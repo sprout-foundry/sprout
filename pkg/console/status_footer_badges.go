@@ -59,16 +59,7 @@ func (f *StatusFooter) composeLine(cols int) string {
 	cwd := shortPath(f.source.WorkingDir())
 	branch := gitBranchOf(cwd)
 
-	// Build the cost segment. When the source exposes a per-turn cost
-	// delta (CLI-UX-6), show "turn · session" split so the user gets
-	// cost-pacing signal. Fall back to cumulative-only for sources that
-	// don't implement turnCostSource (e.g. WebUI).
 	costText := formatCost(cost)
-	if tcs, ok := f.source.(turnCostSource); ok {
-		if turnCost := tcs.TurnCost(); turnCost > 0.001 {
-			costText = formatCost(cost) + " · " + formatCost(turnCost)
-		}
-	}
 
 	parts := []string{
 		styleSegment(badgeColorModel, model),

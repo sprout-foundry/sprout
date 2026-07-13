@@ -560,7 +560,7 @@ func TestPrintPerTurnSummary_SuppressedInTestEnv(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	printPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0, 0)
+	printPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0)
 
 	w.Close()
 	got, err := io.ReadAll(r)

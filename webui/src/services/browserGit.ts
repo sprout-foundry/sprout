@@ -319,6 +319,27 @@ export async function gitInit() {
   return { message: 'ok', initialized: true };
 }
 
+/**
+ * Git operations that browser mode does NOT support.
+ *
+ * Used by the UI to disable/hide buttons in cloud mode so users never
+ * get a "not yet supported in browser mode" 500 error from a click that
+ * looked like it would work. Kept in sync with the `executeGitOp` switch
+ * below — any case that throws an "unsupported" error should be listed
+ * here.
+ */
+export const BROWSER_GIT_UNSUPPORTED_OPS: ReadonlySet<string> = new Set([
+  'unstage',
+  'unstage-all',
+  'reset',
+  'discard',
+  'pull',
+  'revert',
+  'commit-message',
+  'pull-request',
+  'show',
+]);
+
 export async function gitStageAll() {
   await ensureInitialized();
   await syncVfsToGitFs();

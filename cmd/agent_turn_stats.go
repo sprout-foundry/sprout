@@ -56,6 +56,7 @@ func notifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPromp
 // glyph vocabulary in pkg/console; the model name sits in dim grey so the
 // eye is drawn to the bar, not the metadata.
 func printAssistantHeader(model string) {
+	model = shortModelName(model)
 	colorOn := envutil.ResolveColorPreference(true)
 	if !colorOn {
 		fmt.Printf("▌ assistant · %s\n", model)
@@ -219,11 +220,22 @@ func compactDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
+// shortModelName strips the lab/org prefix from a model ID for display.
+// "deepseek-ai/DeepSeek-V4-Flash" → "DeepSeek-V4-Flash"
+// "meta-llama/Llama-3.3-70B-Instruct" → "Llama-3.3-70B-Instruct"
+// "glm-4.6" → "glm-4.6" (no slash, returned as-is)
+func shortModelName(model string) string {
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		return model[i+1:]
+	}
+	return model
+}
+
 // buildPromptPrefix returns the interactive REPL prompt for the given
 // model. SP-048-5d. Format: "<model> ▸ " when a model name is available,
 // "sprout> " as the legacy fallback when it isn't.
 func buildPromptPrefix(model string) string {
-	model = strings.TrimSpace(model)
+	model = strings.TrimSpace(shortModelName(model))
 	if model == "" {
 		return "sprout> "
 	}

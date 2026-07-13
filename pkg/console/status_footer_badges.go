@@ -66,7 +66,7 @@ func (f *StatusFooter) composeLine(cols int) string {
 	costText := formatCost(cost)
 	if tcs, ok := f.source.(turnCostSource); ok {
 		if turnCost := tcs.TurnCost(); turnCost > 0.001 {
-			costText = formatCost(turnCost) + " turn · " + formatCost(cost) + " session"
+			costText = formatCost(cost) + " · " + formatCost(turnCost)
 		}
 	}
 

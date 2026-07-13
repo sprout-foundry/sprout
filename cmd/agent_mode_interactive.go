@@ -408,7 +408,7 @@ func (s *agentFooterSource) Model() string {
 	if s == nil || s.agent == nil {
 		return ""
 	}
-	return s.agent.GetModel()
+	return shortModelName(s.agent.GetModel())
 }
 
 func (s *agentFooterSource) ContextTokens() (used, limit int) {

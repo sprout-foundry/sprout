@@ -17,6 +17,9 @@ func formatCtx(used, limit int) string {
 	if limit <= 0 {
 		return formatTokens(used)
 	}
+	if used <= 0 {
+		return formatTokens(limit)
+	}
 	return fmt.Sprintf("%s/%s", formatTokens(used), formatTokens(limit))
 }
 

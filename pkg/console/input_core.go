@@ -101,12 +101,20 @@ type InputReader struct {
 	// SP-048-2a: pluggable completion provider invoked on Tab. Set by the
 	// agent shell to wire slash-command completion. nil = Tab is a no-op.
 	completer CompletionProvider
+	// richCompleter provides structured candidates (text + description)
+	// for the live autocomplete dropdown. When set, the dropdown
+	// prefers this over the plain completer to render descriptions.
+	richCompleter RichCompletionProvider
 	// Active cycle state. Refreshed when Tab is pressed against a buffer
 	// that differs from the last applied completion (i.e. the user typed
 	// something between Tab presses). SP-078: type aliased to the shared
 	// CompletionCycle so the same cycle state machine is reusable from
 	// SteerInputReader.
 	completionCycle *CompletionCycle
+
+	// Live inline autocomplete dropdown for slash commands. Activated
+	// automatically when the input line starts with "/".
+	autocomplete *inlineAutocomplete
 
 	// SP-048-4f: tracks the half-typed Ctrl-X prefix of the Ctrl-X Ctrl-E
 	// editor-escape sequence. Reset on any keystroke that isn't Ctrl-E.
@@ -221,6 +229,7 @@ func NewInputReader(prompt string) *InputReader {
 		historyIndex:    -1,
 		collapsedPastes: make([]pasteSpan, 0, 8),
 		contextMenu:     NewContextMenu(),
+		autocomplete:    newInlineAutocomplete(),
 	}
 	ir.updateTerminalWidth()
 	return ir
@@ -540,6 +549,48 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 	if ir.tooltipVisible() {
 		ir.hideTooltip()
 	}
+
+	// When the autocomplete dropdown is visible, intercept navigation
+	// and selection keys before the normal dispatch.
+	if ir.autocomplete != nil && ir.autocomplete.visible {
+		switch event.Type {
+		case EventUp:
+			ir.autocomplete.moveSelection(-1)
+			ir.Refresh()
+			return
+		case EventDown:
+			ir.autocomplete.moveSelection(1)
+			ir.Refresh()
+			return
+		case EventTab, EventEnter:
+			text := ir.autocomplete.accept()
+			if text != "" {
+				ir.line = text
+				ir.cursorPos = len(ir.line)
+				ir.hasEditedLine = true
+				ir.historyIndex = -1
+				ir.autocomplete.hide()
+				ir.Refresh()
+				// Enter should still submit the line after accepting.
+				if event.Type == EventEnter {
+					// Fall through to the normal Enter handling below.
+				} else {
+					return
+				}
+			} else {
+				ir.autocomplete.hide()
+				ir.Refresh()
+				if event.Type == EventTab {
+					return
+				}
+			}
+		case EventEscape:
+			ir.autocomplete.hide()
+			ir.Refresh()
+			return
+		}
+	}
+
 	switch event.Type {
 	case EventChar:
 		ir.InsertChar(event.Data)

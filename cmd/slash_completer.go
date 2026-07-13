@@ -27,6 +27,20 @@ import (
 //     appear immediately.
 func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvider {
 	return func(line string, cursorPos int) []string {
+		candidates := buildRichSlashCommandCompleter(chatAgent)(line, cursorPos)
+		out := make([]string, len(candidates))
+		for i, c := range candidates {
+			out[i] = c.Text
+		}
+		return out
+	}
+}
+
+// buildRichSlashCommandCompleter returns a RichCompletionProvider that
+// includes command descriptions alongside the command names. Used by
+// the live autocomplete dropdown so the user sees what each command does.
+func buildRichSlashCommandCompleter(chatAgent *agent.Agent) console.RichCompletionProvider {
+	return func(line string, cursorPos int) []console.CompletionCandidate {
 		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
 			return nil
 		}
@@ -34,18 +48,25 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 		registry := agent_commands.NewCommandRegistry()
 
 		if !strings.ContainsAny(line, " \t") {
-			// No space yet → command name completion (existing behavior).
 			prefix := strings.ToLower(line[1:])
-			var matches []string
+			var matches []console.CompletionCandidate
 			for _, name := range registry.CompletionCandidates() {
 				if strings.HasPrefix(strings.ToLower(name), prefix) {
-					matches = append(matches, "/"+name)
+					desc := ""
+					if cmd, ok := registry.GetCommand(name); ok {
+						desc = cmd.Description()
+					}
+					matches = append(matches, console.CompletionCandidate{
+						Text:        "/" + name,
+						Description: desc,
+					})
 				}
 			}
 			return matches
 		}
 
-		// Space typed → try argument completion via CompletableCommand.
+		// Argument completion path — return plain text candidates
+		// (descriptions are less useful for sub-arguments).
 		parts := strings.Fields(line)
 		cmdName := strings.TrimPrefix(strings.ToLower(parts[0]), "/")
 		cmd, exists := registry.GetCommand(cmdName)
@@ -57,12 +78,6 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 		if len(parts) > 1 {
 			args = parts[1:]
 		}
-		// else: user typed a space after the command name but nothing yet
-		// (e.g., "/skill ") — args stays empty so Complete shows its
-		// first-argument candidates (subcommands, setting keys, etc.)
-
-		// Preserve trailing-space semantics: subcommand + space + Tab should
-		// show all next-argument candidates, not filter by the subcommand name.
 		if strings.HasSuffix(line, " ") {
 			args = append(args, "")
 		}
@@ -72,25 +87,15 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 			if len(candidates) == 0 {
 				return nil
 			}
-			// Reconstruct the full-line prefix (everything before the word
-			// being completed) so the CompletionProvider contract — which
-			// expects full-line replacements — is satisfied.
-			//
-			// When len(parts) > 1, the last element of parts is the word
-			// being completed; everything before it (including the command
-			// name) is the prefix.
-			//
-			// When len(parts) == 1, the user typed a bare "/cmd " with no
-			// argument text yet — the prefix is the command name + space.
 			var prefix string
 			if len(parts) > 1 {
 				prefix = strings.Join(parts[:len(parts)-1], " ") + " "
 			} else {
 				prefix = parts[0] + " "
 			}
-			result := make([]string, len(candidates))
+			result := make([]console.CompletionCandidate, len(candidates))
 			for i, c := range candidates {
-				result[i] = prefix + c
+				result[i] = console.CompletionCandidate{Text: prefix + c}
 			}
 			return result
 		}

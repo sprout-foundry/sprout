@@ -410,3 +410,29 @@ export function setActiveSessionId(id: string | null): void {
 export function resetActiveSessionId(): void {
   activeSessionId = null;
 }
+
+/**
+ * Start a fresh conversation after `/clear` (or an explicit "new chat").
+ *
+ * Generates a new session id, marks it as the active id in memory, AND
+ * persists it as `current_session_id` in the index — without creating a
+ * session record (there are no messages to store yet). This is the key
+ * difference from {@link resetActiveSessionId}: clearing only the
+ * in-memory id left the previous conversation's id as the persisted
+ * "current" marker, so a page refresh resurrected the just-cleared
+ * transcript (the session list fell back to it as current).
+ *
+ * With a fresh id persisted as current, the session-list handler returns
+ * it as `current_session_id`, and restore-on-mount sees a current session
+ * with no messages and starts empty instead of restoring history.
+ *
+ * Returns the new session id so callers can track it if needed.
+ */
+export function startNewCloudSession(): string {
+  const id = generateSessionId();
+  activeSessionId = id;
+  const index = readIndex();
+  index.current_session_id = id;
+  writeIndex(index);
+  return id;
+}

@@ -23,7 +23,7 @@
 
 import { useEffect, useRef } from 'react';
 import { isCloud } from '../config/mode';
-import { saveSession, deleteSession, resetActiveSessionId } from '../services/cloudSessionStore';
+import { saveSession, deleteSession, startNewCloudSession } from '../services/cloudSessionStore';
 import { debugLog } from '../utils/log';
 import type { AppState } from '../types/app';
 
@@ -54,6 +54,13 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
   // history (preserve it) before a fresh empty session starts.
   const lastPersistedSessionIdRef = useRef<string | null>(null);
 
+  // Tracks the previous message count so the rotate-on-/clear effect only
+  // fires on a real non-empty → empty transition. Without this it would also
+  // fire on a fresh mount (messages start empty before the async restore
+  // hydrates them), clobbering the persisted current-session pointer of a
+  // legitimate active conversation before restore-on-mount can read it.
+  const prevMessageCountRef = useRef<number>(state.messages.length);
+
   // ── Save on query completion & chat switch ───────────────────────
   useEffect(() => {
     if (!isCloud) return;
@@ -71,13 +78,18 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
 
   // ── Rotate on /clear: when messages go non-empty → empty, the previous
   //    conversation has already been saved (by the effect above on the last
-  //    query completion). Reset the store's active id so the next save
-  //    creates a fresh session record while the cleared one stays in
-  //    history. ─────────────────────────────────────────────────────────
+  //    query completion). Start a fresh empty session and persist it as the
+  //    current pointer so a refresh restores an empty conversation instead of
+  //    resurrecting the just-cleared transcript. The previous conversation
+  //    stays in history. Only fires on a real non-empty → empty transition —
+  //    NOT on the initial mount (which would clobber a still-loading restore).
   useEffect(() => {
     if (!isCloud) return;
-    if (state.messages.length === 0) {
-      resetActiveSessionId();
+    const wasNonEmpty = prevMessageCountRef.current > 0;
+    const isEmpty = state.messages.length === 0;
+    prevMessageCountRef.current = state.messages.length;
+    if (wasNonEmpty && isEmpty) {
+      startNewCloudSession();
       lastPersistedSessionIdRef.current = null;
     }
   }, [state.messages.length]);

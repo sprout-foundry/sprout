@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -26,7 +27,10 @@ func (ir *InputReader) InsertChar(char string) {
 	// firing from a background event subscriber can't slide in mid-write
 	// and displace the cursor — that's the path that makes typed chars
 	// look "dropped" between turns.
-	if ir.cursorPos == len(ir.line) && len(ir.collapsedPastes) == 0 {
+	//
+	// Slash-command input always takes the full Refresh path so the live
+	// autocomplete dropdown can update alongside the input line.
+	if ir.cursorPos == len(ir.line) && len(ir.collapsedPastes) == 0 && !strings.HasPrefix(ir.line, "/") {
 		LockOutput()
 		fmt.Printf("%s", char)
 		UnlockOutput()

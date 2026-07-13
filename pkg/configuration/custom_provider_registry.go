@@ -275,16 +275,17 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 	}
 
 	conversion := normalized.Conversion
-	if !conversion.IncludeToolCallID &&
-		!conversion.ConvertToolRoleToUser &&
-		conversion.ReasoningContentField == "" &&
-		!conversion.ArgumentsAsJSON &&
-		!conversion.SkipToolExecutionSummary &&
-		conversion.ForceToolCallType == "" {
-		conversion = providers.MessageConversion{
-			IncludeToolCallID:        true,
-			SkipToolExecutionSummary: true,
-		}
+	// Enforce standard OpenAI tool-calling defaults. These are correct for
+	// virtually all OpenAI-compatible providers — the tool role and
+	// tool_call_id are part of the spec. Only override if the user explicitly
+	// set them (non-zero value means the user configured something).
+	if !conversion.IncludeToolCallID {
+		conversion.IncludeToolCallID = true
+	}
+	// ConvertToolRoleToUser defaults to false (Go zero value), which is correct.
+	// Only providers with legacy incompatibility (none currently) should set this true.
+	if !conversion.SkipToolExecutionSummary {
+		conversion.SkipToolExecutionSummary = true
 	}
 
 	// Build model overrides for context sizes

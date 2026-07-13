@@ -19,6 +19,13 @@ func (ir *InputReader) SetCompleter(c CompletionProvider) {
 	ir.completer = c
 }
 
+// SetRichCompleter installs a structured completion provider that
+// returns candidates with descriptions. When set, the live autocomplete
+// dropdown prefers this over the plain completer.
+func (ir *InputReader) SetRichCompleter(rc RichCompletionProvider) {
+	ir.richCompleter = rc
+}
+
 // handleTabCompletion either starts a new completion cycle or advances
 // the existing one. A cycle is "live" as long as the buffer still
 // matches the last completion we applied; any other edit (typing,

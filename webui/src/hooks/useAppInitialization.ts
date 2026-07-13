@@ -267,18 +267,29 @@ export function useAppInitialization({
               );
             }
           } else if (!currentHasMessages) {
-            const restorable = sessions.find(
-              (item: SessionEntry) =>
-                String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
-            );
-            if (restorable?.session_id) {
-              const restored = await apiService.restoreSession(String(restorable.session_id));
-              if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
-                window.dispatchEvent(
-                  new CustomEvent('sprout:session-restored', {
-                    detail: { messages: restored.messages },
-                  }),
-                );
+            // Auto-restore the most recent non-empty session, but only when
+            // there is no explicit current session pointer. In cloud mode a
+            // `/clear` persists a fresh empty session id as current (see
+            // startNewCloudSession) — that is an intentional "start fresh"
+            // signal, so we must NOT fall back to history and resurrect the
+            // just-cleared conversation. In local mode the backend supplies
+            // the current id, so this only fires when there genuinely is none.
+            const hasExplicitCurrent = !!currentSessionId && !!currentSession;
+            const allowFallback = !isCloud || !hasExplicitCurrent;
+            if (allowFallback) {
+              const restorable = sessions.find(
+                (item: SessionEntry) =>
+                  String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+              );
+              if (restorable?.session_id) {
+                const restored = await apiService.restoreSession(String(restorable.session_id));
+                if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+                  window.dispatchEvent(
+                    new CustomEvent('sprout:session-restored', {
+                      detail: { messages: restored.messages },
+                    }),
+                  );
+                }
               }
             }
           }

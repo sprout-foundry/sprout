@@ -478,10 +478,13 @@ interface ProviderPrioritySectionProps {
 }
 
 /**
- * Ordered fallback list. When the active provider can't be reached (no
- * credential, endpoint down, etc.), sprout walks this list and switches
- * to the first usable entry. Empty list = no fallback; only the active
- * provider is used.
+ * Ordered provider preference list. This is the default selection order
+ * for new chat sessions — sprout starts each session with the first
+ * provider in this list (when configured) rather than the active
+ * provider being unavailable. It is NOT an automatic runtime failover:
+ * if the selected provider errors mid-session, sprout surfaces the error
+ * rather than silently switching providers. Empty list = always use the
+ * explicitly active provider.
  */
 function ProviderPrioritySection({ settings, availableProviders, updateSetting }: ProviderPrioritySectionProps) {
   const priority = ((settings as unknown as { provider_priority?: string[] }).provider_priority ?? []) as string[];
@@ -526,8 +529,8 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
     <div className="settings-block-spaced">
       <h4>Provider Priority</h4>
       <div className="config-help settings-help-spaced">
-        Fallback order when the active provider is unreachable. The first usable provider in this list wins. Empty list
-        means no fallback.
+        Default provider preference for new sessions. Sessions start on the first configured provider in this list;
+        the list does not switch providers automatically at runtime. Empty list means the active provider is always used.
       </div>
 
       {priority.length === 0 ? (
@@ -568,7 +571,7 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
                     className="settings-icon-btn danger"
                     onClick={async () => {
                       const confirmed = await showThemedConfirm(
-                        `Remove "${meta?.name ?? id}" from the priority fallback list?`,
+                        `Remove "${meta?.name ?? id}" from the provider priority list?`,
                         { title: 'Remove from priority list', type: 'warning', confirmLabel: 'Remove' },
                       );
                       if (!confirmed) return;

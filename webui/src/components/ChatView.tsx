@@ -3,7 +3,7 @@ import { ChevronDown, Download } from 'lucide-react';
 import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { supportsSSH } from '../config/mode';
+import { supportsExport, supportsSSH } from '../config/mode';
 import { rewindQuery } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
@@ -301,8 +301,10 @@ function Chat(props: ChatProps): JSX.Element {
       data-testid="chat-shell"
     >
       <div className="chat-main" data-testid="chat-main">
-        {/* Export button — shown when a session is active */}
-        {sessionId && (
+        {/* Export button — shown when a session is active AND export is
+            supported (export requires a local filesystem; in cloud mode it
+            404s, so gate it on supportsExport). */}
+        {sessionId && supportsExport && (
           <div className="chat-toolbar">
             <button
               type="button"

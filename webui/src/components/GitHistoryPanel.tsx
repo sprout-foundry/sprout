@@ -1,11 +1,16 @@
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isCloud } from '../config/mode';
+import { BROWSER_GIT_UNSUPPORTED_OPS } from '../services/browserGit';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, formatAbsoluteDate, firstLine } from '../utils/format';
 import { debugLog } from '../utils/log';
 import CommitDetailPanel from './CommitDetailPanel';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
 import './GitHistoryPanel.css';
+
+// Tooltip shown on disabled buttons that browser git can't perform.
+const BROWSER_UNSUPPORTED_TOOLTIP = 'Not available in browser mode';
 
 interface GitHistoryPanelProps {
   onLoadCommits: (
@@ -189,6 +194,8 @@ function GitHistoryPanel({
           onCheckoutCommit={onCheckoutCommit}
           onRevertCommit={onRevertCommit}
           isActing={isActing}
+          revertDisabled={isCloud && BROWSER_GIT_UNSUPPORTED_OPS.has('revert')}
+          unsupportedTooltip={isCloud ? BROWSER_UNSUPPORTED_TOOLTIP : undefined}
         />
         <CommitDetailPanel
           onLoadCommitDetail={onLoadCommitDetail}
@@ -206,7 +213,13 @@ function GitHistoryPanel({
 
   return (
     <div className="git-history-panel">
-      <GitHistoryContextMenu onCheckoutCommit={onCheckoutCommit} onRevertCommit={onRevertCommit} isActing={isActing} />
+      <GitHistoryContextMenu
+        onCheckoutCommit={onCheckoutCommit}
+        onRevertCommit={onRevertCommit}
+        isActing={isActing}
+        revertDisabled={isCloud && BROWSER_GIT_UNSUPPORTED_OPS.has('revert')}
+        unsupportedTooltip={isCloud ? BROWSER_UNSUPPORTED_TOOLTIP : undefined}
+      />
       {error && commits.length > 0 && (
         <div className="git-history-error">
           <span>{error}</span>

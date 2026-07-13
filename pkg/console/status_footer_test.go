@@ -140,6 +140,7 @@ func TestFormatCtx(t *testing.T) {
 	}{
 		{0, 0, "0"},
 		{50, 0, "50"},
+		{0, 200000, "200k"},
 		{500, 200000, "500/200k"},
 		{14200, 200000, "14k/200k"},
 	}
@@ -417,8 +418,8 @@ func TestStatusFooter_StyleCost_RestoresBaseColorAfterAlert(t *testing.T) {
 	}
 }
 
-// CLI-UX-6: A ContentSource that also satisfies turnCostSource should
-// render "session · turn" cost split when the turn cost is non-zero.
+// CLI-UX-6 (removed): turn cost split was removed from the footer.
+// The footer now shows only cumulative session cost.
 type turnCostSrc struct {
 	stubSource
 	turn float64
@@ -435,8 +436,8 @@ func TestStatusFooter_ComposeLine_ShowsTurnCostSplit_WhenNonZero(t *testing.T) {
 	if !strings.Contains(line, "$1.21") {
 		t.Errorf("composeLine should contain session cost, got %q", line)
 	}
-	if !strings.Contains(line, "$0.043") {
-		t.Errorf("composeLine should contain turn cost, got %q", line)
+	if strings.Contains(line, "$0.043") {
+		t.Errorf("composeLine should no longer contain turn cost, got %q", line)
 	}
 }
 

@@ -159,7 +159,7 @@ func resetTurnFirstToken() {
 // wall time, plus ttft when available. Silent when no tokens were used
 // (e.g. the turn was a slash command or zsh fast path). Only shown when
 // stderr is a TTY (respects NO_COLOR for ANSI codes). SP-048-5a.
-func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int, costBefore float64) {
+func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int) {
 	if !shouldShowTurnStats() {
 		return
 	}
@@ -168,7 +168,6 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 	if promptDelta <= 0 && completionDelta <= 0 {
 		return
 	}
-	costDelta := chatAgent.GetTotalCost() - costBefore
 	elapsed := time.Since(start)
 
 	var ttft time.Duration
@@ -179,7 +178,7 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 		}
 	}
 
-	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed, ttft))
+	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, 0, elapsed, ttft))
 }
 
 func compactTokens(n int) string {

@@ -122,14 +122,6 @@ type queuedMessagesSource interface {
 	QueuedMessages() int
 }
 
-// turnCostSource is an optional addition to ContentSource for sources
-// that can report the per-turn cost delta. When the concrete source
-// implements it AND the turn cost is non-zero, the footer renders
-// " · $0.04 turn" alongside the cumulative session cost. CLI-UX-6.
-type turnCostSource interface {
-	TurnCost() float64
-}
-
 // todoProgressSource is an optional addition to ContentSource for sources
 // that can report the agent's todo list progress. When the concrete source
 // implements it AND there are todos with some completed, the footer

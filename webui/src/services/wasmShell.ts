@@ -181,7 +181,7 @@ const DEFAULT_WASM_EXEC_URL = '/webui/wasm/wasm_exec.js';
 /** Debug logger — only logs when localStorage flag is set or VITE_DEBUG is enabled. */
 const debug = (...args: unknown[]) => {
   if (typeof localStorage !== 'undefined' && localStorage.getItem('sprout-debug-wasm')) {
-    debug('', ...args);
+    console.debug('[wasm]', ...args);
   }
 };
 

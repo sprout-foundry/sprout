@@ -19,6 +19,10 @@ interface GitHistoryContextMenuProps {
   onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
   onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   isActing?: boolean;
+  /** Disable the Revert menu item (e.g. browser mode has no revert). */
+  revertDisabled?: boolean;
+  /** Tooltip shown on disabled-for-browser items. */
+  unsupportedTooltip?: string;
 }
 
 /**
@@ -30,6 +34,8 @@ function GitHistoryContextMenu({
   onCheckoutCommit,
   onRevertCommit,
   isActing = false,
+  revertDisabled = false,
+  unsupportedTooltip,
 }: GitHistoryContextMenuProps): JSX.Element {
   const timersRef = useRef<number[]>([]);
 
@@ -232,7 +238,8 @@ function GitHistoryContextMenu({
         className="context-menu-item danger"
         onClick={handleRevert}
         type="button"
-        disabled={isLoading || (actionStatus !== null && actionStatus !== 'Reverted!')}
+        disabled={isLoading || (actionStatus !== null && actionStatus !== 'Reverted!') || revertDisabled}
+        title={revertDisabled ? unsupportedTooltip : undefined}
       >
         <RotateCcw size={13} />
         <span className="menu-item-label">

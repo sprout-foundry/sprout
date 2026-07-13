@@ -29,6 +29,12 @@ export interface GitFileSectionsProps {
   onLoadMore: (section: FileSection) => void;
   onSetFileFilter: (value: string) => void;
   onOpenContextMenu: (section: FileSection, file: GitFile, x: number, y: number) => void;
+  /** Disable the per-row/section Unstage buttons (browser mode). */
+  unstageDisabled?: boolean;
+  /** Disable the per-row Discard buttons (browser mode). */
+  discardDisabled?: boolean;
+  /** Tooltip for disabled-for-browser buttons. */
+  unsupportedTooltip?: string;
 }
 
 function GitFileSections({
@@ -54,6 +60,9 @@ function GitFileSections({
   onLoadMore,
   onSetFileFilter,
   onOpenContextMenu,
+  unstageDisabled = false,
+  discardDisabled = false,
+  unsupportedTooltip,
 }: GitFileSectionsProps) {
   // Tracks the last-clicked index per section for shift+click range selection
   const anchorRef = useRef<Map<string, number>>(new Map());
@@ -157,7 +166,14 @@ function GitFileSections({
                   <button
                     className="git-section-icon-btn"
                     onClick={() => onSectionAction(section.id)}
-                    title={section.id === 'staged' ? 'Unstage all in section' : 'Stage all in section'}
+                    disabled={section.id === 'staged' ? unstageDisabled : false}
+                    title={
+                      section.id === 'staged' && unstageDisabled
+                        ? unsupportedTooltip
+                        : section.id === 'staged'
+                          ? 'Unstage all in section'
+                          : 'Stage all in section'
+                    }
                   >
                     {section.id === 'staged' ? <MinusSquare size={14} /> : <PlusSquare size={14} />}
                   </button>
@@ -233,8 +249,8 @@ function GitFileSections({
                             e.stopPropagation();
                             onUnstageFile(file.path);
                           }}
-                          title="Unstage file"
-                          disabled={isActing}
+                          title={unstageDisabled ? unsupportedTooltip : 'Unstage file'}
+                          disabled={isActing || unstageDisabled}
                         >
                           <MinusSquare size={14} />
                         </button>
@@ -258,8 +274,14 @@ function GitFileSections({
                             e.stopPropagation();
                             onDiscardFile(file.path);
                           }}
-                          title={section.id === 'deleted' ? 'Restore file' : 'Discard file changes'}
-                          disabled={isActing}
+                          title={
+                            discardDisabled
+                              ? unsupportedTooltip
+                              : section.id === 'deleted'
+                                ? 'Restore file'
+                                : 'Discard file changes'
+                          }
+                          disabled={isActing || discardDisabled}
                         >
                           <Trash2 size={14} />
                         </button>

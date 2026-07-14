@@ -346,14 +346,14 @@ func LookupKnownProvider(name string) (info KnownProviderInfo, ok bool) {
 				displayName = normalized
 			}
 			return KnownProviderInfo{
-				Source:        "custom",
-				Name:          normalized,
-				DisplayName:   displayName,
-				EnvVar:        envVar,
+				Source:         "custom",
+				Name:           normalized,
+				DisplayName:    displayName,
+				EnvVar:         envVar,
 				RequiresAPIKey: custom.RequiresAPIKey || envVar != "",
-				Endpoint:      strings.TrimSpace(custom.Endpoint),
-				DefaultModel:  strings.TrimSpace(custom.ModelName),
-				ContextSize:   custom.ContextSize,
+				Endpoint:       strings.TrimSpace(custom.Endpoint),
+				DefaultModel:   strings.TrimSpace(custom.ModelName),
+				ContextSize:    custom.ContextSize,
 			}, true
 		}
 	}

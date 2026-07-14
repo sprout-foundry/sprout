@@ -162,11 +162,12 @@ func (k *KeysCommand) getCredentialStatus(configManager *configuration.Manager, 
 				// Check if env var is set
 				if val := strings.TrimSpace(os.Getenv(cp.EnvVar)); val != "" {
 					return credentialStatus{
-				icon:    console.GlyphSuccess.Prefix(),
-				text:    fmt.Sprintf("env var %s set", cp.EnvVar),
-				missing: false,
-				envVar:  cp.EnvVar,
-			}}
+						icon:    console.GlyphSuccess.Prefix(),
+						text:    fmt.Sprintf("env var %s set", cp.EnvVar),
+						missing: false,
+						envVar:  cp.EnvVar,
+					}
+				}
 				// Check stored credential
 				resolved, err := credentials.ResolveProvider(provider)
 				if err == nil && strings.TrimSpace(resolved.Value) != "" {

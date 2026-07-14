@@ -7,11 +7,16 @@ package tools
 // write_file, write_structured_file, edit_file, shell_command,
 // manage_memory, manage_settings, task_queue, todo_write, todo_read,
 // ask_user, patch_structured_file, commit, git, activate_skill,
-// browse_url, web_search, semantic_search, analyze_image_content,
+// web_search, semantic_search, analyze_image_content,
 // analyze_ui_screenshot, list_automate_workflows, list_changes,
 // revert_my_changes, recover_file, create_pull_request, run_automate,
 // mcp_refresh, run_subagent, run_parallel_subagents,
 // request_clarification, and respond_clarification.
+//
+// browse_url is registered conditionally via registerBrowseURLTool()
+// (build-tagged): it requires a host-side headless browser (rod/Chromium)
+// that is unavailable in WASM builds, so it is excluded from the WASM
+// tool set rather than advertised as a tool that can never succeed.
 //
 // Memory operations (add/read/list/delete/search) are exposed as the
 // consolidated manage_memory tool registered in
@@ -35,7 +40,7 @@ package tools
 //	    registry.Register(h)
 //	}
 func AllTools() []ToolHandler {
-	return []ToolHandler{
+	tools := []ToolHandler{
 		&readFileHandler{},
 		&listDirHandler{},
 		&fetchURLHandler{},
@@ -68,7 +73,8 @@ func AllTools() []ToolHandler {
 		// Skill tools
 		&activateSkillHandler{},
 		// Browser/search tools
-		&browseURLHandler{},
+		// Note: browse_url is registered via registerBrowseURLTool() (build-tagged)
+		// because it requires a host-side headless browser unavailable in WASM.
 		&webSearchHandler{},
 		&semanticSearchHandler{},
 		// Image/analysis tools
@@ -92,4 +98,8 @@ func AllTools() []ToolHandler {
 		// Preview port registration (platform workspaces)
 		&registerPreviewPortHandler{},
 	}
+	// Code intelligence graph tools — platform-specific (nil on WASM via
+	// build-tagged stub).
+	tools = append(tools, registerBrowseURLTool()...)
+	return append(tools, registerCodegraphTools()...)
 }

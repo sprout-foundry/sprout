@@ -154,7 +154,7 @@ func initializeSystem() {
 		// If initialization fails, print helpful error and exit
 		fmt.Fprintf(os.Stderr, "Failed to initialize sprout: %v\n", err)
 		fmt.Fprintln(os.Stderr, "\nThis usually means there's an issue with your configuration or API keys.")
-		fmt.Fprintln(os.Stderr, "   Try opening the Web UI onboarding or checking ~/.config/sprout configuration.")
+		fmt.Fprintln(os.Stderr, "   Try `sprout keys set <provider>` to configure an API key, or open the Web UI onboarding.")
 		os.Exit(1)
 	}
 

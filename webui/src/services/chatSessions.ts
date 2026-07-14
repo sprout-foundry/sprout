@@ -238,7 +238,10 @@ export async function createChatSessionInWorktree(req: {
  * Fork a chat session at a given user-message breakpoint (1-based).
  * Saves the current session and creates a new one from truncated history.
  */
-export async function forkChatSession(chatId: string, breakpointIndex: number): Promise<{
+export async function forkChatSession(
+  chatId: string,
+  breakpointIndex: number,
+): Promise<{
   success: boolean;
   chat_id: string;
   session_id: string;

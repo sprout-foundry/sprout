@@ -387,3 +387,156 @@ func TestPromptForGitHubToken_EmptyTokenInput(t *testing.T) {
 		t.Errorf("expected token from env var, got %q", token)
 	}
 }
+
+// =============================================================================
+// guidedSetupFor dispatch tests
+//
+// These verify that the four rich guided setup functions (Git, GitHub,
+// Playwright, Chrome DevTools) are reachable from the `mcp add` flow —
+// the picker shows these template IDs and runMCPAdd dispatches via
+// guidedSetupFor. Each template ID that the registry exposes for these
+// servers must map to the corresponding guided flow.
+// =============================================================================
+
+func TestGuidedSetupFor_AllTemplateIDsDispatched(t *testing.T) {
+	// Every template ID that should route to a guided flow, mapped to the
+	// function that must handle it. Both the canonical registry IDs and any
+	// aliases (e.g. "git") are covered.
+	cases := []struct {
+		templateID string
+	}{
+		{"git"},
+		{"git-uvx"},
+		{"github"},
+		{"github-remote"},
+		{"github-docker"},
+		{"playwright"},
+		{"chrome-devtools"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.templateID, func(t *testing.T) {
+			fn, ok := guidedSetupFor(tc.templateID)
+			if !ok {
+				t.Fatalf("guidedSetupFor(%q) returned ok=false; this guided flow is unreachable from `mcp add`", tc.templateID)
+			}
+			if fn == nil {
+				t.Fatalf("guidedSetupFor(%q) returned nil function", tc.templateID)
+			}
+		})
+	}
+}
+
+func TestGuidedSetupFor_GenericTemplateIDsHaveNoGuidedFlow(t *testing.T) {
+	// Generic templates route to the generic template-driven path, not a
+	// guided flow, so guidedSetupFor must return ok=false for them.
+	for _, id := range []string{"http-generic", "stdio-generic", "", "unknown"} {
+		if _, ok := guidedSetupFor(id); ok {
+			t.Errorf("guidedSetupFor(%q) should return ok=false", id)
+		}
+	}
+}
+
+func TestGuidedSetupFor_EveryGuidedSetupFunctionIsReachable(t *testing.T) {
+	// All four guided setup functions must be reachable AND mapped to the
+	// correct function. Build a set of the functions reached across all known
+	// guided template IDs and confirm each of the four setup functions appears
+	// at least once. We identify the function by a distinctive install-method
+	// option string (printed via promptInstallMethod -> fmt, which is reliably
+	// captured) rather than the banner, since the banner is printed via
+	// differing mechanisms (console.GlyphInfo vs fmt.Println) across flows.
+	cases := []struct {
+		templateID string
+		wantOption string // distinctive substring in the captured install picker
+		wantName   string // logical name for the seen-set
+	}{
+		{"git", "uvx (recommended)", "git"},
+		{"github", "GitHub Remote MCP (OAuth)", "github"},
+		{"playwright", "Official Playwright MCP Server", "playwright"},
+		{"chrome-devtools", "Default settings (recommended)", "chrome-devtools"},
+	}
+	seen := map[string]bool{}
+	for _, tc := range cases {
+		fn, ok := guidedSetupFor(tc.templateID)
+		if !ok || fn == nil {
+			t.Fatalf("guidedSetupFor(%q) returned ok=%v fn=nil", tc.templateID, ok)
+		}
+		mcpCfg := mcp.MCPConfig{Servers: make(map[string]mcp.MCPServerConfig), Enabled: true}
+		// "\n" advances past any pre-picker prompt (e.g. git reads the repo
+		// path before its picker); the subsequent read hits EOF and the flow
+		// returns an error/cancel, but the picker has already printed.
+		out := testutil.CaptureStdout(t, func() {
+			_ = fn(&mcpCfg, bufio.NewReader(strings.NewReader("\n")))
+		})
+		if !strings.Contains(out, tc.wantOption) {
+			t.Errorf("guidedSetupFor(%q) did not show expected option %q; got:\n%s", tc.templateID, tc.wantOption, out)
+		}
+		seen[tc.wantName] = true
+	}
+	for _, name := range []string{"git", "github", "playwright", "chrome-devtools"} {
+		if !seen[name] {
+			t.Errorf("guided setup function %q was never reached by any template ID", name)
+		}
+	}
+}
+
+// =============================================================================
+// Direct coverage: setupPlaywrightMCPServer & setupChromeDevToolsMCPServer
+// with EOF stdin (mirrors the existing setupGit/setupGitHub EOF tests).
+// =============================================================================
+
+func TestSetupPlaywrightMCPServer_EOFStdin(t *testing.T) {
+	_, cleanup := setupMCPTestEnv(t)
+	defer cleanup()
+
+	shouldSkipIfRealMCPConfigExists(t)
+
+	mcpCfg := mcp.MCPConfig{
+		Servers: make(map[string]mcp.MCPServerConfig),
+		Enabled: true,
+	}
+
+	err := setupPlaywrightMCPServer(&mcpCfg, bufio.NewReader(strings.NewReader("")))
+	if err == nil {
+		t.Fatal("expected error from setupPlaywrightMCPServer with EOF stdin, got nil")
+	}
+	errMsg := strings.ToLower(err.Error())
+	if !strings.Contains(errMsg, "read") && !strings.Contains(errMsg, "eof") {
+		t.Errorf("expected read/eof error, got: %v", err)
+	}
+}
+
+func TestSetupChromeDevToolsMCPServer_EOFStdin(t *testing.T) {
+	_, cleanup := setupMCPTestEnv(t)
+	defer cleanup()
+
+	shouldSkipIfRealMCPConfigExists(t)
+
+	mcpCfg := mcp.MCPConfig{
+		Servers: make(map[string]mcp.MCPServerConfig),
+		Enabled: true,
+	}
+
+	err := setupChromeDevToolsMCPServer(&mcpCfg, bufio.NewReader(strings.NewReader("")))
+	if err == nil {
+		t.Fatal("expected error from setupChromeDevToolsMCPServer with EOF stdin, got nil")
+	}
+	errMsg := strings.ToLower(err.Error())
+	if !strings.Contains(errMsg, "read") && !strings.Contains(errMsg, "eof") {
+		t.Errorf("expected read/eof error, got: %v", err)
+	}
+}
+
+// =============================================================================
+// Registry: playwright template is present (needed so the picker shows it).
+// =============================================================================
+
+func TestNewMCPServerRegistry_HasPlaywrightTemplate(t *testing.T) {
+	r := mcp.NewMCPServerRegistry()
+	tmpl, ok := r.GetTemplate("playwright")
+	if !ok {
+		t.Fatal("expected 'playwright' template in registry so it appears in the mcp add picker")
+	}
+	if tmpl.Type != "stdio" {
+		t.Errorf("expected playwright template type 'stdio', got %q", tmpl.Type)
+	}
+}

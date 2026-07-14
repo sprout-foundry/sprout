@@ -292,12 +292,13 @@ const AdminBillingPage: React.FC = () => {
                   <button
                     onClick={closeRefundModal}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}
-                                      >
+                  >
                     <X size={18} />
                   </button>
                 </div>
                 <div className="platform-card-body">
-                  {refundSuccess ? (<div
+                  {refundSuccess ? (
+                    <div
                       data-testid="success-message"
                       style={{ padding: '16px', textAlign: 'center', color: 'var(--accent-success)' }}
                     >

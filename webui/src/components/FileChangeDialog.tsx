@@ -78,7 +78,9 @@ function FileChangeDialog({
         <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
           <div className="themed-dialog-accent-bar themed-dialog-accent-bar--error" />
           <div className="themed-dialog-header">
-            <span className="themed-dialog-icon themed-dialog-icon--error"><X size={16} /></span>
+            <span className="themed-dialog-icon themed-dialog-icon--error">
+              <X size={16} />
+            </span>
             <h2 className="themed-dialog-title">File Deleted with Unsaved Changes</h2>
           </div>
           <div className="themed-dialog-body" style={{ whiteSpace: 'pre-line' }}>
@@ -108,7 +110,9 @@ function FileChangeDialog({
         <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
           <div className="themed-dialog-accent-bar themed-dialog-accent-bar--error" />
           <div className="themed-dialog-header">
-            <span className="themed-dialog-icon themed-dialog-icon--error"><X size={16} /></span>
+            <span className="themed-dialog-icon themed-dialog-icon--error">
+              <X size={16} />
+            </span>
             <h2 className="themed-dialog-title">File Deleted</h2>
           </div>
           <div
@@ -139,7 +143,9 @@ function FileChangeDialog({
         <div className={cardClass} onClick={(e) => e.stopPropagation()}>
           <div className="themed-dialog-accent-bar themed-dialog-accent-bar--warning" />
           <div className="themed-dialog-header">
-            <span className="themed-dialog-icon themed-dialog-icon--warning"><AlertTriangle size={16} /></span>
+            <span className="themed-dialog-icon themed-dialog-icon--warning">
+              <AlertTriangle size={16} />
+            </span>
             <h2 className="themed-dialog-title">File Changed Externally</h2>
           </div>
           <div className="themed-dialog-body" style={{ whiteSpace: 'pre-line' }}>
@@ -189,7 +195,9 @@ function FileChangeDialog({
       <div className="themed-dialog-card" onClick={(e) => e.stopPropagation()}>
         <div className="themed-dialog-accent-bar themed-dialog-accent-bar--warning" />
         <div className="themed-dialog-header">
-          <span className="themed-dialog-icon themed-dialog-icon--warning"><AlertTriangle size={16} /></span>
+          <span className="themed-dialog-icon themed-dialog-icon--warning">
+            <AlertTriangle size={16} />
+          </span>
           <h2 className="themed-dialog-title">File Changed Externally</h2>
         </div>
         <div className="themed-dialog-body" style={{ whiteSpace: 'pre-line' }}>

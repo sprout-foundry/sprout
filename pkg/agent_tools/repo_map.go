@@ -17,14 +17,14 @@ import (
 )
 
 const (
-	repoMapMaxFullFileSize = 2 * 1024 * 1024 // 2MB max file size
-	repoMapTokenBudget     = 4096            // target ~4096 tokens (~16k chars) — raised from 1024 to cover repos with thousands of source files
-	repoMapMaxFiles        = 2000            // cap on files to surface — raised from 200; together with the depth-aware prioritization this prevents one mega-directory from starving the rest
-	repoMapCharBudget      = repoMapTokenBudget * 4
-	repoMapMaxDepth        = 8               // cap walking depth so deeply-nested vendored trees don't dominate the budget
-	repoMapRootFileAllowance = 64            // number of root-level files/dirs to keep before L1 takes over
-	repoMapPerDirCap       = 60              // max files shown per directory (prevents pkg/foo/ from hogging the whole output)
-	repoMapPerDirChars     = 8 * 1024        // max chars spent per directory in the formatted output
+	repoMapMaxFullFileSize   = 2 * 1024 * 1024 // 2MB max file size
+	repoMapTokenBudget       = 4096            // target ~4096 tokens (~16k chars) — raised from 1024 to cover repos with thousands of source files
+	repoMapMaxFiles          = 2000            // cap on files to surface — raised from 200; together with the depth-aware prioritization this prevents one mega-directory from starving the rest
+	repoMapCharBudget        = repoMapTokenBudget * 4
+	repoMapMaxDepth          = 8        // cap walking depth so deeply-nested vendored trees don't dominate the budget
+	repoMapRootFileAllowance = 64       // number of root-level files/dirs to keep before L1 takes over
+	repoMapPerDirCap         = 60       // max files shown per directory (prevents pkg/foo/ from hogging the whole output)
+	repoMapPerDirChars       = 8 * 1024 // max chars spent per directory in the formatted output
 
 	// Depth levels for the repo map.
 	depthDirTreeOnly = 1 // directory tree with file counts, no symbols
@@ -143,6 +143,7 @@ func GenerateRepoMap(ctx context.Context, rootDir string, depth int, query strin
 //   - Summary header exposes total file count, dirs covered, char usage,
 //     and the reason for any truncation — callers can tell at a glance
 //     when they're seeing partial output.
+//
 // fileEntry is the per-file record produced by the repo-map walk. Hoisted to
 // package scope so buildInclusionOrder can reuse the type.
 type fileEntry struct {
@@ -818,7 +819,6 @@ func dedupStrings(s []string) []string {
 	}
 	return result
 }
-
 
 // openGraphStore opens the codegraph store at the default path (.sprout/codegraph.db).
 // Returns nil, nil when the store is cleanly unavailable (file doesn't exist).

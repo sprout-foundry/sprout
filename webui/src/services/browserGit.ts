@@ -89,7 +89,7 @@ async function readdirRecursive(dir: string, prefix = ''): Promise<string[]> {
     try {
       const stat = await fs.stat(fullPath);
       if (stat.isDirectory()) {
-        results.push(...await readdirRecursive(fullPath, relPath));
+        results.push(...(await readdirRecursive(fullPath, relPath)));
       } else {
         results.push(relPath);
       }
@@ -110,7 +110,11 @@ async function syncVfsToGitFs() {
     const existing = await readdirRecursive(REPO_DIR);
     for (const relPath of existing) {
       if (!relPath.startsWith('.git/') && !relPath.startsWith('.git')) {
-        try { await fs.unlink(`${REPO_DIR}/${relPath}`); } catch { /* gone */ }
+        try {
+          await fs.unlink(`${REPO_DIR}/${relPath}`);
+        } catch {
+          /* gone */
+        }
       }
     }
   } catch {
@@ -175,7 +179,7 @@ export async function gitStatus() {
     }
   }
 
-  return { staged, unstaged, untracked: unstaged.filter(f => f.status === 'new') };
+  return { staged, unstaged, untracked: unstaged.filter((f) => f.status === 'new') };
 }
 
 export async function gitAdd(filepaths: string[]) {
@@ -270,9 +274,15 @@ export async function gitClone(url: string) {
   try {
     const existing = await readdirRecursive(REPO_DIR);
     for (const relPath of existing) {
-      try { await fs.unlink(`${REPO_DIR}/${relPath}`); } catch { /* gone */ }
+      try {
+        await fs.unlink(`${REPO_DIR}/${relPath}`);
+      } catch {
+        /* gone */
+      }
     }
-  } catch { /* fresh */ }
+  } catch {
+    /* fresh */
+  }
 
   await ensureDir(REPO_DIR);
   await git.clone({
@@ -309,6 +319,27 @@ export async function gitInit() {
   return { message: 'ok', initialized: true };
 }
 
+/**
+ * Git operations that browser mode does NOT support.
+ *
+ * Used by the UI to disable/hide buttons in cloud mode so users never
+ * get a "not yet supported in browser mode" 500 error from a click that
+ * looked like it would work. Kept in sync with the `executeGitOp` switch
+ * below — any case that throws an "unsupported" error should be listed
+ * here.
+ */
+export const BROWSER_GIT_UNSUPPORTED_OPS: ReadonlySet<string> = new Set([
+  'unstage',
+  'unstage-all',
+  'reset',
+  'discard',
+  'pull',
+  'revert',
+  'commit-message',
+  'pull-request',
+  'show',
+]);
+
 export async function gitStageAll() {
   await ensureInitialized();
   await syncVfsToGitFs();
@@ -323,6 +354,17 @@ export async function gitStageAll() {
 
 /**
  * Execute a git operation by name (maps to the proxy API shape).
+ *
+ * Capability matrix for browser mode:
+ *   ✓ status, add/stage, stage-all, commit, log, branch/branches, checkout,
+ *     diff, push, clone, init
+ *   ✗ unstage, unstage-all, reset, pull, discard, revert, commit-message,
+ *     pull-request, show
+ *
+ * Unimplemented ops throw an Error with an honest "not yet supported in
+ * browser mode" message rather than faking success. The handler in
+ * browserGitHandler.ts surfaces that as an HTTP 500 error response, so the UI
+ * shows a real failure instead of silently doing nothing.
  */
 export async function executeGitOp(
   op: string,
@@ -330,28 +372,56 @@ export async function executeGitOp(
   query?: Record<string, string>,
 ): Promise<unknown> {
   switch (op) {
-    case 'status': return gitStatus();
+    case 'status':
+      return gitStatus();
     case 'add':
     case 'stage': {
       const files = (body?.files as string[]) || (body?.path ? [body.path as string] : []);
       return gitAdd(files);
     }
-    case 'stage-all': return gitStageAll();
-    case 'commit': return gitCommit((body?.message as string) || 'commit');
-    case 'log': return gitLog(Number(body?.count ?? 50));
+    case 'stage-all':
+      return gitStageAll();
+    case 'commit':
+      return gitCommit((body?.message as string) || 'commit');
+    case 'log':
+      return gitLog(Number(body?.count ?? 50));
     case 'branch':
-    case 'branches': return gitBranch();
-    case 'checkout': return gitCheckout((body?.branch as string) || (body?.name as string));
-    case 'diff': return gitDiff({ path: query?.path, cached: query?.cached === 'true' });
-    case 'push': return gitPush(body?.remote as string, body?.branch as string);
-    case 'clone': return gitClone(body?.url as string);
-    case 'init': return gitInit();
-    case 'show': return gitLog(1);
-    case 'reset':
+    case 'branches':
+      return gitBranch();
+    case 'checkout':
+      return gitCheckout((body?.branch as string) || (body?.name as string));
+    case 'diff':
+      return gitDiff({ path: query?.path, cached: query?.cached === 'true' });
+    case 'push':
+      return gitPush(body?.remote as string, body?.branch as string);
+    case 'clone':
+      return gitClone(body?.url as string);
+    case 'init':
+      return gitInit();
+    // `show` is used to render a single commit's detail. Browser git can only
+    // return the bare log entry, not the full file-diff detail the UI expects,
+    // so report it as unsupported rather than returning a half-shape object.
+    case 'show':
+      throw new Error('show is not yet supported in browser mode');
+    // The following operations require index/working-tree manipulation that
+    // isomorphic-git does not expose in the way this app needs. They are
+    // intentionally NOT faked — returning success would silently corrupt the
+    // user's mental model of repo state.
     case 'unstage':
     case 'unstage-all':
-      return { message: 'ok', note: 'unstage requires isomorphic-git index reset (not yet implemented)' };
+    case 'reset':
+      throw new Error('unstage/reset is not yet supported in browser mode');
+    case 'discard':
+      throw new Error('discard is not yet supported in browser mode');
+    case 'pull':
+      throw new Error('pull is not yet supported in browser mode');
+    case 'revert':
+      throw new Error('revert is not yet supported in browser mode');
+    case 'commit-message':
+      throw new Error('commit-message generation is not yet supported in browser mode');
+    case 'pull-request':
+      throw new Error('pull requests are not yet supported in browser mode');
     default:
-      return { error: `Unsupported git operation: ${op}` };
+      throw new Error(`Unsupported git operation: ${op}`);
   }
 }

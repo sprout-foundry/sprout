@@ -1,6 +1,7 @@
-import { Pencil, Trash2, Lock } from 'lucide-react';
-import { useState } from 'react';
+import { Loader2, Pencil, Trash2, Lock, Zap, Check, X } from 'lucide-react';
+import { Fragment, useState } from 'react';
 import type { SproutSettings } from '../../services/api';
+import { clientFetch } from '../../services/clientSession';
 import { showThemedConfirm } from '../ThemedDialog';
 import ListFilter from './ListFilter';
 import MCPCredentialPanel from './MCPCredentialPanel';
@@ -8,6 +9,8 @@ import MCPServerForm from './MCPServerForm';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 
 const FILTER_THRESHOLD = 4;
+
+type TestPhase = 'idle' | 'testing' | 'ok' | 'error';
 
 interface MCPSettingsTabProps {
   settings: SproutSettings;
@@ -107,6 +110,35 @@ export default function MCPSettingsTab({
     setNewEnvValue('');
   };
 
+  // ── Test connection ─────────────────────────────────────────
+  const [testState, setTestState] = useState<Record<string, { phase: TestPhase; message: string }>>({});
+
+  const handleTestServer = async (name: string) => {
+    setTestState((prev) => ({ ...prev, [name]: { phase: 'testing', message: '' } }));
+    try {
+      const res = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}/test`, {
+        method: 'POST',
+      });
+      const data = (await res.json().catch(() => ({}))) as { status?: string; message?: string };
+      if (res.ok && data.status === 'ok') {
+        setTestState((prev) => ({
+          ...prev,
+          [name]: { phase: 'ok', message: data.message || 'Connected successfully' },
+        }));
+      } else {
+        setTestState((prev) => ({
+          ...prev,
+          [name]: { phase: 'error', message: data.message || `HTTP ${res.status}` },
+        }));
+      }
+    } catch (err) {
+      setTestState((prev) => ({
+        ...prev,
+        [name]: { phase: 'error', message: err instanceof Error ? err.message : 'Request failed' },
+      }));
+    }
+  };
+
   return (
     <div className="section" data-testid="settings-mcp-tab">
       <h4>MCP Configuration</h4>
@@ -139,51 +171,88 @@ export default function MCPSettingsTab({
         <div className="crud-list">
           {filteredServerEntries.map(([name, cfg]) => {
             return (
-              <div key={name} className="crud-item" data-testid="mcp-server-row">
-                <span className="crud-item-name">{name}</span>
-                <span className="crud-item-detail">{cfg.command || ''}</span>
-                <button
-                  type="button"
-                  className="crud-btn"
-                  title="Manage credentials"
-                  onClick={() => handleLoadCredentials(name)}
-                >
-                  <Lock size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="crud-btn"
-                  title="Edit server"
-                  onClick={() => {
-                    setEditingServer({ mode: 'edit', originalName: name });
-                    setServerName(name);
-                    setServerCommand(cfg.command || '');
-                    setServerArgs(cfg.args ? cfg.args.join(' ') : '');
-                    const existingEnv = cfg.env || {};
-                    setServerEnvVars(Object.entries(existingEnv).map(([key, value]) => ({ key, value })));
-                    setNewEnvKey('');
-                    setNewEnvValue('');
-                  }}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="crud-btn danger"
-                  data-testid="mcp-server-delete-button"
-                  title="Delete server"
-                  onClick={async () => {
-                    const confirmed = await showThemedConfirm(
-                      `Delete MCP server "${name}"? This removes its config and disconnects it.`,
-                      { title: 'Delete MCP server', type: 'danger', confirmLabel: 'Delete' },
-                    );
-                    if (!confirmed) return;
-                    void handleDeleteServer(name);
-                  }}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
+              <Fragment key={name}>
+                <div className="crud-item" data-testid="mcp-server-row">
+                  <span className="crud-item-name">{name}</span>
+                  <span className="crud-item-detail">{cfg.command || ''}</span>
+                  <button
+                    type="button"
+                    className="crud-btn"
+                    data-testid="mcp-server-test-button"
+                    title="Test connection"
+                    disabled={testState[name]?.phase === 'testing'}
+                    onClick={() => handleTestServer(name)}
+                  >
+                    {testState[name]?.phase === 'testing' ? (
+                      <Loader2 size={12} className="spinning" />
+                    ) : testState[name]?.phase === 'ok' ? (
+                      <Check size={12} />
+                    ) : testState[name]?.phase === 'error' ? (
+                      <X size={12} />
+                    ) : (
+                      <Zap size={12} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="crud-btn"
+                    title="Manage credentials"
+                    onClick={() => handleLoadCredentials(name)}
+                  >
+                    <Lock size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="crud-btn"
+                    title="Edit server"
+                    onClick={() => {
+                      setEditingServer({ mode: 'edit', originalName: name });
+                      setServerName(name);
+                      setServerCommand(cfg.command || '');
+                      setServerArgs(cfg.args ? cfg.args.join(' ') : '');
+                      const existingEnv = cfg.env || {};
+                      setServerEnvVars(Object.entries(existingEnv).map(([key, value]) => ({ key, value })));
+                      setNewEnvKey('');
+                      setNewEnvValue('');
+                    }}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="crud-btn danger"
+                    data-testid="mcp-server-delete-button"
+                    title="Delete server"
+                    onClick={async () => {
+                      const confirmed = await showThemedConfirm(
+                        `Delete MCP server "${name}"? This removes its config and disconnects it.`,
+                        { title: 'Delete MCP server', type: 'danger', confirmLabel: 'Delete' },
+                      );
+                      if (!confirmed) return;
+                      void handleDeleteServer(name);
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                {testState[name]?.message && (
+                  <div
+                    data-testid={`mcp-server-test-message-${name}`}
+                    style={{
+                      fontSize: 11,
+                      marginTop: 4,
+                      color:
+                        testState[name]?.phase === 'ok'
+                          ? 'var(--accent-success)'
+                          : testState[name]?.phase === 'error'
+                            ? 'var(--accent-error)'
+                            : 'var(--text-tertiary)',
+                    }}
+                  >
+                    {testState[name].message}
+                  </div>
+                )}
+              </Fragment>
             );
           })}
 

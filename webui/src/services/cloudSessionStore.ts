@@ -250,7 +250,7 @@ export function saveSession(
   const sessionId =
     options?.sessionId && options.sessionId.trim()
       ? options.sessionId.trim()
-      : activeSessionId ?? generateSessionId();
+      : (activeSessionId ?? generateSessionId());
   const now = new Date().toISOString();
   const serialized = toSerialized(messages);
   const record: StoredSession = {

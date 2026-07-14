@@ -301,11 +301,17 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	hasStoredCred := resolveErr == nil && strings.TrimSpace(resolved.Value) != ""
 	hasEnvVar := customProvider.EnvVar != "" && strings.TrimSpace(os.Getenv(customProvider.EnvVar)) != ""
 	if !hasStoredCred && !hasEnvVar {
-		envHint := ""
-		if customProvider.EnvVar != "" {
-			envHint = fmt.Sprintf(" Set %s or use '/keys set %s <api_key>'.", customProvider.EnvVar, providerName)
-		} else {
-			envHint = fmt.Sprintf(" Use '/keys set %s <api_key>'.", providerName)
+		// Three options: export env var, set credential via /keys,
+		// or run /custom add (which detects this case and offers to
+		// store the key directly).
+		var envHint string
+		switch {
+		case customProvider.EnvVar != "":
+			envHint = fmt.Sprintf(" Set %s, run '/keys set %s <api_key>', or run '/custom add %s' to be guided through it.",
+				customProvider.EnvVar, providerName, providerName)
+		default:
+			envHint = fmt.Sprintf(" Run '/keys set %s <api_key>' or '/custom add %s' to configure credentials.",
+				providerName, providerName)
 		}
 		return nil, fmt.Errorf("custom provider %q is registered but has no credentials configured.%s", providerName, envHint)
 	}

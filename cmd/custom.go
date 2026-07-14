@@ -84,15 +84,13 @@ func runCustomModelAdd() error {
 		return fmt.Errorf("failed to prompt for provider name: %w", err)
 	}
 
-	existingProviders := cfg.CustomProviders
-	if _, exists := existingProviders[strings.ToLower(strings.TrimSpace(name))]; exists {
-		answer, err := promptLine(reader, "Provider exists. Replace it? "+console.FormatYesNoPromptStdout(false)+": ")
-		if err != nil {
-			return fmt.Errorf("failed to prompt for replace confirmation: %w", err)
-		}
-		if !isYes(answer) {
-			return nil
-		}
+	// Short-flow branch: if this name matches an already-registered provider
+	// (user's custom config or embedded factory), we skip URL/discovery
+	// and only offer to set credentials. This is the common case after
+	// a `/provider <name>` failure shows the user "Run 'sprout custom add'".
+	known, isKnown := configuration.LookupKnownProvider(name)
+	if isKnown {
+		return runCustomModelAddKnown(reader, known)
 	}
 
 	endpoint, err := promptLine(reader, "Base URL (e.g., https://example.com/v1): ")
@@ -324,24 +322,121 @@ func runCustomModelAdd() error {
 	// the active credential backend. Skip the prompt when the env var is
 	// already set in the environment (no need to copy it into the store)
 	// or when the provider doesn't need auth.
-	if normalized.EnvVar != "" {
-		if strings.TrimSpace(os.Getenv(normalized.EnvVar)) == "" {
-			answer, err := promptLine(reader, fmt.Sprintf("\nSet the API key for %s now via the credential backend? %s: ",
-				normalized.Name, console.FormatYesNoPromptStdout(false)))
-			if err == nil && isYes(answer) {
-				key, keyErr := promptLine(reader, fmt.Sprintf("API key (will be stored; or set %s): ", normalized.EnvVar))
-				if keyErr == nil && strings.TrimSpace(key) != "" {
-					if storeErr := credentials.SetToActiveBackend(normalized.Name, strings.TrimSpace(key)); storeErr != nil {
-						fmt.Fprintf(os.Stderr, "Warning: failed to store credential: %v\n", storeErr)
-					} else {
-						console.GlyphSuccess.Printf("Stored credential for %s", normalized.Name)
-					}
-				}
-			}
-		}
-	}
+	promptForCredentialIfNeeded(reader, normalized.Name, normalized.EnvVar)
 
 	return nil
+}
+
+// runCustomModelAddKnown handles the "register credentials for an
+// already-known provider" short-flow. We skip URL/discovery entirely
+// because the provider's endpoint, default model, and auth env var are
+// already configured. This is the common follow-up after a `/provider
+// <name>` failure surfaces "Run 'sprout custom add <name>'".
+func runCustomModelAddKnown(reader *bufio.Reader, known configuration.KnownProviderInfo) error {
+	fmt.Println()
+	fmt.Printf("Provider %q is already configured (source: %s).\n", known.DisplayName, known.Source)
+	if known.Endpoint != "" {
+		fmt.Printf("  Endpoint: %s\n", secretdetect.RedactOpaque(known.Endpoint))
+	}
+	if known.DefaultModel != "" {
+		fmt.Printf("  Default model: %s\n", known.DefaultModel)
+	}
+	if known.ContextSize > 0 {
+		fmt.Printf("  Default context size: %d tokens\n", known.ContextSize)
+	}
+	if known.EnvVar != "" {
+		fmt.Printf("  API key env var: %s\n", known.EnvVar)
+	}
+	fmt.Println()
+
+	if known.RequiresAPIKey {
+		// Check current state so we can offer the right action.
+		envSet := known.EnvVar != "" && strings.TrimSpace(os.Getenv(known.EnvVar)) != ""
+		storedCred := hasStoredCredential(known.Name)
+		switch {
+		case envSet && storedCred:
+			console.GlyphSuccess.Print("API key already configured (env var + credential store).")
+			return nil
+		case envSet:
+			fmt.Println("(env var is set; credential store has no value for this provider)")
+		case storedCred:
+			console.GlyphSuccess.Print("A credential is already stored for this provider.")
+			fmt.Println("Re-run /keys set if you want to rotate it.")
+			return nil
+		default:
+			fmt.Println("No credentials are configured yet.")
+		}
+
+		answer, err := promptLine(reader, fmt.Sprintf("Set the API key for %s now? %s: ",
+			known.Name, console.FormatYesNoPromptStdout(true)))
+		if err != nil || !isYes(answer) {
+			fmt.Println()
+			fmt.Printf("Skipped. Run `/keys set %s <key>` (or `sprout keys set %s <key>`) later.\n",
+				known.Name, known.Name)
+			return nil
+		}
+
+		key, keyErr := promptLine(reader, fmt.Sprintf("API key (or set %s): ", known.EnvVar))
+		if keyErr != nil {
+			return fmt.Errorf("failed to read API key: %w", keyErr)
+		}
+		if strings.TrimSpace(key) == "" {
+			fmt.Println("Empty key — nothing stored.")
+			return nil
+		}
+		if storeErr := credentials.SetToActiveBackend(known.Name, strings.TrimSpace(key)); storeErr != nil {
+			return fmt.Errorf("failed to store credential: %w", storeErr)
+		}
+		console.GlyphSuccess.Printf("Stored credential for %s", known.Name)
+	} else {
+		fmt.Println("This provider does not require an API key.")
+	}
+
+	fmt.Println()
+	fmt.Printf("Try `/provider %s` to switch.\n", known.Name)
+	return nil
+}
+
+// promptForCredentialIfNeeded is the post-save credential prompt shared
+// between the full wizard and any future flows that save a custom
+// provider config. It is a no-op when the env var is already set or the
+// provider doesn't need auth.
+func promptForCredentialIfNeeded(reader *bufio.Reader, providerName, envVar string) {
+	if envVar == "" {
+		return
+	}
+	if strings.TrimSpace(os.Getenv(envVar)) != "" {
+		return
+	}
+	if hasStoredCredential(providerName) {
+		return
+	}
+	answer, err := promptLine(reader, fmt.Sprintf("\nSet the API key for %s now via the credential backend? %s: ",
+		providerName, console.FormatYesNoPromptStdout(false)))
+	if err != nil || !isYes(answer) {
+		return
+	}
+	key, keyErr := promptLine(reader, fmt.Sprintf("API key (will be stored; or set %s): ", envVar))
+	if keyErr != nil || strings.TrimSpace(key) == "" {
+		return
+	}
+	if storeErr := credentials.SetToActiveBackend(providerName, strings.TrimSpace(key)); storeErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to store credential: %v\n", storeErr)
+		return
+	}
+	console.GlyphSuccess.Printf("Stored credential for %s", providerName)
+}
+
+// hasStoredCredential reports whether the active credential backend
+// already has a non-empty value for the named provider. We use it to
+// avoid re-prompting when the user already set a key in this session
+// (e.g. via `/keys set` before re-running the wizard).
+func hasStoredCredential(provider string) bool {
+	resolved, err := credentials.ResolveProvider(provider)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(resolved.Value) != ""
 }
 
 func runCustomModelRemove(providerName string) error {

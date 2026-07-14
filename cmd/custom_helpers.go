@@ -130,6 +130,7 @@ func hasStoredCredential(provider string) bool {
 	}
 	return strings.TrimSpace(resolved.Value) != ""
 }
+
 // errCustomSetupCancelled is returned by helpers when the user explicitly
 // cancels an interactive prompt. Callers in runCustomModelAdd translate
 // this into a nil error so the wizard exits cleanly without saving a

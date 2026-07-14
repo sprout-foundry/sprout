@@ -529,8 +529,8 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
     <div className="settings-block-spaced">
       <h4>Provider Priority</h4>
       <div className="config-help settings-help-spaced">
-        Default provider preference for new sessions. Sessions start on the first configured provider in this list;
-        the list does not switch providers automatically at runtime. Empty list means the active provider is always used.
+        Default provider preference for new sessions. Sessions start on the first configured provider in this list; the
+        list does not switch providers automatically at runtime. Empty list means the active provider is always used.
       </div>
 
       {priority.length === 0 ? (

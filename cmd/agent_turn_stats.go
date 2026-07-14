@@ -185,11 +185,8 @@ func compactTokens(n int) string {
 	if n < 0 {
 		n = 0
 	}
-	if n >= 1_000_000 {
-		return fmt.Sprintf("%dM", n/1_000_000)
-	}
 	if n >= 1000 {
-		return fmt.Sprintf("%dk", n/1000)
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
 	}
 	return fmt.Sprintf("%d", n)
 }

@@ -503,26 +503,26 @@ func (ir *InputReader) ReadLine() (string, error) {
 					ir.handleMouseEvent(event.Data)
 					continue
 				}
-							if event.Type == EventEnter {
-				// If the autocomplete dropdown is visible, accept the
-				// selected candidate before submitting the line.
-				if ir.autocomplete != nil && ir.autocomplete.visible {
-					text := ir.autocomplete.accept()
-					if text != "" {
-						ir.line = text
-						ir.cursorPos = len(ir.line)
-						ir.autocomplete.hide()
+				if event.Type == EventEnter {
+					// If the autocomplete dropdown is visible, accept the
+					// selected candidate before submitting the line.
+					if ir.autocomplete != nil && ir.autocomplete.visible {
+						text := ir.autocomplete.accept()
+						if text != "" {
+							ir.line = text
+							ir.cursorPos = len(ir.line)
+							ir.autocomplete.hide()
+						}
 					}
+					// End of input
+					fmt.Println() // Move to next line
+					input := ir.line
+					if input != "" {
+						ir.AddToHistory(input)
+					}
+					return input, nil
 				}
-				// End of input
-				fmt.Println() // Move to next line
-				input := ir.line
-				if input != "" {
-					ir.AddToHistory(input)
-				}
-				return input, nil
-			}
-			ir.HandleEvent(event)
+				ir.HandleEvent(event)
 			}
 			for parser.hasPending {
 				pending := parser.Parse(0)

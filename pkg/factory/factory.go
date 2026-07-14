@@ -283,12 +283,12 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	}
 
 	if len(customProviders) == 0 {
-		return nil, fmt.Errorf("provider %q is not registered as a custom provider. Run 'sprout custom add %s' to register it, or switch to one of the providers shown in '/provider list'", providerName, providerName)
+		return nil, fmt.Errorf("provider %q is not registered as a custom provider. Run 'sprout custom add %s' (or '/custom add %s' in chat) to register it, or switch to one of the providers shown in '/provider list'", providerName, providerName, providerName)
 	}
 
 	customProvider, exists := customProviders[providerName]
 	if !exists {
-		return nil, fmt.Errorf("custom provider %q is not registered. Run 'sprout custom add %s' to register it, or set %q in /provider list to a provider you have configured", providerName, providerName, providerName)
+		return nil, fmt.Errorf("custom provider %q is not registered. Run 'sprout custom add %s' (or '/custom add %s' in chat) to register it, or set %q in /provider list to a provider you have configured", providerName, providerName, providerName, providerName)
 	}
 
 	genericConfig, err := customProvider.ToProviderConfig()

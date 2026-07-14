@@ -157,6 +157,9 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&KeysCommand{})
 	registry.RegisterAlias("key", "keys")
 
+	// Custom provider management (in-chat wrapper for `sprout custom`)
+	registry.Register(&CustomCommand{})
+
 	// Agent state overview
 	registry.Register(&InfoCommand{})
 

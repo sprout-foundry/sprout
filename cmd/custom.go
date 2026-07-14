@@ -4,7 +4,7 @@ package cmd
 
 import (
 	"bufio"
-	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -121,77 +121,13 @@ func runCustomModelAdd() error {
 		RequiresAPIKey: envVar != "",
 	}
 
-	models, discoverErr := configuration.DiscoverCustomProviderModels(provider)
-	if discoverErr != nil {
-		fmt.Println()
-		console.GlyphWarning.Printf("Model discovery failed: %v", discoverErr)
-		fmt.Println("The provider can still be saved, but model selection will rely on runtime discovery.")
-	} else {
-		fmt.Println()
-		console.GlyphSuccess.Printf("Discovered %d model(s)", len(models))
-		maxShow := len(models)
-		if maxShow > 10 {
-			maxShow = 10
-		}
-		for i := 0; i < maxShow; i++ {
-			ctxInfo := ""
-			if models[i].ContextLength > 0 {
-				ctxInfo = fmt.Sprintf("  (%dK context)", models[i].ContextLength/1000)
-			}
-			fmt.Printf("  %d. %s%s\n", i+1, models[i].ID, ctxInfo)
-		}
-		if len(models) > maxShow {
-			fmt.Printf("  ... and %d more\n", len(models)-maxShow)
-		}
-
-		preferredItems := make([]console.SelectItem, 0, len(models))
-		for _, m := range models {
-			detail := ""
-			if m.ContextLength > 0 {
-				detail = fmt.Sprintf("%dK context", m.ContextLength/1000)
-			}
-			preferredItems = append(preferredItems, console.SelectItem{
-				Label:  m.ID,
-				Detail: detail,
-				Value:  m.ID,
-			})
-		}
-		preferredSL := console.NewSelectList(console.SelectListOptions{
-			Title:      "Pick a preferred default model",
-			Items:      preferredItems,
-			Searchable: true,
-			PageSize:   10,
-		})
-		preferredValue, ok, err := preferredSL.Run(context.Background())
-		if err != nil {
-			return fmt.Errorf("failed to prompt for preferred model: %w", err)
-		}
-		if !ok {
-			fmt.Println()
-			console.GlyphInfo.Print("Setup cancelled.")
+	if err := discoverAndPickModel(reader, &provider); err != nil {
+		if errors.Is(err, errCustomSetupCancelled) {
 			return nil
 		}
-		// The picker only returns discovered model IDs, so the resolve
-		// call is effectively a typed assertion that the ID matches.
-		// (We keep the call rather than a direct assignment so any
-		// future case-folding/normalization in resolvePreferred is
-		// applied here too.)
-		selectedModel, err := resolvePreferredCustomProviderModel(preferredValue, models)
-		if err != nil {
-			return fmt.Errorf("failed to resolve preferred model: %w", err)
-		}
-		provider.ModelName = selectedModel
-
-		// Auto-populate per-model context sizes from discovery data
-		if provider.ModelContextSizes == nil {
-			provider.ModelContextSizes = make(map[string]int)
-		}
-		for _, m := range models {
-			if m.ContextLength > 0 {
-				provider.ModelContextSizes[m.ID] = m.ContextLength
-			}
-		}
+		return err
 	}
+	models := getModelListForVisionPicker(provider)
 
 	// Prompt for default context size.
 	// If discovery succeeded and the default model has a known context size,
@@ -222,56 +158,11 @@ func runCustomModelAdd() error {
 		return fmt.Errorf("failed to prompt for vision support: %w", err)
 	}
 	if isYes(visionAnswer) {
-		provider.SupportsVision = true
-		// Only show the vision-model picker if discovery actually returned
-		// models. If discovery failed, fall back to "use default model".
-		if len(models) > 0 {
-			visionItems := []console.SelectItem{
-				{
-					Label:  "Use default model",
-					Detail: fmt.Sprintf("reuse %s", provider.ModelName),
-					Value:  "",
-				},
-			}
-			for _, m := range models {
-				detail := ""
-				if m.ContextLength > 0 {
-					detail = fmt.Sprintf("%dK context", m.ContextLength/1000)
-				}
-				visionItems = append(visionItems, console.SelectItem{
-					Label:  m.ID,
-					Detail: detail,
-					Value:  m.ID,
-				})
-			}
-			visionSL := console.NewSelectList(console.SelectListOptions{
-				Title:      "Pick a vision model",
-				Items:      visionItems,
-				Searchable: true,
-				PageSize:   10,
-			})
-			visionValue, ok, err := visionSL.Run(context.Background())
-			if err != nil {
-				return fmt.Errorf("failed to prompt for vision model: %w", err)
-			}
-			if !ok {
-				fmt.Println()
-				console.GlyphInfo.Print("Setup cancelled.")
+		if err := pickVisionModel(reader, &provider, models); err != nil {
+			if errors.Is(err, errCustomSetupCancelled) {
 				return nil
 			}
-			// Empty value = "use default model" option picked.
-			if visionValue == "" {
-				provider.VisionModel = provider.ModelName
-			} else {
-				selectedVisionModel, err := resolvePreferredCustomProviderModel(visionValue, models)
-				if err != nil {
-					return fmt.Errorf("failed to resolve vision model: %w", err)
-				}
-				provider.VisionModel = selectedVisionModel
-			}
-		} else {
-			fmt.Println("(no models discovered; vision will reuse the default model)")
-			provider.VisionModel = provider.ModelName
+			return err
 		}
 	}
 
@@ -397,48 +288,6 @@ func runCustomModelAddKnown(reader *bufio.Reader, known configuration.KnownProvi
 	return nil
 }
 
-// promptForCredentialIfNeeded is the post-save credential prompt shared
-// between the full wizard and any future flows that save a custom
-// provider config. It is a no-op when the env var is already set or the
-// provider doesn't need auth.
-func promptForCredentialIfNeeded(reader *bufio.Reader, providerName, envVar string) {
-	if envVar == "" {
-		return
-	}
-	if strings.TrimSpace(os.Getenv(envVar)) != "" {
-		return
-	}
-	if hasStoredCredential(providerName) {
-		return
-	}
-	answer, err := promptLine(reader, fmt.Sprintf("\nSet the API key for %s now via the credential backend? %s: ",
-		providerName, console.FormatYesNoPromptStdout(false)))
-	if err != nil || !isYes(answer) {
-		return
-	}
-	key, keyErr := promptLine(reader, fmt.Sprintf("API key (will be stored; or set %s): ", envVar))
-	if keyErr != nil || strings.TrimSpace(key) == "" {
-		return
-	}
-	if storeErr := credentials.SetToActiveBackend(providerName, strings.TrimSpace(key)); storeErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to store credential: %v\n", storeErr)
-		return
-	}
-	console.GlyphSuccess.Printf("Stored credential for %s", providerName)
-}
-
-// hasStoredCredential reports whether the active credential backend
-// already has a non-empty value for the named provider. We use it to
-// avoid re-prompting when the user already set a key in this session
-// (e.g. via `/keys set` before re-running the wizard).
-func hasStoredCredential(provider string) bool {
-	resolved, err := credentials.ResolveProvider(provider)
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(resolved.Value) != ""
-}
-
 func runCustomModelRemove(providerName string) error {
 	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
@@ -555,87 +404,6 @@ func runCustomModelList() error {
 	}
 
 	return nil
-}
-
-func promptLine(reader *bufio.Reader, prompt string) (string, error) {
-	fmt.Print(prompt)
-	value, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	return strings.TrimSpace(value), nil
-}
-
-func isYes(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "y", "yes":
-		return true
-	default:
-		return false
-	}
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
-func resolvePreferredCustomProviderModel(input string, models []configuration.ProviderDiscoveryModel) (string, error) {
-	trimmed := strings.TrimSpace(input)
-	if len(models) == 0 {
-		return trimmed, nil
-	}
-	if trimmed == "" {
-		return models[0].ID, nil
-	}
-
-	if selectedIndex, err := strconv.Atoi(trimmed); err == nil {
-		if selectedIndex < 1 || selectedIndex > len(models) {
-			return "", fmt.Errorf("model selection %d is out of range", selectedIndex)
-		}
-		return models[selectedIndex-1].ID, nil
-	}
-
-	for _, model := range models {
-		if strings.EqualFold(model.ID, trimmed) {
-			return model.ID, nil
-		}
-	}
-
-	return "", fmt.Errorf("model %q was not found in the discovered model list", trimmed)
-}
-
-func removeString(values []string, target string) []string {
-	filtered := values[:0]
-	for _, value := range values {
-		if value == target {
-			continue
-		}
-		filtered = append(filtered, value)
-	}
-	return filtered
-}
-
-func parseToolCallList(raw string) []string {
-	parts := strings.Split(strings.TrimSpace(raw), ",")
-	toolCalls := make([]string, 0, len(parts))
-	seen := make(map[string]struct{}, len(parts))
-	for _, part := range parts {
-		toolName := strings.TrimSpace(part)
-		if toolName == "" {
-			continue
-		}
-		if _, exists := seen[toolName]; exists {
-			continue
-		}
-		seen[toolName] = struct{}{}
-		toolCalls = append(toolCalls, toolName)
-	}
-	return toolCalls
 }
 
 func init() {

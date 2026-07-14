@@ -168,7 +168,15 @@ export default defineConfig(({ mode }) => {
     
     // Optimize dependencies
     optimizeDeps: {
-      include: ['react', 'react-dom', '@codemirror/language', 'style-to-js'],
+      include: [
+        'react',
+        'react-dom',
+        '@codemirror/language',
+        // Pre-bundle CJS transitive deps of react-markdown / @sprout/ui
+        // so Vite's dev optimizer resolves their default exports correctly.
+        'style-to-js',
+        'debug',
+      ],
       // Exclude React-consuming packages from esbuild pre-bundling.
       // esbuild's optimizer resolves their `import 'react'` from their
       // OWN node_modules location (the monorepo root / packages/ui,

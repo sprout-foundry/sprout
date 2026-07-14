@@ -2,13 +2,16 @@ package factory
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/providerregistry"
 )
 
@@ -772,4 +775,183 @@ func TestOfflineGracefulDegradation(t *testing.T) {
 	}
 
 	t.Logf("Offline degradation test passed: %d providers still available", len(currentProviders))
+}
+
+// TestCreateCustomProvider_NoCredentialsRequired verifies the v0.17.0 regression fix:
+// a custom provider with RequiresAPIKey=false and no EnvVar should be creatable
+// without a "no credentials configured" error. The factory should skip the
+// credential check entirely for such providers (e.g., local mocks in tests,
+// self-hosted services that don't require auth).
+func TestCreateCustomProvider_NoCredentialsRequired(t *testing.T) {
+	// Set up isolated config directory
+	configDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	// Mock server that returns valid responses
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			// Return a valid models list
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "mock-model"},
+				},
+			})
+		case "/v1/chat/completions":
+			// Return a valid chat completion
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "chatcmpl-test",
+				"object":  "chat.completion",
+				"created": 1,
+				"model":   "mock-model",
+				"choices": []map[string]any{
+					{
+						"index": 0,
+						"message": map[string]any{
+							"role":    "assistant",
+							"content": "ok",
+						},
+						"finish_reason": "stop",
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	// Save custom provider with RequiresAPIKey=false and no EnvVar.
+	// This is the configuration that was broken before v0.17.0 — the factory
+	// incorrectly demanded credentials even though auth was explicitly optional.
+	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "no-creds-provider",
+		Endpoint:       server.URL + "/v1",
+		ModelName:      "mock-model",
+		RequiresAPIKey: false,
+		// EnvVar intentionally omitted (empty string)
+	})
+	if err != nil {
+		t.Fatalf("failed to save custom provider: %v", err)
+	}
+
+	// Create the custom provider — should NOT return a "no credentials" error.
+	client, err := CreateCustomProvider("no-creds-provider", "")
+
+	// We may or may not get a client depending on whether the server is
+	// reachable, but the key assertion is: no credentials error.
+	if err != nil {
+		errMsg := err.Error()
+		// The bug produced errors like:
+		// "custom provider X is registered but has no credentials configured."
+		// This should NOT happen for providers that don't require auth.
+		if strings.Contains(errMsg, "credentials") || strings.Contains(errMsg, "no credentials") {
+			t.Errorf("CreateCustomProvider returned a credentials error for a provider that doesn't require them: %v", err)
+		}
+		// Other errors (e.g., connection refused) are acceptable — the point
+		// is that we didn't get a credentials validation error.
+		t.Logf("CreateCustomProvider returned non-credentials error (acceptable): %v", err)
+		return
+	}
+
+	// If we got a client, verify it's usable
+	if client == nil {
+		t.Fatal("CreateCustomProvider returned nil client with no error")
+	}
+
+	if client.GetProvider() != "no-creds-provider" {
+		t.Errorf("Expected provider 'no-creds-provider', got %q", client.GetProvider())
+	}
+
+	t.Logf("CreateCustomProvider succeeded for auth-optional provider: %s", client.GetProvider())
+}
+
+// TestCreateCustomProvider_CredentialsRequired verifies the counterpart: when
+// RequiresAPIKey=true (or EnvVar is set), the factory SHOULD enforce credentials
+// and return a "no credentials configured" error when none are found.
+func TestCreateCustomProvider_CredentialsRequired(t *testing.T) {
+	// Set up isolated config directory
+	configDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	// Save custom provider with RequiresAPIKey=true.
+	// No credentials are set, so CreateCustomProvider should return a
+	// "no credentials configured" error.
+	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "requires-creds-provider",
+		Endpoint:       "https://api.example.com/v1",
+		ModelName:      "some-model",
+		RequiresAPIKey: true,
+		// EnvVar intentionally omitted
+	})
+	if err != nil {
+		t.Fatalf("failed to save custom provider: %v", err)
+	}
+
+	// Create the custom provider — should return a credentials error.
+	_, err = CreateCustomProvider("requires-creds-provider", "")
+
+	if err == nil {
+		t.Fatal("CreateCustomProvider should have returned an error for a provider that requires credentials but has none configured")
+	}
+
+	errMsg := err.Error()
+	// The error should mention credentials
+	if !strings.Contains(errMsg, "credentials") && !strings.Contains(errMsg, "no credentials") {
+		t.Errorf("Expected credentials error, got: %v", err)
+	}
+
+	// Error should identify the provider
+	if !strings.Contains(errMsg, "requires-creds-provider") {
+		t.Errorf("Error should mention the provider name, got: %v", err)
+	}
+
+	t.Logf("Got expected credentials error: %v", err)
+}
+
+// TestCreateCustomProvider_CredentialsRequiredWithEnvVar verifies that when
+// EnvVar is set but the environment variable is not present, the factory
+// returns a credentials error.
+func TestCreateCustomProvider_CredentialsRequiredWithEnvVar(t *testing.T) {
+	// Set up isolated config directory
+	configDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	// Ensure the env var is NOT set
+	t.Setenv("MY_MOCK_API_KEY", "")
+
+	// Save custom provider with EnvVar set but no credentials.
+	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "env-var-provider",
+		Endpoint:       "https://api.example.com/v1",
+		ModelName:      "some-model",
+		RequiresAPIKey: false, // not strictly required, but EnvVar is set
+		EnvVar:         "MY_MOCK_API_KEY",
+	})
+	if err != nil {
+		t.Fatalf("failed to save custom provider: %v", err)
+	}
+
+	// Create the custom provider — should return a credentials error because EnvVar is set.
+	_, err = CreateCustomProvider("env-var-provider", "")
+
+	if err == nil {
+		t.Fatal("CreateCustomProvider should have returned an error when EnvVar is set but not present")
+	}
+
+	errMsg := err.Error()
+	// The error should mention credentials
+	if !strings.Contains(errMsg, "credentials") && !strings.Contains(errMsg, "no credentials") {
+		t.Errorf("Expected credentials error, got: %v", err)
+	}
+
+	// Error should mention the env var name as a hint
+	if !strings.Contains(errMsg, "MY_MOCK_API_KEY") {
+		t.Errorf("Error should mention the EnvVar name as a hint, got: %v", err)
+	}
+
+	t.Logf("Got expected credentials error with EnvVar hint: %v", err)
 }

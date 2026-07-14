@@ -13,6 +13,12 @@ export interface GitHeaderProps {
   onPush: () => void;
   onOpenPrDialog: () => void;
   onRefresh: () => void;
+  /** Disable the Pull button (e.g. browser mode has no pull). */
+  pullDisabled?: boolean;
+  /** Disable the Pull Request button (e.g. browser mode). */
+  pullRequestDisabled?: boolean;
+  /** Tooltip shown on disabled-for-browser buttons. */
+  unsupportedTooltip?: string;
 }
 
 function GitHeader({
@@ -27,6 +33,9 @@ function GitHeader({
   onPush,
   onOpenPrDialog,
   onRefresh,
+  pullDisabled = false,
+  pullRequestDisabled = false,
+  unsupportedTooltip,
 }: GitHeaderProps) {
   return (
     <div className="git-sidebar-header">
@@ -83,11 +92,13 @@ function GitHeader({
             type="button"
             className="git-header-action-btn"
             onClick={onPull}
-            disabled={isActing || isLoading}
+            disabled={isActing || isLoading || pullDisabled}
             title={
-              gitStatus?.behind && gitStatus.behind > 0
-                ? `Pull ${gitStatus.behind} commit${gitStatus.behind === 1 ? '' : 's'} from upstream`
-                : 'Pull from upstream'
+              pullDisabled
+                ? unsupportedTooltip
+                : gitStatus?.behind && gitStatus.behind > 0
+                  ? `Pull ${gitStatus.behind} commit${gitStatus.behind === 1 ? '' : 's'} from upstream`
+                  : 'Pull from upstream'
             }
           >
             <ArrowDown size={12} />
@@ -118,8 +129,8 @@ function GitHeader({
             type="button"
             className="git-header-action-btn"
             onClick={onOpenPrDialog}
-            disabled={isActing || isLoading}
-            title="Create pull request on GitHub"
+            disabled={isActing || isLoading || pullRequestDisabled}
+            title={pullRequestDisabled ? unsupportedTooltip : 'Create pull request on GitHub'}
           >
             <ExternalLink size={12} />
             <span>PR</span>

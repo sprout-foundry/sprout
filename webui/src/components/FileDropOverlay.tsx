@@ -11,7 +11,9 @@ export default function FileDropOverlay({ visible }: FileDropOverlayProps): JSX.
   return (
     <div className="file-drop-overlay" role="status" aria-live="polite" aria-label="File drop zone active">
       <div className="file-drop-overlay-content">
-        <div className="file-drop-overlay-icon"><FileText size={48} /></div>
+        <div className="file-drop-overlay-icon">
+          <FileText size={48} />
+        </div>
         <div className="file-drop-overlay-text">Drop files to open</div>
       </div>
     </div>

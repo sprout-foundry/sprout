@@ -124,8 +124,11 @@ describe('mode config (cloud mode)', () => {
     expect(modeModule.supportsSettings).toBe(true);
   });
 
-  it('exports supportsGit as false in cloud mode without adapter (cloud default)', () => {
-    expect(modeModule.supportsGit).toBe(false);
+  // supportsGit is true in cloud mode — browser-native git (isomorphic-git +
+  // lightning-fs) powers the core git flow (status, add, commit, push, clone,
+  // diff) in-browser. Unimplemented ops return honest errors; see browserGit.ts.
+  it('exports supportsGit as true in cloud mode (browser-native git)', () => {
+    expect(modeModule.supportsGit).toBe(true);
   });
 
   it('exports supportsChat as true in cloud mode (BYOK proxy)', () => {
@@ -336,7 +339,7 @@ describe('with CloudAdapter installed', () => {
 
     // Build-time says local, but CloudAdapter flags win
     expect(modeModule.supportsSSH).toBe(false);
-    expect(modeModule.supportsGit).toBe(false);
+    expect(modeModule.supportsGit).toBe(true);
     expect(modeModule.supportsChat).toBe(true);
     expect(modeModule.supportsWorkspaceSwitching).toBe(false);
     expect(modeModule.supportsExport).toBe(false);

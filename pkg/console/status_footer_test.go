@@ -98,10 +98,13 @@ func TestFormatTokens(t *testing.T) {
 		{0, "0"},
 		{50, "50"},
 		{999, "999"},
-		{1000, "1.0k"},
-		{1500, "1.5k"},
-		{12345, "12.3k"},
-		{100000, "100.0k"},
+		{1000, "1k"},
+		{1500, "1k"},
+		{12345, "12k"},
+		{100000, "100k"},
+		{1_000_000, "1M"},
+		{2_000_000, "2M"},
+		{1_500_000, "1M"},
 	}
 	for _, c := range cases {
 		if got := formatTokens(c.in); got != c.want {
@@ -135,10 +138,11 @@ func TestFormatCtx(t *testing.T) {
 		used, limit int
 		want        string
 	}{
-		{0, 0, "0 ctx"},
-		{50, 0, "50 ctx"},
-		{500, 200000, "500/200.0k ctx"},
-		{14200, 200000, "14.2k/200.0k ctx"},
+		{0, 0, "0"},
+		{50, 0, "50"},
+		{0, 200000, "200k"},
+		{500, 200000, "500/200k"},
+		{14200, 200000, "14k/200k"},
 	}
 	for _, c := range cases {
 		got := formatCtx(c.used, c.limit)
@@ -224,7 +228,7 @@ func TestStatusFooter_ComposeLine_NonTTY_StillProducesString(t *testing.T) {
 	if !strings.Contains(line, "claude-opus-4-7") {
 		t.Errorf("composeLine should include model name; got %q", line)
 	}
-	if !strings.Contains(line, "14.2k/200.0k ctx") {
+	if !strings.Contains(line, "14k/200k") {
 		t.Errorf("composeLine should include context; got %q", line)
 	}
 	if !strings.Contains(line, "$0.42") {
@@ -414,8 +418,8 @@ func TestStatusFooter_StyleCost_RestoresBaseColorAfterAlert(t *testing.T) {
 	}
 }
 
-// CLI-UX-6: A ContentSource that also satisfies turnCostSource should
-// render "turn · session" cost split when the turn cost is non-zero.
+// CLI-UX-6 (removed): turn cost split was removed from the footer.
+// The footer now shows only cumulative session cost.
 type turnCostSrc struct {
 	stubSource
 	turn float64
@@ -429,11 +433,11 @@ func TestStatusFooter_ComposeLine_ShowsTurnCostSplit_WhenNonZero(t *testing.T) {
 		turn:       0.043,
 	})
 	line := f.composeLine(120)
-	if !strings.Contains(line, "turn") {
-		t.Errorf("composeLine with non-zero turn cost should contain 'turn', got %q", line)
+	if !strings.Contains(line, "$1.21") {
+		t.Errorf("composeLine should contain session cost, got %q", line)
 	}
-	if !strings.Contains(line, "session") {
-		t.Errorf("composeLine with non-zero turn cost should contain 'session', got %q", line)
+	if strings.Contains(line, "$0.043") {
+		t.Errorf("composeLine should no longer contain turn cost, got %q", line)
 	}
 }
 
@@ -443,8 +447,8 @@ func TestStatusFooter_ComposeLine_OmitsTurnSplit_WhenZero(t *testing.T) {
 		turn:       0,
 	})
 	line := f.composeLine(120)
-	if strings.Contains(line, "turn") {
-		t.Errorf("composeLine with zero turn cost should not contain 'turn', got %q", line)
+	if strings.Contains(line, "$0.000") {
+		t.Errorf("composeLine with zero turn cost should not contain a second cost, got %q", line)
 	}
 }
 

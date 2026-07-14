@@ -5,6 +5,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -66,7 +67,9 @@ func maybeShowFirstRunHint() {
 	fmt.Fprintln(os.Stderr, "Type /help for commands, or ? for keyboard shortcuts. Ctrl-D exits.")
 
 	state.SeenFirstRunHint = append(state.SeenFirstRunHint, cwd)
-	_ = saveFirstRunState(statePath, state) // best-effort — we don't care if persist fails
+	if err := saveFirstRunState(statePath, state); err != nil {
+		log.Printf("warning: could not persist first-run hint state to %s: %v", statePath, err)
+	}
 }
 
 func firstRunStatePath() (string, error) {

@@ -23,9 +23,9 @@ const (
 // DeadCodeCandidate is a symbol with zero inbound call edges, plus metadata
 // about confidence and whether it has test-only callers.
 type DeadCodeCandidate struct {
-	Symbol       Symbol
-	Confidence   ConfidenceLevel
-	TestCallers  int // number of callers found in test files (0 = no test callers)
+	Symbol      Symbol
+	Confidence  ConfidenceLevel
+	TestCallers int // number of callers found in test files (0 = no test callers)
 }
 
 // isRegistrationFile returns true if the file path suggests the file registers

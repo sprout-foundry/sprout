@@ -127,8 +127,7 @@ export function useEscalationTriggers({
           id: 'git-push-failure',
           reason: 'git_push_failed',
           severity: 'blocking',
-          message:
-            "Git push isn't available in the browser IDE. Start a full workspace to push changes.",
+          message: "Git push isn't available in the browser IDE. Start a full workspace to push changes.",
           repoURL: repoURLRef.current ?? undefined,
         });
       }
@@ -163,8 +162,7 @@ export function useEscalationTriggers({
           id: 'terminal-timeout',
           reason: 'command_timeout',
           severity: 'blocking',
-          message:
-            'Browser commands are time-limited. Start a full workspace for long-running tasks.',
+          message: 'Browser commands are time-limited. Start a full workspace for long-running tasks.',
           repoURL: repoURLRef.current ?? undefined,
         });
       }
@@ -179,8 +177,7 @@ export function useEscalationTriggers({
           id: 'build-command-' + detail.command.replace(/[^a-z0-9]/gi, '-').slice(0, 40),
           reason: 'build_command_detected',
           severity: 'info',
-          message:
-            'Build tools may be limited in the browser. Start a full workspace for native builds.',
+          message: 'Build tools may be limited in the browser. Start a full workspace for native builds.',
           repoURL: repoURLRef.current ?? undefined,
         });
       }

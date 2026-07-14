@@ -43,6 +43,7 @@ func (p *ProvidersCommand) Usage() string {
 		"/provider list           List available providers only.",
 		"/provider select         Interactive provider picker.",
 		"/provider <name>         Switch to <name> directly.",
+		"/provider <name>:<model> Switch to <name> with an explicit model.",
 		"",
 		"Alias: /p",
 		"",
@@ -335,8 +336,17 @@ func (p *providerDropdownItem) Display() string    { return p.displayName }
 func (p *providerDropdownItem) SearchText() string { return p.displayName }
 func (p *providerDropdownItem) Value() interface{} { return p.provider }
 
-// setProvider sets a specific provider by name
-func (p *ProvidersCommand) setProvider(providerName string, configManager *configuration.Manager, chatAgent *agent.Agent) error {
+// setProvider sets a specific provider by name, optionally with a model
+// specified via the "provider:model" syntax.
+func (p *ProvidersCommand) setProvider(providerArg string, configManager *configuration.Manager, chatAgent *agent.Agent) error {
+	// Support "provider:model" syntax to explicitly specify a model
+	providerName := providerArg
+	var explicitModel string
+	if idx := strings.Index(providerArg, ":"); idx > 0 {
+		providerName = providerArg[:idx]
+		explicitModel = providerArg[idx+1:]
+	}
+
 	// Convert name to provider type using the config manager to handle custom providers
 	provider, err := configManager.MapStringToClientType(strings.ToLower(providerName))
 	if err != nil {
@@ -347,6 +357,14 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 			names = append(names, string(p))
 		}
 		return fmt.Errorf("unknown provider '%s'. Available: %s", providerName, strings.Join(names, ", "))
+	}
+
+	// If an explicit model was provided, persist it before switching so
+	// SetProviderPersisted picks it up from the config.
+	if explicitModel != "" {
+		if err := configManager.SetModelForProvider(provider, explicitModel); err != nil {
+			return fmt.Errorf("failed to set model for %s: %w", providerName, err)
+		}
 	}
 
 	// Check if provider needs API key but doesn't have one

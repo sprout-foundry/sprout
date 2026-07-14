@@ -65,7 +65,9 @@ function SecurityPromptDialog({
 
         {/* Header */}
         <div className="security-prompt-header">
-          <span className="security-prompt-shield"><ShieldAlert size={16} /></span>
+          <span className="security-prompt-shield">
+            <ShieldAlert size={16} />
+          </span>
           <h2 className="security-prompt-title">Security Concern Detected</h2>
         </div>
 

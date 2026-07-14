@@ -70,7 +70,11 @@ function Progress({ items }: ProgressProps): JSX.Element | null {
             <div className="progress-message">{item.message}</div>
             <div className="progress-time">
               {!item.done && elapsed[item.id] && formatTime(elapsed[item.id])}
-              {item.done && <><Check size={12} /> Done</>}
+              {item.done && (
+                <>
+                  <Check size={12} /> Done
+                </>
+              )}
             </div>
           </div>
 

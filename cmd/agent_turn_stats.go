@@ -56,6 +56,7 @@ func notifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPromp
 // glyph vocabulary in pkg/console; the model name sits in dim grey so the
 // eye is drawn to the bar, not the metadata.
 func printAssistantHeader(model string) {
+	model = shortModelName(model)
 	colorOn := envutil.ResolveColorPreference(true)
 	if !colorOn {
 		fmt.Printf("▌ assistant · %s\n", model)
@@ -158,7 +159,7 @@ func resetTurnFirstToken() {
 // wall time, plus ttft when available. Silent when no tokens were used
 // (e.g. the turn was a slash command or zsh fast path). Only shown when
 // stderr is a TTY (respects NO_COLOR for ANSI codes). SP-048-5a.
-func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int, costBefore float64) {
+func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int) {
 	if !shouldShowTurnStats() {
 		return
 	}
@@ -167,7 +168,6 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 	if promptDelta <= 0 && completionDelta <= 0 {
 		return
 	}
-	costDelta := chatAgent.GetTotalCost() - costBefore
 	elapsed := time.Since(start)
 
 	var ttft time.Duration
@@ -178,7 +178,7 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 		}
 	}
 
-	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed, ttft))
+	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, 0, elapsed, ttft))
 }
 
 func compactTokens(n int) string {
@@ -216,11 +216,22 @@ func compactDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
+// shortModelName strips the lab/org prefix from a model ID for display.
+// "deepseek-ai/DeepSeek-V4-Flash" → "DeepSeek-V4-Flash"
+// "meta-llama/Llama-3.3-70B-Instruct" → "Llama-3.3-70B-Instruct"
+// "glm-4.6" → "glm-4.6" (no slash, returned as-is)
+func shortModelName(model string) string {
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		return model[i+1:]
+	}
+	return model
+}
+
 // buildPromptPrefix returns the interactive REPL prompt for the given
 // model. SP-048-5d. Format: "<model> ▸ " when a model name is available,
 // "sprout> " as the legacy fallback when it isn't.
 func buildPromptPrefix(model string) string {
-	model = strings.TrimSpace(model)
+	model = strings.TrimSpace(shortModelName(model))
 	if model == "" {
 		return "sprout> "
 	}

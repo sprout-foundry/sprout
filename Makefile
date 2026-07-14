@@ -123,10 +123,9 @@ test-race: prepare-grammars
 		exit $$status; \
 	fi'
 
-# Integration Tests - Mocked AI, file operations
+# Integration Tests - Removed in 60d5e580 (legacy bash scripts deprecated)
 test-integration:
-	@echo "Running integration tests..."
-	python3 integration_test_runner.py
+	@echo "Integration tests removed (see commit 60d5e580). Use 'make test-unit' or 'make test-smoke'."
 
 # E2E Tests - Real LLM models (expensive)
 test-e2e:

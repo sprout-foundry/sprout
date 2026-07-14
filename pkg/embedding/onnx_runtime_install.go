@@ -88,14 +88,14 @@ func onnxRuntimeReleaseFor(goos, goarch string) (onnxRuntimeReleaseConfig, bool)
 				Format:         "tgz",
 			}, true
 		}
-		case "windows":
-			if goarch == "amd64" {
-				return onnxRuntimeReleaseConfig{
-					URL:            base + "/onnxruntime-win-x64-" + onnxRuntimeVersion + ".zip",
-					InnerLibSuffix: "/lib/onnxruntime.dll",
-					Format:         "zip",
-				}, true
-			}
+	case "windows":
+		if goarch == "amd64" {
+			return onnxRuntimeReleaseConfig{
+				URL:            base + "/onnxruntime-win-x64-" + onnxRuntimeVersion + ".zip",
+				InnerLibSuffix: "/lib/onnxruntime.dll",
+				Format:         "zip",
+			}, true
+		}
 	}
 	// Note: Android has no entry here because Microsoft does not publish a
 	// standalone Android artifact on the GitHub releases page. Android ONNX

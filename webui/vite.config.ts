@@ -172,6 +172,14 @@ export default defineConfig(({ mode }) => {
         'react',
         'react-dom',
         '@codemirror/language',
+        // CJS transitive deps that fail Vite's on-demand optimizer
+        // with "does not provide an export named 'default'" in dev mode.
+        'style-to-js',
+        'debug',
+        'extend',
+        'async-lock',
+        'safe-buffer',
+        'process',
       ],
       // Exclude React-consuming packages from esbuild pre-bundling.
       // esbuild's optimizer resolves their `import 'react'` from their
@@ -190,7 +198,6 @@ export default defineConfig(({ mode }) => {
         'lucide-react',
         '@sprout/ui',
         'react-virtuoso',
-        'isomorphic-git',
       ],
     },
   };

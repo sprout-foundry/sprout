@@ -403,7 +403,11 @@ function Chat(props: ChatProps): JSX.Element {
           onToggleIndex={handleToggleIndex}
         />
         {indexingError && (
-          <div className="indexing-error-banner" role="alert" style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}>
+          <div
+            className="indexing-error-banner"
+            role="alert"
+            style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}
+          >
             {indexingError}
           </div>
         )}

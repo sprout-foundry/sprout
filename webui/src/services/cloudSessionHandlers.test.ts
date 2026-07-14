@@ -87,12 +87,7 @@ describe('cloudSessionHandlers', () => {
 
     it('lists persisted sessions with scope=current ignored (returns all)', async () => {
       const id = saveSession([userMsg('hello'), assistantMsg('hi')]);
-      const res = handleCloudSessionsEndpoint(
-        '/api/sessions',
-        'GET',
-        '/api/sessions?scope=current',
-        undefined,
-      )!;
+      const res = handleCloudSessionsEndpoint('/api/sessions', 'GET', '/api/sessions?scope=current', undefined)!;
       const body = await res.json();
       expect(body.sessions).toHaveLength(1);
       expect(body.sessions[0].session_id).toBe(id);
@@ -158,12 +153,7 @@ describe('cloudSessionHandlers', () => {
     });
 
     it('succeeds even when the id was already absent (idempotent)', async () => {
-      const res = handleCloudSessionsEndpoint(
-        '/api/sessions/ghost',
-        'DELETE',
-        '/api/sessions/ghost',
-        undefined,
-      )!;
+      const res = handleCloudSessionsEndpoint('/api/sessions/ghost', 'DELETE', '/api/sessions/ghost', undefined)!;
       expect(res.status).toBe(200);
     });
 

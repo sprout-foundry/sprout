@@ -19,14 +19,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // are created via vi.hoisted (also hoisted) and referenced from the
 // factories by the same variable name.
 
-const {
-  mockGitAdd,
-  mockGitCommit,
-  mockGitStatusMatrix,
-  mockGitInit,
-  mockGitLog,
-  mockGitPush,
-} = vi.hoisted(() => ({
+const { mockGitAdd, mockGitCommit, mockGitStatusMatrix, mockGitInit, mockGitLog, mockGitPush } = vi.hoisted(() => ({
   mockGitAdd: vi.fn(),
   mockGitCommit: vi.fn(),
   mockGitStatusMatrix: vi.fn(),

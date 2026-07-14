@@ -15,12 +15,7 @@
  * service-layer and UI code needs no changes.
  */
 
-import {
-  deleteSession,
-  listSessions,
-  restoreSession,
-  deserializeMessages,
-} from './cloudSessionStore';
+import { deleteSession, listSessions, restoreSession, deserializeMessages } from './cloudSessionStore';
 import { jsonError, jsonOk } from './cloudWasmHandlers';
 
 /**

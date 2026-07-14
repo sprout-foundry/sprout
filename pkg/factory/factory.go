@@ -295,28 +295,33 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to build provider config: %w", err)
 	}
-	// If we have a stored credential, prefer it over the env var. The env var
-	// resolution happens inside NewGenericProvider. Only error if neither is set.
-	resolved, resolveErr := credentials.ResolveProvider(providerName)
-	hasStoredCred := resolveErr == nil && strings.TrimSpace(resolved.Value) != ""
-	hasEnvVar := customProvider.EnvVar != "" && strings.TrimSpace(os.Getenv(customProvider.EnvVar)) != ""
-	if !hasStoredCred && !hasEnvVar {
-		// Three options: export env var, set credential via /keys,
-		// or run /custom add (which detects this case and offers to
-		// store the key directly).
-		var envHint string
-		switch {
-		case customProvider.EnvVar != "":
-			envHint = fmt.Sprintf(" Set %s, run '/keys set %s <api_key>', or run '/custom add %s' to be guided through it.",
-				customProvider.EnvVar, providerName, providerName)
-		default:
-			envHint = fmt.Sprintf(" Run '/keys set %s <api_key>' or '/custom add %s' to configure credentials.",
-				providerName, providerName)
+	// Only enforce credentials when the provider actually requires them.
+	// customProvider.RequiresAPIKey=true (or EnvVar set) signals a key is
+	// needed; otherwise (e.g. local mocks in tests, self-hosted Ollama on
+	// localhost) auth is optional and we should pass through.
+	needsCred := customProvider.RequiresAPIKey || customProvider.EnvVar != ""
+	if needsCred {
+		resolved, resolveErr := credentials.ResolveProvider(providerName)
+		hasStoredCred := resolveErr == nil && strings.TrimSpace(resolved.Value) != ""
+		hasEnvVar := customProvider.EnvVar != "" && strings.TrimSpace(os.Getenv(customProvider.EnvVar)) != ""
+		if !hasStoredCred && !hasEnvVar {
+			// Three options: export env var, set credential via /keys,
+			// or run /custom add (which detects this case and offers to
+			// store the key directly).
+			var envHint string
+			switch {
+			case customProvider.EnvVar != "":
+				envHint = fmt.Sprintf(" Set %s, run '/keys set %s <api_key>', or run '/custom add %s' to be guided through it.",
+					customProvider.EnvVar, providerName, providerName)
+			default:
+				envHint = fmt.Sprintf(" Run '/keys set %s <api_key>' or '/custom add %s' to configure credentials.",
+					providerName, providerName)
+			}
+			return nil, fmt.Errorf("custom provider %q is registered but has no credentials configured.%s", providerName, envHint)
 		}
-		return nil, fmt.Errorf("custom provider %q is registered but has no credentials configured.%s", providerName, envHint)
-	}
-	if hasStoredCred {
-		genericConfig.Auth.Key = strings.TrimSpace(resolved.Value)
+		if hasStoredCred {
+			genericConfig.Auth.Key = strings.TrimSpace(resolved.Value)
+		}
 	}
 
 	client, err := providers.NewGenericProvider(genericConfig)

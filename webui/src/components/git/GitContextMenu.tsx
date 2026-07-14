@@ -11,6 +11,12 @@ export interface GitContextMenuProps {
   onUnstageFile: (path: string) => void;
   onDiscardFile: (path: string) => void;
   onClose: () => void;
+  /** Disable the Unstage menu item (browser mode). */
+  unstageDisabled?: boolean;
+  /** Disable the Discard/Delete menu item (browser mode). */
+  discardDisabled?: boolean;
+  /** Tooltip for disabled-for-browser menu items. */
+  unsupportedTooltip?: string;
 }
 
 function GitContextMenu({
@@ -22,6 +28,9 @@ function GitContextMenu({
   onUnstageFile,
   onDiscardFile,
   onClose,
+  unstageDisabled = false,
+  discardDisabled = false,
+  unsupportedTooltip,
 }: GitContextMenuProps) {
   if (!contextMenu) return null;
 
@@ -77,9 +86,12 @@ function GitContextMenu({
         <button
           className="context-menu-item"
           onClick={() => {
+            if (unstageDisabled) return;
             onClose();
             onUnstageFile(contextMenu.file.path);
           }}
+          disabled={unstageDisabled}
+          title={unstageDisabled ? unsupportedTooltip : undefined}
         >
           Unstage
         </button>
@@ -97,9 +109,12 @@ function GitContextMenu({
       <button
         className="context-menu-item danger"
         onClick={() => {
+          if (discardDisabled) return;
           onClose();
           onDiscardFile(contextMenu.file.path);
         }}
+        disabled={discardDisabled}
+        title={discardDisabled ? unsupportedTooltip : undefined}
       >
         {contextMenu.section === 'deleted' ? 'Restore' : 'Delete'}
       </button>

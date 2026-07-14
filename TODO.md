@@ -741,3 +741,132 @@ split:
   sub-manager change in 1 file instead of touching the 700-line
   monolith.
 
+---
+
+## AUDIT-UF-2026-07-12: User Flows & Functionality Audit
+
+**Date**: 2026-07-12 | **Scope**: End-to-end user flows, broken steps, missing
+error handling, UX gaps | **Method**: Subagent trace of CLI, WebUI, WASM,
+MCP, subagent, auth, billing, task, and mode flows.
+
+### 🔴 Critical (Flow is broken)
+
+✅C1:** `browse_url` always errors in browser/WASM mode.
+      `nopRenderer` returns "browser rendering not available" with no
+      client-side fallback. Cloud agent cannot inspect web pages.
+      **Files**: `pkg/webcontent/browser_none.go:166-188`,
+      `pkg/agent_tools/browse_url_handler.go:58-60`
+
+✅C2:** `run_automate` + `create_pull_request` wired in WASM
+      but call host-only code (no `!js` build guard). Either errors
+      opaquely or hangs when invoked in browser.
+      **Files**: `pkg/agent/agent_tool_wiring.go:55-62`,
+      `pkg/agent/tool_handlers_automate.go:119`
+
+✅C3:** Chat sessions don't persist across page loads in
+      cloud/browser mode. `/api/sessions` returns `[]`, `/api/sessions/restore`
+      returns error. Refresh loses entire conversation.
+      **Files**: `webui/src/services/cloudEndpointRegistry/endpoints/synthetic.ts:224-236`,
+      `webui/src/hooks/useAppInitialization.ts:246,259`
+
+### 🟠 High (Major UX gap)
+
+✅H1:** Four guided MCP setup functions (GitHub, Playwright,
+      Chrome DevTools, git) are dead code — never dispatched from
+      `runMCPAdd`. Users only get generic template picker.
+      **Files**: `cmd/mcp_add.go:196,295,532,629` (defs); dispatcher only
+      uses `setupCustomMCPServer`
+
+✅H2:** Browser git operations are unreachable
+      (`supportsGit=false` never flips) AND incomplete (unstage/reset return
+      fake success). ~800 lines of dead code. Missing ops: pull, pull-request,
+      discard, revert, commit-message.
+      **Files**: `webui/src/services/browserGit.ts:337-379`,
+      `webui/src/config/mode.ts:66`, `webui/src/services/cloudAdapter.ts:37`
+
+✅H3:** Subagents have no default timeout. A stuck/hung
+      subagent blocks the primary indefinitely. Only cancellation is
+      parent context — no per-subagent deadline.
+      **Files**: `pkg/agent/subagent_task.go:50-55`,
+      `pkg/agent/subagent_runners.go`
+
+✅H4:** Screenshot path has no VFS/image-attach plumbing in
+      WASM — even if browser existed, file goes nowhere and model never
+      receives the image.
+      **Files**: `pkg/agent_tools/browse_url_handler.go:65-70`,
+      `pkg/webcontent/browse.go:33-43`,
+      `pkg/agent_tools/browse_url_handler_image_nonjs.go`
+
+✅H5:** `/rewind` interactive prompt uses raw
+      `bufio.NewReader(os.Stdin)` which fights the REPL terminal state
+      (cooked mode, scroll regions, status footer).
+      **Files**: `pkg/agent_commands/rewind_command.go:62-72`
+
+### 🟡 Medium (Minor gap)
+
+✅M1:** PR dialog collects no "head" branch field — always
+      uses current branch. API contract supports `head` but UI omits it.
+      **Files**: `webui/src/components/git/GitPRDialog.tsx`,
+      `webui/src/services/api/gitApi.ts:232-252`
+
+✅M2:** `handleSendMessage` decrements `activeRequestsRef` only
+      in `catch`, not on success. Under flaky WS conditions, next message
+      may be misrouted to steer branch.
+      **Files**: `webui/src/hooks/useMessageSending.ts:96-129`
+
+✅M3:** Semantic search silently returns `[]` in cloud mode
+      with no "unavailable" signal. User assumes no matches.
+      **Files**: `webui/src/services/cloudEndpointRegistry/endpoints/synthetic.ts:133-135`,
+      `webui/src/components/SearchView.tsx:389`
+
+✅M4:** Embedding-index POST toggle has no synthetic handler
+      in cloud mode. Falls through to backend proxy → 401/404. Silently
+      no-ops.
+      **Files**: `webui/src/components/ChatView.tsx:273-289`,
+      `webui/src/services/cloudEndpointRegistry/endpoints/synthetic.ts:160-165`
+
+✅M5:** MCP "Test Connection" exists in CLI but missing from
+      WebUI settings. Misconfigured servers discovered only mid-turn.
+      **Files**: `webui/src/components/settings/MCPSettingsTab.tsx`
+
+✅M6:** CLI startup config failure exits with WebUI-only
+      remediation hint. Pure-CLI users get no `keys set` guidance.
+      **Files**: `cmd/root.go:146-156`
+
+✅M7:** Parallel-subagent-disabled error surfaced as tool
+      failure, not user guidance. User sees cryptic failure.
+      **Files**: `pkg/agent/tool_handlers_subagent_spawn.go:418-422`
+
+### 🟢 Low (Polish)
+
+✅L1:** Onboarding manual provider entry uses raw `bufio`
+      stdin (empty-catalog fallback). Rare but terminal-state-inconsistent.
+      **Files**: `cmd/onboarding.go:184-199`
+
+✅L2:** First-run hint reprints forever if `~/.sprout/state.json`
+      is unwritable. No diagnostic.
+      **Files**: `cmd/first_run_hint.go:55`
+
+✅L3:** Embedding-index toggle failure logs to `console.error`
+      only — no toast, no state rollback.
+      **Files**: `webui/src/components/ChatView.tsx:283-288`
+
+✅L4:** "No git in browser mode" empty state in Sidebar is
+      unreachable dead code (tab is filtered out).
+      **Files**: `webui/src/components/Sidebar.tsx:313-318`
+
+✅L5:** GitHub PAT "add to shell profile" prompt only prints
+      instructions, doesn't edit the file.
+      **Files**: `cmd/mcp_add.go:446-456`
+
+### Cross-cutting observations
+
+1. **Cloud/Mode C is the weakest surface.** Nearly every "not available
+   in browser mode" stub silently returns empty rather than surfacing
+   unavailability (C1, C3, M3, M4, L3).
+2. **Browser git subsystem (~800 lines) is effectively dead** because
+   `supportsGit=false` is never toggled (H2, L4).
+3. **Terminal-state discipline is inconsistent** — codebase has
+   infrastructure for REPL-safe prompts but `/rewind` and onboarding
+   fallback bypass it (H5, L1).
+

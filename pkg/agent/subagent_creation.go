@@ -134,7 +134,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// inheritance by reference is correct.
 	if r.parentAgent != nil {
 		if tm := r.parentAgent.GetTerminalManager(); tm != nil {
-			agent.terminalManager = tm
+			agent.SetTerminalManager(tm)
 		}
 	}
 

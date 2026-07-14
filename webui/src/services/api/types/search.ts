@@ -92,6 +92,8 @@ export interface SemanticSearchResponse {
   query: string;
   total: number;
   duration: string;
+  /** Optional informational note (e.g. when unavailable in browser mode). */
+  note?: string;
 }
 
 export interface SemanticSearchStatusResponse {

@@ -37,7 +37,9 @@
 }
 
 @keyframes thinking-pulse {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     opacity: 0.3;
     transform: scale(0.8);
   }
@@ -151,7 +153,10 @@
   right: 28px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s var(--ease-out), color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+  transition:
+    opacity 0.15s var(--ease-out),
+    color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out);
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   color: var(--text-muted);

@@ -245,7 +245,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 	// Inherit the parent's TerminalManager so shell_command with
 	// background=true / check_background works inside the loop.
 	if tm := parentAgent.GetTerminalManager(); tm != nil {
-		workflowAgent.terminalManager = tm
+		workflowAgent.SetTerminalManager(tm)
 	}
 
 	// Share the parent's clarificationManager so the workflow agent

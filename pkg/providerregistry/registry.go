@@ -201,7 +201,7 @@ func (r *RemoteProviderConfig) defaultsToNative() providers.RequestDefaults {
 }
 
 func (r *RemoteProviderConfig) conversionToNative() providers.MessageConversion {
-	return providers.MessageConversion{
+	mc := providers.MessageConversion{
 		IncludeToolCallID:        r.Conversion.IncludeToolCallID,
 		ConvertToolRoleToUser:    r.Conversion.ConvertToolRoleToUser,
 		ReasoningContentField:    r.Conversion.ReasoningContentField,
@@ -209,6 +209,12 @@ func (r *RemoteProviderConfig) conversionToNative() providers.MessageConversion 
 		SkipToolExecutionSummary: r.Conversion.SkipToolExecutionSummary,
 		ForceToolCallType:        r.Conversion.ForceToolCallType,
 	}
+	// Enforce standard OpenAI tool-calling defaults for remote configs that
+	// omit message_conversion settings. Same rationale as custom providers.
+	if !mc.IncludeToolCallID {
+		mc.IncludeToolCallID = true
+	}
+	return mc
 }
 
 func (r *RemoteProviderConfig) streamingToNative() providers.StreamingConfig {

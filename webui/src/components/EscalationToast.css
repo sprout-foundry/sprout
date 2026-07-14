@@ -7,8 +7,14 @@
 }
 
 @keyframes escalation-slide-in {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .escalation-toast {
@@ -36,7 +42,7 @@
 }
 
 .escalation-toast-close:hover {
-  background: var(--bg-hover, rgba(255,255,255,0.08));
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
   color: var(--text-primary, #e0e0e0);
 }
 

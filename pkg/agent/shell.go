@@ -44,12 +44,13 @@ func getShellOutputTokenLimits() (head, tail int) {
 func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command string) (string, error) {
 	// Wire TerminalManager into context for WebUI mode
 	// (nil-safe: WithTerminalManager handles nil TerminalAccess)
-	if tm := a.terminalManager; tm != nil {
+	tm := a.GetTerminalManager()
+	if tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
 	}
 
 	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
-	if a.terminalManager == nil {
+	if tm == nil {
 		if a.backgroundProcessManager == nil {
 			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
 		}
@@ -259,12 +260,13 @@ func (a *Agent) updatePreviousShellCommandMessage(prevResult *ShellCommandResult
 // checkBackgroundOutput retrieves accumulated output for a background shell session.
 func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string, waitSeconds int) (string, error) {
 	// Wire TerminalManager into context for WebUI mode
-	if tm := a.terminalManager; tm != nil {
+	tm := a.GetTerminalManager()
+	if tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
 	}
 
 	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
-	if a.terminalManager == nil {
+	if tm == nil {
 		if a.backgroundProcessManager == nil {
 			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
 		}
@@ -287,7 +289,7 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string, wai
 // stopBackgroundSession terminates a background shell session by session ID.
 func (a *Agent) stopBackgroundSession(sessionID string) (string, error) {
 	// Try TerminalManager first (WebUI mode)
-	if tm := a.terminalManager; tm != nil {
+	if tm := a.GetTerminalManager(); tm != nil {
 		if err := tm.StopBackgroundSession(sessionID); err != nil {
 			return "", agenterrors.Wrapf(err, "failed to stop background session %s", sessionID)
 		}
@@ -309,12 +311,13 @@ func (a *Agent) stopBackgroundSession(sessionID string) (string, error) {
 // that should not block the agent.
 func (a *Agent) executeShellCommandBackground(ctx context.Context, command string) (string, error) {
 	// Wire TerminalManager into context for WebUI mode
-	if tm := a.terminalManager; tm != nil {
+	tm := a.GetTerminalManager()
+	if tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
 	}
 
 	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
-	if a.terminalManager == nil {
+	if tm == nil {
 		if a.backgroundProcessManager == nil {
 			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
 		}

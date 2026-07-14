@@ -39,7 +39,9 @@ function DriftNotification({ similarity, threshold, onContinue, onNewChat }: Dri
 
         {/* Header */}
         <div className="drift-header">
-          <span className="drift-icon"><TriangleAlert size={16} /></span>
+          <span className="drift-icon">
+            <TriangleAlert size={16} />
+          </span>
           <h2 className="drift-title">Conversation Drift Detected</h2>
         </div>
 

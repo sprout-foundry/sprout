@@ -32,12 +32,18 @@ export async function handleBrowserGitRequest(
   const qIdx = fullUrl.indexOf('?');
   if (qIdx >= 0) {
     const params = new URLSearchParams(fullUrl.substring(qIdx));
-    params.forEach((v, k) => { query[k] = v; });
+    params.forEach((v, k) => {
+      query[k] = v;
+    });
   }
 
   let body: Record<string, unknown> | undefined;
   if (bodyStr) {
-    try { body = JSON.parse(bodyStr); } catch { /* ignore */ }
+    try {
+      body = JSON.parse(bodyStr);
+    } catch {
+      /* ignore */
+    }
   }
 
   try {

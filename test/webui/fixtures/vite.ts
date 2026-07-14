@@ -25,8 +25,10 @@ export interface ViteHandle {
 }
 
 export interface StartViteOptions {
-  /** Override the port (default: 3000 from vite.config.ts) */
+  /** Override the port (default: OS-assigned via pickFreePort) */
   port?: number;
+  /** Sprout backend URL for Vite's dev proxy (e.g. http://127.0.0.1:56000) */
+  sproutBackendUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +70,8 @@ export async function startViteDevServer(opts: StartViteOptions = {}): Promise<V
       ...process.env,
       // Prevent vite from opening a browser
       BROWSER: 'none',
+      // Wire Vite's dev proxy to the sprout backend
+      ...(opts.sproutBackendUrl ? { SPROUT_DEV_BACKEND_URL: opts.sproutBackendUrl } : {}),
     },
   });
 

@@ -123,6 +123,8 @@ export async function startSprout(opts: StartSproutOptions = {}): Promise<Sprout
   args.push('--daemon');
 
   // Environment overrides for isolation
+  // Strip CI env vars — IsCI() in agent_modes.go disables the web UI when
+  // CI=true, which would prevent the web server from starting during E2E.
   const env: Record<string, string> = {
     ...process.env,
     HOME: configDir,
@@ -133,6 +135,8 @@ export async function startSprout(opts: StartSproutOptions = {}): Promise<Sprout
     // Skip connection check to speed up startup
     SPROUT_NO_CONNECTION_CHECK: '1',
   };
+  delete env.CI;
+  delete env.GITHUB_ACTIONS;
 
   const bin = path.join(REPO_ROOT, 'sprout');
   const child = spawn(bin, args, {

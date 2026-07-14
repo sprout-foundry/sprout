@@ -936,6 +936,7 @@ class ApiService {
     query: string;
     total: number;
     duration: string;
+    note?: string;
   }> {
     return searchApi.searchSemantic(clientFetch, query, options);
   }

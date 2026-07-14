@@ -58,6 +58,7 @@ const fallbackHotkeys: HotkeyEntry[] = [
   { key: 'Cmd+Alt+W', command_id: 'close_other_editors', global: true },
   { key: 'Ctrl+Tab', command_id: 'focus_next_tab', global: false },
   { key: 'Ctrl+Shift+Tab', command_id: 'focus_prev_tab', global: false },
+  { key: 'Cmd+Shift+Tab', command_id: 'focus_prev_tab', global: false },
   { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap', global: false },
   { key: 'Shift+Alt+F', command_id: 'format_document', global: false },
   { key: 'Shift+Cmd+F', command_id: 'format_document', global: false },

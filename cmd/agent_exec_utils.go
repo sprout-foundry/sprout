@@ -218,9 +218,9 @@ func formatCompletionSummary(chatAgent *agent.Agent) string {
 
 	parts := []string{}
 	if limit > 0 {
-		parts = append(parts, fmt.Sprintf("%s/%s ctx", compactTokens(ctx), compactTokens(limit)))
+		parts = append(parts, fmt.Sprintf("%s/%s", compactTokens(ctx), compactTokens(limit)))
 	} else if ctx > 0 {
-		parts = append(parts, fmt.Sprintf("%s ctx", compactTokens(ctx)))
+		parts = append(parts, compactTokens(ctx))
 	}
 	if cost > 0 {
 		parts = append(parts, formatCompactCost(cost))

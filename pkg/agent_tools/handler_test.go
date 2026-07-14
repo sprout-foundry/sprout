@@ -825,6 +825,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		// SP-109 Phase 3 Batch C — clarification function-pointer tools
 		"request_clarification": "request_clarification",
 		"respond_clarification": "respond_clarification",
+		"register_preview_port": "register_preview_port",
 		"get_callers":           "get_callers",
 		"get_callees":           "get_callees",
 		"find_dead_code":        "find_dead_code",

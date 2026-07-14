@@ -20,6 +20,24 @@ func (ir *InputReader) Refresh() {
 // PrintExternal to clear the line, print an external message, and redraw
 // the input in a single atomic lock-held sequence.
 func (ir *InputReader) refreshLocked() {
+	// Clear any existing autocomplete dropdown before redrawing the input
+	// line, so stale rows don't persist.
+	if ir.autocomplete != nil {
+		ir.autocomplete.clear()
+	}
+	ir.refreshInputLine()
+	// After the input line is drawn, update and render the autocomplete
+	// dropdown if the line starts with "/".
+	if ir.autocomplete != nil {
+		ir.autocomplete.update(ir.line, ir.cursorPos, ir.completer, ir.richCompleter)
+		ir.autocomplete.render()
+	}
+}
+
+// refreshInputLine is the original refreshLocked body — draws the
+// prompt + input buffer and positions the cursor. Called by
+// refreshLocked after clearing the autocomplete dropdown.
+func (ir *InputReader) refreshInputLine() {
 	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()
 	promptWidth := len(promptRunes)

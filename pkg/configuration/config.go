@@ -226,8 +226,8 @@ type Config struct {
 	Skills map[string]Skill `json:"skills,omitempty"` // Agent Skills that can be loaded into context
 
 	// Zsh Command Execution
-	EnableZshCommandDetection   bool `json:"enable_zsh_command_detection"`     // Enable zsh-aware command detection (default: true)
-	AutoExecuteDetectedCommands bool `json:"auto_execute_detected_commands"`   // Auto-execute detected commands without prompting (default: true)
+	EnableZshCommandDetection   bool `json:"enable_zsh_command_detection"`   // Enable zsh-aware command detection (default: true)
+	AutoExecuteDetectedCommands bool `json:"auto_execute_detected_commands"` // Auto-execute detected commands without prompting (default: true)
 
 	// Security Policy Configuration
 	SecurityPolicy *SecurityPolicy `json:"security_policy,omitempty"`

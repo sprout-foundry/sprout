@@ -479,8 +479,7 @@ describe('cloudEndpointRegistry', () => {
       expect(foundryBackend.length).toBeGreaterThan(0);
       // Sanity check: the four categories together account for all
       // registered endpoints.
-      expect(foundryBackend.length + wasmLocal.length + synthetic.length + noOp.length)
-        .toBe(CLOUD_ENDPOINTS.length);
+      expect(foundryBackend.length + wasmLocal.length + synthetic.length + noOp.length).toBe(CLOUD_ENDPOINTS.length);
     });
 
     it('should have a reasonable number of foundry-backend endpoints', () => {
@@ -587,11 +586,7 @@ describe('cloudEndpointRegistry', () => {
     it('should correctly classify settings endpoints', () => {
       // Core settings endpoints (user prefs, credentials, providers) are
       // foundry-backend — the platform owns them.
-      const proxiedSettings = [
-        '/api/settings',
-        '/api/settings/credentials',
-        '/api/settings/providers',
-      ];
+      const proxiedSettings = ['/api/settings', '/api/settings/credentials', '/api/settings/providers'];
 
       for (const path of proxiedSettings) {
         const getResult = classifyEndpoint(path, 'GET');

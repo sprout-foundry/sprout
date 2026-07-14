@@ -1,6 +1,8 @@
 import { AlertTriangle, CheckSquare, MinusSquare, PlusSquare, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { isCloud } from '../config/mode';
 import { MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';
+import { BROWSER_GIT_UNSUPPORTED_OPS } from '../services/browserGit';
 import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';
 import { parseSelectionKey } from '../types/git-types';
 import GitCommitBox from './git/GitCommitBox';
@@ -9,6 +11,19 @@ import GitFileSections from './git/GitFileSections';
 import GitHeader from './git/GitHeader';
 import GitPRDialog from './git/GitPRDialog';
 import { showThemedPrompt } from './ThemedDialog';
+
+// Tooltip shown on disabled buttons that browser git can't perform.
+const BROWSER_UNSUPPORTED_TOOLTIP = 'Not available in browser mode';
+
+/**
+ * Whether a given git op (by the names used in browserGit's
+ * executeGitOp switch) is unavailable in cloud/browser mode. Returns
+ * false everywhere except browser mode so local-mode callers always
+ * report full support.
+ */
+export function isGitOpUnsupported(op: string): boolean {
+  return isCloud && BROWSER_GIT_UNSUPPORTED_OPS.has(op);
+}
 
 // Re-export types so existing consumers (tests, Sidebar, etc.) don't break.
 export type { GitStatusData, GitFile } from '../types/git-types';
@@ -179,6 +194,19 @@ function GitSidebarPanel({
 
   const hasStagedFiles = (gitStatus?.staged.length ?? 0) > 0;
   const branchName = gitBranches.current || gitStatus?.branch || 'detached';
+
+  // In cloud/browser mode several git ops are unimplemented (unstage,
+  // discard, pull, revert, PR). Disable the corresponding UI so users
+  // never trigger a "not yet supported in browser mode" 500 error.
+  const unsupported = {
+    unstage: isGitOpUnsupported('unstage'),
+    discard: isGitOpUnsupported('discard'),
+    pull: isGitOpUnsupported('pull'),
+    revert: isGitOpUnsupported('revert'),
+    pullRequest: isGitOpUnsupported('pull-request'),
+  } as const;
+  const unsupportedTooltip = isCloud ? BROWSER_UNSUPPORTED_TOOLTIP : undefined;
+
   const totalFiles =
     (gitStatus?.staged.length ?? 0) +
     (gitStatus?.modified.length ?? 0) +
@@ -238,6 +266,9 @@ function GitSidebarPanel({
         onPush={onPush}
         onOpenPrDialog={() => setShowPrDialog(true)}
         onRefresh={onRefresh}
+        pullDisabled={unsupported.pull}
+        pullRequestDisabled={unsupported.pullRequest}
+        unsupportedTooltip={unsupportedTooltip}
       />
 
       <GitCommitBox
@@ -280,13 +311,23 @@ function GitSidebarPanel({
               </button>
             )}
             {unstageSelectedCount > 0 && (
-              <button className="sidebar-action-btn compact" onClick={onUnstageSelected} disabled={isActing}>
+              <button
+                className="sidebar-action-btn compact"
+                onClick={onUnstageSelected}
+                disabled={isActing || unsupported.unstage}
+                title={unsupported.unstage ? unsupportedTooltip : undefined}
+              >
                 <MinusSquare size={13} />
                 Unstage {unstageSelectedCount}
               </button>
             )}
             {discardSelectedCount > 0 && (
-              <button className="sidebar-action-btn compact danger" onClick={onDiscardSelected} disabled={isActing}>
+              <button
+                className="sidebar-action-btn compact danger"
+                onClick={onDiscardSelected}
+                disabled={isActing || unsupported.discard}
+                title={unsupported.discard ? unsupportedTooltip : undefined}
+              >
                 <Trash2 size={13} />
                 {selectedEntries.some((entry) => entry.section === 'deleted') ? 'Restore/Discard' : 'Discard'}{' '}
                 {discardSelectedCount}
@@ -322,6 +363,9 @@ function GitSidebarPanel({
         onLoadMore={handleLoadMore}
         onSetFileFilter={setFileFilter}
         onOpenContextMenu={handleOpenContextMenu}
+        unstageDisabled={unsupported.unstage}
+        discardDisabled={unsupported.discard}
+        unsupportedTooltip={unsupportedTooltip}
       />
 
       <GitContextMenu
@@ -333,6 +377,9 @@ function GitSidebarPanel({
         onUnstageFile={onUnstageFile}
         onDiscardFile={onDiscardFile}
         onClose={() => setContextMenu(null)}
+        unstageDisabled={unsupported.unstage}
+        discardDisabled={unsupported.discard}
+        unsupportedTooltip={unsupportedTooltip}
       />
 
       <GitPRDialog isOpen={showPrDialog} onClose={() => setShowPrDialog(false)} onPullRequest={onPullRequest} />

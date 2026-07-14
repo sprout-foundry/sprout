@@ -503,10 +503,7 @@ describe('CloudAdapter Integration Tests', () => {
     it('/api/settings/* paths → /api/proxy/settings/*', async () => {
       // Only the core settings endpoints are proxied; mcp/skills/subagent-types
       // are intercepted as synthetic (not available in browser mode).
-      const settingsPaths = [
-        '/api/settings/credentials',
-        '/api/settings/providers',
-      ];
+      const settingsPaths = ['/api/settings/credentials', '/api/settings/providers'];
 
       for (const path of settingsPaths) {
         mockFetch.mockClear();

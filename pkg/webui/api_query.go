@@ -453,18 +453,18 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 				capturedOutput = buf.String()
 			}
 
-					// Sync state asynchronously so the query goroutine can proceed
-		// to publish events without waiting for the state export.
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("handleAPIQuery: panic in slash-command state sync chat_id=%s: %v", chatID, r)
+			// Sync state asynchronously so the query goroutine can proceed
+			// to publish events without waiting for the state export.
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("handleAPIQuery: panic in slash-command state sync chat_id=%s: %v", chatID, r)
+					}
+				}()
+				if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
+					log.Printf("handleAPIQuery: async state sync failed chat_id=%s: %v", chatID, err)
 				}
-			}()
-			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-				log.Printf("handleAPIQuery: async state sync failed chat_id=%s: %v", chatID, err)
-			}
-		}()// Send any captured output as a stream chunk before reporting
+			}() // Send any captured output as a stream chunk before reporting
 			// success or error, so the user sees what the command printed.
 			if capturedOutput != "" {
 				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(

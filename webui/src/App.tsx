@@ -6,34 +6,29 @@ import { DisconnectedOverlay } from './components/DisconnectedOverlay';
 import DriftNotification from './components/DriftNotification';
 import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
+import { EscalationListener } from './components/EscalationListener';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
-import Notification from './components/Notification';
 import NotificationCenter from './components/NotificationCenter';
 import OnboardingDialog from './components/OnboardingDialog';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
-import ShellApprovalPanel from './components/ShellApprovalPanel';
 import UIManager from './components/UIManager';
 import UpdateNotification from './components/UpdateNotification';
 import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
-import { EscalationListener } from './components/EscalationListener';
 import { MAX_PERSISTED_LOGS } from './constants/app';
 import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
-import { LocalEventsProvider } from './services/localEventsProvider';
-import { notificationBus } from './services/notificationBus';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
 import { ProviderCatalogProvider } from './contexts/ProviderCatalogContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import './App.css';
-import './components/UpdateNotification.css';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
+import { useCloudSessionPersistence } from './hooks/useCloudSessionPersistence';
 import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
 import { useModelProviderHandlers } from './hooks/useModelProviderHandlers';
@@ -45,7 +40,11 @@ import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHand
 import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
 import { ApiService } from './services/api';
 import { loadPersistedAppState } from './services/appStatePersistence';
+import { LocalEventsProvider } from './services/localEventsProvider';
+import { notificationBus } from './services/notificationBus';
 import { debugLog } from './utils/log';
+import './App.css';
+import './components/UpdateNotification.css';
 
 // ── App Component ─────────────────────────────────────────────────────
 
@@ -184,9 +183,7 @@ function AppInner() {
         if (cancelled) return;
         const verbosity = settings.output_verbosity;
         if (verbosity === 'compact' || verbosity === 'default' || verbosity === 'verbose') {
-          if (verbosity !== state.outputVerbosity) {
-            setState(() => ({ outputVerbosity: verbosity }));
-          }
+          setState((prev) => (prev.outputVerbosity === verbosity ? prev : { outputVerbosity: verbosity }));
         }
       })
       .catch(() => {
@@ -231,6 +228,10 @@ function AppInner() {
   // ── Persistence ───────────────────────────────────────────────────
 
   useAppStatePersistence({ state });
+
+  // Cloud mode: mirror the conversation to localStorage so it survives
+  // page reloads and appears in the session picker. No-op in local mode.
+  useCloudSessionPersistence({ state });
 
   // ── Handlers ─────────────────────────────────────────────────────
 

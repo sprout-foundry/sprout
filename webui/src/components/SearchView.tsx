@@ -110,6 +110,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     filteredResults,
     semanticResults,
     semanticDuration,
+    semanticNote,
     duplicateClusters,
     truncated,
     displayMatches,
@@ -389,7 +390,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         {semanticResults && semanticResults.length === 0 && !isSearching && !error && (
           <div className="search-no-results">
             <Search size={24} />
-            <span>No semantic results found</span>
+            <span>{semanticNote || 'No semantic results found'}</span>
           </div>
         )}
 

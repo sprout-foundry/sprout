@@ -255,6 +255,13 @@ func (a *Agent) HasTurnCheckpoints() bool {
 	return len(a.state.GetTurnCheckpoints()) > 0
 }
 
+// GetTurnCheckpoints returns a defensive copy of the agent's turn
+// checkpoints. Callers (e.g. the /rewind slash command) can read the
+// list safely without holding the internal mutex.
+func (a *Agent) GetTurnCheckpoints() []TurnCheckpoint {
+	return a.copyTurnCheckpoints()
+}
+
 func (a *Agent) copyTurnCheckpoints() []TurnCheckpoint {
 	if a == nil {
 		return nil

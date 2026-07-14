@@ -634,9 +634,11 @@ export function useEventHandler({
         {
           const changedPath = String(eventData.path || eventData.file_path || '');
           if (changedPath) {
-            import('../services/cloudWasmHandlers').then(({ trackFileWrite }) => {
-              trackFileWrite(changedPath);
-            }).catch(() => {});
+            import('../services/cloudWasmHandlers')
+              .then(({ trackFileWrite }) => {
+                trackFileWrite(changedPath);
+              })
+              .catch(() => {});
           }
         }
 

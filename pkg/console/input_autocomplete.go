@@ -119,18 +119,31 @@ func (a *inlineAutocomplete) render() {
 	n := len(a.candidates)
 	more := 0
 	if n > maxAutocompleteRows {
-		n = maxAutocompleteRows
 		more = n - maxAutocompleteRows
+		n = maxAutocompleteRows
+	}
+
+	// Compute the scroll window so the selected item is always visible.
+	offset := 0
+	if a.selected >= n && more > 0 {
+		offset = a.selected - n + 1
+		if offset > more {
+			offset = more
+		}
 	}
 
 	// Save cursor position.
 	fmt.Print("\0337")
 
 	for i := 0; i < n; i++ {
-		c := a.candidates[i]
+		idx := i + offset
+		if idx >= len(a.candidates) {
+			break
+		}
+		c := a.candidates[idx]
 		fmt.Printf("%s%s", MoveCursorDownSeq(1), ClearLineSeq())
 
-		if i == a.selected {
+		if idx == a.selected {
 			fmt.Printf("\033[7m %s\033[27m", c.Text)
 			if c.Description != "" {
 				fmt.Printf(" \033[2;7m%s\033[27m", c.Description)
@@ -143,13 +156,16 @@ func (a *inlineAutocomplete) render() {
 		}
 	}
 
+	drawnRows := n
+
 	if more > 0 {
 		fmt.Printf("%s%s\033[2m ↓ %d more\033[0m", MoveCursorDownSeq(1), ClearLineSeq(), more)
+		drawnRows++
 	}
 
 	// Restore cursor position.
 	fmt.Print("\0338")
-	a.renderedRows = n
+	a.renderedRows = drawnRows
 }
 
 // clear erases any previously drawn dropdown rows. The caller must hold

@@ -503,16 +503,26 @@ func (ir *InputReader) ReadLine() (string, error) {
 					ir.handleMouseEvent(event.Data)
 					continue
 				}
-				if event.Type == EventEnter {
-					// End of input
-					fmt.Println() // Move to next line
-					input := ir.line
-					if input != "" {
-						ir.AddToHistory(input)
+							if event.Type == EventEnter {
+				// If the autocomplete dropdown is visible, accept the
+				// selected candidate before submitting the line.
+				if ir.autocomplete != nil && ir.autocomplete.visible {
+					text := ir.autocomplete.accept()
+					if text != "" {
+						ir.line = text
+						ir.cursorPos = len(ir.line)
+						ir.autocomplete.hide()
 					}
-					return input, nil
 				}
-				ir.HandleEvent(event)
+				// End of input
+				fmt.Println() // Move to next line
+				input := ir.line
+				if input != "" {
+					ir.AddToHistory(input)
+				}
+				return input, nil
+			}
+			ir.HandleEvent(event)
 			}
 			for parser.hasPending {
 				pending := parser.Parse(0)
@@ -562,7 +572,7 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 			ir.autocomplete.moveSelection(1)
 			ir.Refresh()
 			return
-		case EventTab, EventEnter:
+		case EventTab:
 			text := ir.autocomplete.accept()
 			if text != "" {
 				ir.line = text
@@ -571,18 +581,11 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 				ir.historyIndex = -1
 				ir.autocomplete.hide()
 				ir.Refresh()
-				// Enter should still submit the line after accepting.
-				if event.Type == EventEnter {
-					// Fall through to the normal Enter handling below.
-				} else {
-					return
-				}
+				return
 			} else {
 				ir.autocomplete.hide()
 				ir.Refresh()
-				if event.Type == EventTab {
-					return
-				}
+				return
 			}
 		case EventEscape:
 			ir.autocomplete.hide()

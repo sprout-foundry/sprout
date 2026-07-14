@@ -1,6 +1,7 @@
 package console
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -224,5 +225,19 @@ func TestAutocomplete_RichCompleterEmptyFallsBackToPlain(t *testing.T) {
 	}
 	if a.candidates[0].Text != "/plain-fallback" {
 		t.Errorf("expected plain fallback candidate, got %q", a.candidates[0].Text)
+	}
+}
+
+func TestAutocomplete_MoreCountCorrect(t *testing.T) {
+	a := newInlineAutocomplete()
+	many := make([]CompletionCandidate, 12)
+	for i := range many {
+		many[i] = CompletionCandidate{Text: fmt.Sprintf("/cmd%02d", i)}
+	}
+	rich := func(_ string, _ int) []CompletionCandidate { return many }
+	a.update("/cmd", len("/cmd"), nil, rich)
+
+	if len(a.candidates) != 12 {
+		t.Fatalf("expected 12 candidates, got %d", len(a.candidates))
 	}
 }

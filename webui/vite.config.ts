@@ -172,10 +172,6 @@ export default defineConfig(({ mode }) => {
         'react',
         'react-dom',
         '@codemirror/language',
-        // Pre-bundle CJS transitive deps of react-markdown / @sprout/ui
-        // so Vite's dev optimizer resolves their default exports correctly.
-        'style-to-js',
-        'debug',
       ],
       // Exclude React-consuming packages from esbuild pre-bundling.
       // esbuild's optimizer resolves their `import 'react'` from their
@@ -184,11 +180,15 @@ export default defineConfig(({ mode }) => {
       // bypassing resolve.alias. Excluding them sends these packages
       // through vite's normal transform pipeline where the React-18
       // alias applies, so the whole tree shares one React.
+      //
+      // NOTE: react-markdown is intentionally NOT excluded. Its transitive
+      // CJS deps (style-to-js, debug, extend) fail Vite's on-demand
+      // optimizer with "does not provide an export named 'default'".
+      // The dedupe config above ensures a single React version.
       exclude: [
         '@codemirror/legacy-modes',
         'lucide-react',
         '@sprout/ui',
-        'react-markdown',
         'react-virtuoso',
       ],
     },

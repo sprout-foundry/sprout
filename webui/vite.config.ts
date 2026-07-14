@@ -190,6 +190,7 @@ export default defineConfig(({ mode }) => {
         'lucide-react',
         '@sprout/ui',
         'react-virtuoso',
+        'isomorphic-git',
       ],
     },
   };

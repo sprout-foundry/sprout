@@ -283,19 +283,33 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	}
 
 	if len(customProviders) == 0 {
-		return nil, fmt.Errorf("no custom providers configured")
+		return nil, fmt.Errorf("provider %q is not registered as a custom provider. Run 'sprout custom add %s' to register it, or switch to one of the providers shown in '/provider list'", providerName, providerName)
 	}
 
 	customProvider, exists := customProviders[providerName]
 	if !exists {
-		return nil, fmt.Errorf("custom provider not found: %s", providerName)
+		return nil, fmt.Errorf("custom provider %q is not registered. Run 'sprout custom add %s' to register it, or set %q in /provider list to a provider you have configured", providerName, providerName, providerName)
 	}
 
 	genericConfig, err := customProvider.ToProviderConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build provider config: %w", err)
 	}
-	if resolved, resolveErr := credentials.ResolveProvider(providerName); resolveErr == nil && strings.TrimSpace(resolved.Value) != "" {
+	// If we have a stored credential, prefer it over the env var. The env var
+	// resolution happens inside NewGenericProvider. Only error if neither is set.
+	resolved, resolveErr := credentials.ResolveProvider(providerName)
+	hasStoredCred := resolveErr == nil && strings.TrimSpace(resolved.Value) != ""
+	hasEnvVar := customProvider.EnvVar != "" && strings.TrimSpace(os.Getenv(customProvider.EnvVar)) != ""
+	if !hasStoredCred && !hasEnvVar {
+		envHint := ""
+		if customProvider.EnvVar != "" {
+			envHint = fmt.Sprintf(" Set %s or use '/keys set %s <api_key>'.", customProvider.EnvVar, providerName)
+		} else {
+			envHint = fmt.Sprintf(" Use '/keys set %s <api_key>'.", providerName)
+		}
+		return nil, fmt.Errorf("custom provider %q is registered but has no credentials configured.%s", providerName, envHint)
+	}
+	if hasStoredCred {
 		genericConfig.Auth.Key = strings.TrimSpace(resolved.Value)
 	}
 

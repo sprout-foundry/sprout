@@ -153,6 +153,10 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&VerboseCommand{})
 	registry.Register(&ToolsCommand{})
 
+	// Credential management
+	registry.Register(&KeysCommand{})
+	registry.RegisterAlias("key", "keys")
+
 	// Agent state overview
 	registry.Register(&InfoCommand{})
 

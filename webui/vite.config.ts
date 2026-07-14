@@ -168,7 +168,7 @@ export default defineConfig(({ mode }) => {
     
     // Optimize dependencies
     optimizeDeps: {
-      include: ['react', 'react-dom', '@codemirror/language'],
+      include: ['react', 'react-dom', '@codemirror/language', 'style-to-js'],
       // Exclude React-consuming packages from esbuild pre-bundling.
       // esbuild's optimizer resolves their `import 'react'` from their
       // OWN node_modules location (the monorepo root / packages/ui,

@@ -20,7 +20,7 @@ let page: Page;
 test.beforeAll(async () => {
   browser = await chromium.launch();
   sprout = await startSprout();
-  vite = await startViteDevServer();
+  vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });
   page = handle.page;
 });

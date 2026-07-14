@@ -35,7 +35,7 @@ async function main() {
   console.log(`✓ sprout ready at ${sprout.baseUrl}`);
 
   console.log(`Starting Vite dev server on port ${vitePort} ...`);
-  const vite = await startViteDevServer({ port: vitePort });
+  const vite = await startViteDevServer({ port: vitePort, sproutBackendUrl: sprout.baseUrl });
   console.log(`✓ Vite ready at ${vite.url}`);
 
   // Write .ports.json so Playwright / other tooling can discover the ports

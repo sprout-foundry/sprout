@@ -59,7 +59,7 @@ async function waitForVite(url: string, timeoutMs = 60_000): Promise<void> {
 export async function startViteDevServer(opts: StartViteOptions = {}): Promise<ViteHandle> {
   const port = opts.port ?? 3000;
 
-  const child = spawn('npx', ['vite', '--port', String(port), '--strictPort'], {
+  const child = spawn('npx', ['vite', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
     cwd: WEBUI_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,

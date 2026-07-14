@@ -273,15 +273,23 @@ export default function ComputerUseSettingsTab({
           }}
         >
           {testPhase === 'testing' ? <Loader2 size={14} className="spinning" /> : <Camera size={14} />}
-          {testPhase === 'testing'
-            ? 'Testing...'
-            : testPhase === 'ok'
-              ? <><Check size={14} /> Backend ready</>
-              : testPhase === 'disabled'
-                ? <><X size={14} /> Disabled</>
-                : testPhase === 'error'
-                  ? <><X size={14} /> Failed</>
-                  : 'Test connection'}
+          {testPhase === 'testing' ? (
+            'Testing...'
+          ) : testPhase === 'ok' ? (
+            <>
+              <Check size={14} /> Backend ready
+            </>
+          ) : testPhase === 'disabled' ? (
+            <>
+              <X size={14} /> Disabled
+            </>
+          ) : testPhase === 'error' ? (
+            <>
+              <X size={14} /> Failed
+            </>
+          ) : (
+            'Test connection'
+          )}
         </button>
         {testMessage && (
           <div

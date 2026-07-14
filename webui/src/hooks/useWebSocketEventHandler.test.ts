@@ -492,10 +492,7 @@ describe('handleReconnect', () => {
   // Helper: install the wrapper with a controllable getStats mock and seed
   // the starting state. Returns the live stateHolder and the setState spy
   // so the test can assert on call ordering and final values.
-  function setup(opts: {
-    initialLastError: string | null;
-    getStatsImpl: () => Promise<unknown>;
-  }) {
+  function setup(opts: { initialLastError: string | null; getStatsImpl: () => Promise<unknown> }) {
     const stateHolder = {
       current: { ...createDefaultState(), lastError: opts.initialLastError },
     };

@@ -116,6 +116,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// session) are reflected in completion.
 	completer := buildSlashCommandCompleter(chatAgent)
 	inputReader.SetCompleter(completer)
+	inputReader.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent))
 
 	// SP-055: steer coordinator owns the pinned steer-input panel for
 	// the lifetime of this REPL. Constructed once with the agent +
@@ -280,8 +281,6 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnStart := time.Now()
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
-			turnCostStart := chatAgent.GetTotalCost()
-			footerSource.SetTurnCostStart(turnCostStart)
 			// Clear the ttft tracker so the next stream chunk sets a
 			// fresh "time to first token" measurement for this turn.
 			resetTurnFirstToken()
@@ -391,7 +390,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// SP-048-5c: print the per-turn summary line if any LLM tokens
 			// were actually consumed. Suppressed for zero-cost turns (slash
 			// commands, zsh fast paths, empty responses).
-			printPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart, turnCostStart)
+			printPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart)
 		}
 	}
 }
@@ -400,15 +399,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // interface, exposing model / context tokens / cost / cwd to the status
 // footer renderer.
 type agentFooterSource struct {
-	agent         *agent.Agent
-	turnCostStart float64
+	agent *agent.Agent
 }
 
 func (s *agentFooterSource) Model() string {
 	if s == nil || s.agent == nil {
 		return ""
 	}
-	return s.agent.GetModel()
+	return shortModelName(s.agent.GetModel())
 }
 
 func (s *agentFooterSource) ContextTokens() (used, limit int) {
@@ -423,25 +421,6 @@ func (s *agentFooterSource) TotalCost() float64 {
 		return 0
 	}
 	return s.agent.GetTotalCost()
-}
-
-// TurnCost returns the cost spent in the current turn (since the last
-// SetTurnCostStart). Satisfies the optional turnCostSource interface so
-// the footer can render a per-turn cost delta alongside the cumulative
-// session cost. CLI-UX-6.
-func (s *agentFooterSource) TurnCost() float64 {
-	if s == nil || s.agent == nil {
-		return 0
-	}
-	return s.agent.GetTotalCost() - s.turnCostStart
-}
-
-// SetTurnCostStart snapshots the cumulative cost at the start of a turn
-// so TurnCost can compute the per-turn delta.
-func (s *agentFooterSource) SetTurnCostStart(cost float64) {
-	if s != nil {
-		s.turnCostStart = cost
-	}
 }
 
 // TodoProgress returns (completed, total) from the agent's todo list.

@@ -113,10 +113,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       const tool = chatProps.toolExecutions.find((t) => t.id === toolId);
       if (tool) {
         const qid = tool.queryId ?? 0;
-        const maxQid = chatProps.toolExecutions.reduce(
-          (max, t) => Math.max(max, t.queryId ?? 0),
-          0,
-        );
+        const maxQid = chatProps.toolExecutions.reduce((max, t) => Math.max(max, t.queryId ?? 0), 0);
         state.setExpandedQueries((prev) => {
           // expandedQueries has inverted semantics for the current turn:
           //   current turn: isExpanded = !isInSet (in-set = collapsed)

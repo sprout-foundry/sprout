@@ -203,10 +203,17 @@ func TestIndicator_StopErasesAfterStart(t *testing.T) {
 	}
 }
 
-// SP-048-2a: tab-completion cycle in InputReader.
+// SP-048-2a: tab-completion cycle in InputReader. With the live
+// autocomplete dropdown (which intercepts Tab to accept the selected
+// candidate), this test now exercises the cycle state machine directly
+// via handleTabCompletion to verify the non-slash-command Tab path.
 
 func TestInputReader_TabCompletion_CycleAndReset(t *testing.T) {
 	ir := NewInputReader("> ")
+
+	// Disable live autocomplete so handleTabCompletion's cycling path
+	// is exercised directly (not intercepted by the dropdown).
+	ir.autocomplete = nil
 
 	calls := 0
 	ir.SetCompleter(func(line string, cursorPos int) []string {

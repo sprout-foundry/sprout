@@ -3,7 +3,7 @@ import { ChevronDown, Download } from 'lucide-react';
 import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { supportsSSH } from '../config/mode';
+import { supportsExport, supportsSSH } from '../config/mode';
 import { rewindQuery } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
@@ -60,6 +60,7 @@ function Chat(props: ChatProps): JSX.Element {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
+  const [indexingError, setIndexingError] = useState<string | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
 
   const sessionId = chatId ?? '';
@@ -279,9 +280,14 @@ function Chat(props: ChatProps): JSX.Element {
       if (!response.ok) {
         const text = await response.text();
         console.error('Failed to toggle indexing:', response.status, text);
+        // Surface failure to the user instead of silent console-only log
+        setIndexingError(response.ok ? null : `Indexing toggle failed (${response.status})`);
+      } else {
+        setIndexingError(null);
       }
     } catch (e) {
       console.error('Failed to toggle indexing:', e);
+      setIndexingError('Failed to toggle indexing — see console for details');
     }
   }, []);
 
@@ -295,8 +301,10 @@ function Chat(props: ChatProps): JSX.Element {
       data-testid="chat-shell"
     >
       <div className="chat-main" data-testid="chat-main">
-        {/* Export button — shown when a session is active */}
-        {sessionId && (
+        {/* Export button — shown when a session is active AND export is
+            supported (export requires a local filesystem; in cloud mode it
+            404s, so gate it on supportsExport). */}
+        {sessionId && supportsExport && (
           <div className="chat-toolbar">
             <button
               type="button"
@@ -363,9 +371,7 @@ function Chat(props: ChatProps): JSX.Element {
               <span className="thinking-dot" />
               <span className="thinking-dot" />
             </span>
-            <span className="thinking-indicator-text">
-              {isProcessing ? 'Thinking' : 'Sending…'}
-            </span>
+            <span className="thinking-indicator-text">{isProcessing ? 'Thinking' : 'Sending…'}</span>
           </div>
         )}
         <CommandInput
@@ -396,6 +402,15 @@ function Chat(props: ChatProps): JSX.Element {
           isIndexBuilding={!!stats?.embedding_index_building}
           onToggleIndex={handleToggleIndex}
         />
+        {indexingError && (
+          <div
+            className="indexing-error-banner"
+            role="alert"
+            style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}
+          >
+            {indexingError}
+          </div>
+        )}
       </div>
 
       <ChatMessageContextMenu

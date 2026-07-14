@@ -496,11 +496,15 @@ func (a *Agent) GetAllShellCommandHistory() map[string]*ShellCommandResult {
 // When set (non-nil), shell commands can access hidden PTY sessions.
 // When nil (CLI mode), shell commands use os/exec unchanged.
 func (a *Agent) SetTerminalManager(tm tools.TerminalAccess) {
+	a.webuiMu.Lock()
+	defer a.webuiMu.Unlock()
 	a.terminalManager = tm
 }
 
 // GetTerminalManager returns the terminal manager (may be nil in CLI mode).
 func (a *Agent) GetTerminalManager() tools.TerminalAccess {
+	a.webuiMu.RLock()
+	defer a.webuiMu.RUnlock()
 	return a.terminalManager
 }
 

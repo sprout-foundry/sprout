@@ -95,10 +95,7 @@ function ToolTimelineCard({ tool, now }: ToolTimelineCardProps): JSX.Element {
   const personaColor = tool.persona ? getPersonaColor(tool.persona) : undefined;
 
   return (
-    <div
-      className={`tool-timeline-card tool-timeline-card--${tool.status}`}
-      data-tool-name={tool.tool}
-    >
+    <div className={`tool-timeline-card tool-timeline-card--${tool.status}`} data-tool-name={tool.tool}>
       <span className="tool-timeline-status" aria-hidden="true">
         {isRunning ? (
           <Loader2 size={12} className="tool-timeline-spinner" />

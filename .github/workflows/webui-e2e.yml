@@ -65,6 +65,12 @@ jobs:
       # --with-deps pulls in system libraries (libatk, libcups, etc.) on Ubuntu.
       run: npx playwright install --with-deps chromium
 
+    - name: Build sprout binary
+      # The Playwright webServer (start-stack.mjs → fixtures/sprout.ts)
+      # spawns ./sprout from the repo root. Without this step the binary
+      # is missing and every test fails with ENOENT.
+      run: make build
+
     - name: Run E2E shard ${{ matrix.shard }}/4
       # CI=true is set by GH Actions automatically, which triggers
       # playwright.config.js retries: process.env.CI ? 1 : 0 (retry-once on flake).

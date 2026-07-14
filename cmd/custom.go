@@ -14,7 +14,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
+	"golang.org/x/term"
 )
 
 var customModelCmd = &cobra.Command{
@@ -58,6 +61,13 @@ var customModelListCmd = &cobra.Command{
 }
 
 func runCustomModelAdd() error {
+	// The wizard prompts interactively for endpoint URL, API key env var,
+	// and preferred model. If stdin isn't a terminal, promptLine will block
+	// on EOF forever — fail fast with guidance instead.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return fmt.Errorf("'sprout custom add' requires an interactive terminal. " + noninteractive.HelpHint)
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
@@ -89,17 +99,28 @@ func runCustomModelAdd() error {
 	if err != nil {
 		return fmt.Errorf("failed to prompt for endpoint URL: %w", err)
 	}
+	if err := configuration.ValidateCustomProviderEndpoint(endpoint); err != nil {
+		return fmt.Errorf("invalid endpoint URL: %w", err)
+	}
 
 	envVar, err := promptLine(reader, "API key env var (leave empty for no auth): ")
 	if err != nil {
 		return fmt.Errorf("failed to prompt for API key env var: %w", err)
 	}
+	envVar = strings.TrimSpace(envVar)
+
+	// If the user named an env var that's already set in the environment,
+	// tell them — no need to ask them to re-set the credential via
+	// `sprout keys set`.
+	if envVar != "" && strings.TrimSpace(os.Getenv(envVar)) != "" {
+		fmt.Printf("(env var %s is already set; discovery will use it)\n", envVar)
+	}
 
 	provider := configuration.CustomProviderConfig{
 		Name:           name,
 		Endpoint:       endpoint,
-		EnvVar:         strings.TrimSpace(envVar),
-		RequiresAPIKey: strings.TrimSpace(envVar) != "",
+		EnvVar:         envVar,
+		RequiresAPIKey: envVar != "",
 	}
 
 	models, discoverErr := configuration.DiscoverCustomProviderModels(provider)
@@ -204,48 +225,55 @@ func runCustomModelAdd() error {
 	}
 	if isYes(visionAnswer) {
 		provider.SupportsVision = true
-		visionItems := []console.SelectItem{
-			{
-				Label:  "Use default model",
-				Detail: fmt.Sprintf("reuse %s", provider.ModelName),
-				Value:  "",
-			},
-		}
-		for _, m := range models {
-			detail := ""
-			if m.ContextLength > 0 {
-				detail = fmt.Sprintf("%dK context", m.ContextLength/1000)
+		// Only show the vision-model picker if discovery actually returned
+		// models. If discovery failed, fall back to "use default model".
+		if len(models) > 0 {
+			visionItems := []console.SelectItem{
+				{
+					Label:  "Use default model",
+					Detail: fmt.Sprintf("reuse %s", provider.ModelName),
+					Value:  "",
+				},
 			}
-			visionItems = append(visionItems, console.SelectItem{
-				Label:  m.ID,
-				Detail: detail,
-				Value:  m.ID,
+			for _, m := range models {
+				detail := ""
+				if m.ContextLength > 0 {
+					detail = fmt.Sprintf("%dK context", m.ContextLength/1000)
+				}
+				visionItems = append(visionItems, console.SelectItem{
+					Label:  m.ID,
+					Detail: detail,
+					Value:  m.ID,
+				})
+			}
+			visionSL := console.NewSelectList(console.SelectListOptions{
+				Title:      "Pick a vision model",
+				Items:      visionItems,
+				Searchable: true,
+				PageSize:   10,
 			})
-		}
-		visionSL := console.NewSelectList(console.SelectListOptions{
-			Title:      "Pick a vision model",
-			Items:      visionItems,
-			Searchable: true,
-			PageSize:   10,
-		})
-		visionValue, ok, err := visionSL.Run(context.Background())
-		if err != nil {
-			return fmt.Errorf("failed to prompt for vision model: %w", err)
-		}
-		if !ok {
-			fmt.Println()
-			console.GlyphInfo.Print("Setup cancelled.")
-			return nil
-		}
-		// Empty value = "use default model" option picked.
-		if visionValue == "" {
-			provider.VisionModel = provider.ModelName
-		} else {
-			selectedVisionModel, err := resolvePreferredCustomProviderModel(visionValue, models)
+			visionValue, ok, err := visionSL.Run(context.Background())
 			if err != nil {
-				return fmt.Errorf("failed to resolve vision model: %w", err)
+				return fmt.Errorf("failed to prompt for vision model: %w", err)
 			}
-			provider.VisionModel = selectedVisionModel
+			if !ok {
+				fmt.Println()
+				console.GlyphInfo.Print("Setup cancelled.")
+				return nil
+			}
+			// Empty value = "use default model" option picked.
+			if visionValue == "" {
+				provider.VisionModel = provider.ModelName
+			} else {
+				selectedVisionModel, err := resolvePreferredCustomProviderModel(visionValue, models)
+				if err != nil {
+					return fmt.Errorf("failed to resolve vision model: %w", err)
+				}
+				provider.VisionModel = selectedVisionModel
+			}
+		} else {
+			fmt.Println("(no models discovered; vision will reuse the default model)")
+			provider.VisionModel = provider.ModelName
 		}
 	}
 
@@ -291,6 +319,28 @@ func runCustomModelAdd() error {
 		fmt.Printf("  Vision model: %s\n", normalized.VisionModel)
 	}
 	fmt.Printf("  File: %s\n", path)
+
+	// If the user declared an API key env var, offer to set it now via
+	// the active credential backend. Skip the prompt when the env var is
+	// already set in the environment (no need to copy it into the store)
+	// or when the provider doesn't need auth.
+	if normalized.EnvVar != "" {
+		if strings.TrimSpace(os.Getenv(normalized.EnvVar)) == "" {
+			answer, err := promptLine(reader, fmt.Sprintf("\nSet the API key for %s now via the credential backend? %s: ",
+				normalized.Name, console.FormatYesNoPromptStdout(false)))
+			if err == nil && isYes(answer) {
+				key, keyErr := promptLine(reader, fmt.Sprintf("API key (will be stored; or set %s): ", normalized.EnvVar))
+				if keyErr == nil && strings.TrimSpace(key) != "" {
+					if storeErr := credentials.SetToActiveBackend(normalized.Name, strings.TrimSpace(key)); storeErr != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to store credential: %v\n", storeErr)
+					} else {
+						console.GlyphSuccess.Printf("Stored credential for %s", normalized.Name)
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }
 

@@ -163,3 +163,62 @@ func TestLookupKnownProvider_NoAuthRequired(t *testing.T) {
 		t.Errorf("EnvVar = %q, want empty", info.EnvVar)
 	}
 }
+func TestLookupKnownProvider_FactorySource(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	// Use a name that exists in pkg/agent_providers/configs/ but
+	// is NOT present as a custom provider config in the temp
+	// providers dir. With no custom file written, LookupKnownProvider
+	// falls through to the embedded factory and reports source="factory".
+	//
+	// We don't want a custom file because the custom-source branch is
+	// already covered by TestLookupKnownProvider_CustomProvider. The
+	// factory-source branch is what fires for skill-installed and
+	// remote-published providers — the common follow-up to a
+	// "Run 'sprout custom add <name>'" hint.
+	info, ok := LookupKnownProvider("minimax")
+	if !ok {
+		t.Skip("minimax not in embedded factory (running outside source tree?)")
+	}
+	if info.Source != "factory" {
+		t.Errorf("Source = %q, want %q (no custom config was written, so it must come from the embedded factory)",
+			info.Source, "factory")
+	}
+	if info.Name != "minimax" {
+		t.Errorf("Name = %q, want %q", info.Name, "minimax")
+	}
+	if info.EnvVar == "" {
+		t.Error("EnvVar = \"\", want non-empty (embedded minimax.json declares MINIMAX_API_KEY)")
+	}
+	if !info.RequiresAPIKey {
+		t.Error("RequiresAPIKey = false, want true (minimax uses bearer auth)")
+	}
+	// Display name comes from the static GetProviderDisplayName map
+	// when the factory doesn't expose a display_name. Just make sure
+	// it's non-empty and human-readable.
+	if info.DisplayName == "" {
+		t.Error("DisplayName = \"\", want non-empty")
+	}
+}
+
+func TestLookupKnownProvider_FactorySource_NoConfig(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	// A name that is canonical (lowercase, valid chars) but doesn't match
+	// any custom config and isn't in the embedded factory either. This
+	// proves the factory-source branch only fires when the factory
+	// actually has the provider — typos don't accidentally fall into
+	// the same code path as legitimate skill-installed providers.
+	_, ok := LookupKnownProvider("definitely-not-a-real-provider-xyz-9999")
+	if ok {
+		t.Error("expected LookupKnownProvider to return ok=false for a provider that has neither custom nor factory config")
+	}
+}

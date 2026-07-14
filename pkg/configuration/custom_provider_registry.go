@@ -390,6 +390,118 @@ func ValidateCustomProviderEndpoint(raw string) error {
 	return nil
 }
 
+// KnownProviderInfo describes a provider the runtime already knows about,
+// either from the user's custom provider config or the embedded factory.
+// The `sprout custom add` wizard uses this to detect when a user is
+// "registering credentials for an existing provider" rather than
+// "registering a brand-new OpenAI-compatible endpoint".
+type KnownProviderInfo struct {
+	// Source identifies where the metadata came from.
+	// "custom" = user's ~/.config/sprout/providers/<name>.json
+	// "factory" = embedded config in pkg/agent_providers/configs/
+	//            or upserted via refreshFromRemote
+	Source string
+
+	// Name is the canonical provider name (lowercase, trimmed).
+	Name string
+
+	// DisplayName is the friendly label shown in UI surfaces.
+	DisplayName string
+
+	// EnvVar is the environment variable the provider expects for
+	// authentication (e.g. "OPENAI_API_KEY"). Empty when no auth
+	// is required.
+	EnvVar string
+
+	// RequiresAPIKey reports whether the provider needs an API key.
+	RequiresAPIKey bool
+
+	// Endpoint is the chat endpoint URL when known.
+	Endpoint string
+
+	// DefaultModel is the configured default model when known.
+	DefaultModel string
+
+	// ContextSize is the configured default context size in tokens.
+	ContextSize int
+}
+
+// LookupKnownProvider returns metadata for a provider the runtime knows
+// about, checking both the user's custom provider config and the embedded
+// factory. Returns ok=false when the name doesn't match any known provider
+// — in which case the wizard should run the full URL/discovery flow.
+//
+// The factory lookup uses GetProviderAuthMetadata, which the runtime
+// factory populates via SetProviderConfigLookup. This is safe to call
+// from the wizard because configuration init() ensures the package
+// compiles even without a registered factory.
+func LookupKnownProvider(name string) (info KnownProviderInfo, ok bool) {
+	normalized, err := CanonicalizeCustomProviderName(name)
+	if err != nil {
+		return KnownProviderInfo{}, false
+	}
+
+	// User's custom provider config takes precedence — it overrides
+	// any embedded config the user may have customized.
+	cfg, err := LoadOrInitConfig(false)
+	if err == nil {
+		if custom, exists := cfg.CustomProviders[normalized]; exists {
+			envVar := strings.TrimSpace(custom.EnvVar)
+			displayName := strings.TrimSpace(custom.Name)
+			if displayName == "" {
+				displayName = normalized
+			}
+			return KnownProviderInfo{
+				Source:        "custom",
+				Name:          normalized,
+				DisplayName:   displayName,
+				EnvVar:        envVar,
+				RequiresAPIKey: custom.RequiresAPIKey || envVar != "",
+				Endpoint:      strings.TrimSpace(custom.Endpoint),
+				DefaultModel:  strings.TrimSpace(custom.ModelName),
+				ContextSize:   custom.ContextSize,
+			}, true
+		}
+	}
+
+	// Fallback to the embedded / factory view. This catches skill-installed
+	// providers (e.g. the deepinfra defaults shipped with sprout) and
+	// remote-refresh providers. We bypass GetProviderAuthMetadata because
+	// it returns a synthetic default (RequiresAPIKey=true, AuthType=bearer)
+	// for ANY unknown name, which would falsely mark typos as "known".
+	if providerConfigLookup != nil {
+		if envVar, authType, ok := providerConfigLookup(normalized); ok {
+			return KnownProviderInfo{
+				Source:         "factory",
+				Name:           normalized,
+				DisplayName:    GetProviderDisplayName(normalized),
+				EnvVar:         strings.TrimSpace(envVar),
+				RequiresAPIKey: authType != "" && authType != "none",
+			}, true
+		}
+	}
+
+	// Last resort: check the embedded configs directly. This branch is
+	// only reachable when no factory lookup was registered (e.g. narrow
+	// unit tests that import configuration without importing factory).
+	embeddedFactory := providers.NewProviderFactory()
+	if err := embeddedFactory.LoadEmbeddedConfigs(); err == nil {
+		if cfg, err := embeddedFactory.GetProviderConfig(normalized); err == nil && cfg != nil {
+			authType := strings.TrimSpace(cfg.Auth.Type)
+			envVar := strings.TrimSpace(cfg.Auth.EnvVar)
+			return KnownProviderInfo{
+				Source:         "factory",
+				Name:           normalized,
+				DisplayName:    GetProviderDisplayName(normalized),
+				EnvVar:         envVar,
+				RequiresAPIKey: authType != "" && authType != "none",
+			}, true
+		}
+	}
+
+	return KnownProviderInfo{}, false
+}
+
 func CanonicalizeCustomProviderName(name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {

@@ -1,0 +1,165 @@
+package configuration
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLookupKnownProvider_CustomProvider(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	// Write a custom provider config to the manager's temp providers dir.
+	providersDir, err := GetProvidersDir()
+	if err != nil {
+		t.Fatalf("GetProvidersDir: %v", err)
+	}
+	cfg := `{
+  "name": "ai-worker",
+  "endpoint": "http://192.168.1.134:8033/v1/chat/completions",
+  "model_name": "qwen3.6-27b",
+  "context_size": 200000,
+  "requires_api_key": true,
+  "env_var": "AI_WORKER_API_KEY"
+}`
+	if err := os.WriteFile(filepath.Join(providersDir, "ai-worker.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("write provider: %v", err)
+	}
+
+	info, ok := LookupKnownProvider("ai-worker")
+	if !ok {
+		t.Fatal("expected LookupKnownProvider to find the custom provider")
+	}
+	if info.Source != "custom" {
+		t.Errorf("Source = %q, want %q", info.Source, "custom")
+	}
+	if info.Name != "ai-worker" {
+		t.Errorf("Name = %q, want %q", info.Name, "ai-worker")
+	}
+	if info.EnvVar != "AI_WORKER_API_KEY" {
+		t.Errorf("EnvVar = %q, want %q", info.EnvVar, "AI_WORKER_API_KEY")
+	}
+	if !info.RequiresAPIKey {
+		t.Error("RequiresAPIKey = false, want true")
+	}
+	if info.DefaultModel != "qwen3.6-27b" {
+		t.Errorf("DefaultModel = %q, want %q", info.DefaultModel, "qwen3.6-27b")
+	}
+	if info.ContextSize != 200000 {
+		t.Errorf("ContextSize = %d, want %d", info.ContextSize, 200000)
+	}
+}
+
+func TestLookupKnownProvider_CanonicalizesName(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	providersDir, err := GetProvidersDir()
+	if err != nil {
+		t.Fatalf("GetProvidersDir: %v", err)
+	}
+	cfg := `{
+  "name": "ai-worker",
+  "endpoint": "http://example.com/v1",
+  "env_var": "AI_WORKER_API_KEY",
+  "requires_api_key": true
+}`
+	if err := os.WriteFile(filepath.Join(providersDir, "ai-worker.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("write provider: %v", err)
+	}
+
+	// Mixed case should still resolve to the lowercase stored name.
+	info, ok := LookupKnownProvider("AI-Worker")
+	if !ok {
+		t.Fatal("expected LookupKnownProvider to canonicalize mixed-case input")
+	}
+	if info.Name != "ai-worker" {
+		t.Errorf("Name = %q, want %q (canonicalized)", info.Name, "ai-worker")
+	}
+}
+
+func TestLookupKnownProvider_UnknownName(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	_, ok := LookupKnownProvider("nonexistent-provider-xyz-12345")
+	if ok {
+		t.Error("expected LookupKnownProvider to return ok=false for unknown provider")
+	}
+}
+
+func TestLookupKnownProvider_InvalidName(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	// Names with invalid characters (uppercase, spaces) should fail
+	// canonicalization and return ok=false.
+	_, ok := LookupKnownProvider("not valid")
+	if ok {
+		t.Error("expected LookupKnownProvider to reject names with invalid characters")
+	}
+}
+
+func TestLookupKnownProvider_EmptyName(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	_, ok := LookupKnownProvider("")
+	if ok {
+		t.Error("expected LookupKnownProvider to reject empty name")
+	}
+
+	_, ok = LookupKnownProvider("   ")
+	if ok {
+		t.Error("expected LookupKnownProvider to reject whitespace-only name")
+	}
+}
+
+func TestLookupKnownProvider_NoAuthRequired(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_ = mgr
+
+	providersDir, err := GetProvidersDir()
+	if err != nil {
+		t.Fatalf("GetProvidersDir: %v", err)
+	}
+	cfg := `{
+  "name": "my-local",
+  "endpoint": "http://localhost:11434/v1",
+  "env_var": "",
+  "requires_api_key": false
+}`
+	if err := os.WriteFile(filepath.Join(providersDir, "my-local.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("write provider: %v", err)
+	}
+
+	info, ok := LookupKnownProvider("my-local")
+	if !ok {
+		t.Fatal("expected LookupKnownProvider to find no-auth custom provider")
+	}
+	if info.RequiresAPIKey {
+		t.Error("RequiresAPIKey = true, want false (no env var configured)")
+	}
+	if info.EnvVar != "" {
+		t.Errorf("EnvVar = %q, want empty", info.EnvVar)
+	}
+}

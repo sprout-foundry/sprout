@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -30,5 +31,20 @@ func TestResolvePreferredCustomProviderModelRejectsUnknownName(t *testing.T) {
 
 	if _, err := resolvePreferredCustomProviderModel("missing-model", models); err == nil {
 		t.Fatal("expected unknown discovered model to fail validation")
+	}
+}
+
+// TestRunCustomModelAdd_NonInteractiveGuard confirms the wizard fails
+// fast with a non-interactive error when stdin isn't a terminal.
+// `go test` pipes stdin, so this test naturally exercises the guard
+// path without needing to fake a TTY.
+func TestRunCustomModelAdd_NonInteractiveGuard(t *testing.T) {
+	err := runCustomModelAdd()
+	if err == nil {
+		t.Fatal("expected non-interactive error from runCustomModelAdd, got nil")
+	}
+	if !strings.Contains(err.Error(), "non-interactive") &&
+		!strings.Contains(err.Error(), "interactive terminal") {
+		t.Errorf("error should mention interactive terminal requirement, got: %v", err)
 	}
 }

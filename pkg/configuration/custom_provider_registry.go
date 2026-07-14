@@ -364,6 +364,32 @@ func defaultCustomProviderBillingType(explicit, endpoint string) string {
 	return providers.BillingSubscription
 }
 
+// ValidateCustomProviderEndpoint checks that raw is a syntactically valid
+// http or https URL with a host. It runs before NormalizeCustomProviderConfig
+// (which auto-appends /v1/chat/completions), so it catches typos that would
+// otherwise produce a config that silently fails model discovery.
+//
+// Returns nil for empty input — that's allowed at this layer so the wizard
+// can detect "user pressed enter on an empty prompt" separately from
+// "user typed garbage".
+func ValidateCustomProviderEndpoint(raw string) error {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return fmt.Errorf("endpoint URL cannot be empty")
+	}
+	u, err := url.Parse(trimmed)
+	if err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("scheme must be http or https, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("URL must include a host (e.g. https://api.example.com/v1)")
+	}
+	return nil
+}
+
 func CanonicalizeCustomProviderName(name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {

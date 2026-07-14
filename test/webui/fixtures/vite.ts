@@ -6,6 +6,7 @@
 
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { pickFreePort } from './sprout';
 
 // Resolve the webui directory: test/webui/fixtures/vite.ts → webui/
 const WEBUI_DIR = path.resolve(__dirname, '..', '..', '..', 'webui');
@@ -57,7 +58,7 @@ async function waitForVite(url: string, timeoutMs = 60_000): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function startViteDevServer(opts: StartViteOptions = {}): Promise<ViteHandle> {
-  const port = opts.port ?? 3000;
+  const port = opts.port ?? (await pickFreePort());
 
   const child = spawn('npx', ['vite', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
     cwd: WEBUI_DIR,

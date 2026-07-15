@@ -1,6 +1,6 @@
 //go:build !linux && !darwin && !js
 
-package cmd
+package service
 
 import "fmt"
 

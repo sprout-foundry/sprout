@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package service
 
 import (
 	"bufio"
@@ -36,11 +36,11 @@ const (
 	serviceURL  = "http://localhost:56000"
 )
 
-// forceConfirm skips confirmation prompts when true (set by -y flag).
-var forceConfirm bool
+// ForceConfirm skips confirmation prompts when true (set by -y flag).
+var ForceConfirm bool
 
-// serviceCmd is the root command for service management.
-var serviceCmd = &cobra.Command{
+// ServiceCmd is the root command for service management.
+var ServiceCmd = &cobra.Command{
 	Use:   "service",
 	Short: "Manage the sprout daemon service",
 	Long: `Manage the sprout daemon as a system service.
@@ -63,7 +63,7 @@ var serviceInstallCmd = &cobra.Command{
 			for _, p := range legacyPaths {
 				fmt.Printf("  %s\n", p)
 			}
-			if !forceConfirm {
+			if !ForceConfirm {
 				fmt.Print("\nRemove legacy service files? (y/N): ")
 				reader := bufio.NewReader(os.Stdin)
 				resp, _ := reader.ReadString('\n')
@@ -182,16 +182,15 @@ var serviceDiagnoseCmd = &cobra.Command{
 }
 
 func init() {
-	serviceInstallCmd.Flags().BoolVarP(&forceConfirm, "yes", "y", false, "Skip confirmation prompts and auto-remove legacy services")
-	serviceUninstallCmd.Flags().BoolVarP(&forceConfirm, "yes", "y", false, "Skip confirmation prompts")
+	serviceInstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts and auto-remove legacy services")
+	serviceUninstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts")
 
-	serviceCmd.AddCommand(serviceInstallCmd)
-	serviceCmd.AddCommand(serviceUninstallCmd)
-	serviceCmd.AddCommand(serviceStartCmd)
-	serviceCmd.AddCommand(serviceStopCmd)
-	serviceCmd.AddCommand(serviceStatusCmd)
-	serviceCmd.AddCommand(serviceDiagnoseCmd)
-	rootCmd.AddCommand(serviceCmd)
+	ServiceCmd.AddCommand(serviceInstallCmd)
+	ServiceCmd.AddCommand(serviceUninstallCmd)
+	ServiceCmd.AddCommand(serviceStartCmd)
+	ServiceCmd.AddCommand(serviceStopCmd)
+	ServiceCmd.AddCommand(serviceStatusCmd)
+	ServiceCmd.AddCommand(serviceDiagnoseCmd)
 }
 
 // detectLegacyService searches for legacy "sprout" service configuration files

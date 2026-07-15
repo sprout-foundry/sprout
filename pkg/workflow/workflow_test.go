@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package workflow
 
 import (
 	"os"
@@ -32,7 +32,7 @@ func TestLoadAgentWorkflowConfig(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	cfg, err := loadAgentWorkflowConfig(path)
+	cfg, err := LoadAgentWorkflowConfig(path)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -48,14 +48,14 @@ func TestLoadAgentWorkflowConfig(t *testing.T) {
 	if cfg.Initial.MaxIterations == nil || *cfg.Initial.MaxIterations != 50 {
 		t.Fatalf("expected initial max_iterations=50")
 	}
-	if cfg.shouldPersistRuntimeOverrides() {
+	if cfg.ShouldPersistRuntimeOverrides() {
 		t.Fatalf("expected persist_runtime_overrides=false")
 	}
 	if len(cfg.Steps) != 2 {
 		t.Fatalf("expected 2 steps, got %d", len(cfg.Steps))
 	}
-	if cfg.Steps[0].When != workflowWhenOnSuccess {
-		t.Fatalf("expected first step when=%q, got %q", workflowWhenOnSuccess, cfg.Steps[0].When)
+	if cfg.Steps[0].When != WorkflowWhenOnSuccess {
+		t.Fatalf("expected first step when=%q, got %q", WorkflowWhenOnSuccess, cfg.Steps[0].When)
 	}
 	if cfg.Steps[0].ReasoningEffort != "high" {
 		t.Fatalf("expected first step reasoning_effort high, got %q", cfg.Steps[0].ReasoningEffort)
@@ -72,7 +72,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(`{"continue_on_error": true}`), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -82,7 +82,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(`{"steps":[{"prompt":"hello","when":"later"}]}`), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -92,7 +92,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(`{"steps":[{"prompt":"hello","reasoning_effort":"max"}]}`), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -105,7 +105,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load config: %v", err)
 		}
@@ -123,7 +123,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -134,7 +134,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -145,7 +145,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -156,7 +156,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -167,7 +167,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load config: %v", err)
 		}
@@ -185,7 +185,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load config: %v", err)
 		}
@@ -200,7 +200,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -211,7 +211,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -222,7 +222,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error")
 		}
 	})
@@ -233,7 +233,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error for negative budget.usd")
 		}
 	})
@@ -244,7 +244,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error for warn_at > 1")
 		}
 	})
@@ -255,7 +255,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error for unknown on_exceed value")
 		}
 	})
@@ -266,7 +266,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -284,13 +284,13 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		if _, err := loadAgentWorkflowConfig(path); err == nil {
+		if _, err := LoadAgentWorkflowConfig(path); err == nil {
 			t.Fatalf("expected validation error for negative heartbeat_seconds")
 		}
 	})
 
-	t.Run("parseBudgetWarnList valid", func(t *testing.T) {
-		thresholds, err := parseBudgetWarnList("0.5, 0.8")
+	t.Run("ParseBudgetWarnList valid", func(t *testing.T) {
+		thresholds, err := ParseBudgetWarnList("0.5, 0.8")
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
@@ -305,7 +305,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -320,7 +320,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -335,7 +335,7 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -344,11 +344,11 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("parseBudgetWarnList rejects out-of-range", func(t *testing.T) {
-		if _, err := parseBudgetWarnList("0.5,1.5"); err == nil {
+	t.Run("ParseBudgetWarnList rejects out-of-range", func(t *testing.T) {
+		if _, err := ParseBudgetWarnList("0.5,1.5"); err == nil {
 			t.Fatalf("expected error for 1.5")
 		}
-		if _, err := parseBudgetWarnList("0,0.5"); err == nil {
+		if _, err := ParseBudgetWarnList("0,0.5"); err == nil {
 			t.Fatalf("expected error for 0")
 		}
 	})
@@ -362,26 +362,26 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 			t.Fatalf("write config: %v", err)
 		}
-		cfg, err := loadAgentWorkflowConfig(path)
+		cfg, err := LoadAgentWorkflowConfig(path)
 		if err != nil {
 			t.Fatalf("load config: %v", err)
 		}
 		if cfg.Orchestration == nil || !cfg.Orchestration.Enabled {
 			t.Fatalf("expected orchestration enabled")
 		}
-		if cfg.Orchestration.StateFile != defaultWorkflowOrchestrationStateFile {
+		if cfg.Orchestration.StateFile != DefaultWorkflowOrchestrationStateFile {
 			t.Fatalf("unexpected default state file: %q", cfg.Orchestration.StateFile)
 		}
-		if cfg.Orchestration.EventsFile != defaultWorkflowOrchestrationEventsFile {
+		if cfg.Orchestration.EventsFile != DefaultWorkflowOrchestrationEventsFile {
 			t.Fatalf("unexpected default events file: %q", cfg.Orchestration.EventsFile)
 		}
-		if cfg.Orchestration.ConversationSessionID != defaultWorkflowConversationSessionID {
+		if cfg.Orchestration.ConversationSessionID != DefaultWorkflowConversationSessionID {
 			t.Fatalf("unexpected default conversation session id: %q", cfg.Orchestration.ConversationSessionID)
 		}
-		if !cfg.orchestrationResumeEnabled() {
+		if !cfg.OrchestrationResumeEnabled() {
 			t.Fatalf("expected resume default enabled")
 		}
-		if !cfg.orchestrationYieldOnProviderHandoff() {
+		if !cfg.OrchestrationYieldOnProviderHandoff() {
 			t.Fatalf("expected yield_on_provider_handoff default enabled")
 		}
 	})
@@ -396,19 +396,19 @@ func TestShouldRunWorkflowStep(t *testing.T) {
 		hasError bool
 		want     bool
 	}{
-		{name: "always on success", when: workflowWhenAlways, hasError: false, want: true},
-		{name: "always on error", when: workflowWhenAlways, hasError: true, want: true},
-		{name: "on success", when: workflowWhenOnSuccess, hasError: false, want: true},
-		{name: "on success with error", when: workflowWhenOnSuccess, hasError: true, want: false},
-		{name: "on error", when: workflowWhenOnError, hasError: true, want: true},
-		{name: "on error without error", when: workflowWhenOnError, hasError: false, want: false},
+		{name: "always on success", when: WorkflowWhenAlways, hasError: false, want: true},
+		{name: "always on error", when: WorkflowWhenAlways, hasError: true, want: true},
+		{name: "on success", when: WorkflowWhenOnSuccess, hasError: false, want: true},
+		{name: "on success with error", when: WorkflowWhenOnSuccess, hasError: true, want: false},
+		{name: "on error", when: WorkflowWhenOnError, hasError: true, want: true},
+		{name: "on error without error", when: WorkflowWhenOnError, hasError: false, want: false},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := shouldRunWorkflowStep(tc.when, tc.hasError)
+			got := ShouldRunWorkflowStep(tc.when, tc.hasError)
 			if got != tc.want {
-				t.Fatalf("shouldRunWorkflowStep(%q, %t) = %t, want %t", tc.when, tc.hasError, got, tc.want)
+				t.Fatalf("ShouldRunWorkflowStep(%q, %t) = %t, want %t", tc.when, tc.hasError, got, tc.want)
 			}
 		})
 	}
@@ -427,16 +427,16 @@ func TestResolveWorkflowInitialPrompt(t *testing.T) {
 		Initial: &AgentWorkflowInitial{Prompt: "Run configured prompt"},
 	}
 
-	if got, err := resolveWorkflowInitialPrompt("from cli", cfg); err != nil || got != "from cli" {
+	if got, err := ResolveWorkflowInitialPrompt("from cli", cfg); err != nil || got != "from cli" {
 		t.Fatalf("expected CLI prompt to win, got %q err=%v", got, err)
 	}
-	if got, err := resolveWorkflowInitialPrompt("", cfg); err != nil || got != "Run configured prompt" {
+	if got, err := ResolveWorkflowInitialPrompt("", cfg); err != nil || got != "Run configured prompt" {
 		t.Fatalf("expected configured initial prompt, got %q err=%v", got, err)
 	}
 
 	cfg.Initial.Prompt = ""
 	cfg.Initial.PromptFile = promptFile
-	if got, err := resolveWorkflowInitialPrompt("", cfg); err != nil || got != "Run configured prompt from file" {
+	if got, err := ResolveWorkflowInitialPrompt("", cfg); err != nil || got != "Run configured prompt from file" {
 		t.Fatalf("expected initial prompt from file, got %q err=%v", got, err)
 	}
 }
@@ -450,12 +450,12 @@ func TestResolveStepPrompt(t *testing.T) {
 		t.Fatalf("write prompt file: %v", err)
 	}
 
-	prompt, err := resolveStepPrompt(AgentWorkflowStep{Prompt: "inline"})
+	prompt, err := ResolveStepPrompt(AgentWorkflowStep{Prompt: "inline"})
 	if err != nil || prompt != "inline" {
 		t.Fatalf("expected inline prompt, got %q err=%v", prompt, err)
 	}
 
-	prompt, err = resolveStepPrompt(AgentWorkflowStep{PromptFile: promptFile})
+	prompt, err = ResolveStepPrompt(AgentWorkflowStep{PromptFile: promptFile})
 	if err != nil || prompt != "step prompt from file" {
 		t.Fatalf("expected file prompt, got %q err=%v", prompt, err)
 	}
@@ -465,7 +465,7 @@ func TestShouldPersistRuntimeOverridesDefault(t *testing.T) {
 	t.Parallel()
 
 	cfg := &AgentWorkflowConfig{}
-	if !cfg.shouldPersistRuntimeOverrides() {
+	if !cfg.ShouldPersistRuntimeOverrides() {
 		t.Fatalf("expected default persist_runtime_overrides=true")
 	}
 }
@@ -481,7 +481,7 @@ func TestStepFileTriggersSatisfied(t *testing.T) {
 	}
 
 	t.Run("exists and not exists pass", func(t *testing.T) {
-		ok, err := stepFileTriggersSatisfied(AgentWorkflowStep{
+		ok, err := StepFileTriggersSatisfied(AgentWorkflowStep{
 			FileExists:    []string{existing},
 			FileNotExists: []string{missing},
 		})
@@ -494,7 +494,7 @@ func TestStepFileTriggersSatisfied(t *testing.T) {
 	})
 
 	t.Run("exists fails when missing", func(t *testing.T) {
-		ok, err := stepFileTriggersSatisfied(AgentWorkflowStep{
+		ok, err := StepFileTriggersSatisfied(AgentWorkflowStep{
 			FileExists: []string{missing},
 		})
 		if err != nil {
@@ -506,7 +506,7 @@ func TestStepFileTriggersSatisfied(t *testing.T) {
 	})
 
 	t.Run("not exists fails when present", func(t *testing.T) {
-		ok, err := stepFileTriggersSatisfied(AgentWorkflowStep{
+		ok, err := StepFileTriggersSatisfied(AgentWorkflowStep{
 			FileNotExists: []string{existing},
 		})
 		if err != nil {
@@ -530,7 +530,7 @@ func TestWorkflowExecutionStateRoundTrip(t *testing.T) {
 		},
 	}
 
-	state := &workflowExecutionState{
+	state := &WorkflowExecutionState{
 		Version:          1,
 		InitialCompleted: true,
 		NextStepIndex:    2,
@@ -538,11 +538,11 @@ func TestWorkflowExecutionStateRoundTrip(t *testing.T) {
 		FirstError:       "boom",
 		LastProvider:     "ai-worker",
 	}
-	if err := persistWorkflowExecutionState(cfg, state); err != nil {
+	if err := PersistWorkflowExecutionState(cfg, state); err != nil {
 		t.Fatalf("persist state: %v", err)
 	}
 
-	loaded, err := loadWorkflowExecutionState(cfg)
+	loaded, err := LoadWorkflowExecutionState(cfg)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestShouldRestoreWorkflowConversationState(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		state *workflowExecutionState
+		state *WorkflowExecutionState
 		want  bool
 	}{
 		{
@@ -566,31 +566,31 @@ func TestShouldRestoreWorkflowConversationState(t *testing.T) {
 		},
 		{
 			name:  "fresh state does not restore",
-			state: &workflowExecutionState{Version: 1},
+			state: &WorkflowExecutionState{Version: 1},
 			want:  false,
 		},
 		{
 			name:  "initial completed restores",
-			state: &workflowExecutionState{Version: 1, InitialCompleted: true},
+			state: &WorkflowExecutionState{Version: 1, InitialCompleted: true},
 			want:  true,
 		},
 		{
 			name:  "advanced step restores",
-			state: &workflowExecutionState{Version: 1, NextStepIndex: 2},
+			state: &WorkflowExecutionState{Version: 1, NextStepIndex: 2},
 			want:  true,
 		},
 		{
 			name:  "error state restores",
-			state: &workflowExecutionState{Version: 1, HasError: true},
+			state: &WorkflowExecutionState{Version: 1, HasError: true},
 			want:  true,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := shouldRestoreWorkflowConversationState(tc.state)
+			got := ShouldRestoreWorkflowConversationState(tc.state)
 			if got != tc.want {
-				t.Fatalf("shouldRestoreWorkflowConversationState()=%t want=%t", got, tc.want)
+				t.Fatalf("ShouldRestoreWorkflowConversationState()=%t want=%t", got, tc.want)
 			}
 		})
 	}
@@ -605,7 +605,7 @@ func TestSubagentOverridesValidation(t *testing.T) {
 				"": {Provider: "deepinfra"},
 			},
 		}
-		if err := runtime.validate("test"); err == nil {
+		if err := runtime.Validate("test"); err == nil {
 			t.Fatalf("expected validation error for empty persona key")
 		}
 	})
@@ -616,7 +616,7 @@ func TestSubagentOverridesValidation(t *testing.T) {
 				"   ": {Provider: "deepinfra"},
 			},
 		}
-		if err := runtime.validate("test"); err == nil {
+		if err := runtime.Validate("test"); err == nil {
 			t.Fatalf("expected validation error for whitespace-only persona key")
 		}
 	})
@@ -627,7 +627,7 @@ func TestSubagentOverridesValidation(t *testing.T) {
 				"tester": {},
 			},
 		}
-		if err := runtime.validate("test"); err == nil {
+		if err := runtime.Validate("test"); err == nil {
 			t.Fatalf("expected validation error when both provider and model are empty")
 		}
 	})
@@ -638,7 +638,7 @@ func TestSubagentOverridesValidation(t *testing.T) {
 				"tester": {Provider: "deepinfra"},
 			},
 		}
-		if err := runtime.validate("test"); err != nil {
+		if err := runtime.Validate("test"); err != nil {
 			t.Fatalf("unexpected validation error: %v", err)
 		}
 	})
@@ -649,7 +649,7 @@ func TestSubagentOverridesValidation(t *testing.T) {
 				"coder": {Model: "claude-haiku"},
 			},
 		}
-		if err := runtime.validate("test"); err != nil {
+		if err := runtime.Validate("test"); err != nil {
 			t.Fatalf("unexpected validation error: %v", err)
 		}
 	})
@@ -660,7 +660,7 @@ func TestSubagentOverridesValidation(t *testing.T) {
 				"tester": {Provider: "anthropic", Model: "claude-4-haiku"},
 			},
 		}
-		if err := runtime.validate("test"); err != nil {
+		if err := runtime.Validate("test"); err != nil {
 			t.Fatalf("unexpected validation error: %v", err)
 		}
 	})
@@ -671,7 +671,7 @@ func TestSubagentOverridesValidation(t *testing.T) {
 				"Code-Reviewer": {Provider: "openrouter"},
 			},
 		}
-		if err := runtime.validate("test"); err != nil {
+		if err := runtime.Validate("test"); err != nil {
 			t.Fatalf("unexpected validation error: %v", err)
 		}
 	})
@@ -702,7 +702,7 @@ func TestSubagentOverridesApplyAndRestore(t *testing.T) {
 			"tester": {Provider: "deepinfra", Model: "deepseek-v3"},
 		}
 
-		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+		ApplyWorkflowSubagentOverrides(subagentTypes, overrides)
 
 		if subagentTypes["tester"].Provider != "deepinfra" {
 			t.Fatalf("expected tester provider deepinfra, got %q", subagentTypes["tester"].Provider)
@@ -731,7 +731,7 @@ func TestSubagentOverridesApplyAndRestore(t *testing.T) {
 			"nonexistent": {Provider: "deepinfra", Model: "deepseek-v3"},
 		}
 
-		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+		ApplyWorkflowSubagentOverrides(subagentTypes, overrides)
 
 		if subagentTypes["tester"].Provider != "anthropic" {
 			t.Fatalf("expected tester provider to remain unchanged, got %q", subagentTypes["tester"].Provider)
@@ -753,7 +753,7 @@ func TestSubagentOverridesApplyAndRestore(t *testing.T) {
 			"tester": {Provider: "deepinfra", Model: "deepseek-v3"},
 		}
 
-		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+		ApplyWorkflowSubagentOverrides(subagentTypes, overrides)
 
 		if subagentTypes["tester"].Provider != "anthropic" {
 			t.Fatalf("expected disabled tester provider to remain unchanged, got %q", subagentTypes["tester"].Provider)
@@ -775,7 +775,7 @@ func TestSubagentOverridesApplyAndRestore(t *testing.T) {
 			"Code-Reviewer": {Provider: "openrouter", Model: "gemini-2.5-pro"},
 		}
 
-		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+		ApplyWorkflowSubagentOverrides(subagentTypes, overrides)
 
 		if subagentTypes["code_reviewer"].Provider != "openrouter" {
 			t.Fatalf("expected code_reviewer provider openrouter, got %q", subagentTypes["code_reviewer"].Provider)
@@ -801,7 +801,7 @@ func TestSubagentOverridesApplyAndRestore(t *testing.T) {
 			"qa-checker": {Provider: "deepinfra"},
 		}
 
-		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+		ApplyWorkflowSubagentOverrides(subagentTypes, overrides)
 
 		if subagentTypes["tester"].Provider != "deepinfra" {
 			t.Fatalf("expected tester provider deepinfra (matched via alias), got %q", subagentTypes["tester"].Provider)
@@ -843,7 +843,7 @@ func TestSubagentOverridesApplyAndRestore(t *testing.T) {
 		overrides := WorkflowSubagentOverrides{
 			"tester": {Provider: "deepinfra", Model: "deepseek-v3"},
 		}
-		applyWorkflowSubagentOverrides(subagentTypes, overrides)
+		ApplyWorkflowSubagentOverrides(subagentTypes, overrides)
 
 		// Verify mutation happened
 		if subagentTypes["tester"].Provider != "deepinfra" {
@@ -887,27 +887,27 @@ func TestFindSubagentTypeMapKey(t *testing.T) {
 		},
 	}
 
-	key, found := findSubagentTypeMapKey(subagentTypes, "tester")
+	key, found := FindSubagentTypeMapKey(subagentTypes, "tester")
 	if !found || key != "tester" {
 		t.Fatalf("expected to find tester, got key=%q found=%t", key, found)
 	}
 
-	key, found = findSubagentTypeMapKey(subagentTypes, "tester")
+	key, found = FindSubagentTypeMapKey(subagentTypes, "tester")
 	if !found || key != "tester" {
 		t.Fatalf("expected to find tester by normalized key, got key=%q found=%t", key, found)
 	}
 
-	key, found = findSubagentTypeMapKey(subagentTypes, "code_reviewer")
+	key, found = FindSubagentTypeMapKey(subagentTypes, "code_reviewer")
 	if !found || key != "code_reviewer" {
 		t.Fatalf("expected to find code_reviewer by normalized key, got key=%q found=%t", key, found)
 	}
 
-	key, found = findSubagentTypeMapKey(subagentTypes, "qa_checker")
+	key, found = FindSubagentTypeMapKey(subagentTypes, "qa_checker")
 	if !found || key != "tester" {
 		t.Fatalf("expected to find tester via normalized alias, got key=%q found=%t", key, found)
 	}
 
-	key, found = findSubagentTypeMapKey(subagentTypes, "nonexistent")
+	key, found = FindSubagentTypeMapKey(subagentTypes, "nonexistent")
 	if found {
 		t.Fatalf("expected not to find nonexistent, got key=%q", key)
 	}
@@ -940,7 +940,7 @@ func TestSubagentOverridesWorkflowConfigParsing(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	cfg, err := loadAgentWorkflowConfig(path)
+	cfg, err := LoadAgentWorkflowConfig(path)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}

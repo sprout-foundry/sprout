@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package service
 
 import (
 	"bufio"
@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// apiEnvKeyPatterns defines the suffixes and prefixes for API keys and related credentials.
-var apiEnvKeyPatterns = []string{
+// APIEnvKeyPatterns defines the suffixes and prefixes for API keys and related credentials.
+var APIEnvKeyPatterns = []string{
 	"_API_KEY",
 	"_TOKEN",
 	"_SECRET",
@@ -19,22 +19,22 @@ var apiEnvKeyPatterns = []string{
 	"_SECRET_KEY",
 }
 
-// apiEnvKeyPrefixes defines specific prefixes to capture.
-var apiEnvKeyPrefixes = []string{
+// APIEnvKeyPrefixes defines specific prefixes to capture.
+var APIEnvKeyPrefixes = []string{
 	"SPROUT_PROVIDER",
 	"SPROUT_SUBAGENT_PROVIDER",
 	"SPROUT_SUBAGENT_MODEL",
 }
 
 // matchesAPIKeyPattern returns true if the environment variable name appears to be an API key.
-func matchesAPIKeyPattern(key string) bool {
+func MatchesAPIKeyPattern(key string) bool {
 	upperKey := strings.ToUpper(key)
-	for _, prefix := range apiEnvKeyPrefixes {
+	for _, prefix := range APIEnvKeyPrefixes {
 		if strings.HasPrefix(upperKey, prefix) {
 			return true
 		}
 	}
-	for _, suffix := range apiEnvKeyPatterns {
+	for _, suffix := range APIEnvKeyPatterns {
 		if strings.HasSuffix(upperKey, suffix) {
 			return true
 		}
@@ -44,12 +44,12 @@ func matchesAPIKeyPattern(key string) bool {
 
 // captureAPIKeysFromEnv filters the current environment for API keys and related credentials.
 // It returns a slice of "KEY=value" strings for matching environment variables.
-func captureAPIKeysFromEnv() []string {
+func CaptureAPIKeysFromEnv() []string {
 	var matches []string
 	for _, env := range os.Environ() {
 		if idx := strings.IndexByte(env, '='); idx > 0 {
 			key := env[:idx]
-			if matchesAPIKeyPattern(key) {
+			if MatchesAPIKeyPattern(key) {
 				matches = append(matches, env)
 			}
 		}
@@ -58,13 +58,13 @@ func captureAPIKeysFromEnv() []string {
 }
 
 // serviceEnvPath returns the path to the service.env file.
-func serviceEnvPath(homeDir string) string {
+func ServiceEnvPath(homeDir string) string {
 	return filepath.Join(homeDir, ".sprout", "service.env")
 }
 
 // generateServiceEnvFile captures API keys from the current environment and writes them
 // to ~/.sprout/service.env with restricted permissions (0600).
-func generateServiceEnvFile(homeDir string) error {
+func GenerateServiceEnvFile(homeDir string) error {
 	// Ensure the .sprout directory exists
 	sproutDir := filepath.Join(homeDir, ".sprout")
 	if err := os.MkdirAll(sproutDir, 0755); err != nil {
@@ -72,8 +72,8 @@ func generateServiceEnvFile(homeDir string) error {
 	}
 
 	// Capture API keys from current environment
-	envVars := captureAPIKeysFromEnv()
-	envPath := serviceEnvPath(homeDir)
+	envVars := CaptureAPIKeysFromEnv()
+	envPath := ServiceEnvPath(homeDir)
 
 	// Write to a random temp file first, then rename for atomicity.
 	tmpFile, err := os.CreateTemp(sproutDir, ".service.env.*.tmp")
@@ -143,8 +143,8 @@ func generateServiceEnvFile(homeDir string) error {
 
 // loadServiceEnvFile reads ~/.sprout/service.env and returns a map of key-value pairs.
 // If the file doesn't exist or is empty, returns an empty map.
-func loadServiceEnvFile(homeDir string) (map[string]string, error) {
-	envPath := serviceEnvPath(homeDir)
+func LoadServiceEnvFile(homeDir string) (map[string]string, error) {
+	envPath := ServiceEnvPath(homeDir)
 
 	file, err := os.Open(envPath)
 	if err != nil {

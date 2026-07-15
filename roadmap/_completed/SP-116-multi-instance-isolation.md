@@ -1,5 +1,9 @@
 # SP-116: Multi-Instance Isolation
 
+> ✅ **Implemented** — Phases 1–4 shipped 2026-07-15.
+> Commits: `ac4d72e6` (Phase 1), `ef47144d` (Phase 2), `c7c4047b` (Phase 3),
+> `99991ba2` (service-daemon guard), `c0602add` (daemon-side bootstrap).
+
 ## Summary
 
 Sprout needs to support two distinct multi-instance modes:
@@ -99,6 +103,11 @@ it the default behavior.
 
 ### Phase 1: Make isolated config the default
 
+> ✅ **Shipped** — `ac4d72e6 feat: auto-detect git repos for per-workspace isolated config`.
+> Auto-detection lives in `cmd/root.go::detectGitRepo` and the
+> `PersistentPreRunE` guard (honors explicit `--isolated-config`, `SPROUT_SERVICE=1`,
+> and `CI`/`GITHUB_ACTIONS` to skip). Tests: `cmd/root_test.go`.
+
 **1a. Auto-detect workspace config in `PersistentPreRunE`**
 
 In `cmd/root.go`, detect when we're in a git repo and auto-bootstrap:
@@ -124,6 +133,12 @@ context.
 
 ### Phase 2: Per-instance background processes
 
+> ✅ **Shipped** — `ef47144d feat: scope background processes to config dir`.
+> `BackgroundProcessManager` now resolves its base directory from the active
+> config dir (`.sprout/bg-processes/` for isolated, `~/.config/sprout/bg-processes/`
+> for global) instead of the global `/tmp/sprout-bg/`. `sprout shell-bg`
+> reuses the same config resolution.
+
 **2a. Scope BPM directory per config dir**
 
 Change the background process directory from `/tmp/sprout-bg/` to
@@ -137,6 +152,12 @@ to find the right BPM directory.
 
 ### Phase 3: Workspace config overrides (stretch)
 
+> ✅ **Shipped** — `c7c4047b feat: layered config for auto-detected workspaces`.
+> `agent.NewAgentWithLayers(globalDir, workspaceDir, …)` merges the global
+> config with the auto-detected workspace's `.sprout/config.json`; providers
+> still resolve from the global layer. Wired in `cmd/agent_command.go` via
+> `autoDetectedWorkspaceDir`.
+
 Allow `.sprout/config.json` to override specific settings while inheriting
 providers/credentials from the global config.
 
@@ -145,6 +166,9 @@ config values. Providers are always resolved from the global config (API keys
 are personal, not per-project).
 
 ### Phase 4: Daemon service hardening (launch priority)
+
+> ✅ **Shipped** — `99991ba2 fix: skip auto-isolation for system service daemon`
+> and `c0602add feat: auto-bootstrap workspace config when daemon opens a git repo`.
 
 The `sprout service` daemon on port 56000 is the primary way users interact with
 sprout (desktop app is deferred). The daemon must:

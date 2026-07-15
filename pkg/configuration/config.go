@@ -73,6 +73,29 @@ type Config struct {
 	// false explicitly to opt out of the unified resolver.
 	UnifiedRiskResolver bool `json:"unified_risk_resolver,omitempty"`
 
+	// DaemonMultiSession enables N concurrent browser windows per user
+	// when the server runs in service/daemon mode (SPROUT_SERVICE=1).
+	// When true, the WebSocket dispatcher routes new connections through
+	// the multi-session path (handleWebSocket_Daemon); each connection
+	// gets its own chat session and its own agent without colliding
+	// with sibling windows. When false, the daemon falls back to the
+	// single-active-session path (handleWebSocket_Agent) and the second
+	// window triggers session_conflict + takeover — the pre-SP-118
+	// behavior.
+	//
+	// Effective value at the dispatch site is
+	//   effective = (agentEnforceSingleSession == false) && DaemonMultiSession
+	// i.e. the agent path always uses Mode 1 regardless of this flag,
+	// and the daemon path uses Mode 2 only when this flag is true.
+	//
+	// Default: true (the daemon opens with multi-session on, so three
+	// browser windows on the same daemon each get their own chat
+	// without a takeover prompt). Set to false to opt out without
+	// editing code — useful for rolling forward / back during the
+	// SP-118 rollout window. SP-118 Phase 4 will flip the rollout so
+	// this default is the new normal.
+	DaemonMultiSession bool `json:"daemon_multi_session,omitempty"`
+
 	// ResourceDirectory stores captured web/vision resources relative to the current working directory.
 	// This can be overridden at runtime with --resource-directory.
 	ResourceDirectory string `json:"resource_directory,omitempty"`
@@ -346,6 +369,7 @@ func NewConfig() *Config {
 		HistoryScope:                "project", // Default to project-scoped history
 		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
+		DaemonMultiSession:          true,      // SP-118 Phase 4: daemon default-on for multi-window
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		PDFOCREnabled:               true,

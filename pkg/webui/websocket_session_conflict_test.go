@@ -37,6 +37,11 @@ func newTestServer(t *testing.T, preConfigure func(*ReactWebServer)) *testServer
 	}
 	// Override CheckOrigin so the httptest server can complete the WS handshake.
 	srv.upgrader.CheckOrigin = func(_ *http.Request) bool { return true }
+	// SP-118 Phase 1: route to Mode 1 (single-active-session). Existing
+	// TestSessionConflict_* tests exercise the takeover flow which only
+	// exists on the Mode 1 path. The preConfigure callback can still
+	// override this for tests that specifically need Mode 2.
+	srv.agentEnforceSingleSession = true
 	if preConfigure != nil {
 		preConfigure(srv)
 	}

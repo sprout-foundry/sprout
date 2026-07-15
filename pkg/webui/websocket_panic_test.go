@@ -176,7 +176,7 @@ func TestCleanupAfterPanic_ResetsClientState(t *testing.T) {
 	defer ws.eventBus.Unsubscribe("cleanup-test")
 
 	// Run cleanup
-	ws.cleanupAfterPanic(clientID, sessionID)
+	ws.cleanupAfterPanicAgent(clientID, sessionID)
 
 	// Verify top-level state is cleared
 	ws.mutex.RLock()
@@ -249,7 +249,7 @@ func TestCleanupAfterPanic_ClearsCachedAgents(t *testing.T) {
 	ws.clientContexts[clientID] = ctx
 	ws.mutex.Unlock()
 
-	ws.cleanupAfterPanic(clientID, "session-1")
+	ws.cleanupAfterPanicAgent(clientID, "session-1")
 
 	// Verify: the context must still exist but with nil agents
 	ws.mutex.RLock()
@@ -287,8 +287,8 @@ func TestCleanupAfterPanic_EmptyClientID_DoesNotPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Should not panic
-	ws.cleanupAfterPanic("", "session-1")
-	ws.cleanupAfterPanic("  ", "session-2")
+	ws.cleanupAfterPanicAgent("", "session-1")
+	ws.cleanupAfterPanicAgent("  ", "session-2")
 }
 
 // TestCleanupAfterPanic_UnknownClientID_DoesNotPanic verifies cleanupAfterPanic
@@ -299,7 +299,7 @@ func TestCleanupAfterPanic_UnknownClientID_DoesNotPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Should not panic even though no context exists
-	ws.cleanupAfterPanic("nonexistent-client", "session-1")
+	ws.cleanupAfterPanicAgent("nonexistent-client", "session-1")
 }
 
 // TestClearAllChatQueryState verifies clearAllChatQueryState resets all
@@ -407,7 +407,7 @@ func TestCleanupAfterPanic_WithMultipleChatSessions(t *testing.T) {
 	ws.activeQueries = 1
 	ws.mutex.Unlock()
 
-	ws.cleanupAfterPanic(clientID, sessionID)
+	ws.cleanupAfterPanicAgent(clientID, sessionID)
 
 	// Verify all chat sessions are reset
 	ws.mutex.RLock()

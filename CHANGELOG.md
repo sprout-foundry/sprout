@@ -4,6 +4,19 @@ All notable changes to Sprout will be documented in this file.
 
 ## [v0.17.2] - 2026-07-15
 
+- docs: changelog for v0.17.2 (860cd9e9)
+- fix(provider): make /provider switch find custom providers under SPROUT_CONFIG (5257c731)
+- merge: bring in 7a9110ad (webui buffer polyfill + vite optimizeDeps) (88f9c227)
+- fix: make webui builds reliable with browser buffer polyfill (7a9110ad)
+- fix(build): make build-all propagates WebUI failures and re-runs npm ci on stale node_modules (5bcb09ab)
+- fix(automate): workspace-aware directory resolution in daemon-mode tools (6608ecf3)
+- docs(todo): convert SP-118 phases to checkbox format for automation (e7425120)
+- docs(todo): add SP-118 phases for Daemon Multi-Window Session Isolation (b3275d53)
+- docs(roadmap): add SP-118 — Daemon Multi-Window Session Isolation (3cf8583c)
+- docs: Update changelog for v0.17.1 (94485549)
+
+## [v0.17.2] - 2026-07-15
+
 - fix(provider): make /provider switch find custom providers under SPROUT_CONFIG (5257c731)
 
 ## [v0.17.1] - 2026-07-15

@@ -231,6 +231,84 @@ panic cleanup.
 
 ---
 
+## SP-119: Workspace-aware directory resolution in daemon-mode tools
+
+_Spec: `roadmap/SP-119-workspace-aware-directory-resolution.md`. 🔵 Proposed — not yet started._
+
+Discovered 2026-07-14 while debugging a `run_automate` failure in a
+daemon-served workspace. Root cause: `pkg/automate.Dir()` (and the agent
+tool handlers that call it) use `os.Getwd()` to resolve `automate/` —
+correct when the user's shell CWD is the workspace (CLI usage), but wrong
+in daemon mode where `os.Getwd()` is the daemon root (`/Users/alanp` per
+`SPROUT_DAEMON_ROOT=1`). The WebUI HTTP API path
+(`pkg/webui/automations_api.go`) already uses `ws.getAutomateDir(r)` which
+is workspace-rooted — only the chat-invoked tool path is broken.
+
+The same surface (`os.Getwd()` for workspace-relative paths) recurs in
+~25+ other callsites across `pkg/agent/persistence.go`, `pkg/agent/skills.go`,
+`pkg/agent_tools/shell_native.go`, etc. Each is a separate decision; this
+spec fixes the most acute case and ships a discoverable helper so the
+rest can migrate incrementally.
+
+### Phase 1: `automate.DirIn` helper (~0.25 day)
+
+- [ ] **SP-119-1:** Add `automate.DirIn(workspaceDir string) string`
+      to `pkg/automate/discovery.go`. Returns
+      `filepath.Join(workspaceDir, "automate")` when `workspaceDir` is
+      non-empty; falls back to `Dir()` (CWD-based) when empty so the CLI
+      behavior is unchanged. Update the godoc on `Dir()` to flag the
+      daemon-mode caveat and point to SP-119 for the workspace-aware path.
+      Add `TestDirIn` to `pkg/automate/discovery_test.go` covering:
+      empty (falls back to cwd), whitespace-only workspace (falls back),
+      absolute path, relative path. Acceptance:
+      `go test ./pkg/automate/...` passes with the new cases.
+
+- [ ] **SP-119-2:** Wire the three agent-tool callers in
+      `pkg/agent/tool_handlers_automate.go` to `DirIn(a.GetWorkspaceRoot())`:
+
+      - Line 124 (`handleRunAutomate`): `dir := automate.DirIn(a.GetWorkspaceRoot())`
+      - Line 313 (`handleListAutomateWorkflows`): `dir := automate.DirIn(a.GetWorkspaceRoot())`
+      - Line 365 (`workflowRequiresApproval`): `return WorkflowRequiresApprovalIn(automate.DirIn(a.GetWorkspaceRoot()), workflowName)`
+
+      `a.GetWorkspaceRoot()` returns `a.workspaceRoot` (set by
+      `NewAgentWithLayersInWorkspace` at `pkg/agent/agent_creation.go:318`).
+      It does NOT fall back to `os.Getwd()` — when unset it returns `""`,
+      which `DirIn` resolves to `Dir()` (CWD-based) — correct for CLI
+      where the shell CWD IS the workspace.
+
+- [ ] **SP-119-3:** Wire the interface-based registry handler at
+      `pkg/agent_tools/list_automate_workflows_handler.go:45`. Same bug
+      (chat-invokable through `pkg/agent_tools/all.go:84`), different
+      accessor: `dir := automate.DirIn(env.WorkspaceRoot)`. Update the
+      handler's godoc to reflect the workspace-aware behavior. Add
+      `pkg/agent_tools/list_automate_workflows_handler_test.go` (3 cases:
+      workspace-set with workflow, empty workspace, empty WorkspaceRoot
+      fallback to CWD).
+
+      Acceptance for the whole spec:
+      - `go build ./...` clean.
+      - `go test -race ./pkg/automate/...` no regressions.
+      - `go test ./pkg/agent_tools/... -run TestListAutomateWorkflowsHandler` passes.
+      - Manual repro 1: in a workspace served by `sprout service`,
+        `run_automate todo-loop` from chat finds
+        `automate/todo-loop.json` in the workspace (vs. "no
+        automate/ directory found").
+      - Manual repro 2: chat `list_automate_workflows` returns
+        the workspace's workflows.
+      - Manual cross-check: `sprout automate list` from the workspace
+        shell still works (unchanged CLI path).
+
+### Out of scope (follow-ups under SP-091 / individual specs)
+
+The broader CWD-vs-workspace surface (≈25 callsites) is queued for a
+follow-up audit. See SP-119 spec "Why this scope and not broader" for
+the full list. Each is a separate decision based on whether the caller
+has `ctx` (use `filesystem.WorkspaceRootFromContext(ctx)`), `*Agent`
+(use `a.GetWorkspaceRoot()`), or no agent context at all (env var or
+explicit injection).
+
+---
+
 ## SP-091: Close the next round of roadmap gaps
 
 _Tech-debt cleanup + finishing touches (~3–5 days)._ Each item below was

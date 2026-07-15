@@ -53,7 +53,8 @@ type ReactWebServer struct {
 	isRunning                       bool
 	mutex                           sync.RWMutex
 	startTime                       time.Time
-	activeWSByUserID                sync.Map // map[string]*activeWSConn — SP-046: tracks single active WS per user
+	activeWSByUserID                sync.Map // map[string]*activeWSConn — SP-118 Mode1: tracks single active WS per user (agent mode)
+	userConnections                 *UserConnections // SP-118 Mode2: tracks N concurrent WS per user (daemon mode)
 	queryCount                      int
 	activeQueries                   int
 	activeQueryClientID             string
@@ -74,6 +75,7 @@ type ReactWebServer struct {
 	normalizedAllowedOrigins        []string     // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
 	trustedUserHeader               string       // Header name for user ID extraction in service mode
 	serviceMode                     bool         // true when running as a managed service (SPROUT_SERVICE=1)
+	agentEnforceSingleSession       bool         // true: single-active WS (sprout agent/CWS mode); false: multi-session (daemon) — SP-118
 	authToken                       string       // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
 	socketPath                      string       // Unix domain socket path (when non-empty, listen on socket instead of TCP)
 	startOnce                       sync.Once    // Ensures background workers are started exactly once
@@ -274,6 +276,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		askUserMgr:        askUserMgr,
 		clientContexts:    make(map[string]*webClientContext),
 		chatSubscribers:   newChatSubscribersRegistry(),
+		userConnections:   &UserConnections{},
 		port:              port,
 		bindAddr:          bindAddr,
 		socketPath:        socketPath,
@@ -368,12 +371,34 @@ func (ws *ReactWebServer) getActiveQueryCount() int {
 	return ws.activeQueries
 }
 
+// SetAgentEnforceSingleSession configures whether the WebSocket dispatcher
+// should route connections through the single-active-session (Mode 1) path
+// or the multi-session (Mode 2) path. SP-118 Phase 1.
+//
+//   - true  → Mode 1: only one browser window active per user at a time.
+//     Conflicts trigger session_conflict and a takeover prompt. This is
+//     sprout agent / CWS interactive mode.
+//   - false → Mode 2: N parallel browser windows per user. Currently a
+//     stub that accepts connections without enforcement; the full
+//     implementation lands in SP-118-2. This is sprout service / daemon.
+//
+// Cmd should call this immediately after NewReactWebServer returns:
+//   sprout agent path     → SetAgentEnforceSingleSession(true)
+//   sprout service path   → leave false (or explicitly call with false)
+//
+// Dispatch uses this flag, NOT serviceMode. Tests in pkg/webui flip
+// serviceMode=true to exercise the takeover flow under the Mode 1 path
+// (e.g., TestSessionConflict_Takeover_UserMode); using serviceMode as
+// the dispatch key would break them.
+func (ws *ReactWebServer) SetAgentEnforceSingleSession(v bool) {
+	ws.agentEnforceSingleSession = v
+}
+
 // HasActiveWebUIClients returns true if one or more WebSocket connections
 // of type "webui" are currently connected.  The security prompt routing
 // logic uses this to decide whether to route prompts through the WebUI
 // event bus or fall back to CLI-based prompting.
-func (ws *ReactWebServer) HasActiveWebUIClients() bool {
-	hasWebUI := false
+func (ws *ReactWebServer) HasActiveWebUIClients() bool {	hasWebUI := false
 	ws.connections.Range(func(_, value interface{}) bool {
 		if info, ok := value.(*ConnectionInfo); ok && info.Type == "webui" {
 			hasWebUI = true

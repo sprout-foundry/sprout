@@ -53,7 +53,8 @@ type ReactWebServer struct {
 	isRunning                       bool
 	mutex                           sync.RWMutex
 	startTime                       time.Time
-	activeWSByUserID                sync.Map // map[string]*activeWSConn — SP-046: tracks single active WS per user
+	activeWSByUserID                sync.Map // map[string]*activeWSConn — SP-118 Mode1: tracks single active WS per user (agent mode)
+	userConnections                 *UserConnections // SP-118 Mode2: tracks N concurrent WS per user (daemon mode)
 	queryCount                      int
 	activeQueries                   int
 	activeQueryClientID             string
@@ -275,6 +276,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		askUserMgr:        askUserMgr,
 		clientContexts:    make(map[string]*webClientContext),
 		chatSubscribers:   newChatSubscribersRegistry(),
+		userConnections:   &UserConnections{},
 		port:              port,
 		bindAddr:          bindAddr,
 		socketPath:        socketPath,

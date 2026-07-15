@@ -1212,7 +1212,7 @@ func TestHandleWebSocketMessage_HydrateRequest(t *testing.T) {
 				})
 				continue
 			}
-			ws.handleWebSocketMessage(pair.server, sessionID, msg, clientID)
+			ws.handleWebSocketMessage(pair.server, sessionID, msg, clientID, "", "", false)
 		}
 	}()
 
@@ -1298,7 +1298,7 @@ func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptes
 				})
 				continue
 			}
-			ws.handleWebSocketMessage(safeConn, sessionID, msg, clientID)
+			ws.handleWebSocketMessage(safeConn, sessionID, msg, clientID, "", "", false)
 		}
 	}))
 

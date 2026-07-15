@@ -2,9 +2,18 @@
 
 // Package webui provides the React web server with embedded assets.
 //
-// This file implements the multi-device single-active-session registry for
-// SP-046-5 (Multi-device single-active-session).
-// See roadmap/SP-046-workspace-sync-model.md §5 for the full specification.
+// Dead code under SP-118. This file previously implemented the
+// multi-device single-active-session registry (mislabeled SP-046-5;
+// the archived spec has no §5). The registry is unused —
+// multi_device_takeover_test.go has no shared ReactWebServer wiring,
+// and there are zero callers. Retained for back-compat with any
+// pre-SP-118 callers. Will be removed in a follow-up PR with explicit
+// scope (see SP-118-6).
+//
+// The live path for single-active-session enforcement is the Mode 1
+// handler (handleWebSocket_Agent, pkg/webui/websocket_handler.go).
+// Multi-session daemon behavior is handled by UserConnections
+// (pkg/webui/multi_connection_registry.go).
 
 package webui
 

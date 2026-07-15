@@ -21,7 +21,9 @@ import (
 )
 
 // activeWSConn tracks a single active WebSocket connection for a user
-// to enforce single-active-session policy (SP-046).
+// to enforce single-active-session policy (SP-118 Phase 1, Mode 1).
+// In SP-118 Phase 2 (Mode 2), this type is not used; the daemon uses
+// UserConnections (pkg/webui/multi_connection_registry.go) instead.
 type activeWSConn struct {
 	safeConn    *SafeConn
 	conn        *websocket.Conn
@@ -30,8 +32,180 @@ type activeWSConn struct {
 	closed      chan struct{} // closed when the connection is closed
 }
 
-// handleWebSocket handles WebSocket connections for real-time events
+// handleWebSocket is the internal entry point that pkg/webui/routes.go
+// wires to /ws. It dispatches to the mode-appropriate handler based on
+// (agentEnforceSingleSession, DaemonMultiSession config):
+//
+//	Mode 1 (handleWebSocket_Agent) when EITHER:
+//	  - agentEnforceSingleSession is true (sprout agent / interactive
+//	    CLI explicitly opts in to single-session), OR
+//	  - agentEnforceSingleSession is false but the daemon_multi_session
+//	    config setting is false (operator opted the daemon back into
+//	    Mode 1 for a window; SP-118 Phase 4 rollout gate).
+//
+//	Mode 2 (handleWebSocket_Daemon) when:
+//	  - agentEnforceSingleSession is false AND
+//	  - daemon_multi_session is true (default)
+//
+// Effective value formula (per spec): `(!agentEnforceSingleSession) && daemon_multi_session`.
+// The agent path always uses Mode 1 regardless of daemon_multi_session;
+// the daemon path uses Mode 2 only when both conditions hold.
+//
+// Do NOT dispatch on serviceMode here. Tests like
+// TestSessionConflict_Takeover_UserMode set serviceMode=true and exercise
+// the takeover flow as Mode 1 behavior; re-using serviceMode as the
+// dispatch key would break those tests. See SP-118 §Design "Dispatch
+// signal".
 func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	if ws.shouldUseMode1() {
+		ws.handleWebSocket_Agent(w, r)
+		return
+	}
+	ws.handleWebSocket_Daemon(w, r)
+}
+
+// shouldUseMode1 returns true when the dispatcher should route this
+// connection through the single-active-session (Mode 1) path. Mode 1
+// is forced when agentEnforceSingleSession is set (sprout agent
+// always uses Mode 1, regardless of config) OR when the operator
+// has disabled daemon_multi_session in config (rollout escape hatch).
+//
+// Reads the DaemonMultiSession config lazily on each call so a
+// config change is picked up without restart.
+//
+// When ws.agent is nil (pre-SP-118 test scaffolding with no real
+// config manager), we default to Mode 2: this matches the production
+// daemon path (which has no agent) and lets the new daemon
+// integration tests exercise Mode 2 without setting up a full
+// agent+config manager. The agent path (sprout interactive) always
+// has a non-nil agent, so this fallback never fires in production.
+func (ws *ReactWebServer) shouldUseMode1() bool {
+	if ws.agentEnforceSingleSession {
+		return true
+	}
+	if ws.agent == nil {
+		// No agent → no config manager → Mode 2 default.
+		return false
+	}
+	cm := ws.agent.GetConfigManager()
+	if cm == nil {
+		return false
+	}
+	cfg := cm.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	// cfg.DaemonMultiSession defaults to true via config_migration.go's
+	// applyDaemonMultiSessionDefault. Setting false in config opts the
+	// daemon back into Mode 1 (rollout escape hatch).
+	return !cfg.DaemonMultiSession
+}
+
+// handleWebSocket_Daemon handles WebSocket connections in multi-session
+// mode (daemon, sprout service). N parallel browser windows are allowed
+// per user; each gets its own chat session. This is the Mode 2 / SP-118
+// path.
+//
+// In contrast to handleWebSocket_Agent (Mode 1) this handler:
+//   - does NOT enforce single-active-session via activeWSByUserID
+//   - does NOT trigger session_conflict / waitForTakeover / session_displaced
+//   - registers the connection in ws.userConnections so other paths
+//     (cleanupAfterPanicSession, future diagnostics) can find it
+//   - calls cleanupAfterPanicSession on read-goroutine panic, which
+//     scopes the blast radius to this session rather than the whole
+//     clientID (preserved by the per-user connection count check)
+//
+// The pre-loop work (upgrade, sessionID, resolveClientID, panic recovery,
+// connection storage, chatSubscribers subscribe, replay, then the
+// read/write goroutines) is structurally identical to Mode 1 — the
+// differences live in (a) what counts as a "conflict" (nothing does)
+// and (b) what cleanup runs on panic. To keep both handlers readable
+// without duplicating ~300 lines of loop body, the live loop is split
+// out into runConnectionLiveLoop below; both modes call it after their
+// mode-specific pre-loop setup.
+//
+// Effective routing for the dispatcher:
+//   handleWebSocket (entry) reads `agentEnforceSingleSession` and
+//   forwards here when false. The dispatcher is the ONLY dispatch point;
+//   internal callers use one of the two mode handlers directly.
+func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.Request) {
+	conn, err := ws.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade error (daemon): %v", err)
+		return
+	}
+
+	safeConn := NewSafeConn(conn)
+	defer safeConn.Close()
+
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("[SP-118-Mode2] Failed to generate session ID: %v", err)
+		conn.Close()
+		return
+	}
+	sessionID := "ws_" + hex.EncodeToString(b)
+	clientID := ws.resolveClientID(r)
+	userID := ws.ExtractUserID(r)
+	chatID := r.URL.Query().Get("chat_id")
+
+	// Mode 2 panic recovery — use the session-scoped cleanup so a panic
+	// in one window doesn't invalidate sibling windows on the same
+	// clientID. safeConn + sessionID are in scope, so we can mirror the
+	// Mode 1 defer shape exactly.
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[SP-118-Mode2] WebSocket handler panic: %v", r)
+			safeConn.WritePanicError(sessionID, "websocket handler", r)
+			ws.cleanupAfterPanicSession(clientID, userID, chatID, sessionID)
+		}
+	}()
+
+	reattachChatID := strings.TrimSpace(r.URL.Query().Get("reattach"))
+	afterSeq := parseAfterSeqQuery(r.URL.Query().Get("after_seq"))
+	if reattachChatID != "" {
+		chatID = reattachChatID
+	}
+
+	// trackingKey: userID in service mode, clientID in local mode. This
+	// matches the Mode 1 convention so cleanupAfterPanicSession can
+	// reason about "other windows for the same user" correctly.
+	trackingKey := userID
+	if trackingKey == "" {
+		trackingKey = clientID
+	}
+
+	// Register in the multi-connection registry BEFORE the live loop so
+	// concurrent panic cleanup can find this session. Removal happens on
+	// exit via the deferred unregister below.
+	if ws.userConnections != nil {
+		ws.userConnections.Add(trackingKey, UserConnection{
+			Conn:      safeConn,
+			Raw:       conn,
+			SessionID: sessionID,
+			ClientID:  clientID,
+			UserID:    userID,
+		})
+		defer ws.userConnections.Remove(trackingKey, conn)
+	}
+
+	// Mode 2 has no terminal-displacement notification. The function is
+	// a no-op here by design — calling it would only matter if a
+	// takeover happened, which Mode 2 explicitly does not do.
+	log.Printf("[SP-118-Mode2] Daemon connection accepted for user %s session %s (count=%d)",
+		trackingKey, sessionID, ws.userConnections.Count(trackingKey))
+
+	ws.runConnectionLiveLoop(conn, safeConn, sessionID, clientID, userID, chatID, reattachChatID, afterSeq, true)
+}
+
+// handleWebSocket_Agent handles WebSocket connections in single-active-session mode
+// (sprout agent / CWS-bound mode). This is the Mode 1 path: only one browser window
+// may be active at a time per user. A second window triggers session_conflict and
+// waits for the user to confirm takeover via session_takeover.
+//
+// Dispatch from handleWebSocket (the internal entry point) uses agentEnforceSingleSession,
+// NOT serviceMode. See SP-118 §Design "Dispatch signal".
+func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.Request) {
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
@@ -57,7 +231,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		if r := recover(); r != nil {
 			log.Printf("WebSocket handler panic: %v", r)
 			safeConn.WritePanicError(sessionID, "websocket handler", r)
-			ws.cleanupAfterPanic(clientID, sessionID)
+			ws.cleanupAfterPanicAgent(clientID, sessionID)
 		}
 	}()
 
@@ -104,7 +278,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 		// Conflict! Notify the NEW connection that an existing session
 		// is active and wait for the client to confirm takeover.
-		log.Printf("[SP-046] Session conflict for user %s: new session %s vs existing %s",
+		log.Printf("[SP-118-Mode1] Session conflict for user %s: new session %s vs existing %s",
 			trackingKey, sessionID, existingActive.sessionID)
 
 		safeConn.WriteJSON(map[string]interface{}{
@@ -117,7 +291,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 		// Block here until the client either confirms takeover or disconnects.
 		if !ws.waitForTakeover(conn, sessionID) {
-			log.Printf("[SP-046] New session %s disconnected without confirming takeover for user %s",
+			log.Printf("[SP-118-Mode1] New session %s disconnected without confirming takeover for user %s",
 				sessionID, trackingKey)
 			return
 		}
@@ -134,7 +308,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				},
 			})
 			existingActive.safeConn.Close()
-			log.Printf("[SP-046] Session %s evicted for user %s", existingActive.sessionID, trackingKey)
+			log.Printf("[SP-118-Mode1] Session %s evicted for user %s", existingActive.sessionID, trackingKey)
 
 			// Also notify terminal WebSocket connections for the same tracking
 			// key so they can show a displacement banner. Terminal sessions
@@ -164,6 +338,44 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		close(activeConn.closed)
 	}()
 
+	// Store the underlying connection with metadata, subscribe to the
+	// auto-chat, run the replay, and start the read/write goroutines.
+	// Shared with handleWebSocket_Daemon — see runConnectionLiveLoop
+	// for the Mode 1 vs Mode 2 panic-cleanup branching.
+	ws.runConnectionLiveLoop(conn, safeConn, sessionID, clientID, userID, chatID, reattachChatID, afterSeq, false)
+}
+
+// runConnectionLiveLoop is the shared post-upgrade body of both
+// handleWebSocket_Agent (Mode 1) and handleWebSocket_Daemon (Mode 2).
+// It is responsible for:
+//
+//   - Storing ConnectionInfo in ws.connections so other paths (chat
+//     fanout, security dialogs, diagnostics) can find this socket.
+//   - Subscribing to chatSubscribers for the auto-chat (replay fanout).
+//   - Replaying buffered chat events when reattachChatID is set.
+//   - Starting the read goroutine (parses incoming WS frames).
+//   - Running the write loop (drains events, coalesces stream chunks,
+//     forwards through shouldForwardEventToConnection).
+//
+// The only difference between the two modes is which cleanup runs on
+// panic in the read goroutine: Mode 1 calls cleanupAfterPanicAgent
+// (nukes the whole clientID's state — safe because there's only one
+// window); Mode 2 calls cleanupAfterPanicSession (scoped to this
+// session, plus clientID-clear only when this was the last window for
+// the user). The choice is signalled via the `daemon` bool: true →
+// Mode 2, false → Mode 1.
+//
+// Parameters:
+//   - conn, safeConn, sessionID, clientID, userID, chatID, reattachChatID,
+//     afterSeq: same fields as the original handleWebSocket entry point.
+//   - daemon: true for handleWebSocket_Daemon; false for handleWebSocket_Agent.
+func (ws *ReactWebServer) runConnectionLiveLoop(
+	conn *websocket.Conn,
+	safeConn *SafeConn,
+	sessionID, clientID, userID, chatID, reattachChatID string,
+	afterSeq int64,
+	daemon bool,
+) {
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:          sessionID,
@@ -274,7 +486,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 	// Use separate goroutines for reading and writing
 	// This is the standard pattern for bidirectional WebSocket communication
-	ctx, cancel := context.WithCancel(r.Context())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Track last message time for dead connection detection
@@ -288,7 +500,14 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			if r := recover(); r != nil {
 				log.Printf("WebSocket read goroutine panic recovered: %v", r)
 				safeConn.WritePanicError(sessionID, "read goroutine", r)
-				ws.cleanupAfterPanic(clientID, sessionID)
+				// Mode-specific cleanup. Mode 1 (sprout agent) nukes the
+				// whole clientID; Mode 2 (daemon) only clears this
+				// session. See cleanupAfterPanicAgent / cleanupAfterPanicSession.
+				if daemon {
+					ws.cleanupAfterPanicSession(clientID, userID, chatID, sessionID)
+				} else {
+					ws.cleanupAfterPanicAgent(clientID, sessionID)
+				}
 				cancel() // ensure write loop exits cleanly
 			}
 		}()
@@ -355,7 +574,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				ws.touchClientLastSeen(clientID)
 
 				// Handle incoming WebSocket messages
-				ws.handleWebSocketMessage(safeConn, sessionID, msg, clientID)
+				ws.handleWebSocketMessage(safeConn, sessionID, msg, clientID, userID, chatID, daemon)
 			}
 		}
 	}() // Write loop - handles outgoing events
@@ -422,6 +641,70 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+}
+
+// cleanupAfterPanicSession is the Mode 2 / daemon-side panic cleanup.
+// It bounds the blast radius by what could plausibly share state with
+// the panicked session:
+//
+//  1. Drop this session from the userConnections registry (so future
+//     reads/writes don't try to use a half-closed socket).
+//  2. Clear THIS session's chat query state — only the chat that
+//     panicked (chatID), not the client's other chats.
+//  3. Clear cached agents for clientID only when this was the LAST
+//     window for the user (Count(userID) <= 1). The MCP-manager /
+//     conversation-history corruption defense from cleanupAfterPanicAgent
+//     still applies when the user has only one window; with multiple
+//     windows open, we trust the other windows' agents are independent.
+//
+// When userID is empty (local mode), trackingKey falls back to clientID
+// and the count check uses that, preserving Mode-1 parity for the
+// single-window case.
+func (ws *ReactWebServer) cleanupAfterPanicSession(clientID, userID, chatID, sessionID string) {
+	if strings.TrimSpace(clientID) == "" {
+		return
+	}
+
+	trackingKey := userID
+	if trackingKey == "" {
+		trackingKey = clientID
+	}
+
+	// 1. Decrement top-level active query counter for this client.
+	//    Even when multiple windows are open, the counter is per-clientID,
+	//    so this remains the right level of accounting.
+	ws.decrementActiveQueries(clientID)
+
+	// 2. Reset per-chat session query state — but only for the chat
+	//    tied to this session, not the whole clientID. Other windows on
+	//    the same clientID with their own chats are unaffected.
+	ws.mutex.Lock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil && chatID != "" {
+		if cs, ok := ctx.ChatSessions[chatID]; ok && cs != nil {
+			cs.setQueryActive(false, "")
+		}
+	}
+	ws.mutex.Unlock()
+
+	// 3. Cached-agent clear is gated on Count(trackingKey) <= 1. With
+	//    only one window open, the original Mode-1 corruption defense
+	//    still applies — the agent might be half-initialized. With
+	//    multiple windows, we trust the other windows to retain working
+	//    agents and skip the clear so siblings don't lose their in-flight
+	//    query state.
+	if ws.userConnections != nil && ws.userConnections.Count(trackingKey) <= 1 {
+		ws.clearCachedAgent(clientID)
+	}
+
+	// 4. Publish session_terminated event so the panicked client can
+	//    tear down UI. Other windows on the same clientID are NOT
+	//    notified — they continue serving the user.
+	ws.publishClientEvent(clientID, events.EventTypeSessionTerminated, map[string]interface{}{
+		"session_id": sessionID,
+		"status":     "error",
+		"code":       "internal_panic",
+		"message":    "Session terminated due to internal error",
+	})
 }
 
 func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, connInfo *ConnectionInfo) bool {
@@ -538,8 +821,14 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	}
 }
 
-// handleWebSocketMessage processes incoming WebSocket messages
-func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID string, msg *WebSocketMessage, clientID string) {
+// handleWebSocketMessage processes incoming WebSocket messages.
+//
+// The `daemon`, `userID`, and `chatID` parameters drive Mode-2-aware
+// panic cleanup in safeHandleGoroutine below: a panic in a Mode-2
+// message handler must not invalidate sibling windows on the same
+// clientID. Tests that pre-date SP-118 pass empty strings / false
+// for these and continue to behave as Mode 1.
+func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID string, msg *WebSocketMessage, clientID, userID, chatID string, daemon bool) {
 	switch msg.Type {
 	case AllowedMessageTypePing:
 		// Respond to ping with pong
@@ -610,7 +899,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 
 	case AllowedMessageTypeRequestStats:
 		// Send current stats immediately
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			stats := ws.gatherStatsForClientID(clientID)
 			safeConn.WriteJSON(map[string]interface{}{
 				"type": "stats_update",
@@ -629,7 +918,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handleProviderChangeMessage(safeConn, data, clientID)
 		})
 
@@ -644,7 +933,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handleModelChangeMessage(safeConn, data, clientID)
 		})
 
@@ -659,7 +948,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handlePersonaChangeMessage(safeConn, data, clientID)
 		})
 
@@ -674,7 +963,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handleSecurityApprovalResponse(safeConn, data, clientID)
 		})
 
@@ -689,7 +978,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handleSecurityPromptResponse(safeConn, data, clientID)
 		})
 
@@ -704,21 +993,21 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handleAskUserResponse(safeConn, data, clientID)
 		})
 
 	case AllowedMessageTypeHydrateRequest:
 		// SP-046: client requests cold-hydrate of workspace files.
 		// Runs in a goroutine so the read loop stays responsive.
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handleColdHydrateRequest(safeConn, ws.getWorkspaceRootForClient(clientID))
 		})
 
 	case AllowedMessageTypeSyncRecover:
 		// SP-046: client requests sync recovery after container death or browser crash.
 		// Runs in a goroutine so the read loop stays responsive.
-		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
 			ws.handleSyncRecoverMessage(safeConn, sessionID, msg, clientID)
 		})
 
@@ -726,20 +1015,34 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		// SP-046: session_takeover is expected only during the conflict
 		// wait loop. If it arrives during normal message dispatch, log
 		// and ignore — there is nothing to do.
-		log.Printf("[SP-046] session_takeover received for session %s outside of conflict state, ignoring", sessionID)
+		log.Printf("[SP-118-Mode1] session_takeover received for session %s outside of conflict state, ignoring", sessionID)
 	}
 }
 
 // safeHandleGoroutine runs fn in a goroutine with panic recovery. If fn
-// panics, an error event is written to the WebSocket, the client's active
-// query state is reset, and the connection is closed.
-func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, clientID string, fn func()) {
+// panics, an error event is written to the WebSocket, the active query
+// state is reset (mode-appropriate blast radius), and the connection
+// is closed.
+//
+// The userID, chatID, and daemon bool are used to dispatch the right
+// cleanup function on panic:
+//   - daemon=false (Mode 1 / sprout agent): cleanupAfterPanicAgent
+//     nukes the whole clientID's state — safe because there is only
+//     one window per user.
+//   - daemon=true (Mode 2 / daemon): cleanupAfterPanicSession scopes
+//     the clear to this session + clientID-clear only when this is
+//     the last window for the user.
+func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, clientID, userID, chatID string, daemon bool, fn func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("WebSocket handler panic in session %s: %v", sessionID, r)
 				safeConn.WritePanicError(sessionID, "message handler", r)
-				ws.cleanupAfterPanic(clientID, sessionID)
+				if daemon {
+					ws.cleanupAfterPanicSession(clientID, userID, chatID, sessionID)
+				} else {
+					ws.cleanupAfterPanicAgent(clientID, sessionID)
+				}
 				safeConn.Close() // Terminate the session since state is unreliable after a panic
 			}
 		}()
@@ -747,8 +1050,10 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 	}()
 }
 
-// cleanupAfterPanic resets the client's query state and publishes a clean
-// state event so the UI doesn't get stuck showing "running" after a panic.
+// cleanupAfterPanicAgent resets the client's query state in Mode 1
+// (single-session). This is the Mode 1 / SP-118-Mode1 path: only one
+// browser window is active per user, so clearing the full clientID's
+// state is safe and correct.
 //
 // Design note: this clears ALL chat sessions for the clientID, not just the
 // one that panicked. This is intentional — a panicked goroutine may have
@@ -759,7 +1064,7 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 // The session_terminated event is published to the event bus for any other
 // subscribers (monitoring, multi-tab clients). The panicked connection
 // itself already receives the event directly via WritePanicError.
-func (ws *ReactWebServer) cleanupAfterPanic(clientID, sessionID string) {
+func (ws *ReactWebServer) cleanupAfterPanicAgent(clientID, sessionID string) {
 	if strings.TrimSpace(clientID) == "" {
 		return
 	}
@@ -808,17 +1113,17 @@ func (ws *ReactWebServer) waitForTakeover(conn *websocket.Conn, sessionID string
 
 	msg, err := parseAndValidateMessage(rawMsg)
 	if err != nil {
-		log.Printf("[SP-046] Session %s: invalid message during takeover wait: %v", sessionID, err)
+		log.Printf("[SP-118-Mode1] Session %s: invalid message during takeover wait: %v", sessionID, err)
 		return false
 	}
 
 	if msg.Type != AllowedMessageTypeSessionTakeover {
-		log.Printf("[SP-046] Session %s: unexpected message type %q during takeover wait (expected %q)",
+		log.Printf("[SP-118-Mode1] Session %s: unexpected message type %q during takeover wait (expected %q)",
 			sessionID, msg.Type, AllowedMessageTypeSessionTakeover)
 		return false
 	}
 
-	log.Printf("[SP-046] Session %s confirmed takeover", sessionID)
+	log.Printf("[SP-118-Mode1] Session %s confirmed takeover", sessionID)
 	return true
 }
 
@@ -833,7 +1138,7 @@ func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
 	}
 	active, ok := val.(*activeWSConn)
 	if !ok {
-		log.Printf("[SP-046] unexpected type in activeWSByUserID for key %s", trackingKey)
+		log.Printf("[SP-118-Mode1] unexpected type in activeWSByUserID for key %s", trackingKey)
 		return false
 	}
 
@@ -847,7 +1152,7 @@ func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
 	})
 	active.safeConn.Close()
 
-	log.Printf("[SP-046] Session %s evicted for user %s", active.sessionID, trackingKey)
+	log.Printf("[SP-118-Mode1] Session %s evicted for user %s", active.sessionID, trackingKey)
 	return true
 }
 
@@ -857,7 +1162,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	// Unmarshal the data payload
 	var data map[string]interface{}
 	if len(msg.Data) == 0 {
-		log.Printf("[SP-046] sync_recover: empty data from %s", sessionID)
+		log.Printf("[SP-118-Mode1] sync_recover: empty data from %s", sessionID)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "invalid sync_recover data"},
@@ -865,7 +1170,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 		return
 	}
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		log.Printf("[SP-046] sync_recover: invalid JSON from %s: %v", sessionID, err)
+		log.Printf("[SP-118-Mode1] sync_recover: invalid JSON from %s: %v", sessionID, err)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "invalid sync_recover data"},
@@ -876,7 +1181,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	// Extract browser seq map from data
 	seqsRaw, ok := data["seqs"]
 	if !ok {
-		log.Printf("[SP-046] sync_recover: missing seqs from %s", sessionID)
+		log.Printf("[SP-118-Mode1] sync_recover: missing seqs from %s", sessionID)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "missing seqs in sync_recover"},
@@ -886,7 +1191,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 
 	seqsMap, ok := seqsRaw.(map[string]interface{})
 	if !ok {
-		log.Printf("[SP-046] sync_recover: seqs is not a map from %s", sessionID)
+		log.Printf("[SP-118-Mode1] sync_recover: seqs is not a map from %s", sessionID)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "seqs must be a map"},
@@ -902,16 +1207,16 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 		case int64:
 			browserSeqs[path] = v
 		default:
-			log.Printf("[SP-046] sync_recover: unexpected seq type for %s: %T", path, seqVal)
+			log.Printf("[SP-118-Mode1] sync_recover: unexpected seq type for %s: %T", path, seqVal)
 		}
 	}
 
-	log.Printf("[SP-046] sync_recover from client %s: %d files", clientID, len(browserSeqs))
+	log.Printf("[SP-118-Mode1] sync_recover from client %s: %d files", clientID, len(browserSeqs))
 
 	// Run container death recovery with per-file seqs
 	result, err := ws.HandleContainerRecoveryWithSeqs(context.Background(), clientID, browserSeqs)
 	if err != nil {
-		log.Printf("[SP-046] sync_recover reconciliation failed: %v", err)
+		log.Printf("[SP-118-Mode1] sync_recover reconciliation failed: %v", err)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": fmt.Sprintf("reconciliation failed: %v", err)},
@@ -921,7 +1226,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 
 	// Send reconciliation plan back to browser
 	if err := ws.SendSyncReconcile(safeConn, result); err != nil {
-		log.Printf("[SP-046] sync_recover: failed to send reconcile plan: %v", err)
+		log.Printf("[SP-118-Mode1] sync_recover: failed to send reconcile plan: %v", err)
 		return
 	}
 
@@ -936,11 +1241,11 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	if filesToReplay > 0 {
 		ag, err := ws.getClientAgent(clientID)
 		if err != nil {
-			log.Printf("[SP-046] sync_recover: failed to get agent for %s: %v", clientID, err)
+			log.Printf("[SP-118-Mode1] sync_recover: failed to get agent for %s: %v", clientID, err)
 			return
 		}
 		if err := ws.SendSyncReplayStart(safeConn, clientID, filesToReplay); err != nil {
-			log.Printf("[SP-046] sync_recover: failed to send replay start: %v", err)
+			log.Printf("[SP-118-Mode1] sync_recover: failed to send replay start: %v", err)
 			return
 		}
 
@@ -950,27 +1255,27 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 			}
 			// Validate path to prevent traversal attacks
 			if filepath.IsAbs(action.FilePath) || strings.Contains(action.FilePath, "..") {
-				log.Printf("[SP-046] sync_recover: skipping invalid path: %s", action.FilePath)
+				log.Printf("[SP-118-Mode1] sync_recover: skipping invalid path: %s", action.FilePath)
 				continue
 			}
 			// Read the file content from container
 			content, err := ag.ReadFileContent(action.FilePath)
 			if err != nil {
-				log.Printf("[SP-046] sync_recover: failed to read %s: %v", action.FilePath, err)
+				log.Printf("[SP-118-Mode1] sync_recover: failed to read %s: %v", action.FilePath, err)
 				continue
 			}
 			if err := ws.SendSyncReplayFile(safeConn, clientID, action.FilePath, content, action.ContainerSeq); err != nil {
-				log.Printf("[SP-046] sync_recover: failed to replay %s: %v", action.FilePath, err)
+				log.Printf("[SP-118-Mode1] sync_recover: failed to replay %s: %v", action.FilePath, err)
 				return
 			}
 		}
 
 		if err := ws.SendSyncReplayComplete(safeConn, clientID); err != nil {
-			log.Printf("[SP-046] sync_recover: failed to send replay complete: %v", err)
+			log.Printf("[SP-118-Mode1] sync_recover: failed to send replay complete: %v", err)
 		}
 	}
 
-	log.Printf("[SP-046] sync_recover complete for client %s: %d files reconciled", clientID, len(result.Plan))
+	log.Printf("[SP-118-Mode1] sync_recover complete for client %s: %d files reconciled", clientID, len(result.Plan))
 }
 
 // notifyTerminalConnectionsDisplaced sends a session_displaced message to
@@ -979,7 +1284,17 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 // that terminal tabs on the displaced device can show a banner instead of
 // silently continuing as if nothing happened. Terminal PTY processes are NOT
 // closed — they persist across disconnects by design.
+//
+// Mode 2 (daemon, sprout service) is a no-op: takeover does not happen in
+// Mode 2 because there is no single-active-session enforcement. The handler
+// checks `ws.agentEnforceSingleSession` so this function remains a safe
+// call site from Mode 1 paths without leaking displacement messages into
+// the multi-session daemon.
 func (ws *ReactWebServer) notifyTerminalConnectionsDisplaced(trackingKey string) {
+	if !ws.agentEnforceSingleSession {
+		// Mode 2: no displacement event — terminal tabs persist by design.
+		return
+	}
 	displacedMsg := map[string]interface{}{
 		"type": "session_displaced",
 		"data": map[string]interface{}{

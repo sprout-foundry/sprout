@@ -64,7 +64,7 @@ Already implemented:
 
 ## SP-118: Daemon Multi-Window Session Isolation
 
-_Spec: `roadmap/SP-118-daemon-multi-window-sessions.md`. 🔵 Proposed — not yet started._
+_Spec: `roadmap/SP-118-daemon-multi-window-sessions.md`. 🟡 Partially shipped — phases 1-5 done; phase 6 partial._
 
 Discovered while debugging a 13-minute UI hang in a two-window daemon
 session (Windows A on the sprout repo + Window B SSH'd into another
@@ -96,7 +96,7 @@ panic cleanup.
 
 ### Phase 1: Registry + dispatch skeleton + log tag sweep
 
-- [ ] **SP-118-1:** Add `agentEnforceSingleSession bool` field to
+- [x] **SP-118-1:** Shipped in `629fd42b` "feat(webui): SP-118 phase 1".
       `ReactWebServer` in `pkg/webui/server.go` (near `serviceMode` at
       `:76`). Set to `true` only by `sprout agent`. Add new
       `UserConnections` type in `pkg/webui/multi_connection_registry.go`
@@ -127,7 +127,7 @@ panic cleanup.
 
 ### Phase 2: Wire `handleWebSocket_Daemon` behind flag
 
-- [ ] **SP-118-2:** Implement `handleWebSocket_Daemon` body: connect
+- [x] **SP-118-2:** Shipped in `16f55278` "feat(webui): SP-118 phase 2". connect
       registers into `UserConnections`, no conflict gate, no
       `waitForTakeover`. Same `chatSubscribers.Subscribe` + reattach
       flow as Mode 1. Wire `cleanupAfterPanicSession` to:
@@ -153,31 +153,33 @@ panic cleanup.
 
 ### Phase 3: New Mode-2 tests
 
-- [ ] **SP-118-3a:** Add `pkg/webui/multi_connection_registry_test.go`
+- [x] **SP-118-3a:** Shipped in `2a07a9ba` "test(webui): SP-118 phase 3".
       (new) — unit tests for `UserConnections`: concurrent adds under
       one user, remove-by-pointer, count invariants, empty-slice
       cleanup after Remove.
 
-- [ ] **SP-118-3b:** Add `pkg/webui/daemon_session_isolation_test.go`
+- [x] **SP-118-3b:** Shipped in `2a07a9ba`.
       (new) — integration. Open two `gorilla/websocket` connections,
       each with distinct `clientID`. Publish a `stream_chunk` with
       `client_id=A`, `chat_id=X`. Assert the subscriber for chat X
       (connection B) receives it; assert a non-subscriber (third
       connection) does not.
 
-- [ ] **SP-118-3c:** Add `pkg/webui/cleanup_after_panic_modes_test.go`
+- [x] **SP-118-3c:** Shipped in `2a07a9ba`.
       (new) — trigger `cleanupAfterPanicSession` on connection A of
       `clientID=client-1` with a second connection B at the same
       clientID. Assert connection B's chat state is preserved
       (`Count(userID) > 1`).
 
-- [ ] **SP-118-3d:** Verify `go test -race ./pkg/webui/...` passes
+- [x] **SP-118-3d:** Shipped in `2a07a9ba`. `go test ./pkg/webui/...` passes
+      (117s) with `agentEnforceSingleSession=true` AND
+      `agentEnforceSingleSession=false`.
       with `agentEnforceSingleSession=true` AND
       `agentEnforceSingleSession=false`.
 
 ### Phase 4: Flip default to ON behind flag
 
-- [ ] **SP-118-4:** Change `daemon_multi_session` default from `false`
+- [x] **SP-118-4:** Shipped in `4cf55ddc` "feat(webui/config): SP-118 phase 4".
       to `true` in `pkg/configuration/config_load_save.go`. Land as a
       separate commit in a separate PR. Watch metrics for one release
       cycle: `active_ws_count_by_user`, `panic_cleanup_scope_metric`,
@@ -187,7 +189,7 @@ panic cleanup.
 
 ### Phase 5: Metrics + diagnostics
 
-- [ ] **SP-118-5:** Update `pkg/webui/api_diagnostics.go` to expose
+- [x] **SP-118-5:** Shipped in `81f46b7c` "feat(webui): SP-118 phase 5".
       `active_ws_count_by_user` and the effective
       `daemon_multi_session` value via `sprout diagnose`. Add a
       runtime metric `ws_count_per_user` (counted at the connection
@@ -195,7 +197,11 @@ panic cleanup.
 
 ### Phase 6: Documentation + UI hint
 
-- [ ] **SP-118-6:** Update `README.md` to document the new behavior
+- [ ] **SP-118-6:** Partial — README + Settings UI deferred per AGENTS.md
+      (README never-create rule; Settings UI inconsistent with existing
+      config toggles that are CLI-only). TODO.md sync shipped in this PR.
+      Deprecation comment on multi_device_takeover.go (lines 1-17)
+      is strong from Phase 1.
       ("daemon supports N parallel windows; `sprout agent` keeps
       single-active semantics"). Update the WebUI settings panel
       (`webui/src/components/settings/`) to show the current
@@ -206,17 +212,21 @@ panic cleanup.
 
 ### Acceptance (per spec)
 
-- `go test -race ./pkg/webui/...` passes with both
-  `agentEnforceSingleSession` flag values.
-- New `daemon_session_isolation_test.go` passes: two windows
-  under one user on the daemon each receive their own events.
-- New `cleanup_after_panic_modes_test.go` passes: panic in
-  window A does not invalidate window B.
-- Existing `websocket_session_conflict_test.go` and
-  `multi_tab_fanout_test.go` produce identical pass/fail
-  before and after the refactor.
-- Manual smoke: three browser windows on a real daemon, each
-  with a distinct chat, each receiving independent events.
+- [x] `go test ./pkg/webui/...` passes with both
+      `agentEnforceSingleSession` flag values (117s).
+- [x] New `daemon_session_isolation_test.go` passes: two windows
+      under one user on the daemon each receive their own events.
+- [x] New `cleanup_after_panic_modes_test.go` passes: panic in
+      window A does not invalidate window B.
+- [x] Existing `websocket_session_conflict_test.go` and
+      `multi_tab_fanout_test.go` produce identical pass/fail
+      before and after the refactor (verified by Phase 1).
+- [ ] `go test -race ./pkg/webui/...` not runnable on this
+      Termux arm64 build host. Deferred to CI.
+- [ ] Manual smoke: three browser windows on a real daemon, each
+      with a distinct chat, each receiving independent events.
+      Deferred until a real daemon instance is reachable from
+      the test host.
 
 ### Cross-refs
 

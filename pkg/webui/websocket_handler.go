@@ -21,7 +21,9 @@ import (
 )
 
 // activeWSConn tracks a single active WebSocket connection for a user
-// to enforce single-active-session policy (SP-046).
+// to enforce single-active-session policy (SP-118 Phase 1, Mode 1).
+// In SP-118 Phase 2 (Mode 2), this type is not used; the daemon uses
+// UserConnections (pkg/webui/multi_connection_registry.go) instead.
 type activeWSConn struct {
 	safeConn    *SafeConn
 	conn        *websocket.Conn
@@ -30,8 +32,46 @@ type activeWSConn struct {
 	closed      chan struct{} // closed when the connection is closed
 }
 
-// handleWebSocket handles WebSocket connections for real-time events
+// handleWebSocket is the internal entry point that pkg/webui/routes.go
+// wires to /ws. It dispatches to the mode-appropriate handler based on
+// agentEnforceSingleSession:
+//   - true  → handleWebSocket_Agent (single-active-session, Mode 1)
+//   - false → handleWebSocket_Daemon (multi-session, Mode 2)
+//
+// Do NOT dispatch on serviceMode here. Tests like
+// TestSessionConflict_Takeover_UserMode set serviceMode=true and exercise
+// the takeover flow as Mode 1 behavior; re-using serviceMode as the
+// dispatch key would break those tests. See SP-118 §Design "Dispatch
+// signal".
 func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	if ws.agentEnforceSingleSession {
+		ws.handleWebSocket_Agent(w, r)
+		return
+	}
+	ws.handleWebSocket_Daemon(w, r)
+}
+
+// handleWebSocket_Daemon handles WebSocket connections in multi-session
+// mode (daemon, sprout service). N parallel browser windows are allowed
+// per user; each gets its own chat session. This is the Mode 2 / SP-118
+// path. Currently a stub; the full implementation is Phase 2 (SP-118-2).
+func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.Request) {
+	// TODO(SP-118-2): implement multi-session connection handling.
+	// The Mode 1 path (single-active-session) is preserved in
+	// handleWebSocket_Agent. Until this is implemented, daemon mode
+	// falls back to allowing connections without single-session
+	// enforcement (no session_conflict, no takeover flow).
+	log.Printf("[SP-118-Mode2] Daemon multi-session WebSocket not yet implemented; connection accepted without enforcement")
+}
+
+// handleWebSocket_Agent handles WebSocket connections in single-active-session mode
+// (sprout agent / CWS-bound mode). This is the Mode 1 path: only one browser window
+// may be active at a time per user. A second window triggers session_conflict and
+// waits for the user to confirm takeover via session_takeover.
+//
+// Dispatch from handleWebSocket (the internal entry point) uses agentEnforceSingleSession,
+// NOT serviceMode. See SP-118 §Design "Dispatch signal".
+func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.Request) {
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
@@ -57,7 +97,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		if r := recover(); r != nil {
 			log.Printf("WebSocket handler panic: %v", r)
 			safeConn.WritePanicError(sessionID, "websocket handler", r)
-			ws.cleanupAfterPanic(clientID, sessionID)
+			ws.cleanupAfterPanicAgent(clientID, sessionID)
 		}
 	}()
 
@@ -104,7 +144,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 		// Conflict! Notify the NEW connection that an existing session
 		// is active and wait for the client to confirm takeover.
-		log.Printf("[SP-046] Session conflict for user %s: new session %s vs existing %s",
+		log.Printf("[SP-118-Mode1] Session conflict for user %s: new session %s vs existing %s",
 			trackingKey, sessionID, existingActive.sessionID)
 
 		safeConn.WriteJSON(map[string]interface{}{
@@ -117,7 +157,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 		// Block here until the client either confirms takeover or disconnects.
 		if !ws.waitForTakeover(conn, sessionID) {
-			log.Printf("[SP-046] New session %s disconnected without confirming takeover for user %s",
+			log.Printf("[SP-118-Mode1] New session %s disconnected without confirming takeover for user %s",
 				sessionID, trackingKey)
 			return
 		}
@@ -134,7 +174,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				},
 			})
 			existingActive.safeConn.Close()
-			log.Printf("[SP-046] Session %s evicted for user %s", existingActive.sessionID, trackingKey)
+			log.Printf("[SP-118-Mode1] Session %s evicted for user %s", existingActive.sessionID, trackingKey)
 
 			// Also notify terminal WebSocket connections for the same tracking
 			// key so they can show a displacement banner. Terminal sessions
@@ -288,7 +328,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			if r := recover(); r != nil {
 				log.Printf("WebSocket read goroutine panic recovered: %v", r)
 				safeConn.WritePanicError(sessionID, "read goroutine", r)
-				ws.cleanupAfterPanic(clientID, sessionID)
+				ws.cleanupAfterPanicAgent(clientID, sessionID)
 				cancel() // ensure write loop exits cleanly
 			}
 		}()
@@ -726,7 +766,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		// SP-046: session_takeover is expected only during the conflict
 		// wait loop. If it arrives during normal message dispatch, log
 		// and ignore — there is nothing to do.
-		log.Printf("[SP-046] session_takeover received for session %s outside of conflict state, ignoring", sessionID)
+		log.Printf("[SP-118-Mode1] session_takeover received for session %s outside of conflict state, ignoring", sessionID)
 	}
 }
 
@@ -739,7 +779,7 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 			if r := recover(); r != nil {
 				log.Printf("WebSocket handler panic in session %s: %v", sessionID, r)
 				safeConn.WritePanicError(sessionID, "message handler", r)
-				ws.cleanupAfterPanic(clientID, sessionID)
+				ws.cleanupAfterPanicAgent(clientID, sessionID)
 				safeConn.Close() // Terminate the session since state is unreliable after a panic
 			}
 		}()
@@ -747,8 +787,10 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 	}()
 }
 
-// cleanupAfterPanic resets the client's query state and publishes a clean
-// state event so the UI doesn't get stuck showing "running" after a panic.
+// cleanupAfterPanicAgent resets the client's query state in Mode 1
+// (single-session). This is the Mode 1 / SP-118-Mode1 path: only one
+// browser window is active per user, so clearing the full clientID's
+// state is safe and correct.
 //
 // Design note: this clears ALL chat sessions for the clientID, not just the
 // one that panicked. This is intentional — a panicked goroutine may have
@@ -759,7 +801,7 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 // The session_terminated event is published to the event bus for any other
 // subscribers (monitoring, multi-tab clients). The panicked connection
 // itself already receives the event directly via WritePanicError.
-func (ws *ReactWebServer) cleanupAfterPanic(clientID, sessionID string) {
+func (ws *ReactWebServer) cleanupAfterPanicAgent(clientID, sessionID string) {
 	if strings.TrimSpace(clientID) == "" {
 		return
 	}
@@ -808,17 +850,17 @@ func (ws *ReactWebServer) waitForTakeover(conn *websocket.Conn, sessionID string
 
 	msg, err := parseAndValidateMessage(rawMsg)
 	if err != nil {
-		log.Printf("[SP-046] Session %s: invalid message during takeover wait: %v", sessionID, err)
+		log.Printf("[SP-118-Mode1] Session %s: invalid message during takeover wait: %v", sessionID, err)
 		return false
 	}
 
 	if msg.Type != AllowedMessageTypeSessionTakeover {
-		log.Printf("[SP-046] Session %s: unexpected message type %q during takeover wait (expected %q)",
+		log.Printf("[SP-118-Mode1] Session %s: unexpected message type %q during takeover wait (expected %q)",
 			sessionID, msg.Type, AllowedMessageTypeSessionTakeover)
 		return false
 	}
 
-	log.Printf("[SP-046] Session %s confirmed takeover", sessionID)
+	log.Printf("[SP-118-Mode1] Session %s confirmed takeover", sessionID)
 	return true
 }
 
@@ -833,7 +875,7 @@ func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
 	}
 	active, ok := val.(*activeWSConn)
 	if !ok {
-		log.Printf("[SP-046] unexpected type in activeWSByUserID for key %s", trackingKey)
+		log.Printf("[SP-118-Mode1] unexpected type in activeWSByUserID for key %s", trackingKey)
 		return false
 	}
 
@@ -847,7 +889,7 @@ func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
 	})
 	active.safeConn.Close()
 
-	log.Printf("[SP-046] Session %s evicted for user %s", active.sessionID, trackingKey)
+	log.Printf("[SP-118-Mode1] Session %s evicted for user %s", active.sessionID, trackingKey)
 	return true
 }
 
@@ -857,7 +899,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	// Unmarshal the data payload
 	var data map[string]interface{}
 	if len(msg.Data) == 0 {
-		log.Printf("[SP-046] sync_recover: empty data from %s", sessionID)
+		log.Printf("[SP-118-Mode1] sync_recover: empty data from %s", sessionID)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "invalid sync_recover data"},
@@ -865,7 +907,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 		return
 	}
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		log.Printf("[SP-046] sync_recover: invalid JSON from %s: %v", sessionID, err)
+		log.Printf("[SP-118-Mode1] sync_recover: invalid JSON from %s: %v", sessionID, err)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "invalid sync_recover data"},
@@ -876,7 +918,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	// Extract browser seq map from data
 	seqsRaw, ok := data["seqs"]
 	if !ok {
-		log.Printf("[SP-046] sync_recover: missing seqs from %s", sessionID)
+		log.Printf("[SP-118-Mode1] sync_recover: missing seqs from %s", sessionID)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "missing seqs in sync_recover"},
@@ -886,7 +928,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 
 	seqsMap, ok := seqsRaw.(map[string]interface{})
 	if !ok {
-		log.Printf("[SP-046] sync_recover: seqs is not a map from %s", sessionID)
+		log.Printf("[SP-118-Mode1] sync_recover: seqs is not a map from %s", sessionID)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "seqs must be a map"},
@@ -902,16 +944,16 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 		case int64:
 			browserSeqs[path] = v
 		default:
-			log.Printf("[SP-046] sync_recover: unexpected seq type for %s: %T", path, seqVal)
+			log.Printf("[SP-118-Mode1] sync_recover: unexpected seq type for %s: %T", path, seqVal)
 		}
 	}
 
-	log.Printf("[SP-046] sync_recover from client %s: %d files", clientID, len(browserSeqs))
+	log.Printf("[SP-118-Mode1] sync_recover from client %s: %d files", clientID, len(browserSeqs))
 
 	// Run container death recovery with per-file seqs
 	result, err := ws.HandleContainerRecoveryWithSeqs(context.Background(), clientID, browserSeqs)
 	if err != nil {
-		log.Printf("[SP-046] sync_recover reconciliation failed: %v", err)
+		log.Printf("[SP-118-Mode1] sync_recover reconciliation failed: %v", err)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": fmt.Sprintf("reconciliation failed: %v", err)},
@@ -921,7 +963,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 
 	// Send reconciliation plan back to browser
 	if err := ws.SendSyncReconcile(safeConn, result); err != nil {
-		log.Printf("[SP-046] sync_recover: failed to send reconcile plan: %v", err)
+		log.Printf("[SP-118-Mode1] sync_recover: failed to send reconcile plan: %v", err)
 		return
 	}
 
@@ -936,11 +978,11 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	if filesToReplay > 0 {
 		ag, err := ws.getClientAgent(clientID)
 		if err != nil {
-			log.Printf("[SP-046] sync_recover: failed to get agent for %s: %v", clientID, err)
+			log.Printf("[SP-118-Mode1] sync_recover: failed to get agent for %s: %v", clientID, err)
 			return
 		}
 		if err := ws.SendSyncReplayStart(safeConn, clientID, filesToReplay); err != nil {
-			log.Printf("[SP-046] sync_recover: failed to send replay start: %v", err)
+			log.Printf("[SP-118-Mode1] sync_recover: failed to send replay start: %v", err)
 			return
 		}
 
@@ -950,27 +992,27 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 			}
 			// Validate path to prevent traversal attacks
 			if filepath.IsAbs(action.FilePath) || strings.Contains(action.FilePath, "..") {
-				log.Printf("[SP-046] sync_recover: skipping invalid path: %s", action.FilePath)
+				log.Printf("[SP-118-Mode1] sync_recover: skipping invalid path: %s", action.FilePath)
 				continue
 			}
 			// Read the file content from container
 			content, err := ag.ReadFileContent(action.FilePath)
 			if err != nil {
-				log.Printf("[SP-046] sync_recover: failed to read %s: %v", action.FilePath, err)
+				log.Printf("[SP-118-Mode1] sync_recover: failed to read %s: %v", action.FilePath, err)
 				continue
 			}
 			if err := ws.SendSyncReplayFile(safeConn, clientID, action.FilePath, content, action.ContainerSeq); err != nil {
-				log.Printf("[SP-046] sync_recover: failed to replay %s: %v", action.FilePath, err)
+				log.Printf("[SP-118-Mode1] sync_recover: failed to replay %s: %v", action.FilePath, err)
 				return
 			}
 		}
 
 		if err := ws.SendSyncReplayComplete(safeConn, clientID); err != nil {
-			log.Printf("[SP-046] sync_recover: failed to send replay complete: %v", err)
+			log.Printf("[SP-118-Mode1] sync_recover: failed to send replay complete: %v", err)
 		}
 	}
 
-	log.Printf("[SP-046] sync_recover complete for client %s: %d files reconciled", clientID, len(result.Plan))
+	log.Printf("[SP-118-Mode1] sync_recover complete for client %s: %d files reconciled", clientID, len(result.Plan))
 }
 
 // notifyTerminalConnectionsDisplaced sends a session_displaced message to

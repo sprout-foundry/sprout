@@ -31,6 +31,10 @@ func TestReplayCapturesLiveEventsDuringFlush(t *testing.T) {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}
 	srv.upgrader.CheckOrigin = func(_ *http.Request) bool { return true }
+	// SP-118 Phase 1: this test exercises the Mode 1 single-session path
+	// (replay-then-live ordering); without the flag it would route to the
+	// Mode 2 stub which doesn't accept the connection.
+	srv.agentEnforceSingleSession = true
 
 	clientID := "replay-client"
 	chatID := "chat-replay-test"

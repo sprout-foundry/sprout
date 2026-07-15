@@ -22,6 +22,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 	"github.com/sprout-foundry/sprout/pkg/webui"
+	"github.com/sprout-foundry/sprout/pkg/workflow"
 	"golang.org/x/term"
 )
 
@@ -39,11 +40,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	}
 
 	ensureContinuationSessionID(chatAgent)
-	workflowConfig, workflowLoadErr := loadAgentWorkflowConfig(agentWorkflowConfig)
+	workflowOverrides := buildWorkflowCLIOverrides()
+	workflowConfig, workflowLoadErr := workflow.LoadAgentWorkflowConfig(agentWorkflowConfig)
 	if workflowLoadErr != nil {
 		return workflowLoadErr
 	}
-	applyWorkflowCommandOverrides(workflowConfig)
+	workflow.ApplyWorkflowCommandOverrides(workflowConfig, workflowOverrides)
 
 	// When a workflow config defines an initial prompt, force non-interactive
 	// (direct) mode. Without this, the isInteractive branch calls
@@ -453,7 +455,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			}
 		}
 
-		query, err = resolveWorkflowInitialPrompt(query, workflowConfig)
+		query, err = workflow.ResolveWorkflowInitialPrompt(query, workflowConfig)
 		if err != nil {
 			return fmt.Errorf("failed to resolve workflow initial prompt: %w", err)
 		}
@@ -479,7 +481,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return nil
 		}
 
-		restoreRuntimeOverrides, restoreSetupErr := prepareWorkflowRuntimeRestorer(chatAgent, workflowConfig)
+		restoreRuntimeOverrides, restoreSetupErr := workflow.PrepareWorkflowRuntimeRestorer(chatAgent, workflowConfig, workflowOverrides)
 		if restoreSetupErr != nil {
 			return fmt.Errorf("failed to prepare runtime override restoration: %w", restoreSetupErr)
 		}
@@ -494,11 +496,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				}
 			}()
 		}
-		workflowState, workflowStateErr := loadWorkflowExecutionState(workflowConfig)
+		workflowState, workflowStateErr := workflow.LoadWorkflowExecutionState(workflowConfig)
 		if workflowStateErr != nil {
 			return fmt.Errorf("failed to load workflow execution state: %w", workflowStateErr)
 		}
-		if restoreErr := restoreWorkflowConversationState(chatAgent, workflowConfig, workflowState); restoreErr != nil {
+		if restoreErr := workflow.RestoreWorkflowConversationState(chatAgent, workflowConfig, workflowState); restoreErr != nil {
 			return fmt.Errorf("failed to restore workflow conversation state: %w", restoreErr)
 		}
 
@@ -506,10 +508,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// any LLM call. stopBudget MUST be invoked before the agent
 		// shuts down so the heartbeat goroutine exits and callbacks are
 		// cleared. Safe no-op when no budget is configured.
-		stopBudget := attachWorkflowBudget(chatAgent, workflowConfig)
+		stopBudget := workflow.AttachWorkflowBudget(chatAgent, workflowConfig)
 		defer stopBudget()
-		if workflowConfig != nil && workflowConfig.orchestrationEnabled() {
-			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
+		if workflowConfig != nil && workflowConfig.OrchestrationEnabled() {
+			if eventErr := workflow.EmitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
 				"initial_completed": workflowState.InitialCompleted,
 				"next_step_index":   workflowState.NextStepIndex,
 			}); eventErr != nil {
@@ -519,7 +521,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		shouldRunInitialQuery := strings.TrimSpace(query) != "" && !workflowState.InitialCompleted
 		if shouldRunInitialQuery {
-			if err := applyWorkflowInitialOverrides(chatAgent, workflowConfig); err != nil {
+			if err := workflow.ApplyWorkflowInitialOverrides(chatAgent, workflowConfig, workflowOverrides); err != nil {
 				return fmt.Errorf("failed to apply workflow initial runtime overrides: %w", err)
 			}
 
@@ -530,10 +532,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			if err != nil {
 				workflowState.FirstError = err.Error()
 			}
-			if persistErr := persistWorkflowCheckpoint(workflowConfig, workflowState, chatAgent); persistErr != nil {
+			if persistErr := workflow.PersistWorkflowCheckpoint(workflowConfig, workflowState, chatAgent); persistErr != nil {
 				return fmt.Errorf("failed to persist workflow checkpoint: %w", persistErr)
 			}
-			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_initial_completed", map[string]interface{}{
+			if eventErr := workflow.EmitWorkflowOrchestrationEvent(workflowConfig, "workflow_initial_completed", map[string]interface{}{
 				"provider":  workflowState.LastProvider,
 				"has_error": workflowState.HasError,
 			}); eventErr != nil {
@@ -547,7 +549,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		// Loop mode: iterate over TODO items with stateless gate + context reset.
 		if workflowConfig != nil && workflowConfig.Loop != nil {
-			workflowYielded, workflowErr := runAgentWorkflowLoop(ctx, chatAgent, eventBus, workflowConfig, workflowState)
+			workflowYielded, workflowErr := workflow.RunAgentWorkflowLoop(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery), workflowOverrides)
 			if workflowYielded {
 				return nil
 			}
@@ -563,7 +565,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return nil
 		}
 
-		workflowYielded, workflowErr := runAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, workflowState)
+		workflowYielded, workflowErr := workflow.RunAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery), workflowOverrides)
 		if workflowYielded {
 			return nil
 		}

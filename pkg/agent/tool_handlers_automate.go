@@ -123,7 +123,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	// Resolve the automate directory
-	dir := automate.Dir()
+	dir := automate.DirIn(a.GetWorkspaceRoot())
 
 	// Find the workflow file (includes path traversal protection)
 	wfPath, err := automate.ResolvePath(dir, workflowName)
@@ -310,7 +310,7 @@ func WorkflowRequiresApproval(workflowName string) bool {
 
 // handleListAutomateWorkflows lists available workflows from the automate/ directory.
 func handleListAutomateWorkflows(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	dir := automate.Dir()
+	dir := automate.DirIn(a.GetWorkspaceRoot())
 
 	workflows, err := automate.Discover(dir)
 	if err != nil {
@@ -361,8 +361,14 @@ func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessMa
 // workflowRequiresApproval returns true unless the named workflow's JSON
 // declares requires_approval: false. Used by the security gate to decide
 // whether to bypass the intent-confirmation prompt for run_automate calls.
-func workflowRequiresApproval(workflowName string) bool {
-	return WorkflowRequiresApprovalIn(automate.Dir(), workflowName)
+//
+// The agent is required (not optional) so the approval check resolves
+// the automate/ directory against the agent's workspace root —
+// `automate.Dir()` alone returns the daemon CWD in SPROUT_SERVICE mode,
+// which would mismatch the directory the workflow itself will be loaded
+// from. See SP-119 for the workspace-aware flow.
+func workflowRequiresApproval(agent *Agent, workflowName string) bool {
+	return WorkflowRequiresApprovalIn(automate.DirIn(agent.GetWorkspaceRoot()), workflowName)
 }
 
 // normalizeWorkflowKey produces a stable cache key for the in-session approval

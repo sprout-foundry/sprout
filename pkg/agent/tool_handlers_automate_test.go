@@ -28,44 +28,48 @@ func withAutomateDir(t *testing.T, files map[string]string) string {
 }
 
 func TestWorkflowRequiresApproval_DefaultsToTrue(t *testing.T) {
-	withAutomateDir(t, map[string]string{
+	tmp := withAutomateDir(t, map[string]string{
 		"check.json": `{"initial":{"prompt":"hi"}}`,
 	})
-	if !workflowRequiresApproval("check.json") {
+	a := &Agent{workspaceRoot: tmp}
+	if !workflowRequiresApproval(a, "check.json") {
 		t.Fatalf("workflow without requires_approval field should require approval")
 	}
 }
 
 func TestWorkflowRequiresApproval_FalseSkipsApproval(t *testing.T) {
-	withAutomateDir(t, map[string]string{
+	tmp := withAutomateDir(t, map[string]string{
 		"check.json": `{"requires_approval": false, "initial":{"prompt":"hi"}}`,
 	})
-	if workflowRequiresApproval("check.json") {
+	a := &Agent{workspaceRoot: tmp}
+	if workflowRequiresApproval(a, "check.json") {
 		t.Fatalf("workflow with requires_approval=false should NOT require approval")
 	}
 	// Bare name (no .json) should resolve the same workflow.
-	if workflowRequiresApproval("check") {
+	if workflowRequiresApproval(a, "check") {
 		t.Fatalf("bare name lookup should resolve and return false")
 	}
 }
 
 func TestWorkflowRequiresApproval_FailsSafe(t *testing.T) {
-	withAutomateDir(t, map[string]string{
+	tmp := withAutomateDir(t, map[string]string{
 		"valid.json": `{"requires_approval": false, "initial":{"prompt":"hi"}}`,
 	})
+	a := &Agent{workspaceRoot: tmp}
 	// Unknown workflow falls through to requiring approval (fail-safe).
-	if !workflowRequiresApproval("nonexistent.json") {
+	if !workflowRequiresApproval(a, "nonexistent.json") {
 		t.Fatalf("unresolvable workflow must default to requiring approval")
 	}
 }
 
 func TestWorkflowRequiresApproval_MalformedJsonFailsSafe(t *testing.T) {
-	withAutomateDir(t, map[string]string{
+	tmp := withAutomateDir(t, map[string]string{
 		"broken.json": `{"requires_approval": false,`,
 	})
+	a := &Agent{workspaceRoot: tmp}
 	// Malformed JSON still has the regex-valid filename, but Summarize will
 	// fail. Must fall through to requiring approval.
-	if !workflowRequiresApproval("broken.json") {
+	if !workflowRequiresApproval(a, "broken.json") {
 		t.Fatalf("malformed JSON must default to requiring approval")
 	}
 }

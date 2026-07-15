@@ -172,6 +172,11 @@ export default defineConfig(({ mode }) => {
         'react',
         'react-dom',
         '@codemirror/language',
+        // buffer is a direct dependency (added for isomorphic-git browser polyfill).
+        // Include it here so Vite pre-bundles it even when node_modules/buffer is missing
+        // (stale workspace install); otherwise Rollup externalizes it as
+        // __vite-browser-external which has no Buffer export.
+        'buffer',
       ],
       // Exclude React-consuming packages from esbuild pre-bundling.
       // esbuild's optimizer resolves their `import 'react'` from their

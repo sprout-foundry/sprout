@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/service"
 )
 
 // =============================================================================
@@ -169,7 +170,7 @@ func TestSanitizeArgForPreview(t *testing.T) {
 }
 
 // =============================================================================
-// service_env.go — matchesAPIKeyPattern
+// service_env.go — service.MatchesAPIKeyPattern
 // =============================================================================
 
 func TestMatchesAPIKeyPattern(t *testing.T) {
@@ -203,15 +204,15 @@ func TestMatchesAPIKeyPattern(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := matchesAPIKeyPattern(tt.key); got != tt.want {
-				t.Errorf("matchesAPIKeyPattern(%q) = %v, want %v", tt.key, got, tt.want)
+			if got := service.MatchesAPIKeyPattern(tt.key); got != tt.want {
+				t.Errorf("service.MatchesAPIKeyPattern(%q) = %v, want %v", tt.key, got, tt.want)
 			}
 		})
 	}
 }
 
 // =============================================================================
-// service_env.go — serviceEnvPath
+// service_env.go — service.ServiceEnvPath
 // =============================================================================
 
 func TestServiceEnvPath(t *testing.T) {
@@ -228,20 +229,20 @@ func TestServiceEnvPath(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := serviceEnvPath(tt.homeDir); got != tt.want {
-				t.Errorf("serviceEnvPath(%q) = %q, want %q", tt.homeDir, got, tt.want)
+			if got := service.ServiceEnvPath(tt.homeDir); got != tt.want {
+				t.Errorf("service.ServiceEnvPath(%q) = %q, want %q", tt.homeDir, got, tt.want)
 			}
 		})
 	}
 }
 
 // =============================================================================
-// service_env.go — loadServiceEnvFile
+// service_env.go — service.LoadServiceEnvFile
 // =============================================================================
 
 func TestLoadServiceEnvFile_Missing(t *testing.T) {
 	t.Parallel()
-	m, err := loadServiceEnvFile("/tmp/nonexistent_sprout_dir_" + t.Name())
+	m, err := service.LoadServiceEnvFile("/tmp/nonexistent_sprout_dir_" + t.Name())
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got: %v", err)
 	}
@@ -261,9 +262,9 @@ func TestLoadServiceEnvFile_WithContent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := loadServiceEnvFile(dir)
+	m, err := service.LoadServiceEnvFile(dir)
 	if err != nil {
-		t.Fatalf("loadServiceEnvFile() error: %v", err)
+		t.Fatalf("service.LoadServiceEnvFile() error: %v", err)
 	}
 	if len(m) != 2 {
 		t.Fatalf("expected 2 entries, got %d: %v", len(m), m)

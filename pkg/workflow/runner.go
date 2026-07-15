@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package workflow
 
 import (
 	"context"
@@ -17,12 +17,12 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
-func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, cfg *AgentWorkflowConfig, state *workflowExecutionState) (bool, error) {
+func RunAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, cfg *AgentWorkflowConfig, state *WorkflowExecutionState, queryExecutor QueryExecutor, overrides *CLIOverrides) (bool, error) {
 	if cfg == nil || len(cfg.Steps) == 0 {
 		return false, nil
 	}
 	if state == nil {
-		state = newWorkflowExecutionState()
+		state = NewWorkflowExecutionState()
 	}
 	if state.NextStepIndex >= len(cfg.Steps) {
 		state.Complete = true
@@ -42,13 +42,13 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			stepName = fmt.Sprintf("step-%d", i+1)
 		}
 
-		if shouldYieldBeforeWorkflowStep(cfg, state, step, chatAgent) {
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_yielded", map[string]interface{}{
+		if ShouldYieldBeforeWorkflowStep(cfg, state, step, chatAgent) {
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_yielded", map[string]interface{}{
 				"reason":          "provider_handoff",
 				"next_step_index": i,
 				"next_step_name":  stepName,
 				"from_provider":   strings.TrimSpace(state.LastProvider),
-				"to_provider":     workflowEffectiveStepProvider(chatAgent, step),
+				"to_provider":     WorkflowEffectiveStepProvider(chatAgent, step),
 			}); err != nil {
 				return false, utils.WrapError(err, "emit workflow yield event")
 			}
@@ -57,7 +57,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			if firstErr != nil {
 				state.FirstError = firstErr.Error()
 			}
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			fmt.Println()
@@ -65,9 +65,9 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			return true, nil
 		}
 
-		if !shouldRunWorkflowStep(step.When, hasError) {
+		if !ShouldRunWorkflowStep(step.When, hasError) {
 			state.NextStepIndex = i + 1
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			continue
@@ -75,15 +75,15 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 
 		fmt.Println()
 		console.GlyphAction.Printf("Workflow step %d/%d (%s)", i+1, len(cfg.Steps), stepName)
-		if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_started", map[string]interface{}{
+		if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_step_started", map[string]interface{}{
 			"step_index": i,
 			"step_name":  stepName,
-			"provider":   workflowEffectiveStepProvider(chatAgent, step),
+			"provider":   WorkflowEffectiveStepProvider(chatAgent, step),
 		}); err != nil {
 			return false, utils.WrapError(err, "emit workflow step started event")
 		}
 
-		triggersSatisfied, triggerErr := stepFileTriggersSatisfied(step)
+		triggersSatisfied, triggerErr := StepFileTriggersSatisfied(step)
 		if triggerErr != nil {
 			hasError = true
 			if firstErr == nil {
@@ -94,7 +94,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			if firstErr != nil {
 				state.FirstError = firstErr.Error()
 			}
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
@@ -104,7 +104,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		}
 		if !triggersSatisfied {
 			console.GlyphInfo.Fprintf(os.Stdout, "\nSkipping workflow step %s: file trigger conditions not met", stepName)
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_skipped", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_step_skipped", map[string]interface{}{
 				"step_index": i,
 				"step_name":  stepName,
 				"reason":     "file_triggers_not_satisfied",
@@ -112,7 +112,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				return false, utils.WrapError(err, "emit workflow step skipped event")
 			}
 			state.NextStepIndex = i + 1
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			continue
@@ -131,7 +131,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 					state.FirstError = firstErr.Error()
 				}
 				state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-				if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_failed", map[string]interface{}{
+				if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_step_failed", map[string]interface{}{
 					"step_index": i,
 					"step_name":  stepName,
 					"kind":       "shell",
@@ -139,7 +139,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				}); err != nil {
 					return false, utils.WrapError(err, "emit workflow step failed event")
 				}
-				if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+				if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 					return false, utils.WrapError(err, "persist workflow checkpoint")
 				}
 				if !cfg.ContinueOnError {
@@ -152,20 +152,20 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			state.NextStepIndex = i + 1
 			state.HasError = false
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_completed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_step_completed", map[string]interface{}{
 				"step_index": i,
 				"step_name":  stepName,
 				"kind":       "shell",
 			}); err != nil {
 				return false, utils.WrapError(err, "emit workflow step completed event")
 			}
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			continue
 		}
 
-		if err := applyWorkflowRuntimeOverrides(chatAgent, step.AgentWorkflowRuntime); err != nil {
+		if err := ApplyWorkflowRuntimeOverrides(chatAgent, step.AgentWorkflowRuntime, overrides); err != nil {
 			hasError = true
 			if firstErr == nil {
 				firstErr = fmt.Errorf("workflow step %q runtime setup failed: %w", stepName, err)
@@ -176,7 +176,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
@@ -185,7 +185,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 
-		stepPrompt, err := resolveStepPrompt(step)
+		stepPrompt, err := ResolveStepPrompt(step)
 		if err != nil {
 			hasError = true
 			if firstErr == nil {
@@ -197,7 +197,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
@@ -216,7 +216,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
@@ -225,7 +225,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 
-		err = ProcessQuery(ctx, chatAgent, eventBus, stepPrompt)
+		err = queryExecutor(ctx, chatAgent, eventBus, stepPrompt)
 		if err != nil {
 			hasError = true
 			if firstErr == nil {
@@ -237,7 +237,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_failed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_step_failed", map[string]interface{}{
 				"step_index": i,
 				"step_name":  stepName,
 				"provider":   state.LastProvider,
@@ -245,7 +245,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			}); err != nil {
 				return false, utils.WrapError(err, "emit workflow step failed event")
 			}
-			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
 			if !cfg.ContinueOnError {
@@ -258,14 +258,14 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		state.NextStepIndex = i + 1
 		state.HasError = false
 		state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-		if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_completed", map[string]interface{}{
+		if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_step_completed", map[string]interface{}{
 			"step_index": i,
 			"step_name":  stepName,
 			"provider":   state.LastProvider,
 		}); err != nil {
 			return false, utils.WrapError(err, "emit workflow step completed event")
 		}
-		if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+		if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 			return false, utils.WrapError(err, "persist workflow checkpoint")
 		}
 	}
@@ -275,10 +275,10 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		state.FirstError = firstErr.Error()
 		state.HasError = true
 	}
-	if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+	if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 		return false, utils.WrapError(err, "persist workflow checkpoint")
 	}
-	if err := emitWorkflowOrchestrationEvent(cfg, "workflow_completed", map[string]interface{}{
+	if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_completed", map[string]interface{}{
 		"has_error": state.HasError,
 	}); err != nil {
 		return false, utils.WrapError(err, "emit workflow completed event")
@@ -287,7 +287,57 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 	return false, firstErr
 }
 
-// attachWorkflowBudget wires the workflow's USD budget and progress
+// runWorkflowShellStep executes a shell command step. Stdout and stderr are
+// inherited from the workflow's terminal so progress is visible in real time.
+// A non-zero exit code becomes a step failure.
+//
+// command_file is interpreted as a script path passed to the shell, not as a
+// raw command line — this avoids quoting headaches and lets users keep
+// multi-line scripts in version control.
+func runWorkflowShellStep(ctx context.Context, step AgentWorkflowStep) error {
+	shell := strings.TrimSpace(os.Getenv("SHELL"))
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+
+	command := strings.TrimSpace(step.Command)
+	commandFile := strings.TrimSpace(step.CommandFile)
+
+	var cmd *exec.Cmd
+	switch {
+	case command != "":
+		console.GlyphShell.Fprintf(os.Stdout, "%s", singleLinePreview(command))
+		cmd = exec.CommandContext(ctx, shell, "-c", command)
+	case commandFile != "":
+		if _, err := os.Stat(commandFile); err != nil {
+			return fmt.Errorf("command_file %q not accessible: %w", commandFile, err)
+		}
+		console.GlyphShell.Fprintf(os.Stdout, "%s %s", shell, commandFile)
+		cmd = exec.CommandContext(ctx, shell, commandFile)
+	default:
+		return errors.New("shell step has neither command nor command_file")
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// singleLinePreview collapses a multi-line command to a single display line.
+func singleLinePreview(s string) string {
+	if idx := strings.IndexAny(s, "\r\n"); idx >= 0 {
+		return strings.TrimSpace(s[:idx]) + " …"
+	}
+	return s
+}
+
+// AttachWorkflowBudget wires the workflow's USD budget and progress
 // heartbeat onto the agent. Returns a stop function the caller MUST
 // invoke before the agent shuts down — it unregisters callbacks and
 // stops the heartbeat goroutine. If no budget is configured the
@@ -298,7 +348,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 //   - cfg.Progress.HeartbeatSeconds > 0 overrides the cadence.
 //   - The heartbeat prints to stdout in a single line so it composes with
 //     existing console output without clobbering it.
-func attachWorkflowBudget(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (stop func()) {
+func AttachWorkflowBudget(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (stop func()) {
 	if chatAgent == nil || cfg == nil || cfg.Budget == nil || cfg.Budget.USD <= 0 {
 		// Heartbeat without a budget is still meaningful, but only if
 		// explicitly requested. Most workflows want budget+heartbeat as
@@ -378,54 +428,4 @@ func startWorkflowHeartbeat(chatAgent *agent.Agent, interval time.Duration) func
 		}
 	}()
 	return func() { close(stop) }
-}
-
-// runWorkflowShellStep executes a shell command step. Stdout and stderr are
-// inherited from the workflow's terminal so progress is visible in real time.
-// A non-zero exit code becomes a step failure.
-//
-// command_file is interpreted as a script path passed to the shell, not as a
-// raw command line — this avoids quoting headaches and lets users keep
-// multi-line scripts in version control.
-func runWorkflowShellStep(ctx context.Context, step AgentWorkflowStep) error {
-	shell := strings.TrimSpace(os.Getenv("SHELL"))
-	if shell == "" {
-		shell = "/bin/sh"
-	}
-
-	command := strings.TrimSpace(step.Command)
-	commandFile := strings.TrimSpace(step.CommandFile)
-
-	var cmd *exec.Cmd
-	switch {
-	case command != "":
-		console.GlyphShell.Fprintf(os.Stdout, "%s", singleLinePreview(command))
-		cmd = exec.CommandContext(ctx, shell, "-c", command)
-	case commandFile != "":
-		if _, err := os.Stat(commandFile); err != nil {
-			return fmt.Errorf("command_file %q not accessible: %w", commandFile, err)
-		}
-		console.GlyphShell.Fprintf(os.Stdout, "%s %s", shell, commandFile)
-		cmd = exec.CommandContext(ctx, shell, commandFile)
-	default:
-		return errors.New("shell step has neither command nor command_file")
-	}
-
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// singleLinePreview collapses a multi-line command to a single display line.
-func singleLinePreview(s string) string {
-	if idx := strings.IndexAny(s, "\r\n"); idx >= 0 {
-		return strings.TrimSpace(s[:idx]) + " …"
-	}
-	return s
 }

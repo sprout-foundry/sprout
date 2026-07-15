@@ -1,25 +1,21 @@
 //go:build !js
 
-package cmd
+package workflow
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflowRuntime) error {
+func ApplyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflowRuntime, overrides *CLIOverrides) error {
 	if chatAgent == nil {
 		return errors.New("agent is required")
 	}
@@ -29,8 +25,8 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 		return errors.New("agent config is unavailable")
 	}
 
-	if runtime.SkipPrompt != nil || normalizeReasoningEffort(runtime.ReasoningEffort) != "" {
-		normalized := normalizeReasoningEffort(runtime.ReasoningEffort)
+	if runtime.SkipPrompt != nil || NormalizeReasoningEffort(runtime.ReasoningEffort) != "" {
+		normalized := NormalizeReasoningEffort(runtime.ReasoningEffort)
 		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
 			if runtime.SkipPrompt != nil {
 				cfg.SkipPrompt = *runtime.SkipPrompt
@@ -56,8 +52,8 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 	if runtime.Unsafe != nil {
 		chatAgent.SetUnsafeMode(*runtime.Unsafe)
 	}
-	if runtime.NoStream != nil {
-		agentNoStreaming = *runtime.NoStream
+	if runtime.NoStream != nil && overrides != nil && overrides.SetNoStream != nil {
+		overrides.SetNoStream(*runtime.NoStream)
 	}
 	if runtime.DryRun != nil {
 		if *runtime.DryRun {
@@ -112,7 +108,7 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 		}
 	}
 
-	systemPrompt, err := resolveWorkflowTextOrFile(runtime.SystemPrompt, runtime.SystemPromptFile, "system_prompt")
+	systemPrompt, err := ResolveWorkflowTextOrFile(runtime.SystemPrompt, runtime.SystemPromptFile, "system_prompt")
 	if err != nil {
 		return fmt.Errorf("failed to resolve workflow system prompt: %w", err)
 	}
@@ -132,7 +128,7 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 			if cfg.SubagentTypes == nil {
 				return nil
 			}
-			applyWorkflowSubagentOverrides(cfg.SubagentTypes, runtime.SubagentOverrides)
+			ApplyWorkflowSubagentOverrides(cfg.SubagentTypes, runtime.SubagentOverrides)
 			return nil
 		}); err != nil {
 			return fmt.Errorf("failed to apply workflow runtime overrides: %w", err)
@@ -165,25 +161,25 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 	return nil
 }
 
-func applyWorkflowInitialOverrides(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) error {
+func ApplyWorkflowInitialOverrides(chatAgent *agent.Agent, cfg *AgentWorkflowConfig, overrides *CLIOverrides) error {
 	if cfg == nil || cfg.Initial == nil {
 		return nil
 	}
-	return applyWorkflowRuntimeOverrides(chatAgent, cfg.Initial.AgentWorkflowRuntime)
+	return ApplyWorkflowRuntimeOverrides(chatAgent, cfg.Initial.AgentWorkflowRuntime, overrides)
 }
 
 // pickSubagentDefault selects a deterministic override entry to use as the
 // global subagent default when no global SubagentProvider/SubagentModel is set.
 // Preference order: orchestrator → coder → first entry alphabetically.
 // Persona IDs are normalized (lowercase, hyphens→underscores) before matching
-// to stay consistent with applyWorkflowSubagentOverrides / GetSubagentType.
-func pickSubagentDefault(overrides WorkflowSubagentOverrides) workflowSubagentOverride {
+// to stay consistent with ApplyWorkflowSubagentOverrides / GetSubagentType.
+func pickSubagentDefault(overrides WorkflowSubagentOverrides) WorkflowSubagentOverride {
 	// Prefer orchestrator, then coder — match against normalized keys so
 	// "Orchestrator", "ORCHESTRATOR", "repo_orchestrator" all resolve.
 	wanted := []string{"orchestrator", "coder"}
 	for _, target := range wanted {
 		for key, v := range overrides {
-			if normalizeWorkflowPersonaID(key) != target {
+			if NormalizeWorkflowPersonaID(key) != target {
 				continue
 			}
 			if v.Provider != "" || v.Model != "" {
@@ -203,7 +199,7 @@ func pickSubagentDefault(overrides WorkflowSubagentOverrides) workflowSubagentOv
 			return v
 		}
 	}
-	return workflowSubagentOverride{}
+	return WorkflowSubagentOverride{}
 }
 
 type workflowRuntimeSnapshot struct {
@@ -227,8 +223,8 @@ type workflowRuntimeSnapshot struct {
 	}
 }
 
-func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (func() error, error) {
-	if cfg == nil || cfg.shouldPersistRuntimeOverrides() {
+func PrepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowConfig, overrides *CLIOverrides) (func() error, error) {
+	if cfg == nil || cfg.ShouldPersistRuntimeOverrides() {
 		return nil, nil
 	}
 	if chatAgent == nil {
@@ -248,12 +244,14 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 		SkipPrompt:             agentCfg.SkipPrompt,
 		Unsafe:                 chatAgent.GetUnsafeMode(),
 		MaxIterations:          chatAgent.GetMaxIterations(),
-		NoStream:               agentNoStreaming,
 		DryRunEnv:              configuration.GetEnvSimple("DRY_RUN"),
 		NoSubagentsEnv:         configuration.GetEnvSimple("NO_SUBAGENTS"),
 		ResourceDirectoryEnv:   configuration.GetEnvSimple("RESOURCE_DIRECTORY"),
 		SystemPrompt:           chatAgent.GetSystemPrompt(),
 		CustomReasoningEfforts: map[string]string{},
+	}
+	if overrides != nil && overrides.GetNoStream != nil {
+		snapshot.NoStream = overrides.GetNoStream()
 	}
 	for providerName, providerCfg := range agentCfg.CustomProviders {
 		snapshot.CustomReasoningEfforts[providerName] = providerCfg.ReasoningEffort
@@ -278,11 +276,11 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 	}
 	if agentCfg.SubagentTypes != nil {
 		for personaID := range allOverrides {
-			normalizedID := normalizeWorkflowPersonaID(personaID)
+			normalizedID := NormalizeWorkflowPersonaID(personaID)
 			if normalizedID == "" {
 				continue
 			}
-			mapKey, found := findSubagentTypeMapKey(agentCfg.SubagentTypes, normalizedID)
+			mapKey, found := FindSubagentTypeMapKey(agentCfg.SubagentTypes, normalizedID)
 			if !found {
 				continue
 			}
@@ -303,7 +301,7 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 		var restoreErrors []error
 
 		if snapshot.Provider != "" && !strings.EqualFold(strings.TrimSpace(chatAgent.GetProvider()), snapshot.Provider) {
-			if err := applyWorkflowRuntimeOverrides(chatAgent, AgentWorkflowRuntime{Provider: snapshot.Provider}); err != nil {
+			if err := ApplyWorkflowRuntimeOverrides(chatAgent, AgentWorkflowRuntime{Provider: snapshot.Provider}, overrides); err != nil {
 				restoreErrors = append(restoreErrors, fmt.Errorf("failed to restore provider %q: %w", snapshot.Provider, err))
 			}
 		}
@@ -347,7 +345,9 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 			}
 		}
 
-		agentNoStreaming = snapshot.NoStream
+		if overrides != nil && overrides.SetNoStream != nil {
+			overrides.SetNoStream(snapshot.NoStream)
+		}
 		chatAgent.SetUnsafeMode(snapshot.Unsafe)
 		chatAgent.SetMaxIterations(snapshot.MaxIterations)
 		chatAgent.SetSystemPrompt(snapshot.SystemPrompt)
@@ -378,292 +378,13 @@ func prepareWorkflowRuntimeRestorer(chatAgent *agent.Agent, cfg *AgentWorkflowCo
 	return restore, nil
 }
 
-func shouldRunWorkflowStep(when string, hasError bool) bool {
-	switch normalizeWorkflowWhen(when) {
-	case workflowWhenOnSuccess:
+func ShouldRunWorkflowStep(when string, hasError bool) bool {
+	switch NormalizeWorkflowWhen(when) {
+	case WorkflowWhenOnSuccess:
 		return !hasError
-	case workflowWhenOnError:
+	case WorkflowWhenOnError:
 		return hasError
 	default:
 		return true
 	}
-}
-
-func newWorkflowExecutionState() *workflowExecutionState {
-	return &workflowExecutionState{
-		Version:       1,
-		NextStepIndex: 0,
-	}
-}
-
-func loadWorkflowExecutionState(cfg *AgentWorkflowConfig) (*workflowExecutionState, error) {
-	if !cfg.orchestrationEnabled() || !cfg.orchestrationResumeEnabled() {
-		return newWorkflowExecutionState(), nil
-	}
-
-	path := cfg.Orchestration.StateFile
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return newWorkflowExecutionState(), nil
-		}
-		return nil, fmt.Errorf("failed to read orchestration state %q: %w", path, err)
-	}
-
-	// Gracefully handle empty or whitespace-only files.
-	if len(bytes.TrimSpace(data)) == 0 {
-		fmt.Fprintln(os.Stderr, "Warning: workflow state file is empty — starting fresh")
-		return newWorkflowExecutionState(), nil
-	}
-
-	var state workflowExecutionState
-	if err := json.Unmarshal(data, &state); err != nil {
-		// Corrupt JSON — log a warning and start fresh rather than failing
-		// the entire workflow.
-		fmt.Fprintf(os.Stderr, "Warning: workflow state file %q is corrupt (%v) — starting fresh\n", path, err)
-		return newWorkflowExecutionState(), nil
-	}
-	if state.Version == 0 {
-		state.Version = 1
-	}
-	if state.NextStepIndex < 0 {
-		state.NextStepIndex = 0
-	}
-	if state.Complete {
-		return newWorkflowExecutionState(), nil
-	}
-	return &state, nil
-}
-
-// writeFileAtomic writes data to path atomically by writing to a temp file
-// in the same directory and then renaming. This prevents partial/corrupt
-// state files if the process crashes mid-write.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("mkdir %q: %w", dir, err)
-	}
-	tmp, err := os.CreateTemp(dir, ".tmp_*.write")
-	if err != nil {
-		return fmt.Errorf("create temp file in %q: %w", dir, err)
-	}
-	tmpName := tmp.Name()
-
-	// Clean up temp file on any failure.
-	cleanup := true
-	defer func() {
-		if cleanup {
-			os.Remove(tmpName)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return fmt.Errorf("write temp file %q: %w", tmpName, err)
-	}
-	// Sync to ensure data is on disk before rename.
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return fmt.Errorf("sync temp file %q: %w", tmpName, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file %q: %w", tmpName, err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("rename %q → %q: %w", tmpName, path, err)
-	}
-	// After rename, the file at tmpName is gone, so don't try to remove it.
-	cleanup = false
-	return nil
-}
-
-func persistWorkflowExecutionState(cfg *AgentWorkflowConfig, state *workflowExecutionState) error {
-	if state == nil || !cfg.orchestrationEnabled() {
-		return nil
-	}
-	path := cfg.Orchestration.StateFile
-	if path == "" {
-		return errors.New("orchestration state file path is empty")
-	}
-
-	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to serialize orchestration state: %w", err)
-	}
-	if err := writeFileAtomic(path, data, 0600); err != nil {
-		return fmt.Errorf("failed to write orchestration state %q: %w", path, err)
-	}
-	return nil
-}
-
-func shouldRestoreWorkflowConversationState(state *workflowExecutionState) bool {
-	if state == nil {
-		return false
-	}
-	return state.InitialCompleted || state.NextStepIndex > 0 || state.HasError || strings.TrimSpace(state.FirstError) != ""
-}
-
-func restoreWorkflowConversationState(chatAgent *agent.Agent, cfg *AgentWorkflowConfig, state *workflowExecutionState) error {
-	if chatAgent == nil || cfg == nil || !cfg.orchestrationEnabled() || !cfg.orchestrationResumeEnabled() {
-		return nil
-	}
-	if !shouldRestoreWorkflowConversationState(state) {
-		return nil
-	}
-	sessionID := strings.TrimSpace(cfg.Orchestration.ConversationSessionID)
-	if sessionID == "" {
-		return nil
-	}
-	workingDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to resolve current working directory for workflow restore: %w", err)
-	}
-	restoredState, err := chatAgent.LoadStateScoped(sessionID, workingDir)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return nil
-		}
-		return fmt.Errorf("failed to load orchestration conversation session %q: %w", sessionID, err)
-	}
-	chatAgent.ApplyState(restoredState)
-	return nil
-}
-
-func persistWorkflowConversationState(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) error {
-	if chatAgent == nil || cfg == nil || !cfg.orchestrationEnabled() {
-		return nil
-	}
-	sessionID := strings.TrimSpace(cfg.Orchestration.ConversationSessionID)
-	if sessionID == "" {
-		return nil
-	}
-	workingDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to resolve current working directory for workflow checkpoint: %w", err)
-	}
-	if err := chatAgent.SaveStateScoped(sessionID, workingDir); err != nil {
-		return fmt.Errorf("failed to write orchestration conversation session %q: %w", sessionID, err)
-	}
-	return nil
-}
-
-func persistWorkflowCheckpoint(cfg *AgentWorkflowConfig, state *workflowExecutionState, chatAgent *agent.Agent) error {
-	if err := persistWorkflowExecutionState(cfg, state); err != nil {
-		return fmt.Errorf("failed to persist workflow checkpoint: %w", err)
-	}
-	return persistWorkflowConversationState(chatAgent, cfg)
-}
-
-// loopCheckpointFilePath returns the path to the lightweight fallback
-// checkpoint file that stores just the TODO line number.
-func loopCheckpointFilePath(workDir string) string {
-	return filepath.Join(workDir, ".sprout", "todo_loop_checkpoint.txt")
-}
-
-// persistLoopCheckpoint writes just the line number to the fallback
-// checkpoint file using an atomic write (temp file + rename).
-func persistLoopCheckpoint(workDir string, lineNum int) error {
-	path := loopCheckpointFilePath(workDir)
-	data := []byte(fmt.Sprintf("%d\n", lineNum))
-	if err := writeFileAtomic(path, data, 0600); err != nil {
-		return fmt.Errorf("failed to persist loop checkpoint: %w", err)
-	}
-	return nil
-}
-
-// removeLoopCheckpoint deletes the fallback checkpoint file, ignoring
-// not-found errors.
-func removeLoopCheckpoint(workDir string) {
-	path := loopCheckpointFilePath(workDir)
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Warning: failed to remove loop checkpoint %q: %v\n", path, err)
-	}
-}
-
-// loadLoopCheckpoint reads the fallback checkpoint file and returns
-// the line number. Returns (0, nil) if the file doesn't exist.
-func loadLoopCheckpoint(workDir string) (int, error) {
-	path := loopCheckpointFilePath(workDir)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("failed to read loop checkpoint %q: %w", path, err)
-	}
-
-	lineStr := strings.TrimSpace(string(data))
-	if lineStr == "" {
-		return 0, nil
-	}
-	var lineNum int
-	if _, err := fmt.Sscanf(lineStr, "%d", &lineNum); err != nil {
-		// Corrupt file — log warning and treat as missing.
-		fmt.Fprintf(os.Stderr, "Warning: loop checkpoint %q has invalid content %q — ignoring\n", path, lineStr)
-		return 0, nil
-	}
-	if lineNum <= 0 {
-		return 0, nil
-	}
-	return lineNum, nil
-}
-
-func emitWorkflowOrchestrationEvent(cfg *AgentWorkflowConfig, eventType string, payload map[string]interface{}) error {
-	if !cfg.orchestrationEnabled() {
-		return nil
-	}
-	path := cfg.Orchestration.EventsFile
-	if path == "" {
-		return errors.New("orchestration events file path is empty")
-	}
-
-	record := map[string]interface{}{
-		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
-		"type":      strings.TrimSpace(eventType),
-	}
-	for k, v := range payload {
-		record[k] = v
-	}
-
-	line, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to serialize orchestration event: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create orchestration events directory: %w", err)
-	}
-
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to open orchestration events file %q: %w", path, err)
-	}
-	defer func() { _ = f.Close() }()
-
-	if _, err := f.Write(append(line, '\n')); err != nil {
-		return fmt.Errorf("failed to append orchestration event to %q: %w", path, err)
-	}
-	return nil
-}
-
-func workflowEffectiveStepProvider(chatAgent *agent.Agent, step AgentWorkflowStep) string {
-	if strings.TrimSpace(step.Provider) != "" {
-		return strings.TrimSpace(step.Provider)
-	}
-	return strings.TrimSpace(chatAgent.GetProvider())
-}
-
-func shouldYieldBeforeWorkflowStep(cfg *AgentWorkflowConfig, state *workflowExecutionState, nextStep AgentWorkflowStep, chatAgent *agent.Agent) bool {
-	if !cfg.orchestrationEnabled() || !cfg.orchestrationYieldOnProviderHandoff() {
-		return false
-	}
-	lastProvider := strings.TrimSpace(state.LastProvider)
-	if lastProvider == "" {
-		return false
-	}
-	nextProvider := workflowEffectiveStepProvider(chatAgent, nextStep)
-	if nextProvider == "" {
-		return false
-	}
-	return !strings.EqualFold(lastProvider, nextProvider)
 }

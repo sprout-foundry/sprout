@@ -1,19 +1,19 @@
 //go:build !js
 
-package cmd
+package workflow
 
 import (
 	"strings"
 )
 
 const (
-	workflowWhenAlways    = "always"
-	workflowWhenOnSuccess = "on_success"
-	workflowWhenOnError   = "on_error"
+	WorkflowWhenAlways    = "always"
+	WorkflowWhenOnSuccess = "on_success"
+	WorkflowWhenOnError   = "on_error"
 
-	defaultWorkflowOrchestrationStateFile  = ".sprout/workflow_state.json"
-	defaultWorkflowOrchestrationEventsFile = ".sprout/workflow_events.jsonl"
-	defaultWorkflowConversationSessionID   = "workflow"
+	DefaultWorkflowOrchestrationStateFile  = ".sprout/workflow_state.json"
+	DefaultWorkflowOrchestrationEventsFile = ".sprout/workflow_events.jsonl"
+	DefaultWorkflowConversationSessionID   = "workflow"
 )
 
 // AgentWorkflowConfig defines non-interactive workflow orchestration.
@@ -106,8 +106,8 @@ type AgentWorkflowOrchestrationConfig struct {
 	ConversationSessionID  string `json:"conversation_session_id,omitempty"`
 }
 
-// workflowSubagentOverride defines per-persona subagent provider/model overrides.
-type workflowSubagentOverride struct {
+// WorkflowSubagentOverride defines per-persona subagent provider/model overrides.
+type WorkflowSubagentOverride struct {
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
 }
@@ -115,9 +115,11 @@ type workflowSubagentOverride struct {
 // WorkflowSubagentOverrides maps persona IDs to their subagent routing overrides.
 // Keys are normalized persona IDs (lowercase, hyphens→underscores).
 // Values override provider/model for subagents with that persona.
-type WorkflowSubagentOverrides map[string]workflowSubagentOverride
+type WorkflowSubagentOverrides map[string]WorkflowSubagentOverride
 
-type workflowExecutionState struct {
+// WorkflowExecutionState tracks workflow execution progress for
+// checkpoint/resume support.
+type WorkflowExecutionState struct {
 	Version            int    `json:"version"`
 	InitialCompleted   bool   `json:"initial_completed"`
 	NextStepIndex      int    `json:"next_step_index"`
@@ -131,19 +133,19 @@ type workflowExecutionState struct {
 
 // AgentWorkflowRuntime contains runtime options aligned with agent CLI flags.
 type AgentWorkflowRuntime struct {
-	SkipPrompt        *bool                     `json:"skip_prompt,omitempty"`
-	Provider          string                    `json:"provider,omitempty"`
-	Model             string                    `json:"model,omitempty"`
-	Persona           string                    `json:"persona,omitempty"`
-	DryRun            *bool                     `json:"dry_run,omitempty"`
-	MaxIterations     *int                      `json:"max_iterations,omitempty"`
-	NoStream          *bool                     `json:"no_stream,omitempty"`
-	SystemPrompt      string                    `json:"system_prompt,omitempty"`
-	SystemPromptFile  string                    `json:"system_prompt_file,omitempty"`
-	Unsafe            *bool                     `json:"unsafe,omitempty"`
-	NoSubagents       *bool                     `json:"no_subagents,omitempty"`
-	ResourceDirectory string                    `json:"resource_directory,omitempty"`
-	ReasoningEffort   string                    `json:"reasoning_effort,omitempty"`
+	SkipPrompt        *bool                    `json:"skip_prompt,omitempty"`
+	Provider          string                   `json:"provider,omitempty"`
+	Model             string                   `json:"model,omitempty"`
+	Persona           string                   `json:"persona,omitempty"`
+	DryRun            *bool                    `json:"dry_run,omitempty"`
+	MaxIterations     *int                     `json:"max_iterations,omitempty"`
+	NoStream          *bool                    `json:"no_stream,omitempty"`
+	SystemPrompt      string                   `json:"system_prompt,omitempty"`
+	SystemPromptFile  string                   `json:"system_prompt_file,omitempty"`
+	Unsafe            *bool                    `json:"unsafe,omitempty"`
+	NoSubagents       *bool                    `json:"no_subagents,omitempty"`
+	ResourceDirectory string                   `json:"resource_directory,omitempty"`
+	ReasoningEffort   string                   `json:"reasoning_effort,omitempty"`
 	SubagentOverrides WorkflowSubagentOverrides `json:"subagent_overrides,omitempty"`
 	// RiskProfile selects a named shell-command risk cascade preset
 	// for this step / initial run (SP-058). One of: readonly,

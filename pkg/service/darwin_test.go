@@ -1,12 +1,13 @@
 //go:build darwin
 
-package cmd
+package service
 
 import (
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -286,10 +287,10 @@ func TestPlistPath(t *testing.T) {
 func TestLaunchdDomain(t *testing.T) {
 	domain := launchdDomain()
 	uid := os.Getuid()
-	expected := "gui/" + itoa(uid)
+	expected := "gui/" + strconv.Itoa(uid)
 	if domain != expected {
 		t.Errorf("launchdDomain() = %q, want %q", domain, expected)
 	}
 }
 
-// itoa is declared in service_darwin.go — use that one.
+

@@ -141,7 +141,7 @@ func (a *inlineAutocomplete) render() {
 			break
 		}
 		c := a.candidates[idx]
-		fmt.Printf("%s%s", MoveCursorDownSeq(1), ClearLineSeq())
+		fmt.Printf("%s\r%s", MoveCursorDownSeq(1), ClearLineSeq())
 
 		if idx == a.selected {
 			fmt.Printf("\033[7m %s\033[27m", c.Text)
@@ -159,7 +159,7 @@ func (a *inlineAutocomplete) render() {
 	drawnRows := n
 
 	if more > 0 {
-		fmt.Printf("%s%s\033[2m ↓ %d more\033[0m", MoveCursorDownSeq(1), ClearLineSeq(), more)
+		fmt.Printf("%s\r%s\033[2m ↓ %d more\033[0m", MoveCursorDownSeq(1), ClearLineSeq(), more)
 		drawnRows++
 	}
 
@@ -177,7 +177,7 @@ func (a *inlineAutocomplete) clear() {
 
 	fmt.Print("\0337")
 	for i := 0; i < a.renderedRows; i++ {
-		fmt.Printf("%s%s", MoveCursorDownSeq(1), ClearLineSeq())
+		fmt.Printf("%s\r%s", MoveCursorDownSeq(1), ClearLineSeq())
 	}
 	fmt.Print("\0338")
 	a.renderedRows = 0

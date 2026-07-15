@@ -369,6 +369,7 @@ func NewConfig() *Config {
 		HistoryScope:                "project", // Default to project-scoped history
 		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
+		DaemonMultiSession:          true,      // SP-118 Phase 4: daemon default-on for multi-window
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		PDFOCREnabled:               true,

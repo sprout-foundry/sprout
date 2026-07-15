@@ -56,7 +56,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		if r := recover(); r != nil {
 			log.Printf("Terminal WebSocket handler panic: %v", r)
 			safeConn.WritePanicError(sessionID, "terminal handler", r)
-			ws.cleanupAfterPanic(clientID, sessionID)
+			ws.cleanupAfterPanicAgent(clientID, sessionID)
 		}
 	}()
 

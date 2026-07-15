@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package workflow
 
 import (
 	"context"
@@ -258,12 +258,11 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			chatAgent := newTestLoopAgent(t, client)
 			eventBus := events.NewEventBus()
 
-			// Override processQueryFn for this test.
-			oldProcessFn := processQueryFn
+			// Override query execution for this test.
 			callCount := 0
-			processQueryFn = func(ctx context.Context, _ *agent.Agent, _ *events.EventBus, query string) error {
+			queryExecutor := func(ctx context.Context, _ *agent.Agent, _ *events.EventBus, query string) error {
 				if callCount >= len(tt.processResults) {
-					t.Fatalf("processQueryFn called %d times but only %d results configured", callCount+1, len(tt.processResults))
+					t.Fatalf("queryExecutor called %d times but only %d results configured", callCount+1, len(tt.processResults))
 				}
 				err := tt.processResults[callCount]
 				callCount++
@@ -278,7 +277,6 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 				_ = query
 				return err
 			}
-			defer func() { processQueryFn = oldProcessFn }()
 
 			cfg := &AgentWorkflowConfig{
 				Loop: &AgentWorkflowLoopConfig{
@@ -304,13 +302,13 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 				}
 			}
 
-			var state *workflowExecutionState
+			var state *WorkflowExecutionState
 			if tt.name == "resume_from_checkpoint_file" {
 				// Simulate a previous interrupted run: write a checkpoint
 				// state file with CurrentTodoLineNum=3 (Item 2, 1-based).
 				// Item 1 at line 2 is already [x] in the TODO file.
 				stateFile := cfg.Orchestration.StateFile
-				checkpointData, _ := json.Marshal(workflowExecutionState{
+				checkpointData, _ := json.Marshal(WorkflowExecutionState{
 					Version:            1,
 					InitialCompleted:   true,
 					NextStepIndex:      0,
@@ -323,13 +321,13 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 				if err := os.WriteFile(stateFile, checkpointData, 0600); err != nil {
 					t.Fatalf("write checkpoint state: %v", err)
 				}
-				loaded, err := loadWorkflowExecutionState(cfg)
+				loaded, err := LoadWorkflowExecutionState(cfg)
 				if err != nil {
-					t.Fatalf("loadWorkflowExecutionState: %v", err)
+					t.Fatalf("LoadWorkflowExecutionState: %v", err)
 				}
 				state = loaded
 			} else {
-				state = &workflowExecutionState{
+				state = &WorkflowExecutionState{
 					Version:       1,
 					NextStepIndex: 0,
 				}
@@ -353,10 +351,10 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 				defer cancel()
 			}
 
-			yielded, err := runAgentWorkflowLoop(ctx, chatAgent, eventBus, cfg, state)
+			yielded, err := RunAgentWorkflowLoop(ctx, chatAgent, eventBus, cfg, state, queryExecutor, nil)
 
 			if (err != nil) != tt.wantError {
-				t.Errorf("runAgentWorkflowLoop error = %v, want error = %v", err, tt.wantError)
+				t.Errorf("RunAgentWorkflowLoop error = %v, want error = %v", err, tt.wantError)
 			}
 			if state.Complete != tt.wantComplete {
 				t.Errorf("state.Complete = %v, want %v", state.Complete, tt.wantComplete)
@@ -381,7 +379,7 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 					if readErr != nil {
 						t.Fatalf("read state file: %v", readErr)
 					}
-					var persistedState workflowExecutionState
+					var persistedState WorkflowExecutionState
 					if jsonErr := json.Unmarshal(data, &persistedState); jsonErr != nil {
 						t.Fatalf("unmarshal state file: %v", jsonErr)
 					}
@@ -402,7 +400,7 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 					if readErr != nil {
 						t.Fatalf("read state file: %v", readErr)
 					}
-					var persistedState workflowExecutionState
+					var persistedState WorkflowExecutionState
 					if jsonErr := json.Unmarshal(data, &persistedState); jsonErr != nil {
 						t.Fatalf("unmarshal state file: %v", jsonErr)
 					}
@@ -444,8 +442,8 @@ func TestWriteFileAtomic(t *testing.T) {
 	path := filepath.Join(dir, "test_atomic.txt")
 
 	data := []byte("hello world\nline 2\n")
-	if err := writeFileAtomic(path, data, 0600); err != nil {
-		t.Fatalf("writeFileAtomic: %v", err)
+	if err := WriteFileAtomic(path, data, 0600); err != nil {
+		t.Fatalf("WriteFileAtomic: %v", err)
 	}
 
 	got, err := os.ReadFile(path)
@@ -458,8 +456,8 @@ func TestWriteFileAtomic(t *testing.T) {
 
 	// Overwrite atomically with new content.
 	data2 := []byte("replacement content")
-	if err := writeFileAtomic(path, data2, 0600); err != nil {
-		t.Fatalf("writeFileAtomic overwrite: %v", err)
+	if err := WriteFileAtomic(path, data2, 0600); err != nil {
+		t.Fatalf("WriteFileAtomic overwrite: %v", err)
 	}
 	got2, err := os.ReadFile(path)
 	if err != nil {
@@ -485,43 +483,43 @@ func TestLoopCheckpointFile_PersistAndLoad(t *testing.T) {
 	dir := t.TempDir()
 
 	// 1. No file → returns 0.
-	lineNum, err := loadLoopCheckpoint(dir)
+	lineNum, err := LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint on fresh dir: %v", err)
+		t.Fatalf("LoadLoopCheckpoint on fresh dir: %v", err)
 	}
 	if lineNum != 0 {
 		t.Errorf("expected 0 for missing file, got %d", lineNum)
 	}
 
 	// 2. Persist and load back.
-	if err := persistLoopCheckpoint(dir, 42); err != nil {
-		t.Fatalf("persistLoopCheckpoint: %v", err)
+	if err := PersistLoopCheckpoint(dir, 42); err != nil {
+		t.Fatalf("PersistLoopCheckpoint: %v", err)
 	}
-	lineNum, err = loadLoopCheckpoint(dir)
+	lineNum, err = LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint after persist: %v", err)
+		t.Fatalf("LoadLoopCheckpoint after persist: %v", err)
 	}
 	if lineNum != 42 {
 		t.Errorf("expected 42, got %d", lineNum)
 	}
 
 	// 3. Overwrite with different value.
-	if err := persistLoopCheckpoint(dir, 99); err != nil {
-		t.Fatalf("persistLoopCheckpoint overwrite: %v", err)
+	if err := PersistLoopCheckpoint(dir, 99); err != nil {
+		t.Fatalf("PersistLoopCheckpoint overwrite: %v", err)
 	}
-	lineNum, err = loadLoopCheckpoint(dir)
+	lineNum, err = LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint after overwrite: %v", err)
+		t.Fatalf("LoadLoopCheckpoint after overwrite: %v", err)
 	}
 	if lineNum != 99 {
 		t.Errorf("expected 99, got %d", lineNum)
 	}
 
 	// 4. Remove checkpoint.
-	removeLoopCheckpoint(dir)
-	lineNum, err = loadLoopCheckpoint(dir)
+	RemoveLoopCheckpoint(dir)
+	lineNum, err = LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint after removal: %v", err)
+		t.Fatalf("LoadLoopCheckpoint after removal: %v", err)
 	}
 	if lineNum != 0 {
 		t.Errorf("expected 0 after removal, got %d", lineNum)
@@ -550,9 +548,9 @@ func TestLoopCheckpointFile_InvalidContent(t *testing.T) {
 	os.WriteFile(badPath, []byte("not a number\n"), 0600)
 
 	// Should treat as missing — returns 0, no error.
-	lineNum, err := loadLoopCheckpoint(dir)
+	lineNum, err := LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint with invalid content: %v", err)
+		t.Fatalf("LoadLoopCheckpoint with invalid content: %v", err)
 	}
 	if lineNum != 0 {
 		t.Errorf("expected 0 for invalid content, got %d", lineNum)
@@ -560,9 +558,9 @@ func TestLoopCheckpointFile_InvalidContent(t *testing.T) {
 
 	// Empty file.
 	os.WriteFile(badPath, []byte(""), 0600)
-	lineNum, err = loadLoopCheckpoint(dir)
+	lineNum, err = LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint with empty file: %v", err)
+		t.Fatalf("LoadLoopCheckpoint with empty file: %v", err)
 	}
 	if lineNum != 0 {
 		t.Errorf("expected 0 for empty file, got %d", lineNum)
@@ -570,9 +568,9 @@ func TestLoopCheckpointFile_InvalidContent(t *testing.T) {
 
 	// Whitespace-only file.
 	os.WriteFile(badPath, []byte("   \n  \n"), 0600)
-	lineNum, err = loadLoopCheckpoint(dir)
+	lineNum, err = LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint with whitespace file: %v", err)
+		t.Fatalf("LoadLoopCheckpoint with whitespace file: %v", err)
 	}
 	if lineNum != 0 {
 		t.Errorf("expected 0 for whitespace file, got %d", lineNum)
@@ -580,9 +578,9 @@ func TestLoopCheckpointFile_InvalidContent(t *testing.T) {
 
 	// Zero value.
 	os.WriteFile(badPath, []byte("0\n"), 0600)
-	lineNum, err = loadLoopCheckpoint(dir)
+	lineNum, err = LoadLoopCheckpoint(dir)
 	if err != nil {
-		t.Fatalf("loadLoopCheckpoint with zero: %v", err)
+		t.Fatalf("LoadLoopCheckpoint with zero: %v", err)
 	}
 	if lineNum != 0 {
 		t.Errorf("expected 0 for zero line number, got %d", lineNum)
@@ -602,10 +600,10 @@ func TestLoadWorkflowExecutionState_EmptyFile(t *testing.T) {
 			EventsFile: filepath.Join(tmpDir, "events.jsonl"),
 		},
 	}
-	cfg.validate()
+	cfg.Validate()
 
 	// Empty file should return a fresh state, not an error.
-	state, err := loadWorkflowExecutionState(cfg)
+	state, err := LoadWorkflowExecutionState(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error for empty state file: %v", err)
 	}
@@ -627,9 +625,9 @@ func TestLoadWorkflowExecutionState_WhitespaceOnlyFile(t *testing.T) {
 			EventsFile: filepath.Join(tmpDir, "events.jsonl"),
 		},
 	}
-	cfg.validate()
+	cfg.Validate()
 
-	state, err := loadWorkflowExecutionState(cfg)
+	state, err := LoadWorkflowExecutionState(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error for whitespace state file: %v", err)
 	}
@@ -656,14 +654,12 @@ func TestFallbackCheckpoint_WithoutOrchestration(t *testing.T) {
 	chatAgent := newTestLoopAgent(t, client)
 	eventBus := events.NewEventBus()
 
-	oldProcessFn := processQueryFn
 	callCount := 0
-	processQueryFn = func(ctx context.Context, _ *agent.Agent, _ *events.EventBus, query string) error {
+	queryExecutor := func(ctx context.Context, _ *agent.Agent, _ *events.EventBus, query string) error {
 		callCount++
 		_ = query
 		return nil
 	}
-	defer func() { processQueryFn = oldProcessFn }()
 
 	// No orchestration config — loop should fall back to lightweight checkpoint.
 	cfg := &AgentWorkflowConfig{
@@ -675,13 +671,13 @@ func TestFallbackCheckpoint_WithoutOrchestration(t *testing.T) {
 			BuildCommand:   "true",
 		},
 	}
-	state := &workflowExecutionState{Version: 1}
+	state := &WorkflowExecutionState{Version: 1}
 
 	ctx := context.Background()
-	yielded, err := runAgentWorkflowLoop(ctx, chatAgent, eventBus, cfg, state)
+	yielded, err := RunAgentWorkflowLoop(ctx, chatAgent, eventBus, cfg, state, queryExecutor, nil)
 
 	if err != nil {
-		t.Fatalf("runAgentWorkflowLoop error: %v", err)
+		t.Fatalf("RunAgentWorkflowLoop error: %v", err)
 	}
 	if yielded {
 		t.Errorf("yielded = true, want false")
@@ -690,12 +686,12 @@ func TestFallbackCheckpoint_WithoutOrchestration(t *testing.T) {
 		t.Errorf("state.Complete = false, want true")
 	}
 	if callCount != 2 {
-		t.Errorf("processQueryFn called %d times, want 2", callCount)
+		t.Errorf("queryExecutor called %d times, want 2", callCount)
 	}
 
 	// After successful completion, the fallback checkpoint file should
 	// be removed (not present).
-	checkpointPath := loopCheckpointFilePath(dir)
+	checkpointPath := LoopCheckpointFilePath(dir)
 	if _, statErr := os.Stat(checkpointPath); !os.IsNotExist(statErr) {
 		t.Errorf("fallback checkpoint file %q still exists after completion", checkpointPath)
 	}
@@ -725,8 +721,8 @@ func TestFallbackCheckpoint_ResumeOnRestart(t *testing.T) {
 	if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
 		t.Fatalf("write TODO.md: %v", err)
 	}
-	if err := persistLoopCheckpoint(dir, 4); err != nil {
-		t.Fatalf("persistLoopCheckpoint: %v", err)
+	if err := PersistLoopCheckpoint(dir, 4); err != nil {
+		t.Fatalf("PersistLoopCheckpoint: %v", err)
 	}
 
 	client := agent.NewScriptedClient(
@@ -737,14 +733,12 @@ func TestFallbackCheckpoint_ResumeOnRestart(t *testing.T) {
 	chatAgent := newTestLoopAgent(t, client)
 	eventBus := events.NewEventBus()
 
-	oldProcessFn := processQueryFn
 	callCount := 0
-	processQueryFn = func(ctx context.Context, _ *agent.Agent, _ *events.EventBus, query string) error {
+	queryExecutor := func(ctx context.Context, _ *agent.Agent, _ *events.EventBus, query string) error {
 		callCount++
 		_ = query
 		return nil
 	}
-	defer func() { processQueryFn = oldProcessFn }()
 
 	// No orchestration — rely on fallback checkpoint.
 	cfg := &AgentWorkflowConfig{
@@ -756,13 +750,13 @@ func TestFallbackCheckpoint_ResumeOnRestart(t *testing.T) {
 			BuildCommand:   "true",
 		},
 	}
-	state := &workflowExecutionState{Version: 1}
+	state := &WorkflowExecutionState{Version: 1}
 
 	ctx := context.Background()
-	yielded, err := runAgentWorkflowLoop(ctx, chatAgent, eventBus, cfg, state)
+	yielded, err := RunAgentWorkflowLoop(ctx, chatAgent, eventBus, cfg, state, queryExecutor, nil)
 
 	if err != nil {
-		t.Fatalf("runAgentWorkflowLoop error: %v", err)
+		t.Fatalf("RunAgentWorkflowLoop error: %v", err)
 	}
 	if yielded {
 		t.Errorf("yielded = true, want false")
@@ -771,11 +765,11 @@ func TestFallbackCheckpoint_ResumeOnRestart(t *testing.T) {
 		t.Errorf("state.Complete = false, want true")
 	}
 	if callCount != 1 {
-		t.Errorf("processQueryFn called %d times, want 1 (only Item 3)", callCount)
+		t.Errorf("queryExecutor called %d times, want 1 (only Item 3)", callCount)
 	}
 
 	// Fallback checkpoint should be removed after completion.
-	checkpointPath := loopCheckpointFilePath(dir)
+	checkpointPath := LoopCheckpointFilePath(dir)
 	if _, statErr := os.Stat(checkpointPath); !os.IsNotExist(statErr) {
 		t.Errorf("fallback checkpoint file %q still exists after completion", checkpointPath)
 	}

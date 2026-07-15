@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package service
 
 import (
 	"encoding/json"

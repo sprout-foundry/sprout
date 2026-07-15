@@ -300,7 +300,16 @@ func (ir *InputReader) ReadLine() (string, error) {
 	// output (e.g. partial content under the status footer's scroll region
 	// after a redraw), the prompt would render *on top of* that content
 	// and produce the prompt-overlap-on-startup bug we caught in real use.
+	//
+	// The prompt draw is wrapped in LockOutput so a background footer
+	// Refresh (SIGWINCH, event subscriber) can't emit DECSC/DECRC
+	// between the bare Printf and the read loop entry. Without the
+	// lock, the footer's DECRC could restore the cursor to a pre-prompt
+	// position (column 0), making the first typed character appear at
+	// the start of the row instead of after the prompt prefix.
+	LockOutput()
 	fmt.Printf("\r\033[K%s", ir.prompt)
+	UnlockOutput()
 
 	// SP-055 follow-up: if the REPL carried over unsent steer text,
 	// pre-fill it into the line buffer and render it so the user can

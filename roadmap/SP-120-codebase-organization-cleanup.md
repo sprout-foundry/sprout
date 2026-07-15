@@ -1,6 +1,6 @@
 # SP-120: Codebase Organization & Test Infrastructure Cleanup
 
-**Status:** 🚧 In Progress — Phase 1 (test cleanup) starting 2026-07-15.
+**Status:** ✅ Phase 1 + Phase 2a + Phase 2b complete (2026-07-15). Phase 2c deferred. Phase 3 shipped (package guide).
 
 ## Problem
 

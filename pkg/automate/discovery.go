@@ -27,9 +27,29 @@ type Entry struct {
 var isValidFilenamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+\.json$`)
 
 // Dir returns the default automate directory path (cwd + "/automate").
+//
+// CAUTION: in daemon mode (SPROUT_SERVICE=1), os.Getwd() returns the daemon
+// root, not the active workspace. Tool handlers in the agent must use DirIn
+// with the workspace root from the active Agent (a.GetWorkspaceRoot()) or
+// context (pkg/filesystem.WorkspaceRootFromContext), not Dir(). See
+// SP-119 for the workspace-aware flow.
 func Dir() string {
 	cwd, _ := os.Getwd()
 	return filepath.Join(cwd, "automate")
+}
+
+// DirIn returns the automate directory inside the given workspace directory.
+// Returns the CWD-based Dir() when workspaceDir is empty (or whitespace-only),
+// preserving CLI behavior where the user's shell CWD IS the workspace root.
+//
+// This is the workspace-aware counterpart to Dir(). Use DirIn from any code
+// that knows the active workspace (e.g., agent tools running inside a daemon
+// where os.Getwd() returns the daemon root, not the user's workspace).
+func DirIn(workspaceDir string) string {
+	if strings.TrimSpace(workspaceDir) == "" {
+		return Dir()
+	}
+	return filepath.Join(workspaceDir, "automate")
 }
 
 // IsValidFilename checks if a filename is safe for use as a workflow filename.

@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test test-unit test-unit-lowmem test-race test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
+.PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local automate-run
@@ -13,11 +13,9 @@ help:
 	@echo "  make test-unit        - Run unit tests (fast, no dependencies)"
 	@echo "  make test-unit-lowmem - Run unit tests in ~4GB RAM (no -race, low parallelism)"
 	@echo "  make test-race        - Run unit tests with race detector (required CI check)"
-	@echo "  make test-integration - Run integration tests (mocked AI)"  
-	@echo "  make test-e2e         - Run e2e tests (requires AI model)"
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
 	@echo "  make test-desktop-smoke - Run desktop Electron smoke tests"
-	@echo "  make test-all         - Run unit + integration + smoke tests"
+	@echo "  make test-all         - Run unit + smoke tests"
 	@echo "  make test-coverage    - Run unit tests with coverage check (fails if < 40%)"
 	@echo "  make clean            - Clean test artifacts"
 	@echo ""
@@ -52,7 +50,6 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test-unit                    # Quick feedback loop"
-	@echo "  make test-e2e MODEL=openai:gpt-4  # Full e2e with real model"
 	@echo "  make test-all                     # Pre-release validation"
 	@echo "  make build-version                # Build with version info"
 	@echo "  make deploy-ui                    # Build and deploy React UI"
@@ -123,21 +120,6 @@ test-race: prepare-grammars
 		exit $$status; \
 	fi'
 
-# Integration Tests - Removed in 60d5e580 (legacy bash scripts deprecated)
-test-integration:
-	@echo "Integration tests removed (see commit 60d5e580). Use 'make test-unit' or 'make test-smoke'."
-
-# E2E Tests - Real LLM models (expensive)
-test-e2e:
-ifndef MODEL
-	@echo "Error: MODEL is required for e2e tests"
-	@echo "Example: make test-e2e MODEL=openai:gpt-4"
-	@exit 1
-endif
-	@echo "Running e2e tests with model: $(MODEL)"
-	@echo "This will use real API calls and cost money!"
-	python3 e2e_test_runner.py -m $(MODEL)
-
 # Smoke Tests - Basic functionality check
 test-smoke:
 	@echo "Running smoke tests..."
@@ -150,8 +132,8 @@ test-desktop-smoke:
 	xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test --config=playwright.config.js
 
 # Test All (except expensive e2e)
-test-all: test-unit test-integration test-smoke
-	@echo "All tests completed (excluding e2e)"
+test-all: test-unit test-smoke
+	@echo "All tests completed"
 
 # Clean test artifacts
 clean:
@@ -166,8 +148,8 @@ clean:
 # Quick test for development (just unit tests)
 test: test-unit
 
-# CI-friendly test (unit + integration)
-test-ci: test-unit test-integration
+# CI-friendly test (unit only — integration suite removed)
+test-ci: test-unit
 	@echo "CI tests completed"
 
 # Coverage Check - Run tests with coverage and enforce minimum threshold

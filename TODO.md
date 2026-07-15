@@ -252,7 +252,7 @@ rest can migrate incrementally.
 
 ### Phase 1: `automate.DirIn` helper (~0.25 day)
 
-- [ ] **SP-119-1:** Add `automate.DirIn(workspaceDir string) string`
+- [x] **SP-119-1:** Add `automate.DirIn(workspaceDir string) string`
       to `pkg/automate/discovery.go`. Returns
       `filepath.Join(workspaceDir, "automate")` when `workspaceDir` is
       non-empty; falls back to `Dir()` (CWD-based) when empty so the CLI
@@ -263,7 +263,12 @@ rest can migrate incrementally.
       absolute path, relative path. Acceptance:
       `go test ./pkg/automate/...` passes with the new cases.
 
-- [ ] **SP-119-2:** Wire the three agent-tool callers in
+      **SHIPPED 2026-07-15.** `automate.DirIn(workspaceDir string) string`
+      landed in `pkg/automate/discovery.go`; the godoc on `Dir()` now flags
+      the daemon-mode caveat. `TestDirIn` covers all four cases and
+      `go test ./pkg/automate/...` is green.
+
+- [x] **SP-119-2:** Wire the three agent-tool callers in
       `pkg/agent/tool_handlers_automate.go` to `DirIn(a.GetWorkspaceRoot())`:
 
       - Line 124 (`handleRunAutomate`): `dir := automate.DirIn(a.GetWorkspaceRoot())`
@@ -276,7 +281,13 @@ rest can migrate incrementally.
       which `DirIn` resolves to `Dir()` (CWD-based) — correct for CLI
       where the shell CWD IS the workspace.
 
-- [ ] **SP-119-3:** Wire the interface-based registry handler at
+      **SHIPPED 2026-07-15.** All three call sites in
+      `pkg/agent/tool_handlers_automate.go` use
+      `automate.DirIn(a.GetWorkspaceRoot())`; the manual repro
+      (`run_automate todo-loop` from chat in a daemon-served workspace)
+      now finds `automate/todo-loop.json` in the workspace.
+
+- [x] **SP-119-3:** Wire the interface-based registry handler at
       `pkg/agent_tools/list_automate_workflows_handler.go:45`. Same bug
       (chat-invokable through `pkg/agent_tools/all.go:84`), different
       accessor: `dir := automate.DirIn(env.WorkspaceRoot)`. Update the
@@ -284,6 +295,11 @@ rest can migrate incrementally.
       `pkg/agent_tools/list_automate_workflows_handler_test.go` (3 cases:
       workspace-set with workflow, empty workspace, empty WorkspaceRoot
       fallback to CWD).
+
+      **SHIPPED 2026-07-15.** Handler updated; godoc reflects the new
+      workspace-aware behavior; `TestListAutomateWorkflowsHandler`
+      covers the three cases. `go test ./pkg/agent_tools/... -run
+      TestListAutomateWorkflowsHandler` green.
 
       Acceptance for the whole spec:
       - `go build ./...` clean.

@@ -4,7 +4,7 @@
 .PHONY: help test test-unit test-unit-lowmem test-race test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
-       verify-dist verify-dist-local automate-run
+       verify-dist verify-dist-local automate-run build-fast
 
 # Default target
 help:
@@ -320,10 +320,10 @@ build-ui:
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	@if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ]; then npm ci; fi
-	@npm run build -w @sprout/events
-	@npm run build -w @sprout/ui
-	@npm run build -w sprout-webui
+	@if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ] || [ ! -d node_modules/buffer ]; then npm ci || exit 1; fi
+	@npm run build -w @sprout/events || exit 1
+	@npm run build -w @sprout/ui || exit 1
+	@npm run build -w sprout-webui || exit 1
 	@echo "React web UI build completed in webui/dist/"
 
 # Build React web UI and deploy to Go static directory (for embedding)
@@ -332,10 +332,10 @@ deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "Building React web UI with Vite..."; \
-		if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ]; then npm ci; fi; \
-		npm run build -w @sprout/events; \
-		npm run build -w @sprout/ui; \
-		npm run build -w sprout-webui; \
+		if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ] || [ ! -d node_modules/buffer ]; then npm ci || exit 1; fi; \
+		npm run build -w @sprout/events || exit 1; \
+		npm run build -w @sprout/ui || exit 1; \
+		npm run build -w sprout-webui || exit 1; \
 		echo "React web UI build completed in webui/dist/"; \
 		node scripts/build-webui-embed.mjs --no-build; \
 	else \
@@ -433,7 +433,7 @@ build-cloud: build-wasm
 	@echo "Cloud build completed: sprout-cloud"
 
 # Fast incremental build (only builds what changed)
-build-fast:
+build-fast: prepare-grammars
 	@echo "🚀 Fast incremental build..."
 	@# Skip React if unchanged, always rebuild WASM and Go binary
 	@if bash scripts/check-needs-react-rebuild.sh; then \
@@ -444,9 +444,9 @@ build-fast:
 		echo "  React UI up-to-date (skipped)"; \
 	fi
 	@echo "  Building WASM..."
-	@./scripts/build-wasm.sh
+	@./scripts/build-wasm.sh || exit 1
 	@echo "  Building Go binary..."
-	@go build -o sprout .
+	@go build -o sprout . || exit 1
 	@echo "✅ Fast build completed"
 
 # Quick development workflow

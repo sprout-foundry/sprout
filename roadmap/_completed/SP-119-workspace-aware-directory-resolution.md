@@ -1,5 +1,12 @@
 # SP-119: Workspace-aware directory resolution in daemon-mode tools
 
+> ✅ **Implemented** — 3 phases shipped 2026-07-15. Commits: `6608ecf3`
+> (`automate.DirIn(workspaceDir)` helper + 4 call-site migrations across
+> `pkg/agent/tool_handlers_automate.go` and
+> `pkg/agent_tools/list_automate_workflows_handler.go`), `aa2d05a9`
+> (TODO.md sync). Tests: `pkg/automate/discovery_test.go::TestDirIn`,
+> `pkg/agent_tools/list_automate_workflows_handler_test.go`.
+
 _Discovered 2026-07-14 while debugging a `run_automate` failure in a daemon-served
 workspace._
 

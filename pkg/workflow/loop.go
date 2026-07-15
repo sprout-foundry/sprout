@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package workflow
 
 import (
 	"bytes"
@@ -202,9 +202,9 @@ func trimMarkdownFence(text string) string {
 	return strings.Join(inner, "\n")
 }
 
-// runAgentWorkflowLoop iterates over unchecked TODO items, processing each
+// RunAgentWorkflowLoop iterates over unchecked TODO items, processing each
 // with a fresh agent context. Between items, the conversation is cleared.
-func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, cfg *AgentWorkflowConfig, state *workflowExecutionState) (bool, error) {
+func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, cfg *AgentWorkflowConfig, state *WorkflowExecutionState, queryExecutor QueryExecutor, overrides *CLIOverrides) (bool, error) {
 	if cfg == nil || cfg.Loop == nil {
 		return false, nil
 	}
@@ -213,7 +213,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 	todoFile := loop.TodoFile
 
 	// Read the gate system prompt.
-	gatePrompt, err := resolveWorkflowTextOrFile("", loop.GatePromptFile, "gate_prompt")
+	gatePrompt, err := ResolveWorkflowTextOrFile("", loop.GatePromptFile, "gate_prompt")
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve gate_prompt_file: %w", err)
 	}
@@ -241,7 +241,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 	// Fallback: try loading the lightweight loop checkpoint file when
 	// orchestration checkpoint didn't provide a resume line.
 	if startAfter == 0 {
-		if fallbackLine, fbErr := loadLoopCheckpoint(todoWorkDir); fbErr == nil && fallbackLine > 0 {
+		if fallbackLine, fbErr := LoadLoopCheckpoint(todoWorkDir); fbErr == nil && fallbackLine > 0 {
 			console.GlyphInfo.Printf("Resuming from fallback TODO checkpoint: line %d", fallbackLine)
 			startAfter = fallbackLine - 1
 		}
@@ -251,12 +251,12 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		// Check for context cancellation.
 		if err := ctx.Err(); err != nil {
 			// Persist checkpoint so we can resume from this line.
-			if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+			if persistErr := PersistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
 				console.GlyphWarning.Printf("Failed to persist checkpoint: %v", persistErr)
 			}
 			// Also persist fallback checkpoint.
 			if state.CurrentTodoLineNum > 0 {
-				if fbErr := persistLoopCheckpoint(todoWorkDir, state.CurrentTodoLineNum); fbErr != nil {
+				if fbErr := PersistLoopCheckpoint(todoWorkDir, state.CurrentTodoLineNum); fbErr != nil {
 					console.GlyphWarning.Printf("Failed to persist fallback checkpoint: %v", fbErr)
 				}
 			}
@@ -268,12 +268,12 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			fmt.Println()
 			console.GlyphWarning.Print("Budget exceeded — stopping TODO loop")
 			// Persist checkpoint so we can resume from the last item's line.
-			if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+			if persistErr := PersistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
 				console.GlyphWarning.Printf("Failed to persist checkpoint: %v", persistErr)
 			}
 			// Also persist fallback checkpoint.
 			if state.CurrentTodoLineNum > 0 {
-				if fbErr := persistLoopCheckpoint(todoWorkDir, state.CurrentTodoLineNum); fbErr != nil {
+				if fbErr := PersistLoopCheckpoint(todoWorkDir, state.CurrentTodoLineNum); fbErr != nil {
 					console.GlyphWarning.Printf("Failed to persist fallback checkpoint: %v", fbErr)
 				}
 			}
@@ -292,11 +292,11 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 					itemsProcessed, itemsSkipped, itemsFailed)
 				state.CurrentTodoLineNum = 0
 				state.Complete = true
-				if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+				if persistErr := PersistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
 					console.GlyphWarning.Printf("Failed to persist final state: %v", persistErr)
 				}
 				// Remove fallback checkpoint on successful completion.
-				removeLoopCheckpoint(todoWorkDir)
+				RemoveLoopCheckpoint(todoWorkDir)
 				return false, nil
 			}
 			return false, fmt.Errorf("failed to find next TODO item: %w", findErr)
@@ -304,7 +304,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 
 		// Step 1b: Persist checkpoint before processing the item.
 		state.CurrentTodoLineNum = lineNum
-		if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+		if persistErr := PersistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
 			console.GlyphWarning.Printf("Failed to persist checkpoint: %v", persistErr)
 		}
 
@@ -316,7 +316,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		if gateErr != nil {
 			console.GlyphWarning.Printf("Gate call failed: %v", gateErr)
 			itemsFailed++
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
 				"title":  "unknown",
 				"line":   lineNum,
 				"reason": fmt.Sprintf("gate_call_failed: %v", gateErr),
@@ -330,7 +330,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		if parseErr != nil {
 			console.GlyphWarning.Printf("Gate parse failed: %v", parseErr)
 			itemsFailed++
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
 				"title":  "unknown",
 				"line":   lineNum,
 				"reason": fmt.Sprintf("gate_parse_failed: %v", parseErr),
@@ -353,7 +353,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 				console.GlyphWarning.Printf("Failed to mark item done: %v", markErr)
 			}
 			itemsSkipped++
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_skipped", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_skipped", map[string]interface{}{
 				"title":  gateRes.Title,
 				"line":   lineNum,
 				"reason": reason,
@@ -366,7 +366,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		if gateRes.Prompt == "" {
 			console.GlyphWarning.Printf("Gate returned empty prompt, skipping item")
 			itemsFailed++
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
 				"title":  gateRes.Title,
 				"line":   lineNum,
 				"reason": "empty_prompt",
@@ -378,7 +378,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 
 		// Step 4: Process the item with the agent.
 		console.GlyphAction.Printf("Processing: %s", gateRes.Title)
-		if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_started", map[string]interface{}{
+		if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_started", map[string]interface{}{
 			"title": gateRes.Title,
 			"line":  lineNum,
 		}); err != nil {
@@ -390,7 +390,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		chatAgent.SetMaxIterations(loop.MaxIterations)
 
 		// Run the agent with the gate-generated prompt.
-		processErr := processQueryFn(ctx, chatAgent, eventBus, gateRes.Prompt)
+		processErr := queryExecutor(ctx, chatAgent, eventBus, gateRes.Prompt)
 
 		// Restore max iterations.
 		chatAgent.SetMaxIterations(prevMaxIter)
@@ -472,7 +472,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}
 			chatAgent.SetMaxIterations(retryMaxIter)
 
-			retryErr := processQueryFn(ctx, chatAgent, eventBus, retryPrompt)
+			retryErr := queryExecutor(ctx, chatAgent, eventBus, retryPrompt)
 			chatAgent.SetMaxIterations(prevMaxIter)
 
 			if retryErr != nil {
@@ -505,7 +505,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		switch classifyLoopOutcome(buildFailed, processErr, retrySucceeded, triageSkipped) {
 		case outcomeSkipped:
 			// Triage said skip — already counted in itemsSkipped.
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_skipped", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_skipped", map[string]interface{}{
 				"title":  gateRes.Title,
 				"line":   lineNum,
 				"reason": "triage_skip",
@@ -515,7 +515,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		case outcomeFailed:
 			itemsFailed++
 			console.GlyphWarning.Printf("Item failed after retries: %s", gateRes.Title)
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
 				"title":  gateRes.Title,
 				"line":   lineNum,
 				"reason": "build_failed_after_retries",
@@ -527,7 +527,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			// Don't mark done — the work may be incomplete.
 			itemsFailed++
 			console.GlyphWarning.Printf("Build passes but agent didn't complete: %v", processErr)
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
 				"title":  gateRes.Title,
 				"line":   lineNum,
 				"reason": fmt.Sprintf("agent_incomplete: %v", processErr),
@@ -543,7 +543,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 				fmt.Println()
 				console.GlyphSuccess.Printf("Item complete: %s", gateRes.Title)
 			}
-			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_completed", map[string]interface{}{
+			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_completed", map[string]interface{}{
 				"title": gateRes.Title,
 				"line":  lineNum,
 			}); err != nil {
@@ -553,7 +553,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			// crash after this item persists only the successfully completed
 			// work. The next run will resume with the unchecked item at
 			// lineNum+1 (or detect loop completion).
-			if fbErr := persistLoopCheckpoint(todoWorkDir, lineNum+1); fbErr != nil {
+			if fbErr := PersistLoopCheckpoint(todoWorkDir, lineNum+1); fbErr != nil {
 				console.GlyphWarning.Printf("Failed to persist fallback checkpoint: %v", fbErr)
 			}
 		}

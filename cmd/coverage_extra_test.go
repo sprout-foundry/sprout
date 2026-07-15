@@ -11,6 +11,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/service"
 )
 
 // =============================================================================
@@ -106,7 +107,7 @@ func TestBuildQueueTaskQuery_CoverageExtra(t *testing.T) {
 }
 
 // =============================================================================
-// service_env.go — captureAPIKeysFromEnv
+// service_env.go — service.CaptureAPIKeysFromEnv
 // =============================================================================
 
 func TestCaptureAPIKeysFromEnv_Coverage(t *testing.T) {
@@ -115,7 +116,7 @@ func TestCaptureAPIKeysFromEnv_Coverage(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "gh_abc")
 	t.Setenv("NORMAL_VAR", "value")
 
-	matches := captureAPIKeysFromEnv()
+	matches := service.CaptureAPIKeysFromEnv()
 	foundAPIKey := false
 	foundToken := false
 	foundNormal := false
@@ -197,7 +198,7 @@ func TestIsPIDAlive_Coverage(t *testing.T) {
 }
 
 // =============================================================================
-// service_env.go — generateServiceEnvFile
+// service_env.go — service.GenerateServiceEnvFile
 // =============================================================================
 
 func TestGenerateServiceEnvFile_NoKeys_Coverage(t *testing.T) {
@@ -206,9 +207,9 @@ func TestGenerateServiceEnvFile_NoKeys_Coverage(t *testing.T) {
 	os.Unsetenv("MY_API_KEY")
 	os.Unsetenv("GITHUB_TOKEN")
 
-	err := generateServiceEnvFile(tmpDir)
+	err := service.GenerateServiceEnvFile(tmpDir)
 	if err != nil {
-		t.Fatalf("generateServiceEnvFile() error: %v", err)
+		t.Fatalf("service.GenerateServiceEnvFile() error: %v", err)
 	}
 
 	// Should create an empty file

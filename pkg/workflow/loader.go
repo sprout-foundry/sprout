@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package workflow
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-func loadAgentWorkflowConfig(path string) (*AgentWorkflowConfig, error) {
+func LoadAgentWorkflowConfig(path string) (*AgentWorkflowConfig, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
 		return nil, nil
@@ -30,14 +30,14 @@ func loadAgentWorkflowConfig(path string) (*AgentWorkflowConfig, error) {
 		return nil, fmt.Errorf("failed to parse workflow config %q: %w", trimmed, err)
 	}
 
-	if err := cfg.validate(); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid workflow config %q: %w", trimmed, err)
 	}
 
 	return &cfg, nil
 }
 
-func (c *AgentWorkflowConfig) validate() error {
+func (c *AgentWorkflowConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
@@ -46,13 +46,13 @@ func (c *AgentWorkflowConfig) validate() error {
 		c.Orchestration.EventsFile = strings.TrimSpace(c.Orchestration.EventsFile)
 		c.Orchestration.ConversationSessionID = strings.TrimSpace(c.Orchestration.ConversationSessionID)
 		if c.Orchestration.StateFile == "" {
-			c.Orchestration.StateFile = defaultWorkflowOrchestrationStateFile
+			c.Orchestration.StateFile = DefaultWorkflowOrchestrationStateFile
 		}
 		if c.Orchestration.EventsFile == "" {
-			c.Orchestration.EventsFile = defaultWorkflowOrchestrationEventsFile
+			c.Orchestration.EventsFile = DefaultWorkflowOrchestrationEventsFile
 		}
 		if c.Orchestration.ConversationSessionID == "" {
-			c.Orchestration.ConversationSessionID = defaultWorkflowConversationSessionID
+			c.Orchestration.ConversationSessionID = DefaultWorkflowConversationSessionID
 		}
 		if c.Orchestration.Enabled {
 			if c.Orchestration.StateFile == "" {
@@ -103,7 +103,7 @@ func (c *AgentWorkflowConfig) validate() error {
 	if c.Initial != nil {
 		c.Initial.Prompt = strings.TrimSpace(c.Initial.Prompt)
 		c.Initial.PromptFile = strings.TrimSpace(c.Initial.PromptFile)
-		if err := c.Initial.AgentWorkflowRuntime.validate("initial"); err != nil {
+		if err := c.Initial.AgentWorkflowRuntime.Validate("initial"); err != nil {
 			return fmt.Errorf("validating initial step: %w", err)
 		}
 		if c.Initial.Prompt != "" && c.Initial.PromptFile != "" {
@@ -149,9 +149,9 @@ func (c *AgentWorkflowConfig) validate() error {
 		step.PromptFile = strings.TrimSpace(step.PromptFile)
 		step.Command = strings.TrimSpace(step.Command)
 		step.CommandFile = strings.TrimSpace(step.CommandFile)
-		step.When = normalizeWorkflowWhen(step.When)
-		step.FileExists = normalizeWorkflowPaths(step.FileExists)
-		step.FileNotExists = normalizeWorkflowPaths(step.FileNotExists)
+		step.When = NormalizeWorkflowWhen(step.When)
+		step.FileExists = NormalizeWorkflowPaths(step.FileExists)
+		step.FileNotExists = NormalizeWorkflowPaths(step.FileNotExists)
 
 		hasPrompt := step.Prompt != "" || step.PromptFile != ""
 		hasCommand := step.Command != "" || step.CommandFile != ""
@@ -167,11 +167,11 @@ func (c *AgentWorkflowConfig) validate() error {
 		if step.Command != "" && step.CommandFile != "" {
 			return fmt.Errorf("steps[%d].command and steps[%d].command_file are mutually exclusive", i, i)
 		}
-		if !isValidWorkflowWhen(step.When) {
-			return fmt.Errorf("steps[%d].when must be one of: %s, %s, %s", i, workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError)
+		if !IsValidWorkflowWhen(step.When) {
+			return fmt.Errorf("steps[%d].when must be one of: %s, %s, %s", i, WorkflowWhenAlways, WorkflowWhenOnSuccess, WorkflowWhenOnError)
 		}
 		prefix := fmt.Sprintf("steps[%d]", i)
-		if err := step.AgentWorkflowRuntime.validate(prefix); err != nil {
+		if err := step.AgentWorkflowRuntime.Validate(prefix); err != nil {
 			return fmt.Errorf("validating step %s: %w", prefix, err)
 		}
 	}
@@ -179,50 +179,53 @@ func (c *AgentWorkflowConfig) validate() error {
 	return nil
 }
 
-func applyWorkflowCommandOverrides(cfg *AgentWorkflowConfig) {
+func ApplyWorkflowCommandOverrides(cfg *AgentWorkflowConfig, overrides *CLIOverrides) {
 	if cfg == nil {
 		return
 	}
-	if cfg.NoWebUI != nil {
-		disableWebUI = *cfg.NoWebUI
+	if overrides == nil {
+		return
 	}
-	if cfg.WebPort != nil {
-		webPort = *cfg.WebPort
+	if cfg.NoWebUI != nil && overrides.SetWebUI != nil {
+		overrides.SetWebUI(*cfg.NoWebUI)
 	}
-	if cfg.Daemon != nil {
-		daemonMode = *cfg.Daemon
+	if cfg.WebPort != nil && overrides.SetWebPort != nil {
+		overrides.SetWebPort(*cfg.WebPort)
+	}
+	if cfg.Daemon != nil && overrides.SetDaemon != nil {
+		overrides.SetDaemon(*cfg.Daemon)
 	}
 
 	// CLI → workflow JSON overrides for budget + heartbeat.
 	// Only positive values override — 0 means "inherit JSON".
-	if agentBudgetUSD > 0 {
+	if overrides.BudgetUSD > 0 {
 		if cfg.Budget == nil {
 			cfg.Budget = &AgentWorkflowBudgetConfig{}
 		}
-		cfg.Budget.USD = agentBudgetUSD
+		cfg.Budget.USD = overrides.BudgetUSD
 	}
-	if strings.TrimSpace(agentBudgetWarn) != "" {
-		thresholds, err := parseBudgetWarnList(agentBudgetWarn)
+	if strings.TrimSpace(overrides.BudgetWarn) != "" {
+		thresholds, err := ParseBudgetWarnList(overrides.BudgetWarn)
 		if err == nil && len(thresholds) > 0 {
 			if cfg.Budget == nil {
 				cfg.Budget = &AgentWorkflowBudgetConfig{}
 			}
 			cfg.Budget.WarnAt = thresholds
 		} else if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: ignoring invalid --budget-warn %q: %v\n", agentBudgetWarn, err)
+			fmt.Fprintf(os.Stderr, "Warning: ignoring invalid --budget-warn %q: %v\n", overrides.BudgetWarn, err)
 		}
 	}
-	if agentHeartbeatSeconds > 0 {
+	if overrides.HeartbeatSeconds > 0 {
 		if cfg.Progress == nil {
 			cfg.Progress = &AgentWorkflowProgressConfig{}
 		}
-		cfg.Progress.HeartbeatSeconds = agentHeartbeatSeconds
+		cfg.Progress.HeartbeatSeconds = overrides.HeartbeatSeconds
 	}
 }
 
-// parseBudgetWarnList parses a comma-separated list of fractional thresholds
+// ParseBudgetWarnList parses a comma-separated list of fractional thresholds
 // (e.g. "0.5,0.8") into a sorted []float64. Each value must be in (0, 1].
-func parseBudgetWarnList(s string) ([]float64, error) {
+func ParseBudgetWarnList(s string) ([]float64, error) {
 	parts := strings.Split(s, ",")
 	out := make([]float64, 0, len(parts))
 	for _, p := range parts {
@@ -243,7 +246,7 @@ func parseBudgetWarnList(s string) ([]float64, error) {
 	return out, nil
 }
 
-func (r *AgentWorkflowRuntime) validate(prefix string) error {
+func (r *AgentWorkflowRuntime) Validate(prefix string) error {
 	if r == nil {
 		return nil
 	}
@@ -254,7 +257,7 @@ func (r *AgentWorkflowRuntime) validate(prefix string) error {
 	r.SystemPromptFile = strings.TrimSpace(r.SystemPromptFile)
 	r.ResourceDirectory = strings.TrimSpace(r.ResourceDirectory)
 	rawReasoning := r.ReasoningEffort
-	r.ReasoningEffort = normalizeReasoningEffort(r.ReasoningEffort)
+	r.ReasoningEffort = NormalizeReasoningEffort(r.ReasoningEffort)
 
 	if r.SystemPrompt != "" && r.SystemPromptFile != "" {
 		return fmt.Errorf("%s.system_prompt and %s.system_prompt_file are mutually exclusive", prefix, prefix)
@@ -266,7 +269,7 @@ func (r *AgentWorkflowRuntime) validate(prefix string) error {
 		return fmt.Errorf("%s.max_iterations must be >= 0", prefix)
 	}
 	for personaID, override := range r.SubagentOverrides {
-		normalized := normalizeWorkflowPersonaID(personaID)
+		normalized := NormalizeWorkflowPersonaID(personaID)
 		if normalized == "" {
 			return fmt.Errorf("%s.subagent_overrides has an empty persona key", prefix)
 		}
@@ -278,32 +281,32 @@ func (r *AgentWorkflowRuntime) validate(prefix string) error {
 	return nil
 }
 
-func (c *AgentWorkflowConfig) shouldPersistRuntimeOverrides() bool {
+func (c *AgentWorkflowConfig) ShouldPersistRuntimeOverrides() bool {
 	if c == nil || c.PersistRuntimeOverrides == nil {
 		return true
 	}
 	return *c.PersistRuntimeOverrides
 }
 
-func (c *AgentWorkflowConfig) orchestrationEnabled() bool {
+func (c *AgentWorkflowConfig) OrchestrationEnabled() bool {
 	return c != nil && c.Orchestration != nil && c.Orchestration.Enabled
 }
 
-func (c *AgentWorkflowConfig) orchestrationResumeEnabled() bool {
-	if !c.orchestrationEnabled() || c.Orchestration.Resume == nil {
+func (c *AgentWorkflowConfig) OrchestrationResumeEnabled() bool {
+	if !c.OrchestrationEnabled() || c.Orchestration.Resume == nil {
 		return true
 	}
 	return *c.Orchestration.Resume
 }
 
-func (c *AgentWorkflowConfig) orchestrationYieldOnProviderHandoff() bool {
-	if !c.orchestrationEnabled() || c.Orchestration.YieldOnProviderHandoff == nil {
+func (c *AgentWorkflowConfig) OrchestrationYieldOnProviderHandoff() bool {
+	if !c.OrchestrationEnabled() || c.Orchestration.YieldOnProviderHandoff == nil {
 		return true
 	}
 	return *c.Orchestration.YieldOnProviderHandoff
 }
 
-func normalizeReasoningEffort(v string) string {
+func NormalizeReasoningEffort(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "":
 		return ""
@@ -318,15 +321,15 @@ func normalizeReasoningEffort(v string) string {
 	}
 }
 
-func normalizeWorkflowWhen(v string) string {
+func NormalizeWorkflowWhen(v string) string {
 	trimmed := strings.TrimSpace(strings.ToLower(v))
 	if trimmed == "" {
-		return workflowWhenAlways
+		return WorkflowWhenAlways
 	}
 	return trimmed
 }
 
-func normalizeWorkflowPaths(paths []string) []string {
+func NormalizeWorkflowPaths(paths []string) []string {
 	if len(paths) == 0 {
 		return nil
 	}
@@ -341,22 +344,22 @@ func normalizeWorkflowPaths(paths []string) []string {
 	return normalized
 }
 
-// normalizeWorkflowPersonaID normalizes a persona ID the same way config.go does.
-func normalizeWorkflowPersonaID(raw string) string {
+// NormalizeWorkflowPersonaID normalizes a persona ID the same way config.go does.
+func NormalizeWorkflowPersonaID(raw string) string {
 	normalized := strings.TrimSpace(strings.ToLower(raw))
 	normalized = strings.ReplaceAll(normalized, "-", "_")
 	return normalized
 }
 
-// findSubagentTypeMapKey finds the original map key in SubagentTypes matching the
+// FindSubagentTypeMapKey finds the original map key in SubagentTypes matching the
 // given normalized persona ID. It mirrors the lookup logic in config.go GetSubagentType.
-func findSubagentTypeMapKey(subagentTypes map[string]configuration.SubagentType, normalizedID string) (string, bool) {
+func FindSubagentTypeMapKey(subagentTypes map[string]configuration.SubagentType, normalizedID string) (string, bool) {
 	for key, st := range subagentTypes {
-		if normalizeWorkflowPersonaID(key) == normalizedID {
+		if NormalizeWorkflowPersonaID(key) == normalizedID {
 			return key, true
 		}
 		for _, alias := range st.Aliases {
-			if normalizeWorkflowPersonaID(alias) == normalizedID {
+			if NormalizeWorkflowPersonaID(alias) == normalizedID {
 				return key, true
 			}
 		}
@@ -364,21 +367,21 @@ func findSubagentTypeMapKey(subagentTypes map[string]configuration.SubagentType,
 	return "", false
 }
 
-// applyWorkflowSubagentOverrides patches the SubagentTypes map entries matching
+// ApplyWorkflowSubagentOverrides patches the SubagentTypes map entries matching
 // the given overrides. No error is returned for unknown personas — they are skipped.
 // Log lines are emitted for every skip and every successful apply so that silent
 // divergence between the workflow JSON and the actual SubagentTypes is visible.
-func applyWorkflowSubagentOverrides(subagentTypes map[string]configuration.SubagentType, overrides WorkflowSubagentOverrides) {
+func ApplyWorkflowSubagentOverrides(subagentTypes map[string]configuration.SubagentType, overrides WorkflowSubagentOverrides) {
 	for personaID, override := range overrides {
 		if override.Provider == "" && override.Model == "" {
 			log.Printf("[workflow] subagent_overrides: empty override for %q — both provider and model are empty; nothing to apply", personaID)
 			continue
 		}
-		normalizedID := normalizeWorkflowPersonaID(personaID)
+		normalizedID := NormalizeWorkflowPersonaID(personaID)
 		if normalizedID == "" {
 			continue
 		}
-		mapKey, found := findSubagentTypeMapKey(subagentTypes, normalizedID)
+		mapKey, found := FindSubagentTypeMapKey(subagentTypes, normalizedID)
 		if !found {
 			log.Printf("[workflow] subagent_overrides: unknown persona %q — no matching SubagentTypes entry or alias; override ignored (provider=%s model=%s)", personaID, override.Provider, override.Model)
 			continue
@@ -399,16 +402,16 @@ func applyWorkflowSubagentOverrides(subagentTypes map[string]configuration.Subag
 	}
 }
 
-func isValidWorkflowWhen(v string) bool {
+func IsValidWorkflowWhen(v string) bool {
 	switch v {
-	case workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError:
+	case WorkflowWhenAlways, WorkflowWhenOnSuccess, WorkflowWhenOnError:
 		return true
 	default:
 		return false
 	}
 }
 
-func stepFileTriggersSatisfied(step AgentWorkflowStep) (bool, error) {
+func StepFileTriggersSatisfied(step AgentWorkflowStep) (bool, error) {
 	for _, path := range step.FileExists {
 		_, err := os.Stat(path)
 		if err != nil {
@@ -432,7 +435,7 @@ func stepFileTriggersSatisfied(step AgentWorkflowStep) (bool, error) {
 	return true, nil
 }
 
-func resolveWorkflowTextOrFile(text, filePath, label string) (string, error) {
+func ResolveWorkflowTextOrFile(text, filePath, label string) (string, error) {
 	text = strings.TrimSpace(text)
 	filePath = strings.TrimSpace(filePath)
 	if text != "" && filePath != "" {
@@ -449,7 +452,7 @@ func resolveWorkflowTextOrFile(text, filePath, label string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-func resolveWorkflowInitialPrompt(cliQuery string, cfg *AgentWorkflowConfig) (string, error) {
+func ResolveWorkflowInitialPrompt(cliQuery string, cfg *AgentWorkflowConfig) (string, error) {
 	query := strings.TrimSpace(cliQuery)
 	if query != "" {
 		return query, nil
@@ -457,9 +460,9 @@ func resolveWorkflowInitialPrompt(cliQuery string, cfg *AgentWorkflowConfig) (st
 	if cfg == nil || cfg.Initial == nil {
 		return "", nil
 	}
-	return resolveWorkflowTextOrFile(cfg.Initial.Prompt, cfg.Initial.PromptFile, "prompt")
+	return ResolveWorkflowTextOrFile(cfg.Initial.Prompt, cfg.Initial.PromptFile, "prompt")
 }
 
-func resolveStepPrompt(step AgentWorkflowStep) (string, error) {
-	return resolveWorkflowTextOrFile(step.Prompt, step.PromptFile, "prompt")
+func ResolveStepPrompt(step AgentWorkflowStep) (string, error) {
+	return ResolveWorkflowTextOrFile(step.Prompt, step.PromptFile, "prompt")
 }

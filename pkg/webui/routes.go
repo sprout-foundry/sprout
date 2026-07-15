@@ -94,6 +94,7 @@ func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
 	mux.HandleFunc("/api/recall", ws.handleAPIRecall)
 	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
+	mux.HandleFunc("/api/ws-metrics", ws.handleAPIWSMetrics)
 }
 
 func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {

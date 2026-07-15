@@ -605,6 +605,44 @@ func TestSummary_IsApprovalRequired_NilSafe(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// DirIn (SP-119)
+// ---------------------------------------------------------------------------
+
+func TestDirIn(t *testing.T) {
+	t.Run("empty workspace falls back to cwd-based Dir", func(t *testing.T) {
+		got := DirIn("")
+		want := Dir()
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want Dir() = %q", "", got, want)
+		}
+	})
+
+	t.Run("whitespace-only workspace falls back to cwd-based Dir", func(t *testing.T) {
+		got := DirIn("   ")
+		want := Dir()
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want Dir() = %q", "   ", got, want)
+		}
+	})
+
+	t.Run("explicit workspace joins automate dir", func(t *testing.T) {
+		got := DirIn("/tmp/foo")
+		want := filepath.Join("/tmp/foo", "automate")
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want %q", "/tmp/foo", got, want)
+		}
+	})
+
+	t.Run("relative path joins automate dir", func(t *testing.T) {
+		got := DirIn("subdir")
+		want := filepath.Join("subdir", "automate")
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want %q", "subdir", got, want)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

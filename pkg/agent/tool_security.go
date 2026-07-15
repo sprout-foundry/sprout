@@ -99,7 +99,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 			workflowAutoApproved := false
 			if agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
 				if wf, ok := args["workflow"].(string); ok && wf != "" {
-					if !workflowRequiresApproval(wf) {
+					if !workflowRequiresApproval(agent, wf) {
 						if agent.debug {
 							agent.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
 						}
@@ -457,7 +457,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	// don't need to re-prompt — the user opted in once for this workflow.
 	if name == "run_automate" && assessment.RequiresIntentConfirmation {
 		if wf, ok := args["workflow"].(string); ok && wf != "" {
-			if !workflowRequiresApproval(wf) {
+			if !workflowRequiresApproval(a, wf) {
 				if a.debug {
 					a.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
 				}

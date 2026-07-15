@@ -15,8 +15,11 @@ import (
 //
 // Unlike the Agent-dependent tools in this batch, this handler is
 // fully standalone — it uses package-level functions from
-// pkg/automate (automate.Dir, automate.Discover) that are accessible
-// from pkg/agent_tools without creating an import cycle.
+// pkg/automate (automate.DirIn, automate.Discover) that are accessible
+// from pkg/agent_tools without creating an import cycle. The workspace
+// root is supplied via ToolEnv.WorkspaceRoot (set by the agent at
+// dispatch time) so daemon-mode invocations resolve automate/ under
+// the active workspace rather than the daemon CWD. See SP-119.
 type listAutomateWorkflowsHandler struct{}
 
 func (h *listAutomateWorkflowsHandler) Name() string { return "list_automate_workflows" }
@@ -36,7 +39,10 @@ func (h *listAutomateWorkflowsHandler) Validate(args map[string]any) error {
 }
 
 func (h *listAutomateWorkflowsHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	dir := automate.Dir()
+	// Use the workspace-aware directory in daemon mode (SPROUT_SERVICE=1).
+	// Falls back to CWD via automate.Dir() when env.WorkspaceRoot is empty
+	// (CLI mode where the user's shell CWD IS the workspace). See SP-119.
+	dir := automate.DirIn(env.WorkspaceRoot)
 
 	workflows, err := automate.Discover(dir)
 	if err != nil {

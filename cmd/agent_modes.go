@@ -165,6 +165,18 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				log.Fatalf("%v", webErr)
 			}
 
+			// SP-118 Phase 1: Route to Mode 1 (single-active-session) for the
+			// sprout agent path (interactive / direct / non-daemon). The daemon
+			// path (daemonMode=true) leaves agentEnforceSingleSession=false so
+			// connections route to the Mode 2 stub until SP-118-2 lands. The
+			// stub logs and drops connections, so daemon mode's WebUI is
+			// intentionally broken in this phase. The flag is the dispatch
+			// signal — NOT serviceMode, which tests manipulate independently
+			// to exercise Mode 1 in service-mode setups.
+			if !daemonMode {
+				webServer.SetAgentEnforceSingleSession(true)
+			}
+
 			// In shared mode, register the server so the CLI's ProcessQuery
 			// wrapper can sync agent state after each CLI query.
 			if !daemonMode {

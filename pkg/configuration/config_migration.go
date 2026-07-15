@@ -216,6 +216,23 @@ func applyUnifiedRiskResolverDefault(raw map[string]interface{}) {
 	}
 }
 
+// applyDaemonMultiSessionDefault enables N parallel browser windows
+// per user on the daemon (SP-118 Phase 4) by default. The default
+// flips the rollout so newly-spawned daemons accept multiple windows
+// per user with no extra configuration. Operators who need the
+// pre-SP-118 single-active-session behavior on the daemon can set
+// "daemon_multi_session": false to opt out (e.g. for a temporary
+// rollback during the rollout window).
+//
+// The agent path is unaffected — sprout agent always uses Mode 1
+// regardless of this setting. The flag only gates Mode 2 in the
+// daemon path; see pkg/webui/websocket_handler.go shouldUseMode1.
+func applyDaemonMultiSessionDefault(raw map[string]interface{}) {
+	if _, exists := raw["daemon_multi_session"]; !exists {
+		raw["daemon_multi_session"] = true
+	}
+}
+
 // applyMapInitializations ensures required map fields are initialized to empty maps.
 // It only sets fields that are nil/missing — existing values are preserved.
 func applyMapInitializations(raw map[string]interface{}) {
@@ -525,6 +542,7 @@ func applyV2Defaults(raw map[string]interface{}) error {
 	applyPDFOCRDefaults(raw)
 	applyZshCommandDetectionDefaults(raw)
 	applyUnifiedRiskResolverDefault(raw)
+	applyDaemonMultiSessionDefault(raw)
 	applyDefaultSubagentTypes(raw)
 	applyDefaultSkills(raw)
 	applyLegacyToolAllowlistMigration(raw)

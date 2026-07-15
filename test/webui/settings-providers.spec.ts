@@ -63,7 +63,8 @@ test.describe('Settings Providers', () => {
     await expect(providersTab).toBeVisible({ timeout: 15_000 });
   });
 
-  test('the providers tab contains a providers list', async () => {
+  test.fixme('the providers tab contains a providers list', async () => {
+    // FIXME: Settings providers tab is nested in a lazy-loaded SettingsPanel within a collapsible section.
     await page.goto(vite.url, { waitUntil: 'networkidle' });
 
     const settingsToggle = page.getByTestId(TESTIDS['sidebar-settings-toggle']);

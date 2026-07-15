@@ -314,34 +314,53 @@ fmt-check:
 # the @sprout/* packages are then built explicitly because their `prepare`
 # script was removed in 61ba3f17 and webui resolves their `exports` from
 # `dist/` at Vite-bundle time.
+#
+# The dep-existence check covers the cases where webui's direct deps
+# aren't yet hoisted to the workspace root. 'vite' and 'isomorphic-git'
+# are workspace-install sentinels; 'buffer' is a direct dep added in
+# 3edba290 (SP-120) for the Buffer polyfill in webui/src/index.tsx —
+# without an explicit check it stays nested inside
+# isomorphic-git/node_modules/... and Vite falls through to the
+# __vite-browser-external stub, failing with "Buffer is not exported".
 build-ui:
 	@echo "Building React web UI with Vite..."
-	@if [ ! -d "webui" ]; then \
+	@if [ ! -d webui ]; then \
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	@if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ]; then npm ci; fi
-	@npm run build -w @sprout/events
-	@npm run build -w @sprout/ui
-	@npm run build -w sprout-webui
+	@if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ] || [ ! -d node_modules/buffer ]; then \
+		echo "WebUI deps missing — running npm ci..."; \
+		npm ci || { echo "npm ci failed" >&2; exit 1; }; \
+	fi
+	@npm run build -w @sprout/events  || { echo "@sprout/events build failed" >&2; exit 1; }
+	@npm run build -w @sprout/ui      || { echo "@sprout/ui build failed" >&2; exit 1; }
+	@npm run build -w sprout-webui     || { echo "sprout-webui build failed" >&2; exit 1; }
 	@echo "React web UI build completed in webui/dist/"
 
 # Build React web UI and deploy to Go static directory (for embedding)
 # Optimized: skips React build if source files haven't changed
+#
+# Every step uses '|| exit 1' so a WebUI build failure propagates as
+# a non-zero recipe exit code; make build-all then stops before the
+# Go binary step, instead of embedding whatever stale assets are in
+# pkg/webui/static/ from a prior good run. See SP-120 for rationale.
 deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "Building React web UI with Vite..."; \
-		if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ]; then npm ci; fi; \
-		npm run build -w @sprout/events; \
-		npm run build -w @sprout/ui; \
-		npm run build -w sprout-webui; \
-		echo "React web UI build completed in webui/dist/"; \
-		node scripts/build-webui-embed.mjs --no-build; \
+		if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ] || [ ! -d node_modules/buffer ]; then \
+			echo "WebUI deps missing — running npm ci..."; \
+			npm ci || { echo "npm ci failed" >&2; exit 1; }; \
+		fi; \
+		npm run build -w @sprout/events  || { echo "@sprout/events build failed" >&2; exit 1; } && \
+		npm run build -w @sprout/ui      || { echo "@sprout/ui build failed" >&2; exit 1; } && \
+		npm run build -w sprout-webui     || { echo "sprout-webui build failed" >&2; exit 1; } && \
+		echo "React web UI build completed in webui/dist/" && \
+		node scripts/build-webui-embed.mjs --no-build || { echo "embed copy failed" >&2; exit 1; }; \
 	else \
 		echo "React UI is up-to-date, skipping rebuild"; \
 		echo "Deploying existing React build to Go static directory..."; \
-		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs --no-build; \
+		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs --no-build || { echo "embed copy failed" >&2; exit 1; }; \
 	fi
 	@echo "React web UI deployed to pkg/webui/static/"
 	@echo "Build artifacts in pkg/webui/static/ are now embedded at compile time."
@@ -424,12 +443,20 @@ generate-ts-types:
 
 # Build cloud-mode binary (sprout-cloud) — embeds cloud-mode WebUI
 # Produces a separate binary so it doesn't overwrite the local-mode 'sprout'
+#
+# Each step uses '|| { echo ...; exit 1; }' so a WebUI build or embed
+# failure propagates and stops make before producing a broken
+# sprout-cloud binary. See SP-120 for the same fix applied to deploy-ui.
 build-cloud: build-wasm
 	@echo "Building cloud-mode WebUI..."
-	@cd webui && npm run build:cloud || exit 1
-	@cd "$(CURDIR)" && node scripts/build-webui-embed.mjs
+	@if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ] || [ ! -d node_modules/buffer ]; then \
+		echo "WebUI deps missing — running npm ci..."; \
+		npm ci || { echo "npm ci failed" >&2; exit 1; }; \
+	fi
+	@cd webui && npm run build:cloud || { echo "cloud build failed" >&2; exit 1; }
+	@cd "$(CURDIR)" && node scripts/build-webui-embed.mjs || { echo "embed copy failed" >&2; exit 1; }
 	@echo "Building sprout-cloud..."
-	GO111MODULE=on go build -o sprout-cloud .
+	GO111MODULE=on go build -o sprout-cloud . || { echo "go build failed" >&2; exit 1; }
 	@echo "Cloud build completed: sprout-cloud"
 
 # Fast incremental build (only builds what changed)
@@ -438,15 +465,19 @@ build-fast:
 	@# Skip React if unchanged, always rebuild WASM and Go binary
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "  Building React UI with Vite..."; \
-		cd webui && npm run build || exit 1; \
-		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs || exit 1; \
+		if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ] || [ ! -d node_modules/buffer ]; then \
+			echo "  WebUI deps missing — running npm ci..."; \
+			npm ci || { echo "npm ci failed" >&2; exit 1; }; \
+		fi; \
+		cd webui && npm run build || { echo "vite build failed" >&2; exit 1; }; \
+		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs || { echo "embed copy failed" >&2; exit 1; }; \
 	else \
 		echo "  React UI up-to-date (skipped)"; \
 	fi
 	@echo "  Building WASM..."
-	@./scripts/build-wasm.sh
+	@./scripts/build-wasm.sh || { echo "wasm build failed" >&2; exit 1; }
 	@echo "  Building Go binary..."
-	@go build -o sprout .
+	@go build -o sprout . || { echo "go build failed" >&2; exit 1; }
 	@echo "✅ Fast build completed"
 
 # Quick development workflow

@@ -242,6 +242,15 @@ func (f *StatusFooter) SetShowKeymapHint(show bool) {
 // previous footer stranded mid-screen, then the scroll region is
 // re-applied for the new height and the footer is redrawn at the new
 // bottom.
+//
+// The entire body is wrapped in LockOutput so the scroll-region reset,
+// row clearing, and re-application can't interleave with a concurrent
+// SteerInputReader.renderLine → footer.draw or a PrintExternal call.
+// Without the lock, two SIGWINCH handlers (footer + steer reader) race:
+// the steer reader's draw renders footer rows that Resize just cleared,
+// and the scroll-region manipulation in Resize displaces content the
+// steer reader's draw just positioned — producing the stacked-duplicates
+// symptom on every resize during an active turn.
 func (f *StatusFooter) Resize() {
 	if f == nil || !f.isTTY {
 		return
@@ -253,6 +262,9 @@ func (f *StatusFooter) Resize() {
 	if !active {
 		return
 	}
+
+	LockOutput()
+	defer UnlockOutput()
 
 	// Reset the scroll region temporarily so we can address rows by
 	// absolute number without the terminal clamping us inside the OLD
@@ -289,8 +301,8 @@ func (f *StatusFooter) Resize() {
 		fmt.Fprint(f.w, "\0338")
 	}
 
-	f.applyScrollRegion()
-	f.draw()
+	f.applyScrollRegionLocked()
+	f.drawLocked()
 }
 
 // Stop resets the scroll region to full-screen, clears the footer row, and

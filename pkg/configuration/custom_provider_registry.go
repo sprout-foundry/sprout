@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -36,6 +37,17 @@ func GetProvidersDir() (string, error) {
 	return providersDir, nil
 }
 
+// GetCustomProviderPath returns the path where a custom provider JSON
+// file is stored. This honors SPROUT_CONFIG / LEDIT_CONFIG so writes
+// follow the user's currently-active config directory — the same
+// scope as the rest of SaveCustomProvider / DeleteCustomProvider.
+//
+// LoadCustomProviders does NOT use this directory exclusively: custom
+// providers are conceptually a global resource, so reads also pull
+// from the default (home) providers dir. That keeps the /provider
+// listing (manager-driven, global-scope) and the switch path (factory-
+// driven, this function) consistent when SPROUT_CONFIG is overridden
+// to a workspace-local directory.
 func GetCustomProviderPath(name string) (string, error) {
 	providersDir, err := GetProvidersDir()
 	if err != nil {
@@ -48,20 +60,71 @@ func GetCustomProviderPath(name string) (string, error) {
 	return filepath.Join(providersDir, normalized+".json"), nil
 }
 
-// LoadCustomProviders loads all custom provider configs from the global
-// providers directory (~/.config/sprout/providers/).
+// getDefaultProvidersDir returns the home ~/.config/sprout/providers
+// path, ignoring SPROUT_CONFIG. Custom providers are conceptually a
+// global resource — see LoadConfigWithLayers and the manager's
+// "always load from the global config directory" comment for the
+// design rationale. This helper exists so LoadCustomProviders can
+// honor that contract while still respecting SPROUT_CONFIG for writes.
+func getDefaultProvidersDir() (string, error) {
+	configDir, err := getDefaultConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get default config directory: %w", err)
+	}
+	return filepath.Join(configDir, ProvidersDirName), nil
+}
+
+// LoadCustomProviders loads all custom provider configs. It merges
+// providers from the SPROUT_CONFIG-resolved directory and the global
+// home directory (~/.config/sprout/providers/), with the global home
+// directory winning on name conflicts.
+//
+// This matches the layered manager's effective behavior (which only
+// reads from global) and ensures the factory's /provider switch path
+// resolves the same providers the /provider listing shows. Without
+// the merge, a user running sprout from a project workspace with
+// SPROUT_CONFIG overridden sees custom providers listed (via the
+// layered manager) but receives a "not registered as a custom
+// provider" error when trying to switch to one (via LoadCustomProviders,
+// which would otherwise only see the SPROUT_CONFIG-resolved dir).
 func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
-	providersDir, err := GetProvidersDir()
+	scopedDir, err := GetProvidersDir()
 	if err != nil {
 		return nil, fmt.Errorf("get providers directory: %w", err)
 	}
-	return LoadCustomProvidersFromDir(providersDir)
+	globalDir, err := getDefaultProvidersDir()
+	if err != nil {
+		return nil, fmt.Errorf("get default providers directory: %w", err)
+	}
+
+	merged := make(map[string]CustomProviderConfig)
+
+	// Read the SPROUT_CONFIG-scoped dir first so the global home dir
+	// can override on conflict (matching the layered manager: global
+	// is the source of truth for custom providers).
+	if scopedProviders, scopedErr := LoadCustomProvidersFromDir(scopedDir); scopedErr != nil {
+		log.Printf("[config] warning: failed to read scoped custom providers from %s: %v", scopedDir, scopedErr)
+	} else {
+		for name, provider := range scopedProviders {
+			merged[name] = provider
+		}
+	}
+
+	if globalProviders, globalErr := LoadCustomProvidersFromDir(globalDir); globalErr != nil {
+		log.Printf("[config] warning: failed to read global custom providers from %s: %v", globalDir, globalErr)
+	} else {
+		for name, provider := range globalProviders {
+			merged[name] = provider
+		}
+	}
+
+	return merged, nil
 }
 
 // LoadCustomProvidersFromDir loads all custom provider JSON files from the
-// given directory. Use this when SPROUT_CONFIG is temporarily overridden
-// (e.g. inside NewManagerWithLayers) and custom providers must still be read
-// from the true global location.
+// given directory. Used by LoadCustomProviders for both the
+// SPROUT_CONFIG-resolved dir and the global home dir (see the merge
+// behavior in LoadCustomProviders for context).
 func LoadCustomProvidersFromDir(providersDir string) (map[string]CustomProviderConfig, error) {
 
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))

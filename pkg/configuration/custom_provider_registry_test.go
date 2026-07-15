@@ -697,3 +697,133 @@ func TestToProviderConfig_DefaultsEmptyBillingTypeToSubscription(t *testing.T) {
 			defaultCustomProviderBillingType("subscription", "http://127.0.0.1:11434/v1"))
 	})
 }
+
+// TestLoadCustomProviders_FallsBackToGlobalHomeDir verifies that when
+// SPROUT_CONFIG points to a project workspace but custom provider
+// files actually live in the global home dir (~/.config/sprout/
+// providers/), LoadCustomProviders still finds them. This is the
+// regression for /provider listing providers that the switch path
+// then refused to register.
+func TestLoadCustomProviders_FallsBackToGlobalHomeDir(t *testing.T) {
+	// Fake "global home" with a providers dir holding a real provider file.
+	// getDefaultConfigDir() honors XDG_CONFIG_HOME first, so that's the
+	// cheapest env var to point at a temp dir without touching HOME.
+	fakeHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", fakeHome)
+	t.Setenv("HOME", fakeHome)
+
+	globalProviders := filepath.Join(fakeHome, "sprout", "providers")
+	require.NoError(t, os.MkdirAll(globalProviders, 0o700))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(globalProviders, "ai-worker.json"),
+		[]byte(`{
+  "name": "ai-worker",
+  "endpoint": "https://example.com/v1/chat/completions",
+  "model_name": "qwen3.6-27b",
+  "requires_api_key": true,
+  "env_var": "AI_WORKER_API_KEY"
+}`),
+		0o600,
+	))
+
+	// Now point SPROUT_CONFIG at a *different* directory — the user's
+	// project workspace. Its providers/ dir is intentionally empty so
+	// the only place "ai-worker" can come from is the global home dir.
+	projDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", projDir)
+	t.Setenv("LEDIT_CONFIG", projDir)
+	require.NoError(t, os.MkdirAll(filepath.Join(projDir, "providers"), 0o700))
+
+	got, err := LoadCustomProviders()
+	require.NoError(t, err)
+	require.Contains(t, got, "ai-worker",
+		"LoadCustomProviders must surface providers from the global home dir "+
+			"even when SPROUT_CONFIG points to a workspace dir")
+	assert.Equal(t, "qwen3.6-27b", got["ai-worker"].ModelName)
+}
+
+// TestLoadCustomProviders_MergesScopedAndGlobal verifies the merge
+// semantics: providers from both the SPROUT_CONFIG-scoped dir and the
+// global home dir are returned. Without the merge, the factory's
+// switch path would silently miss whichever side the listing path
+// showed, depending on which manager construction the chat agent used.
+func TestLoadCustomProviders_MergesScopedAndGlobal(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", fakeHome)
+	t.Setenv("HOME", fakeHome)
+
+	// "global" provider
+	globalProviders := filepath.Join(fakeHome, "sprout", "providers")
+	require.NoError(t, os.MkdirAll(globalProviders, 0o700))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(globalProviders, "alan-box.json"),
+		[]byte(`{
+  "name": "alan-box",
+  "endpoint": "https://example.com/v1/chat/completions",
+  "model_name": "qwen3.6-27b"
+}`),
+		0o600,
+	))
+
+	// SPROUT_CONFIG points at a project dir that has its OWN provider.
+	projDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", projDir)
+	t.Setenv("LEDIT_CONFIG", projDir)
+	require.NoError(t, os.MkdirAll(filepath.Join(projDir, "providers"), 0o700))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(projDir, "providers", "local.json"),
+		[]byte(`{
+  "name": "local",
+  "endpoint": "http://127.0.0.1:11434/v1/chat/completions",
+  "model_name": "qwen3-coder"
+}`),
+		0o600,
+	))
+
+	got, err := LoadCustomProviders()
+	require.NoError(t, err)
+	assert.Contains(t, got, "alan-box", "global provider should be present")
+	assert.Contains(t, got, "local", "scoped provider should be present")
+}
+
+// TestLoadCustomProviders_GlobalOverridesScoped verifies that when the
+// same provider name exists in both dirs, the global home dir wins —
+// matching the layered manager's effective behavior, which treats the
+// global home dir as the source of truth.
+func TestLoadCustomProviders_GlobalOverridesScoped(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", fakeHome)
+	t.Setenv("HOME", fakeHome)
+
+	globalProviders := filepath.Join(fakeHome, "sprout", "providers")
+	require.NoError(t, os.MkdirAll(globalProviders, 0o700))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(globalProviders, "shared.json"),
+		[]byte(`{
+  "name": "shared",
+  "endpoint": "https://global.example.com/v1/chat/completions",
+  "model_name": "global-model"
+}`),
+		0o600,
+	))
+
+	projDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", projDir)
+	t.Setenv("LEDIT_CONFIG", projDir)
+	require.NoError(t, os.MkdirAll(filepath.Join(projDir, "providers"), 0o700))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(projDir, "providers", "shared.json"),
+		[]byte(`{
+  "name": "shared",
+  "endpoint": "https://scoped.example.com/v1/chat/completions",
+  "model_name": "scoped-model"
+}`),
+		0o600,
+	))
+
+	got, err := LoadCustomProviders()
+	require.NoError(t, err)
+	require.Contains(t, got, "shared")
+	assert.Equal(t, "global-model", got["shared"].ModelName,
+		"global home dir should win name conflicts, matching layered manager behavior")
+}

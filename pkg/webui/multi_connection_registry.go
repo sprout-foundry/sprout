@@ -22,11 +22,11 @@ import (
 // so callers can hand out the same pointer to a goroutine that may run
 // after a removal.
 type UserConnection struct {
-	Conn      *SafeConn          // shared write mutex for cross-conn notifications
-	Raw       interface{}        // underlying *websocket.Conn (kept as interface{} to avoid an import cycle in some test setups)
-	SessionID string             // human-readable session id
-	ClientID  string             // browser-side client_id (matches ConnectionInfo.ClientID)
-	UserID    string             // resolved user id (service mode)
+	Conn      *SafeConn   // shared write mutex for cross-conn notifications
+	Raw       interface{} // underlying *websocket.Conn (kept as interface{} to avoid an import cycle in some test setups)
+	SessionID string      // human-readable session id
+	ClientID  string      // browser-side client_id (matches ConnectionInfo.ClientID)
+	UserID    string      // resolved user id (service mode)
 }
 
 // UserConnections holds a registry of WebSocket connections indexed by
@@ -35,8 +35,8 @@ type UserConnection struct {
 //
 // Zero value is ready to use. No constructor required.
 type UserConnections struct {
-	mu      sync.RWMutex             // guards byUser
-	byUser  map[string]*userConnSlot // userID/ClientID → slot
+	mu     sync.RWMutex             // guards byUser
+	byUser map[string]*userConnSlot // userID/ClientID → slot
 }
 
 // userConnSlot holds the per-user lock and the live connection slice.

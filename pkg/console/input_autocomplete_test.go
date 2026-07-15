@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -239,5 +240,74 @@ func TestAutocomplete_MoreCountCorrect(t *testing.T) {
 
 	if len(a.candidates) != 12 {
 		t.Fatalf("expected 12 candidates, got %d", len(a.candidates))
+	}
+}
+
+// TestAutocomplete_RenderRowsStartAtColumnZero is a regression test for a
+// cursor-column bug in the dropdown rendering. MoveCursorDown (\033[B)
+// preserves the cursor's column, and ClearLine (\033[2K) does not move the
+// cursor to column 0. Without an intervening carriage return (\r), the row
+// text is written starting at whatever column the input prompt left the
+// cursor at — so the dropdown appears shifted right rather than at column 0.
+//
+// The fix inserts \r between the two sequences. This test verifies that
+// every "\033[B" emitted by render() is immediately followed by "\r".
+func TestAutocomplete_RenderRowsStartAtColumnZero(t *testing.T) {
+	a := &inlineAutocomplete{
+		visible: true,
+		selected: 0,
+		candidates: []CompletionCandidate{
+			{Text: "/help", Description: "Show help"},
+			{Text: "/heart", Description: ""},
+			{Text: "/heat", Description: "Temperature"},
+		},
+	}
+
+	output := captureStdout(t, func() { a.render() })
+
+	// Fixed sequence: move-down + carriage return + clear-line.
+	// MoveCursorDownSeq(1) emits "\x1b[1B" (not "\x1b[B" — it includes the
+	// explicit row count), and ClearLineSeq() emits "\x1b[2K".
+	fixedSeq := "\x1b[1B\r\x1b[2K"
+	// Buggy sequence: move-down + clear-line (no carriage return).
+	buggySeq := "\x1b[1B\x1b[2K"
+
+	// Sanity check: render() drew exactly 3 candidates, so the fixed
+	// sequence must appear 3 times.
+	if got := strings.Count(output, fixedSeq); got != 3 {
+		t.Errorf("expected 3 occurrences of %q (move-down + carriage return + clear), got %d\noutput=%q",
+			fixedSeq, got, output)
+	}
+
+	// The buggy sequence (without \r) must never appear, otherwise text
+	// would start at the prompt's column instead of column 0.
+	if strings.Contains(output, buggySeq) {
+		t.Errorf("render() output contains buggy sequence %q (no carriage return before clear); "+
+			"text would start at the wrong column\noutput=%q", buggySeq, output)
+	}
+}
+
+// TestAutocomplete_ClearRowsUseCarriageReturn is the clear()-side regression
+// companion to the render() test above. clear() erases previously drawn
+// dropdown rows using the same move-down + clear pattern, so it must also
+// emit \r between them to return to column 0.
+func TestAutocomplete_ClearRowsUseCarriageReturn(t *testing.T) {
+	a := &inlineAutocomplete{
+		visible:      true,
+		renderedRows: 4,
+	}
+
+	output := captureStdout(t, func() { a.clear() })
+
+	fixedSeq := "\x1b[1B\r\x1b[2K"
+	buggySeq := "\x1b[1B\x1b[2K"
+
+	if got := strings.Count(output, fixedSeq); got != 4 {
+		t.Errorf("expected 4 occurrences of %q (move-down + carriage return + clear), got %d\noutput=%q",
+			fixedSeq, got, output)
+	}
+	if strings.Contains(output, buggySeq) {
+		t.Errorf("clear() output contains buggy sequence %q (no carriage return before clear)\noutput=%q",
+			buggySeq, output)
 	}
 }

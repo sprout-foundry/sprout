@@ -2,6 +2,10 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.1] - 2026-07-15
+
+- docs: Update changelog for v0.16.25 (2f995af4)
+
 ## [v0.16.25] - 2026-07-15
 
 - test(e2e): mark final 2 failing tests as fixme (bd50a0ad)

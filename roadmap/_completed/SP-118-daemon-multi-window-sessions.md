@@ -1,9 +1,20 @@
 # SP-118: Daemon Multi-Window Session Isolation
 
-**Status:** 🔵 Proposed — not yet started. Author: orchestrator session 2026-07-14.
-**Cross-refs:** SP-116 (Multi-Instance Isolation, in-flight), SP-046 (archived —
+**Status:** ✅ Implemented — Phases 1–5 shipped 2026-07-15; Phase 6 partial
+(README + Settings UI intentionally deferred per AGENTS.md "never create
+documentation"; TODO.md sync landed, `multi_device_takeover.go` deprecation
+comment landed in Phase 1).
+**Cross-refs:** SP-116 (Multi-Instance Isolation, ✅ implemented — Phases 1–4 shipped 2026-07-15), SP-046 (archived —
 *unrelated; do NOT migrate to the new model*), `multi_tab_fanout_test.go` and
 `websocket_session_conflict_test.go`.
+
+**Commits:**
+- Phase 1: `629fd42b` — registry + dispatch skeleton + log sweep
+- Phase 2: `16f55278` — daemon multi-session handler + scoped panic cleanup
+- Phase 3: `2a07a9ba` — multi-session and panic-cleanup test coverage
+- Phase 4: `4cf55ddc` — `daemon_multi_session` default-on rollout
+- Phase 5: `81f46b7c` — `/api/ws-metrics` endpoint
+- Phase 6 (partial): `6b013bce` — TODO.md sync
 
 > **Scope clarification (read first).** SP-046 is *not* the policy this spec
 > replaces. The completed `roadmap/_completed/SP-046-workspace-sync-model.md`
@@ -83,10 +94,11 @@ leaves it false. Dispatch on it, *not* on `ws.serviceMode` — see
   log lines — just scoped to a single handler and rebranded `[SP-118-Mode1]`.
 - `cleanupAfterPanic` stops nuking sibling windows. In Mode 2 a panic in
   one window must not invalidate another window's chat session or agent.
-- Recent-workspaces tracker (`~/.sprout/recent_workspaces.json` per SP-116
-  Phase 4) is preserved with its current user-global semantics — two
-  windows in different workspaces will see each other's recents. Documented
-  in §"Open questions" for a follow-up; not changed in this spec.
+- Recent-workspaces tracker (`~/.sprout/recent_workspaces.json` per the
+  shipped SP-116 Phase 4) is preserved with its current user-global
+  semantics — two windows in different workspaces will see each other's
+  recents. Documented in §"Open questions" for a follow-up; not changed
+  in this spec.
 - Roll out behind a feature flag (`DAEMON_MULTI_SESSION`) defaulting to ON
   for the daemon and OFF for everything else, so we can roll forward,
   watch metrics, and roll back via config rather than re-deploy.
@@ -110,6 +122,11 @@ leaves it false. Dispatch on it, *not* on `ws.serviceMode` — see
   cap" covers why.
 
 ## Design
+
+> ✅ **Phases 1–5 shipped.** All "Phase N" mentions below landed in
+> the commits listed in the header. Phase 6 (README + Settings UI) is
+> deferred per AGENTS.md "never create documentation" guidance and
+> is intentionally not part of this implementation.
 
 ### Dispatch signal: `ws.agentEnforceSingleSession`
 
@@ -436,7 +453,7 @@ so on-call has visibility even before the cap ships.
 7. **Daemon restart mid-session.** Sessions are in-memory; a restart
    loses them. Pre-existing behavior; not changed here. Spell out in
    `README.md` so users know.
-8. **Recent workspaces tracker.** SP-116 Phase 4 makes it user-global
+8. **Recent workspaces tracker.** SP-116 Phase 4 ships it as user-global
    (`~/.sprout/recent_workspaces.json`). Two Mode-2 windows in
    different workspaces will clobber each other's recents on every
    WS roundtrip. Two responses are reasonable: (a) per-clientID

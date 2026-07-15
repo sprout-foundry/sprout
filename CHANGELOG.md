@@ -2,6 +2,10 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.2] - 2026-07-15
+
+- fix(provider): make /provider switch find custom providers under SPROUT_CONFIG (5257c731)
+
 ## [v0.17.1] - 2026-07-15
 
 - docs: Update changelog for v0.16.25 (2f995af4)

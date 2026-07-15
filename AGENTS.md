@@ -13,7 +13,7 @@ This file provides guidance to AI agents working on code in this repository.
 
 ```bash
 go test ./...                   # unit tests
-python3 e2e_test_runner.py      # E2E tests
+make test-smoke                 # smoke tests
 ```
 
 See `docs/TESTING.md` for the full testing strategy.

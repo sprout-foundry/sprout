@@ -1,6 +1,6 @@
 //go:build !linux && !darwin && !js
 
-package cmd
+package service
 
 // removeLegacyServices is a no-op on platforms without dedicated legacy
 // service-manager integrations (Windows, etc.). The legacy paths only

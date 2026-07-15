@@ -1,6 +1,6 @@
 //go:build darwin
 
-package cmd
+package service
 
 import (
 	"fmt"

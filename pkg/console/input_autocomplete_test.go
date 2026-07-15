@@ -254,7 +254,7 @@ func TestAutocomplete_MoreCountCorrect(t *testing.T) {
 // every "\033[B" emitted by render() is immediately followed by "\r".
 func TestAutocomplete_RenderRowsStartAtColumnZero(t *testing.T) {
 	a := &inlineAutocomplete{
-		visible: true,
+		visible:  true,
 		selected: 0,
 		candidates: []CompletionCandidate{
 			{Text: "/help", Description: "Show help"},

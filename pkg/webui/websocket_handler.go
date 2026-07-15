@@ -125,9 +125,10 @@ func (ws *ReactWebServer) shouldUseMode1() bool {
 // mode-specific pre-loop setup.
 //
 // Effective routing for the dispatcher:
-//   handleWebSocket (entry) reads `agentEnforceSingleSession` and
-//   forwards here when false. The dispatcher is the ONLY dispatch point;
-//   internal callers use one of the two mode handlers directly.
+//
+//	handleWebSocket (entry) reads `agentEnforceSingleSession` and
+//	forwards here when false. The dispatcher is the ONLY dispatch point;
+//	internal callers use one of the two mode handlers directly.
 func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.Request) {
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {

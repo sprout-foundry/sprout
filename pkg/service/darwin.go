@@ -1,6 +1,6 @@
 //go:build darwin
 
-package cmd
+package service
 
 import (
 	"bufio"
@@ -36,7 +36,7 @@ func init() {
 // when a struct has both XMLName "dict" and a child field also tagged xml:"dict".
 func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	// Load API keys and other environment variables from service.env.
-	envVars, err := loadServiceEnvFile(homeDir)
+	envVars, err := LoadServiceEnvFile(homeDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service.env: %w", err)
 	}
@@ -149,7 +149,7 @@ func (m *launchdManager) Install() error {
 
 	// Capture API keys from the current environment and write to service.env
 	// This is done before generating the plist so the environment variables can be inlined
-	if err := generateServiceEnvFile(homeDir); err != nil {
+	if err := GenerateServiceEnvFile(homeDir); err != nil {
 		fmt.Printf("Warning: failed to generate service.env: %v\n", err)
 		fmt.Println("The service will be installed but may not have access to API keys.")
 	}
@@ -230,7 +230,7 @@ func (m *launchdManager) Uninstall() error {
 	}
 	if count > 0 {
 		fmt.Printf("Warning: %d active agent session(s) detected. Uninstalling will stop the daemon and terminate these sessions.\n", count)
-		if !forceConfirm {
+		if !ForceConfirm {
 			fmt.Printf("Continue? %s ", console.FormatYesNoPromptStdout(false))
 			reader := bufio.NewReader(os.Stdin)
 			resp, _ := reader.ReadString('\n')
@@ -260,7 +260,7 @@ func (m *launchdManager) Uninstall() error {
 	// Remove the service.env file if it exists
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		envFile := serviceEnvPath(homeDir)
+		envFile := ServiceEnvPath(homeDir)
 		if err := os.Remove(envFile); err != nil && !os.IsNotExist(err) {
 			// Don't fail the whole uninstall if we can't remove service.env
 			fmt.Printf("Warning: failed to remove %s: %v\n", envFile, err)
@@ -438,8 +438,8 @@ func (m *launchdManager) Diagnose() error {
 	// Check service.env
 	if err == nil {
 		fmt.Println("🔑 Checking service.env:")
-		envPath := serviceEnvPath(homeDir)
-		envVars, err := loadServiceEnvFile(homeDir)
+		envPath := ServiceEnvPath(homeDir)
+		envVars, err := LoadServiceEnvFile(homeDir)
 		if err != nil {
 			console.GlyphWarning.Fprintf(os.Stdout, "  Error loading service.env: %v", err)
 		} else if len(envVars) == 0 {

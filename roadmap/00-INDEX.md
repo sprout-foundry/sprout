@@ -6,7 +6,7 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-07-09):** 75 shipped · 6 pending · 1 on hold.
+**Counts (as of 2026-07-14):** 75 shipped · 7 pending · 1 on hold.
 
 ## Shipped
 
@@ -103,7 +103,8 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-107 | [Code Intelligence Graph](./SP-107-code-intelligence-graph.md) | 🔵 Proposed — Persistent call graph, dead-code detection, semantic code search. Leverages existing tree-sitter + LSP + embedding infrastructure. |
 | SP-110 | [Background Completion Injection & Auto-Resume](./SP-110-background-completion-auto-resume.md) | 🔵 Proposed — Design complete. 3 phases. Notification queue, shell bg completion, opt-in auto-resume with budget controls. |
 | SP-112 | [Platform Parity — Resolve Stubbed Feature Gaps](./SP-112-platform-parity.md) | 🔵 Proposed — 4 tiers. Windows process groups/signals, WASM tool exclusion, no-CGO embedding fallback, permanent limitation docs. Based on 2026-07-04 platform audit. |
-| SP-116 | [Multi-Instance Isolation](./SP-116-multi-instance-isolation.md) | 🔵 Proposed — Auto-isolate config per workspace (`.sprout/` in git repos), scope background processes, workspace-level config overrides. 4 phases; Phase 1 (~50 lines in `cmd/root.go`) fixes the core workflow.
+| SP-116 | [Multi-Instance Isolation](./SP-116-multi-instance-isolation.md) | 🔵 Proposed — Auto-isolate config per workspace (`.sprout/` in git repos), scope background processes, workspace-level config overrides. 4 phases; Phase 1 (~50 lines in `cmd/root.go`) fixes the core workflow. |
+| SP-118 | [Daemon Multi-Window Session Isolation](./SP-118-daemon-multi-window-sessions.md) | 🔵 Proposed — Replace the mislabeled SP-046 single-active WS policy on the `sprout service` path (port 56000) with N parallel browser windows per user. Daemon-only; `sprout agent` keeps its single-active enforcement. Cross-ref SP-116 (different layer); SP-046 is unrelated and stays archived. 6 phases; new `UserConnections` registry, per-session panic cleanup, `daemon_multi_session` feature flag with phased rollout. |
 
 ## Future / On Hold
 

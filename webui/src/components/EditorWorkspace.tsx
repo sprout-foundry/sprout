@@ -15,6 +15,7 @@ import WorkspacePane from './WorkspacePane';
 const TasksPage = lazy(() => import('./platform').then((m) => ({ default: m.TasksPage })));
 const TeamPage = lazy(() => import('./platform').then((m) => ({ default: m.TeamPage })));
 const BillingPage = lazy(() => import('./platform').then((m) => ({ default: m.BillingPage })));
+const RunnersPage = lazy(() => import('./platform').then((m) => ({ default: m.RunnersPage })));
 const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
@@ -24,7 +25,7 @@ const RouteFallback: React.FC = () => (
 );
 
 export interface EditorWorkspaceProps {
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners';
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   onCreateChat?: () => Promise<string | null>;
@@ -35,7 +36,7 @@ export interface EditorWorkspaceProps {
   /** Called when a cost session row is clicked to restore that session */
   onSessionRestore?: (sessionId: string) => void;
   /** Called when the user clicks Back from a non-chat view (e.g. costs). */
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
+  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners') => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -571,6 +572,14 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return (
       <Suspense fallback={<RouteFallback />}>
         <TeamPage />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'runners') {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <RunnersPage />
       </Suspense>
     );
   }

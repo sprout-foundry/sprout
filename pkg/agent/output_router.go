@@ -46,7 +46,8 @@ type OutputRouter struct {
 	externalWriteHook func()
 
 	// terminalSubscriberActive indicates that a terminal subscriber
-	// (cmd/agent_terminal_subscriber.go) owns rendering agent_message
+	// (pkg/cliui/terminal_subscriber.go, extracted from cmd/agent_terminal_subscriber.go
+	// in SP-120 phase 2c) owns rendering agent_message
 	// events to the terminal. When true, RouteAgentMessage publishes the
 	// event (for the subscriber + WebUI) but skips the raw writeTerminalMessage
 	// fallback — the subscriber renders the glyph-prefixed line itself, so
@@ -414,7 +415,8 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	iterInfo := fmt.Sprintf("[%d%s]", currentIter, contextPercent)
 
 	// Terminal output is handled entirely by the terminal subscriber
-	// (cmd/agent_terminal_subscriber.go) which renders the activity
+	// (pkg/cliui/terminal_subscriber.go, extracted from cmd/agent_terminal_subscriber.go
+	// in SP-120 phase 2c) which renders the activity
 	// indicator spinner and tool-end lines with proper cursor management.
 	// The legacy writeTerminalMessage path here produced competing output
 	// that clobbered the spinner — see commit history for the fix.

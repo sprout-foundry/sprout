@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-07T12:08:31Z",
+  "updated_at": "2026-07-15T11:01:20Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -398,20 +398,10 @@
       "recommended_model_why": "Largest available open model.",
       "models": [
         {
-          "id": "deepseek-v3.1:671b",
-          "name": "deepseek-v3.1:671b"
-        },
-        {
-          "id": "deepseek-v3.2",
-          "name": "deepseek-v3.2",
-          "input_cost": 0.2288,
-          "output_cost": 0.3432
-        },
-        {
           "id": "deepseek-v4-flash",
           "name": "deepseek-v4-flash",
-          "input_cost": 0.09,
-          "output_cost": 0.18
+          "input_cost": 0.098,
+          "output_cost": 0.196
         },
         {
           "id": "deepseek-v4-pro",
@@ -420,46 +410,8 @@
           "output_cost": 0.87
         },
         {
-          "id": "devstral-2:123b",
-          "name": "devstral-2:123b"
-        },
-        {
-          "id": "devstral-small-2:24b",
-          "name": "devstral-small-2:24b"
-        },
-        {
-          "id": "gemini-3-flash-preview",
-          "name": "gemini-3-flash-preview",
-          "input_cost": 0.5,
-          "output_cost": 3
-        },
-        {
-          "id": "gemma3:12b",
-          "name": "gemma3:12b"
-        },
-        {
-          "id": "gemma3:27b",
-          "name": "gemma3:27b"
-        },
-        {
-          "id": "gemma3:4b",
-          "name": "gemma3:4b"
-        },
-        {
           "id": "gemma4:31b",
           "name": "gemma4:31b"
-        },
-        {
-          "id": "glm-4.7",
-          "name": "glm-4.7",
-          "input_cost": 0.39999999999999997,
-          "output_cost": 1.75
-        },
-        {
-          "id": "glm-5",
-          "name": "glm-5",
-          "input_cost": 0.6,
-          "output_cost": 1.92
         },
         {
           "id": "glm-5.1",
@@ -470,8 +422,8 @@
         {
           "id": "glm-5.2",
           "name": "glm-5.2",
-          "input_cost": 0.8999999999999999,
-          "output_cost": 2.8600000000000003
+          "input_cost": 0.8805999999999999,
+          "output_cost": 2.7676
         },
         {
           "id": "gpt-oss:120b",
@@ -484,8 +436,8 @@
         {
           "id": "kimi-k2.5",
           "name": "kimi-k2.5",
-          "input_cost": 0.375,
-          "output_cost": 2.025
+          "input_cost": 0.5700000000000001,
+          "output_cost": 2.8499999999999996
         },
         {
           "id": "kimi-k2.6",
@@ -496,44 +448,26 @@
         {
           "id": "kimi-k2.7-code",
           "name": "kimi-k2.7-code",
-          "input_cost": 0.74,
-          "output_cost": 3.5
-        },
-        {
-          "id": "minimax-m2.1",
-          "name": "minimax-m2.1",
-          "input_cost": 0.3,
-          "output_cost": 1.2
+          "input_cost": 0.719,
+          "output_cost": 3.49
         },
         {
           "id": "minimax-m2.5",
           "name": "minimax-m2.5",
-          "input_cost": 0.12,
-          "output_cost": 0.48
+          "input_cost": 0.15,
+          "output_cost": 0.8999999999999999
         },
         {
           "id": "minimax-m2.7",
           "name": "minimax-m2.7",
-          "input_cost": 0.18,
-          "output_cost": 0.72
+          "input_cost": 0.3,
+          "output_cost": 1.2
         },
         {
           "id": "minimax-m3",
           "name": "minimax-m3",
           "input_cost": 0.3,
           "output_cost": 1.2
-        },
-        {
-          "id": "ministral-3:14b",
-          "name": "ministral-3:14b"
-        },
-        {
-          "id": "ministral-3:3b",
-          "name": "ministral-3:3b"
-        },
-        {
-          "id": "ministral-3:8b",
-          "name": "ministral-3:8b"
         },
         {
           "id": "mistral-large-3:675b",
@@ -550,16 +484,6 @@
         {
           "id": "nemotron-3-ultra",
           "name": "nemotron-3-ultra"
-        },
-        {
-          "id": "qwen3-coder-next",
-          "name": "qwen3-coder-next",
-          "input_cost": 0.11,
-          "output_cost": 0.7999999999999999
-        },
-        {
-          "id": "qwen3-coder:480b",
-          "name": "qwen3-coder:480b"
         },
         {
           "id": "qwen3.5:397b",
@@ -619,37 +543,43 @@
           "output_cost": 8
         },
         {
-          "id": "aion-labs/aion-1.0",
-          "name": "AionLabs: Aion-1.0",
-          "description": "Aion-1.0 is a multi-model system designed for high performance across various tasks, including reasoning and coding. It is built on DeepSeek-R1, augmented with additional models and techniques such as Tree...",
-          "context_length": 131072,
-          "tags": [
-            "reasoning"
-          ],
-          "input_cost": 4,
-          "output_cost": 8
-        },
-        {
-          "id": "aion-labs/aion-1.0-mini",
-          "name": "AionLabs: Aion-1.0-Mini",
-          "description": "Aion-1.0-Mini 32B parameter model is a distilled version of the DeepSeek-R1 model, designed for strong performance in reasoning domains such as mathematics, coding, and logic. It is a modified variant...",
-          "context_length": 131072,
-          "tags": [
-            "reasoning"
-          ],
-          "input_cost": 0.7,
-          "output_cost": 1.4
-        },
-        {
           "id": "aion-labs/aion-2.0",
           "name": "AionLabs: Aion-2.0",
           "description": "Aion-2.0 is a variant of DeepSeek V3.2 optimized for immersive roleplaying and storytelling. It is particularly strong at introducing tension, crises, and conflict into stories, making narratives feel more engaging....",
           "context_length": 131072,
           "tags": [
-            "reasoning"
+            "tools",
+            "reasoning",
+            "structured_output"
           ],
           "input_cost": 0.7999999999999999,
           "output_cost": 1.5999999999999999
+        },
+        {
+          "id": "aion-labs/aion-3.0",
+          "name": "AionLabs: Aion-3.0",
+          "description": "Aion-3.0 is a multi-model roleplaying and storytelling system from AionLabs, built on the GLM family of models. It uses a collaborative generation process in which multiple specialized models each contribute...",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 3,
+          "output_cost": 6
+        },
+        {
+          "id": "aion-labs/aion-3.0-mini",
+          "name": "AionLabs: Aion-3.0-Mini",
+          "description": "Aion-3.0 Mini is a multi-model roleplaying and storytelling system from AionLabs, built on the DeepSeek family of models. It uses a collaborative generation process in which multiple specialized models each...",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.7,
+          "output_cost": 1.4
         },
         {
           "id": "aion-labs/aion-rp-llama-3.1-8b",
@@ -969,19 +899,6 @@
           "output_cost": 0.7999999999999999
         },
         {
-          "id": "arcee-ai/trinity-mini",
-          "name": "Arcee AI: Trinity Mini",
-          "description": "Trinity Mini is a 26B-parameter (3B active) sparse mixture-of-experts language model featuring 128 experts with 8 active per token. Engineered for efficient reasoning over long contexts (131k) with robust function...",
-          "context_length": 131072,
-          "tags": [
-            "tools",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.045,
-          "output_cost": 0.15
-        },
-        {
           "id": "arcee-ai/virtuoso-large",
           "name": "Arcee AI: Virtuoso Large",
           "description": "Virtuoso‑Large is Arcee's top‑tier general‑purpose LLM at 72 B parameters, tuned to tackle cross‑domain reasoning, creative writing and enterprise QA. Unlike many 70 B peers, it retains the 128 k...",
@@ -1071,6 +988,17 @@
           ],
           "input_cost": 0.09999999999999999,
           "output_cost": 0.19999999999999998
+        },
+        {
+          "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
+          "name": "Venice: Uncensored",
+          "description": "Venice Uncensored Dolphin Mistral 24B Venice Edition is a fine-tuned variant of Mistral-Small-24B-Instruct-2501, developed by dphn.ai in collaboration with Venice.ai. This model is designed as an “uncensored” instruct-tuned LLM, preserving...",
+          "context_length": 128000,
+          "tags": [
+            "structured_output"
+          ],
+          "input_cost": 0.19999999999999998,
+          "output_cost": 0.8999999999999999
         },
         {
           "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
@@ -1170,8 +1098,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.24,
-          "output_cost": 0.8999999999999999
+          "input_cost": 0.27,
+          "output_cost": 1.12
         },
         {
           "id": "deepseek/deepseek-chat-v3.1",
@@ -1183,8 +1111,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.21,
-          "output_cost": 0.7899999999999999
+          "input_cost": 0.25,
+          "output_cost": 0.95
         },
         {
           "id": "deepseek/deepseek-r1",
@@ -1227,27 +1155,27 @@
           "id": "deepseek/deepseek-v3.1-terminus",
           "name": "DeepSeek: DeepSeek V3.1 Terminus",
           "description": "DeepSeek-V3.1 Terminus is an update to [DeepSeek V3.1](/deepseek/deepseek-chat-v3.1) that maintains the model's original capabilities while addressing issues reported by users, including language consistency and agent capabilities, further optimizing the model's...",
-          "context_length": 163840,
-          "tags": [
-            "tools",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.27,
-          "output_cost": 0.95
-        },
-        {
-          "id": "deepseek/deepseek-v3.2",
-          "name": "DeepSeek: DeepSeek V3.2",
-          "description": "DeepSeek-V3.2 is a large language model designed to harmonize high computational efficiency with strong reasoning and agentic tool-use performance. It introduces DeepSeek Sparse Attention (DSA), a fine-grained sparse attention mechanism...",
           "context_length": 131072,
           "tags": [
             "tools",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.2288,
-          "output_cost": 0.3432
+          "input_cost": 0.27,
+          "output_cost": 1
+        },
+        {
+          "id": "deepseek/deepseek-v3.2",
+          "name": "DeepSeek: DeepSeek V3.2",
+          "description": "DeepSeek-V3.2 is a large language model designed to harmonize high computational efficiency with strong reasoning and agentic tool-use performance. It introduces DeepSeek Sparse Attention (DSA), a fine-grained sparse attention mechanism...",
+          "context_length": 163840,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.26899999999999996,
+          "output_cost": 0.39999999999999997
         },
         {
           "id": "deepseek/deepseek-v3.2-exp",
@@ -1272,8 +1200,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 0.18
+          "input_cost": 0.098,
+          "output_cost": 0.196
         },
         {
           "id": "deepseek/deepseek-v4-pro",
@@ -1317,20 +1245,6 @@
         {
           "id": "google/gemini-2.5-flash-lite",
           "name": "Google: Gemini 2.5 Flash Lite",
-          "description": "Gemini 2.5 Flash-Lite is a lightweight reasoning model in the Gemini 2.5 family, optimized for ultra-low latency and cost efficiency. It offers improved throughput, faster token generation, and better performance...",
-          "context_length": 1048576,
-          "tags": [
-            "tools",
-            "vision",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.39999999999999997
-        },
-        {
-          "id": "google/gemini-2.5-flash-lite-preview-09-2025",
-          "name": "Google: Gemini 2.5 Flash Lite Preview 09-2025",
           "description": "Gemini 2.5 Flash-Lite is a lightweight reasoning model in the Gemini 2.5 family, optimized for ultra-low latency and cost efficiency. It offers improved throughput, faster token generation, and better performance...",
           "context_length": 1048576,
           "tags": [
@@ -1569,7 +1483,7 @@
             "structured_output"
           ],
           "input_cost": 0.08,
-          "output_cost": 0.16
+          "output_cost": 0.44999999999999996
         },
         {
           "id": "google/gemma-3-4b-it",
@@ -1605,8 +1519,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06,
-          "output_cost": 0.33
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.3
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -1632,7 +1546,7 @@
             "structured_output"
           ],
           "input_cost": 0.12,
-          "output_cost": 0.35
+          "output_cost": 0.37
         },
         {
           "id": "google/gemma-4-31b-it:free",
@@ -1767,6 +1681,18 @@
           "output_cost": 10
         },
         {
+          "id": "kwaipilot/kat-coder-air-v2.5",
+          "name": "Kwaipilot: KAT-Coder-Air V2.5",
+          "description": "KAT-Coder-Air V2.5 is a flagship-level Agentic Coding model that can directly hand over an entire issue or an entire business workflow to it, allowing it to autonomously locate and make...",
+          "context_length": 256000,
+          "tags": [
+            "tools",
+            "structured_output"
+          ],
+          "input_cost": 0.15,
+          "output_cost": 0.6
+        },
+        {
           "id": "kwaipilot/kat-coder-pro-v2",
           "name": "Kwaipilot: KAT-Coder-Pro V2",
           "description": "KAT-Coder-Pro V2 is the latest high-performance model in KwaiKAT’s KAT-Coder series, designed for complex enterprise-grade software engineering and SaaS integration. It builds on the agentic coding strengths of earlier versions,...",
@@ -1779,35 +1705,16 @@
           "output_cost": 1.2
         },
         {
-          "id": "liquid/lfm-2-24b-a2b",
-          "name": "LiquidAI: LFM2-24B-A2B",
-          "description": "LFM2-24B-A2B is the largest model in the LFM2 family of hybrid architectures designed for efficient on-device deployment. Built as a 24B parameter Mixture-of-Experts model with only 2B active parameters per...",
-          "context_length": 128000,
-          "tags": [
-            "structured_output"
-          ],
-          "input_cost": 0.03,
-          "output_cost": 0.12
-        },
-        {
-          "id": "liquid/lfm-2.5-1.2b-instruct:free",
-          "name": "LiquidAI: LFM2.5-1.2B-Instruct (free)",
-          "description": "LFM2.5-1.2B-Instruct is a compact, high-performance instruction-tuned model built for fast on-device AI. It delivers strong chat quality in a 1.2B parameter footprint, with efficient edge inference and broad runtime support.",
-          "context_length": 32768,
-          "tags": [
-            "structured_output"
-          ]
-        },
-        {
-          "id": "liquid/lfm-2.5-1.2b-thinking:free",
-          "name": "LiquidAI: LFM2.5-1.2B-Thinking (free)",
-          "description": "LFM2.5-1.2B-Thinking is a lightweight reasoning-focused model optimized for agentic tasks, data extraction, and RAG—while still running comfortably on edge devices. It supports long context (up to 32K tokens) and is...",
-          "context_length": 32768,
+          "id": "kwaipilot/kat-coder-pro-v2.5",
+          "name": "Kwaipilot: KAT-Coder-Pro V2.5",
+          "description": "KAT-Coder-Pro V2.5 is a flagship-level Agentic Coding model that can directly hand over an entire issue or an entire business workflow to it, allowing it to autonomously locate and make...",
+          "context_length": 256000,
           "tags": [
             "tools",
-            "reasoning",
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.74,
+          "output_cost": 2.96
         },
         {
           "id": "mancer/weaver",
@@ -1819,17 +1726,6 @@
           ],
           "input_cost": 0.75,
           "output_cost": 1
-        },
-        {
-          "id": "meta-llama/llama-3-8b-instruct",
-          "name": "Meta: Llama 3 8B Instruct",
-          "description": "Meta's latest class of model (Llama 3) launched with a variety of sizes \u0026 flavors. This 8B instruct-tuned version was optimized for high quality dialogue usecases. It has demonstrated strong...",
-          "context_length": 8192,
-          "tags": [
-            "structured_output"
-          ],
-          "input_cost": 0.14,
-          "output_cost": 0.14
         },
         {
           "id": "meta-llama/llama-3.1-70b-instruct",
@@ -1852,8 +1748,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.02,
-          "output_cost": 0.03
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.08
         },
         {
           "id": "meta-llama/llama-3.2-11b-vision-instruct",
@@ -1883,8 +1779,8 @@
           "tags": [
             "structured_output"
           ],
-          "input_cost": 0.049999999999999996,
-          "output_cost": 0.33
+          "input_cost": 0.0509,
+          "output_cost": 0.335
         },
         {
           "id": "meta-llama/llama-3.2-3b-instruct:free",
@@ -1901,8 +1797,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.32
+          "input_cost": 0.13,
+          "output_cost": 0.39999999999999997
         },
         {
           "id": "meta-llama/llama-3.3-70b-instruct:free",
@@ -1923,8 +1819,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.6
+          "input_cost": 0.19999999999999998,
+          "output_cost": 0.7999999999999999
         },
         {
           "id": "meta-llama/llama-4-scout",
@@ -1993,7 +1889,7 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.39999999999999997,
+          "input_cost": 0.55,
           "output_cost": 2.2
         },
         {
@@ -2040,8 +1936,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.12,
-          "output_cost": 0.48
+          "input_cost": 0.15,
+          "output_cost": 0.8999999999999999
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -2053,8 +1949,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.18,
-          "output_cost": 0.72
+          "input_cost": 0.3,
+          "output_cost": 1.2
         },
         {
           "id": "minimax/minimax-m3",
@@ -2220,7 +2116,7 @@
             "structured_output"
           ],
           "input_cost": 0.02,
-          "output_cost": 0.03
+          "output_cost": 0.04
         },
         {
           "id": "mistralai/mistral-saba",
@@ -2274,14 +2170,14 @@
           "id": "mistralai/mistral-small-3.2-24b-instruct",
           "name": "Mistral: Mistral Small 3.2 24B",
           "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
-          "context_length": 128000,
+          "context_length": 131072,
           "tags": [
             "tools",
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.075,
-          "output_cost": 0.19999999999999998
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.3
         },
         {
           "id": "mistralai/mixtral-8x22b-instruct",
@@ -2354,8 +2250,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.375,
-          "output_cost": 2.025
+          "input_cost": 0.5700000000000001,
+          "output_cost": 2.8499999999999996
         },
         {
           "id": "moonshotai/kimi-k2.6",
@@ -2382,8 +2278,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.74,
-          "output_cost": 3.5
+          "input_cost": 0.719,
+          "output_cost": 3.49
         },
         {
           "id": "morph/morph-v3-fast",
@@ -2424,6 +2320,7 @@
           "description": "Nex-N2-Pro is an agentic mixture-of-experts model from Nex AGI, with 17B active parameters out of 397B total. Built on the Qwen3.5 architecture, it accepts text and image input and produces...",
           "context_length": 262144,
           "tags": [
+            "tools",
             "vision",
             "reasoning"
           ],
@@ -2539,8 +2436,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.08,
-          "output_cost": 0.44999999999999996
+          "input_cost": 0.21,
+          "output_cost": 0.45499999999999996
         },
         {
           "id": "nvidia/nemotron-3-super-120b-a12b:free",
@@ -2563,8 +2460,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.5,
-          "output_cost": 2.2
+          "input_cost": 0.6,
+          "output_cost": 3.5999999999999996
         },
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -3188,6 +3085,90 @@
           "output_cost": 180
         },
         {
+          "id": "openai/gpt-5.6-luna",
+          "name": "OpenAI: GPT-5.6 Luna",
+          "description": "GPT-5.6 Luna is a fast, cost-efficient model in OpenAI's GPT-5.6 series. It is suited for high-volume, latency-sensitive tasks such as chat, classification, and lightweight agentic workflows, providing capable reasoning for...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 6
+        },
+        {
+          "id": "openai/gpt-5.6-luna-pro",
+          "name": "OpenAI: GPT-5.6 Luna Pro",
+          "description": "GPT-5.6 Luna Pro is the same underlying model as [GPT-5.6 Luna](https://openrouter.ai/openai/gpt-5.6-luna), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 6
+        },
+        {
+          "id": "openai/gpt-5.6-sol",
+          "name": "OpenAI: GPT-5.6 Sol",
+          "description": "GPT-5.6 Sol is the flagship model in OpenAI's GPT-5.6 series. It is suited for complex reasoning, coding, and agentic workflows, and is particularly strong at command-line and multi-step coding tasks...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 5,
+          "output_cost": 30
+        },
+        {
+          "id": "openai/gpt-5.6-sol-pro",
+          "name": "OpenAI: GPT-5.6 Sol Pro",
+          "description": "GPT-5.6 Sol Pro is the same underlying model as [GPT-5.6 Sol](https://openrouter.ai/openai/gpt-5.6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 5,
+          "output_cost": 30
+        },
+        {
+          "id": "openai/gpt-5.6-terra",
+          "name": "OpenAI: GPT-5.6 Terra",
+          "description": "GPT-5.6 Terra is a balanced model in OpenAI's GPT-5.6 series, positioned between the flagship Sol tier and the cost-efficient Luna tier. It is suited for everyday coding, reasoning, and agentic...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2.5,
+          "output_cost": 15
+        },
+        {
+          "id": "openai/gpt-5.6-terra-pro",
+          "name": "OpenAI: GPT-5.6 Terra Pro",
+          "description": "GPT-5.6 Terra Pro is the same underlying model as [GPT-5.6 Terra](https://openrouter.ai/openai/gpt-5.6-terra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2.5,
+          "output_cost": 15
+        },
+        {
           "id": "openai/gpt-audio",
           "name": "OpenAI: GPT Audio",
           "description": "The gpt-audio model is OpenAI's first generally available audio model. The new snapshot features an upgraded decoder for more natural sounding voices and maintains better voice consistency. Audio is priced...",
@@ -3234,18 +3215,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.03,
-          "output_cost": 0.15
-        },
-        {
-          "id": "openai/gpt-oss-120b:free",
-          "name": "OpenAI: gpt-oss-120b (free)",
-          "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized...",
-          "context_length": 131072,
-          "tags": [
-            "tools",
-            "reasoning"
-          ]
+          "input_cost": 0.037,
+          "output_cost": 0.16999999999999998
         },
         {
           "id": "openai/gpt-oss-20b",
@@ -3257,8 +3228,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.029,
-          "output_cost": 0.14
+          "input_cost": 0.03,
+          "output_cost": 0.13
         },
         {
           "id": "openai/gpt-oss-20b:free",
@@ -3587,28 +3558,6 @@
           ]
         },
         {
-          "id": "poolside/laguna-xs.2",
-          "name": "Poolside: Laguna XS.2",
-          "description": "Laguna XS.2 is the second-generation model in the XS size class from [Poolside](https://poolside.ai/), their efficient coding agent series. It combines tool calling and reasoning capabilities with a compact footprint, offering...",
-          "context_length": 262144,
-          "tags": [
-            "tools",
-            "reasoning"
-          ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.19999999999999998
-        },
-        {
-          "id": "poolside/laguna-xs.2:free",
-          "name": "Poolside: Laguna XS.2 (free)",
-          "description": "Laguna XS.2 is the second-generation model in the XS size class from [Poolside](https://poolside.ai/), their efficient coding agent series. It combines tool calling and reasoning capabilities with a compact footprint, offering...",
-          "context_length": 262144,
-          "tags": [
-            "tools",
-            "reasoning"
-          ]
-        },
-        {
           "id": "qwen/qwen-2.5-72b-instruct",
           "name": "Qwen2.5 72B Instruct",
           "description": "Qwen2.5 72B is the latest series of Qwen large language models. Qwen2.5 brings the following improvements upon Qwen2: - Significantly more knowledge and has greatly improved capabilities in coding and...",
@@ -3725,7 +3674,7 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.09999999999999999
+          "output_cost": 0.55
         },
         {
           "id": "qwen/qwen3-235b-a22b-thinking-2507",
@@ -3757,13 +3706,13 @@
           "id": "qwen/qwen3-30b-a3b-instruct-2507",
           "name": "Qwen: Qwen3 30B A3B Instruct 2507",
           "description": "Qwen3-30B-A3B-Instruct-2507 is a 30.5B-parameter mixture-of-experts language model from Qwen, with 3.3B active parameters per inference. It operates in non-thinking mode and is designed for high-quality instruction following, multilingual understanding, and...",
-          "context_length": 131072,
+          "context_length": 262144,
           "tags": [
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.04815,
-          "output_cost": 0.19305
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.3
         },
         {
           "id": "qwen/qwen3-30b-a3b-thinking-2507",
@@ -3813,8 +3762,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.22,
-          "output_cost": 1.7999999999999998
+          "input_cost": 0.3,
+          "output_cost": 1
         },
         {
           "id": "qwen/qwen3-coder-30b-a3b-instruct",
@@ -3849,7 +3798,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.11,
+          "input_cost": 0.12,
           "output_cost": 0.7999999999999999
         },
         {
@@ -3907,7 +3856,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09,
+          "input_cost": 0.09999999999999999,
           "output_cost": 1.1
         },
         {
@@ -3937,14 +3886,14 @@
           "id": "qwen/qwen3-vl-235b-a22b-instruct",
           "name": "Qwen: Qwen3 VL 235B A22B Instruct",
           "description": "Qwen3-VL-235B-A22B Instruct is an open-weight multimodal model that unifies strong text generation with visual understanding across images and video. The Instruct model targets general vision-language use (VQA, document parsing, chart/table...",
-          "context_length": 262144,
+          "context_length": 131072,
           "tags": [
             "tools",
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.19999999999999998,
-          "output_cost": 0.88
+          "input_cost": 0.21,
+          "output_cost": 1.9
         },
         {
           "id": "qwen/qwen3-vl-235b-a22b-thinking",
@@ -4073,15 +4022,15 @@
           "id": "qwen/qwen3.5-397b-a17b",
           "name": "Qwen: Qwen3.5 397B A17B",
           "description": "The Qwen3.5 series 397B-A17B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. It delivers...",
-          "context_length": 256000,
+          "context_length": 262144,
           "tags": [
             "tools",
             "vision",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.385,
-          "output_cost": 2.4499999999999997
+          "input_cost": 0.44999999999999996,
+          "output_cost": 3
         },
         {
           "id": "qwen/qwen3.5-9b",
@@ -4150,8 +4099,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.28500000000000003,
-          "output_cost": 2.4
+          "input_cost": 0.44999999999999996,
+          "output_cost": 2.7
         },
         {
           "id": "qwen/qwen3.6-35b-a3b",
@@ -4306,17 +4255,6 @@
           "output_cost": 0.049999999999999996
         },
         {
-          "id": "sao10k/l3.1-70b-hanami-x1",
-          "name": "Sao10K: Llama 3.1 70B Hanami x1",
-          "description": "This is [Sao10K](/sao10k)'s experiment over [Euryale v2.2](/sao10k/l3.1-euryale-70b).",
-          "context_length": 16000,
-          "tags": [
-            "structured_output"
-          ],
-          "input_cost": 3,
-          "output_cost": 3
-        },
-        {
           "id": "sao10k/l3.1-euryale-70b",
           "name": "Sao10K: Llama 3.1 Euryale 70B v2.2",
           "description": "Euryale L3.1 70B v2.2 is a model focused on creative roleplay from [Sao10k](https://ko-fi.com/sao10k). It is the successor of [Euryale L3 70B v2.1](/models/sao10k/l3-euryale-70b).",
@@ -4364,18 +4302,6 @@
           ],
           "input_cost": 0.19999999999999998,
           "output_cost": 1.15
-        },
-        {
-          "id": "switchpoint/router",
-          "name": "Switchpoint Router",
-          "description": "Switchpoint AI's router instantly analyzes your request and directs it to the optimal AI from an ever-evolving library. As the world of LLMs advances, our router gets smarter, ensuring you...",
-          "context_length": 131072,
-          "tags": [
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.85,
-          "output_cost": 3.4
         },
         {
           "id": "tencent/hunyuan-a13b-instruct",
@@ -4440,7 +4366,10 @@
           "id": "thedrummer/rocinante-12b",
           "name": "TheDrummer: Rocinante 12B",
           "description": "Rocinante 12B is designed for engaging storytelling and rich prose. Early testers have reported: - Expanded vocabulary with unique and expressive word choices - Enhanced creativity for vivid narratives -...",
-          "context_length": 32768,
+          "context_length": 65536,
+          "tags": [
+            "structured_output"
+          ],
           "input_cost": 0.25,
           "output_cost": 0.5
         },
@@ -4541,6 +4470,20 @@
           "output_cost": 2.5
         },
         {
+          "id": "x-ai/grok-4.5",
+          "name": "xAI: Grok 4.5",
+          "description": "Grok 4.5 is SpaceXAI's smartest model with frontier performance on coding, knowledge work, and STEM.",
+          "context_length": 500000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 6
+        },
+        {
           "id": "x-ai/grok-build-0.1",
           "name": "xAI: Grok Build 0.1",
           "description": "Grok Build 0.1 is xAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
@@ -4565,7 +4508,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.105,
+          "input_cost": 0.14,
           "output_cost": 0.28
         },
         {
@@ -4630,8 +4573,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.43,
-          "output_cost": 1.74
+          "input_cost": 0.5,
+          "output_cost": 2
         },
         {
           "id": "z-ai/glm-4.6v",
@@ -4664,13 +4607,13 @@
           "id": "z-ai/glm-4.7-flash",
           "name": "Z.ai: GLM 4.7 Flash",
           "description": "As a 30B-class SOTA model, GLM-4.7-Flash offers a new option that balances performance and efficiency. It is further optimized for agentic coding use cases, strengthening coding capabilities, long-horizon task planning,...",
-          "context_length": 202752,
+          "context_length": 200000,
           "tags": [
             "tools",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06,
+          "input_cost": 0.060500000000000005,
           "output_cost": 0.39999999999999997
         },
         {
@@ -4683,14 +4626,14 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.6,
-          "output_cost": 1.92
+          "input_cost": 0.95,
+          "output_cost": 3.15
         },
         {
           "id": "z-ai/glm-5-turbo",
           "name": "Z.ai: GLM 5 Turbo",
           "description": "GLM-5 Turbo is a new model from Z.ai designed for fast inference and strong performance in agent-driven environments such as OpenClaw scenarios. It is deeply optimized for real-world agent workflows...",
-          "context_length": 262144,
+          "context_length": 202752,
           "tags": [
             "tools",
             "reasoning",
@@ -4722,8 +4665,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.8999999999999999,
-          "output_cost": 2.8600000000000003
+          "input_cost": 0.8805999999999999,
+          "output_cost": 2.7676
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -4864,6 +4807,20 @@
           ],
           "input_cost": 0.75,
           "output_cost": 4.5
+        },
+        {
+          "id": "~x-ai/grok-latest",
+          "name": "xAI: Grok Latest",
+          "description": "This model always redirects to the latest Grok model from xAI.",
+          "context_length": 500000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 6
         }
       ]
     },
@@ -5031,8 +4988,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.13999999999999999,
-          "output_cost": 1
+          "input_cost": 0.1,
+          "output_cost": 0.7499999999999999
         },
         {
           "id": "deepseek-ai/DeepSeek-R1-0528",
@@ -5081,8 +5038,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.21,
-          "output_cost": 0.7899999999999999
+          "input_cost": 0.25,
+          "output_cost": 0.9500000000000001
         },
         {
           "id": "deepseek-ai/DeepSeek-V3.1-Terminus",
@@ -5278,11 +5235,23 @@
           "context_length": 262144,
           "tags": [
             "tools",
+            "vision",
             "reasoning",
             "structured_output"
           ],
           "input_cost": 0.12000000000000001,
           "output_cost": 0.37
+        },
+        {
+          "id": "google/gemma-4-E4B-it",
+          "name": "google/gemma-4-E4B-it",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 0.02,
+          "output_cost": 0.1
         },
         {
           "id": "Gryphe/MythoMax-L2-13b",
@@ -5293,18 +5262,6 @@
           ],
           "input_cost": 0.4,
           "output_cost": 0.4
-        },
-        {
-          "id": "meta-llama/Llama-3.2-11B-Vision-Instruct",
-          "name": "meta-llama/Llama-3.2-11B-Vision-Instruct",
-          "description": "Llama 3.2 11B Vision is a multimodal model with 11 billion parameters, designed to handle tasks combining visual and textual data. It excels in tasks such as image captioning and visual question answering, bridging the gap between language generation and visual reasoning. Pre-trained on a massive dataset of image-text pairs, it performs well in complex, high-accuracy image analysis.  Its ability to integrate visual understanding with language processing makes it an ideal solution for industries requiring comprehensive visual-linguistic AI applications, such as content creation, AI-driven customer service, and research.",
-          "context_length": 131072,
-          "tags": [
-            "vision",
-            "structured_output"
-          ],
-          "input_cost": 0.345,
-          "output_cost": 0.345
         },
         {
           "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -5327,8 +5284,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.6
+          "input_cost": 0.2,
+          "output_cost": 0.8
         },
         {
           "id": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
@@ -5367,18 +5324,6 @@
           "output_cost": 0.4
         },
         {
-          "id": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-          "name": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-          "description": "Meta developed and released the Meta Llama 3.1 family of large language models (LLMs), a collection of pretrained and instruction tuned generative text models in 8B, 70B and 405B sizes",
-          "context_length": 131072,
-          "tags": [
-            "tools",
-            "structured_output"
-          ],
-          "input_cost": 0.02,
-          "output_cost": 0.05
-        },
-        {
           "id": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
           "name": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
           "description": "Meta developed and released the Meta Llama 3.1 family of large language models (LLMs), a collection of pretrained and instruction tuned generative text models in 8B, 70B and 405B sizes",
@@ -5400,19 +5345,6 @@
           ],
           "input_cost": 0.06999999999999999,
           "output_cost": 0.13999999999999999
-        },
-        {
-          "id": "MiniMaxAI/MiniMax-M2.5",
-          "name": "MiniMaxAI/MiniMax-M2.5",
-          "description": "MiniMax M2.5 is SOTA in coding, agentic tool use and search, office work, and a range of other economically valuable tasks, boasting scores of 80.2% in SWE-Bench Verified, 51.3% in Multi-SWE-Bench, and 76.3% in BrowseComp (with context management).",
-          "context_length": 196608,
-          "tags": [
-            "tools",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.15,
-          "output_cost": 1.1500000000000001
         },
         {
           "id": "MiniMaxAI/MiniMax-M2.7",
@@ -5437,8 +5369,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.4,
-          "output_cost": 2
+          "input_cost": 0.38,
+          "output_cost": 1.7000000000000002
         },
         {
           "id": "MiniMaxAI/MiniMax-M3",
@@ -5555,19 +5487,6 @@
           "output_cost": 0.7
         },
         {
-          "id": "nvidia/Llama-3.3-Nemotron-Super-49B-v1.5",
-          "name": "nvidia/Llama-3.3-Nemotron-Super-49B-v1.5",
-          "description": "Llama-3.3-Nemotron-Super-49B-v1.5 is a large language model (LLM) optimized for advanced reasoning, conversational interactions, retrieval-augmented generation (RAG), and tool-calling tasks. Derived from Meta's Llama-3.3-70B-Instruct, it employs a Neural Architecture Search (NAS) approach, significantly enhancing efficiency and reducing memory requirements.",
-          "context_length": 131072,
-          "tags": [
-            "tools",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.4,
-          "output_cost": 0.4
-        },
-        {
           "id": "nvidia/Nemotron-3-Nano-30B-A3B",
           "name": "nvidia/Nemotron-3-Nano-30B-A3B",
           "description": "NVIDIA Nemotron 3 Nano is an open small reasoning model optimized for fast, cost-efficient inference in agentic and production workloads. Built with a hybrid Mixture-of-Experts (MoE) and Mamba-Transformer architecture, it delivers strong multi-step reasoning, high token throughput, stable latency with predictable cost, and efficient deployment for agent-based systems. Designed for real-world AI systems where reasoning can generate significantly more tokens per prompt, Nemotron Nano reduces compute cost while maintaining strong reasoning quality.",
@@ -5578,20 +5497,6 @@
           ],
           "input_cost": 0.05,
           "output_cost": 0.2
-        },
-        {
-          "id": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning",
-          "name": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning",
-          "description": "Nemotron 3 Nano Omni is an open multimodal model built on a hybrid Mixture-of-Experts (MoE) architecture, engineered for high efficiency and strong accuracy across image, video, audio, and text inputs. It powers always-on sub-agents for computer use, document intelligence, and audio-video understanding—replacing fragmented vision, speech, and language pipelines with a single unified inference pass.",
-          "context_length": 262144,
-          "tags": [
-            "tools",
-            "vision",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.2,
-          "output_cost": 0.8
         },
         {
           "id": "nvidia/Nemotron-Content-Safety-3.5",
@@ -5641,7 +5546,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.039,
+          "input_cost": 0.037,
           "output_cost": 0.17
         },
         {
@@ -5704,7 +5609,7 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.1
+          "output_cost": 0.55
         },
         {
           "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
@@ -5961,6 +5866,19 @@
           "output_cost": 1.1500000000000001
         },
         {
+          "id": "tencent/Hy3",
+          "name": "tencent/Hy3",
+          "description": "Hy3 is a 295B-parameter Mixture-of-Experts (MoE) model with 21B active parameters and 3.8B MTP layer parameters, developed by the Tencent Hy Team. Following the Hy3 Preview launch in late April, we gathered feedback from 50+ products and scaled up post-training with higher quality data. Today, we introduce Hy3, which outperforms similar-size models and rivals flagship open-source models with 2-5x parameters. It also shows significant gains in utility across various products and productivity tasks.",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.13999999999999999,
+          "output_cost": 0.58
+        },
+        {
           "id": "XiaomiMiMo/MiMo-V2.5",
           "name": "XiaomiMiMo/MiMo-V2.5",
           "description": "MiMo-V2.5 is a native omnimodal model with strong agentic capabilities, supporting text, image, video, and audio understanding within a unified architecture. Built upon the MiMo-V2-Flash backbone and extended with dedicated vision and audio encoders, it delivers robust performance across multimodal perception, long-context reasoning, and agentic workflows.",
@@ -5997,8 +5915,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.43,
-          "output_cost": 1.74
+          "input_cost": 0.5,
+          "output_cost": 2
         },
         {
           "id": "zai-org/GLM-4.7",

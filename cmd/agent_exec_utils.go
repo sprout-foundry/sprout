@@ -16,6 +16,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"golang.org/x/term"
 )
 
@@ -200,7 +201,8 @@ func FormatDuration(d time.Duration) string {
 //
 // Mirrors the cost/ctx formatters in pkg/console/status_footer_format.go
 // so the on-screen tokens/dollars match the in-footer figures byte-for-byte.
-// Reuses compactTokens from agent_turn_stats.go and adds formatCompactCost
+// Reuses cliui.CompactTokens for the context-window counts (extracted from
+// cmd/agent_turn_stats.go in SP-120 phase 2c) and adds formatCompactCost
 // (parallel to formatCost in pkg/console/status_footer_format.go) so the
 // on-screen dollars match the footer's, then and now.
 func formatCompletionSummary(chatAgent *agent.Agent) string {
@@ -218,9 +220,9 @@ func formatCompletionSummary(chatAgent *agent.Agent) string {
 
 	parts := []string{}
 	if limit > 0 {
-		parts = append(parts, fmt.Sprintf("%s/%s", compactTokens(ctx), compactTokens(limit)))
+		parts = append(parts, fmt.Sprintf("%s/%s", cliui.CompactTokens(ctx), cliui.CompactTokens(limit)))
 	} else if ctx > 0 {
-		parts = append(parts, compactTokens(ctx))
+		parts = append(parts, cliui.CompactTokens(ctx))
 	}
 	if cost > 0 {
 		parts = append(parts, formatCompactCost(cost))

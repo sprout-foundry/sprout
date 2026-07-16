@@ -169,7 +169,11 @@ describe('PlatformNav Integration: CloudAdapter with platform nav items', () => 
   it('all nav item IDs match the VALID_PLATFORM_VIEWS set used by Sidebar', () => {
     renderProvider();
 
-    const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
+    // Mirrors webui/src/components/Sidebar.tsx VALID_PLATFORM_VIEWS — keep in
+    // sync. The mock adapter at the top of this file defines only 3 items
+    // (tasks/billing/team); if a future PR adds a 4th cloud nav item, both
+    // the mock and this set need to be updated together.
+    const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'runners']);
     const itemIds = latestContext.platformNavItems.map((item: PlatformNavItem) => item.id);
 
     for (const id of itemIds) {

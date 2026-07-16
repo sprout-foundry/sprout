@@ -7,6 +7,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -73,7 +74,7 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 				// CompareAndSwap: only the FIRST non-empty chunk records
 				// the ttft. Subsequent chunks are a no-op so reading the
 				// timestamp later yields "first token landed at X".
-				noteFirstStreamChunk()
+				cliui.NoteFirstStreamChunk()
 				// SP-056: Resolve any active reasoning fold on the first assistant
 				// text chunk so the fold line is finalized before prose appears.
 				if fold := currentReasoningFold; fold != nil && fold.IsActive() {
@@ -133,5 +134,5 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 // currentReasoningFold holds the ReasoningFold instance for the current
 // session when reasoningMode == "fold". Created once at startup in
 // SetupAgentEvents and reused across turns. Accessed from agent_mode_interactive.go
-// and agent_terminal_subscriber.go.
+// and pkg/cliui/terminal_subscriber.go (extracted from cmd/ in SP-120 phase 2c).
 var currentReasoningFold *console.ReasoningFold

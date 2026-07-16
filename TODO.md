@@ -8,6 +8,11 @@ record.
 
 ## SP-122: Security Classifier — Chained Command Handling
 
+**Status:** ✅ Shipped — Phase 1 + Phase 2 both implemented.
+
+- Phase 1 (nested safe-path matching): `safeRmRfComponents` set in `shell_patterns.go` + `isSafeRmRfComponent` helper. Nested paths like `rm -rf internal/api/webui/dist/sprout-webui` classify SAFE because `dist` is a known build artifact. Path traversal (`../`) and absolute system paths rejected.
+- Phase 2 (chained command splitting): `classifyChainedCommand` in `security_classifier.go` splits on `&&`, `||`, `;`, `|` (quote-aware), classifies each subcommand independently, and returns the max risk. Safe portions of a chain don't elevate to DANGEROUS.
+
 **Priority**: High — blocks safe dev workflows (vendoring, build cycles)
 
 ### Problem
@@ -49,32 +54,49 @@ commands are perfectly safe but got blocked by association.
 
 ### Phase 1: Expand safe-path matching
 
-- [ ] **SP-122-1a:** Add pattern matching for `rm -rf` against paths
+- [x] **SP-122-1a:** Add pattern matching for `rm -rf` against paths
       ending in known build output dirs (e.g. `*/dist/*`, `*/build/*`,
       `*/node_modules/*`). Use a glob/regex approach instead of exact
       prefix matching so nested paths are covered.
       **Files**: `pkg/agent_tools/shell_patterns.go`
       **Acceptance**: `rm -rf internal/api/webui/dist/sprout-webui`
       classifies as SAFE; `rm -rf internal/api/` still DANGEROUS.
+      **SHIPPED.** `safeRmRfComponents` set + `isSafeRmRfComponent` helper.
 
-- [ ] **SP-122-1b:** Add tests for nested-path safety matching.
-      **Files**: `pkg/agent_tools/shell_patterns_test.go`
+- [x] **SP-122-1b:** Add tests for nested-path safety matching.
+      **Files**: `pkg/agent_tools/security_classifier_test.go`
       **Acceptance**: Tests cover top-level, nested, and traversal
       (`../`) paths.
+      **SHIPPED.** `TestIsSafeRmRfPrefix_NestedPaths` (46 cases),
+      `TestIsSafeRmRfPrefix_NestedPathsClassifiedSafe` (5 cases),
+      `TestIsSafeRmRfComponent` (23 cases),
+      `TestIsSafeRmRfPrefixBackwardCompatibility` (16 cases),
+      `TestSafeRmRfTraversalEscape` (6 cases).
 
 ### Phase 2: Split chained commands for classification
 
-- [ ] **SP-122-2a:** When a command contains `&&`, `||`, or `;`, split
+- [x] **SP-122-2a:** When a command contains `&&`, `||`, or `;`, split
       into subcommands and classify each independently. The overall risk
       is the MAX of the subcommand risks, but the prompt/block decision
       should be per-subcommand where feasible.
       **Files**: `pkg/agent_tools/security_classifier.go`
       **Acceptance**: A command like `cp -r x y && rm -rf dist/ && echo done`
       classifies the `cp` and `echo` as SAFE and only flags the `rm -rf`.
+      **SHIPPED.** `classifyChainedCommand` splits on `&&`/`||`/`;`/`|`
+      (quote-aware), classifies each subcommand via `classifySingleCommand`,
+      returns max risk. The vendoring example from the original bug report
+      (`rm -rf internal/api/webui/dist/sprout-webui && mkdir -p ... && cp -r ...`)
+      classifies as SAFE.
 
-- [ ] **SP-122-2b:** Tests for chained command splitting.
+- [x] **SP-122-2b:** Tests for chained command splitting.
       **Files**: `pkg/agent_tools/security_classifier_test.go`
       **Acceptance**: Tests cover `&&`, `||`, `;`, pipes, and mixed chains.
+      **SHIPPED.** `TestClassifyChainedCommand` (25 cases covering `&&`,
+      `||`, `;`, `|`, mixed chains, quote handling, and the vendoring
+      example from the TODO). Known gap: `xargs rm -rf` after a pipe
+      classifies as CAUTION (xargs prefix not matched by rm patterns) —
+      tracked as a minor follow-up, not a security bypass since CAUTION
+      still prompts.
 
 ### Key files
 

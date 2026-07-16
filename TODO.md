@@ -165,20 +165,43 @@ headers updated, but no new code work is required:
 
 ## SP-103: Vision Pipeline Reliability + Caching + Routing Fixes
 
-_Most items completed by subsequent work. Verified against code state 2026-07-05._
+_2 of 6 sub-items remain open (D1, D2). B2 + A9 shipped by subsequent work;
+B2 verified at `abf3f6ba`, A9 image-path verified at `e47280c7`. Code state
+audit performed 2026-07-15._
 
 ### Remaining Work
 
 #### SP-103-B2: Image Resizing
 
-4K screenshots bill as ~4800 visual tokens. No resize logic exists. Providers have `max_image_width`/`max_image_height` or detail-tier settings (`low`/`high`/`auto` on OpenAI, `low`/`high` on Anthropic). Resize oversized images before embedding to cap token cost.
+**SHIPPED 2026-07-15** at `abf3f6ba feat(agent): pre-resize images to 1568px for
+vision embedding`. Implementation diverges from the original spec name
+(`resizeImageForVisionEmbed` instead of `resizeImageToMax`) and target
+(`1568px` is Anthropic's recommended value, not the spec's "1536"), but
+achieves the spec's goal. Wired into `readImageAsImageData` which feeds
+`processImagesAsMultimodal` — images are resized before being attached as
+inline multimodal content, capping the long edge at `visionEmbedMaxEdgePx =
+1568` using bilinear interpolation, re-encoded as JPEG quality 85.
+Pass-through for unsupported formats (webp/avif) so the agent doesn't lose
+those images entirely. Tests: `conversation_test.go` (5 unit tests:
+no-op small, no-op exact, downscale to cap, format pass-through, error
+tolerance) + `conversation_embed_resize_integration_test.go` (4
+integration tests covering extreme aspect ratios + end-to-end
+`readImageAsImageData` pipeline).
 
-**What to build:**
-- Add `resizeImageToMax(dim image.Dimensions, maxW, maxH int) []byte` using an existing image library (or a minimal Go implementation)
-- Call it in `DownloadImage` and when preparing `ImageData` for `processImagesAsMultimodal`
-- Cap at 1536px on the longest side (Anthropic's default for "auto" detail)
+The TODO's original "Call it in `DownloadImage`" item is not necessary:
+`DownloadImage` returns raw bytes that flow into `OptimizeImageData` for
+the `analyze_image_content` tool path, which already has its own
+`visionMaxDimension = 4096px` resize. The 1568px pre-resize is a
+multimodal-path concern; the tool path keeps the larger cap so
+`analyze_image_content` users can still see high-detail screenshots.
 
-**Effort:** ~0.5 day. New helper in `vision_image.go` or `vision_utils.go`.
+**Genuine follow-up** for the broader vision resize story: SP-103-D3
+(per-provider `VisionCapabilities` table). The current code picks a
+single 1568px cap regardless of provider — OpenAI's `low`/`high` detail
+tiers, Anthropic's `low`/`high`, and Gemini's different size policies
+all need their own optimal caps. The `VisionCapabilities` struct was
+added at `pkg/agent_api/interface.go` (per SP-103-D3 referenced in
+AUDIT-GAP-2); populating per-provider values is the remaining work.
 
 #### SP-103-A9: Typed Errors in Vision
 

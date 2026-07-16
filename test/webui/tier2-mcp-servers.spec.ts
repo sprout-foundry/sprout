@@ -52,7 +52,7 @@ test.describe('MCP Servers', () => {
     await expect(page.getByTestId(TESTIDS['settings-panel'])).toBeVisible({ timeout: 15_000 });
 
     // Navigate to MCP tab (workspace-mcp subsection)
-    const mcpTab = page.getByTestId(TESTIDS['settings-mcp-tab']);
+    const mcpTab = page.getByTestId(TESTIDS['settings-workspace-mcp-tab']);
     const isMcpTabVisible = await mcpTab.isVisible({ timeout: 10_000 }).catch(() => false);
 
     if (!isMcpTabVisible) {
@@ -132,7 +132,7 @@ test.describe('MCP Servers', () => {
     await expect(page.getByTestId(TESTIDS['settings-panel'])).toBeVisible({ timeout: 15_000 });
 
     // Navigate to MCP tab
-    const mcpTab = page.getByTestId(TESTIDS['settings-mcp-tab']);
+    const mcpTab = page.getByTestId(TESTIDS['settings-workspace-mcp-tab']);
     const isMcpTabVisible = await mcpTab.isVisible({ timeout: 10_000 }).catch(() => false);
 
     if (!isMcpTabVisible) {

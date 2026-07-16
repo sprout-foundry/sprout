@@ -71,6 +71,7 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetCachedTokens(state.CachedTokens)
 	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
+	a.state.SetImageTokens(state.ImageTokens)
 	a.state.SetChargedCostTotal(state.ChargedCostTotal)
 	a.state.SetTokenCostTotal(state.TokenCostTotal)
 	a.state.SetSubscriptionTokens(state.SubscriptionTokens)

@@ -347,6 +347,8 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	var category RiskCategory
 	if isPrivilegedInstall {
 		category = RiskCategoryPrivileged
+	} else if isSudoCommand(cmd) {
+		category = RiskCategoryPrivileged
 	} else if maxRisk == SecurityDangerous {
 		category = riskCategoryFromRiskType(getShellCommandRiskType(cmd, maxRisk, isCritical))
 	} else if maxRisk == SecuritySafe {

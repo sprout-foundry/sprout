@@ -13,6 +13,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -95,7 +96,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// SP-048-5d: prompt includes the current model so users always know
 	// what they're talking to. Falls back to "sprout> " when the model
 	// name is empty (e.g. provider failed to resolve at startup).
-	inputReader := console.NewInputReader(buildPromptPrefix(chatAgent.GetModel()))
+	inputReader := console.NewInputReader(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())
@@ -146,7 +147,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// cost/context after each tool. Runs until ctx is cancelled.
 	subCtx, cancelSub := context.WithCancel(ctx)
 	defer cancelSub()
-	resetSpawnTracking := startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+	resetSpawnTracking := cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 
 	// Tracks the time of the last Ctrl+C at the idle prompt so a
 	// second press within 2s exits the REPL (standard convention:
@@ -167,7 +168,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// it tracks model changes (e.g. an LLM-driven /model switch
 			// from inside a previous turn, or interactive provider/model
 			// selection during recovery).
-			inputReader.SetPrompt(buildPromptPrefix(chatAgent.GetModel()))
+			inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 
 			query, err := inputReader.ReadLine()
 
@@ -258,7 +259,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				}
 				// `/model` and friends may have changed the active model;
 				// rebuild the prompt prefix so the next prompt reflects it.
-				inputReader.SetPrompt(buildPromptPrefix(chatAgent.GetModel()))
+				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 				footer.Refresh()
 				continue
 			}
@@ -283,7 +284,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnCompletionStart := chatAgent.GetCompletionTokens()
 			// Clear the ttft tracker so the next stream chunk sets a
 			// fresh "time to first token" measurement for this turn.
-			resetTurnFirstToken()
+			cliui.ResetTurnFirstToken()
 
 			// SP-051-2c: clear per-turn spawn dedupe so the next batch of
 			// subagents announces fresh "↳ persona spawned" lines instead of
@@ -296,7 +297,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Paired at the bottom with the existing dim `⎯ this turn: … ⎯`
 			// summary line, which acts as the closing separator.
 			fmt.Println()
-			printAssistantHeader(chatAgent.GetModel())
+			cliui.PrintAssistantHeader(chatAgent.GetModel())
 
 			// Per-turn assistant renderer: indents prose with "  " as it
 			// streams, and at turn-end optionally re-renders the final
@@ -383,14 +384,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			}
 			endTurn(chatAgent, turnRenderer)
 			// SP-070-2: notify the user when a long turn completes
-			notifyTurnCompletion(chatAgent, turnStart, agentSkipPrompt)
+			cliui.NotifyTurnCompletion(chatAgent, turnStart, agentSkipPrompt)
 			// SP-048-3: refresh the footer at turn-end so cost / context /
 			// model changes (e.g. /model switch) land immediately.
 			footer.Refresh()
 			// SP-048-5c: print the per-turn summary line if any LLM tokens
 			// were actually consumed. Suppressed for zero-cost turns (slash
 			// commands, zsh fast paths, empty responses).
-			printPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart)
+			cliui.PrintPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart)
 		}
 	}
 }
@@ -406,7 +407,7 @@ func (s *agentFooterSource) Model() string {
 	if s == nil || s.agent == nil {
 		return ""
 	}
-	return shortModelName(s.agent.GetModel())
+	return cliui.ShortModelName(s.agent.GetModel())
 }
 
 func (s *agentFooterSource) ContextTokens() (used, limit int) {

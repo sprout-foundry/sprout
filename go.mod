@@ -138,6 +138,3 @@ require (
 // in-package atomic-write helper. Source lives in ./internal/hnsw/.
 // Drop this replace when upstream merges a Windows fix.
 replace github.com/coder/hnsw => ./internal/hnsw
-
-// Use local seed module for SP-103-D1 ImageTokens field.
-replace github.com/sprout-foundry/seed => ../seed

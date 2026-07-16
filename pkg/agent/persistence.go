@@ -45,6 +45,7 @@ type ConversationState struct {
 	CachedTokens            int              `json:"cached_tokens"`
 	CacheWriteTokens        int              `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64          `json:"cached_cost_savings"`
+	ImageTokens             int              `json:"image_tokens,omitempty"`
 	LastUpdated             time.Time        `json:"last_updated"`
 	SessionID               string           `json:"session_id"`
 	Name                    string           `json:"name"`              // Human-readable session name
@@ -714,6 +715,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.state.SetCachedTokens(state.CachedTokens)
 	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
+	a.state.SetImageTokens(state.ImageTokens)
 
 	// CRITICAL: Reset session state to prevent hanging issues after session restore
 	a.state.SetCurrentIteration(0)

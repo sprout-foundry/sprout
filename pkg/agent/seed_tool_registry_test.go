@@ -76,6 +76,8 @@ func (m *mockStateManager) GetCacheWriteTokens() int                      { retu
 func (m *mockStateManager) SetCacheWriteTokens(int)                       {}
 func (m *mockStateManager) GetCachedCostSavings() float64                 { return 0 }
 func (m *mockStateManager) SetCachedCostSavings(float64)                  {}
+func (m *mockStateManager) GetImageTokens() int                           { return 0 }
+func (m *mockStateManager) SetImageTokens(int)                            {}
 func (m *mockStateManager) GetActiveSkills() []string                     { return nil }
 func (m *mockStateManager) SetActiveSkills([]string)                      {}
 func (m *mockStateManager) GetActivePersona() string                      { return "" }

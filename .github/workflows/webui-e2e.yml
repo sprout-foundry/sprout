@@ -65,6 +65,13 @@ jobs:
       # --with-deps pulls in system libraries (libatk, libcups, etc.) on Ubuntu.
       run: npx playwright install --with-deps chromium
 
+    - name: Download Go modules
+      # prepare-grammars (called by make build) needs the gotreesitter
+      # module in the local cache. setup-go caches go.sum but doesn't
+      # download every module — go mod download ensures the grammar blobs
+      # are available.
+      run: go mod download
+
     - name: Build sprout binary
       # The Playwright webServer (start-stack.mjs → fixtures/sprout.ts)
       # spawns ./sprout from the repo root. Without this step the binary

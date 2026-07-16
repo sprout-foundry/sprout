@@ -564,9 +564,25 @@ func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInf
 }
 
 func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Context) ([]ModelInfo, error) {
-	data, err := os.ReadFile(customProviderFilePath(w.providerName))
-	if err != nil {
-		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to load %s provider config", w.providerName), err)
+	// Try the scoped config dir first (e.g. workspace .sprout/ when isolated
+	// config is active). If the provider file isn't there, fall back to the
+	// global home dir. This mirrors LoadCustomProviders' merge behavior —
+	// without it, /model select fails for providers registered globally when
+	// running inside a workspace with isolated config.
+	data, scopedErr := os.ReadFile(customProviderFilePath(w.providerName))
+	if scopedErr != nil {
+		// Try the global home dir as fallback
+		globalPath := globalCustomProviderFilePath(w.providerName)
+		if globalPath != "" {
+			globalData, globalErr := os.ReadFile(globalPath)
+			if globalErr == nil {
+				data = globalData
+				scopedErr = nil
+			}
+		}
+	}
+	if scopedErr != nil {
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to load %s provider config", w.providerName), scopedErr)
 	}
 
 	var providerConfig customProviderFile
@@ -609,6 +625,19 @@ func customProviderFilePath(providerName string) string {
 		return filepath.Join(configRoot, "providers", providerName+".json")
 	}
 	return filepath.Join(configDir, "providers", providerName+".json")
+}
+
+// globalCustomProviderFilePath returns the provider config path under the
+// user's home ~/.config/sprout/providers/ directory, ignoring SPROUT_CONFIG
+// overrides. Used as a fallback when customProviderFilePath (which honors
+// SPROUT_CONFIG) doesn't find the file — e.g. when running inside a
+// workspace with isolated config but the provider was registered globally.
+func globalCustomProviderFilePath(providerName string) string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(homeDir, ".config", "sprout", "providers", providerName+".json")
 }
 
 func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint string) ([]ModelInfo, error) {

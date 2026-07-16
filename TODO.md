@@ -871,3 +871,67 @@ MCP, subagent, auth, billing, task, and mode flows.
    infrastructure for REPL-safe prompts but `/rewind` and onboarding
    fallback bypass it (H5, L1).
 
+---
+
+## SP-122: Security Classifier — Chained Command Handling
+
+### Problem
+When a shell command chains a destructive operation (e.g. `rm -rf`)
+with subsequent safe operations (e.g. `mkdir`, `cp`), the classifier
+blocks the ENTIRE pipeline, even when the `rm -rf` targets a
+legitimate build/vendoring path.
+
+### Concrete example (2026-07-15)
+```bash
+rm -rf internal/api/webui/dist/sprout-webui && \
+  mkdir -p internal/api/webui/dist && \
+  cp -r ../sprout/webui/dist/* internal/api/webui/dist/sprout-webui/
+```
+This is a safe vendoring operation (clear build artifacts, copy fresh
+build). The classifier blocked it because `rm -rf internal/api/webui/...`
+is not in the `safeRmRfPrefixes` whitelist — only top-level dirs like
+`dist/`, `node_modules/`, etc. are whitelisted. The `cp -r` and `mkdir`
+commands are perfectly safe but got blocked by association.
+
+### Root cause
+Two compounding issues:
+
+1. **`safeRmRfPrefixes` is too narrow.** It only matches top-level
+   build artifact directories (`node_modules/`, `dist/`, `build/`).
+   Nested project paths like `internal/api/webui/dist/sprout-webui`
+   or `platform/webui/dist/` are not whitelisted and trigger
+   `directory_deletion` → DANGEROUS → hard block.
+
+2. **Chained command classification is all-or-nothing.** When a
+   command has `&&`-chained subcommands, the classifier evaluates
+   the full command string as a single unit. If ANY part is
+   DANGEROUS, the whole thing is blocked. There's no mechanism to:
+   - Split on `&&` / `||` / `;` and evaluate each subcommand independently
+   - Allow the safe portions while prompting for the dangerous portion
+   - Whitelist specific workspace-relative paths
+
+### Proposed fix (two phases)
+
+#### Phase 1: Expand the safe-path matching
+- [ ] Add support for matching `rm -rf` against workspace-relative paths
+      under known build output directories (e.g. any path matching
+      `*/dist/*`, `*/build/*`, `*/node_modules/*`)
+- [ ] Add specific entries for nested platform paths:
+      `internal/api/webui/dist/`, `internal/webui_shell/dist/`
+- [ ] Consider a glob/pattern approach instead of exact prefix matching
+
+#### Phase 2: Split chained commands for classification
+- [ ] When a command contains `&&` or `;`, split into subcommands
+- [ ] Classify each subcommand independently
+- [ ] If all subcommands are SAFE → allow
+- [ ] If any subcommand is DANGEROUS → prompt for that subcommand only,
+      but don't block the safe ones
+- [ ] The security prompt should show which specific subcommand is
+      blocked and let the user approve/modify just that part
+
+### Key files
+- `pkg/agent_tools/security_classifier.go` — main classifier
+- `pkg/agent_tools/shell_patterns.go` — `safeRmRfPrefixes` map
+- `pkg/agent_tools/shell_utils.go` — `getShellCommandRiskType`
+- `pkg/agent_tools/shell_handler.go` — where block decision is enforced
+

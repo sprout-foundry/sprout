@@ -179,7 +179,6 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 		PromptTokens:     resp.Usage.PromptTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
 		CachedTokens:     resp.Usage.CachedTokens,
-		ImageTokens:      resp.Usage.ImageTokens,
 	}
 	sp.agent.state.AddCostEntry(entry)
 

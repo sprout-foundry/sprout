@@ -119,8 +119,9 @@ export function teardownEmbeddingBackend(): void {
  * name so SproutWasm.embeddingModel() returns the right string from Go.
  */
 export function installEmbeddingBackendController(): void {
-  (globalThis as { __sproutSwitchEmbeddingBackend?: (n: string) => string }).__sproutSwitchEmbeddingBackend =
-    (name: string) => switchEmbeddingBackend(name as EmbeddingBackend);
+  (globalThis as { __sproutSwitchEmbeddingBackend?: (n: string) => string }).__sproutSwitchEmbeddingBackend = (
+    name: string,
+  ) => switchEmbeddingBackend(name as EmbeddingBackend);
   (globalThis as { __sproutEmbeddingModel?: string }).__sproutEmbeddingModel = EMBEDDING_MODEL_DEFAULT;
 }
 

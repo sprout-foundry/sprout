@@ -87,6 +87,11 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
   return (
     <div className="header-bar">
+      {isCloud && (
+        <a href="/" className="header-back-to-dashboard" title="Back to Dashboard">
+          ← Dashboard
+        </a>
+      )}
       <MenuBar />
       <div className="header-bar-actions">
         {isCloud && (

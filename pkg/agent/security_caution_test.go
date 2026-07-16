@@ -178,7 +178,7 @@ func TestSecurityCautionVsDangerousBoundary(t *testing.T) {
 		{"rm -rf node_modules no slash: not in safe list, classified as dangerous", "rm -rf node_modules", tools.SecurityDangerous, true},
 		{"rm -rf src: dangerous source destruction", "rm -rf src/", tools.SecurityDangerous, true},
 		{"rm -rf /: critical hard block", "rm -rf /", tools.SecurityDangerous, true},
-		{"sudo without install: dangerous", "sudo apt update", tools.SecurityDangerous, true},
+		{"sudo without install: caution (prompts in default, auto-approves in permissive)", "sudo apt update", tools.SecurityCaution, false},
 		{"sudo apt install: caution with prompt", "sudo apt-get install -y shellcheck", tools.SecurityCaution, false},
 		{"eval: dangerous arbitrary code", "eval 'rm -rf /'", tools.SecurityDangerous, true},
 		{"chmod 777: dangerous insecure permissions", "chmod 777 file.txt", tools.SecurityDangerous, true},

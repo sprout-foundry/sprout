@@ -13,7 +13,7 @@ export interface ContextSidebarProps {
   isTablet: boolean;
   showContextSidebar: boolean;
   contextPanelRef: React.RefObject<ContextPanelHandle>;
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces';
   toolExecutions: ToolExecution[];
   fileEdits: FileEdit[];
   logs: LogEntry[];

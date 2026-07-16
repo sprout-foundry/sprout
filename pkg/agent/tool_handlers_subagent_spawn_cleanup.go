@@ -187,7 +187,7 @@ func extractAndTrackSubagentSummary(a *Agent, resultMap map[string]string, resul
 	// so they're left at zero; TrackMetricsFromResponse treats them as
 	// "unknown split" and still applies the totals correctly.
 	if result.TokensUsed > 0 || result.Cost > 0 {
-		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0, 0)
+		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0, 0, 0)
 		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", result.TokensUsed, result.Cost)
 	}
 }

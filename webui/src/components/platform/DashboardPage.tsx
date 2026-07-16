@@ -1,6 +1,7 @@
 import { GitBranch, Clock, Zap, LayoutDashboard, Search } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
+import { getEditorSync } from '../../services/crossTabSync';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
 
@@ -78,6 +79,15 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     fetchDashboard();
+  }, [fetchDashboard]);
+
+  // Cross-tab sync: refresh when dashboard pushes a task_update
+  useEffect(() => {
+    const sync = getEditorSync();
+    const unsub = sync.subscribe((msg) => {
+      if (msg.type === 'task_update') fetchDashboard();
+    });
+    return unsub;
   }, [fetchDashboard]);
 
   const filteredRepos = useMemo(() => {

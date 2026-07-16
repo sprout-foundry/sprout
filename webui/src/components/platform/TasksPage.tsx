@@ -1,6 +1,7 @@
 import { ListChecks, Plus, X } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
+import { getEditorSync } from '../../services/crossTabSync';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
 
@@ -61,6 +62,17 @@ const TasksPage: React.FC = () => {
 
   useEffect(() => {
     fetchTasks();
+  }, [fetchTasks]);
+
+  // Cross-tab sync: refresh task list when the dashboard receives a WS task_update
+  useEffect(() => {
+    const sync = getEditorSync();
+    const unsub = sync.subscribe((msg) => {
+      if (msg.type === 'task_update') {
+        fetchTasks();
+      }
+    });
+    return unsub;
   }, [fetchTasks]);
 
   const handleCreateTask = async (e: React.FormEvent) => {

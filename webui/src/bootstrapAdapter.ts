@@ -23,12 +23,20 @@ interface BootstrapResponse {
   appMode?: 'local' | 'cloud';
   buildVersion?: string;
   sharedMode?: boolean;
+  navItems?: PlatformNavItem[];
+  /** Authenticated user identity, injected by the platform in cloud mode. */
+  user?: {
+    id: string;
+    email: string;
+    tier: string;
+  };
 }
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
   { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 2 },
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
+  { id: 'runners', label: 'Runners', href: '/runners', icon: 'server', order: 4 },
 ];
 
 const LOCALHOST_DEFAULTS: RuntimeConfig = {
@@ -40,6 +48,23 @@ const LOCALHOST_DEFAULTS: RuntimeConfig = {
 };
 
 let lastConfig: RuntimeConfig = LOCALHOST_DEFAULTS;
+
+/**
+ * Most recently resolved user identity from bootstrap. Undefined when the
+ * platform did not inject a user (local mode, or cloud mode without a session).
+ *
+ * Components that need the authenticated identity read this via getBootstrapUser()
+ * instead of re-fetching /user/me.
+ */
+let currentUserIdentity: { id: string; email: string; tier: string } | undefined;
+
+/**
+ * Return the authenticated user identity resolved from the bootstrap response,
+ * or undefined when there is no session. Safe to call before bootstrap resolves.
+ */
+export function getBootstrapUser(): { id: string; email: string; tier: string } | undefined {
+  return currentUserIdentity;
+}
 
 /**
  * Derive same-origin API/WS URLs from the current page location. Used when
@@ -95,8 +120,29 @@ function fromEnvVars(): RuntimeConfig | null {
  *   3. Localhost defaults
  *
  * The resolved config is cached and also used to install the adapter.
+ *
+ * Memoized: the first call performs the tier fallback, installs the adapter,
+ * and caches the resulting promise. Subsequent calls return the same promise
+ * so awaiting bootstrap from multiple places (the module auto-run plus
+ * useAppInitialization's auth gate) does NOT trigger duplicate /api/bootstrap
+ * requests or re-install the adapter.
  */
-export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
+let bootstrapPromise: Promise<RuntimeConfig> | null = null;
+
+export function fetchRuntimeConfig(): Promise<RuntimeConfig> {
+  if (!bootstrapPromise) {
+    bootstrapPromise = resolveRuntimeConfig().catch((err) => {
+      // resolveRuntimeConfig never rejects in practice (it falls back to
+      // localhost defaults), but clear the cache defensively so a transient
+      // throw allows a future retry rather than caching the failure forever.
+      bootstrapPromise = null;
+      throw err;
+    });
+  }
+  return bootstrapPromise;
+}
+
+async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
   let fetchError: string | null = null;
 
   // — Tier 1: fetch from server —
@@ -112,8 +158,11 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
         appMode: data.appMode ?? 'local',
         buildVersion: data.buildVersion ?? 'dev',
         sharedMode: data.sharedMode ?? false,
+        navItems: data.navItems,
+        user: data.user,
       };
       lastConfig = config;
+      currentUserIdentity = config.user;
       // eslint-disable-next-line no-console
       installAdapterForConfig(config);
       return config;
@@ -157,7 +206,7 @@ function installAdapterForConfig(config: RuntimeConfig): void {
     const adapter = new CloudAdapter({
       apiBase: config.apiBaseURL,
       wsUrl: config.wsURL,
-      navItems: CLOUD_NAV_ITEMS,
+      navItems: config.navItems ?? CLOUD_NAV_ITEMS,
     });
     installAdapter(adapter);
 

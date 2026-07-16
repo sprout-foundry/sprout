@@ -317,6 +317,24 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// multi-turn continuity is preserved across queries.
 	if msgs := a.state.GetMessages(); len(msgs) > 0 {
 		opts.InitialMessages = msgs
+
+		// Phase 2 instrumentation: check if corruption exists in the
+		// InitialMessages BEFORE the seed agent runs. If violations are
+		// present here, the corruption was inherited from a previous
+		// query's syncSeedStateToSprout or from session persistence.
+		if violations := core.ValidateToolThreading(msgs); len(violations) > 0 {
+			missing := 0
+			for _, v := range violations {
+				if v.Kind == core.ToolThreadingViolationMissingResult {
+					missing++
+				}
+			}
+			a.Logger().Warn(
+				"[threading] %d violation(s) in InitialMessages BEFORE seed run (missing_results=%d, total_msgs=%d) — "+
+					"corruption inherited from previous query or session restore",
+				len(violations), missing, len(msgs),
+			)
+		}
 	}
 
 	// Restore turn checkpoints so that the message pipeline can apply
@@ -647,5 +665,48 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
 	if a.debug {
 		a.Logger().Debug("[sync] Seed sync complete: msgCount=%d, assistantCount=%d, terminationReason=%s, iteration=%d\n",
 			len(seedMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
+	}
+
+	// Phase 2 instrumentation: validate tool threading on the raw synced
+	// messages. This tells us whether the corruption (consecutive assistant
+	// messages with missing tool results) originates in the seed runLoop
+	// (if violations are present here) or in a later transformation like
+	// checkpoint compaction (if violations only appear in prepared messages).
+	// Logged at WARN level so it's visible without --debug.
+	if violations := core.ValidateToolThreading(seedMsgs); len(violations) > 0 {
+		missing := 0
+		for _, v := range violations {
+			if v.Kind == core.ToolThreadingViolationMissingResult {
+				missing++
+			}
+		}
+		// Build a compact role sequence for diagnostics: A=assistant, T=tool,
+		// U=user, S=system. Shows the message structure at a glance.
+		roles := make([]byte, 0, len(seedMsgs))
+		for _, m := range seedMsgs {
+			switch m.Role {
+			case "assistant":
+				tc := len(m.ToolCalls)
+				if tc > 0 {
+					roles = append(roles, 'A')
+				} else {
+					roles = append(roles, 'a')
+				}
+			case "tool":
+				roles = append(roles, 'T')
+			case "user":
+				roles = append(roles, 'U')
+			case "system":
+				roles = append(roles, 'S')
+			default:
+				roles = append(roles, '?')
+			}
+		}
+		a.Logger().Warn(
+			"[threading] %d violation(s) in raw state after sync (missing_results=%d, total_msgs=%d) — "+
+				"corruption originates in seed runLoop or InitialMessages, not in prepareMessages\n"+
+				"  role sequence: %s",
+			len(violations), missing, len(seedMsgs), string(roles),
+		)
 	}
 }

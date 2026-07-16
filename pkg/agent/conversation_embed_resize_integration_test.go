@@ -59,7 +59,7 @@ func TestReadImageAsImageData_LargePNG_Resized(t *testing.T) {
 	data := encodePNG(t, img)
 	path := writeTempImage(t, data, ".png")
 
-	got, size, err := readImageAsImageData(path)
+	got, size, err := readImageAsImageData(path, 1568)
 	if err != nil {
 		t.Fatalf("readImageAsImageData: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestReadImageAsImageData_SmallPNG_NoOp(t *testing.T) {
 	data := encodePNG(t, img)
 	path := writeTempImage(t, data, ".png")
 
-	got, _, err := readImageAsImageData(path)
+	got, _, err := readImageAsImageData(path, 1568)
 	if err != nil {
 		t.Fatalf("readImageAsImageData: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestReadImageAsImageData_SmallJPEG_NoOp(t *testing.T) {
 	data := encodeJPEG(t, img)
 	path := writeTempImage(t, data, ".jpg")
 
-	got, _, err := readImageAsImageData(path)
+	got, _, err := readImageAsImageData(path, 1568)
 	if err != nil {
 		t.Fatalf("readImageAsImageData: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestReadImageAsImageData_LargeJPEG_Resized(t *testing.T) {
 	data := encodeJPEG(t, img)
 	path := writeTempImage(t, data, ".jpg")
 
-	got, size, err := readImageAsImageData(path)
+	got, size, err := readImageAsImageData(path, 1568)
 	if err != nil {
 		t.Fatalf("readImageAsImageData: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestResizeImageForVisionEmbed_ExtremeAspectRatios(t *testing.T) {
 		img := image.NewRGBA(image.Rect(0, 0, w, h))
 		data := encodePNG(t, img)
 
-		got, err := resizeImageForVisionEmbed(data)
+		got, err := resizeImageForVisionEmbed(data, 1568)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -230,7 +230,7 @@ func TestResizeImageForVisionEmbed_ExtremeAspectRatios(t *testing.T) {
 		img := image.NewRGBA(image.Rect(0, 0, w, h))
 		data := encodePNG(t, img)
 
-		got, err := resizeImageForVisionEmbed(data)
+		got, err := resizeImageForVisionEmbed(data, 1568)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -256,7 +256,7 @@ func TestResizeImageForVisionEmbed_ExtremeAspectRatios(t *testing.T) {
 		img := image.NewRGBA(image.Rect(0, 0, w, h))
 		data := encodePNG(t, img)
 
-		got, err := resizeImageForVisionEmbed(data)
+		got, err := resizeImageForVisionEmbed(data, 1568)
 		if err != nil {
 			t.Fatalf("unexpected error (must not panic): %v", err)
 		}
@@ -284,7 +284,7 @@ func TestIntegrationEmbed_ExtremeWide(t *testing.T) {
 	data := encodePNG(t, img)
 	path := writeTempImage(t, data, ".png")
 
-	got, _, err := readImageAsImageData(path)
+	got, _, err := readImageAsImageData(path, 1568)
 	if err != nil {
 		t.Fatalf("readImageAsImageData: %v", err)
 	}

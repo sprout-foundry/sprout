@@ -97,9 +97,7 @@ const RunnersPage: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `Failed to generate token: ${response.status} ${response.statusText}`,
-        );
+        throw new Error(errorData.error || `Failed to generate token: ${response.status} ${response.statusText}`);
       }
 
       const data = (await response.json()) as GenerateTokenResponse;
@@ -147,9 +145,7 @@ const RunnersPage: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `Failed to rotate key: ${response.status} ${response.statusText}`,
-        );
+        throw new Error(errorData.error || `Failed to rotate key: ${response.status} ${response.statusText}`);
       }
 
       // A rotated key may return a new token; surface it like a freshly generated one.
@@ -192,9 +188,7 @@ const RunnersPage: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `Failed to delete runner: ${response.status} ${response.statusText}`,
-        );
+        throw new Error(errorData.error || `Failed to delete runner: ${response.status} ${response.statusText}`);
       }
 
       // Remove the runner from local state immediately
@@ -399,9 +393,7 @@ const RunnersPage: React.FC = () => {
                 </div>
                 <div className="platform-list-item-content">
                   <div className="platform-list-item-title">{runner.name}</div>
-                  <div className="platform-list-item-subtitle">
-                    Last seen: {formatLastSeen(runner.last_seen)}
-                  </div>
+                  <div className="platform-list-item-subtitle">Last seen: {formatLastSeen(runner.last_seen)}</div>
                 </div>
                 <div className="platform-list-item-meta">
                   <span className={`platform-status-badge ${runner.status === 'online' ? 'running' : 'cancelled'}`}>

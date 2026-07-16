@@ -210,8 +210,8 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 		})
 
 		// Two responses totaling $6 — crosses the 50% threshold once.
-		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0)
-		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0, 0)
 
 		spent, _ := budget.Snapshot()
 		if spent < 5.99 || spent > 6.01 {
@@ -232,7 +232,7 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 			exceededCalls++
 		})
 
-		a.TrackMetricsFromResponse(100, 50, 150, 6.0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 6.0, 0, 0, 0)
 
 		if !a.FleetBudgetExceeded() {
 			t.Fatalf("FleetBudgetExceeded should be true after USD cap hit")
@@ -242,7 +242,7 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 		}
 
 		// Subsequent debit should NOT re-fire the exceeded callback.
-		a.TrackMetricsFromResponse(100, 50, 150, 1.0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 1.0, 0, 0, 0)
 		if exceededCalls != 1 {
 			t.Fatalf("exceeded callback should not re-fire, got %d", exceededCalls)
 		}
@@ -256,7 +256,7 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 		var warnings int
 		a.SetBudgetWarningCallback(func(threshold, spent, limit float64) { warnings++ })
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0, 0, 0, 0)
 
 		if warnings != 0 {
 			t.Fatalf("zero-cost response should not fire warnings, got %d", warnings)
@@ -268,7 +268,7 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 
 	t.Run("no budget attached is a no-op", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
-		a.TrackMetricsFromResponse(100, 50, 150, 100.0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 100.0, 0, 0, 0)
 		if a.FleetBudgetExceeded() {
 			t.Fatalf("no budget should mean no truncation")
 		}
@@ -288,6 +288,7 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 			0.05, // estimatedCost
 			0,    // cachedTokens
 			0,    // cacheWriteTokens
+			0,    // imageTokens
 		)
 
 		if a.GetTotalTokens() != 150 {
@@ -304,8 +305,8 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 	t.Run("updates cost correctly", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0)
-		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0)
+		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 0, 0, 0)
 
 		cost := a.GetTotalCost()
 		// Use approximate comparison for floating point
@@ -321,13 +322,13 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 			t.Errorf("expected initial call count 0, got %d", a.GetLLMCallCount())
 		}
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0)
 
 		if a.GetLLMCallCount() != 1 {
 			t.Errorf("expected call count 1, got %d", a.GetLLMCallCount())
 		}
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0)
 
 		if a.GetLLMCallCount() != 2 {
 			t.Errorf("expected call count 2, got %d", a.GetLLMCallCount())
@@ -337,8 +338,8 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 	t.Run("tracks cached tokens", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0)
-		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 50, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0, 0)
+		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 50, 0, 0)
 
 		if a.GetCachedTokens() != 75 {
 			t.Errorf("expected 75 cached tokens, got %d", a.GetCachedTokens())
@@ -358,7 +359,7 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 		a.state.SetSessionModel("test-model")
 
 		// With 0.05 cost for 150 tokens and cached=25, savings = 25 * (0.6 - 0.06) / 1e6 = 0.0000135
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0, 0)
 
 		savings := a.GetCachedCostSavings()
 		if savings <= 0 {
@@ -374,11 +375,11 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 		a := newMetricsTestAgent(t)
 
 		// First response
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 20, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 20, 0, 0)
 		// Second response
-		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 40, 0)
+		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 40, 0, 0)
 		// Third response
-		a.TrackMetricsFromResponse(50, 25, 75, 0.025, 10, 0)
+		a.TrackMetricsFromResponse(50, 25, 75, 0.025, 10, 0, 0)
 
 		if a.GetTotalTokens() != 525 {
 			t.Errorf("expected total tokens 525, got %d", a.GetTotalTokens())

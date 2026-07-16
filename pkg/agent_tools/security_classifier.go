@@ -495,6 +495,14 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecurityDangerous
 	}
 
+	// Safe rm -rf commands must be checked BEFORE isCautionPattern,
+	// which catches all "rm " prefixed commands. Without this early
+	// return, safe nested paths like "rm -rf internal/api/dist/cache"
+	// would be classified as CAUTION instead of SAFE.
+	if isSafeRmRfPrefix(cmdLower) {
+		return SecuritySafe
+	}
+
 	// Check caution patterns BEFORE safe patterns, so that specific
 	// caution-level commands (like "docker rm") override broad safe matches.
 	if isCautionPattern(cmdLower) {

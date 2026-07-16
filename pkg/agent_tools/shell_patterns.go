@@ -455,6 +455,44 @@ var safeRmRfPrefixes = map[string]bool{
 	"rm -rf .venv/": true, "rm -rf .venv ": true,
 }
 
+// safeBuildArtifactDirs is a set of directory names that are always safe to
+// rm -rf regardless of nesting depth. These are generated build artifacts,
+// caches, or tool output directories — deleting them only requires a rebuild.
+//
+// This is used by isSafeRmRfPrefix as a fallback when the exact-prefix map
+// (safeRmRfPrefixes) doesn't match nested paths. A nested path like
+// "internal/api/webui/dist/sprout-webui" contains the segment "dist", which
+// is in this set, so the deletion is classified as safe.
+//
+// Source directories (src, lib, internal, app, pkg, etc.) are intentionally
+// NOT in this set — those contain hand-written code, not generated artifacts.
+//
+// Safety: path traversal (../) and absolute non-tmp paths are rejected BEFORE
+// this check runs in isSafeRmRfPrefix.
+var safeBuildArtifactDirs = map[string]bool{
+	"dist":          true,
+	"build":         true,
+	"node_modules":  true,
+	"target":        true,
+	"__pycache__":   true,
+	".cache":        true,
+	".gradle":       true,
+	".next":         true,
+	".turbo":        true,
+	".output":       true,
+	".svelte-kit":   true,
+	".parcel-cache": true,
+	".nuxt":         true,
+	".astro":        true,
+	".npm":          true,
+	".yarn":         true,
+	".pnpm":         true,
+	".vercel":       true,
+	".netlify":      true,
+	".terraform":    true,
+	".docker":       true,
+}
+
 // isSafeRmRfPrefix checks if a lowercased command matches one of the safe
 // rm -rf prefixes in O(1). It checks both "rm -rf " and "rm -fr " variants.
 func isSafeRmRfPrefix(cmdLower string) bool {
@@ -485,6 +523,43 @@ func isSafeRmRfPrefix(cmdLower string) bool {
 				return true
 			}
 			break // only check the first path component
+		}
+	}
+
+	// Fallback: check if any path segment in the target matches a known
+	// build-artifact directory. This handles nested paths like
+	// "rm -rf internal/api/webui/dist/sprout-webui" where "dist" is a
+	// generated build artifact directory embedded within a project path.
+	//
+	// The path must contain at least one "/" separator to qualify. This
+	// ensures bare names like "rm -rf build" (no trailing "/" or " ") stay
+	// DANGEROUS — consistent with the existing map design which intentionally
+	// leaves the no-trailing-separator variant unmatched.
+	targets := normalized[len("rm -rf "):]
+	for _, target := range strings.Fields(targets) {
+		// Skip flags (e.g., --no-preserve-root, though such commands
+		// should already be caught by isCriticalSystemOperation)
+		if strings.HasPrefix(target, "-") {
+			continue
+		}
+		// Require at least one "/" — bare names without a path separator
+		// stay DANGEROUS (e.g., "rm -rf build" vs "rm -rf build/").
+		if !strings.Contains(target, "/") {
+			continue
+		}
+		// CRITICAL: reject path traversal — never auto-approve "../".
+		if strings.Contains(target, "..") {
+			continue
+		}
+		// CRITICAL: reject absolute paths except /tmp/ (already safe).
+		if strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "/tmp/") {
+			continue
+		}
+		// Check if any path segment is a known build artifact directory.
+		for _, segment := range strings.Split(target, "/") {
+			if safeBuildArtifactDirs[segment] {
+				return true
+			}
 		}
 	}
 	return false

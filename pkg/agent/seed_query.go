@@ -8,33 +8,15 @@ package agent
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
-
-// diagnosticsDir returns the directory under the sprout config dir where
-// tool-threading diagnostic transcripts are written. It creates the directory
-// and returns an error if it cannot.
-func diagnosticsDir() (string, error) {
-	configDir, err := configuration.GetConfigDir()
-	if err != nil {
-		return "", agenterrors.NewConfig("resolve config dir", err)
-	}
-	dir := filepath.Join(configDir, "diagnostics", "threading")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", agenterrors.NewConfig("create diagnostics dir", err)
-	}
-	return dir, nil
-}
 
 // ---------------------------------------------------------------------------
 // Integration entry point
@@ -262,15 +244,6 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// fires earlier — by default at 0.70 instead of 0.85.
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
 
-	// SP-066 substitution target: when pressure fires and we substitute
-	// checkpoint summaries for raw messages, target 50% of the context
-	// window rather than seed's default 85%. Substitution is a one-way
-	// information-loss operation, so paying the cost should buy many turns
-	// of headroom instead of re-substituting one checkpoint every turn.
-	// The emergency drop/truncate cascade (Phase 1+) is unaffected and
-	// still targets 85%.
-	opts.SubstitutionTargetFraction = 0.50
-
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}
@@ -293,48 +266,10 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages, a.GetCachedTokens(), a.GetPromptTokens(), 0)
 	}
 
-	// Diagnostic capture: when seed detects a tool-call threading violation
-	// (the recurring MiniMax 2013 "tool call result does not follow tool call"
-	// rejection), save the full prepared transcript to disk so the failure can
-	// be reproduced and root-caused. Captures land under
-	// <config-dir>/diagnostics/threading/. The callback is fire-and-forget:
-	// a write failure is logged but never breaks the conversation.
-	opts.OnDiagnosticCapture = func(c core.DiagnosticCapture) {
-		dir, err := diagnosticsDir()
-		if err != nil {
-			a.Logger().Debug("[diagnostic] could not resolve config dir: %v\n", err)
-			return
-		}
-		path, err := core.WriteDiagnosticTranscript(c, dir)
-		if err != nil {
-			a.Logger().Debug("[diagnostic] failed to write transcript: %v\n", err)
-			return
-		}
-		a.Logger().Debug("[diagnostic] saved tool-threading transcript (%s, %d violation(s)): %s\n", c.Trigger, len(c.Violations), path)
-	}
-
 	// Seed the agent with the existing conversation history so that
 	// multi-turn continuity is preserved across queries.
 	if msgs := a.state.GetMessages(); len(msgs) > 0 {
 		opts.InitialMessages = msgs
-
-		// Phase 2 instrumentation: check if corruption exists in the
-		// InitialMessages BEFORE the seed agent runs. If violations are
-		// present here, the corruption was inherited from a previous
-		// query's syncSeedStateToSprout or from session persistence.
-		if violations := core.ValidateToolThreading(msgs); len(violations) > 0 {
-			missing := 0
-			for _, v := range violations {
-				if v.Kind == core.ToolThreadingViolationMissingResult {
-					missing++
-				}
-			}
-			a.Logger().Warn(
-				"[threading] %d violation(s) in InitialMessages BEFORE seed run (missing_results=%d, total_msgs=%d) — "+
-					"corruption inherited from previous query or session restore",
-				len(violations), missing, len(msgs),
-			)
-		}
 	}
 
 	// Restore turn checkpoints so that the message pipeline can apply
@@ -353,24 +288,11 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	if len(cps) > 0 {
 		seedCPs := make([]core.TurnCheckpoint, len(cps))
 		for i, cp := range cps {
-			// Convert sprout's CheckpointFileChange manifest to seed's
-			// FileChange slice so the model sees the git-style turn
-			// manifest and can resolve revision_id via the view_history
-			// tool when it needs the full diff.
-			var seedChanges []core.FileChange
-			if len(cp.FileChanges) > 0 {
-				seedChanges = make([]core.FileChange, len(cp.FileChanges))
-				for j, fc := range cp.FileChanges {
-					seedChanges[j] = core.FileChange{Path: fc.Path, Op: fc.Op}
-				}
-			}
 			seedCPs[i] = core.TurnCheckpoint{
 				StartIndex:        cp.StartIndex,
 				EndIndex:          cp.EndIndex,
 				Summary:           cp.Summary,
 				ActionableSummary: cp.ActionableSummary,
-				FileChanges:       seedChanges,
-				RevisionID:        cp.RevisionID,
 			}
 		}
 		opts.InitialCheckpoints = seedCPs
@@ -665,48 +587,5 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
 	if a.debug {
 		a.Logger().Debug("[sync] Seed sync complete: msgCount=%d, assistantCount=%d, terminationReason=%s, iteration=%d\n",
 			len(seedMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
-	}
-
-	// Phase 2 instrumentation: validate tool threading on the raw synced
-	// messages. This tells us whether the corruption (consecutive assistant
-	// messages with missing tool results) originates in the seed runLoop
-	// (if violations are present here) or in a later transformation like
-	// checkpoint compaction (if violations only appear in prepared messages).
-	// Logged at WARN level so it's visible without --debug.
-	if violations := core.ValidateToolThreading(seedMsgs); len(violations) > 0 {
-		missing := 0
-		for _, v := range violations {
-			if v.Kind == core.ToolThreadingViolationMissingResult {
-				missing++
-			}
-		}
-		// Build a compact role sequence for diagnostics: A=assistant, T=tool,
-		// U=user, S=system. Shows the message structure at a glance.
-		roles := make([]byte, 0, len(seedMsgs))
-		for _, m := range seedMsgs {
-			switch m.Role {
-			case "assistant":
-				tc := len(m.ToolCalls)
-				if tc > 0 {
-					roles = append(roles, 'A')
-				} else {
-					roles = append(roles, 'a')
-				}
-			case "tool":
-				roles = append(roles, 'T')
-			case "user":
-				roles = append(roles, 'U')
-			case "system":
-				roles = append(roles, 'S')
-			default:
-				roles = append(roles, '?')
-			}
-		}
-		a.Logger().Warn(
-			"[threading] %d violation(s) in raw state after sync (missing_results=%d, total_msgs=%d) — "+
-				"corruption originates in seed runLoop or InitialMessages, not in prepareMessages\n"+
-				"  role sequence: %s",
-			len(violations), missing, len(seedMsgs), string(roles),
-		)
 	}
 }

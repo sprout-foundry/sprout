@@ -128,6 +128,9 @@ func Load() (*Config, error) {
 	// /commit silently routing to a no-op mock.
 	sanitizeTestProvider(config)
 
+	// Migrate legacy approved_shell_commands to unified command_policies
+	MigrateCommandPolicies(config)
+
 	return config, nil
 }
 

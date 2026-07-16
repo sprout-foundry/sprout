@@ -364,23 +364,11 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	}
 }
 
-// classifyChainedCommand splits and classifies chained commands
-func classifyChainedCommand(cmd string) []SecurityRisk {
-	if risk, ok := classifyReadOnlyForLoop(cmd); ok {
-		return []SecurityRisk{risk}
-	}
-
-	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass).
-	// Strip quoted sections first to avoid false positives from | characters
-	// inside grep patterns, regex alternation, etc. (e.g., grep "a|b|c" | head).
-	// Use regex to handle any whitespace and multiple shell interpreters.
-	cmdLower := strings.ToLower(cmd)
-	stripped := stripQuotedSections(cmdLower)
-	if isPipeToShell(stripped) {
-		return []SecurityRisk{SecurityDangerous}
-	}
-
-	// Split on &&, ||, ;, | but respect quotes
+// SplitChainedCommand splits a command string on &&, ||, ;, | (quote-aware)
+// and returns the individual subcommand strings. It respects single and
+// double quotes so that separators inside quoted strings are not treated as
+// chain boundaries.
+func SplitChainedCommand(cmd string) []string {
 	var parts []string
 	current := &strings.Builder{}
 	inQuote := false
@@ -434,6 +422,27 @@ func classifyChainedCommand(cmd string) []SecurityRisk {
 	if current.Len() > 0 {
 		parts = append(parts, strings.TrimSpace(current.String()))
 	}
+
+	return parts
+}
+
+// classifyChainedCommand splits and classifies chained commands
+func classifyChainedCommand(cmd string) []SecurityRisk {
+	if risk, ok := classifyReadOnlyForLoop(cmd); ok {
+		return []SecurityRisk{risk}
+	}
+
+	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass).
+	// Strip quoted sections first to avoid false positives from | characters
+	// inside grep patterns, regex alternation, etc. (e.g., grep "a|b|c" | head).
+	// Use regex to handle any whitespace and multiple shell interpreters.
+	cmdLower := strings.ToLower(cmd)
+	stripped := stripQuotedSections(cmdLower)
+	if isPipeToShell(stripped) {
+		return []SecurityRisk{SecurityDangerous}
+	}
+
+	parts := SplitChainedCommand(cmd)
 
 	var risks []SecurityRisk
 	for _, part := range parts {

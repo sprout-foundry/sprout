@@ -235,4 +235,3 @@ func TestExtractShortLabel(t *testing.T) {
 		})
 	}
 }
-

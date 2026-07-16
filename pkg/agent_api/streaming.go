@@ -188,7 +188,6 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 			TotalTokens:      chunk.Usage.TotalTokens,
 			EstimatedCost:    chunk.Usage.EstimatedCost,
 			Cost:             chunk.Usage.Cost,
-			ImageTokens:      chunk.Usage.ImageTokens,
 			CachedTokens:     chunk.Usage.PromptTokensDetails.CachedTokens,
 			CacheWriteTokens: chunk.Usage.PromptTokensDetails.CacheWriteTokens,
 		}

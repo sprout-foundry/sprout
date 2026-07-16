@@ -409,6 +409,20 @@ func IsPermanent(err error) bool {
 	return ok && category == CategoryPermanent
 }
 
+// IsPermission checks if an error is a TypedError with CodePermission.
+// Permission errors arise from security approval denial, approval timeout,
+// or no approval channel — none are retryable.
+func IsPermission(err error) bool {
+	if err == nil {
+		return false
+	}
+	var typedErr *TypedError
+	if errors.As(err, &typedErr) {
+		return typedErr.Code == CodePermission
+	}
+	return false
+}
+
 // =============================================================================
 // SP-094 typed-error hierarchy (additive, coexists with the legacy Category
 // taxonomy above). New call sites should prefer these constructors; existing

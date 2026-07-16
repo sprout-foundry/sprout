@@ -163,9 +163,10 @@ func TestSanitizeArgForPreview(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-					if got := cliui.SanitizeArgForPreview(tt.in); got != tt.want {
-			t.Errorf("cliui.SanitizeArgForPreview(%q) = %q, want %q", tt.in, got, tt.want)
-		}})
+			if got := cliui.SanitizeArgForPreview(tt.in); got != tt.want {
+				t.Errorf("cliui.SanitizeArgForPreview(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

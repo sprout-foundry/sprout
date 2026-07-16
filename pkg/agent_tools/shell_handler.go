@@ -203,6 +203,16 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 
 	background := getBoolArg(args, "background")
 
+	// Validate: command is required when not doing a background session operation.
+	// This catches malformed tool calls early — they are validation failures,
+	// not security issues, and should never reach the approval flow.
+	if command == "" && checkBackground == "" && stopBackground == "" {
+		return ToolResult{
+			Output:  "command parameter is required when check_background and stop_background are not provided",
+			IsError: true,
+		}, agenterrors.NewValidation("command parameter is required when check_background and stop_background are not provided", nil)
+	}
+
 	// --- Usage guidance (not a security gate) ---
 	// Standalone sleep/wait is an antipattern in tool calls. The classifier
 	// returns SecuritySafe for these so no security elevation triggers, but

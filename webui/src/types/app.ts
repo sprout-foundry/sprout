@@ -84,7 +84,7 @@ export interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces';
   toolExecutions: ToolExecution[];
   queryProgress: QueryProgress | null;
   stats: Record<string, unknown>; // Enhanced stats from API

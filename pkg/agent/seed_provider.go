@@ -327,6 +327,28 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	if err != nil {
 		return nil, err
 	}
+
+	// Reasoning-model fallback: some models (GLM-5, Qwen with thinking)
+	// stream their visible prose as reasoning_content, not content. The
+	// StreamingResponseBuilder moves reasoning to content in GetResponse(),
+	// but by then the streaming callback has already fired with contentType
+	// "reasoning" (hidden from terminal). The prose never reaches the
+	// terminal as inline text — it appears as a batch dump at turn end.
+	//
+	// Detect this case: if the streaming buffer is empty (no "assistant_text"
+	// chunks were streamed) but the response has non-empty content, invoke
+	// the callback with that content so it displays inline via the normal
+	// RouteStreamChunk path.
+	if resp != nil && len(resp.Choices) > 0 {
+		msgContent := resp.Choices[0].Message.Content
+		if sp.agent.output.GetStreamingBuffer().Len() == 0 && strings.TrimSpace(msgContent) != "" {
+			sp.agent.output.GetStreamingBuffer().WriteString(msgContent)
+			if router := sp.agent.OutputRouter(); router != nil {
+				router.RouteStreamChunk(msgContent, "assistant_text")
+			}
+		}
+	}
+
 	return sproutResponseToSeed(resp), nil
 }
 

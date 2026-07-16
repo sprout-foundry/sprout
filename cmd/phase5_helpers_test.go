@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 )
 
 // SP-048-5d
@@ -24,8 +26,8 @@ func TestBuildPromptPrefix(t *testing.T) {
 		{"  trim-me  ", "trim-me ▸ "},
 	}
 	for _, c := range cases {
-		if got := buildPromptPrefix(c.model); got != c.want {
-			t.Errorf("buildPromptPrefix(%q) = %q, want %q", c.model, got, c.want)
+		if got := cliui.BuildPromptPrefix(c.model); got != c.want {
+			t.Errorf("cliui.BuildPromptPrefix(%q) = %q, want %q", c.model, got, c.want)
 		}
 	}
 }
@@ -45,8 +47,8 @@ func TestCompactTokens(t *testing.T) {
 		{12345, "12.3k"},
 	}
 	for _, c := range cases {
-		if got := compactTokens(c.in); got != c.want {
-			t.Errorf("compactTokens(%d) = %q, want %q", c.in, got, c.want)
+		if got := cliui.CompactTokens(c.in); got != c.want {
+			t.Errorf("cliui.CompactTokens(%d) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -73,8 +75,8 @@ func TestCompactTokens_Boundaries(t *testing.T) {
 		{1050, "1.1k"},
 	}
 	for _, c := range cases {
-		if got := compactTokens(c.in); got != c.want {
-			t.Errorf("compactTokens(%d) = %q, want %q", c.in, got, c.want)
+		if got := cliui.CompactTokens(c.in); got != c.want {
+			t.Errorf("cliui.CompactTokens(%d) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -94,8 +96,8 @@ func TestCompactCost(t *testing.T) {
 		{12.34, "$12.34"},
 	}
 	for _, c := range cases {
-		if got := compactCost(c.in); got != c.want {
-			t.Errorf("compactCost(%v) = %q, want %q", c.in, got, c.want)
+		if got := cliui.CompactCost(c.in); got != c.want {
+			t.Errorf("cliui.CompactCost(%v) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -115,8 +117,8 @@ func TestCompactDuration(t *testing.T) {
 		{125 * time.Second, "2m5s"},
 	}
 	for _, c := range cases {
-		if got := compactDuration(c.in); got != c.want {
-			t.Errorf("compactDuration(%v) = %q, want %q", c.in, got, c.want)
+		if got := cliui.CompactDuration(c.in); got != c.want {
+			t.Errorf("cliui.CompactDuration(%v) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -151,7 +153,7 @@ func TestFormatTurnStatsLine_Color(t *testing.T) {
 	// With color enabled (default): should contain ANSI dim codes.
 	os.Unsetenv("NO_COLOR")
 	os.Unsetenv("FORCE_COLOR")
-	out := formatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond, 0)
+	out := cliui.FormatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond, 0)
 	if !strings.Contains(out, "\033[2m") {
 		t.Errorf("with color, expected ANSI dim code in output: %q", out)
 	}
@@ -170,7 +172,7 @@ func TestFormatTurnStatsLine_Color(t *testing.T) {
 
 	// With color disabled: no ANSI codes.
 	os.Setenv("NO_COLOR", "1")
-	out = formatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond, 0)
+	out = cliui.FormatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond, 0)
 	if strings.Contains(out, "\033[2m") || strings.Contains(out, "\033[0m") {
 		t.Errorf("without color, no ANSI codes expected: %q", out)
 	}
@@ -183,7 +185,7 @@ func TestFormatTurnStatsLine_Color(t *testing.T) {
 
 func TestFormatTurnStatsLine_TTFT_Hidden_WhenZero(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	out := formatTurnStatsLine(100, 200, 0.01, 1*time.Second, 0)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.01, 1*time.Second, 0)
 	if strings.Contains(out, "ttft") {
 		t.Errorf("zero ttft should not render segment, got %q", out)
 	}
@@ -191,7 +193,7 @@ func TestFormatTurnStatsLine_TTFT_Hidden_WhenZero(t *testing.T) {
 
 func TestFormatTurnStatsLine_TTFT_Shown_WhenNonZero(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	out := formatTurnStatsLine(100, 200, 0.01, 2*time.Second, 800*time.Millisecond)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.01, 2*time.Second, 800*time.Millisecond)
 	if !strings.Contains(out, "ttft 800ms") {
 		t.Errorf("expected 'ttft 800ms' segment, got %q", out)
 	}
@@ -200,7 +202,7 @@ func TestFormatTurnStatsLine_TTFT_Shown_WhenNonZero(t *testing.T) {
 func TestFormatTurnStatsLine_TTFT_YellowAbove2s(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("FORCE_COLOR", "1")
-	out := formatTurnStatsLine(100, 200, 0.01, 3*time.Second, 3*time.Second)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.01, 3*time.Second, 3*time.Second)
 	if !strings.Contains(out, "\033[33m") {
 		t.Errorf("ttft >2s should render yellow; got %q", out)
 	}
@@ -209,7 +211,7 @@ func TestFormatTurnStatsLine_TTFT_YellowAbove2s(t *testing.T) {
 func TestFormatTurnStatsLine_TTFT_RedAbove5s(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("FORCE_COLOR", "1")
-	out := formatTurnStatsLine(100, 200, 0.01, 6*time.Second, 6*time.Second)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.01, 6*time.Second, 6*time.Second)
 	if !strings.Contains(out, "\033[31m") {
 		t.Errorf("ttft >5s should render red; got %q", out)
 	}
@@ -217,7 +219,7 @@ func TestFormatTurnStatsLine_TTFT_RedAbove5s(t *testing.T) {
 
 func TestFormatTurnStatsLine_TTFT_NoColorWhenDisabled(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	out := formatTurnStatsLine(100, 200, 0.01, 6*time.Second, 6*time.Second)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.01, 6*time.Second, 6*time.Second)
 	if strings.Contains(out, "\033[31m") || strings.Contains(out, "\033[33m") {
 		t.Errorf("NO_COLOR should suppress threshold colors; got %q", out)
 	}
@@ -230,19 +232,19 @@ func TestFormatTurnStatsLine_Durations(t *testing.T) {
 	os.Setenv("NO_COLOR", "1") // strip ANSI for easier assertions
 
 	// Sub-second
-	out := formatTurnStatsLine(100, 200, 0.0023, 450*time.Millisecond, 0)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.0023, 450*time.Millisecond, 0)
 	if !strings.Contains(out, "450ms") {
 		t.Errorf("expected '450ms' in %q", out)
 	}
 
 	// Seconds
-	out = formatTurnStatsLine(50, 60, 0.001, 3*time.Second, 0)
+	out = cliui.FormatTurnStatsLine(50, 60, 0.001, 3*time.Second, 0)
 	if !strings.Contains(out, "3.0s") {
 		t.Errorf("expected '3.0s' in %q", out)
 	}
 
 	// Minutes
-	out = formatTurnStatsLine(500, 600, 0.12, 1*time.Minute+30*time.Second, 0)
+	out = cliui.FormatTurnStatsLine(500, 600, 0.12, 1*time.Minute+30*time.Second, 0)
 	if !strings.Contains(out, "1m30s") {
 		t.Errorf("expected '1m30s' in %q", out)
 	}
@@ -256,14 +258,14 @@ func TestFormatTurnStatsLine_EdgeCases(t *testing.T) {
 
 	// Zero deltas still produce output (the caller is responsible for
 	// filtering out zero-token turns).
-	out := formatTurnStatsLine(0, 0, 0, 0, 0)
+	out := cliui.FormatTurnStatsLine(0, 0, 0, 0, 0)
 	if !strings.Contains(out, "0 in / 0 out") {
 		t.Errorf("expected zero stats in %q", out)
 	}
 
 	// Negative cost (shouldn't happen) — omitted entirely since
 	// zero/negative cost means "no pricing for this model."
-	out = formatTurnStatsLine(100, 200, -0.5, 2*time.Second, 0)
+	out = cliui.FormatTurnStatsLine(100, 200, -0.5, 2*time.Second, 0)
 	if strings.Contains(out, "$") {
 		t.Errorf("expected no cost segment for negative cost, got %q", out)
 	}
@@ -272,11 +274,11 @@ func TestFormatTurnStatsLine_EdgeCases(t *testing.T) {
 // SP-048-5a
 func TestShouldShowTurnStats(t *testing.T) {
 	// In a test harness, stderr is not a TTY (no terminal attached), so
-	// shouldShowTurnStats() must return false. This is correct: the
+	// cliui.ShouldShowTurnStats() must return false. This is correct: the
 	// function checks stderr (not stdout) because printPerTurnSummary
 	// writes to os.Stderr.
-	if shouldShowTurnStats() {
-		t.Error("shouldShowTurnStats() should return false in a non-TTY test environment")
+	if cliui.ShouldShowTurnStats() {
+		t.Error("cliui.ShouldShowTurnStats() should return false in a non-TTY test environment")
 	}
 }
 
@@ -360,8 +362,8 @@ func TestCompactCost_Boundaries(t *testing.T) {
 		{1234.56, "$1234.56"},
 	}
 	for _, c := range cases {
-		if got := compactCost(c.in); got != c.want {
-			t.Errorf("compactCost(%v) = %q, want %q", c.in, got, c.want)
+		if got := cliui.CompactCost(c.in); got != c.want {
+			t.Errorf("cliui.CompactCost(%v) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -388,8 +390,8 @@ func TestCompactDuration_Boundaries(t *testing.T) {
 		{3*time.Hour + 30*time.Minute + 45*time.Second, "210m45s"},
 	}
 	for _, c := range cases {
-		if got := compactDuration(c.in); got != c.want {
-			t.Errorf("compactDuration(%v) = %q, want %q", c.in, got, c.want)
+		if got := cliui.CompactDuration(c.in); got != c.want {
+			t.Errorf("cliui.CompactDuration(%v) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -400,7 +402,7 @@ func TestFormatTurnStatsLine_ExactFormat(t *testing.T) {
 	defer os.Setenv("NO_COLOR", old)
 	os.Setenv("NO_COLOR", "1")
 
-	out := formatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
 
 	// Verify the line format: "⎯ this turn: X in / Y out · $Z · Ts ⎯\n"
 	// Strip trailing newline for assertions
@@ -485,7 +487,7 @@ func TestFormatTurnStatsLine_LargeValues(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out := formatTurnStatsLine(c.prompt, c.completion, c.cost, c.elapsed, 0)
+			out := cliui.FormatTurnStatsLine(c.prompt, c.completion, c.cost, c.elapsed, 0)
 			for _, want := range c.wants {
 				if !strings.Contains(out, want) {
 					t.Errorf("expected %q in output: %q", want, out)
@@ -508,7 +510,7 @@ func TestFormatTurnStatsLine_ForceColor(t *testing.T) {
 	// When both are set, output should NOT contain ANSI codes.
 	os.Setenv("NO_COLOR", "1")
 	os.Setenv("FORCE_COLOR", "1")
-	out := formatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
+	out := cliui.FormatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
 	if strings.Contains(out, "\033[2m") {
 		t.Errorf("NO_COLOR should win over FORCE_COLOR, expected no ANSI codes in: %q", out)
 	}
@@ -516,7 +518,7 @@ func TestFormatTurnStatsLine_ForceColor(t *testing.T) {
 	// FORCE_COLOR alone (no NO_COLOR) should enable ANSI codes.
 	os.Setenv("NO_COLOR", "")
 	os.Setenv("FORCE_COLOR", "1")
-	out = formatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
+	out = cliui.FormatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
 	if !strings.Contains(out, "\033[2m") {
 		t.Errorf("FORCE_COLOR alone should enable ANSI codes, expected dim code in: %q", out)
 	}
@@ -540,7 +542,7 @@ func TestFormatTurnStatsLine_CostThresholds(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out := formatTurnStatsLine(100, 200, c.cost, 1*time.Second, 0)
+			out := cliui.FormatTurnStatsLine(100, 200, c.cost, 1*time.Second, 0)
 			if !strings.Contains(out, c.want) {
 				t.Errorf("expected %q in output: %q", c.want, out)
 			}
@@ -550,17 +552,17 @@ func TestFormatTurnStatsLine_CostThresholds(t *testing.T) {
 
 // SP-048-5a
 func TestPrintPerTurnSummary_SuppressedInTestEnv(t *testing.T) {
-	// In a test environment, stderr is not a TTY, so shouldShowTurnStats()
+	// In a test environment, stderr is not a TTY, so cliui.ShouldShowTurnStats()
 	// returns false and printPerTurnSummary produces no output. We verify
 	// this by capturing stderr. We pass nil for the agent because the early
-	// return in shouldShowTurnStats() means the agent is never dereferenced.
+	// return in cliui.ShouldShowTurnStats() means the agent is never dereferenced.
 	old := os.Stderr
 	defer func() { os.Stderr = old }()
 
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	printPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0)
+	cliui.PrintPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0)
 
 	w.Close()
 	got, err := io.ReadAll(r)

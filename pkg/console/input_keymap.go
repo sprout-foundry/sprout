@@ -40,8 +40,8 @@ type KeymapEntry struct {
 }
 
 // globalKeymap is the process-wide registry. Accessed via
-// RegisterKeymap / LookupKeymap / GlobalKeymap. Tests may swap it via
-// SetGlobalKeymapForTest.
+// RegisterKeymap / LookupKeymap / GlobalKeymap. Tests in this package
+// swap globalKeymap / keymapOnce directly (no public setter).
 var (
 	globalKeymap     *KeymapRegistry
 	globalKeymapOnce sync.Once
@@ -181,10 +181,66 @@ func KeymapHelpTable() string {
 // KeymapHintRow renders a single-line hint of registered keybindings
 // suitable for embedding in a footer or status bar.
 // Format: "Alt+T label1 · Alt+V label2 · ..."
-// The label is the Description truncated to ~30 display columns.
-// Returns empty string when no bindings are registered.
+// The label is derived from the Action name (the second-to-last
+// dot-separated segment, e.g. "footer.tooltip.toggle" → "tooltip"),
+// falling back to the Description's first word when Action is empty.
+// Labels longer than 30 display columns are truncated with "…".
+// Returns empty string when no bindings have descriptions.
 func KeymapHintRow() string {
-	return "Type /help for available slash commands"
+	entries := GlobalKeymap().Entries()
+	if len(entries) == 0 {
+		return ""
+	}
+
+	const maxLabelWidth = 30
+	var parts []string
+	for _, e := range entries {
+		if e.Description == "" {
+			continue
+		}
+		label := extractShortLabel(e)
+		if len(label) > maxLabelWidth {
+			label = truncateToWidth(label, maxLabelWidth, "…")
+		}
+		parts = append(parts, e.Key+" "+label)
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " · ")
+}
+
+// extractShortLabel derives a compact label from a keymap entry for use in
+// footer hints. It takes the second-to-last dot-separated segment of the
+// Action name (e.g., "footer.tooltip.toggle" → "tooltip",
+// "output_verbosity.toggle" → "verbosity"). The middle segment is the
+// "thing being controlled" — the most semantically useful for a hint.
+//
+// Edge cases:
+//   - Action has only one dot ("footer.tooltip"): returns "footer" (the
+//     first segment), since there's no second-to-last.
+//   - Action has no dots ("simpleaction"): returns the whole Action.
+//   - Action is empty: falls back to the first word of Description.
+func extractShortLabel(e KeymapEntry) string {
+	if e.Action != "" {
+		if lastDot := strings.LastIndex(e.Action, "."); lastDot > 0 {
+			// Walk back from lastDot to find the previous dot.
+			head := e.Action[:lastDot]
+			if prevDot := strings.LastIndex(head, "."); prevDot >= 0 {
+				return head[prevDot+1:]
+			}
+			// Only one dot in Action: return the head segment.
+			return head
+		}
+		// No dot: use the whole Action name.
+		return e.Action
+	}
+	// Fallback: first word of Description.
+	if idx := strings.Index(e.Description, " "); idx > 0 {
+		return e.Description[:idx]
+	}
+	return e.Description
 }
 
 func padRight(s string, n int) string {

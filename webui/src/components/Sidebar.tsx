@@ -59,8 +59,20 @@ interface SidebarProps {
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces';
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => void;
+  currentView?:
+    | 'chat'
+    | 'editor'
+    | 'git'
+    | 'tasks'
+    | 'billing'
+    | 'team'
+    | 'costs'
+    | 'runners'
+    | 'dashboard'
+    | 'workspaces';
+  onViewChange?: (
+    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
+  ) => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -472,7 +484,19 @@ function Sidebar({
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces');
+                            onViewChange(
+                              item.id as
+                                | 'chat'
+                                | 'editor'
+                                | 'git'
+                                | 'tasks'
+                                | 'billing'
+                                | 'team'
+                                | 'costs'
+                                | 'runners'
+                                | 'dashboard'
+                                | 'workspaces',
+                            );
                           }
                         }}
                         title={item.label}

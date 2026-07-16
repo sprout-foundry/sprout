@@ -20,6 +20,17 @@ const defaultToolResultMaxChars = 50000 // Universal cap on tool result size (~1
 // Can be overridden via SPROUT_TOOL_TIMEOUT environment variable (in seconds).
 // When 0 or unset, the per-tool defaults apply.
 func getToolTimeout(toolName string) time.Duration {
+	// Interactive tools (ask_user, request_clarification) manage their own
+	// timeouts internally (AskUserManager: 30 min, ClarificationManager: 60s).
+	// Applying the default 5-minute tool-execution timeout here fires before
+	// those internal deadlines, silently cancelling the prompt while the
+	// dialog stays open and the user's in-progress input is lost.
+	// This check runs BEFORE the env override so SPROUT_TOOL_TIMEOUT can't
+	// re-introduce the bug for interactive tools.
+	if IsInteractiveTool(toolName) {
+		return 1 * time.Hour
+	}
+
 	// Check for environment variable override first.
 	// GetEnvSimple("TOOL_TIMEOUT") checks SPROUT_TOOL_TIMEOUT, then LEDIT_TOOL_TIMEOUT.
 	if envTimeout := configuration.GetEnvSimple("TOOL_TIMEOUT"); envTimeout != "" {

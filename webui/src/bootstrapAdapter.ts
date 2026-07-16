@@ -36,6 +36,7 @@ const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
   { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 2 },
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
+  { id: 'runners', label: 'Runners', href: '/runners', icon: 'server', order: 4 },
 ];
 
 const LOCALHOST_DEFAULTS: RuntimeConfig = {

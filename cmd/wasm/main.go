@@ -75,6 +75,9 @@ func main() {
 	for name, fn := range toolExecJSFuncs() {
 		apiSurface[name] = fn
 	}
+	for name, fn := range embeddingJSFuncs() {
+		apiSurface[name] = fn
+	}
 
 	js.Global().Set("SproutWasm", js.ValueOf(apiSurface))
 

@@ -6,332 +6,96 @@ record.
 
 ---
 
-## SP-116: Multi-Instance Isolation
+## SP-122: Security Classifier — Chained Command Handling
 
-_Spec: `roadmap/SP-116-multi-instance-isolation.md`. 🔵 Proposed — not yet started._
+**Priority**: High — blocks safe dev workflows (vendoring, build cycles)
 
-### Phase 1: Auto-isolate config per workspace (~0.5 day)
+### Problem
 
-Auto-detect when `sprout agent` is run in a git repo (`.git` in cwd or
-ancestors) and auto-bootstrap `.sprout/config.json` by cloning from the
-global config on first run. This makes `--isolated-config` the default
-for all repo-backed directories.
+When a shell command chains a destructive operation (e.g. `rm -rf`)
+with subsequent safe operations (e.g. `mkdir`, `cp`), the classifier
+blocks the ENTIRE pipeline, even when the `rm -rf` targets a
+legitimate build/vendoring path.
 
-**Files:** `cmd/root.go` (~50 lines in `PersistentPreRunE`) + maybe
-`pkg/configuration/isolated_config.go` (handle empty source gracefully).
+### Concrete example (2026-07-15)
 
-### Phase 2: Per-instance background processes (~0.5 day)
+```bash
+rm -rf internal/api/webui/dist/sprout-webui && \
+  mkdir -p internal/api/webui/dist && \
+  cp -r ../sprout/webui/dist/* internal/api/webui/dist/sprout-webui/
+```
 
-Scope `/tmp/sprout-bg/` to `<configDir>/bg-processes/` so `sprout
-shell-bg list` only shows sessions from the current workspace.
+This is a safe vendoring operation (clear build artifacts, copy fresh
+build). The classifier blocked it because `rm -rf internal/api/webui/...`
+is not in the `safeRmRfPrefixes` whitelist — only top-level dirs like
+`dist/`, `node_modules/`, etc. are whitelisted. The `cp -r` and `mkdir`
+commands are perfectly safe but got blocked by association.
 
-**Files:** `pkg/agent_tools/background_process_manager.go`,
-`cmd/shell_bg.go`.
+### Root cause (two compounding issues)
 
-### Phase 3: Workspace config overrides (~1-2 days, stretch)
+1. **`safeRmRfPrefixes` is too narrow.** It only matches top-level
+   build artifact directories (`node_modules/`, `dist/`, `build/`).
+   Nested project paths like `internal/api/webui/dist/sprout-webui`
+   or `platform/webui/dist/` are not whitelisted and trigger
+   `directory_deletion` → DANGEROUS → hard block.
 
-Allow `.sprout/config.json` to override specific settings (model
-preference, subagent provider, persona) while inheriting
-providers/credentials from the global config.
+2. **Chained command classification is all-or-nothing.** When a
+   command has `&&`-chained subcommands, the classifier evaluates
+   the full command string as a single unit. If ANY part is
+   DANGEROUS, the whole thing is blocked. There's no mechanism to:
+   - Split on `&&` / `||` / `;` and evaluate each subcommand independently
+   - Allow the safe portions while prompting for the dangerous portion
+   - Whitelist specific workspace-relative paths
 
-**Files:** `pkg/configuration/config_load_save.go`,
-`pkg/configuration/config_paths.go`.
+### Phase 1: Expand safe-path matching
 
-### Phase 4: Daemon service hardening (launch priority)
+- [ ] **SP-122-1a:** Add pattern matching for `rm -rf` against paths
+      ending in known build output dirs (e.g. `*/dist/*`, `*/build/*`,
+      `*/node_modules/*`). Use a glob/regex approach instead of exact
+      prefix matching so nested paths are covered.
+      **Files**: `pkg/agent_tools/shell_patterns.go`
+      **Acceptance**: `rm -rf internal/api/webui/dist/sprout-webui`
+      classifies as SAFE; `rm -rf internal/api/` still DANGEROUS.
 
-The `sprout service` daemon on port 56000 is the primary launch target (desktop
-is deferred). The daemon must serve multiple workspaces through a single WebUI.
-Already implemented:
-- `NewAgentWithLayersInWorkspace` creates per-workspace agents
-- `WorkspacePicker` UI for switching workspaces
-- `RecentWorkspace` tracking (`~/.sprout/recent_workspaces.json`)
-- `SPROUT_SERVICE=1` guard to skip auto-isolation for system daemon
-- Graceful startup without provider (WebUI onboarding)
+- [ ] **SP-122-1b:** Add tests for nested-path safety matching.
+      **Files**: `pkg/agent_tools/shell_patterns_test.go`
+      **Acceptance**: Tests cover top-level, nested, and traversal
+      (`../`) paths.
 
-**Remaining**: Service manager robustness testing on macOS (launchd) and Linux
-(systemd). Verify `sprout service install/start/stop/status` end-to-end.
+### Phase 2: Split chained commands for classification
 
-### Acceptance
+- [ ] **SP-122-2a:** When a command contains `&&`, `||`, or `;`, split
+      into subcommands and classify each independently. The overall risk
+      is the MAX of the subcommand risks, but the prompt/block decision
+      should be per-subcommand where feasible.
+      **Files**: `pkg/agent_tools/security_classifier.go`
+      **Acceptance**: A command like `cp -r x y && rm -rf dist/ && echo done`
+      classifies the `cp` and `echo` as SAFE and only flags the `rm -rf`.
 
-- Start two sprout instances in different git repos; each gets its own
-  `.sprout/config.json`, `instances.json`, and port.
-- `sprout shell-bg list` only shows sessions from the current workspace.
-- `sprout agent` in a non-git directory still uses `~/.config/sprout/`
-  (backward compat).
-- Desktop app multi-workspace remains fully functional.
+- [ ] **SP-122-2b:** Tests for chained command splitting.
+      **Files**: `pkg/agent_tools/security_classifier_test.go`
+      **Acceptance**: Tests cover `&&`, `||`, `;`, pipes, and mixed chains.
+
+### Key files
+
+- `pkg/agent_tools/security_classifier.go` — main classifier
+- `pkg/agent_tools/shell_patterns.go` — `safeRmRfPrefixes` map
+- `pkg/agent_tools/shell_utils.go` — `getShellCommandRiskType`
+- `pkg/agent_tools/shell_handler.go` — where block decision is enforced
 
 ---
+
+## SP-116: Multi-Instance Isolation
+
+_Spec: `roadmap/_completed/SP-116-multi-instance-isolation.md`. ✅ Implemented — Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). Auto-detect in `cmd/root.go::detectGitRepo`, scoped background processes, layered config (`agent.NewAgentWithLayers`). The spec is archived; the test coverage is in `cmd/root_test.go` and `pkg/configuration/isolated_config_test.go`. Daemon-side skip-via-`SPROUT_SERVICE=1` guard ensures system services stay global._
 
 ## SP-118: Daemon Multi-Window Session Isolation
 
-_Spec: `roadmap/SP-118-daemon-multi-window-sessions.md`. 🟡 Partially shipped — phases 1-5 done; phase 6 partial._
-
-Discovered while debugging a 13-minute UI hang in a two-window daemon
-session (Windows A on the sprout repo + Window B SSH'd into another
-box, both against the same `sprout service` daemon). Root cause: the
-WS single-active policy currently enforced for *all* modes via
-`activeWSByUserID sync.Map` (`pkg/webui/server.go:56`,
-`websocket_handler.go:93-156`). Two browser windows under one user
-account trigger `session_conflict`; the second sits in
-`waitForTakeover` for up to 10s (`websocket_handler.go:798-826`)
-then drops; the first window's socket is closed by the daemon,
-and the first window's UI appears frozen even though the agent
-keeps running.
-
-The mislabel is real: the policy is attributed to "SP-046" in ~15
-`[SP-046]` log lines (`websocket_handler.go:107, 120, 137, 729,
-811, 816, 821, 836, 850, 860, 868, 879, 889, 905, 909, 914, 924,
-939, 943, 953, 959, 963, 969, 973`) and in the
-`pkg/webui/multi_device_takeover.go:7-12` doc comment that
-references a non-existent "SP-046-5" sub-section. SP-046 is the
-unrelated browser-primary workspace-sync spec
-(`roadmap/_completed/SP-046-workspace-sync-model.md`).
-
-Spec covers: split WS session policy into Mode 1 (`sprout agent`,
-keeps current single-active enforcement byte-identical) and Mode 2
-(`sprout service`, supports N parallel windows). Read spec
-before implementing; non-trivial design decisions on
-`agentEnforceSingleSession` field, registry shape, and per-session
-panic cleanup.
-
-### Phase 1: Registry + dispatch skeleton + log tag sweep
-
-- [x] **SP-118-1:** Shipped in `629fd42b` "feat(webui): SP-118 phase 1".
-      `ReactWebServer` in `pkg/webui/server.go` (near `serviceMode` at
-      `:76`). Set to `true` only by `sprout agent`. Add new
-      `UserConnections` type in `pkg/webui/multi_connection_registry.go`
-      with `Add`, `Remove`, `Count`, `ForEach`. Use lazy-allocated
-      per-user `sync.RWMutex`. Existing `activeWSByUserID sync.Map`
-      registry kept *temporarily* for the Mode-1 path; the Mode-2 path
-      uses `UserConnections`. Cutover in Phase 2. Dispatch in
-      `handleWebSocket`: `if ws.agentEnforceSingleSession {
-      handleWebSocket_Agent(...) } else { handleWebSocket_Daemon(...) }`.
-      Mode-2 body is a stub for this phase. Rename `cleanupAfterPanic`
-      → `cleanupAfterPanicAgent`. Add `cleanupAfterPanicSession` as a
-      thin wrapper that delegates to the existing logic for now. Sweep
-      all 24 `[SP-046]` log lines (line numbers above) to
-      `[SP-118-Mode1]`. Update type comment on `activeWSConn`
-      (`websocket_handler.go:14-16`). Update
-      `pkg/webui/multi_device_takeover.go:7-12` doc comment to
-      reference SP-118 instead of non-existent SP-046-5.
-
-      **Files:** `pkg/webui/server.go`, `pkg/webui/websocket_handler.go`
-      (renames only — no logic change yet),
-      `pkg/webui/multi_connection_registry.go` (new), plus 24
-      single-line log tag edits, plus the takeover doc comment.
-
-      **Acceptance:** `go test -race ./pkg/webui/...` byte-identical
-      before/after. Existing `websocket_session_conflict_test.go` and
-      `multi_tab_fanout_test.go` continue to pass with one new line in
-      each test setup: `srv.agentEnforceSingleSession = true`.
-
-### Phase 2: Wire `handleWebSocket_Daemon` behind flag
-
-- [x] **SP-118-2:** Shipped in `16f55278` "feat(webui): SP-118 phase 2". connect
-      registers into `UserConnections`, no conflict gate, no
-      `waitForTakeover`. Same `chatSubscribers.Subscribe` + reattach
-      flow as Mode 1. Wire `cleanupAfterPanicSession` to:
-      remove conn from `UserConnections`; clear only this session's
-      chat state (not all chats for clientID); clear cached agents
-      for `clientID` only if `Count(userID) <= 1`. Add new config
-      setting `daemon_multi_session` in
-      `pkg/configuration/config_load_save.go`. Read at handler entry.
-      Dispatch uses both `agentEnforceSingleSession` AND the flag
-      value: `(agentEnforceSingleSession == false) && setting == true`
-      → Mode 2; else Mode 1. Default OFF. First PR ships with the
-      flag off. Second PR flips default to ON.
-
-      **Files:** `pkg/webui/websocket_handler.go` (Mode-2 body),
-      `pkg/webui/websocket_handler_daemon.go` (new, optional
-      decomposition), `pkg/configuration/config_load_save.go`,
-      `pkg/configuration/config_get.go`, settings UI.
-
-      **Acceptance:** With `daemon_multi_session=false` (default),
-      all existing tests pass byte-identically. With
-      `daemon_multi_session=true` (override), Mode-2 tests
-      (introduced in Phase 3) pass.
-
-### Phase 3: New Mode-2 tests
-
-- [x] **SP-118-3a:** Shipped in `2a07a9ba` "test(webui): SP-118 phase 3".
-      (new) — unit tests for `UserConnections`: concurrent adds under
-      one user, remove-by-pointer, count invariants, empty-slice
-      cleanup after Remove.
-
-- [x] **SP-118-3b:** Shipped in `2a07a9ba`.
-      (new) — integration. Open two `gorilla/websocket` connections,
-      each with distinct `clientID`. Publish a `stream_chunk` with
-      `client_id=A`, `chat_id=X`. Assert the subscriber for chat X
-      (connection B) receives it; assert a non-subscriber (third
-      connection) does not.
-
-- [x] **SP-118-3c:** Shipped in `2a07a9ba`.
-      (new) — trigger `cleanupAfterPanicSession` on connection A of
-      `clientID=client-1` with a second connection B at the same
-      clientID. Assert connection B's chat state is preserved
-      (`Count(userID) > 1`).
-
-- [x] **SP-118-3d:** Shipped in `2a07a9ba`. `go test ./pkg/webui/...` passes
-      (117s) with `agentEnforceSingleSession=true` AND
-      `agentEnforceSingleSession=false`.
-      with `agentEnforceSingleSession=true` AND
-      `agentEnforceSingleSession=false`.
-
-### Phase 4: Flip default to ON behind flag
-
-- [x] **SP-118-4:** Shipped in `4cf55ddc` "feat(webui/config): SP-118 phase 4".
-      to `true` in `pkg/configuration/config_load_save.go`. Land as a
-      separate commit in a separate PR. Watch metrics for one release
-      cycle: `active_ws_count_by_user`, `panic_cleanup_scope_metric`,
-      `chat_subscribers_count`. Rollback path:
-      `sprout config set daemon_multi_session=false` is enough — no
-      re-deploy.
-
-### Phase 5: Metrics + diagnostics
-
-- [x] **SP-118-5:** Shipped in `81f46b7c` "feat(webui): SP-118 phase 5".
-      `active_ws_count_by_user` and the effective
-      `daemon_multi_session` value via `sprout diagnose`. Add a
-      runtime metric `ws_count_per_user` (counted at the connection
-      registry level; one window with two tabs = two conns).
-
-### Phase 6: Documentation + UI hint
-
-- [ ] **SP-118-6:** Partial — README + Settings UI deferred per AGENTS.md
-      (README never-create rule; Settings UI inconsistent with existing
-      config toggles that are CLI-only). TODO.md sync shipped in this PR.
-      Deprecation comment on multi_device_takeover.go (lines 1-17)
-      is strong from Phase 1.
-      ("daemon supports N parallel windows; `sprout agent` keeps
-      single-active semantics"). Update the WebUI settings panel
-      (`webui/src/components/settings/`) to show the current
-      `daemon_multi_session` setting and link to the spec. Update
-      `pkg/webui/multi_device_takeover.go:7-12` to mark the file as
-      deprecated; open a follow-up issue to delete it (explicitly
-      out of scope here).
-
-### Acceptance (per spec)
-
-- [x] `go test ./pkg/webui/...` passes with both
-      `agentEnforceSingleSession` flag values (117s).
-- [x] New `daemon_session_isolation_test.go` passes: two windows
-      under one user on the daemon each receive their own events.
-- [x] New `cleanup_after_panic_modes_test.go` passes: panic in
-      window A does not invalidate window B.
-- [x] Existing `websocket_session_conflict_test.go` and
-      `multi_tab_fanout_test.go` produce identical pass/fail
-      before and after the refactor (verified by Phase 1).
-- [ ] `go test -race ./pkg/webui/...` not runnable on this
-      Termux arm64 build host. Deferred to CI.
-- [ ] Manual smoke: three browser windows on a real daemon, each
-      with a distinct chat, each receiving independent events.
-      Deferred until a real daemon instance is reachable from
-      the test host.
-
-### Cross-refs
-
-- SP-116 (Multi-Instance Isolation, in-flight). Different
-  layer (config/instance registry vs WS session). Stacks
-  naturally.
-- SP-046 (archived, unrelated). Stays archived and
-  untouched. The `[SP-046]` log tag sweep and the
-  `multi_device_takeover.go` doc comment update are *not*
-  part of "fixing SP-046" — they're cleaning up misattributed
-  references in code under SP-118's logic.
-
----
+_Spec: `roadmap/_completed/SP-118-daemon-multi-window-sessions.md`. ✅ Implemented — Phases 1–5 shipped 2026-07-15; Phase 6 partial. `agentEnforceSingleSession` dispatch + `UserConnections` registry lets the daemon (`sprout service`) accept N parallel browser windows per user while `sprout agent` keeps single-active semantics byte-identical. `daemon_multi_session` flag defaulted ON with `sprout config set daemon_multi_session=false` rollback path. `/api/ws-metrics` exposes `active_ws_count_by_user` and `ws_count_per_user`. Phase 6 (README + Settings UI) intentionally deferred per AGENTS.md "no documentation" rule; TODO.md sync landed and `multi_device_takeover.go` deprecation comment shipped in Phase 1. Commits: `629fd42b`, `16f55278`, `2a07a9ba`, `4cf55ddc`, `81f46b7c`, `6b013bce`._
 
 ## SP-119: Workspace-aware directory resolution in daemon-mode tools
 
-_Spec: `roadmap/SP-119-workspace-aware-directory-resolution.md`. 🔵 Proposed — not yet started._
-
-Discovered 2026-07-14 while debugging a `run_automate` failure in a
-daemon-served workspace. Root cause: `pkg/automate.Dir()` (and the agent
-tool handlers that call it) use `os.Getwd()` to resolve `automate/` —
-correct when the user's shell CWD is the workspace (CLI usage), but wrong
-in daemon mode where `os.Getwd()` is the daemon root (`/Users/alanp` per
-`SPROUT_DAEMON_ROOT=1`). The WebUI HTTP API path
-(`pkg/webui/automations_api.go`) already uses `ws.getAutomateDir(r)` which
-is workspace-rooted — only the chat-invoked tool path is broken.
-
-The same surface (`os.Getwd()` for workspace-relative paths) recurs in
-~25+ other callsites across `pkg/agent/persistence.go`, `pkg/agent/skills.go`,
-`pkg/agent_tools/shell_native.go`, etc. Each is a separate decision; this
-spec fixes the most acute case and ships a discoverable helper so the
-rest can migrate incrementally.
-
-### Phase 1: `automate.DirIn` helper (~0.25 day)
-
-- [x] **SP-119-1:** Add `automate.DirIn(workspaceDir string) string`
-      to `pkg/automate/discovery.go`. Returns
-      `filepath.Join(workspaceDir, "automate")` when `workspaceDir` is
-      non-empty; falls back to `Dir()` (CWD-based) when empty so the CLI
-      behavior is unchanged. Update the godoc on `Dir()` to flag the
-      daemon-mode caveat and point to SP-119 for the workspace-aware path.
-      Add `TestDirIn` to `pkg/automate/discovery_test.go` covering:
-      empty (falls back to cwd), whitespace-only workspace (falls back),
-      absolute path, relative path. Acceptance:
-      `go test ./pkg/automate/...` passes with the new cases.
-
-      **SHIPPED 2026-07-15.** `automate.DirIn(workspaceDir string) string`
-      landed in `pkg/automate/discovery.go`; the godoc on `Dir()` now flags
-      the daemon-mode caveat. `TestDirIn` covers all four cases and
-      `go test ./pkg/automate/...` is green.
-
-- [x] **SP-119-2:** Wire the three agent-tool callers in
-      `pkg/agent/tool_handlers_automate.go` to `DirIn(a.GetWorkspaceRoot())`:
-
-      - Line 124 (`handleRunAutomate`): `dir := automate.DirIn(a.GetWorkspaceRoot())`
-      - Line 313 (`handleListAutomateWorkflows`): `dir := automate.DirIn(a.GetWorkspaceRoot())`
-      - Line 365 (`workflowRequiresApproval`): `return WorkflowRequiresApprovalIn(automate.DirIn(a.GetWorkspaceRoot()), workflowName)`
-
-      `a.GetWorkspaceRoot()` returns `a.workspaceRoot` (set by
-      `NewAgentWithLayersInWorkspace` at `pkg/agent/agent_creation.go:318`).
-      It does NOT fall back to `os.Getwd()` — when unset it returns `""`,
-      which `DirIn` resolves to `Dir()` (CWD-based) — correct for CLI
-      where the shell CWD IS the workspace.
-
-      **SHIPPED 2026-07-15.** All three call sites in
-      `pkg/agent/tool_handlers_automate.go` use
-      `automate.DirIn(a.GetWorkspaceRoot())`; the manual repro
-      (`run_automate todo-loop` from chat in a daemon-served workspace)
-      now finds `automate/todo-loop.json` in the workspace.
-
-- [x] **SP-119-3:** Wire the interface-based registry handler at
-      `pkg/agent_tools/list_automate_workflows_handler.go:45`. Same bug
-      (chat-invokable through `pkg/agent_tools/all.go:84`), different
-      accessor: `dir := automate.DirIn(env.WorkspaceRoot)`. Update the
-      handler's godoc to reflect the workspace-aware behavior. Add
-      `pkg/agent_tools/list_automate_workflows_handler_test.go` (3 cases:
-      workspace-set with workflow, empty workspace, empty WorkspaceRoot
-      fallback to CWD).
-
-      **SHIPPED 2026-07-15.** Handler updated; godoc reflects the new
-      workspace-aware behavior; `TestListAutomateWorkflowsHandler`
-      covers the three cases. `go test ./pkg/agent_tools/... -run
-      TestListAutomateWorkflowsHandler` green.
-
-      Acceptance for the whole spec:
-      - `go build ./...` clean.
-      - `go test -race ./pkg/automate/...` no regressions.
-      - `go test ./pkg/agent_tools/... -run TestListAutomateWorkflowsHandler` passes.
-      - Manual repro 1: in a workspace served by `sprout service`,
-        `run_automate todo-loop` from chat finds
-        `automate/todo-loop.json` in the workspace (vs. "no
-        automate/ directory found").
-      - Manual repro 2: chat `list_automate_workflows` returns
-        the workspace's workflows.
-      - Manual cross-check: `sprout automate list` from the workspace
-        shell still works (unchanged CLI path).
-
-### Out of scope (follow-ups under SP-091 / individual specs)
-
-The broader CWD-vs-workspace surface (≈25 callsites) is queued for a
-follow-up audit. See SP-119 spec "Why this scope and not broader" for
-the full list. Each is a separate decision based on whether the caller
-has `ctx` (use `filesystem.WorkspaceRootFromContext(ctx)`), `*Agent`
-(use `a.GetWorkspaceRoot()`), or no agent context at all (env var or
-explicit injection).
+_Spec: `roadmap/_completed/SP-119-workspace-aware-directory-resolution.md`. ✅ Implemented — 3 phases shipped 2026-07-15. `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool paths (`handleRunAutomate`, `handleListAutomateWorkflows`, `workflowRequiresApproval`) and the interface-based registry handler (`list_automate_workflows_handler.go`). Tests: `TestDirIn` (4 cases) + `TestListAutomateWorkflowsHandler` (3 cases). Out-of-scope ~25 CWD-vs-workspace callsites tracked under SP-091. Commits: `6608ecf3`, `aa2d05a9`._
 
 ---
 
@@ -480,20 +244,43 @@ headers updated, but no new code work is required:
 
 ## SP-103: Vision Pipeline Reliability + Caching + Routing Fixes
 
-_Most items completed by subsequent work. Verified against code state 2026-07-05._
+_2 of 6 sub-items remain open (D1, D2). B2 + A9 shipped by subsequent work;
+B2 verified at `abf3f6ba`, A9 image-path verified at `e47280c7`. Code state
+audit performed 2026-07-15._
 
 ### Remaining Work
 
 #### SP-103-B2: Image Resizing
 
-4K screenshots bill as ~4800 visual tokens. No resize logic exists. Providers have `max_image_width`/`max_image_height` or detail-tier settings (`low`/`high`/`auto` on OpenAI, `low`/`high` on Anthropic). Resize oversized images before embedding to cap token cost.
+**SHIPPED 2026-07-15** at `abf3f6ba feat(agent): pre-resize images to 1568px for
+vision embedding`. Implementation diverges from the original spec name
+(`resizeImageForVisionEmbed` instead of `resizeImageToMax`) and target
+(`1568px` is Anthropic's recommended value, not the spec's "1536"), but
+achieves the spec's goal. Wired into `readImageAsImageData` which feeds
+`processImagesAsMultimodal` — images are resized before being attached as
+inline multimodal content, capping the long edge at `visionEmbedMaxEdgePx =
+1568` using bilinear interpolation, re-encoded as JPEG quality 85.
+Pass-through for unsupported formats (webp/avif) so the agent doesn't lose
+those images entirely. Tests: `conversation_test.go` (5 unit tests:
+no-op small, no-op exact, downscale to cap, format pass-through, error
+tolerance) + `conversation_embed_resize_integration_test.go` (4
+integration tests covering extreme aspect ratios + end-to-end
+`readImageAsImageData` pipeline).
 
-**What to build:**
-- Add `resizeImageToMax(dim image.Dimensions, maxW, maxH int) []byte` using an existing image library (or a minimal Go implementation)
-- Call it in `DownloadImage` and when preparing `ImageData` for `processImagesAsMultimodal`
-- Cap at 1536px on the longest side (Anthropic's default for "auto" detail)
+The TODO's original "Call it in `DownloadImage`" item is not necessary:
+`DownloadImage` returns raw bytes that flow into `OptimizeImageData` for
+the `analyze_image_content` tool path, which already has its own
+`visionMaxDimension = 4096px` resize. The 1568px pre-resize is a
+multimodal-path concern; the tool path keeps the larger cap so
+`analyze_image_content` users can still see high-detail screenshots.
 
-**Effort:** ~0.5 day. New helper in `vision_image.go` or `vision_utils.go`.
+**Genuine follow-up** for the broader vision resize story: SP-103-D3
+(per-provider `VisionCapabilities` table). The current code picks a
+single 1568px cap regardless of provider — OpenAI's `low`/`high` detail
+tiers, Anthropic's `low`/`high`, and Gemini's different size policies
+all need their own optimal caps. The `VisionCapabilities` struct was
+added at `pkg/agent_api/interface.go` (per SP-103-D3 referenced in
+AUDIT-GAP-2); populating per-provider values is the remaining work.
 
 #### SP-103-A9: Typed Errors in Vision
 
@@ -718,52 +505,72 @@ moving spec files._
 
 _~3 days, 2 phases._
 
-**NOT shipped (verified open 2026-07-06).** The two artifacts called
-for by the spec do not exist:
+**SHIPPED 2026-07-15.** Phase 1 (Go surface) and Phase 2 (TS loader)
+both landed. The shipped artifacts diverge from the original spec
+paths — the onnxruntime-web loader lives in `webui/src/services/
+onnxruntimeWebLoader.ts` (the modern TS service location per
+project conventions, not `webui/public/wasm/onnxruntime-web-loader.js`
+as the spec prescribed). The bridge globals `__sproutONNX`,
+`__sproutLoadOnnxRuntime`, and the new `__sproutSwitchEmbeddingBackend`
++ `__sproutEmbeddingModel` are installed by `webui/src/services/
+embeddingBackendController.ts` on app boot.
 
-- `cmd/wasm/embedding_funcs.go` — **missing**. `cmd/wasm/` contains
-  `embedding_support.go`, `chat_funcs.go`, `llm_funcs.go`, etc.,
-  but no `embedding_funcs.go`. There is no
-  `switchEmbeddingBackend` / `embeddingBackendStatus` /
-  `embeddingModel = "gemma-300m"` symbol on disk.
-- `webui/public/wasm/onnxruntime-web-loader.js` — **missing**.
-  Only `webui/public/wasm/sprout.wasm` exists in that directory.
+The Go-side control surface that the spec prescribed
+(`SproutWasm.embeddingModel`, `SproutWasm.switchEmbeddingBackend`,
+`SproutWasm.embeddingBackendStatus`) is wired in `cmd/wasm/
+embedding_funcs.go` and merged into the shell WASM module's
+apiSurface via `cmd/wasm/main.go`. All three are pure delegation:
+the actual install/uninstall of `__sproutONNX` is owned by the
+host page (TypeScript), since the underlying `BrowserONNXProvider`
+is TypeScript-only.
 
-This is genuine remaining work — Tier 1 + Tier 2 (per SP-045 §6) are
-shipped; Tier 2a (the onnxruntime-web bridge surfaced into the
-WASM JS API) is still open. Spec body preserved verbatim per
-sp-009 isolation rules.
+### Phase 1: Go-side control surface (`cmd/wasm/embedding_funcs.go`)
 
-### Scope
+- `embeddingJSFuncs()` returns the three JS-callable functions and
+  is merged into `apiSurface` in `cmd/wasm/main.go`. Defaults to
+  "static" backend with `EmbeddingModelDefault = "gemma-300m"`.
+- `embeddingModelFunc` reads `globalThis.__sproutEmbeddingModel`
+  first (host-page override), falls back to the default.
+- `switchEmbeddingBackendFunc` validates the name (`"static"` or
+  `"onnx-web"`), rejects unknown names with a JS Error, then calls
+  the host-side helper `globalThis.__sproutSwitchEmbeddingBackend`.
+- `embeddingBackendStatusFunc` returns
+  `{backend, model, dimensions, ready}` based on whether
+  `__sproutONNX` is installed. Always returns an object.
 
-Phase 1: surface the existing bridge as `SproutWasm.embedding*`.
+Pure-Go helpers covered by `embedding_funcs_test.go` (3 tests:
+default model name, backend name constants, registry surface).
 
-**Edit `cmd/wasm/embedding_funcs.go`:**
-- Add `SproutWasm.embeddingModel = "gemma-300m"` constant + load
-  helper that resolves the right asset path.
-- Add `SproutWasm.switchEmbeddingBackend(name string)` — switches
-  between `static` and `onnx-web`.
-- Add `SproutWasm.embeddingBackendStatus() { backend, model,
-  dimensions, ready }`.
+### Phase 2: Host-side controller (`webui/src/services/embeddingBackendController.ts`)
 
-Phase 2: lazy-load the onnxruntime-web bundle.
+- `installEmbeddingBackendController()` installs
+  `globalThis.__sproutSwitchEmbeddingBackend` (delegates to
+  `switchEmbeddingBackend`) and `globalThis.__sproutEmbeddingModel`
+  (the default model name).
+- `switchEmbeddingBackend(name)` uninstalls the bridge for "static"
+  or calls `installSproutONNXBridge()` for "onnx-web". Idempotent.
+- `embeddingBackendStatus()` mirrors the Go-side contract.
+- `teardownEmbeddingBackend()` removes all globals + closes the
+  underlying BrowserONNXProvider.
+- Wired into `webui/src/services/wasmShell.ts` boot sequence
+  immediately after `installSproutONNXBridge()`.
 
-**New `webui/public/wasm/onnxruntime-web-loader.js` (~80 lines):**
-- Detects the active backend; only injects `<script src=onnxruntime-web>`
-  if `onnx` is selected.
-- Caches the promise so the second call reuses the resolved runtime.
-- Falls back to static with a console warning if the network blocks the
-  script.
+Augments the existing `SproutWasmAPI` interface in `wasmShell.ts`
+via a `declare module` block rather than redeclaring `window.SproutWasm`
+— the canonical interface covers ~30 entries (init, executeCommand,
+extractSymbols, runAgent, etc.) and shadowing it would lose them all.
 
-### Phase order
-
+11 vitest tests cover: install side-effects, default state, idempotent
+switching, static↔onnx-web round-trip, error on unknown names, status
+reporting for both backends, and the WASM-callable helper surface.
 
 ### Acceptance
 
-- `SproutWasm.switchEmbeddingBackend("onnx")` resolves, fires the
-  lazy-load, and the next `searchSemantic` call uses ONNX vectors.
-- Default remains `static` so existing WASM users see no change.
-- A test asserts the loader is not fetched when backend is `static`.
+- `SproutWasm.switchEmbeddingBackend("onnx-web")` returns "onnx-web",
+  triggers lazy-load of onnxruntime-web, and installs `__sproutONNX`.
+- Default backend remains "static" so existing WASM users see no change.
+- Tests assert the onnxruntime-web script is NOT injected when the
+  backend is "static" (covered by `onnxruntimeWebLoader.test.ts`).
 
 ---
 
@@ -1142,4 +949,7 @@ MCP, subagent, auth, billing, task, and mode flows.
 3. **Terminal-state discipline is inconsistent** — codebase has
    infrastructure for REPL-safe prompts but `/rewind` and onboarding
    fallback bypass it (H5, L1).
+
+---
+
 

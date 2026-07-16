@@ -11,6 +11,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/service"
 )
 
@@ -20,7 +21,7 @@ import (
 
 func TestFormatSpawnLine_NilAgent(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatSpawnLine(nil, 0, "coder", 0, "")
+	got := cliui.FormatSpawnLine(nil, 0, "coder", 0, "")
 	if !strings.Contains(got, "spawned") {
 		t.Errorf("expected 'spawned' in output, got: %q", got)
 	}
@@ -37,7 +38,7 @@ func TestFormatSpawnLine_WithAgent(t *testing.T) {
 	}
 
 	t.Setenv("NO_COLOR", "1")
-	got := formatSpawnLine(a, 1, "coder", 0, "")
+	got := cliui.FormatSpawnLine(a, 1, "coder", 0, "")
 	if !strings.Contains(got, "spawned") {
 		t.Errorf("expected 'spawned' in output, got: %q", got)
 	}
@@ -60,12 +61,12 @@ func TestFormatSpawnLine_IncludesMaxContext(t *testing.T) {
 	}
 	t.Setenv("NO_COLOR", "1")
 
-	withCtx := formatSpawnLine(a, 1, "coder", 128000, "")
+	withCtx := cliui.FormatSpawnLine(a, 1, "coder", 128000, "")
 	if !strings.Contains(withCtx, "128.0k ctx") {
 		t.Errorf("expected '128.0k ctx' suffix when maxCtx is known, got: %q", withCtx)
 	}
 
-	withoutCtx := formatSpawnLine(a, 1, "coder", 0, "")
+	withoutCtx := cliui.FormatSpawnLine(a, 1, "coder", 0, "")
 	if strings.Contains(withoutCtx, "ctx)") {
 		t.Errorf("should not have ctx suffix when maxCtx is 0, got: %q", withoutCtx)
 	}
@@ -239,7 +240,7 @@ func TestFormatRunSubagentPreview_WithAgent_Coverage(t *testing.T) {
 		t.Fatalf("NewAgent() error: %v", err)
 	}
 
-	got := formatRunSubagentPreview(a, `{"persona":"coder"}`)
+	got := cliui.FormatRunSubagentPreview(a, `{"persona":"coder"}`)
 	// Should contain the persona name
 	if !strings.Contains(got, "coder") {
 		t.Errorf("expected 'coder' in preview, got: %q", got)
@@ -252,7 +253,7 @@ func TestFormatRunSubagentPreview_InvalidJSON_Coverage(t *testing.T) {
 		t.Fatalf("NewAgent() error: %v", err)
 	}
 
-	got := formatRunSubagentPreview(a, `not valid json`)
+	got := cliui.FormatRunSubagentPreview(a, `not valid json`)
 	if got != "" {
 		t.Errorf("expected empty for invalid JSON, got: %q", got)
 	}
@@ -264,7 +265,7 @@ func TestFormatRunSubagentPreview_NoPersona_Coverage(t *testing.T) {
 		t.Fatalf("NewAgent() error: %v", err)
 	}
 
-	got := formatRunSubagentPreview(a, `{"persona":""}`)
+	got := cliui.FormatRunSubagentPreview(a, `{"persona":""}`)
 	if got != "" {
 		t.Errorf("expected empty for empty persona, got: %q", got)
 	}
@@ -280,7 +281,7 @@ func TestFormatToolPreview_WithAgent_RunSubagent_Coverage(t *testing.T) {
 		t.Fatalf("NewAgent() error: %v", err)
 	}
 
-	got := formatToolPreview(a, "run_subagent", `{"persona":"coder"}`, 0)
+	got := cliui.FormatToolPreview(a, "run_subagent", `{"persona":"coder"}`, 0)
 	if !strings.Contains(got, "coder") {
 		t.Errorf("expected 'coder' in preview, got: %q", got)
 	}
@@ -292,7 +293,7 @@ func TestFormatToolPreview_WithAgent_RunParallelSubagents_Coverage(t *testing.T)
 		t.Fatalf("NewAgent() error: %v", err)
 	}
 
-	got := formatToolPreview(a, "run_parallel_subagents", `{"subagents":["a","b","c"]}`, 0)
+	got := cliui.FormatToolPreview(a, "run_parallel_subagents", `{"subagents":["a","b","c"]}`, 0)
 	if !strings.Contains(got, "3 tasks") {
 		t.Errorf("expected '3 tasks' in preview, got: %q", got)
 	}
@@ -308,7 +309,7 @@ func TestPrintPerTurnSummary_NonTTY_Coverage(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	printPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0)
+	cliui.PrintPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0)
 
 	w.Close()
 	os.Stderr = old

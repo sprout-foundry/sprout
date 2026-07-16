@@ -59,8 +59,8 @@ interface SidebarProps {
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs';
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
+  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners';
+  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners') => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -137,7 +137,7 @@ const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = 
 ];
 
 /** Valid platform view IDs for type-safe navigation */
-const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs']);
+const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs', 'runners']);
 
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
@@ -472,7 +472,7 @@ function Sidebar({
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs');
+                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners');
                           }
                         }}
                         title={item.label}

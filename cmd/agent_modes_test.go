@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -246,9 +247,9 @@ func TestFormatToolArgPreview(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := formatToolArgPreview(c.tool, c.args, 0)
+			got := cliui.FormatToolArgPreview(c.tool, c.args, 0)
 			if got != c.want {
-				t.Errorf("formatToolArgPreview(%q, %q) = %q, want %q", c.tool, c.args, got, c.want)
+				t.Errorf("FormatToolArgPreview(%q, %q) = %q, want %q", c.tool, c.args, got, c.want)
 			}
 		})
 	}
@@ -271,9 +272,9 @@ func TestFormatRunParallelSubagentsPreview(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := formatRunParallelSubagentsPreview(c.args)
+			got := cliui.FormatRunParallelSubagentsPreview(c.args)
 			if got != c.want {
-				t.Errorf("formatRunParallelSubagentsPreview(%q) = %q, want %q", c.args, got, c.want)
+				t.Errorf("FormatRunParallelSubagentsPreview(%q) = %q, want %q", c.args, got, c.want)
 			}
 		})
 	}
@@ -293,9 +294,9 @@ func TestFormatToolPreview_DispatchToDefault(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.tool, func(t *testing.T) {
-			got := formatToolPreview(nil, c.tool, c.args, 0)
+			got := cliui.FormatToolPreview(nil, c.tool, c.args, 0)
 			if got != c.want {
-				t.Errorf("formatToolPreview(nil, %q, %q) = %q, want %q",
+				t.Errorf("FormatToolPreview(nil, %q, %q) = %q, want %q",
 					c.tool, c.args, got, c.want)
 			}
 		})
@@ -305,7 +306,7 @@ func TestFormatToolPreview_DispatchToDefault(t *testing.T) {
 // run_subagent without an agent reference should degrade gracefully —
 // no panic, returns empty (or just persona if available without lookup).
 func TestFormatRunSubagentPreview_NilAgent(t *testing.T) {
-	got := formatRunSubagentPreview(nil, `{"persona":"coder"}`)
+	got := cliui.FormatRunSubagentPreview(nil, `{"persona":"coder"}`)
 	if got != "" {
 		t.Errorf("nil agent should yield empty preview, got %q", got)
 	}
@@ -333,9 +334,9 @@ func TestAbbreviatePath(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := abbreviatePath(c.in, c.maxLen)
+			got := cliui.AbbreviatePath(c.in, c.maxLen)
 			if got != c.want {
-				t.Errorf("abbreviatePath(%q, %d) = %q, want %q", c.in, c.maxLen, got, c.want)
+				t.Errorf("AbbreviatePath(%q, %d) = %q, want %q", c.in, c.maxLen, got, c.want)
 			}
 		})
 	}
@@ -358,9 +359,9 @@ func TestFormatThousands(t *testing.T) {
 		{-12345, "-12,345"},
 	}
 	for _, c := range cases {
-		got := formatThousands(c.in)
+		got := cliui.FormatThousands(c.in)
 		if got != c.want {
-			t.Errorf("formatThousands(%d) = %q, want %q", c.in, got, c.want)
+			t.Errorf("FormatThousands(%d) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -400,7 +401,7 @@ func TestFormatSubagentDoneLine(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := formatSubagentDoneLine(c.persona, c.status, c.reason, c.tokens, c.cost, c.elapsedSec)
+			got := cliui.FormatSubagentDoneLine(c.persona, c.status, c.reason, c.tokens, c.cost, c.elapsedSec)
 			for _, want := range c.wantSubstrs {
 				if !strings.Contains(got, want) {
 					t.Errorf("missing %q in %q", want, got)
@@ -409,7 +410,7 @@ func TestFormatSubagentDoneLine(t *testing.T) {
 		})
 	}
 	// Cost == 0 case should not contain "$" at all.
-	got := formatSubagentDoneLine("coder", "completed", "", 100, 0, 1.0)
+	got := cliui.FormatSubagentDoneLine("coder", "completed", "", 100, 0, 1.0)
 	if strings.Contains(got, "$") {
 		t.Errorf("zero cost should drop the dollar field; got %q", got)
 	}
@@ -431,9 +432,9 @@ func TestFormatTokensShort(t *testing.T) {
 		{1234567, "1.2M"},
 	}
 	for _, c := range cases {
-		got := formatTokensShort(c.in)
+		got := cliui.FormatTokensShort(c.in)
 		if got != c.want {
-			t.Errorf("formatTokensShort(%d) = %q, want %q", c.in, got, c.want)
+			t.Errorf("FormatTokensShort(%d) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -446,19 +447,19 @@ func TestFormatTokensShort(t *testing.T) {
 func TestFormatSubagentCtxSuffix(t *testing.T) {
 	cases := []struct {
 		name string
-		snap subagentProgressSnapshot
+		snap cliui.SubagentProgressSnapshot
 		want string
 	}{
-		{"with ctx pair", subagentProgressSnapshot{ctxUsed: 12300, ctxMax: 128000, tokensUsed: 12300}, " · 12.3k/128.0k ctx"},
-		{"only total tokens", subagentProgressSnapshot{tokensUsed: 500}, " · 500 tok"},
-		{"empty snapshot", subagentProgressSnapshot{}, ""},
-		{"ctx max known but used not yet", subagentProgressSnapshot{ctxMax: 128000}, ""},
+		{"with ctx pair", cliui.SubagentProgressSnapshot{CtxUsed: 12300, CtxMax: 128000, TokensUsed: 12300}, " · 12.3k/128.0k ctx"},
+		{"only total tokens", cliui.SubagentProgressSnapshot{TokensUsed: 500}, " · 500 tok"},
+		{"empty snapshot", cliui.SubagentProgressSnapshot{}, ""},
+		{"ctx max known but used not yet", cliui.SubagentProgressSnapshot{CtxMax: 128000}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := formatSubagentCtxSuffix(c.snap)
+			got := cliui.FormatSubagentCtxSuffix(c.snap)
 			if got != c.want {
-				t.Errorf("formatSubagentCtxSuffix(%+v) = %q, want %q", c.snap, got, c.want)
+				t.Errorf("FormatSubagentCtxSuffix(%+v) = %q, want %q", c.snap, got, c.want)
 			}
 		})
 	}
@@ -483,8 +484,8 @@ func TestReadEventDepth(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := readEventDepth(c.data); got != c.want {
-				t.Errorf("readEventDepth = %d, want %d", got, c.want)
+			if got := cliui.ReadEventDepth(c.data); got != c.want {
+				t.Errorf("ReadEventDepth = %d, want %d", got, c.want)
 			}
 		})
 	}
@@ -504,8 +505,8 @@ func TestReadEventPersona(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := readEventPersona(c.data); got != c.want {
-				t.Errorf("readEventPersona = %q, want %q", got, c.want)
+			if got := cliui.ReadEventPersona(c.data); got != c.want {
+				t.Errorf("ReadEventPersona = %q, want %q", got, c.want)
 			}
 		})
 	}
@@ -514,10 +515,10 @@ func TestReadEventPersona(t *testing.T) {
 // Depth 0 must produce a line byte-identical to the pre-SP-051 format so
 // primary-agent tool calls don't regress visually.
 func TestFormatToolStartLine_Depth0_Unchanged(t *testing.T) {
-	got := formatToolStartLine(0, "", "read_file", " (foo.go)")
+	got := cliui.FormatToolStartLine(0, "", "read_file", " (foo.go)")
 	want := "  read_file (foo.go)"
 	if got != want {
-		t.Errorf("formatToolStartLine(0, ...) = %q, want %q", got, want)
+		t.Errorf("FormatToolStartLine(0, ...) = %q, want %q", got, want)
 	}
 }
 
@@ -525,7 +526,7 @@ func TestFormatToolStartLine_Depth0_Unchanged(t *testing.T) {
 // persona name. NO_COLOR keeps the line ANSI-free for stable comparison.
 func TestFormatToolStartLine_Depth1_IndentedAndBadged(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatToolStartLine(1, "coder", "read_file", " (foo.go)")
+	got := cliui.FormatToolStartLine(1, "coder", "read_file", " (foo.go)")
 	if !strings.HasPrefix(got, "    [coder] read_file") {
 		// 4 spaces = 2 (depth indent) + 2 (existing tool-line prefix)
 		t.Errorf("depth-1 start line should be indented + badged, got %q", got)
@@ -534,7 +535,7 @@ func TestFormatToolStartLine_Depth1_IndentedAndBadged(t *testing.T) {
 
 func TestFormatToolStartLine_Depth2_DoubleIndent(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatToolStartLine(2, "coder", "read_file", " (foo.go)")
+	got := cliui.FormatToolStartLine(2, "coder", "read_file", " (foo.go)")
 	if !strings.HasPrefix(got, "      [coder] read_file") {
 		// 6 spaces = 4 (depth-2 indent) + 2 (existing tool-line prefix)
 		t.Errorf("depth-2 start line should be double-indented, got %q", got)
@@ -542,16 +543,16 @@ func TestFormatToolStartLine_Depth2_DoubleIndent(t *testing.T) {
 }
 
 func TestFormatToolEndLine_Depth0_Unchanged(t *testing.T) {
-	got := formatToolEndLine(0, "", "[OK]", "read_file", " (foo.go)", 0.1)
+	got := cliui.FormatToolEndLine(0, "", "[OK]", "read_file", " (foo.go)", 0.1)
 	want := "  [OK] read_file (foo.go) · 0.1s"
 	if got != want {
-		t.Errorf("formatToolEndLine(0, ...) = %q, want %q", got, want)
+		t.Errorf("FormatToolEndLine(0, ...) = %q, want %q", got, want)
 	}
 }
 
 func TestFormatToolEndLine_Depth1_Badged(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatToolEndLine(1, "coder", "[OK]", "read_file", " (foo.go)", 0.2)
+	got := cliui.FormatToolEndLine(1, "coder", "[OK]", "read_file", " (foo.go)", 0.2)
 	if !strings.Contains(got, "[coder]") {
 		t.Errorf("depth-1 end line should include persona badge, got %q", got)
 	}
@@ -564,7 +565,7 @@ func TestFormatToolEndLine_Depth1_Badged(t *testing.T) {
 
 func TestFormatToolRunLine_IncludesCountAndArgsTrail(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatToolRunLine(0, "", "✓ ", "read_file", 3,
+	got := cliui.FormatToolRunLine(0, "", "✓ ", "read_file", 3,
 		[]string{"(foo.go)", "(bar.go)", "(baz.go)"}, 0.4)
 	if !strings.Contains(got, "× 3") {
 		t.Errorf("collapsed line should show count, got %q", got)
@@ -579,7 +580,7 @@ func TestFormatToolRunLine_IncludesCountAndArgsTrail(t *testing.T) {
 
 func TestFormatToolRunLine_EmptyArgsTrail_NoEmptyParens(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatToolRunLine(0, "", "✓ ", "ping", 5, nil, 0.0)
+	got := cliui.FormatToolRunLine(0, "", "✓ ", "ping", 5, nil, 0.0)
 	if strings.Contains(got, "()") {
 		t.Errorf("empty args trail should produce no parens, got %q", got)
 	}
@@ -638,21 +639,21 @@ func TestWriteKeyboardHelp_ColorAddsBoldHeaders(t *testing.T) {
 }
 
 func TestToolRunState_MatchesAndAppend(t *testing.T) {
-	r := &toolRunState{name: "read_file", depth: 0, persona: ""}
-	if !r.matches("read_file", 0, "") {
-		t.Error("matches should return true for identical (name, depth, persona)")
+	r := &cliui.ToolRunState{Name: "read_file", Depth: 0, Persona: ""}
+	if !r.Matches("read_file", 0, "") {
+		t.Error("Matches should return true for identical (name, depth, persona)")
 	}
-	if r.matches("write_file", 0, "") {
-		t.Error("matches should return false for different tool")
+	if r.Matches("write_file", 0, "") {
+		t.Error("Matches should return false for different tool")
 	}
-	if r.matches("read_file", 1, "") {
-		t.Error("matches should return false at different depth")
+	if r.Matches("read_file", 1, "") {
+		t.Error("Matches should return false at different depth")
 	}
-	// appendArg should cap the trail at maxArgsTrail.
-	for i := 0; i < maxArgsTrail+3; i++ {
-		r.appendArg("preview")
+	// AppendArg should cap the trail at MaxArgsTrail.
+	for i := 0; i < cliui.MaxArgsTrail+3; i++ {
+		r.AppendArg("preview")
 	}
-	if len(r.argsTrail) != maxArgsTrail {
-		t.Errorf("expected argsTrail capped at %d, got %d", maxArgsTrail, len(r.argsTrail))
+	if len(r.ArgsTrail) != cliui.MaxArgsTrail {
+		t.Errorf("expected ArgsTrail capped at %d, got %d", cliui.MaxArgsTrail, len(r.ArgsTrail))
 	}
 }

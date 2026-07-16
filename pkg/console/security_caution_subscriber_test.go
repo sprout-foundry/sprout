@@ -10,7 +10,8 @@ import (
 )
 
 // Regression tests for the security-caution terminal-corruption bug
-// (cmd/agent_terminal_subscriber.go).
+// (pkg/cliui/terminal_subscriber.go — extracted from cmd/agent_terminal_subscriber.go
+// in SP-120 phase 2c).
 //
 // The terminal subscriber used to write `[⚠️  SECURITY CAUTION] …`
 // directly to os.Stderr via fmt.Fprintf, bypassing PrintExternal. When

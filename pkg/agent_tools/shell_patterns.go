@@ -274,13 +274,19 @@ func isSafeShellCommand(cmd string) bool {
 // isDangerousPattern checks for dangerous patterns
 func isDangerousPattern(cmd string) bool {
 	cmdLower := strings.ToLower(cmd)
-	if strings.HasPrefix(cmd, "eval ") || cmd == "eval" {
+
+	// Strip a leading "sudo " prefix for dangerous-pattern evaluation
+	// so that sudo-prefixed destructive commands are still detected.
+	// e.g., "sudo rm -rf /etc" is evaluated as "rm -rf /etc".
+	evalCmd := cmdLower
+	if strings.HasPrefix(evalCmd, "sudo ") {
+		evalCmd = evalCmd[5:]
+	}
+
+	if strings.HasPrefix(evalCmd, "eval ") || evalCmd == "eval" {
 		return true
 	}
-	if strings.HasPrefix(cmd, "sudo ") && !isPrivilegedPackageInstall(cmd) {
-		return true
-	}
-	if strings.Contains(cmd, "chmod 777") || strings.Contains(cmd, "chmod 666") {
+	if strings.Contains(evalCmd, "chmod 777") || strings.Contains(evalCmd, "chmod 666") {
 		return true
 	}
 
@@ -290,33 +296,33 @@ func isDangerousPattern(cmd string) bool {
 	// after chain splitting is inside quotes (e.g., grep regex alternation).
 
 	// curl/wget piped to shell
-	if (strings.Contains(cmd, "curl") || strings.Contains(cmd, "wget")) &&
-		(strings.Contains(cmd, "| bash") || strings.Contains(cmd, "| sh")) {
+	if (strings.Contains(evalCmd, "curl") || strings.Contains(evalCmd, "wget")) &&
+		(strings.Contains(evalCmd, "| bash") || strings.Contains(evalCmd, "| sh")) {
 		return true
 	}
 
 	// Dangerous git operations
 	dangerousGit := []string{"git push --force", "git push -f", "git branch -D", "git branch -d", "git clean -ff", "git clean -fd", "git clean -ffd"}
 	for _, op := range dangerousGit {
-		if strings.HasPrefix(cmd, op) {
+		if strings.HasPrefix(evalCmd, op) {
 			return true
 		}
 	}
 
 	// Check for rm -rf or rm -fr (case-insensitive) - default to dangerous
 	// Check if an rm -rf target is safe (O(1) map lookup)
-	if isSafeRmRfPrefix(cmdLower) {
+	if isSafeRmRfPrefix(evalCmd) {
 		return false
 	}
 	// All other rm -rf commands not in the safe allowlist are dangerous
-	if strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ") {
+	if strings.HasPrefix(evalCmd, "rm -rf ") || strings.HasPrefix(evalCmd, "rm -fr ") {
 		return true
 	}
 
 	// Dangerous system operations
 	dangerousSys := []string{"mkfs", "dd if=/dev/zero", "dd if=/dev/urandom", "fdisk", "parted", "gparted", "init 0", "init 6", "reboot", "shutdown -h"}
 	for _, op := range dangerousSys {
-		if strings.Contains(cmd, op) {
+		if strings.Contains(evalCmd, op) {
 			return true
 		}
 	}
@@ -324,8 +330,8 @@ func isDangerousPattern(cmd string) bool {
 	// Check for workspace commands targeting system directories
 	prefixes := []string{"chmod ", "chown ", "chgrp ", "cp ", "mv ", "mkdir -p", "touch ", "tee ", "ln ", "install ", "strip "}
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(cmdLower, prefix) {
-			argsAfterCmd := cmd[len(prefix):]
+		if strings.HasPrefix(evalCmd, prefix) {
+			argsAfterCmd := evalCmd[len(prefix):]
 			if hasSystemPathTarget(argsAfterCmd) {
 				return true
 			}
@@ -361,6 +367,12 @@ func isCautionPattern(cmd string) bool {
 		}
 	}
 	return false
+}
+
+// isSudoCommand reports whether cmd is a sudo-prefixed command.
+func isSudoCommand(cmd string) bool {
+	cmdLower := strings.ToLower(strings.TrimSpace(cmd))
+	return strings.HasPrefix(cmdLower, "sudo ")
 }
 
 func isPrivilegedPackageInstall(cmd string) bool {

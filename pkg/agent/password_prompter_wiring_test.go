@@ -63,8 +63,10 @@ func TestSetPasswordPrompter_Nil(t *testing.T) {
 // =============================================================================
 
 // TestResolveToolRisk_PrivilegedDowngradedWithPrompter verifies that a sudo
-// command is downgraded from High to Medium when a password prompter is
-// registered, so the user can type their password.
+// command is Medium (CAUTION level from classifier) when a password prompter
+// is registered. Since sudo is now CAUTION in the classifier, the level is
+// already Medium before the prompter downgrade logic — the downgrade only
+// fires at High or above, so RiskSourcePasswordPrompter is NOT added.
 func TestResolveToolRisk_PrivilegedDowngradedWithPrompter(t *testing.T) {
 	agent := newIsolatedTestAgent(t)
 	defer agent.Shutdown()
@@ -76,31 +78,24 @@ func TestResolveToolRisk_PrivilegedDowngradedWithPrompter(t *testing.T) {
 	assert.True(t, assessment.Level.Rank() <= configuration.RiskLevelMedium.Rank(),
 		"sudo with prompter should be Medium or lower, got %s", assessment.Level)
 	assert.False(t, assessment.IsHardBlock, "sudo with prompter should not be a hard block")
-	// Verify the downgrade source is recorded.
-	foundSource := false
-	for _, s := range assessment.Sources {
-		if s == RiskSourcePasswordPrompter {
-			foundSource = true
-			break
-		}
-	}
-	assert.True(t, foundSource, "assessment should include RiskSourcePasswordPrompter")
 }
 
 // TestResolveToolRisk_PrivilegedNotDowngradedWithoutPrompter verifies that
-// a sudo command stays High (or Critical) when no prompter is registered —
-// the existing safe default.
+// a sudo command is CAUTION (Medium) even without a password prompter.
+// The classifier now returns CAUTION for sudo, so no prompter is needed
+// to avoid a hard block — sudo simply prompts in the default profile.
 func TestResolveToolRisk_PrivilegedNotDowngradedWithoutPrompter(t *testing.T) {
 	agent := newIsolatedTestAgent(t)
 	defer agent.Shutdown()
-	// No prompter — sudo should be blocked as before.
+	// No prompter — sudo is now CAUTION (Medium), not blocked.
 	assert.False(t, agent.HasPasswordPrompter())
 
 	args := map[string]interface{}{"command": "sudo apt update"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
 
-	assert.True(t, assessment.Level.Rank() >= configuration.RiskLevelHigh.Rank(),
-		"sudo without prompter should be High or Critical, got %s", assessment.Level)
+	assert.True(t, assessment.Level.Rank() <= configuration.RiskLevelMedium.Rank(),
+		"sudo without prompter should be Medium or lower (CAUTION), got %s", assessment.Level)
+	assert.False(t, assessment.IsHardBlock, "sudo without prompter should not be a hard block")
 }
 
 // TestResolveToolRisk_DestructiveNotDowngradedWithPrompter is the safety

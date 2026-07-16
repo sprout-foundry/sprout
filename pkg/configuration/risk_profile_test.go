@@ -166,6 +166,13 @@ func TestIsCriticalOperation(t *testing.T) {
 		"sudo rm -rf /",
 		"cd /tmp && rm -rf /",
 		":(){ :|:& };:", // classic fork bomb
+		// sudo-prefixed critical operations (SP-123 regression tests)
+		"sudo killall -9",
+		"sudo killall -KILL",
+		"sudo mkfs.ext4 /dev/sda1",
+		"sudo mkfs /dev/sdb",
+		"sudo dd if=/dev/zero of=/dev/sda",
+		"sudo chmod 000 /",
 	}
 	for _, c := range critical {
 		if !IsCriticalOperation(c) {

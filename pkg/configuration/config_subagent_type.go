@@ -69,8 +69,15 @@ func IsCriticalOperation(command string) bool {
 	}
 
 	// mkfs / mkfs.* — formatting a filesystem destroys everything on the target.
-	if len(fields) > 0 && (fields[0] == "mkfs" || strings.HasPrefix(fields[0], "mkfs.")) {
-		return true
+	// Handle sudo prefix: "sudo mkfs.ext4 /dev/sda1" → fields[0] is "sudo".
+	if len(fields) > 0 {
+		checkIdx := 0
+		if fields[0] == "sudo" && len(fields) > 1 {
+			checkIdx = 1
+		}
+		if fields[checkIdx] == "mkfs" || strings.HasPrefix(fields[checkIdx], "mkfs.") {
+			return true
+		}
 	}
 
 	// dd reading from / writing to a primary block device.
@@ -83,7 +90,9 @@ func IsCriticalOperation(command string) bool {
 	}
 
 	// killall -9 / -KILL — mass process termination.
-	if strings.HasPrefix(cmdLower, "killall -9") || strings.HasPrefix(cmdLower, "killall -kill") {
+	// Handle sudo prefix: "sudo killall -9" must also be critical.
+	if strings.HasPrefix(cmdLower, "killall -9") || strings.HasPrefix(cmdLower, "killall -kill") ||
+		strings.HasPrefix(cmdLower, "sudo killall -9") || strings.HasPrefix(cmdLower, "sudo killall -kill") {
 		return true
 	}
 

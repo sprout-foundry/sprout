@@ -1,8 +1,7 @@
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { SproutSettings } from '../../services/api';
-import { showThemedConfirm } from '../ThemedDialog';
-import { getNestedValue } from './settingsHelpers';
+import CommandPolicyEditor from './CommandPolicyEditor';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 
 interface SecuritySettingsTabProps {
@@ -20,34 +19,6 @@ export default function SecuritySettingsTab({
   renderSelect,
   updateSetting,
 }: SecuritySettingsTabProps) {
-  const rawApproved = settings ? (getNestedValue(settings, 'approved_shell_commands') as unknown) : [];
-  const approved: string[] = Array.isArray(rawApproved) ? rawApproved : [];
-
-  const [draft, setDraft] = useState('');
-
-  const addApproved = async () => {
-    const next = draft.trim();
-    if (!next) return;
-    if (approved.includes(next)) {
-      setDraft('');
-      return;
-    }
-    await updateSetting('approved_shell_commands', [...approved, next]);
-    setDraft('');
-  };
-
-  const removeApproved = async (cmd: string) => {
-    const confirmed = await showThemedConfirm(
-      `Remove "${cmd}" from approved commands? Future runs will prompt for approval.`,
-      { title: 'Remove approved command', type: 'warning', confirmLabel: 'Remove' },
-    );
-    if (!confirmed) return;
-    await updateSetting(
-      'approved_shell_commands',
-      approved.filter((c) => c !== cmd),
-    );
-  };
-
   return (
     <div className="section">
       <h4>Security</h4>
@@ -65,61 +36,8 @@ export default function SecuritySettingsTab({
           'When detection is on, run matched commands without an extra confirmation prompt.',
         )}
       </div>
-      <div className="settings-section-spaced">
-        <h4>Approved Shell Commands</h4>
-        <div className="config-help settings-help-spaced">
-          Persistent allowlist of shell commands that bypass the per-command approval prompt. Each entry is a literal
-          command string — patterns must match exactly. Approvals persist across sessions; remove with the trash icon.
-        </div>
 
-        <div className="config-item">
-          <div className="settings-inline-row">
-            <input
-              type="text"
-              className="styled-input"
-              placeholder="e.g. git push origin main --force-with-lease"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void addApproved();
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="settings-action-btn"
-              onClick={() => void addApproved()}
-              disabled={draft.trim().length === 0}
-            >
-              Add
-            </button>
-          </div>
-        </div>
-
-        {approved.length === 0 ? (
-          <div className="settings-empty">No approved commands yet.</div>
-        ) : (
-          <ul className="settings-list settings-help-spaced-top">
-            {approved.map((cmd) => (
-              <li key={cmd} className="settings-list-row">
-                <code className="settings-list-row-code">{cmd}</code>
-                <button
-                  type="button"
-                  className="settings-icon-btn danger"
-                  aria-label={`Remove approval for ${cmd}`}
-                  title="Remove"
-                  onClick={() => void removeApproved(cmd)}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
+      <CommandPolicyEditor settings={settings} updateSetting={updateSetting} />
       <SecurityPolicyEditor settings={settings} updateSetting={updateSetting} />
     </div>
   );

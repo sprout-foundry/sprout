@@ -42,6 +42,12 @@ const (
 	// session. The folder is conveyed via the approval request's
 	// `folder` extra so the caller knows which path to record.
 	ApprovalAllowFolderSession
+
+	// ApprovalAlwaysAsk approves this invocation AND persists the
+	// command as an "ask" rule in Config.CommandPolicies so future
+	// matching commands always force an interactive prompt, even in
+	// permissive mode or when the classifier says SAFE. SP-123-2b.
+	ApprovalAlwaysAsk
 )
 
 // String returns a stable lowercase identifier for the decision, used
@@ -58,6 +64,8 @@ func (d ApprovalDecision) String() string {
 		return "elevate"
 	case ApprovalAllowFolderSession:
 		return "allow_folder_session"
+	case ApprovalAlwaysAsk:
+		return "always_ask"
 	default:
 		return "deny"
 	}
@@ -75,6 +83,8 @@ func ApprovalDecisionFromString(s string) ApprovalDecision {
 		return ApprovalElevate
 	case "allow_folder_session":
 		return ApprovalAllowFolderSession
+	case "always_ask", "ask":
+		return ApprovalAlwaysAsk
 	default:
 		return ApprovalDeny
 	}

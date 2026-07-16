@@ -155,11 +155,12 @@ func TestDropOrphanToolResults(t *testing.T) {
 	}
 }
 
-// TestConvertMessages_StripsOrphanToolResults_ForStrictProvider is the
-// end-to-end repro: a strict-syntax provider (MiniMax) sees the orphan
-// tool message removed before serialization, but a non-strict provider
-// (OpenAI) passes it through unchanged.
-func TestConvertMessages_StripsOrphanToolResults_ForStrictProvider(t *testing.T) {
+// TestConvertMessages_StripsOrphanToolResults_ForAllProviders verifies that
+// orphaned tool results (tool_call_id with no matching parent assistant) are
+// dropped for ALL providers. This was previously gated on strict-syntax
+// providers only, but the conversation state corruption (orphaned tool calls
+// and results) is provider-agnostic and degrades model output on all providers.
+func TestConvertMessages_StripsOrphanToolResults_ForAllProviders(t *testing.T) {
 	strictConf := &ProviderConfig{
 		Name: "minimax",
 		Conversion: MessageConversion{
@@ -184,6 +185,7 @@ func TestConvertMessages_StripsOrphanToolResults_ForStrictProvider(t *testing.T)
 		{Role: "tool", ToolCallID: "c2", Content: "ok"}, // orphan — id mismatch
 	}
 
+	// Both strict and non-strict providers should drop the orphan tool result.
 	strictP := &GenericProvider{config: strictConf, model: "MiniMax-M2.5"}
 	got := strictP.convertMessages(messages, "")
 	if hasRole(got, "tool") {
@@ -192,8 +194,8 @@ func TestConvertMessages_StripsOrphanToolResults_ForStrictProvider(t *testing.T)
 
 	looseP := &GenericProvider{config: looseConf, model: "gpt-5"}
 	got = looseP.convertMessages(messages, "")
-	if !hasRole(got, "tool") {
-		t.Errorf("non-strict provider dropped the tool message: %v", got)
+	if hasRole(got, "tool") {
+		t.Errorf("non-strict provider kept the orphan tool message: %v", got)
 	}
 }
 

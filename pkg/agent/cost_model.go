@@ -17,6 +17,7 @@ type CostEntry struct {
 	PromptTokens     int     `json:"prompt_tokens"`
 	CompletionTokens int     `json:"completion_tokens"`
 	CachedTokens     int     `json:"cached_tokens,omitempty"`
+	ImageTokens      int     `json:"image_tokens,omitempty"`
 }
 
 // Billing type constants (re-exported for convenience within the agent package).

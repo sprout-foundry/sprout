@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -98,6 +100,8 @@ func handleSettingsSet(a *Agent, args map[string]interface{}) (string, error) {
 }
 
 // handleSettingsListProviders lists available providers.
+// When a provider filter matches exactly one provider, it also fetches and
+// displays that provider's available models.
 func handleSettingsListProviders(a *Agent, args map[string]interface{}) (string, error) {
 	mgr := a.GetConfigManager()
 	if mgr == nil {
@@ -128,6 +132,28 @@ func handleSettingsListProviders(a *Agent, args map[string]interface{}) (string,
 	lines = append(lines, fmt.Sprintf("Available providers (%d):", len(names)))
 	for _, n := range names {
 		lines = append(lines, fmt.Sprintf("  - %s", n))
+	}
+
+	// If exactly one provider matched the filter, fetch and display its models.
+	if len(names) == 1 {
+		providerName := names[0]
+		clientType := api.ClientType(providerName)
+
+		// Use a short timeout — this is a live API call.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		models, err := api.GetModelsForProviderCtx(ctx, clientType)
+		if err == nil && len(models) > 0 {
+			lines = append(lines, "")
+			lines = append(lines, fmt.Sprintf("Models for %s (%d):", providerName, len(models)))
+			for _, m := range models {
+				lines = append(lines, fmt.Sprintf("  - %s", m.ID))
+			}
+		} else if err != nil {
+			lines = append(lines, "")
+			lines = append(lines, fmt.Sprintf("  (could not fetch models: %v)", err))
+		}
 	}
 
 	return strings.Join(lines, "\n"), nil

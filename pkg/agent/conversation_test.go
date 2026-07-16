@@ -407,7 +407,7 @@ func TestResizeImageForVisionEmbed_NoOpSmall(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 400, 300))
 	data := encodePNG(t, img)
 
-	got, err := resizeImageForVisionEmbed(data)
+	got, err := resizeImageForVisionEmbed(data, 1568)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestResizeImageForVisionEmbed_ExactlyAtLimit(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 1568, 1568))
 	data := encodePNG(t, img)
 
-	got, err := resizeImageForVisionEmbed(data)
+	got, err := resizeImageForVisionEmbed(data, 1568)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestResizeImageForVisionEmbed_ResizesLarge(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	data := encodePNG(t, img)
 
-	got, err := resizeImageForVisionEmbed(data)
+	got, err := resizeImageForVisionEmbed(data, 1568)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestResizeImageForVisionEmbed_PreservesAspect(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	data := encodePNG(t, img)
 
-	got, err := resizeImageForVisionEmbed(data)
+	got, err := resizeImageForVisionEmbed(data, 1568)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -496,7 +496,7 @@ func TestResizeImageForVisionEmbed_PreservesAspect(t *testing.T) {
 func TestResizeImageForVisionEmbed_Undecodable(t *testing.T) {
 	// Garbage bytes — should pass through unchanged (no error, same bytes).
 	garbage := []byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB, 0xFA}
-	got, err := resizeImageForVisionEmbed(garbage)
+	got, err := resizeImageForVisionEmbed(garbage, 1568)
 	if err != nil {
 		t.Logf("error returned (acceptable): %v", err)
 	}
@@ -512,7 +512,7 @@ func TestResizeImageForVisionEmbed_WideImage(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	data := encodePNG(t, img)
 
-	got, err := resizeImageForVisionEmbed(data)
+	got, err := resizeImageForVisionEmbed(data, 1568)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

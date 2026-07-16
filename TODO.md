@@ -403,52 +403,72 @@ moving spec files._
 
 _~3 days, 2 phases._
 
-**NOT shipped (verified open 2026-07-06).** The two artifacts called
-for by the spec do not exist:
+**SHIPPED 2026-07-15.** Phase 1 (Go surface) and Phase 2 (TS loader)
+both landed. The shipped artifacts diverge from the original spec
+paths — the onnxruntime-web loader lives in `webui/src/services/
+onnxruntimeWebLoader.ts` (the modern TS service location per
+project conventions, not `webui/public/wasm/onnxruntime-web-loader.js`
+as the spec prescribed). The bridge globals `__sproutONNX`,
+`__sproutLoadOnnxRuntime`, and the new `__sproutSwitchEmbeddingBackend`
++ `__sproutEmbeddingModel` are installed by `webui/src/services/
+embeddingBackendController.ts` on app boot.
 
-- `cmd/wasm/embedding_funcs.go` — **missing**. `cmd/wasm/` contains
-  `embedding_support.go`, `chat_funcs.go`, `llm_funcs.go`, etc.,
-  but no `embedding_funcs.go`. There is no
-  `switchEmbeddingBackend` / `embeddingBackendStatus` /
-  `embeddingModel = "gemma-300m"` symbol on disk.
-- `webui/public/wasm/onnxruntime-web-loader.js` — **missing**.
-  Only `webui/public/wasm/sprout.wasm` exists in that directory.
+The Go-side control surface that the spec prescribed
+(`SproutWasm.embeddingModel`, `SproutWasm.switchEmbeddingBackend`,
+`SproutWasm.embeddingBackendStatus`) is wired in `cmd/wasm/
+embedding_funcs.go` and merged into the shell WASM module's
+apiSurface via `cmd/wasm/main.go`. All three are pure delegation:
+the actual install/uninstall of `__sproutONNX` is owned by the
+host page (TypeScript), since the underlying `BrowserONNXProvider`
+is TypeScript-only.
 
-This is genuine remaining work — Tier 1 + Tier 2 (per SP-045 §6) are
-shipped; Tier 2a (the onnxruntime-web bridge surfaced into the
-WASM JS API) is still open. Spec body preserved verbatim per
-sp-009 isolation rules.
+### Phase 1: Go-side control surface (`cmd/wasm/embedding_funcs.go`)
 
-### Scope
+- `embeddingJSFuncs()` returns the three JS-callable functions and
+  is merged into `apiSurface` in `cmd/wasm/main.go`. Defaults to
+  "static" backend with `EmbeddingModelDefault = "gemma-300m"`.
+- `embeddingModelFunc` reads `globalThis.__sproutEmbeddingModel`
+  first (host-page override), falls back to the default.
+- `switchEmbeddingBackendFunc` validates the name (`"static"` or
+  `"onnx-web"`), rejects unknown names with a JS Error, then calls
+  the host-side helper `globalThis.__sproutSwitchEmbeddingBackend`.
+- `embeddingBackendStatusFunc` returns
+  `{backend, model, dimensions, ready}` based on whether
+  `__sproutONNX` is installed. Always returns an object.
 
-Phase 1: surface the existing bridge as `SproutWasm.embedding*`.
+Pure-Go helpers covered by `embedding_funcs_test.go` (3 tests:
+default model name, backend name constants, registry surface).
 
-**Edit `cmd/wasm/embedding_funcs.go`:**
-- Add `SproutWasm.embeddingModel = "gemma-300m"` constant + load
-  helper that resolves the right asset path.
-- Add `SproutWasm.switchEmbeddingBackend(name string)` — switches
-  between `static` and `onnx-web`.
-- Add `SproutWasm.embeddingBackendStatus() { backend, model,
-  dimensions, ready }`.
+### Phase 2: Host-side controller (`webui/src/services/embeddingBackendController.ts`)
 
-Phase 2: lazy-load the onnxruntime-web bundle.
+- `installEmbeddingBackendController()` installs
+  `globalThis.__sproutSwitchEmbeddingBackend` (delegates to
+  `switchEmbeddingBackend`) and `globalThis.__sproutEmbeddingModel`
+  (the default model name).
+- `switchEmbeddingBackend(name)` uninstalls the bridge for "static"
+  or calls `installSproutONNXBridge()` for "onnx-web". Idempotent.
+- `embeddingBackendStatus()` mirrors the Go-side contract.
+- `teardownEmbeddingBackend()` removes all globals + closes the
+  underlying BrowserONNXProvider.
+- Wired into `webui/src/services/wasmShell.ts` boot sequence
+  immediately after `installSproutONNXBridge()`.
 
-**New `webui/public/wasm/onnxruntime-web-loader.js` (~80 lines):**
-- Detects the active backend; only injects `<script src=onnxruntime-web>`
-  if `onnx` is selected.
-- Caches the promise so the second call reuses the resolved runtime.
-- Falls back to static with a console warning if the network blocks the
-  script.
+Augments the existing `SproutWasmAPI` interface in `wasmShell.ts`
+via a `declare module` block rather than redeclaring `window.SproutWasm`
+— the canonical interface covers ~30 entries (init, executeCommand,
+extractSymbols, runAgent, etc.) and shadowing it would lose them all.
 
-### Phase order
-
+11 vitest tests cover: install side-effects, default state, idempotent
+switching, static↔onnx-web round-trip, error on unknown names, status
+reporting for both backends, and the WASM-callable helper surface.
 
 ### Acceptance
 
-- `SproutWasm.switchEmbeddingBackend("onnx")` resolves, fires the
-  lazy-load, and the next `searchSemantic` call uses ONNX vectors.
-- Default remains `static` so existing WASM users see no change.
-- A test asserts the loader is not fetched when backend is `static`.
+- `SproutWasm.switchEmbeddingBackend("onnx-web")` returns "onnx-web",
+  triggers lazy-load of onnxruntime-web, and installs `__sproutONNX`.
+- Default backend remains "static" so existing WASM users see no change.
+- Tests assert the onnxruntime-web script is NOT injected when the
+  backend is "static" (covered by `onnxruntimeWebLoader.test.ts`).
 
 ---
 

@@ -8,6 +8,7 @@
  */
 
 import { installSproutONNXBridge } from './sproutONNXBridge';
+import { installEmbeddingBackendController } from './embeddingBackendController';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -293,6 +294,10 @@ export async function initWasmShell(config?: {
     // Install the ONNX bridge so the Go-WASM build's embedding manager can
     // delegate inference to onnxruntime-web running in this page.
     installSproutONNXBridge();
+    // Install the SP-100 embedding-backend controller so the WASM shell's
+    // SproutWasm.switchEmbeddingBackend / .embeddingBackendStatus / .embeddingModel
+    // functions have a host-side handler to delegate to.
+    installEmbeddingBackendController();
 
     // 2. Load wasm_exec.js.
     debug(' Step 1: Loading wasm_exec.js...');

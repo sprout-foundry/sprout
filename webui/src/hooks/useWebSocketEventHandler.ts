@@ -45,7 +45,7 @@ import {
 
 // Handle connection_status event
 const handleConnectionStatus = (ctx: EventHandlerContext): void => {
-  const { event, setState, connectionTimeoutRef, lastConnectionStateRef } = ctx;
+  const { event, setState, connectionTimeoutRef, lastConnectionStateRef, activeRequestsRef } = ctx;
   const logEntry = createLogEntry(event);
   const data = (event.data ?? {}) as ConnectionStatusData;
   if (data.client_id && String(data.client_id) !== getWebUIClientId()) return;
@@ -65,6 +65,13 @@ const handleConnectionStatus = (ctx: EventHandlerContext): void => {
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
     connectionTimeoutRef.current = setTimeout(() => {
       lastConnectionStateRef.current = newConnectionState;
+      // On disconnect, reset the active request counter — any in-flight
+      // turn's completion event will never arrive over a dead socket.
+      // On reconnect, the backend replay will set it correctly if the
+      // turn is still running server-side.
+      if (!newConnectionState && activeRequestsRef.current > 0) {
+        activeRequestsRef.current = 0;
+      }
       setState((prev) => ({
         sessionId: incomingSessionId || prev.sessionId,
         isConnected: newConnectionState,

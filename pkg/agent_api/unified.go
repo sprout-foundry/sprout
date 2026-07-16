@@ -89,7 +89,6 @@ func (w *UnifiedProviderWrapper) SendChatRequest(ctx context.Context, messages [
 			Cost:             response.Usage.Cost,
 			CachedTokens:     response.Usage.CachedTokens,
 			CacheWriteTokens: response.Usage.CacheWriteTokens,
-			ImageTokens:      response.Usage.ImageTokens,
 		},
 	}
 
@@ -267,7 +266,6 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(ctx context.Context, messages
 			Cost:             response.Usage.Cost,
 			CachedTokens:     response.Usage.CachedTokens,
 			CacheWriteTokens: response.Usage.CacheWriteTokens,
-			ImageTokens:      response.Usage.ImageTokens,
 		},
 	}
 
@@ -389,7 +387,6 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(ctx context.Context, mess
 			Cost:             response.Usage.Cost,
 			CachedTokens:     response.Usage.CachedTokens,
 			CacheWriteTokens: response.Usage.CacheWriteTokens,
-			ImageTokens:      response.Usage.ImageTokens,
 		},
 	}
 

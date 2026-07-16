@@ -57,6 +57,18 @@ async function openSettings() {
   await expect(page.getByTestId(TESTIDS['settings-panel'])).toBeVisible({ timeout: 15_000 });
 }
 
+/** Reload the page and re-open the settings panel. Used by the round-trip
+ *  persistence tests to verify that setting changes saved to the backend
+ *  survive a full page reload (not just localStorage UI state). */
+async function reopenSettingsAfterReload() {
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
+  const settingsToggle = page.getByTestId(TESTIDS['sidebar-settings-toggle']);
+  await expect(settingsToggle).toBeVisible({ timeout: 15_000 });
+  await settingsToggle.click();
+  await expect(page.getByTestId(TESTIDS['settings-panel'])).toBeVisible({ timeout: 15_000 });
+}
+
 /** Expand a section by its label text. Matches the section whose header label
  *  exactly matches, avoiding false positives from hasText on subtree content. */
 async function expandSection(label: string) {
@@ -425,5 +437,157 @@ test.describe('State persistence', () => {
 
     // Workspace should still be expanded
     await expect(sectionByLabel('Workspace')).toHaveClass(/expanded/, { timeout: 10_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Round-trip persistence
+//    Verify that changing a setting value via UI controls actually persists
+//    to the backend and survives a full page reload (the backend is the
+//    source of truth — localStorage only stores UI state like which
+//    sections are expanded).
+// ---------------------------------------------------------------------------
+
+test.describe('Round-trip persistence', () => {
+  test.beforeEach(async () => {
+    await openSettings();
+  });
+
+  test('Editor > Display: whitespace rendering dropdown persists across reload', async () => {
+    await expandSection('Editor');
+    await clickSubsectionTab('settings-editor-preferences-tab');
+
+    // The whitespace rendering <select> is the only one with id
+    // "whitespace-rendering-select"; options are none/boundary/all.
+    const wsSelect = page.locator('#whitespace-rendering-select');
+    await expect(wsSelect).toBeVisible({ timeout: 10_000 });
+
+    // Read the current value and switch to a different option.
+    const initialValue = await wsSelect.inputValue();
+    const options = ['none', 'boundary', 'all'].filter((v) => v !== initialValue);
+    const nextValue = options[0];
+    await wsSelect.selectOption(nextValue);
+    await expect(wsSelect).toHaveValue(nextValue);
+
+    // Wait for the save API call to complete, then reload and reopen settings.
+    await page.waitForTimeout(500);
+    await reopenSettingsAfterReload();
+
+    // Re-navigate to the control.
+    await expandSection('Editor');
+    await clickSubsectionTab('settings-editor-preferences-tab');
+    const wsSelectAfterReload = page.locator('#whitespace-rendering-select');
+    await expect(wsSelectAfterReload).toBeVisible({ timeout: 10_000 });
+
+    // The backend value should be the one we selected.
+    await expect(wsSelectAfterReload).toHaveValue(nextValue, { timeout: 10_000 });
+  });
+
+  test('Agent > General: skip_prompt toggle persists across reload', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-general-tab');
+
+    // renderToggle creates <div class="config-item"><label class="styled-toggle">
+    //   <input type="checkbox"><span class="toggle-track"/><span class="toggle-label">Skip...
+    // The checkbox is visually hidden (opacity:0, pointer-events:none), so
+    // click the label and check state via the input.
+    const skipLabel = page
+      .locator('.settings-subsection-content .toggle-label')
+      .filter({ hasText: 'Skip confirmation' })
+      .locator('xpath=ancestor::label[1]');
+    const skipCheckbox = skipLabel.locator('input[type="checkbox"]');
+    await expect(skipLabel).toBeVisible({ timeout: 10_000 });
+
+    // Capture the initial state and flip it.
+    const wasChecked = await skipCheckbox.isChecked();
+    await skipLabel.click();
+    await expect(skipCheckbox).toBeChecked({ checked: !wasChecked });
+
+    // Wait for the save API call to complete, then reload and reopen settings.
+    await page.waitForTimeout(500);
+    await reopenSettingsAfterReload();
+
+    // Re-navigate to the control.
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-general-tab');
+    const skipLabelAfterReload = page
+      .locator('.settings-subsection-content .toggle-label')
+      .filter({ hasText: 'Skip confirmation' })
+      .locator('xpath=ancestor::label[1]');
+    const skipCheckboxAfterReload = skipLabelAfterReload.locator('input[type="checkbox"]');
+    await expect(skipLabelAfterReload).toBeVisible({ timeout: 10_000 });
+
+    // The flipped state should be the one persisted on the backend.
+    await expect(skipCheckboxAfterReload).toBeChecked({ checked: !wasChecked, timeout: 10_000 });
+  });
+
+  test('Agent > General: reasoning effort dropdown persists across reload', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-general-tab');
+
+    // AgentBehaviorSettingsTab renders a select for "Reasoning effort" via
+    // renderSelect('reasoning_effort', ...), which produces id="setting-reasoning_effort".
+    const reasoningSelect = page.locator('#setting-reasoning_effort');
+    await expect(reasoningSelect).toBeVisible({ timeout: 10_000 });
+
+    // Read the current value and switch to a different option.
+    const initialValue = await reasoningSelect.inputValue();
+    const options = ['low', 'medium', 'high'].filter((v) => v !== initialValue);
+    const nextValue = options[0];
+    await reasoningSelect.selectOption(nextValue);
+    await expect(reasoningSelect).toHaveValue(nextValue);
+
+    // Wait for the save API call to complete, then reload and reopen settings.
+    await page.waitForTimeout(500);
+    await reopenSettingsAfterReload();
+
+    // Re-navigate to the control.
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-general-tab');
+    const reasoningSelectAfterReload = page.locator('#setting-reasoning_effort');
+    await expect(reasoningSelectAfterReload).toBeVisible({ timeout: 10_000 });
+
+    // The backend value should be the one we selected.
+    await expect(reasoningSelectAfterReload).toHaveValue(nextValue, { timeout: 10_000 });
+  });
+
+  test('Agent > Security: approved shell command persists across reload', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+
+    // SecuritySettingsTab renders an input (placeholder mentions "git push")
+    // plus an "Add" button. Each approved command shows up as a
+    // code.settings-list-row-code entry. Use a unique command string so we
+    // can safely add it without colliding with prior runs.
+    const command = `echo persistence-test-${Date.now()}`;
+    const approvedInput = page
+      .locator('.settings-subsection-content')
+      .locator('input[placeholder*="git push"]');
+    await expect(approvedInput).toBeVisible({ timeout: 10_000 });
+    await approvedInput.fill(command);
+
+    const addButton = page
+      .locator('.settings-subsection-content')
+      .locator('.settings-inline-row')
+      .getByRole('button', { name: 'Add', exact: true });
+    await addButton.click();
+
+    // The command should appear in the list.
+    await expect(
+      page.locator('.settings-subsection-content').getByText(command, { exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Wait for the save API call to complete, then reload and reopen settings.
+    await page.waitForTimeout(500);
+    await reopenSettingsAfterReload();
+
+    // Re-navigate to the Security tab.
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+
+    // The command should still be in the persisted approved list.
+    await expect(
+      page.locator('.settings-subsection-content').getByText(command, { exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
   });
 });

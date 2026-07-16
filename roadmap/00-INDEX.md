@@ -10,7 +10,7 @@ The root directory only contains specs still receiving active changes.
 
 ## Shipped
 
-Full spec bodies in [`_completed/`](./_completed/) (72 files).
+Full spec bodies in [`_completed/`](./_completed/) (79 files).
 
 | Spec | Title | Status |
 |------|-------|--------|
@@ -23,6 +23,7 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 | SP-009 | [Component Library Maturation — Storybook + @sprout/ui](./_completed/SP-009-component-library-maturation.md) | ✅ Implemented (Storybook + MDX docs + Chromatic visual regression; webui imports @sprout/ui as monorepo sibling) |
 | SP-010 | [Editor Modernization](./_completed/SP-010-editor-modernization.md) | ✅ Implemented (EditorPane 2604→513 lines; EditorCore extracted; React.memo + 18 bug fixes) |
 | SP-011 | [Terminal Parity & Bug Fixes](./_completed/SP-011-terminal-parity.md) | ✅ Shipped (all 3 phases complete 2026-06) |
+| SP-012 | [UX Polish](./_completed/SP-012-ux-polish.md) | ✅ Implemented (a11y gap-closure shipped 2026-07-01: `role="treeitem"`/`aria-expanded` on FileTree rows, `aria-live="polite"` on ChatPanel log region, global `:focus-visible` styles in `webui/src/index.css`, `notificationBus.markAllRead()` + NotificationCenter "Mark all read" button. Broader SP-012 surface shipped 2026-06-23 → 2026-06-30 per the spec history.) |
 | SP-013 | [Agent Settings Management Tool](./_completed/SP-013-agent-settings-skill.md) | ✅ Implemented (manage_settings tool registered; pkg/agent/settings_handler.go) |
 | SP-014 | [Agent Terminal Sessions — Hidden PTY Routing + Background Mode](./_completed/SP-014-agent-terminal-sessions.md) | ✅ Implemented (Hidden PTY routing + background mode shipped) |
 | SP-015 | [Cloud Platform Integration](./_completed/SP-015-cloud-platform.md) | ✅ Implemented (sprout-side; 2026-06-26) — R1–R7 complete in this repo. Cross-repo evolution lives in `../sprout-foundry` |
@@ -32,7 +33,6 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 | SP-018 | [Memory System](./_completed/SP-018-memory-system.md) | ✅ Implemented |
 | SP-019 | [Multi-Chat Sessions](./_completed/SP-019-multi-chat-sessions.md) | ✅ Implemented |
 | SP-020 | [Trace/Dataset Mode](./_completed/SP-020-trace-dataset-mode.md) | ✅ Implemented |
-| SP-021 | [Self-Review Tool](./_completed/SP-021-self-review-tool.md) | ✅ Implemented |
 | SP-022 | [Remote Provider Registry](./_completed/SP-022-remote-provider-registry.md) | ✅ Implemented |
 | SP-022 | [Workspace Management & Project Detection](./_completed/SP-022-workspace-management.md) | ✅ Implemented (WorkspacePicker + WorkspacePane + LocationSwitcher + WorkspaceBar) |
 | SP-023 | [In-Process Subagent Execution](./_completed/SP-023-in-process-subagents.md) | ✅ Active |
@@ -87,25 +87,24 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 | SP-087 | [SP-087 Acceptance Report](./_completed/SP-087-acceptance.md) | (supporting doc — see linked spec) |
 | SP-087b | [Full Playwright Coverage of the WebUI](./_completed/SP-087b-full-playwright-webui-coverage.md) | ✅ Implemented (2026-06-30; acceptance criterion 3 partial — trace/video/screenshot config deferred, see SP-087-acceptanc |
 | SP-106 | [CLI Output Polish + SelectList Touch Scroll](./_completed/SP-106-cli-output-polish.md) | ✅ Implemented (all 3 features: markdown table rendering, nested list indentation + indented code blocks, SelectList mouse wheel scroll) |
+| SP-107 | [Code Intelligence Graph](./_completed/SP-107-code-intelligence-graph.md) | ✅ Implemented — auto-build on first query (`codegraph_handler.go:60`), embedding_index integration (`embedding_index_handler.go:267`), qualified-name edge fix (`repo_map.go:ToCodegraphSymbols`). 41 codegraph + 29 edge-extraction tests pass; `find_dead_code`/`get_callers`/`get_callees` produce real results. Spec reconciliation at `55c997e1`; primary wiring at `7ea9061d`, `ce0e6b48`, `82d40fa1`. |
 | SP-109 | [Single-Source Tool Definitions — Eliminate Dual Maintenance](./_completed/SP-109-single-source-tool-definitions.md) | ✅ Implemented (all 4 phases complete; legacy `ToolConfig` registry deleted; `ToolHandler.Definition()` is the single source of truth) |
+| SP-110 | [Background Completion Injection & Auto-Resume](./_completed/SP-110-background-completion-auto-resume.md) | 🟡 Partially Implemented — Phases 1+2 shipped at `6d31e17a` (162-line `pkg/agent/notifications.go` with NotificationQueue, DrainNotifications, WakeupConfig + `startWakeupWatcher` in `shell_handler.go`). Phase 3 (auto-resume daemon poller at `pkg/agent/wakeup_poller.go`) NOT shipped; the 2s ticker + all-gates-checked polling loop is genuine remaining work. |
 | SP-116 | [Multi-Instance Isolation](./_completed/SP-116-multi-instance-isolation.md) | ✅ Implemented — git-repo auto-detection in `cmd/root.go` makes `.sprout/` isolation the default for repo-backed directories; bg processes scoped to config dir; layered config merges workspace overrides with global providers. Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). |
 | SP-118 | [Daemon Multi-Window Session Isolation](./_completed/SP-118-daemon-multi-window-sessions.md) | ✅ Implemented (Phases 1–5 shipped 2026-07-15; Phase 6 partial — TODO.md sync landed, README + Settings UI deferred per AGENTS.md "no documentation" rule). Mode 2 (daemon) supports N parallel browser windows per user via `agentEnforceSingleSession` dispatch + `UserConnections` registry; Mode 1 (`sprout agent`) keeps single-active semantics. `daemon_multi_session` feature flag defaulted ON; rollback via `sprout config set daemon_multi_session=false`. `active_ws_count_by_user` metric exposed at `/api/ws-metrics`. |
 | SP-119 | [Workspace-aware Directory Resolution](./_completed/SP-119-workspace-aware-directory-resolution.md) | ✅ Implemented — `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool and interface-handler paths so daemon-served workspaces find `<workspace>/automate/` instead of the daemon root. 3 phases shipped 2026-07-15 (`6608ecf3`, `aa2d05a9`). Out-of-scope follow-ups (~25 callsites across `pkg/agent/persistence.go`, `pkg/agent/skills.go`, `pkg/agent_tools/shell_native.go`, etc.) tracked under SP-091. |
 
 ## Pending
 
-Specs still in flight (5 files). When a spec's core work
+Specs still in flight (4 files). When a spec's core work
 ships, it moves to [`_completed/`](./_completed/).
 
 | Spec | Title | Status |
 |------|-------|--------|
-| SP-012 | [UX Polish](./SP-012-ux-polish.md) | ⚠️ ~90% Shipped — Notification center, reduced-motion, inline tool badges, MAX_PANES, sidebar persistence, mobile responsive, loading skeletons, panel animations shipped; remaining: ARIA gaps in FileTree (role="treeitem"/aria-expanded) and ChatPanel (role="log"), global `:focus-visible` styles, `notificationBus.markAllRead()` |
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ⚠️ In Progress — Phase 1 (config + cmd) and Phase 2 (agent core) substantially shipped 2026-06; Phase 3 (providers + web) shipped for several files. Original 2833-line `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines. **Remaining files over 600-line target:** `steer_input.go` 1313, `go_adapter.go` 1188, `models.go` 1121, `settings_api_put.go` 1094, `client.go` 1060, `client_context.go` 1011, `tool_handlers_subagent_spawn.go` 999, `Terminal.tsx` 780, `agent_modes.go` 732, `input_core.go` 715, `generic_provider.go` 669. |
-| SP-080 | [Multi-Billing-Model Cost Tracking](./SP-080-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
 | SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
-| SP-107 | [Code Intelligence Graph](./_completed/SP-107-code-intelligence-graph.md) | ✅ Implemented — auto-build on first query (`codegraph_handler.go:60`), embedding_index integration (`embedding_index_handler.go:267`), qualified-name edge fix (`repo_map.go:ToCodegraphSymbols`). 41 codegraph + 29 edge-extraction tests pass; `find_dead_code`/`get_callers`/`get_callees` produce real results. Spec reconciliation at `55c997e1`; primary wiring at `7ea9061d`, `ce0e6b48`, `82d40fa1`. |
-| SP-110 | [Background Completion Injection & Auto-Resume](./_completed/SP-110-background-completion-auto-resume.md) | 🟡 Partially Implemented — Phases 1+2 shipped at `6d31e17a` (162-line `pkg/agent/notifications.go` with NotificationQueue, DrainNotifications, WakeupConfig + `startWakeupWatcher` in `shell_handler.go`). Phase 3 (auto-resume daemon poller at `pkg/agent/wakeup_poller.go`) NOT shipped; the 2s ticker + all-gates-checked polling loop is genuine remaining work. |
 | SP-112 | [Platform Parity — Resolve Stubbed Feature Gaps](./SP-112-platform-parity.md) | 🔵 Proposed — 4 tiers. Windows process groups/signals, WASM tool exclusion, no-CGO embedding fallback, permanent limitation docs. Based on 2026-07-04 platform audit. |
+| SP-113 | [Multi-Billing-Model Cost Tracking](./SP-113-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
 
 ## Future / On Hold
 

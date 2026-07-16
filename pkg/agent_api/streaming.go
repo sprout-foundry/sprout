@@ -57,6 +57,7 @@ type StreamingUsage struct {
 	TotalTokens         int     `json:"total_tokens"`
 	EstimatedCost       float64 `json:"estimated_cost"`
 	Cost                float64 `json:"cost,omitempty"` // OpenRouter returns cost directly
+	ImageTokens         int     `json:"image_tokens,omitempty"`
 	PromptTokensDetails struct {
 		CachedTokens     int  `json:"cached_tokens"`
 		CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -187,6 +188,7 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 			TotalTokens:      chunk.Usage.TotalTokens,
 			EstimatedCost:    chunk.Usage.EstimatedCost,
 			Cost:             chunk.Usage.Cost,
+			ImageTokens:      chunk.Usage.ImageTokens,
 			CachedTokens:     chunk.Usage.PromptTokensDetails.CachedTokens,
 			CacheWriteTokens: chunk.Usage.PromptTokensDetails.CacheWriteTokens,
 		}

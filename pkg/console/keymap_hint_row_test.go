@@ -9,10 +9,9 @@ import (
 func TestKeymapHintRow_ContainsRegisteredBindings(t *testing.T) {
 	// Snapshot and restore the global keymap so this test is hermetic.
 	prevEntries := GlobalKeymap().Entries()
-	prevOnce := keymapOnce
 	prevGlobal := globalKeymap
 	t.Cleanup(func() {
-		keymapOnce = prevOnce
+		keymapOnce = sync.Once{}
 		globalKeymap = prevGlobal
 		for _, e := range prevEntries {
 			GlobalKeymap().Register(e)
@@ -76,10 +75,9 @@ func TestKeymapHintRow_ContainsRegisteredBindings(t *testing.T) {
 func TestKeymapHintRow_EmptyRegistry(t *testing.T) {
 	// Snapshot and restore the global keymap so this test is hermetic.
 	prevEntries := GlobalKeymap().Entries()
-	prevOnce := keymapOnce
 	prevGlobal := globalKeymap
 	t.Cleanup(func() {
-		keymapOnce = prevOnce
+		keymapOnce = sync.Once{}
 		globalKeymap = prevGlobal
 		for _, e := range prevEntries {
 			GlobalKeymap().Register(e)
@@ -99,10 +97,9 @@ func TestKeymapHintRow_EmptyRegistry(t *testing.T) {
 func TestKeymapHintRow_SkipsEmptyDescription(t *testing.T) {
 	// Snapshot and restore the global keymap so this test is hermetic.
 	prevEntries := GlobalKeymap().Entries()
-	prevOnce := keymapOnce
 	prevGlobal := globalKeymap
 	t.Cleanup(func() {
-		keymapOnce = prevOnce
+		keymapOnce = sync.Once{}
 		globalKeymap = prevGlobal
 		for _, e := range prevEntries {
 			GlobalKeymap().Register(e)
@@ -137,10 +134,9 @@ func TestKeymapHintRow_SkipsEmptyDescription(t *testing.T) {
 func TestKeymapHintRow_TruncatesLongLabels(t *testing.T) {
 	// Snapshot and restore the global keymap so this test is hermetic.
 	prevEntries := GlobalKeymap().Entries()
-	prevOnce := keymapOnce
 	prevGlobal := globalKeymap
 	t.Cleanup(func() {
-		keymapOnce = prevOnce
+		keymapOnce = sync.Once{}
 		globalKeymap = prevGlobal
 		for _, e := range prevEntries {
 			GlobalKeymap().Register(e)
@@ -235,4 +231,3 @@ func TestExtractShortLabel(t *testing.T) {
 		})
 	}
 }
-

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ func (h *gitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "Git operation: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
 			{Name: "args", Type: "string", Description: "Args to pass to the git command"},
+			{Name: "repo_dir", Type: "string", Description: "Subdirectory within the workspace to run git operations in (e.g., for submodules or monorepo workspaces). Must be within the workspace root. Defaults to workspace root if omitted."},
 		},
 	}
 }
@@ -43,17 +45,28 @@ var dangerousOps = map[string]bool{
 }
 
 func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// Inject env.WorkspaceRoot into context so downstream code
+	operation, _ := extractString(args, "operation")
+	argsStr, _ := extractString(args, "args")
+	repoDir, _ := extractString(args, "repo_dir")
+
+	// Determine the effective working directory: repo_dir overrides WorkspaceRoot.
+	effectiveDir := env.WorkspaceRoot
+	if repoDir != "" {
+		resolvedDir, err := validateRepoDir(repoDir, env.WorkspaceRoot)
+		if err != nil {
+			return ToolResult{Output: fmt.Sprintf("Invalid repo_dir: %v", err), IsError: true}, nil
+		}
+		effectiveDir = resolvedDir
+	}
+
+	// Inject effective directory into context so downstream code
 	// (executeGitCommand, SafeGitCmd, etc.) resolves the correct
 	// working directory. Without this, git commands fall back to
 	// os.Getwd() which is the package source dir during tests —
 	// creating nested .git repos that corrupt the ChangeTracker.
-	if env.WorkspaceRoot != "" {
-		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
+	if effectiveDir != "" {
+		ctx = filesystem.WithWorkspaceRoot(ctx, effectiveDir)
 	}
-
-	operation, _ := extractString(args, "operation")
-	argsStr, _ := extractString(args, "args")
 
 	// Validate args against the dangerous-args blocklist before any further
 	// processing. This is the same blocklist the legacy ExecuteGitOperation
@@ -151,7 +164,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// For commit with -m message, use the temp-file approach shared with
 	// the commit tool. This prevents shell expansion of backticks, $(), etc.
 	if useCommitMessage && commitMsg != "" {
-		result, err := commitMessage(ctx, commitMsg, env.WorkspaceRoot)
+		result, err := commitMessage(ctx, commitMsg, effectiveDir)
 		if err != nil {
 			return result, err
 		}
@@ -218,7 +231,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 		// SecuritySafe: no approval needed, skip entirely
 	}
 
-	result, err := execShellCmd(ctx, gitCmd, env.WorkspaceRoot)
+	result, err := execShellCmd(ctx, gitCmd, effectiveDir)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Git operation failed: %v", err), IsError: true}, nil
 	}
@@ -230,6 +243,56 @@ func (h *gitHandler) Timeout() time.Duration { return 0 }
 func (h *gitHandler) MaxResultSize() int     { return 0 }
 func (h *gitHandler) SafeForParallel() bool  { return false }
 func (h *gitHandler) Interactive() bool      { return false }
+
+// validateRepoDir validates that repoDir resolves to a path within workspaceRoot.
+// Returns the absolute resolved path, or an error if the path is invalid or escapes
+// the workspace boundary.
+func validateRepoDir(repoDir, workspaceRoot string) (string, error) {
+	if workspaceRoot == "" {
+		return "", fmt.Errorf("workspace root is not set")
+	}
+
+	// Resolve workspace root to absolute path.
+	absWorkspace, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace root: %w", err)
+	}
+
+	// Resolve repoDir: if relative, join to workspace root; if absolute, use as-is.
+	cleanDir := filepath.Clean(repoDir)
+	var absRepoDir string
+	if filepath.IsAbs(cleanDir) {
+		absRepoDir = cleanDir
+	} else {
+		absRepoDir = filepath.Join(absWorkspace, cleanDir)
+	}
+
+	// Normalize to absolute.
+	absRepoDir, err = filepath.Abs(absRepoDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve repo_dir: %w", err)
+	}
+
+	// Check the resolved path is within the workspace root.
+	rel, err := filepath.Rel(absWorkspace, absRepoDir)
+	if err != nil {
+		return "", fmt.Errorf("compute relative path: %w", err)
+	}
+	if strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("repo_dir %q resolves outside workspace root %q", repoDir, workspaceRoot)
+	}
+
+	// Verify the directory exists.
+	info, err := os.Stat(absRepoDir)
+	if err != nil {
+		return "", fmt.Errorf("repo_dir %q does not exist or is not accessible: %w", repoDir, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("repo_dir %q is not a directory", repoDir)
+	}
+
+	return absRepoDir, nil
+}
 
 // extractCommitMessage extracts -m <message> from git commit args, handling
 // double-quoted, single-quoted, and unquoted message values. Returns the

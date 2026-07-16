@@ -22,7 +22,11 @@ const WorkspacesPage: React.FC = () => {
 
   const fetchWorkspaces = useCallback(async () => {
     const adapter = getAdapter();
-    if (!adapter) { setError('Not available in local mode'); setLoading(false); return; }
+    if (!adapter) {
+      setError('Not available in local mode');
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -38,7 +42,9 @@ const WorkspacesPage: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { fetchWorkspaces(); }, [fetchWorkspaces]);
+  useEffect(() => {
+    fetchWorkspaces();
+  }, [fetchWorkspaces]);
 
   const handleAction = async (ws: Workspace, action: 'start' | 'stop' | 'destroy') => {
     const adapter = getAdapter();
@@ -61,13 +67,21 @@ const WorkspacesPage: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="platform-page"><div className="platform-loading"><div className="platform-spinner" /></div></div>;
+    return (
+      <div className="platform-page">
+        <div className="platform-loading">
+          <div className="platform-spinner" />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="platform-page">
       <div className="platform-page-header">
-        <h2><Server size={20} /> Workspaces</h2>
+        <h2>
+          <Server size={20} /> Workspaces
+        </h2>
       </div>
 
       {error && (
@@ -88,7 +102,7 @@ const WorkspacesPage: React.FC = () => {
 
       {workspaces.length > 0 && (
         <div className="platform-list">
-          {workspaces.map(ws => (
+          {workspaces.map((ws) => (
             <div key={ws.id} className="platform-card workspace-card">
               <div className="workspace-card-header">
                 <div className={`status-dot status-dot-${ws.status}`} />
@@ -106,14 +120,20 @@ const WorkspacesPage: React.FC = () => {
                     <Square size={14} /> Stop
                   </button>
                 )}
-                <button className="btn btn-sm btn-danger" disabled={busyId === ws.id} onClick={() => handleAction(ws, 'destroy')}>
+                <button
+                  className="btn btn-sm btn-danger"
+                  disabled={busyId === ws.id}
+                  onClick={() => handleAction(ws, 'destroy')}
+                >
                   <Trash2 size={14} /> Destroy
                 </button>
               </div>
               {ws.ports && ws.ports.length > 0 && (
                 <div className="workspace-ports">
-                  {ws.ports.map(p => (
-                    <span key={p.port} className="workspace-port-chip">{p.name || `:${p.port}`}</span>
+                  {ws.ports.map((p) => (
+                    <span key={p.port} className="workspace-port-chip">
+                      {p.name || `:${p.port}`}
+                    </span>
                   ))}
                 </div>
               )}

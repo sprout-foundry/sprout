@@ -86,6 +86,10 @@ function SecurityApprovalDialog({
     onRespond(requestId, true, 'approve_always');
   }, [requestId, onRespond]);
 
+  const handleAlwaysAsk = useCallback(() => {
+    onRespond(requestId, false, 'always_ask');
+  }, [requestId, onRespond]);
+
   const handleElevate = useCallback(() => {
     onRespond(requestId, true, 'elevate');
   }, [requestId, onRespond]);
@@ -295,6 +299,14 @@ function SecurityApprovalDialog({
                 title="Persist this exact command to your allowlist so it won't prompt again"
               >
                 Always approve
+              </button>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow security-approval-btn--allow--caution"
+                onClick={handleAlwaysAsk}
+                title="Always prompt before this command — overrides risk profile auto-approve"
+              >
+                Always ask
               </button>
               <button
                 type="button"

@@ -23,6 +23,7 @@ interface BootstrapResponse {
   appMode?: 'local' | 'cloud';
   buildVersion?: string;
   sharedMode?: boolean;
+  navItems?: PlatformNavItem[];
 }
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
@@ -112,6 +113,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
         appMode: data.appMode ?? 'local',
         buildVersion: data.buildVersion ?? 'dev',
         sharedMode: data.sharedMode ?? false,
+        navItems: data.navItems,
       };
       lastConfig = config;
       // eslint-disable-next-line no-console
@@ -157,7 +159,7 @@ function installAdapterForConfig(config: RuntimeConfig): void {
     const adapter = new CloudAdapter({
       apiBase: config.apiBaseURL,
       wsUrl: config.wsURL,
-      navItems: CLOUD_NAV_ITEMS,
+      navItems: config.navItems ?? CLOUD_NAV_ITEMS,
     });
     installAdapter(adapter);
 

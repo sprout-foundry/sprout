@@ -25,7 +25,7 @@ export interface UseModelProviderHandlersOptions {
 export interface UseModelProviderHandlersReturn {
   handleModelChange: (model: string) => void;
   handleProviderChange: (provider: string) => void;
-  handleViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners') => void;
+  handleViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => void;
   handlePersonaChange: (persona: string) => void;
   /** Refs exposed for sharing with other hooks (e.g., WS event handler). */
   pendingProviderRef: MutableRefObject<string>;
@@ -93,12 +93,15 @@ export function useModelProviderHandlers({
     [events],
   );
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners') => {
-    setState((prev) => ({
-      currentView: view,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleViewChange = useCallback(
+    (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => {
+      setState((prev) => ({
+        currentView: view,
+      }));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [],
+  );
 
   const handlePersonaChange = useCallback(
     (persona: string) => {

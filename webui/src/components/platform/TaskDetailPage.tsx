@@ -159,7 +159,7 @@ const TaskDetailPage: React.FC<TaskDetailPageProps> = ({ taskId, onBack }) => {
           <ArrowLeft size={14} /> Back to tasks
         </button>
         <div className="platform-page-error">
-          <h3>Couldn't load task</h3>
+          <h3>Couldn&apos;t load task</h3>
           <p>{friendlyError(error)}</p>
           <button
             className="platform-button platform-button-secondary platform-button-sm"
@@ -195,12 +195,8 @@ const TaskDetailPage: React.FC<TaskDetailPageProps> = ({ taskId, onBack }) => {
         <div className="platform-card-header">
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-              <span className={`platform-status-badge ${normalizeStatusClass(task.status)}`}>
-                {task.status}
-              </span>
-              {task.task_size === 'power' && (
-                <span className="platform-status-badge running">power</span>
-              )}
+              <span className={`platform-status-badge ${normalizeStatusClass(task.status)}`}>{task.status}</span>
+              {task.task_size === 'power' && <span className="platform-status-badge running">power</span>}
             </div>
             <h3 className="platform-card-title" style={{ wordBreak: 'break-word' }}>
               {task.prompt}
@@ -253,9 +249,7 @@ const TaskDetailPage: React.FC<TaskDetailPageProps> = ({ taskId, onBack }) => {
           {result.metrics.tokens_out != null && result.metrics.tokens_out > 0 && (
             <Metric label="Tokens Out" value={result.metrics.tokens_out.toLocaleString()} />
           )}
-          {result.metrics.llm_calls != null && (
-            <Metric label="LLM Calls" value={String(result.metrics.llm_calls)} />
-          )}
+          {result.metrics.llm_calls != null && <Metric label="LLM Calls" value={String(result.metrics.llm_calls)} />}
         </div>
       )}
 
@@ -307,7 +301,9 @@ const TaskDetailPage: React.FC<TaskDetailPageProps> = ({ taskId, onBack }) => {
       )}
 
       {/* Diff viewer */}
-      {task.diff ? <DiffViewer raw={task.diff} /> : (
+      {task.diff ? (
+        <DiffViewer raw={task.diff} />
+      ) : (
         <div className="platform-page-empty" style={{ padding: '32px' }}>
           <h3>No diff for this task.</h3>
         </div>
@@ -399,9 +395,7 @@ function DiffViewer({ raw }: { raw: string }) {
 function DiffFileBlock({ file }: { file: DiffFile }) {
   const [collapsed, setCollapsed] = useState(file.collapsed ?? false);
   const isRenamed = file.oldPath !== file.newPath;
-  const displayName = isRenamed
-    ? `${shortPath(file.oldPath)} → ${shortPath(file.newPath)}`
-    : shortPath(file.newPath);
+  const displayName = isRenamed ? `${shortPath(file.oldPath)} → ${shortPath(file.newPath)}` : shortPath(file.newPath);
 
   return (
     <div
@@ -427,7 +421,13 @@ function DiffFileBlock({ file }: { file: DiffFile }) {
       >
         {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         <span
-          style={{ fontFamily: 'monospace', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          style={{
+            fontFamily: 'monospace',
+            color: 'var(--text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
           title={file.newPath}
         >
           {displayName}

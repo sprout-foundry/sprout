@@ -37,9 +37,7 @@ export default function ComputerUseSettingsTab({
   const auditLogDir = String(getNestedValue(settings ?? {}, 'computer_use.audit_log_dir') ?? '');
 
   // ── Workspace allowlist (textarea, newline-separated) ──────
-  const rawAllowlist = settings
-    ? (getNestedValue(settings, 'computer_use.workspace_allowlist') as unknown)
-    : [];
+  const rawAllowlist = settings ? (getNestedValue(settings, 'computer_use.workspace_allowlist') as unknown) : [];
   const persistedAllowlist: string[] = Array.isArray(rawAllowlist) ? rawAllowlist : [];
   const [allowlistDraft, setAllowlistDraft] = useState<string>(persistedAllowlist.join('\n'));
   const allowlistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

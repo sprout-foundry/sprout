@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package cliui
 
 import (
 	"encoding/json"
@@ -12,25 +12,25 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
-// formatToolStartLine builds the activity-indicator line for a ToolStart
+// FormatToolStartLine builds the activity-indicator line for a ToolStart
 // event. At depth 0 it's byte-identical to the pre-SP-051 format
 // ("  tool_name(preview)") so primary-agent tool calls render unchanged.
 // At depth >= 1 it adds a depth indent and a colored "[persona]" badge.
-func formatToolStartLine(depth int, persona, toolName, preview string) string {
+func FormatToolStartLine(depth int, persona, toolName, preview string) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
 	return fmt.Sprintf("%s  %s%s%s", indent, badge, toolName, preview)
 }
 
-// formatToolEndLine builds the activity-indicator replacement line for a
-// ToolEnd event. Same depth/badge logic as formatToolStartLine.
-func formatToolEndLine(depth int, persona, icon, toolName, preview string, durationSec float64) string {
+// FormatToolEndLine builds the activity-indicator replacement line for a
+// ToolEnd event. Same depth/badge logic as FormatToolStartLine.
+func FormatToolEndLine(depth int, persona, icon, toolName, preview string, durationSec float64) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
 	return fmt.Sprintf("%s  %s %s%s%s · %.1fs", indent, icon, badge, toolName, preview, durationSec)
 }
 
-// formatToolRunLine renders a collapsed line for repeated calls of the
+// FormatToolRunLine renders a collapsed line for repeated calls of the
 // same tool. Replaces N stacked "✓ read_file (foo.go) · 0.1s" entries
 // with a single "✓ read_file × N (foo.go, bar.go, baz.go) · 0.3s" line
 // updated in place via ActivityIndicator.ReplaceLastN.
@@ -40,7 +40,7 @@ func formatToolEndLine(depth int, persona, icon, toolName, preview string, durat
 // entries. totalSec is the cumulative duration across all N calls so
 // the line still surfaces "this batch took a moment" even when each
 // individual call was quick.
-func formatToolRunLine(depth int, persona, icon, toolName string, count int, argsTrail []string, totalSec float64) string {
+func FormatToolRunLine(depth int, persona, icon, toolName string, count int, argsTrail []string, totalSec float64) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
 	preview := ""
@@ -51,11 +51,11 @@ func formatToolRunLine(depth int, persona, icon, toolName string, count int, arg
 		indent, icon, badge, toolName, count, preview, totalSec)
 }
 
-// computeDiffStat produces a dim "+N -M" diffstat suffix for file-editing
+// ComputeDiffStat produces a dim "+N -M" diffstat suffix for file-editing
 // tools. For edit_file it counts lines in old_str vs new_str; for write_file
 // it counts all lines as added (new file or full overwrite). Returns "" for
 // non-file tools or when no useful diff can be computed. CLI-UX-3.
-func computeDiffStat(toolName, arguments string) string {
+func ComputeDiffStat(toolName, arguments string) string {
 	if arguments == "" {
 		return ""
 	}
@@ -94,16 +94,16 @@ func computeDiffStat(toolName, arguments string) string {
 	return ""
 }
 
-// formatCompactDiffLine renders the minimal one-liner shown in compact mode
+// FormatCompactDiffLine renders the minimal one-liner shown in compact mode
 // for file edits: "edit_file (path.go) +12 -3". Extracts the path from args
 // for context so the user knows which file changed.
-func formatCompactDiffLine(toolName, arguments, diffStat string) string {
+func FormatCompactDiffLine(toolName, arguments, diffStat string) string {
 	path := ""
 	if arguments != "" {
 		var args map[string]interface{}
 		if json.Unmarshal([]byte(arguments), &args) == nil {
 			if p, ok := args["path"].(string); ok {
-				path = abbreviatePath(p, 50)
+				path = AbbreviatePath(p, 50)
 			}
 		}
 	}
@@ -122,14 +122,14 @@ func countLines(s string) int {
 	return strings.Count(s, "\n") + 1
 }
 
-// formatResultSize renders a human-readable size string for the number
+// FormatResultSize renders a human-readable size string for the number
 // of characters in a tool result. Used by verbose mode to append a dim
 // "· 1.2KB" or "· 450 chars" suffix to tool-end lines. Returns "" for
 // zero-length results so we don't clutter the line with "· 0 chars".
 //
 // Threshold: >=1000 chars switches to kilobytes (base-1024) with one
 // decimal place; below that we show the raw char count.
-func formatResultSize(length int) string {
+func FormatResultSize(length int) string {
 	if length <= 0 {
 		return ""
 	}
@@ -139,32 +139,34 @@ func formatResultSize(length int) string {
 	return fmt.Sprintf("%d chars", length)
 }
 
-// toolRunState tracks a sequence of consecutive identical tool calls
+// ToolRunState tracks a sequence of consecutive identical tool calls
 // so the subscriber can collapse them into a single in-place row
 // (Phase 3 of CLI ergonomics). A run is broken — set to nil — whenever
 // any non-tool event would invalidate the row math: streaming
 // assistant text, a different tool, or a user-prompt boundary.
-type toolRunState struct {
-	name      string
-	depth     int
-	persona   string
-	count     int
-	argsTrail []string // most recent up to maxArgsTrail entries
-	totalMs   int64
-	lastIcon  string
-	lastEnd   time.Time
+type ToolRunState struct {
+	Name      string
+	Depth     int
+	Persona   string
+	Count     int
+	ArgsTrail []string // most recent up to MaxArgsTrail entries
+	TotalMs   int64
+	LastIcon  string
+	LastEnd   time.Time
 }
 
-// maxArgsTrail caps the per-arg preview list shown in the collapsed
+// MaxArgsTrail caps the per-arg preview list shown in the collapsed
 // line. The earliest entries get dropped — the user usually cares
 // about the most recent few calls in a run.
-const maxArgsTrail = 3
+const MaxArgsTrail = 3
 
-func (r *toolRunState) matches(name string, depth int, persona string) bool {
-	return r != nil && r.name == name && r.depth == depth && r.persona == persona
+// Matches reports whether the run matches the given tool call parameters.
+func (r *ToolRunState) Matches(name string, depth int, persona string) bool {
+	return r != nil && r.Name == name && r.Depth == depth && r.Persona == persona
 }
 
-func (r *toolRunState) appendArg(preview string) {
+// AppendArg adds an argument preview to the args trail, capping it at MaxArgsTrail.
+func (r *ToolRunState) AppendArg(preview string) {
 	// formatToolPreview returns its result already wrapped in " (...)"
 	// so that the start/end lines render as "tool (arg)". For the
 	// collapsed run line we re-wrap argsTrail as a single parenthesised
@@ -178,50 +180,50 @@ func (r *toolRunState) appendArg(preview string) {
 		// renders as a stray comma-space ("× N (, , foo)").
 		return
 	}
-	r.argsTrail = append(r.argsTrail, stripped)
-	if len(r.argsTrail) > maxArgsTrail {
-		r.argsTrail = r.argsTrail[len(r.argsTrail)-maxArgsTrail:]
+	r.ArgsTrail = append(r.ArgsTrail, stripped)
+	if len(r.ArgsTrail) > MaxArgsTrail {
+		r.ArgsTrail = r.ArgsTrail[len(r.ArgsTrail)-MaxArgsTrail:]
 	}
 }
 
-// formatToolPreview produces a short, single-line preview of a tool call
+// FormatToolPreview produces a short, single-line preview of a tool call
 // for the activity-indicator timeline. For subagent tools (run_subagent,
 // run_parallel_subagents) it surfaces the persona and the resolved
 // provider/model so users can see which subagent — and which underlying
 // model, often a cheaper/faster one than the parent's — is doing the
-// work. For everything else it falls through to formatToolArgPreview.
+// work. For everything else it falls through to FormatToolArgPreview.
 //
 // maxArgLen overrides the per-tool truncation width when > 0 (verbose
 // mode passes a higher value so power users see more of the path/command).
 // Pass 0 to use the built-in per-tool defaults.
-func formatToolPreview(chatAgent *agent.Agent, toolName, arguments string, maxArgLen int) string {
+func FormatToolPreview(chatAgent *agent.Agent, toolName, arguments string, maxArgLen int) string {
 	switch toolName {
 	case "run_subagent":
-		return formatRunSubagentPreview(chatAgent, arguments)
+		return FormatRunSubagentPreview(chatAgent, arguments)
 	case "run_parallel_subagents":
-		return formatRunParallelSubagentsPreview(arguments)
+		return FormatRunParallelSubagentsPreview(arguments)
 	case "TodoWrite", "todo_write":
-		return formatTodoWritePreview(arguments)
+		return FormatTodoWritePreview(arguments)
 	default:
-		return formatToolArgPreview(toolName, arguments, maxArgLen)
+		return FormatToolArgPreview(toolName, arguments, maxArgLen)
 	}
 }
 
-// formatTodoListBlock renders the multi-line todo block printed in the
+// FormatTodoListBlock renders the multi-line todo block printed in the
 // scroll region in response to EventTypeTodoUpdate. The header is a
 // one-line summary (counts by status); the body is one row per item
 // with a status-coded glyph (✓ done, → active, · pending, ⏹ cancelled).
 // Truncates long lists to keep the terminal scannable.
-func formatTodoListBlock(todosRaw []interface{}) string {
+func FormatTodoListBlock(todosRaw []interface{}) string {
 	return formatTodoListBlockLocked(todosRaw)
 }
 
-// formatTodoListPanel renders the todo list inside a box-drawing panel
+// FormatTodoListPanel renders the todo list inside a box-drawing panel
 // for stronger visual structure (CLI-UX-9). The panel header includes
 // the status counts; the body is the same per-row content as
 // formatTodoListBlock but wrapped in light-vertical borders.
-func formatTodoListPanel(todosRaw []interface{}) string {
-	items, counts := collectTodos(todosRaw)
+func FormatTodoListPanel(todosRaw []interface{}) string {
+	items, counts := CollectTodos(todosRaw)
 	content := buildTodoPanelContent(items, counts)
 	style := console.DefaultPanelStyle()
 	style.MinWidth = 40
@@ -233,17 +235,17 @@ func formatTodoListPanel(todosRaw []interface{}) string {
 	}.Render()
 }
 
-// todoEntry mirrors the internal struct used by both the inline block
-// and the panel renderer so they stay in sync. Kept package-local.
-type todoEntry struct {
-	content string
-	status  string
+// TodoEntry mirrors the internal struct used by both the inline block
+// and the panel renderer so they stay in sync.
+type TodoEntry struct {
+	Content string
+	Status  string
 }
 
-// collectTodos parses the raw todo event payload into typed items and
+// CollectTodos parses the raw todo event payload into typed items and
 // counts by status. Shared by formatTodoListBlock and formatTodoListPanel.
-func collectTodos(todosRaw []interface{}) ([]todoEntry, map[string]int) {
-	items := make([]todoEntry, 0, len(todosRaw))
+func CollectTodos(todosRaw []interface{}) ([]TodoEntry, map[string]int) {
+	items := make([]TodoEntry, 0, len(todosRaw))
 	counts := map[string]int{
 		"pending":     0,
 		"in_progress": 0,
@@ -257,7 +259,7 @@ func collectTodos(todosRaw []interface{}) ([]todoEntry, map[string]int) {
 		}
 		content, _ := m["content"].(string)
 		status, _ := m["status"].(string)
-		items = append(items, todoEntry{content: content, status: status})
+		items = append(items, TodoEntry{Content: content, Status: status})
 		if _, tracked := counts[status]; tracked {
 			counts[status]++
 		} else {
@@ -293,7 +295,7 @@ func buildTodoPanelTitle(counts map[string]int) string {
 // buildTodoPanelContent renders the per-row body of the todo panel.
 // Each row is "✓ content" with a status-coded glyph. Truncates long
 // lists to keep the terminal scannable.
-func buildTodoPanelContent(items []todoEntry, _ map[string]int) []string {
+func buildTodoPanelContent(items []TodoEntry, _ map[string]int) []string {
 	const maxLines = 20
 	const maxContentLen = 80
 	rows := make([]string, 0, len(items))
@@ -303,25 +305,25 @@ func buildTodoPanelContent(items []todoEntry, _ map[string]int) []string {
 			rows = append(rows, fmt.Sprintf("%s…and %d more", console.GlyphDim.Prefix(), len(items)-shown))
 			break
 		}
-		content := strings.TrimSpace(it.content)
+		content := strings.TrimSpace(it.Content)
 		if content == "" {
 			content = "<untitled>"
 		}
 		if len(content) > maxContentLen {
 			content = content[:maxContentLen-1] + "…"
 		}
-		rows = append(rows, fmt.Sprintf("%s %s", todoStatusGlyph(it.status), content))
+		rows = append(rows, fmt.Sprintf("%s %s", todoStatusGlyph(it.Status), content))
 		shown++
 	}
 	return rows
 }
 
-// todoBlockRowCount returns the number of terminal rows that
+// TodoBlockRowCount returns the number of terminal rows that
 // fmt.Fprintln(os.Stdout, formatTodoListBlock(todosRaw)) will consume.
 // The block string has a header row plus one row per item (each item
 // prefixed by \n). fmt.Fprintln adds a final \n. So the visible rows
 // = strings.Count(block, "\n") + 1.
-func todoBlockRowCount(todosRaw []interface{}) int {
+func TodoBlockRowCount(todosRaw []interface{}) int {
 	block := formatTodoListBlockLocked(todosRaw)
 	return strings.Count(block, "\n") + 1
 }
@@ -408,13 +410,13 @@ func todoStatusGlyph(status string) string {
 	}
 }
 
-// formatTodoWritePreview produces the compact tail for the todo_write
+// FormatTodoWritePreview produces the compact tail for the todo_write
 // tool's spinner / collapse line — "(5 tasks · 1 active · 3 done)" —
 // so the user sees the shape of the list at a glance without waiting
 // for the full TodoUpdate block to land. Returns "" when the args
 // are unparseable or empty, matching the contract of the other
 // per-tool preview helpers.
-func formatTodoWritePreview(arguments string) string {
+func FormatTodoWritePreview(arguments string) string {
 	if arguments == "" {
 		return ""
 	}
@@ -449,13 +451,13 @@ func formatTodoWritePreview(arguments string) string {
 	return " (" + strings.Join(parts, " · ") + ")"
 }
 
-// formatRunSubagentPreview extracts the persona from args and looks up its
+// FormatRunSubagentPreview extracts the persona from args and looks up its
 // effective provider/model via the agent's persona resolver. Format:
 //
 //	(coder · anthropic/claude-haiku-4-5)
 //
 // Falls back to just persona name (or empty) when the lookup fails.
-func formatRunSubagentPreview(chatAgent *agent.Agent, arguments string) string {
+func FormatRunSubagentPreview(chatAgent *agent.Agent, arguments string) string {
 	if arguments == "" || chatAgent == nil {
 		return ""
 	}
@@ -475,11 +477,11 @@ func formatRunSubagentPreview(chatAgent *agent.Agent, arguments string) string {
 	return fmt.Sprintf(" (%s · %s/%s)", persona, provider, model)
 }
 
-// formatRunParallelSubagentsPreview shows the task count so the user
+// FormatRunParallelSubagentsPreview shows the task count so the user
 // knows how many subagents fanned out. No per-task persona since the
 // parallel form doesn't accept per-task persona overrides today; users
 // see the count and infer fan-out from the line.
-func formatRunParallelSubagentsPreview(arguments string) string {
+func FormatRunParallelSubagentsPreview(arguments string) string {
 	if arguments == "" {
 		return ""
 	}
@@ -493,7 +495,7 @@ func formatRunParallelSubagentsPreview(arguments string) string {
 	return ""
 }
 
-// formatToolArgPreview produces a short, single-line preview of a tool's
+// FormatToolArgPreview produces a short, single-line preview of a tool's
 // arguments for the activity indicator. The arguments string is the raw
 // JSON the model emitted; we extract whichever field is most informative
 // for the tool at hand. Returns an empty string (no parens) when nothing
@@ -504,14 +506,14 @@ func formatRunParallelSubagentsPreview(arguments string) string {
 // per-tool defaults documented below.
 //
 // Per-tool max widths and truncation strategies (when maxArgLen == 0):
-//   - File paths use abbreviatePath so the filename always survives even
+//   - File paths use AbbreviatePath so the filename always survives even
 //     when the directory prefix has to be dropped — "…/last/two/seg.go"
 //     reads better than "webui/src/components/sett…" where the actual
 //     file is lost.
 //   - shell_command / exec preserve more context (80 chars) because the
 //     suffix of a command is often the meaningful part (pipes, args).
 //   - Everything else gets the conservative 70-char tail truncation.
-func formatToolArgPreview(toolName, arguments string, maxArgLen int) string {
+func FormatToolArgPreview(toolName, arguments string, maxArgLen int) string {
 	if arguments == "" {
 		return ""
 	}
@@ -563,19 +565,19 @@ func formatToolArgPreview(toolName, arguments string, maxArgLen int) string {
 		maxLen = maxArgLen
 	}
 
-	preview = sanitizeArgForPreview(preview)
+	preview = SanitizeArgForPreview(preview)
 	if preview == "" {
 		return ""
 	}
 	if isPath {
-		preview = abbreviatePath(preview, maxLen)
+		preview = AbbreviatePath(preview, maxLen)
 	} else if len(preview) > maxLen {
 		preview = preview[:maxLen-1] + "…"
 	}
 	return " (" + preview + ")"
 }
 
-// abbreviatePath shortens a path while preserving the filename. A path
+// AbbreviatePath shortens a path while preserving the filename. A path
 // like "webui/src/components/settings/ProviderSettingsTab.tsx" that
 // exceeds maxLen renders as "…/ProviderSettingsTab.tsx" — the user
 // almost always cares about the file at the tail more than the
@@ -587,7 +589,7 @@ func formatToolArgPreview(toolName, arguments string, maxArgLen int) string {
 // the file type, which is worse than overshooting maxLen by a few
 // chars on a pathological filename. The only path with no separator
 // falls back to a plain tail-truncate.
-func abbreviatePath(p string, maxLen int) string {
+func AbbreviatePath(p string, maxLen int) string {
 	if len(p) <= maxLen {
 		return p
 	}
@@ -598,9 +600,9 @@ func abbreviatePath(p string, maxLen int) string {
 	return "…/" + p[slash+1:]
 }
 
-// sanitizeArgForPreview collapses whitespace and strips control characters
+// SanitizeArgForPreview collapses whitespace and strips control characters
 // so the preview always renders on one line inside parentheses.
-func sanitizeArgForPreview(s string) string {
+func SanitizeArgForPreview(s string) string {
 	out := make([]rune, 0, len(s))
 	prevSpace := false
 	for _, r := range s {
@@ -620,17 +622,17 @@ func sanitizeArgForPreview(s string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// editDiffMaxLines is the default number of diff lines to show in
+// EditDiffMaxLines is the default number of diff lines to show in
 // non-verbose mode. Keep it tight — the user wants a glance, not a wall.
-const editDiffMaxLines = 8
+const EditDiffMaxLines = 8
 
-// computeEditDiff generates a compact unified diff from the old and new
+// ComputeEditDiff generates a compact unified diff from the old and new
 // strings for display in the terminal after an edit_file operation.
 //
 // Shows removed lines in red (-) and added lines in green (+), with up to
 // one context line before and after the changed block. Truncates to
 // maxLines when > 0; pass 0 for unlimited (verbose mode).
-func computeEditDiff(oldStr, newStr string, maxLines int) string {
+func ComputeEditDiff(oldStr, newStr string, maxLines int) string {
 	oldLines := strings.Split(oldStr, "\n")
 	newLines := strings.Split(newStr, "\n")
 
@@ -698,10 +700,10 @@ func computeEditDiff(oldStr, newStr string, maxLines int) string {
 	return result
 }
 
-// computeWriteFileDiff generates a preview of new file content written
+// ComputeWriteFileDiff generates a preview of new file content written
 // via write_file. Shows the first few lines with green (+) markers,
 // truncated per maxLines (0 = unlimited, for verbose mode).
-func computeWriteFileDiff(content string, maxLines int) string {
+func ComputeWriteFileDiff(content string, maxLines int) string {
 	lines := strings.Split(content, "\n")
 	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
 		return ""

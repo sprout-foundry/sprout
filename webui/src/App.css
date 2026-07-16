@@ -351,6 +351,38 @@ body {
   min-width: 0;
 }
 
+/* Cloud-mode "Back to Dashboard" link at the left of the header bar.
+ * Subtle ghost-link style that matches the header bar aesthetic. */
+.header-back-to-dashboard {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-left: 8px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  text-decoration: none;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background 0.15s var(--ease-out),
+    color 0.15s var(--ease-out);
+}
+
+.header-back-to-dashboard:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.header-back-to-dashboard:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary));
+  outline-offset: 2px;
+}
+
 .header-context-toggle-btn {
   width: 28px;
   height: 28px;

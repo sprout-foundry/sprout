@@ -27,4 +27,12 @@ export interface RuntimeConfig {
   /** Platform navigation items (tasks, billing, team, etc.) injected at runtime.
    * Falls back to CLOUD_NAV_ITEMS when the platform doesn't provide them. */
   navItems?: PlatformNavItem[];
+
+  /** Authenticated user identity, injected by the platform in cloud mode.
+   * Undefined when there is no session (local mode or unauthenticated). */
+  user?: {
+    id: string;
+    email: string;
+    tier: string;
+  };
 }

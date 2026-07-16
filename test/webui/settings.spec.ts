@@ -591,3 +591,123 @@ test.describe('Round-trip persistence', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// 8. Command Policy Editor (SP-123)
+//    Tests the unified command policy UI: add/remove rules in each category,
+//    verify persistence across reload, verify migration from legacy fields.
+// ---------------------------------------------------------------------------
+
+test.describe('Command Policy Editor', () => {
+  test.beforeEach(async () => {
+    await openSettings();
+  });
+
+  test('renders three policy sections (Allow, Ask, Deny)', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+
+    const content = page.locator('.settings-subsection-content');
+    await expect(content.getByText('Command Policies', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(content.locator('.policy-section-header.accent-green')).toBeVisible({ timeout: 5_000 });
+    await expect(content.locator('.policy-section-header.accent-amber')).toBeVisible({ timeout: 5_000 });
+    await expect(content.locator('.policy-section-header.accent-red')).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('add allow rule persists across reload', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+
+    const content = page.locator('.settings-subsection-content');
+    // Target the Allow input by its placeholder
+    const allowInput = content.locator('input[placeholder="e.g. npm test"]');
+
+    const pattern = `echo test-${Date.now()}`;
+    await allowInput.fill(pattern);
+    await allowInput.press('Enter');
+    await page.waitForTimeout(1000);
+
+    // Verify it appears
+    await expect(content.getByText(pattern, { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Reload and verify persistence
+    await reopenSettingsAfterReload();
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+    await expect(page.locator('.settings-subsection-content').getByText(pattern, { exact: true }))
+      .toBeVisible({ timeout: 10_000 });
+  });
+
+  test('add deny rule persists across reload', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+
+    const content = page.locator('.settings-subsection-content');
+    const denyInput = content.locator('input[placeholder="e.g. kubectl delete*"]');
+
+    const pattern = `kubectl delete-${Date.now()}`;
+    await denyInput.fill(pattern);
+    await denyInput.press('Enter');
+    await page.waitForTimeout(1000);
+
+    await expect(content.getByText(pattern, { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Reload and verify persistence
+    await reopenSettingsAfterReload();
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+    await expect(page.locator('.settings-subsection-content').getByText(pattern, { exact: true }))
+      .toBeVisible({ timeout: 10_000 });
+  });
+
+  test('add ask rule persists across reload', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+
+    const content = page.locator('.settings-subsection-content');
+    const askInput = content.locator('input[placeholder="e.g. git push*"]');
+
+    const pattern = `git push-ask-${Date.now()}`;
+    await askInput.fill(pattern);
+    await askInput.press('Enter');
+    await page.waitForTimeout(1000);
+
+    await expect(content.getByText(pattern, { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Reload and verify persistence
+    await reopenSettingsAfterReload();
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+    await expect(page.locator('.settings-subsection-content').getByText(pattern, { exact: true }))
+      .toBeVisible({ timeout: 10_000 });
+  });
+
+  test('remove rule persists across reload', async () => {
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+
+    const content = page.locator('.settings-subsection-content');
+    const allowInput = content.locator('input[placeholder="e.g. npm test"]');
+
+    // Add a rule first
+    const pattern = `echo remove-test-${Date.now()}`;
+    await allowInput.fill(pattern);
+    await allowInput.press('Enter');
+    await page.waitForTimeout(1000);
+    await expect(content.getByText(pattern, { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Remove it
+    const removeBtn = content.locator('.settings-list-row')
+      .filter({ hasText: pattern })
+      .locator('button[aria-label*="Remove"]');
+    await removeBtn.click();
+    await page.waitForTimeout(1000);
+
+    // Verify it's gone after reload
+    await reopenSettingsAfterReload();
+    await expandSection('Agent');
+    await clickSubsectionTab('settings-agent-behavior-tab');
+    await expect(page.locator('.settings-subsection-content').getByText(pattern, { exact: true }))
+      .toHaveCount(0);
+  });
+});

@@ -23,6 +23,7 @@ func (h *commitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "message", Type: "string", Description: "Commit message (auto-generated if omitted). Shell-safe: backticks, $(), and other special characters are not expanded."},
 			{Name: "notes", Type: "string", Description: "Context for auto-generated message (ignored if message is provided)"},
+			{Name: "repo_dir", Type: "string", Description: "Subdirectory within the workspace to commit in (e.g., for submodules or monorepo workspaces). Must be within the workspace root. Defaults to workspace root if omitted."},
 		},
 	}
 }
@@ -37,13 +38,24 @@ func (h *commitHandler) Validate(args map[string]any) error {
 func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	message, _ := extractString(args, "message")
 	notes, _ := extractString(args, "notes")
+	repoDir, _ := extractString(args, "repo_dir")
+
+	// Determine the effective working directory.
+	effectiveDir := env.WorkspaceRoot
+	if repoDir != "" {
+		resolvedDir, err := validateRepoDir(repoDir, env.WorkspaceRoot)
+		if err != nil {
+			return ToolResult{Output: fmt.Sprintf("Invalid repo_dir: %v", err), IsError: true}, nil
+		}
+		effectiveDir = resolvedDir
+	}
 
 	if message != "" {
-		return commitMessage(ctx, message, env.WorkspaceRoot)
+		return commitMessage(ctx, message, effectiveDir)
 	}
 
 	// Auto-generate from diff + notes
-	stagedResult, err := execShellCmd(ctx, "git diff --cached --stat", env.WorkspaceRoot)
+	stagedResult, err := execShellCmd(ctx, "git diff --cached --stat", effectiveDir)
 	if err != nil {
 		stagedResult = "(could not read staged changes)"
 	}
@@ -54,7 +66,7 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		msg = notes
 	}
 
-	result, err := commitMessage(ctx, msg, env.WorkspaceRoot)
+	result, err := commitMessage(ctx, msg, effectiveDir)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, stagedResult), IsError: true}, nil
 	}

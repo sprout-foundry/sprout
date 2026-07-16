@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -498,4 +499,125 @@ func TestRunAutomateSecurityClassification(t *testing.T) {
 			t.Error("list_automate_workflows.ShouldPrompt should be false")
 		}
 	})
+}
+
+// TestIsSafeRmRfPrefix_NestedPaths tests that isSafeRmRfPrefix correctly
+// classifies nested build-artifact paths as safe (SP-122 Phase 1).
+//
+// The core improvement: a path like "internal/api/webui/dist/sprout-webui"
+// contains the segment "dist" (a known build artifact), so it's safe to rm -rf.
+// Paths without a build-artifact segment (e.g., "internal/api/") stay dangerous.
+func TestIsSafeRmRfPrefix_NestedPaths(t *testing.T) {
+	// SAFE: paths containing a known build-artifact segment
+	safeCases := []string{
+		// Nested paths with build-artifact segments
+		"rm -rf internal/api/webui/dist/sprout-webui",
+		"rm -rf platform/webui/dist/",
+		"rm -rf services/api/build/cache",
+		"rm -rf packages/foo/node_modules/.cache",
+		"rm -rf apps/backend/target/debug",
+		"rm -rf lib/__pycache__/pytest_cache",
+		"rm -rf frontend/.next/server",
+		"rm -rf monorepo/.turbo/cache",
+		"rm -rf site/.output/public",
+		"rm -rf blog/.svelte-kit/generated",
+		"rm -rf pkg/.parcel-cache",
+		"rm -rf web/.nuxt/dist",
+		"rm -rf docs/.astro",
+		"rm -rf tools/.gradle/wrapper",
+		"rm -rf infra/.terraform/modules",
+		"rm -rf deploy/.docker/data",
+		// rm -fr variant (reversed flag order)
+		"rm -fr internal/api/dist/sprout-webui",
+		"rm -fr build/cache",
+		// Multiple targets where one is a build artifact
+		"rm -rf dist/ build/",
+		// /tmp paths are safe regardless
+		"rm -rf /tmp/build/cache",
+		// Existing top-level entries still match via map
+		"rm -rf node_modules/",
+		"rm -rf build/",
+		"rm -rf __pycache__/",
+	}
+
+	for _, cmd := range safeCases {
+		t.Run("safe: "+cmd, func(t *testing.T) {
+			cmdLower := strings.ToLower(cmd)
+			if !isSafeRmRfPrefix(cmdLower) {
+				t.Errorf("isSafeRmRfPrefix(%q) = false, want true", cmd)
+			}
+		})
+	}
+
+	// DANGEROUS: paths without a build-artifact segment, or unsafe patterns
+	dangerousCases := []string{
+		// Root, home, current dir
+		"rm -rf /",
+		"rm -rf .",
+		"rm -rf ~",
+		// Source code directories (not build artifacts)
+		"rm -rf src/",
+		"rm -rf internal/",
+		"rm -rf internal/api/",
+		"rm -rf lib/",
+		"rm -rf pkg/",
+		"rm -rf app/",
+		"rm -rf tests/",
+		// System directories
+		"rm -rf /etc/dist/",   // absolute non-tmp path — must NOT match
+		"rm -rf /var/build/",  // absolute non-tmp path
+		"rm -rf /usr/build/",  // absolute non-tmp path
+		// Path traversal — must NEVER be safe
+		"rm -rf ../something/dist/",
+		"rm -rf ../../node_modules/",
+		"rm -rf ../dist",
+		// Bare names without a path separator (consistent with map design)
+		"rm -rf build",         // no trailing "/" or " "
+		"rm -rf node_modules",  // no trailing "/" or " "
+		"rm -rf dist",          // no trailing "/" or " "
+		// Paths with build-artifact-like substrings but not as segments
+		"rm -rf mybuild/",       // "mybuild" ≠ "build"
+		"rm -rf distribution/",  // "distribution" ≠ "dist"
+		// Non-rm commands
+		"ls -la",
+		"echo hello",
+	}
+
+	for _, cmd := range dangerousCases {
+		t.Run("dangerous: "+cmd, func(t *testing.T) {
+			cmdLower := strings.ToLower(cmd)
+			if isSafeRmRfPrefix(cmdLower) {
+				t.Errorf("isSafeRmRfPrefix(%q) = true, want false", cmd)
+			}
+		})
+	}
+}
+
+// TestIsSafeRmRfPrefix_NestedPathsClassifiedSafe verifies the end-to-end
+// classification through classifyShellCommand for the SP-122 acceptance criteria.
+func TestIsSafeRmRfPrefix_NestedPathsClassifiedSafe(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		wantRisk SecurityRisk
+	}{
+		// Acceptance criteria from TODO.md
+		{"nested dist path", "rm -rf internal/api/webui/dist/sprout-webui", SecuritySafe},
+		{"nested build path", "rm -rf services/api/build/cache", SecuritySafe},
+		// Must stay dangerous
+		{"internal dir", "rm -rf internal/api/", SecurityDangerous},
+		{"src dir", "rm -rf src/", SecurityDangerous},
+		// Bare build without separator stays dangerous (existing test behavior)
+		{"bare build", "rm -rf build", SecurityDangerous},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.Risk != tt.wantRisk {
+				t.Errorf("classifyShellCommand(%q).Risk = %v, want %v (reasoning: %s)",
+					tt.command, result.Risk, tt.wantRisk, result.Reasoning)
+			}
+		})
+	}
 }

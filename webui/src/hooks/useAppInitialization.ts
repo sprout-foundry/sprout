@@ -22,6 +22,7 @@ import type { CloudAdapter } from '../services/cloudAdapter';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
 import type { SproutEvent } from '../types/events';
+import { fetchRuntimeConfig } from '../bootstrapAdapter';
 import { debugLog, useLog } from '../utils/log';
 
 interface RecentFile {
@@ -58,15 +59,19 @@ export function useAppInitialization({
 
   useEffect(() => {
     // ── Cloud mode: check auth BEFORE anything else ─────────────
-    // In cloud mode, redirect to login if not authenticated.
+    // In cloud mode, redirect to login if not authenticated. The session
+    // check reuses the bootstrap response's `user` field instead of a
+    // separate /user/me round-trip, so the redirect fires only AFTER
+    // bootstrap has resolved and the app is about to mount.
     // All other initialization (WebSocket, data loading, WASM) is
     // gated behind this check to avoid 401 error spam.
     if (isCloud) {
-      fetch('/user/me', { credentials: 'include' })
-        .then((authRes) => {
-          if (!authRes.ok) {
-            // Redirect to platform login with return_to so the user comes back
-            // to the browser IDE after authenticating, not stranded on the dashboard.
+      fetchRuntimeConfig()
+        .then((config) => {
+          if (config.appMode === 'cloud' && !config.user) {
+            // No session — redirect to platform login with return_to so the
+            // user comes back to the browser IDE after authenticating, not
+            // stranded on the dashboard.
             window.location.href = '/login?return_to=' + encodeURIComponent('/webui/');
             return;
           }

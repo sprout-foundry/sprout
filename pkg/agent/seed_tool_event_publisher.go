@@ -65,6 +65,15 @@ func (r *richEventPublisher) Publish(eventType string, data any) {
 			}
 		}
 		r.bus.Publish(eventType, data)
+
+	case core.EventTypeQueryCompleted:
+		// Seed's finalize() publishes QueryCompleted, but sprout's
+		// finalizeConversationPostHooks also publishes it (on ALL paths
+		// including errors where seed's finalize() doesn't run).
+		// Suppress seed's publication to prevent the duplicate
+		// "✓ turn complete" line in the terminal. Sprout's version
+		// carries the same fields plus a "status" field.
+		return
 	default:
 		r.bus.Publish(eventType, data)
 	}

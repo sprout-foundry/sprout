@@ -301,6 +301,29 @@ export function useAppInitialization({
         } catch (error) {
           debugLog('[startup] session restore check failed:', error);
         }
+
+        // Deep-link: ?chat=<session_id> restores a specific conversation.
+        // Used by dashboard task links, PWA shortcuts, and share links.
+        try {
+          if (typeof window !== 'undefined') {
+            const chatParam = new URLSearchParams(window.location.search).get('chat');
+            if (chatParam) {
+              const restored = await apiService.restoreSession(chatParam);
+              if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+                window.dispatchEvent(
+                  new CustomEvent('sprout:session-restored', {
+                    detail: { messages: restored.messages },
+                  }),
+                );
+              }
+              // Clean the URL so refresh doesn't re-trigger
+              const cleanUrl = window.location.pathname + window.location.hash;
+              window.history.replaceState({}, '', cleanUrl);
+            }
+          }
+        } catch (error) {
+          debugLog('[startup] ?chat= deep-link restore failed:', error);
+        }
       };
       restoreStartupState().catch((err) => {
         debugLog('[startup] Restore startup state failed:', err);

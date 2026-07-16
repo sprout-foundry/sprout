@@ -36,5 +36,5 @@ func (s *agentAskUserService) Ask(ctx context.Context, req tools.AskUserRequest)
 	if hasActiveWebUI {
 		return tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
 	}
-	return tools.AskUser(req)
+	return tools.AskUser(ctx, req)
 }

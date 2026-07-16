@@ -668,6 +668,20 @@ func AskUserRequestEvent(requestID string, req AskUserRequest, clientID string) 
 	return payload
 }
 
+// AskUserCancelledEvent creates a payload for cancelling an in-flight
+// ask_user request. The frontend uses the status field to dismiss the
+// dialog without losing context — the same status pattern as "responded".
+func AskUserCancelledEvent(requestID, clientID string) map[string]interface{} {
+	payload := map[string]interface{}{
+		"request_id": requestID,
+		"status":     "cancelled",
+	}
+	if clientID != "" {
+		payload["client_id"] = clientID
+	}
+	return payload
+}
+
 // InputRequiredEvent creates an input_required event payload.
 // reason is a human-readable description of why input is needed
 // (e.g., "security_approval", "ask_user", "blocking_prompt").

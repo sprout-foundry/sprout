@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -94,7 +95,7 @@ func (s *SettingsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		options = buildSettingsOptions(settings, cfg)
 
 		// Prompt the user to select a setting
-		resp, err := tools.AskUser(tools.AskUserRequest{
+		resp, err := tools.AskUser(context.Background(), tools.AskUserRequest{
 			Header:   "Settings",
 			Question: "Select a setting to change (or 'q' to quit)",
 			Options:  options,
@@ -218,7 +219,7 @@ func promptSettingValue(setting agent.SettingDetail, cfg *configuration.Config, 
 	// Check if this is an enum setting
 	if enumOpts, ok := getEnumOptions(setting.Key, cfg); ok {
 		currentVal := setting.GetValue(cfg)
-		return tools.AskUser(tools.AskUserRequest{
+		return tools.AskUser(context.Background(), tools.AskUserRequest{
 			Header:   fmt.Sprintf("Change %s", setting.Key),
 			Question: fmt.Sprintf("Select a value for %s", setting.Key),
 			Options:  enumOpts,
@@ -230,7 +231,7 @@ func promptSettingValue(setting agent.SettingDetail, cfg *configuration.Config, 
 	if providerOptionKeys[setting.Key] {
 		if providerOpts, ok := getProviderOptions(mgr); ok {
 			currentVal := setting.GetValue(cfg)
-			return tools.AskUser(tools.AskUserRequest{
+			return tools.AskUser(context.Background(), tools.AskUserRequest{
 				Header:   fmt.Sprintf("Change %s", setting.Key),
 				Question: fmt.Sprintf("Select a provider for %s", setting.Key),
 				Options:  providerOpts,
@@ -241,7 +242,7 @@ func promptSettingValue(setting agent.SettingDetail, cfg *configuration.Config, 
 
 	// Freeform input
 	currentVal := setting.GetValue(cfg)
-	return tools.AskUser(tools.AskUserRequest{
+	return tools.AskUser(context.Background(), tools.AskUserRequest{
 		Header:   fmt.Sprintf("Change %s", setting.Key),
 		Question: fmt.Sprintf("Enter a new value for %s (valid: %s)", setting.Key, setting.ValidValues),
 		Default:  currentVal,
@@ -347,7 +348,7 @@ func promptListSettingValue(setting agent.SettingDetail, cfg *configuration.Conf
 
 		// Prompt
 		defaultVal := setting.GetValue(cfg)
-		resp, err := tools.AskUser(tools.AskUserRequest{
+		resp, err := tools.AskUser(context.Background(), tools.AskUserRequest{
 			Header:   fmt.Sprintf("Manage %s", setting.Key),
 			Question: fmt.Sprintf("Action for %s", setting.Key),
 			Default:  defaultVal,

@@ -67,6 +67,7 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string) utils.App
 		{Label: "Approve once", Detail: "allow this invocation only", Value: "approve_once"},
 		{Label: "Deny", Detail: "reject and surface a security error", Value: "deny"},
 		{Label: "Always approve", Detail: "persist this exact command to your allowlist", Value: "approve_always"},
+		{Label: "Always ask", Detail: "force a prompt for this command every time", Value: "always_ask"},
 		{Label: "Elevate (session)", Detail: "loosen the gate for the rest of this session", Value: "elevate"},
 	}
 
@@ -88,6 +89,8 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string) utils.App
 		return utils.ApprovalChoiceDeny
 	case "approve_always":
 		return utils.ApprovalChoiceApproveAlways
+	case "always_ask":
+		return utils.ApprovalChoiceAlwaysAsk
 	case "elevate":
 		return utils.ApprovalChoiceElevate
 	default:

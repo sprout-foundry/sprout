@@ -31,6 +31,8 @@ func approvalDecisionFromCLIChoice(c utils.ApprovalChoice) security.ApprovalDeci
 		return security.ApprovalApproveOnce
 	case utils.ApprovalChoiceApproveAlways:
 		return security.ApprovalApproveAlways
+	case utils.ApprovalChoiceAlwaysAsk:
+		return security.ApprovalAlwaysAsk
 	case utils.ApprovalChoiceElevate:
 		return security.ApprovalElevate
 	default:

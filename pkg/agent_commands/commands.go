@@ -188,6 +188,9 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.RegisterAlias("rw", "rewind")
 	registry.RegisterAlias("ch", "changes")
 	registry.RegisterAlias("cg", "codegraph")
+	// common alternative names for commands
+	registry.RegisterAlias("new", "clear")
+	registry.RegisterAlias("resume", "sessions")
 
 	return registry
 }

@@ -55,8 +55,9 @@ func newDaemonTestServer(t *testing.T, preConfigure func(*ReactWebServer)) *test
 // paths where the tracking key is the user id, not the client id.
 func (ts *testServer) dialConnUser(t *testing.T, clientID, userID string) *websocket.Conn {
 	t.Helper()
-	dialer := websocket.DefaultDialer
-	dialer.HandshakeTimeout = 5 * time.Second
+	dialer := &websocket.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
 
 	headers := http.Header{}
 	if clientID != "" {

@@ -292,5 +292,3 @@ func TestLaunchdDomain(t *testing.T) {
 		t.Errorf("launchdDomain() = %q, want %q", domain, expected)
 	}
 }
-
-

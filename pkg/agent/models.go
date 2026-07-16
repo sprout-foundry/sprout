@@ -485,6 +485,9 @@ func (a *Agent) SetModelPersisted(model string) error {
 	// Connection is validated on the first real request — skip the blocking
 	// connection check here so model switches feel instant in the CLI.
 
+	// Store in session fields so GetModel() returns the new value immediately.
+	a.state.SetSessionModel(model)
+
 	// Save the selection to config (persisted for CLI use)
 	if err := a.configManager.SetProvider(a.clientType); err != nil {
 		return agenterrors.NewConfig("failed to save provider", err)

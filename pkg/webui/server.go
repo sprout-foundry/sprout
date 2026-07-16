@@ -53,7 +53,7 @@ type ReactWebServer struct {
 	isRunning                       bool
 	mutex                           sync.RWMutex
 	startTime                       time.Time
-	activeWSByUserID                sync.Map // map[string]*activeWSConn — SP-118 Mode1: tracks single active WS per user (agent mode)
+	activeWSByUserID                sync.Map         // map[string]*activeWSConn — SP-118 Mode1: tracks single active WS per user (agent mode)
 	userConnections                 *UserConnections // SP-118 Mode2: tracks N concurrent WS per user (daemon mode)
 	queryCount                      int
 	activeQueries                   int
@@ -383,8 +383,9 @@ func (ws *ReactWebServer) getActiveQueryCount() int {
 //     implementation lands in SP-118-2. This is sprout service / daemon.
 //
 // Cmd should call this immediately after NewReactWebServer returns:
-//   sprout agent path     → SetAgentEnforceSingleSession(true)
-//   sprout service path   → leave false (or explicitly call with false)
+//
+//	sprout agent path     → SetAgentEnforceSingleSession(true)
+//	sprout service path   → leave false (or explicitly call with false)
 //
 // Dispatch uses this flag, NOT serviceMode. Tests in pkg/webui flip
 // serviceMode=true to exercise the takeover flow under the Mode 1 path
@@ -398,7 +399,8 @@ func (ws *ReactWebServer) SetAgentEnforceSingleSession(v bool) {
 // of type "webui" are currently connected.  The security prompt routing
 // logic uses this to decide whether to route prompts through the WebUI
 // event bus or fall back to CLI-based prompting.
-func (ws *ReactWebServer) HasActiveWebUIClients() bool {	hasWebUI := false
+func (ws *ReactWebServer) HasActiveWebUIClients() bool {
+	hasWebUI := false
 	ws.connections.Range(func(_, value interface{}) bool {
 		if info, ok := value.(*ConnectionInfo); ok && info.Type == "webui" {
 			hasWebUI = true

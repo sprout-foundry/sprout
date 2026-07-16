@@ -133,19 +133,19 @@ type WorkflowExecutionState struct {
 
 // AgentWorkflowRuntime contains runtime options aligned with agent CLI flags.
 type AgentWorkflowRuntime struct {
-	SkipPrompt        *bool                    `json:"skip_prompt,omitempty"`
-	Provider          string                   `json:"provider,omitempty"`
-	Model             string                   `json:"model,omitempty"`
-	Persona           string                   `json:"persona,omitempty"`
-	DryRun            *bool                    `json:"dry_run,omitempty"`
-	MaxIterations     *int                     `json:"max_iterations,omitempty"`
-	NoStream          *bool                    `json:"no_stream,omitempty"`
-	SystemPrompt      string                   `json:"system_prompt,omitempty"`
-	SystemPromptFile  string                   `json:"system_prompt_file,omitempty"`
-	Unsafe            *bool                    `json:"unsafe,omitempty"`
-	NoSubagents       *bool                    `json:"no_subagents,omitempty"`
-	ResourceDirectory string                   `json:"resource_directory,omitempty"`
-	ReasoningEffort   string                   `json:"reasoning_effort,omitempty"`
+	SkipPrompt        *bool                     `json:"skip_prompt,omitempty"`
+	Provider          string                    `json:"provider,omitempty"`
+	Model             string                    `json:"model,omitempty"`
+	Persona           string                    `json:"persona,omitempty"`
+	DryRun            *bool                     `json:"dry_run,omitempty"`
+	MaxIterations     *int                      `json:"max_iterations,omitempty"`
+	NoStream          *bool                     `json:"no_stream,omitempty"`
+	SystemPrompt      string                    `json:"system_prompt,omitempty"`
+	SystemPromptFile  string                    `json:"system_prompt_file,omitempty"`
+	Unsafe            *bool                     `json:"unsafe,omitempty"`
+	NoSubagents       *bool                     `json:"no_subagents,omitempty"`
+	ResourceDirectory string                    `json:"resource_directory,omitempty"`
+	ReasoningEffort   string                    `json:"reasoning_effort,omitempty"`
 	SubagentOverrides WorkflowSubagentOverrides `json:"subagent_overrides,omitempty"`
 	// RiskProfile selects a named shell-command risk cascade preset
 	// for this step / initial run (SP-058). One of: readonly,

@@ -357,7 +357,7 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 					fmt.Sscanf(totalCostStr, "%f", &totalCost)
 
 					// Add to parent agent's totals using TrackMetricsFromResponse
-					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens, 0)
+					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens, 0, 0)
 					a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", taskID, totalTokens, totalCost)
 				}
 			}

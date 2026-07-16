@@ -501,6 +501,20 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecurityCaution
 	}
 
+	// rm -rf / rm -fr whose target passes the safe-prefix whitelist
+	// (e.g., "rm -rf internal/api/webui/dist/sprout-webui") is a SAFE
+	// workspace cleanup. Without this branch, the dangerous check above
+	// already exempts these commands, but the absence of any explicit
+	// "safe" match would leave them at the default CAUTION fallback.
+	// isCautionPattern already skips rm -rf/-fr entirely (they route
+	// through isSafeRmRfPrefix via isDangerousPattern), so this branch
+	// fires only for commands the safe whitelist accepts.
+	if strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ") {
+		if isSafeRmRfPrefix(cmdLower) {
+			return SecuritySafe
+		}
+	}
+
 	if isSafeShellCommand(cmdLower) {
 		return SecuritySafe
 	}

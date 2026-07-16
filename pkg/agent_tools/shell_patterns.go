@@ -338,14 +338,25 @@ func isDangerousPattern(cmd string) bool {
 // isCautionPattern checks for caution-level patterns.
 // This is deliberately minimal — almost everything is SAFE now.
 // Only true deletion operations remain as CAUTION (never DANGEROUS).
+//
+// Note: rm -rf and rm -fr are NOT matched here because they are specifically
+// handled by isDangerousPattern (via isSafeRmRfPrefix). The "rm -" prefix check
+// guards against rm -rf and rm -fr accidentally matching the "rm " pattern via
+// HasPrefix.
 func isCautionPattern(cmd string) bool {
+	cmdLower := strings.ToLower(cmd)
+	// Skip rm -rf / rm -fr entirely — those are dispatched to
+	// isDangerousPattern via isSafeRmRfPrefix.
+	if strings.HasPrefix(cmdLower, "rm -rf") || strings.HasPrefix(cmdLower, "rm -fr") {
+		return false
+	}
 	cautionPatterns := []string{
-		"rm ",       // single file deletion (rm without -rf flag; rm -rf commands use safeRmRfPrefixes whitelist)
+		"rm ",     // single file deletion (rm without -rf/-fr; those are handled by isDangerousPattern)
 		"docker rm", // container deletion
 	}
 
 	for _, pattern := range cautionPatterns {
-		if strings.HasPrefix(cmd, pattern) {
+		if strings.HasPrefix(cmdLower, pattern) {
 			return true
 		}
 	}
@@ -455,8 +466,42 @@ var safeRmRfPrefixes = map[string]bool{
 	"rm -rf .venv/": true, "rm -rf .venv ": true,
 }
 
+// safeRmRfComponents is a set of known safe directory names that can appear
+// anywhere in a path. A path like "internal/api/webui/dist/sprout-webui" is safe
+// because it contains "dist" as a path component, even though "dist" is nested.
+// This set is checked by isSafeRmRfComponent for nested path matching.
+var safeRmRfComponents = map[string]bool{
+	// Common build output directories
+	"dist": true, "build": true, "out": true, "target": true, "bin": true,
+	// Package manager caches
+	"node_modules": true, "vendor": true,
+	// Dotfile caches
+	"__pycache__": true, ".cache": true, ".gradle": true, ".next": true,
+	".npm": true, ".yarn": true, ".pnpm": true, ".m2": true, ".ivy": true, ".sbt": true,
+	".parcel-cache": true, ".turbo": true, ".nuxt": true, ".output": true,
+	".astro": true, ".svelte-kit": true, ".sass-cache": true, ".stylelintcache": true,
+	".eslintcache": true, ".swc": true, ".vercel": true, ".netlify": true,
+	".firebase": true, ".serverless": true,
+	// Infrastructure/DevOps
+	".terraform": true, ".aws": true, ".kube": true, ".docker": true, ".docker-compose": true,
+	// IDE/config
+	".idea": true, ".vscode": true, ".project": true, ".settings": true, ".metadata": true,
+	// Virtual environments
+	"venv": true, ".venv": true,
+}
+
 // isSafeRmRfPrefix checks if a lowercased command matches one of the safe
 // rm -rf prefixes in O(1). It checks both "rm -rf " and "rm -fr " variants.
+//
+// Matching is done in two passes:
+//  1. Exact prefix match: checks if the command target matches a known safe directory
+//     at the top level (e.g., "rm -rf dist/", "rm -rf node_modules/sub/path")
+//  2. Component match: checks if ANY path component in the target is a known safe
+//     directory name (e.g., "rm -rf internal/api/webui/dist/sprout-webui" is safe
+//     because "dist" is a path component)
+//
+// Path traversal components ("..") and absolute paths are NOT allowed in component
+// matching to prevent bypassing the safe directory check.
 func isSafeRmRfPrefix(cmdLower string) bool {
 	// Only check if it's an rm -rf command at all
 	if !strings.HasPrefix(cmdLower, "rm -rf ") && !strings.HasPrefix(cmdLower, "rm -fr ") {
@@ -469,6 +514,18 @@ func isSafeRmRfPrefix(cmdLower string) bool {
 		normalized = "rm -rf " + cmdLower[len("rm -fr "):]
 	}
 
+	// Extract the target path (everything after "rm -rf ")
+	target := normalized[len("rm -rf "):]
+
+	// Hard reject any path containing traversal ("..") regardless of
+	// whether it passes a prefix or component match below. Without this,
+	// "rm -rf dist/../etc" would pass the prefix check (the loop finds
+	// "rm -rf dist/" and the map has that as a safe prefix) and silently
+	// classify as SAFE even though ".." escapes the safe directory.
+	if strings.Contains(target, "..") {
+		return false
+	}
+
 	// Try direct map lookup — covers exact matches like "rm -rf node_modules/"
 	if safeRmRfPrefixes[normalized] {
 		return true
@@ -477,16 +534,101 @@ func isSafeRmRfPrefix(cmdLower string) bool {
 	// For commands like "rm -rf node_modules/sub/path", check each possible
 	// prefix by scanning for "/" or " " in the target. Since map lookups are O(1),
 	// this is still bounded by path depth (typically <10 characters to scan).
-	for i := len("rm -rf "); i < len(normalized); i++ {
-		c := normalized[i]
+	for i := 0; i < len(target); i++ {
+		c := target[i]
 		if c == '/' || c == ' ' {
-			prefix := normalized[:i+1] // include the separator for exact map match
+			prefix := "rm -rf " + target[:i+1] // include the separator for exact map match
 			if safeRmRfPrefixes[prefix] {
+				// Reject if the remainder of the path (after the safe
+				// prefix) contains ".." — a path-traversal escape that
+				// would let the user delete a directory outside the
+				// whitelisted safe dir (e.g., "rm -rf dist/../etc" must
+				// not be whitelisted by matching "rm -rf dist/").
+				remainder := target[i+1:]
+				if strings.Contains(remainder, "..") {
+					return false
+				}
 				return true
 			}
 			break // only check the first path component
 		}
 	}
+
+	// Phase 1: Component-based matching for nested paths.
+	// Split the target path into components and check if any match a safe directory.
+	// Skip path traversal ("..") and absolute paths to stay conservative.
+	if isSafeRmRfComponent(target) {
+		return true
+	}
+
+	return false
+}
+
+// isSafeRmRfComponent checks if any path component in the given path matches
+// a known safe directory name. Returns false for empty paths, path traversal,
+// or absolute paths to be conservative.
+//
+// A path is considered safe only when:
+//   - It contains no path-traversal components ("..") anywhere
+//   - It is not absolute (no leading "/")
+//   - It is not composed entirely of "." components
+//   - Any single path component matches a known safe directory name
+//     (e.g., "dist", "node_modules")
+//   - The matching safe component is NOT the last component — there must
+//     be additional content after it (the same convention as the existing
+//     prefix whitelist, which requires a trailing "/" or " ").
+//
+// Examples:
+//   - "internal/api/webui/dist/sprout-webui" → true (contains "dist" with more after it)
+//   - "dist/sprout-webui" → true (contains "dist" with more after it)
+//   - "node_modules/package" → true (contains "node_modules" with more after it)
+//   - "internal/api/" → false (no safe component)
+//   - "../sibling-project" → false (path traversal)
+//   - "dist/../etc" → false (path traversal escapes safe dir)
+//   - "internal/api/webui/dist/../etc" → false (traversal escapes)
+//   - "dist/." → false (trailing "." with no real content after safe dir)
+//   - "/tmp/something" → false (absolute path)
+//   - "dist" → false (safe component but nothing follows it)
+func isSafeRmRfComponent(target string) bool {
+	if target == "" {
+		return false
+	}
+
+	// Reject absolute paths (conservative: only workspace-relative paths are safe)
+	if strings.HasPrefix(target, "/") {
+		return false
+	}
+
+	components := strings.Split(target, "/")
+
+	// Reject if ANY component is a traversal ("..") — this catches both
+	// leading traversal ("../foo") and embedded traversal ("dist/../etc").
+	// Must scan ALL components (not just non-last), because a ".."
+	// appearing AFTER a safe component still escapes that safe directory.
+	for _, comp := range components {
+		if comp == ".." {
+			return false
+		}
+	}
+
+	// Check each component except the last one. A safe component must have
+	// additional path segments following it to be whitelisted.
+	// This ensures "rm -rf node_modules" (no trailing /) is NOT whitelisted
+	// while "rm -rf node_modules/package" IS whitelisted.
+	for i := 0; i < len(components)-1; i++ {
+		comp := components[i]
+
+		// Skip empty components (e.g., from leading ./ or multiple slashes)
+		if comp == "" || comp == "." {
+			continue
+		}
+
+		// Check if this component matches a known safe directory name
+		if safeRmRfComponents[comp] {
+			return true
+		}
+	}
+
 	return false
 }
 

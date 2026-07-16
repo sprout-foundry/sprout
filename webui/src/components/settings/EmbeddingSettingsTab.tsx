@@ -30,9 +30,10 @@ export default function EmbeddingSettingsTab({
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const persistedExclude = settings
-    ? ((getNestedValue(settings, 'embedding_index.exclude_paths') as string[] | undefined) ?? [])
+  const rawExclude = settings
+    ? (getNestedValue(settings, 'embedding_index.exclude_paths') as unknown)
     : [];
+  const persistedExclude: string[] = Array.isArray(rawExclude) ? rawExclude : [];
   const [excludeDraft, setExcludeDraft] = useState<string>(persistedExclude.join('\n'));
   const excludeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPersistedJoinedRef = useRef<string>(persistedExclude.join('\n'));

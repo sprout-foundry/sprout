@@ -285,8 +285,8 @@ describe('test button', () => {
 
     expect(mockNotify).not.toHaveBeenCalled();
     await waitFor(() => {
-      // Check the button text changed to show blocked (not the status label)
-      expect(screen.getByText(/✗ Blocked/)).toBeInTheDocument();
+      // The button label changes to "Blocked" (not the status label/helper message)
+      expect(screen.getByText('Blocked')).toBeInTheDocument();
     });
   });
 
@@ -324,8 +324,8 @@ describe('test button', () => {
     expect(mockNotify).not.toHaveBeenCalled();
 
     await waitFor(() => {
-      // Check the button text changed to show blocked (not the status label)
-      expect(screen.getByText(/✗ Blocked/)).toBeInTheDocument();
+      // The button label changes to "Blocked" (not the status label/helper message)
+      expect(screen.getByText('Blocked')).toBeInTheDocument();
     });
   });
 });
@@ -347,8 +347,8 @@ describe('test status feedback', () => {
     await userEvent.click(btn);
 
     await waitFor(() => {
-      // Check the button text changed (not the helper message)
-      expect(screen.getByText(/✓ Sent!/)).toBeInTheDocument();
+      // The button label changes to "Sent" (not the helper message)
+      expect(screen.getByText('Sent')).toBeInTheDocument();
     });
   });
 
@@ -412,8 +412,8 @@ describe('test status feedback', () => {
     });
 
     await waitFor(() => {
-      // Check the button text changed to "✓ Sent!" (specific to avoid ambiguity)
-      expect(screen.getByText('✓ Sent!')).toBeInTheDocument();
+      // The button label changes to "Sent" (specific to avoid ambiguity)
+      expect(screen.getByText('Sent')).toBeInTheDocument();
     });
   });
 });

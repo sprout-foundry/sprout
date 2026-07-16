@@ -472,7 +472,9 @@ function Sidebar({
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners');
+                            onViewChange(
+                              item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners',
+                            );
                           }
                         }}
                         title={item.label}

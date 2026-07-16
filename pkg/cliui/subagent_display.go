@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package cliui
 
 import (
 	"encoding/json"
@@ -13,39 +13,39 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
-// subagentProgressSnapshot is the most-recent live snapshot of a running
+// SubagentProgressSnapshot is the most-recent live snapshot of a running
 // subagent's token / context usage, refreshed by the runner's monitorProgress
 // ticker (~every 2s). The CLI subscriber appends a compact "· 12.3k/128k ctx"
 // suffix to subsequent tool-start lines fired by the same persona so users
 // see the budget burn in real time, instead of only learning the final
 // numbers in the "completed" line after the subagent has already exited.
-type subagentProgressSnapshot struct {
-	tokensUsed  int
-	ctxUsed     int
-	ctxMax      int
-	iteration   int
-	lastUpdated time.Time
+type SubagentProgressSnapshot struct {
+	TokensUsed  int
+	CtxUsed     int
+	CtxMax      int
+	Iteration   int
+	LastUpdated time.Time
 }
 
-// formatSubagentCtxSuffix renders the trailing "· 12.3k/128k ctx" hint
+// FormatSubagentCtxSuffix renders the trailing "· 12.3k/128k ctx" hint
 // appended to depth>0 tool-start lines. Returns "" when no useful
 // numbers are available so the line stays clean during the first tick
 // before any tokens have accumulated.
-func formatSubagentCtxSuffix(snap subagentProgressSnapshot) string {
-	if snap.ctxMax > 0 && snap.ctxUsed > 0 {
-		return fmt.Sprintf(" · %s/%s ctx", formatTokensShort(snap.ctxUsed), formatTokensShort(snap.ctxMax))
+func FormatSubagentCtxSuffix(snap SubagentProgressSnapshot) string {
+	if snap.CtxMax > 0 && snap.CtxUsed > 0 {
+		return fmt.Sprintf(" · %s/%s ctx", FormatTokensShort(snap.CtxUsed), FormatTokensShort(snap.CtxMax))
 	}
-	if snap.tokensUsed > 0 {
-		return fmt.Sprintf(" · %s tok", formatTokensShort(snap.tokensUsed))
+	if snap.TokensUsed > 0 {
+		return fmt.Sprintf(" · %s tok", FormatTokensShort(snap.TokensUsed))
 	}
 	return ""
 }
 
-// formatTokensShort formats a token count compactly: "1234" → "1.2k",
+// FormatTokensShort formats a token count compactly: "1234" → "1.2k",
 // "1234567" → "1.2M". Used inside tool/spawn lines where horizontal
 // space is at a premium — the full comma-separated form lives in the
 // "↳ done" line at the end of the subagent run.
-func formatTokensShort(n int) string {
+func FormatTokensShort(n int) string {
 	switch {
 	case n < 1000:
 		return strconv.Itoa(n)
@@ -56,11 +56,11 @@ func formatTokensShort(n int) string {
 	}
 }
 
-// extractSubagentTask parses run_subagent tool arguments and returns
+// ExtractSubagentTask parses run_subagent tool arguments and returns
 // (taskDescription, persona). The task description is the first line of
 // the prompt, truncated to 60 chars so the spawn line stays scannable.
 // Returns ("", "") when the args don't contain a usable prompt/persona.
-func extractSubagentTask(argsJSON string) (taskDesc, persona string) {
+func ExtractSubagentTask(argsJSON string) (taskDesc, persona string) {
 	if argsJSON == "" {
 		return "", ""
 	}
@@ -88,7 +88,7 @@ func extractSubagentTask(argsJSON string) (taskDesc, persona string) {
 	return prompt, persona
 }
 
-// formatSpawnLine renders the one-shot "↳ persona spawned (provider · model · 128k ctx)"
+// FormatSpawnLine renders the one-shot "↳ persona spawned (provider · model · 128k ctx)"
 // line emitted the first time the CLI sees a new (depth, persona) pair in a
 // turn. Indent matches the corresponding tool-line depth so it visually
 // nests under the parent that spawned it. The `maxCtx` argument carries
@@ -99,7 +99,7 @@ func extractSubagentTask(argsJSON string) (taskDesc, persona string) {
 // CLI-UX-11: when taskDesc is non-empty, it's appended after the persona
 // badge so the user sees what the subagent is doing: "↳ coder: refactor
 // auth.go" instead of just "↳ coder".
-func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx int, taskDesc string) string {
+func FormatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx int, taskDesc string) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
 	taskSuffix := ""
@@ -110,7 +110,7 @@ func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx i
 	if chatAgent != nil {
 		if provider, model, err := chatAgent.GetPersonaProviderModel(persona); err == nil && (provider != "" || model != "") {
 			if maxCtx > 0 {
-				suffix = fmt.Sprintf(" (%s · %s · %s ctx)", provider, model, formatTokensShort(maxCtx))
+				suffix = fmt.Sprintf(" (%s · %s · %s ctx)", provider, model, FormatTokensShort(maxCtx))
 			} else {
 				suffix = fmt.Sprintf(" (%s · %s)", provider, model)
 			}
@@ -119,7 +119,7 @@ func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx i
 	return fmt.Sprintf("%s  ↳ %sspawned%s%s", indent, badge, taskSuffix, suffix)
 }
 
-// formatSubagentDoneLine renders the per-subagent completion summary —
+// FormatSubagentDoneLine renders the per-subagent completion summary —
 // the closing bracket for the spawn line. Format:
 //
 //	↳ [persona] done · 12,345 tok · $0.0234 · 4.2s
@@ -128,7 +128,7 @@ func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx i
 // Indents at depth 1 to nest visually under the parent's run_subagent
 // row. Numeric fields are omitted when zero so a no-cost / no-token
 // cancellation stays terse rather than printing "0 tok · $0.0000".
-func formatSubagentDoneLine(persona, status, reason string, tokens int, cost, elapsedSec float64) string {
+func FormatSubagentDoneLine(persona, status, reason string, tokens int, cost, elapsedSec float64) string {
 	indent := console.PersonaIndent(1)
 	badge := console.PersonaBadge(1, persona)
 	icon := console.GlyphSuccess.Prefix()
@@ -142,7 +142,7 @@ func formatSubagentDoneLine(persona, status, reason string, tokens int, cost, el
 	}
 	parts := []string{}
 	if tokens > 0 {
-		parts = append(parts, fmt.Sprintf("%s tok", formatThousands(tokens)))
+		parts = append(parts, fmt.Sprintf("%s tok", FormatThousands(tokens)))
 	}
 	if cost > 0 {
 		parts = append(parts, fmt.Sprintf("$%.4f", cost))
@@ -157,10 +157,10 @@ func formatSubagentDoneLine(persona, status, reason string, tokens int, cost, el
 	return fmt.Sprintf("%s  ↳ %s %s%s%s", indent, icon, badge, verb, suffix)
 }
 
-// readEventInt extracts an int from an event payload, tolerating the
+// ReadEventInt extracts an int from an event payload, tolerating the
 // numeric types the event bus may marshal through (int / int64 /
 // float64 round-trip via JSON).
-func readEventInt(data map[string]interface{}, key string) int {
+func ReadEventInt(data map[string]interface{}, key string) int {
 	if data == nil {
 		return 0
 	}
@@ -175,7 +175,8 @@ func readEventInt(data map[string]interface{}, key string) int {
 	return 0
 }
 
-func readEventInt64(data map[string]interface{}, key string) int64 {
+// ReadEventInt64 extracts an int64 from an event payload.
+func ReadEventInt64(data map[string]interface{}, key string) int64 {
 	if data == nil {
 		return 0
 	}
@@ -190,11 +191,11 @@ func readEventInt64(data map[string]interface{}, key string) int64 {
 	return 0
 }
 
-// formatThousands renders an integer with comma separators (e.g.
+// FormatThousands renders an integer with comma separators (e.g.
 // 1234567 → "1,234,567"). Negative numbers keep the sign.
-func formatThousands(n int) string {
+func FormatThousands(n int) string {
 	if n < 0 {
-		return "-" + formatThousands(-n)
+		return "-" + FormatThousands(-n)
 	}
 	s := strconv.Itoa(n)
 	if len(s) <= 3 {
@@ -218,10 +219,10 @@ func formatThousands(n int) string {
 	return b.String()
 }
 
-// readEventDepth reads the subagent_depth from an event payload. Returns 0
+// ReadEventDepth reads the subagent_depth from an event payload. Returns 0
 // for missing or malformed values — matches today's "primary agent" rendering
 // when older events that pre-date SP-051 metadata land in the bus.
-func readEventDepth(data map[string]interface{}) int {
+func ReadEventDepth(data map[string]interface{}) int {
 	if data == nil {
 		return 0
 	}
@@ -237,9 +238,9 @@ func readEventDepth(data map[string]interface{}) int {
 	}
 }
 
-// readEventPersona reads the active_persona from an event payload, trimmed.
+// ReadEventPersona reads the active_persona from an event payload, trimmed.
 // Returns "" when absent — which suppresses the persona badge.
-func readEventPersona(data map[string]interface{}) string {
+func ReadEventPersona(data map[string]interface{}) string {
 	if data == nil {
 		return ""
 	}

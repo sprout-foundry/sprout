@@ -10,6 +10,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -51,7 +52,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	// footer refreshes after each tool.
 	subCtx, cancelSub := context.WithCancel(ctx)
 	defer cancelSub()
-	resetSpawnTracking := startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+	resetSpawnTracking := cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 	defer resetSpawnTracking()
 
 	tq := tools.NewTaskQueue(tools.DefaultTaskQueuePath())

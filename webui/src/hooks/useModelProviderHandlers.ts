@@ -25,7 +25,7 @@ export interface UseModelProviderHandlersOptions {
 export interface UseModelProviderHandlersReturn {
   handleModelChange: (model: string) => void;
   handleProviderChange: (provider: string) => void;
-  handleViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
+  handleViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners') => void;
   handlePersonaChange: (persona: string) => void;
   /** Refs exposed for sharing with other hooks (e.g., WS event handler). */
   pendingProviderRef: MutableRefObject<string>;
@@ -93,7 +93,7 @@ export function useModelProviderHandlers({
     [events],
   );
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => {
+  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners') => {
     setState((prev) => ({
       currentView: view,
     }));

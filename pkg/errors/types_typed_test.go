@@ -2,6 +2,7 @@ package errors
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -529,5 +530,33 @@ func TestNewApprovalClonesDetails(t *testing.T) {
 	src["req"] = "mutated"
 	if err.Details["req"] != "abc" {
 		t.Error("expected req=abc preserved, got aliasing")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// IsPermission helper
+// ---------------------------------------------------------------------------
+
+func TestIsPermission(t *testing.T) {
+	perm := NewPermission("approval timed out", nil)
+	if !IsPermission(perm) {
+		t.Error("IsPermission(NewPermission(...)) = false; want true")
+	}
+
+	// Wrapped permission error should still be detected.
+	wrapped := fmt.Errorf("layer: %w", perm)
+	if !IsPermission(wrapped) {
+		t.Error("IsPermission(wrapped permission) = false; want true")
+	}
+
+	// Non-permission errors should return false.
+	other := NewValidation("bad input", nil)
+	if IsPermission(other) {
+		t.Error("IsPermission(NewValidation(...)) = true; want false")
+	}
+
+	// Nil error.
+	if IsPermission(nil) {
+		t.Error("IsPermission(nil) = true; want false")
 	}
 }

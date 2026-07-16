@@ -93,12 +93,15 @@ export function useModelProviderHandlers({
     [events],
   );
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => {
-    setState((prev) => ({
-      currentView: view,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleViewChange = useCallback(
+    (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => {
+      setState((prev) => ({
+        currentView: view,
+      }));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [],
+  );
 
   const handlePersonaChange = useCallback(
     (persona: string) => {

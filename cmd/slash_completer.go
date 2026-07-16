@@ -4,11 +4,88 @@ package cmd
 
 import (
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
+
+// completionCacheTTL is how long argument-completion results are cached
+// before re-querying. Short enough that newly registered MCP servers or
+// config changes appear within a second, long enough to prevent
+// repeated network calls or config reads during rapid typing.
+const completionCacheTTL = 500 * time.Millisecond
+
+// slashCommandCache caches the command registry and argument-completion
+// results so the autocomplete dropdown doesn't rebuild the registry or
+// re-query providers/config on every keystroke.
+type slashCommandCache struct {
+	registry *agent_commands.CommandRegistry
+
+	mu       sync.Mutex
+	argCache map[string]argCacheEntry
+}
+
+type argCacheEntry struct {
+	candidates []string
+	expiresAt  time.Time
+}
+
+var globalSlashCache = &slashCommandCache{
+	argCache: make(map[string]argCacheEntry),
+}
+
+// getRegistry returns the cached command registry, building it on first
+// use. The registry is static within a session (MCP commands are
+// resolved at execution time, not registration time).
+func (c *slashCommandCache) getRegistry() *agent_commands.CommandRegistry {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.registry == nil {
+		c.registry = agent_commands.NewCommandRegistry()
+	}
+	return c.registry
+}
+
+// getArgCompletions returns cached argument completions for a command,
+// or calls the completion function and caches the result for completionCacheTTL.
+func (c *slashCommandCache) getArgCompletions(cmdName string, args []string, chatAgent *agent.Agent, cmd agent_commands.Command) []string {
+	// Build a cache key from the command name and args using NUL delimiter
+	// to avoid collisions (args are whitespace-split so can't contain NUL).
+	cacheKey := cmdName + "\x00" + strings.Join(args, "\x00")
+
+	c.mu.Lock()
+	if entry, ok := c.argCache[cacheKey]; ok && time.Now().Before(entry.expiresAt) {
+		c.mu.Unlock()
+		return append([]string(nil), entry.candidates...)
+	}
+	c.mu.Unlock()
+
+	// Compute the completion outside the lock
+	var candidates []string
+	if completable, ok := cmd.(agent_commands.CompletableCommand); ok {
+		candidates = completable.Complete(args, chatAgent)
+	}
+
+	c.mu.Lock()
+	c.argCache[cacheKey] = argCacheEntry{
+		candidates: candidates,
+		expiresAt:  time.Now().Add(completionCacheTTL),
+	}
+	// Prune expired entries to prevent unbounded growth
+	now := time.Now()
+	for k, v := range c.argCache {
+		if !now.Before(v.expiresAt) {
+			delete(c.argCache, k)
+		}
+	}
+	c.mu.Unlock()
+
+	return candidates
+}
 
 // buildSlashCommandCompleter returns a CompletionProvider that completes
 // slash-command names against the current command registry, and
@@ -17,14 +94,6 @@ import (
 // both the REPL prompt (Tab, via inputReader.SetCompleter) and the
 // mid-turn steer panel (Ctrl-], via steerCoord.SetCompleter — SP-078
 // Phase 2).
-//
-// Behavior:
-//   - Without a space: command name completion (existing behavior).
-//   - With a space: tries argument completion via CompletableCommand
-//     on the resolved command.
-//   - Case-insensitive prefix match in both paths.
-//   - Re-builds the registry per call so newly-installed MCP commands
-//     appear immediately.
 func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvider {
 	return func(line string, cursorPos int) []string {
 		candidates := buildRichSlashCommandCompleter(chatAgent)(line, cursorPos)
@@ -45,7 +114,7 @@ func buildRichSlashCommandCompleter(chatAgent *agent.Agent) console.RichCompleti
 			return nil
 		}
 
-		registry := agent_commands.NewCommandRegistry()
+		registry := globalSlashCache.getRegistry()
 
 		if !strings.ContainsAny(line, " \t") {
 			prefix := strings.ToLower(line[1:])
@@ -82,23 +151,20 @@ func buildRichSlashCommandCompleter(chatAgent *agent.Agent) console.RichCompleti
 			args = append(args, "")
 		}
 
-		if completable, ok := cmd.(agent_commands.CompletableCommand); ok {
-			candidates := completable.Complete(args, chatAgent)
-			if len(candidates) == 0 {
-				return nil
-			}
-			var prefix string
-			if len(parts) > 1 {
-				prefix = strings.Join(parts[:len(parts)-1], " ") + " "
-			} else {
-				prefix = parts[0] + " "
-			}
-			result := make([]console.CompletionCandidate, len(candidates))
-			for i, c := range candidates {
-				result[i] = console.CompletionCandidate{Text: prefix + c}
-			}
-			return result
+		candidates := globalSlashCache.getArgCompletions(cmdName, args, chatAgent, cmd)
+		if len(candidates) == 0 {
+			return nil
 		}
-		return nil
+		var prefix string
+		if len(parts) > 1 {
+			prefix = strings.Join(parts[:len(parts)-1], " ") + " "
+		} else {
+			prefix = parts[0] + " "
+		}
+		result := make([]console.CompletionCandidate, len(candidates))
+		for i, c := range candidates {
+			result[i] = console.CompletionCandidate{Text: prefix + c}
+		}
+		return result
 	}
 }

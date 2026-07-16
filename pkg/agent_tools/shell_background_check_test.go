@@ -152,12 +152,16 @@ func TestClassifyShellCommand_CheckBackgroundWithCommand(t *testing.T) {
 }
 
 func TestClassifyShellCommand_EmptyCommandWithoutCheckBackground(t *testing.T) {
-	// Empty command without check_background should still be CAUTION
+	// Empty command without check_background: Validate catches this before
+	// classification, so classifier returns Safe (no approval prompt).
 	result := ClassifyToolCall("shell_command", map[string]interface{}{
 		"command": "",
 	})
-	if result.Risk != SecurityCaution {
-		t.Errorf("expected SecurityCaution for empty command without check_background, got %v", result.Risk)
+	if result.Risk != SecuritySafe {
+		t.Errorf("expected SecuritySafe for empty command, got %v", result.Risk)
+	}
+	if result.ShouldPrompt {
+		t.Error("empty command should not trigger approval prompt")
 	}
 }
 

@@ -20,9 +20,7 @@ export default function SecuritySettingsTab({
   renderSelect,
   updateSetting,
 }: SecuritySettingsTabProps) {
-  const rawApproved = settings
-    ? (getNestedValue(settings, 'approved_shell_commands') as unknown)
-    : [];
+  const rawApproved = settings ? (getNestedValue(settings, 'approved_shell_commands') as unknown) : [];
   const approved: string[] = Array.isArray(rawApproved) ? rawApproved : [];
 
   const [draft, setDraft] = useState('');

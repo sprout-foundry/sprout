@@ -174,9 +174,16 @@ headers updated, but no new code work is required:
         "feature is unreachable" verdict was correct as of 2026-07-04
         but the wiring was added between then and now).
       - SP-110 (background completion auto-resume) — verified
-        Partially Implemented (Phases 1+2 shipped, Phase 3 auto-resume
-        daemon poller missing). Status flipped to 🟡 Partially
-        Implemented with rationale.
+        ✅ Implemented (all 3 phases shipped at `6d31e17a`).
+        Status flipped from 🟡 Partially Implemented to ✅ Implemented.
+        Phase 3 deliverables (`pkg/webui/wakeup_poller.go`,
+        `pkg/agent/pause.go::DisableWakeup`,
+        `pkg/configuration/config.go::WakeupConfig`, Settings UI
+        toggle) all landed in `6d31e17a` — the previous "Phase 3
+        NOT shipped" verdict from the 2026-07-05 audit was stale,
+        caught by the 2026-07-15 doc-drift sweep (`93b722f6`).
+        TODO.md sync completed in the same sweep (entries at
+        line 176 + line 666 updated).
       - SP-112 (platform parity) — verified Not shipped (spec is
         1 day old, no implementation). Status stays Proposed.
       - SP-114 (unify command execution) — verified Not shipped
@@ -663,8 +670,9 @@ that were still marked 🔵 Proposed:
   `embedding_index_handler.go:267` integration,
   `repo_map.go:ToCodegraphSymbols` edge fix). Stale audit doc
   `SP-107-code-intelligence-graph-audit.md` deleted.
-- SP-110 — verified Partially Implemented (Phases 1+2 shipped,
-  Phase 3 auto-resume daemon poller missing).
+- SP-110 — ✅ Implemented (all 3 phases shipped at `6d31e17a`).
+  Doc-drift caught in the 2026-07-15 sweep; status flipped from
+  🟡 Partially Implemented to ✅ Implemented.
 - SP-112 — verified NOT shipped (1-day-old spec). Stays Proposed.
 - SP-114 — verified NOT shipped (1-day-old spec). Stays Proposed.
 

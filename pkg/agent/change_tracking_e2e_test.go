@@ -5,11 +5,19 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 // TestChangeTrackingE2E tests the end-to-end change tracking and rollback workflow
 func TestChangeTrackingE2E(t *testing.T) {
+	// Isolate all config + history I/O to a temp dir. Without this,
+	// history.GetAllChanges() reads from whatever SPROUT_CONFIG points
+	// at in the test runner's env (often the user's real config dir),
+	// so the count assertion sees data accumulated from prior runs.
+	_, configCleanup := configuration.NewTestManager(t)
+	defer configCleanup()
+
 	// Test constants for test file names and content
 	const (
 		testFileName    = "tracking_test.go"
@@ -188,6 +196,11 @@ func TestChangeTrackingE2E(t *testing.T) {
 }
 
 func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
+	// Isolate config + history I/O to a temp dir so history count
+	// assertions are not contaminated by accumulated changes from
+	// prior runs or sibling tests.
+	_, configCleanup := configuration.NewTestManager(t)
+	defer configCleanup()
 	testDir := t.TempDir()
 	oldDir, _ := os.Getwd()
 	defer func() {
@@ -265,6 +278,11 @@ func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
 // every entry. The fix advances the counter inside the loop so a retry
 // resumes from the correct position.
 func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
+	// Isolate config + history I/O to a temp dir so history count
+	// assertions are not contaminated by accumulated changes from
+	// prior runs or sibling tests.
+	_, configCleanup := configuration.NewTestManager(t)
+	defer configCleanup()
 	testDir := t.TempDir()
 	oldDir, _ := os.Getwd()
 	defer func() {

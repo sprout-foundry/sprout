@@ -106,19 +106,33 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	}
 	flush()
 
-	// Defense in depth: drop any tool-role messages whose tool_call_id has no
-	// parent assistant tool_calls block. Strict-syntax providers (MiniMax,
-	// DeepSeek) reject the whole request as "tool call result does not
-	// follow tool call" otherwise. The same orphan can arise from manual
-	// edits, restored sessions, or any other path that bypasses
-	// BuildCheckpointCompactedMessages' guard. We only apply this to
-	// strict-syntax providers because non-strict ones (OpenAI, Anthropic)
-	// tolerate dropped tool results as long as the conversation stays
-	// coherent.
-	if p.requiresStrictToolCallSyntax() {
-		converted = stripUnansweredToolCalls(converted)
-		converted = dropOrphanToolResults(converted)
-	}
+	// Conversation state repair: clean up orphaned tool calls and tool
+	// results that arise from checkpoint compaction, session persistence
+	// gaps, or any path that leaves assistant tool_calls without matching
+	// tool results (or vice versa).
+	//
+	// This was previously gated on requiresStrictToolCallSyntax() (only
+	// MiniMax/DeepSeek), but the corruption is provider-agnostic — it
+	// originates from sprout's own conversation management, not from the
+	// provider. Even tolerant providers (OpenAI, Anthropic, local Qwen)
+	// produce degraded output when the model sees its own tool calls
+	// disappear from history. Diagnostic captures show 1,600+ missing
+	// tool results across 10 sessions, causing truncated/confused model
+	// responses ("Good", "user Good") and false "early completion".
+	//
+	// Order matters:
+	//   1. stripUnansweredToolCalls — remove tool_calls from assistant
+	//      messages whose results are missing (ID-based matching).
+	//   2. dropOrphanToolResults — remove tool messages whose
+	//      tool_call_id no longer matches any surviving assistant.
+	//   3. mergeConsecutiveAssistants — merge any consecutive assistants
+	//      exposed by steps 1-2 (e.g. when drop removed the tool message
+	//      that separated two assistants). Also handles the
+	//      IncludeToolCallID=false case where ID-based matching can't work.
+	// Must run LAST so it catches all newly-exposed consecutive pairs.
+	converted = stripUnansweredToolCalls(converted)
+	converted = dropOrphanToolResults(converted)
+	converted = mergeConsecutiveAssistants(converted)
 
 	// Inject cache_control breakpoints for providers that support prompt-prefix
 	// caching (Anthropic via OpenRouter). Anthropic allows up to 4 breakpoints
@@ -468,4 +482,121 @@ func stripUnansweredToolCalls(converted []map[string]interface{}) []map[string]i
 	}
 
 	return result
+}
+
+// mergeConsecutiveAssistants merges back-to-back assistant messages into one,
+// combining their content and keeping the tool_calls from whichever messages
+// still have them. After stripUnansweredToolCalls removes orphaned tool_calls
+// from earlier assistant messages, the conversation can contain two or more
+// consecutive assistant entries — e.g. an earlier one whose calls were
+// stripped (content only) followed by a later one with live tool_calls.
+//
+// This also handles the IncludeToolCallID=false case where ID-based matching
+// in stripUnansweredToolCalls is a no-op: when two assistants each declare
+// tool_calls with no tool results between them, the first one's calls are
+// inherently orphaned. The merge drops the first's tool_calls and keeps the
+// second's (which still has its results following).
+//
+// Empty assistants (no content AND no tool_calls) are dropped entirely —
+// they carry no information and create role-alternation violations.
+//
+// The function works on a copy; the caller's slice is never mutated.
+func mergeConsecutiveAssistants(converted []map[string]interface{}) []map[string]interface{} {
+	if len(converted) == 0 {
+		return converted
+	}
+
+	result := make([]map[string]interface{}, 0, len(converted))
+
+	for _, entry := range converted {
+		role, _ := entry["role"].(string)
+
+		// If this is an assistant and the previous result entry is also
+		// an assistant, merge into the previous instead of appending.
+		if role == "assistant" && len(result) > 0 {
+			prevRole, _ := result[len(result)-1]["role"].(string)
+			if prevRole == "assistant" {
+				prev := result[len(result)-1]
+				mergeAssistantInto(prev, entry)
+				continue
+			}
+		}
+
+		// Non-assistant, or first message — append a copy.
+		result = append(result, copyMap(entry))
+	}
+
+	// Second pass: drop assistant messages that ended up with no content
+	// and no tool_calls after merging.
+	result = dropEmptyAssistants(result)
+
+	return result
+}
+
+// mergeAssistantInto folds src into dst (both role "assistant"). Content is
+// concatenated with a newline separator (skipping empty/whitespace-only
+// content). When consecutive assistant messages appear, the earlier one's
+// tool_calls are inherently orphaned (no tool results exist between the two
+// assistants), so src's tool_calls always replace dst's. Reasoning fields are
+// kept from whichever side has them, preferring the earlier (original
+// reasoning context).
+func mergeAssistantInto(dst, src map[string]interface{}) {
+	// Merge content.
+	dstContent, _ := dst["content"].(string)
+	srcContent, _ := src["content"].(string)
+	if strings.TrimSpace(srcContent) != "" {
+		if strings.TrimSpace(dstContent) != "" {
+			dst["content"] = dstContent + "\n" + srcContent
+		} else {
+			dst["content"] = srcContent
+		}
+	}
+
+	// Tool calls: the earlier assistant's (dst) are orphaned — no tool
+	// results exist between consecutive assistants. Always replace with
+	// src's if src has any; otherwise strip dst's.
+	srcTCs, srcHas := src["tool_calls"].([]map[string]interface{})
+	if srcHas && len(srcTCs) > 0 {
+		dst["tool_calls"] = srcTCs
+	} else {
+		// Neither side should have orphaned tool_calls after merge.
+		delete(dst, "tool_calls")
+	}
+
+	// Preserve reasoning from src if dst lacks it.
+	for _, key := range []string{"reasoning_content", "reasoning"} {
+		if _, ok := dst[key]; !ok {
+			if v, ok := src[key]; ok {
+				dst[key] = v
+			}
+		}
+	}
+}
+
+// dropEmptyAssistants removes assistant entries that have neither content nor
+// tool_calls after the merge pass. These are purely noise — typically the
+// remnants of an assistant message whose tool_calls were stripped and whose
+// content was empty (a common pattern for Qwen models that emit only "\n\n").
+func dropEmptyAssistants(converted []map[string]interface{}) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(converted))
+	for _, entry := range converted {
+		role, _ := entry["role"].(string)
+		if role == "assistant" {
+			content, _ := entry["content"].(string)
+			tcs, _ := entry["tool_calls"].([]map[string]interface{})
+			if strings.TrimSpace(content) == "" && len(tcs) == 0 {
+				continue
+			}
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+func copyMap(m map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }

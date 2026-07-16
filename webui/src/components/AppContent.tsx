@@ -61,7 +61,9 @@ interface AppContentProps {
   onSidebarToggle: () => void;
   onToggleSidebar: () => void;
   onCloseSidebar: () => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => void;
+  onViewChange: (
+    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
+  ) => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
@@ -242,7 +244,9 @@ const AppContent: React.FC<AppContentProps> = ({
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
   const handlePrimaryViewChange = useCallback(
-    (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => {
+    (
+      view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
+    ) => {
       if (view === 'chat') {
         openWorkspaceBuffer({
           kind: 'chat',

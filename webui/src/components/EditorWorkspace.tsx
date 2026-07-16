@@ -27,7 +27,17 @@ const RouteFallback: React.FC = () => (
 );
 
 export interface EditorWorkspaceProps {
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces';
+  currentView:
+    | 'chat'
+    | 'editor'
+    | 'git'
+    | 'tasks'
+    | 'billing'
+    | 'team'
+    | 'costs'
+    | 'runners'
+    | 'dashboard'
+    | 'workspaces';
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   onCreateChat?: () => Promise<string | null>;
@@ -38,7 +48,9 @@ export interface EditorWorkspaceProps {
   /** Called when a cost session row is clicked to restore that session */
   onSessionRestore?: (sessionId: string) => void;
   /** Called when the user clicks Back from a non-chat view (e.g. costs). */
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => void;
+  onViewChange?: (
+    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
+  ) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which

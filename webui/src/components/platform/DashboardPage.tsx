@@ -41,7 +41,11 @@ const DashboardPage: React.FC = () => {
 
   const fetchDashboard = useCallback(async () => {
     const adapter = getAdapter();
-    if (!adapter) { setError('Not available in local mode'); setLoading(false); return; }
+    if (!adapter) {
+      setError('Not available in local mode');
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -72,20 +76,26 @@ const DashboardPage: React.FC = () => {
     setLoading(false);
   }, [log]);
 
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
 
   const filteredRepos = useMemo(() => {
     if (!searchQuery) return repos;
     const q = searchQuery.toLowerCase();
-    return repos.filter(r => r.full_name?.toLowerCase().includes(q) || r.name?.toLowerCase().includes(q));
+    return repos.filter((r) => r.full_name?.toLowerCase().includes(q) || r.name?.toLowerCase().includes(q));
   }, [repos, searchQuery]);
 
-  const taskPct = usage ? Math.min(100, Math.round((usage.task_credits.used / Math.max(1, usage.task_credits.included)) * 100)) : 0;
+  const taskPct = usage
+    ? Math.min(100, Math.round((usage.task_credits.used / Math.max(1, usage.task_credits.included)) * 100))
+    : 0;
 
   if (loading) {
     return (
       <div className="platform-page">
-        <div className="platform-loading"><div className="platform-spinner" /></div>
+        <div className="platform-loading">
+          <div className="platform-spinner" />
+        </div>
       </div>
     );
   }
@@ -97,20 +107,32 @@ const DashboardPage: React.FC = () => {
         <div className="platform-card dashboard-usage-bar">
           <div className="dashboard-usage-left">
             <Zap size={16} className="dashboard-tier-icon" />
-            <span className="dashboard-tier-label" style={{ textTransform: 'capitalize' }}>{usage.tier}</span>
+            <span className="dashboard-tier-label" style={{ textTransform: 'capitalize' }}>
+              {usage.tier}
+            </span>
           </div>
           <div className="dashboard-usage-right">
             <div className="dashboard-meter">
-              <div className="dashboard-meter-label">{usage.task_credits.used} / {usage.task_credits.included} tasks</div>
+              <div className="dashboard-meter-label">
+                {usage.task_credits.used} / {usage.task_credits.included} tasks
+              </div>
               <div className="dashboard-meter-bar">
                 <div className="dashboard-meter-fill" style={{ width: `${taskPct}%` }} />
               </div>
             </div>
             {usage.llm_spend && (
               <div className="dashboard-meter">
-                <div className="dashboard-meter-label">${(usage.llm_spend.spend_cents / 100).toFixed(2)} / ${(usage.llm_spend.budget_cents / 100).toFixed(2)} LLM</div>
+                <div className="dashboard-meter-label">
+                  ${(usage.llm_spend.spend_cents / 100).toFixed(2)} / ${(usage.llm_spend.budget_cents / 100).toFixed(2)}{' '}
+                  LLM
+                </div>
                 <div className="dashboard-meter-bar">
-                  <div className="dashboard-meter-fill" style={{ width: `${Math.min(100, (usage.llm_spend.spend_cents / Math.max(1, usage.llm_spend.budget_cents)) * 100)}%` }} />
+                  <div
+                    className="dashboard-meter-fill"
+                    style={{
+                      width: `${Math.min(100, (usage.llm_spend.spend_cents / Math.max(1, usage.llm_spend.budget_cents)) * 100)}%`,
+                    }}
+                  />
                 </div>
               </div>
             )}
@@ -129,7 +151,7 @@ const DashboardPage: React.FC = () => {
                 type="text"
                 placeholder="Search repos…"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="dashboard-search-input"
               />
             </div>
@@ -138,11 +160,13 @@ const DashboardPage: React.FC = () => {
             <p className="platform-empty-text">No repos found. Connect your GitHub account.</p>
           ) : (
             <div className="dashboard-repo-list">
-              {filteredRepos.map(repo => (
+              {filteredRepos.map((repo) => (
                 <div key={repo.id} className="dashboard-repo-item">
                   <GitBranch size={14} className="dashboard-repo-icon" />
                   <div className="dashboard-repo-info">
-                    <a href={`/webui/?repo=${encodeURIComponent(repo.html_url)}`} className="dashboard-repo-name">{repo.full_name}</a>
+                    <a href={`/webui/?repo=${encodeURIComponent(repo.html_url)}`} className="dashboard-repo-name">
+                      {repo.full_name}
+                    </a>
                     {repo.description && <p className="dashboard-repo-desc">{repo.description}</p>}
                     {repo.language && <span className="dashboard-repo-lang">{repo.language}</span>}
                   </div>
@@ -161,7 +185,7 @@ const DashboardPage: React.FC = () => {
             <p className="platform-empty-text">No tasks yet. Run an agent task from a repo.</p>
           ) : (
             <div className="dashboard-task-list">
-              {tasks.map(task => (
+              {tasks.map((task) => (
                 <div key={task.task_id} className="dashboard-task-item">
                   <div className={`dashboard-task-status status-dot-${task.status}`} />
                   <div className="dashboard-task-info">

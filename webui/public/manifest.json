@@ -1,13 +1,14 @@
 {
   "name": "Sprout Foundry",
   "short_name": "Sprout",
-  "description": "Agentic code editing and light IDE tool",
-  "start_url": ".",
+  "description": "AI agents that write, test, and ship code",
+  "start_url": "/webui/",
   "display": "standalone",
-  "background_color": "#1a1a2a",
-  "theme_color": "#14b8c8",
+  "background_color": "#282c34",
+  "theme_color": "#61afef",
   "orientation": "any",
-  "scope": ".",
+  "scope": "/webui/",
+  "id": "/webui/",
   "icons": [
     {
       "src": "icon-192.png",

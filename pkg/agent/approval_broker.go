@@ -64,9 +64,19 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 							)
 					case configuration.CommandPolicyAllow:
 						// Auto-approve: skip classifier, risk profile, and interactive prompt.
-						// Note: Critical-tier hard blocks are NOT overridden — the caller
-						// (ResolveToolRisk) would have already flagged IsHardBlock=true,
-						// and the Critical check below catches it.
+						// Critical-tier hard blocks can never be overridden by user policy.
+						if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
+							a.logSecurityDecision(toolName, args, assessment, "blocked")
+							return BrokerDecision{
+								Approved:   false,
+								Decision:   security.ApprovalDeny,
+								Surface:    "command-policy",
+								Assessment: assessment,
+							}, agenterrors.NewSecurityErrorWithAssessment(
+								fmt.Sprintf("critical operation cannot be overridden by allow policy: %s", matchedPattern),
+								assessment.Explain(), nil,
+							)
+						}
 						return BrokerDecision{
 								Approved:   true,
 								Decision:   security.ApprovalApproveOnce,

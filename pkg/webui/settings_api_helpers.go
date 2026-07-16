@@ -152,6 +152,7 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"ea_mode":                 cfg.EAMode,
 		"subagent_max_depth":      cfg.SubagentMaxDepth,
 		"approved_shell_commands": cfg.ApprovedShellCommands,
+		"command_policies":        cfg.CommandPolicies,
 		"language_servers":        cfg.LanguageServers,
 		"security_policy":         cfg.SecurityPolicy,
 		"persistent_context":      cfg.PersistentContext,

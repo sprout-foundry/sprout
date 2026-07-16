@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -501,122 +500,186 @@ func TestRunAutomateSecurityClassification(t *testing.T) {
 	})
 }
 
-// TestIsSafeRmRfPrefix_NestedPaths tests that isSafeRmRfPrefix correctly
-// classifies nested build-artifact paths as safe (SP-122 Phase 1).
+// TestNestedPathRmRfSafety tests that rm -rf commands targeting nested paths
+// containing known safe directories (like dist/, build/, node_modules/) are
+// correctly classified as SAFE (not DANGEROUS).
 //
-// The core improvement: a path like "internal/api/webui/dist/sprout-webui"
-// contains the segment "dist" (a known build artifact), so it's safe to rm -rf.
-// Paths without a build-artifact segment (e.g., "internal/api/") stay dangerous.
-func TestIsSafeRmRfPrefix_NestedPaths(t *testing.T) {
-	// SAFE: paths containing a known build-artifact segment
-	safeCases := []string{
-		// Nested paths with build-artifact segments
-		"rm -rf internal/api/webui/dist/sprout-webui",
-		"rm -rf platform/webui/dist/",
-		"rm -rf services/api/build/cache",
-		"rm -rf packages/foo/node_modules/.cache",
-		"rm -rf apps/backend/target/debug",
-		"rm -rf lib/__pycache__/pytest_cache",
-		"rm -rf frontend/.next/server",
-		"rm -rf monorepo/.turbo/cache",
-		"rm -rf site/.output/public",
-		"rm -rf blog/.svelte-kit/generated",
-		"rm -rf pkg/.parcel-cache",
-		"rm -rf web/.nuxt/dist",
-		"rm -rf docs/.astro",
-		"rm -rf tools/.gradle/wrapper",
-		"rm -rf infra/.terraform/modules",
-		"rm -rf deploy/.docker/data",
-		// rm -fr variant (reversed flag order)
-		"rm -fr internal/api/dist/sprout-webui",
-		"rm -fr build/cache",
-		// Multiple targets where one is a build artifact
-		"rm -rf dist/ build/",
-		// /tmp paths are safe regardless
-		"rm -rf /tmp/build/cache",
-		// Existing top-level entries still match via map
-		"rm -rf node_modules/",
-		"rm -rf build/",
-		"rm -rf __pycache__/",
-	}
-
-	for _, cmd := range safeCases {
-		t.Run("safe: "+cmd, func(t *testing.T) {
-			cmdLower := strings.ToLower(cmd)
-			if !isSafeRmRfPrefix(cmdLower) {
-				t.Errorf("isSafeRmRfPrefix(%q) = false, want true", cmd)
-			}
-		})
-	}
-
-	// DANGEROUS: paths without a build-artifact segment, or unsafe patterns
-	dangerousCases := []string{
-		// Root, home, current dir
-		"rm -rf /",
-		"rm -rf .",
-		"rm -rf ~",
-		// Source code directories (not build artifacts)
-		"rm -rf src/",
-		"rm -rf internal/",
-		"rm -rf internal/api/",
-		"rm -rf lib/",
-		"rm -rf pkg/",
-		"rm -rf app/",
-		"rm -rf tests/",
-		// System directories
-		"rm -rf /etc/dist/",   // absolute non-tmp path — must NOT match
-		"rm -rf /var/build/",  // absolute non-tmp path
-		"rm -rf /usr/build/",  // absolute non-tmp path
-		// Path traversal — must NEVER be safe
-		"rm -rf ../something/dist/",
-		"rm -rf ../../node_modules/",
-		"rm -rf ../dist",
-		// Bare names without a path separator (consistent with map design)
-		"rm -rf build",         // no trailing "/" or " "
-		"rm -rf node_modules",  // no trailing "/" or " "
-		"rm -rf dist",          // no trailing "/" or " "
-		// Paths with build-artifact-like substrings but not as segments
-		"rm -rf mybuild/",       // "mybuild" ≠ "build"
-		"rm -rf distribution/",  // "distribution" ≠ "dist"
-		// Non-rm commands
-		"ls -la",
-		"echo hello",
-	}
-
-	for _, cmd := range dangerousCases {
-		t.Run("dangerous: "+cmd, func(t *testing.T) {
-			cmdLower := strings.ToLower(cmd)
-			if isSafeRmRfPrefix(cmdLower) {
-				t.Errorf("isSafeRmRfPrefix(%q) = true, want false", cmd)
-			}
-		})
-	}
-}
-
-// TestIsSafeRmRfPrefix_NestedPathsClassifiedSafe verifies the end-to-end
-// classification through classifyShellCommand for the SP-122 acceptance criteria.
-func TestIsSafeRmRfPrefix_NestedPathsClassifiedSafe(t *testing.T) {
+// This is Phase 1 of SP-122: expanding safeRmRfPrefixes matching to cover
+// nested paths like "internal/api/webui/dist/sprout-webui".
+func TestNestedPathRmRfSafety(t *testing.T) {
 	tests := []struct {
 		name     string
 		command  string
 		wantRisk SecurityRisk
 	}{
-		// Acceptance criteria from TODO.md
-		{"nested dist path", "rm -rf internal/api/webui/dist/sprout-webui", SecuritySafe},
-		{"nested build path", "rm -rf services/api/build/cache", SecuritySafe},
-		// Must stay dangerous
-		{"internal dir", "rm -rf internal/api/", SecurityDangerous},
-		{"src dir", "rm -rf src/", SecurityDangerous},
-		// Bare build without separator stays dangerous (existing test behavior)
-		{"bare build", "rm -rf build", SecurityDangerous},
+		// Positive cases: nested paths containing safe components should be SAFE
+		// Note: The safe component must be followed by more path segments.
+		// "rm -rf dist/" is SAFE (trailing /), but "rm -rf dist" is DANGEROUS.
+		{"nested dist", "rm -rf internal/api/webui/dist/sprout-webui", SecuritySafe},
+		{"nested build with subpath", "rm -rf ./build/something", SecuritySafe},
+		{"nested node_modules with subpath", "rm -rf ./node_modules/something", SecuritySafe},
+		{"nested target with subpath", "rm -rf ./target/something", SecuritySafe},
+		{"nested out with subpath", "rm -rf ./out/something", SecuritySafe},
+		{"nested with leading ./", "rm -rf ./dist/something", SecuritySafe},
+		{"deep nested dist", "rm -rf ./internal/api/webui/dist/sprout-webui", SecuritySafe},
+		{"deep nested platform dist", "rm -rf ./platform/webui/dist/sprout-webui", SecuritySafe},
+		{"deep nested build", "rm -rf ./src/components/build/artifact", SecuritySafe},
+		{"nested vendor", "rm -rf ./vendor/package/dist", SecuritySafe},
+		{"nested .cache", "rm -rf ./src/.cache/something", SecuritySafe},
+		{"nested .next", "rm -rf ./src/.next/cache", SecuritySafe},
+		{"nested .turbo", "rm -rf ./src/.turbo/cache", SecuritySafe},
+		{"nested .nuxt", "rm -rf ./src/.nuxt/dist", SecuritySafe},
+		{"rm -fr variant nested", "rm -fr ./dist/something", SecuritySafe},
+
+		// Negative cases: paths WITHOUT safe components should still be DANGEROUS
+		{"no safe component", "rm -rf internal/api/", SecurityDangerous},
+		{"path traversal", "rm -rf ../sibling-project", SecurityDangerous},
+		{"path traversal deep", "rm -rf ../../other-project/src", SecurityDangerous},
+		{"absolute path", "rm -rf /tmp/something", SecurityDangerous},
+		{"absolute root", "rm -rf /", SecurityDangerous},
+		{"home directory", "rm -rf ~", SecurityDangerous},
+		{"tilde expansion", "rm -rf ~/.config", SecurityDangerous}, // tilde expands to home dir
+		{"src directory", "rm -rf src/", SecurityDangerous},       // src is NOT in safeRmRfComponents
+		{"pkg directory", "rm -rf pkg/", SecurityDangerous},       // pkg is NOT in safeRmRfComponents
+		{"lib directory", "rm -rf lib/", SecurityDangerous},       // lib is NOT in safeRmRfComponents
+
+		// Cases with NO trailing slash or space (backward compatibility: should be DANGEROUS)
+		{"dist without trailing /", "rm -rf dist", SecurityDangerous},
+		{"build without trailing /", "rm -rf build", SecurityDangerous},
+		{"node_modules without trailing /", "rm -rf node_modules", SecurityDangerous},
+		{"vendor without trailing /", "rm -rf vendor", SecurityDangerous},
+
+		// Special cases
+		{"no target at all", "rm -rf", SecurityCaution},        // rm -rf with no args is CAUTION, not DANGEROUS
+		{"variable expansion home", "rm -rf $HOME/.config", SecurityDangerous}, // Variable expansion in path → DANGEROUS
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
 			if result.Risk != tt.wantRisk {
-				t.Errorf("classifyShellCommand(%q).Risk = %v, want %v (reasoning: %s)",
+				t.Errorf("classifyShellCommand(%q).Risk = %s, want %s (reasoning: %s)",
 					tt.command, result.Risk, tt.wantRisk, result.Reasoning)
+			}
+		})
+	}
+}
+
+// TestIsSafeRmRfComponent verifies the helper function that checks path components.
+func TestIsSafeRmRfComponent(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   bool
+	}{
+		// Positive: paths containing safe components (with more path after them)
+		{"dist with more after", "dist/sprout-webui", true},
+		{"build with more after", "build/something", true},
+		{"node_modules with more after", "node_modules/package", true},
+		{"nested dist", "internal/api/webui/dist/sprout-webui", true},
+		{"leading ./ dist", "./dist/something", true},
+		{"multiple slashes", "src///dist///something", true},
+		{".cache with more after", ".cache/something", true},
+		{"__pycache__ with more after", "__pycache__/module.pyc", true},
+		{"target with more after", "target/debug/binary", true},
+
+		// Negative: paths without safe components
+		{"empty", "", false},
+		{"single dist (no trailing)", "dist", false},
+		{"single node_modules (no trailing)", "node_modules", false},
+		{"no safe component", "internal/api/", false},
+		{"src only", "src/", false},
+		{"pkg only", "pkg/", false},
+		{"lib only", "lib/", false},
+		{"relative parent traversal", "../sibling", false},
+		{"deep parent traversal", "../../other", false},
+		{"absolute path", "/tmp/something", false},
+		{"absolute root", "/", false},
+		{"just .", ".", false},
+		{"just ..", "..", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isSafeRmRfComponent(tt.target)
+			if got != tt.want {
+				t.Errorf("isSafeRmRfComponent(%q) = %v, want %v", tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsSafeRmRfPrefixBackwardCompatibility ensures the existing exact-prefix
+// matching behavior is preserved after the nested path component addition.
+func TestIsSafeRmRfPrefixBackwardCompatibility(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		// Exact prefix matches (existing behavior)
+		{"rm -rf node_modules/", "rm -rf node_modules/", true},
+		{"rm -rf node_modules with space", "rm -rf node_modules package", true},
+		{"rm -rf dist/", "rm -rf dist/", true},
+		{"rm -rf dist with space", "rm -rf dist package", true},
+		{"rm -rf build/", "rm -rf build/", true},
+		{"rm -rf vendor/", "rm -rf vendor/", true},
+		{"rm -rf target/", "rm -rf target/", true},
+		{"rm -rf .cache/", "rm -rf .cache/", true},
+		{"rm -rf .next/", "rm -rf .next/", true},
+
+		// Non-matching commands (should still not match)
+		{"rm -rf no-suffix", "rm -rf node_modules", false}, // Note: no trailing / or space
+		{"rm -rf arbitrary", "rm -rf arbitrary", false},
+		{"rm -rf src/", "rm -rf src/", false},
+		{"echo", "echo hello", false},
+		{"ls", "ls -la", false},
+
+		// Path traversal escapes — MUST be false even when the prefix matches.
+		// Without the ..-rejection guard, "rm -rf dist/../etc" would have
+		// matched the "rm -rf dist/" prefix and silently bypassed the
+		// classifier.
+		{"traversal in safe prefix", "rm -rf dist/../etc", false},
+		{"traversal deep in safe prefix", "rm -rf node_modules/../../etc", false},
+		{"traversal in nested safe", "rm -rf internal/api/webui/dist/../etc", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isSafeRmRfPrefix(tt.command)
+			if got != tt.want {
+				t.Errorf("isSafeRmRfPrefix(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSafeRmRfTraversalEscape is the security-focused regression suite for
+// SP-122 Phase 1. It covers all path-traversal patterns that previously
+// slipped through the prefix whitelist and would have classified dangerous
+// rm -rf commands as SAFE.
+//
+// Every case here MUST return DANGEROUS — a regression to SAFE for any of
+// these indicates a security bypass in the safe-prefix matcher.
+func TestSafeRmRfTraversalEscape(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+	}{
+		// Embedded traversal that escapes a whitelisted safe dir
+		{"traversal in safe dir", "rm -rf dist/../etc"},
+		{"traversal deep in safe dir", "rm -rf internal/api/webui/dist/../etc"},
+		{"traversal in node_modules", "rm -rf node_modules/../../etc"},
+		{"traversal with multiple hops", "rm -rf build/../../etc/passwd"},
+		{"traversal at root", "rm -rf ../sibling-project"},
+		{"traversal deep", "rm -rf ../../other-project/src"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.Risk != SecurityDangerous {
+				t.Errorf("classifyShellCommand(%q) = %s, want DANGEROUS (path traversal bypass!)",
+					tt.command, result.Risk)
 			}
 		})
 	}

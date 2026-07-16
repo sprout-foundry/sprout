@@ -16,6 +16,12 @@ import (
 func withShellSkipDirsFile(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
+	// SPROUT_CONFIG (canonical) + LEDIT_CONFIG (legacy) take precedence
+	// over $HOME in envutil.GetConfigDir — without these, the test's
+	// pre-populated file in tmpDir is bypassed and saveAutoSkipDirsFor
+	// writes to the test-runner's real config dir instead.
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	return tmpDir
@@ -26,7 +32,9 @@ func withShellSkipDirsFile(t *testing.T) string {
 // file doesn't exist.
 func readShellSkipDirsFile(t *testing.T, tmpDir string) shellSkipDirsFileSchema {
 	t.Helper()
-	path := filepath.Join(tmpDir, ".config", "sprout", shellSkipDirsFilename)
+	// SPROUT_CONFIG takes precedence over HOME in envutil.GetConfigDir,
+	// so the persisted file lives directly under tmpDir.
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return shellSkipDirsFileSchema{
@@ -66,7 +74,7 @@ func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 		schema.LastUsed[root] = baseTime + int64(i*100)
 	}
 	// Write initial state.
-	path := filepath.Join(tmpDir, ".config", "sprout", shellSkipDirsFilename)
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +143,7 @@ func TestShellSkipDirs_HandlesMissingLastUsed(t *testing.T) {
 	tmpDir := withShellSkipDirsFile(t)
 
 	// Write a file with only Workspaces (old format).
-	path := filepath.Join(tmpDir, ".config", "sprout", shellSkipDirsFilename)
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +196,7 @@ func TestShellSkipDirs_EmptyWorkspaceNoOp(t *testing.T) {
 	if err := saveAutoSkipDirsFor("/ws", map[string]bool{}); err != nil {
 		t.Errorf("save with empty dirs: %v", err)
 	}
-	path := filepath.Join(tmpDir, ".config", "sprout", shellSkipDirsFilename)
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
 	if _, err := os.Stat(path); err == nil {
 		t.Errorf("file should not exist for no-op saves")
 	}
@@ -201,7 +209,7 @@ func TestShellSkipDirs_LoadRecordsWorkspaceForBump(t *testing.T) {
 	root := filepath.Join(tmpDir, "ws", "loaded")
 
 	// Pre-populate with an old LastUsed.
-	path := filepath.Join(tmpDir, ".config", "sprout", shellSkipDirsFilename)
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}

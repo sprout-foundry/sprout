@@ -40,10 +40,10 @@ const (
 // The endpoint never reveals session IDs, client IDs, or chat IDs — those
 // are debugging breadcrumbs we don't expose via HTTP.
 type wsMetricsResponse struct {
-	Mode                  wsMode        `json:"mode"`
-	TotalConnections      int           `json:"total_connections"`
-	UsersWithConnections  int           `json:"users_with_connections"`
-	MaxConnectionsPerUser int           `json:"max_connections_per_user"`
+	Mode                  wsMode         `json:"mode"`
+	TotalConnections      int            `json:"total_connections"`
+	UsersWithConnections  int            `json:"users_with_connections"`
+	MaxConnectionsPerUser int            `json:"max_connections_per_user"`
 	PerUser               []userConnInfo `json:"per_user,omitempty"`
 }
 

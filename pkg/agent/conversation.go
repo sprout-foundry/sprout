@@ -233,24 +233,26 @@ func (a *Agent) GetOptimizationStats() map[string]interface{} {
 	}
 }
 
-// maxTotalImagePayloadBytes is the maximum combined size of all images sent in a
-// single query (20 MB).  Individual images are capped by console.MaxPastedImageSize.
-const maxTotalImagePayloadBytes = 20 * 1024 * 1024
+// maxTotalImagePayloadBytesDefault is the fallback maximum combined size of
+// all images sent in a single query (20 MB) when the provider's
+// VisionCapabilities are unavailable.
+const maxTotalImagePayloadBytesDefault = 20 * 1024 * 1024
 
 // pastedImagePlaceholderRe matches the placeholder inserted by the console
 // when a user pastes an image.  ONLY this pattern is considered safe to load
 // and send as multimodal content — arbitrary file paths in user text are ignored.
 var pastedImagePlaceholderRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
 
-// visionEmbedMaxEdgePx caps the longest edge of embedded images for multimodal
-// LLM input.  Anthropic recommends ≤1568px for the best cost/quality trade-off.
-const visionEmbedMaxEdgePx = 1568
+// visionEmbedMaxEdgePxDefault is the fallback longest-edge cap for embedded
+// images (1568px).  Anthropic recommends ≤1568px for the best cost/quality
+// trade-off.  Used when the provider's VisionCapabilities are unavailable.
+const visionEmbedMaxEdgePxDefault = 1568
 
 // resizeImageForVisionEmbed caps the long edge of the decoded image at
-// visionEmbedMaxEdgePx using bilinear resampling, re-encoding as JPEG
-// at quality 85. Returns the input unchanged if the long edge is
-// already within the cap or the bytes cannot be decoded by stdlib.
-func resizeImageForVisionEmbed(data []byte) ([]byte, error) {
+// maxEdgePx using bilinear resampling, re-encoding as JPEG at quality 85.
+// Returns the input unchanged if the long edge is already within the cap or
+// the bytes cannot be decoded by stdlib.
+func resizeImageForVisionEmbed(data []byte, maxEdgePx int) ([]byte, error) {
 	// Fast path: check config without full decode.
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
@@ -263,7 +265,7 @@ func resizeImageForVisionEmbed(data []byte) ([]byte, error) {
 	if cfg.Height > longEdge {
 		longEdge = cfg.Height
 	}
-	if longEdge <= visionEmbedMaxEdgePx {
+	if longEdge <= maxEdgePx {
 		return data, nil
 	}
 
@@ -274,7 +276,7 @@ func resizeImageForVisionEmbed(data []byte) ([]byte, error) {
 	}
 
 	// Calculate new dimensions preserving aspect ratio.
-	scale := float64(visionEmbedMaxEdgePx) / float64(longEdge)
+	scale := float64(maxEdgePx) / float64(longEdge)
 	newW := int(float64(cfg.Width)*scale + 0.5)
 	newH := int(float64(cfg.Height)*scale + 0.5)
 	if newW < 1 {
@@ -402,8 +404,27 @@ func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) stri
 
 // processImagesAsMultimodal extracts pasted-image references from the query,
 // reads each file, and returns the image data for multimodal embedding.
+// SP-103-D3: uses the provider's VisionCapabilities to determine resize
+// dimensions, per-image caps, and total payload limits.
 func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string, error) {
 	cwd := a.currentWorkspaceRoot()
+
+	// SP-103-D3: Query the provider's VisionCapabilities for per-provider
+	// limits. Fall back to safe defaults when the client is unavailable or
+	// returns zero values.
+	caps := api.VisionCapabilitiesDefault()
+	if c := a.getClient(); c != nil {
+		caps = api.VisionCapabilitiesOrDefault(c.VisionCapabilities())
+	}
+	maxEdgePx := caps.MaxImageDimension
+	maxImageBytes := caps.MaxImageBytes
+	maxImageCount := caps.MaxImageCount
+	// Total payload cap: maxImageBytes * maxImageCount gives a provider-aware
+	// upper bound. Clamp to a reasonable minimum (20 MB) to avoid tiny caps.
+	maxTotalImagePayloadBytes := maxImageBytes * maxImageCount
+	if maxTotalImagePayloadBytes < maxTotalImagePayloadBytesDefault {
+		maxTotalImagePayloadBytes = maxTotalImagePayloadBytesDefault
+	}
 
 	var images []api.ImageData
 	totalBytes := 0
@@ -430,6 +451,14 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		}
 		seen[filePath] = struct{}{}
 		placeholders = append(placeholders, placeholderInfo{fullMatch: fullMatch, filePath: filePath})
+	}
+
+	// SP-103-D3: Warn and truncate if the query has more images than the
+	// provider supports.
+	if len(placeholders) > maxImageCount {
+		a.Logger().Debug("[WARN] Query has %d images, but provider %s supports at most %d; truncating\n",
+			len(placeholders), a.getClientType(), maxImageCount)
+		placeholders = placeholders[:maxImageCount]
 	}
 
 	// Rewrite the query once, replacing every occurrence of each placeholder.
@@ -469,16 +498,22 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 			continue
 		}
 
-		imgData, imgSize, err := readImageAsImageData(filePath)
+		// SP-103-D3: pass provider-aware caps to readImageAsImageData.
+		imgData, imgSize, err := readImageAsImageData(filePath, maxEdgePx)
 		if err != nil {
 			a.Logger().Debug("[WARN] Skipping image %s: %v\n", filePath, err)
 			continue
 		}
 
-		// Enforce per-image size cap (should already be enforced by console, but be safe).
-		if imgSize > console.MaxPastedImageSize {
+		// Enforce per-image size cap: use the provider's MaxImageBytes when
+		// available, otherwise fall back to console.MaxPastedImageSize.
+		perImageCap := maxImageBytes
+		if perImageCap <= 0 {
+			perImageCap = console.MaxPastedImageSize
+		}
+		if imgSize > perImageCap {
 			a.Logger().Debug("[WARN] Skipping image %s: exceeds per-image size cap (%d > %d)\n",
-				filePath, imgSize, console.MaxPastedImageSize)
+				filePath, imgSize, perImageCap)
 			continue
 		}
 
@@ -537,7 +572,10 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 // the MIME type from magic bytes, optimizes the image for vision models, and
 // returns base64-encoded ImageData with the byte length of the (possibly
 // optimized) image data.
-func readImageAsImageData(filePath string) (api.ImageData, int, error) {
+//
+// maxEdgePx is the longest-side cap for vision embedding (SP-103-D3).
+// Images larger than this are resized before encoding.
+func readImageAsImageData(filePath string, maxEdgePx int) (api.ImageData, int, error) {
 	// Check size before reading to avoid loading huge files into memory.
 	stat, err := os.Stat(filePath)
 	if err != nil {
@@ -565,16 +603,16 @@ func readImageAsImageData(filePath string) (api.ImageData, int, error) {
 		data = optimized
 	}
 
-	// Pre-resize for vision embedding: cap long edge at 1568px using
+	// Pre-resize for vision embedding: cap long edge at maxEdgePx using
 	// bilinear resampling for better visual quality. Runs after
 	// OptimizeImageData so we don't double-resize small images.
 	//
 	// NOTE: OptimizeImageData already performs a 4096px nearest-neighbor
 	// resize for oversized images. For very large inputs (>4096px on the
 	// long edge), the chained steps (nearest-neighbor at 4096px → bilinear
-	// at 1568px) may compound artifacts. This is a known limitation; future
-	// work could unify both passes into a single bilinear resize.
-	resized, resizeErr := resizeImageForVisionEmbed(data)
+	// at maxEdgePx) may compound artifacts. This is a known limitation;
+	// future work could unify both passes into a single bilinear resize.
+	resized, resizeErr := resizeImageForVisionEmbed(data, maxEdgePx)
 	if resizeErr == nil && len(resized) > 0 {
 		// Check if the image was actually resized (different bytes).
 		// If the image was already small enough, resizeImageForVisionEmbed

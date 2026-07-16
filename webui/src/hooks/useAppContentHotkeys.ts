@@ -18,7 +18,9 @@ export interface UseAppContentHotkeysParams {
     isPinned?: boolean;
     metadata?: Record<string, unknown>;
   }) => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces') => void;
+  onViewChange: (
+    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
+  ) => void;
   handlePrimaryViewChange: (view: 'chat' | 'editor' | 'git') => void;
   closeBuffer: (bufferId: string) => void;
   setCommandPaletteMode: (mode: 'all' | 'files' | 'symbols') => void;

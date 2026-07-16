@@ -36,7 +36,7 @@ func TestTokenTrackingAccuracy(t *testing.T) {
 	}
 
 	// TrackMetricsFromResponse should work correctly
-	agent.TrackMetricsFromResponse(1000, 200, 1200, 0.01, 500, 0)
+	agent.TrackMetricsFromResponse(1000, 200, 1200, 0.01, 500, 0, 0)
 	if agent.state.GetTotalTokens() != 88400 { // 87200 + 1200
 		t.Errorf("Expected totalTokens to be 88400, got %d", agent.state.GetTotalTokens())
 	}

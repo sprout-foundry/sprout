@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/service"
 )
 
@@ -162,10 +163,9 @@ func TestSanitizeArgForPreview(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := sanitizeArgForPreview(tt.in); got != tt.want {
-				t.Errorf("sanitizeArgForPreview(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
+					if got := cliui.SanitizeArgForPreview(tt.in); got != tt.want {
+			t.Errorf("cliui.SanitizeArgForPreview(%q) = %q, want %q", tt.in, got, tt.want)
+		}})
 	}
 }
 
@@ -362,8 +362,8 @@ func TestNoteFirstStreamChunk(t *testing.T) {
 	t.Parallel()
 	// These functions use package-level atomic state.
 	// Verify they don't panic.
-	noteFirstStreamChunk()
-	resetTurnFirstToken()
+	cliui.NoteFirstStreamChunk()
+	cliui.ResetTurnFirstToken()
 }
 
 // =============================================================================
@@ -373,9 +373,9 @@ func TestNoteFirstStreamChunk(t *testing.T) {
 
 func TestCompactCost_ZeroValue(t *testing.T) {
 	t.Parallel()
-	got := compactCost(0)
-	// compactCost uses "$0.0000" for values < 0.01 (including 0)
+	got := cliui.CompactCost(0)
+	// CompactCost uses "$0.0000" for values < 0.01 (including 0)
 	if got != "$0.0000" {
-		t.Errorf("compactCost(0) = %q, want %q", got, "$0.0000")
+		t.Errorf("cliui.CompactCost(0) = %q, want %q", got, "$0.0000")
 	}
 }

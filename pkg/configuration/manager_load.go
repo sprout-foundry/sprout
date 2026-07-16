@@ -128,6 +128,9 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 			len(discovered), strings.Join(discovered, ", "))
 	}
 
+	// Migrate legacy approved_shell_commands to unified command_policies
+	MigrateCommandPolicies(result)
+
 	return result, nil
 }
 

@@ -174,7 +174,7 @@ func TestSecurityCautionVsDangerousBoundary(t *testing.T) {
 	}{
 		{"rm single file: caution", "rm test.txt", tools.SecurityCaution, false},
 		{"rm -rf arbitrary dir: dangerous", "rm -rf auth-gateway", tools.SecurityDangerous, true},
-		{"rm -rf node_modules: in safe list, classified as caution via rm pattern", "rm -rf node_modules/", tools.SecurityCaution, false},
+		{"rm -rf node_modules: in safe list, classified as safe", "rm -rf node_modules/", tools.SecuritySafe, false},
 		{"rm -rf node_modules no slash: not in safe list, classified as dangerous", "rm -rf node_modules", tools.SecurityDangerous, true},
 		{"rm -rf src: dangerous source destruction", "rm -rf src/", tools.SecurityDangerous, true},
 		{"rm -rf /: critical hard block", "rm -rf /", tools.SecurityDangerous, true},

@@ -6,9 +6,10 @@
 //
 // Classification is driven by the error category:
 //
+//   - SecurityError       → Escalate (ask user/LLM)
+//   - PermissionError     → Fail (approval denied/timeout — not retryable)
 //   - TransientError      → Retry (backoff)
 //   - RateLimitError      → Retry (longer backoff)
-//   - SecurityError       → Escalate (ask user/LLM)
 //   - InvalidInputError   → Fail (input must be fixed)
 //   - ContextError        → Fail (context overflow, needs compaction)
 //   - PermanentError      → Fail (non-recoverable)
@@ -55,6 +56,7 @@ func (a RetryAction) String() string {
 //
 // Classification rules (checked in priority order):
 //   - SecurityError → ActionEscalate (ask user/LLM)
+//   - PermissionError → ActionFail (approval denied/timeout — not retryable)
 //   - TransientError → ActionRetry (with backoff)
 //   - RateLimitError → ActionRetry (with longer backoff)
 //   - InvalidInputError → ActionFail (fix the input)
@@ -73,6 +75,9 @@ func ClassifyError(err error) RetryAction {
 	// because they need human/LLM review before the system proceeds.
 	if agenterrors.IsSecurity(err) {
 		return ActionEscalate
+	}
+	if agenterrors.IsPermission(err) {
+		return ActionFail
 	}
 	if agenterrors.IsTransient(err) {
 		return ActionRetry

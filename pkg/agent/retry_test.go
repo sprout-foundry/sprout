@@ -47,6 +47,14 @@ func TestClassifyError_SecurityError(t *testing.T) {
 	}
 }
 
+func TestClassifyError_PermissionError(t *testing.T) {
+	err := agenterrors.NewPermission("shell_command rejected (timed_out): approval timed out", nil)
+	action := ClassifyError(err)
+	if action != ActionFail {
+		t.Errorf("expected ActionFail for PermissionError, got %s", action)
+	}
+}
+
 func TestClassifyError_InvalidInputError(t *testing.T) {
 	err := agenterrors.NewInvalidInputError("bad argument", nil)
 	action := ClassifyError(err)
@@ -170,6 +178,16 @@ func TestClassifyError_TableDriven(t *testing.T) {
 			name:     "security error",
 			err:      agenterrors.NewSecurityError("blocked command", nil),
 			expected: ActionEscalate,
+		},
+		{
+			name:     "permission error (TypedError)",
+			err:      agenterrors.NewPermission("approval timed out", nil),
+			expected: ActionFail,
+		},
+		{
+			name:     "wrapped permission error",
+			err:      fmt.Errorf("layer: %w", agenterrors.NewPermission("rejected", nil)),
+			expected: ActionFail,
 		},
 		{
 			name:     "invalid input error",

@@ -19,29 +19,29 @@ func TestLookupKnownProvider_CustomProvider(t *testing.T) {
 		t.Fatalf("GetProvidersDir: %v", err)
 	}
 	cfg := `{
-  "name": "ai-worker",
+  "name": "unit-test-fixture-prov",
   "endpoint": "http://192.168.1.134:8033/v1/chat/completions",
   "model_name": "qwen3.6-27b",
   "context_size": 200000,
   "requires_api_key": true,
-  "env_var": "AI_WORKER_API_KEY"
+  "env_var": "UNIT_TEST_FIXTURE_API_KEY"
 }`
-	if err := os.WriteFile(filepath.Join(providersDir, "ai-worker.json"), []byte(cfg), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(providersDir, "unit-test-fixture-prov.json"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("write provider: %v", err)
 	}
 
-	info, ok := LookupKnownProvider("ai-worker")
+	info, ok := LookupKnownProvider("unit-test-fixture-prov")
 	if !ok {
 		t.Fatal("expected LookupKnownProvider to find the custom provider")
 	}
 	if info.Source != "custom" {
 		t.Errorf("Source = %q, want %q", info.Source, "custom")
 	}
-	if info.Name != "ai-worker" {
-		t.Errorf("Name = %q, want %q", info.Name, "ai-worker")
+	if info.Name != "unit-test-fixture-prov" {
+		t.Errorf("Name = %q, want %q", info.Name, "unit-test-fixture-prov")
 	}
-	if info.EnvVar != "AI_WORKER_API_KEY" {
-		t.Errorf("EnvVar = %q, want %q", info.EnvVar, "AI_WORKER_API_KEY")
+	if info.EnvVar != "UNIT_TEST_FIXTURE_API_KEY" {
+		t.Errorf("EnvVar = %q, want %q", info.EnvVar, "UNIT_TEST_FIXTURE_API_KEY")
 	}
 	if !info.RequiresAPIKey {
 		t.Error("RequiresAPIKey = false, want true")
@@ -66,22 +66,22 @@ func TestLookupKnownProvider_CanonicalizesName(t *testing.T) {
 		t.Fatalf("GetProvidersDir: %v", err)
 	}
 	cfg := `{
-  "name": "ai-worker",
+  "name": "unit-test-canon-prov",
   "endpoint": "http://example.com/v1",
-  "env_var": "AI_WORKER_API_KEY",
+  "env_var": "UNIT_TEST_CANON_API_KEY",
   "requires_api_key": true
 }`
-	if err := os.WriteFile(filepath.Join(providersDir, "ai-worker.json"), []byte(cfg), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(providersDir, "unit-test-canon-prov.json"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("write provider: %v", err)
 	}
 
 	// Mixed case should still resolve to the lowercase stored name.
-	info, ok := LookupKnownProvider("AI-Worker")
+	info, ok := LookupKnownProvider("Unit-Test-Canon-Prov")
 	if !ok {
 		t.Fatal("expected LookupKnownProvider to canonicalize mixed-case input")
 	}
-	if info.Name != "ai-worker" {
-		t.Errorf("Name = %q, want %q (canonicalized)", info.Name, "ai-worker")
+	if info.Name != "unit-test-canon-prov" {
+		t.Errorf("Name = %q, want %q (canonicalized)", info.Name, "unit-test-canon-prov")
 	}
 }
 

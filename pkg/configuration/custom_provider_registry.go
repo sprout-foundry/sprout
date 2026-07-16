@@ -400,9 +400,15 @@ func LookupKnownProvider(name string) (info KnownProviderInfo, ok bool) {
 
 	// User's custom provider config takes precedence — it overrides
 	// any embedded config the user may have customized.
-	cfg, err := LoadOrInitConfig(false)
+	// LoadCustomProviders reads directly from the providers/ directory
+	// (both SPROUT_CONFIG-scoped and global), which is where custom
+	// provider JSON files live. LoadOrInitConfig/Load() only reads
+	// config.json and does NOT populate CustomProviders from the
+	// providers/ directory — that merge happens in the layered manager
+	// path (LoadConfigWithLayers).
+	customProviders, err := LoadCustomProviders()
 	if err == nil {
-		if custom, exists := cfg.CustomProviders[normalized]; exists {
+		if custom, exists := customProviders[normalized]; exists {
 			envVar := strings.TrimSpace(custom.EnvVar)
 			displayName := strings.TrimSpace(custom.Name)
 			if displayName == "" {

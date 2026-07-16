@@ -159,7 +159,7 @@ const TaskDetailPage: React.FC<TaskDetailPageProps> = ({ taskId, onBack }) => {
           <ArrowLeft size={14} /> Back to tasks
         </button>
         <div className="platform-page-error">
-          <h3>Couldn't load task</h3>
+          <h3>Couldn&apos;t load task</h3>
           <p>{friendlyError(error)}</p>
           <button
             className="platform-button platform-button-secondary platform-button-sm"

@@ -108,6 +108,8 @@ type CacheStats interface {
 	SetCacheWriteTokens(int)
 	GetCachedCostSavings() float64
 	SetCachedCostSavings(float64)
+	GetImageTokens() int
+	SetImageTokens(int)
 }
 
 // PersonaStore manages active skills and persona.

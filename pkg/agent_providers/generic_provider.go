@@ -147,6 +147,25 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 			response.Usage.EstimatedCost = cost
 		}
 	}
+	// Extract image tokens from provider-specific fields.
+	// Some providers (Anthropic, OpenAI) report image token counts under
+	// non-standard property names. Probe the raw JSON to capture them.
+	if response.Usage.ImageTokens == 0 {
+		var raw struct {
+			Usage struct {
+				ImageTokens     int `json:"image_tokens"`
+				InputImages     int `json:"input_images"`
+				CacheReadImages int `json:"cache_read_input_tokens"` // Anthropic
+			} `json:"usage"`
+		}
+		if json.Unmarshal(body, &raw) == nil {
+			if raw.Usage.ImageTokens > 0 {
+				response.Usage.ImageTokens = raw.Usage.ImageTokens
+			} else if raw.Usage.InputImages > 0 {
+				response.Usage.ImageTokens = raw.Usage.InputImages
+			}
+		}
+	}
 	return &response, nil
 }
 

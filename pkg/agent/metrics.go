@@ -69,7 +69,10 @@ func (a *Agent) GetPromptTokens() int {
 // cacheWriteTokens is the number of prompt tokens written to the provider cache
 // on this request (Anthropic/OpenRouter cache_creation_input_tokens). Pass 0
 // when the provider does not report write tokens.
-func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens, cacheWriteTokens int) {
+// imageTokens is the number of tokens consumed by image inputs (vision models).
+// These are already included in PromptTokens/TotalTokens, so they are tracked
+// separately for display only — NOT for budget deduction (avoids double-counting).
+func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens, cacheWriteTokens, imageTokens int) {
 	a.state.IncrementLLMCallCount()
 	a.state.SetTotalTokens(a.state.GetTotalTokens() + totalTokens)
 	a.state.SetPromptTokens(a.state.GetPromptTokens() + promptTokens)
@@ -77,6 +80,8 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 	a.state.AddCost(estimatedCost)
 	a.state.SetCachedTokens(a.state.GetCachedTokens() + cachedTokens)
 	a.state.SetCacheWriteTokens(a.state.GetCacheWriteTokens() + cacheWriteTokens)
+	// Track image tokens separately for display (already included in totals).
+	a.state.SetImageTokens(a.state.GetImageTokens() + imageTokens)
 
 	// Fleet budget tracking: debit tokens to the shared fleet tracker.
 	if a.fleetBudgetTracker != nil && a.fleetBudgetLimit > 0 {
@@ -120,6 +125,12 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 // GetCompletionTokens returns the total completion tokens used
 func (a *Agent) GetCompletionTokens() int {
 	return a.state.GetCompletionTokens()
+}
+
+// GetImageTokens returns the total image tokens used (vision model inputs).
+// These are already included in PromptTokens/TotalTokens; this is for display only.
+func (a *Agent) GetImageTokens() int {
+	return a.state.GetImageTokens()
 }
 
 // GetLLMCallCount returns the total number of LLM API calls made

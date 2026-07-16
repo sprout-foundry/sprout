@@ -898,6 +898,10 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   logEntry.level = 'info';
   const data = (event.data ?? {}) as AskUserRequestData;
   if (data.status === 'responded') return;
+  if (data.status === 'cancelled') {
+    setState((prev) => ({ askUserRequest: null }));
+    return;
+  }
   if (!data.question) return;
   setState((prev) => ({
     askUserRequest: {

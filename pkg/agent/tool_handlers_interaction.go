@@ -18,7 +18,7 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 
 	if a == nil {
 		// Fallback to CLI-only mode if agent is nil
-		response, err := tools.AskUser(req)
+		response, err := tools.AskUser(ctx, req)
 		if err != nil {
 			return "", mapAskUserError(err)
 		}
@@ -58,7 +58,7 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 		// CLI fallback: terminal is interactive. AskUser does its own
 		// stdinIsTTY check (now consistent with isNonInteractive) and
 		// returns ErrAskUserNoChannel if stdin is somehow unavailable.
-		response, err = tools.AskUser(req)
+		response, err = tools.AskUser(ctx, req)
 	}
 	if err != nil {
 		if a.debug {

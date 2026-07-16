@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -246,7 +247,7 @@ func TestSettingsCommand_NonTTYFallback(t *testing.T) {
 	// Verify that when AskUser returns ErrAskUserNoChannel,
 	// the command handles it gracefully. We simulate this by
 	// checking that the tools package returns the error in non-TTY.
-	_, err := tools.AskUser(tools.AskUserRequest{
+	_, err := tools.AskUser(context.Background(), tools.AskUserRequest{
 		Question: "test question",
 	})
 	if err != tools.ErrAskUserNoChannel {

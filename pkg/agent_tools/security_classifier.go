@@ -297,7 +297,7 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 
 	cmdRaw, ok := args["command"].(string)
 	if !ok || cmdRaw == "" {
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid command", ShouldPrompt: true, Category: RiskCategoryUnknown}
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "No shell command (check_background or stop_background operation)", Category: RiskCategoryReadOnly}
 	}
 
 	cmd := strings.TrimSpace(cmdRaw)

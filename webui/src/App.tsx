@@ -56,7 +56,17 @@ function App() {
       model: persisted?.model || 'unknown',
       sessionId: persisted?.sessionId || null,
       queryCount: persisted?.queryCount || 0,
-      currentView: persisted?.currentView || 'chat',
+      currentView: (() => {
+        // Deep-link: ?view=chat|editor overrides persisted state
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const viewParam = params.get('view');
+          if (viewParam === 'chat' || viewParam === 'editor') {
+            return viewParam;
+          }
+        }
+        return persisted?.currentView || 'chat';
+      })(),
       messages: [],
       logs: [],
       toolExecutions: [],

@@ -1,22 +1,6 @@
 //go:build !js
 
-package cmd
-
-// Integration regression tests for cmd/agent_terminal_subscriber.go's
-// EventTypeAgentMessage handler. The previous code wrote
-// `[⚠️  SECURITY CAUTION] …` directly to os.Stderr via fmt.Fprintf,
-// bypassing PrintExternal. When the InputReader was active (between
-// turns), the raw bytes landed under the cursor and corrupted the
-// in-progress input line; when the SteerInputReader was active (during
-// a turn), they corrupted the pinned steer panel.
-//
-// The contract under test: when the subscriber receives a
-// security_caution agent message, it must NOT write raw bytes to
-// stderr; it must route through console.PrintExternal so the cursor-
-// management path handles them. This is verified by swapping os.Stdout
-// and os.Stderr for pipes, publishing a security_caution event, then
-// closing the write ends and draining the pipes to inspect what each
-// stream received.
+package cliui
 
 import (
 	"bytes"
@@ -76,7 +60,7 @@ func TestTerminalSubscriber_AgentMessage_SecurityCaution_NoStderrLeak(t *testing
 	indicator := console.NewActivityIndicator(&indicatorBuf)
 	footer := console.NewStatusFooter(&footerBuf, nil)
 
-	resetSpawn := startTerminalToolSubscriber(t.Context(), nil, eb, indicator, footer)
+	resetSpawn := StartTerminalToolSubscriber(t.Context(), nil, eb, indicator, footer)
 	t.Cleanup(resetSpawn)
 
 	// Publish the security_caution event. This is the exact pattern

@@ -160,6 +160,15 @@ type Config struct {
 	// or remove all entries to reset.
 	ApprovedShellCommandPatterns []string `json:"approved_shell_command_patterns,omitempty"`
 
+	// CommandPolicies is the unified command policy layer (SP-123) with
+	// three actions: allow (auto-approve), ask (force prompt), deny
+	// (hard block). Rules are evaluated before the classifier and risk
+	// profile, first-match-wins. Replaces the fragmented
+	// approved_shell_commands / approved_shell_command_patterns /
+	// security_policy.denied_commands surfaces. Legacy fields remain for
+	// backward compatibility; MigrateCommandPolicies converts them on load.
+	CommandPolicies *CommandPolicies `json:"command_policies,omitempty"`
+
 	// DismissedPrompts tracks which one-time prompts the user has dismissed.
 	DismissedPrompts map[string]bool `json:"dismissed_prompts,omitempty"`
 

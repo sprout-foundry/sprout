@@ -494,16 +494,35 @@ func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
 	if p.config == nil {
 		return api.VisionCapabilitiesDefault()
 	}
-	// OpenAI-compatible tier is the conservative pick for all GenericProvider
-	// backends (Anthropic, OpenRouter, Chutes, etc.). Per-provider override
-	// (e.g. tighter Anthropic caps) can land later by switching on
-	// p.config.Name; keeping a single safe value here avoids silent
-	// variation while the SP-103-B2 / SP-103-D2 wiring stabilises.
-	return api.VisionCapabilities{
-		MaxImageBytes:     20_000_000,
-		MaxImageCount:     500,
-		MaxImageDimension: 2048,
-		DetailTiers:       []string{"low", "high", "auto"},
+	switch p.config.Name {
+	case "anthropic":
+		// Anthropic's documented limits: ~5MB per image, auto-resizes to
+		// 1568px on the longest side, no hard image-count limit (20 is
+		// a safe practical cap).
+		return api.VisionCapabilities{
+			MaxImageBytes:     5_000_000,
+			MaxImageCount:     20,
+			MaxImageDimension: 1568,
+		}
+	case "openai":
+		// OpenAI's gpt-4o: ~20MB per image, supports low/high/auto detail
+		// tiers, up to 500 images in some endpoints (10 is a safe
+		// practical cap for most use-cases).
+		return api.VisionCapabilities{
+			MaxImageBytes:     20_000_000,
+			MaxImageCount:     10,
+			MaxImageDimension: 2048,
+			DetailTiers:       []string{"low", "high", "auto"},
+		}
+	default:
+		// Conservative defaults for all other OpenAI-compatible backends
+		// (OpenRouter, Chutes, LM Studio, etc.).
+		return api.VisionCapabilities{
+			MaxImageBytes:     20_000_000,
+			MaxImageCount:     500,
+			MaxImageDimension: 2048,
+			DetailTiers:       []string{"low", "high", "auto"},
+		}
 	}
 }
 

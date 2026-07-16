@@ -6,6 +6,17 @@ record.
 
 ---
 
+## SP-123: User Command Policies
+
+**Status:** ✅ Shipped — Phases 1–3 all implemented (2026-07-16).
+_Spec: `roadmap/SP-123-user-command-policies.md`._
+
+- Phase 1: Config types + EvaluateCommandPolicy engine + RequestApproval wiring + migration
+- Phase 2: CommandPolicyEditor UI (Allow/Ask/Deny) + "Always ask" in CLI + WebUI approval
+- Phase 3: E2E tests + settings API round-trip fix
+
+---
+
 ## SP-122: Security Classifier — Chained Command Handling
 
 **Status:** ✅ Shipped — Phase 1 + Phase 2 both implemented.

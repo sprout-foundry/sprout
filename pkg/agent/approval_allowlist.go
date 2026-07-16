@@ -99,6 +99,40 @@ func (a *Agent) PersistShellCommandPattern(pattern string) error {
 	})
 }
 
+// PersistShellCommandAskPolicy adds a "always ask" command policy rule for
+// the given command pattern to Config.CommandPolicies and saves to disk.
+// This is the persistence behind the "Always ask" approval dialog option
+// (SP-123-2b). The command is used as an exact-match pattern.
+//
+// Idempotent: re-adding an identical (pattern, ask) rule is a no-op.
+func (a *Agent) PersistShellCommandAskPolicy(command string) error {
+	if a == nil {
+		return agenterrors.NewPermission("nil agent", nil)
+	}
+	if command == "" {
+		return agenterrors.NewValidation("cannot persist empty command as ask policy", nil)
+	}
+	mgr := a.GetConfigManager()
+	if mgr == nil {
+		return agenterrors.NewPermission("no config manager — cannot persist ask policy", nil)
+	}
+	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.CommandPolicies == nil {
+			cfg.CommandPolicies = &configuration.CommandPolicies{}
+		}
+		for _, r := range cfg.CommandPolicies.Rules {
+			if r.Pattern == command && r.Action == configuration.CommandPolicyAsk {
+				return nil // already exists
+			}
+		}
+		cfg.CommandPolicies.Rules = append(cfg.CommandPolicies.Rules, configuration.CommandRule{
+			Pattern: command,
+			Action:  configuration.CommandPolicyAsk,
+		})
+		return nil
+	})
+}
+
 // ElevateSessionToPermissive sets the agent's transient risk-profile
 // override to "permissive" for the rest of this session. Used by the
 // "Elevate permissions" choice on the approval dialog. Does NOT persist

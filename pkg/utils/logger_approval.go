@@ -45,6 +45,10 @@ const (
 	// auto-approving future accesses under that folder. Only offered
 	// for the External filesystem tier.
 	ApprovalChoiceAllowFolderSession
+	// ApprovalChoiceAlwaysAsk approves this invocation and persists
+	// the command as an "ask" rule in Config.CommandPolicies so future
+	// matching commands always force an interactive prompt. SP-123-2b.
+	ApprovalChoiceAlwaysAsk
 )
 
 // FilesystemPromptTier picks the option set for the filesystem
@@ -101,6 +105,7 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 		"  [y] Approve once         — allow this invocation only",
 		"  [n] Deny                 — reject and surface a security error",
 		"  [a] Always approve       — persist this exact command to your allowlist",
+		"  [s] Always ask           — force a prompt for this command every time",
 		"  [e] Elevate (session)    — bump to 'permissive' for the rest of this session",
 		"                            (Critical ops still block. Run /risk-profile permissive",
 		"                             to make this persistent across restarts.)",
@@ -112,7 +117,7 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 	w.LogUserInteraction(fmt.Sprintf("%s\nCommand:\n  %s\n\n%s\n", prompt, command, menu))
 
 	for {
-		w.LogUserInteraction("Choose [y/n/a/e]: ")
+		w.LogUserInteraction("Choose [y/n/a/s/e]: ")
 		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
 		if errors.Is(err, ErrPromptTimeout) {
 			w.LogUserInteraction(fmt.Sprintf(" timed out after %s waiting for input - denying for safety.", ApprovalPromptTimeout))
@@ -136,10 +141,12 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 			return ApprovalChoiceDeny
 		case "a", "always":
 			return ApprovalChoiceApproveAlways
+		case "s", "ask":
+			return ApprovalChoiceAlwaysAsk
 		case "e", "elevate":
 			return ApprovalChoiceElevate
 		default:
-			w.LogUserInteraction("Invalid input. Type one of: y / n / a / e.")
+			w.LogUserInteraction("Invalid input. Type one of: y / n / a / s / e.")
 		}
 	}
 }

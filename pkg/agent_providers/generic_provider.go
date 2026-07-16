@@ -147,6 +147,22 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 			response.Usage.EstimatedCost = cost
 		}
 	}
+	// Extract image tokens from provider-specific fields (SP-103-D1)
+	if response.Usage.ImageTokens == 0 {
+		var raw struct {
+			Usage struct {
+				ImageTokens int `json:"image_tokens"`
+				InputImages int `json:"input_images"`
+			} `json:"usage"`
+		}
+		if json.Unmarshal(body, &raw) == nil {
+			if raw.Usage.ImageTokens > 0 {
+				response.Usage.ImageTokens = raw.Usage.ImageTokens
+			} else if raw.Usage.InputImages > 0 {
+				response.Usage.ImageTokens = raw.Usage.InputImages
+			}
+		}
+	}
 	return &response, nil
 }
 

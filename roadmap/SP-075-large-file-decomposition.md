@@ -6,18 +6,18 @@
 
 | File | Lines | Notes |
 |---|---|---|
-| `pkg/agent/steer_input.go` | 1313 | NEW — wasn't in original spec |
-| `pkg/adapters/go_adapter.go` | 1188 | NEW — wasn't in original spec |
-| `pkg/agent_providers/models.go` | 1121 | NEW |
-| `pkg/webui/settings_api_put.go` | 1094 | NEW |
-| `pkg/webcontent/client.go` | 1060 | NEW |
-| `pkg/webcontent/client_context.go` | 1011 | NEW |
-| `pkg/agent_tools/tool_handlers_subagent_spawn.go` | 999 | irony: extraction result over target |
-| `webui/src/components/Terminal.tsx` | 780 | partially extracted to useTerminalPanes hook |
-| `pkg/agent/agent_modes.go` | 732 | split into 5 mode files, orchestrator still big |
-| `pkg/console/input_core.go` | 715 | partial — was 1264 |
-| `pkg/agent/change_tracking_shell.go` | 464 | UNDER 600 (was 1344) ✅ |
-| `pkg/agent_providers/generic_provider.go` | 669 | partial — was 1449 |
+| `pkg/agent_tools/repo_map.go` | 1500 | Code intelligence graph generation (SP-107) |
+| `pkg/webui/websocket_handler.go` | 1324 | WebSocket connection loop + event dispatch |
+| `pkg/console/markdown_formatter.go` | 1217 | Markdown-to-terminal rendering + table parsing |
+| `pkg/webui/chat_sessions_api.go` | 1086 | Chat session REST API (list/create/update/delete) |
+| `pkg/configuration/config_risk_subagent.go` | 1035 | Risk-profile-driven config generation + rules |
+| `pkg/configuration/manager.go` | 949 | Config loading, layered dirs, API key management |
+| `pkg/agent/seed_tool_registry.go` | 926 | Tool registry initialization + rich event publishing |
+| `pkg/agent_api/ollama_local.go` | 924 | Local Ollama API adapter (list/chat/stream) |
+| `pkg/filediscovery/filediscovery.go` | 897 | Workspace file discovery, shell search, reranking |
+| `pkg/webui/ssh_launch.go` | 896 | SSH workspace remote launch + process management |
+| `pkg/console/input_core.go` | 892 | Console input processing (was 1264, partial extract) |
+| `pkg/agent/agent_getters.go` | 890 | Agent accessor methods (Get* / Set*) |
 
 Next phase: continue extracting these remaining offenders toward the 600-line target.
 

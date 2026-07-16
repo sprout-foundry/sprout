@@ -109,12 +109,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		inputReader.SetInitialContent(dismissKey)
 	}
 
-	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
-	// per call so newly-installed MCP commands (which can be added mid-
-	// session) are reflected in completion.
-	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
-	// per call so newly-installed MCP commands (which can be added mid-
-	// session) are reflected in completion.
+	// SP-048-2a: slash command tab completion. The registry is cached
+	// per-session (see slashCommandCache); argument completions are
+	// TTL-cached to avoid network/config reads on every keystroke.
 	completer := buildSlashCommandCompleter(chatAgent)
 	inputReader.SetCompleter(completer)
 	inputReader.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent))

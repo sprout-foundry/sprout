@@ -437,10 +437,6 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	}
 
 	// Build replacement map so we can rewrite the query in a single pass.
-	type placeholderInfo struct {
-		fullMatch string
-		filePath  string
-	}
 	var placeholders []placeholderInfo
 	seen := make(map[string]struct{}, len(uniqueMatches))
 	for _, loc := range uniqueMatches {
@@ -453,12 +449,17 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		placeholders = append(placeholders, placeholderInfo{fullMatch: fullMatch, filePath: filePath})
 	}
 
-	// SP-103-D3: Warn and truncate if the query has more images than the
-	// provider supports.
+	// SP-103-D2: Split images into inline (multimodal) and overflow (OCR fallback).
+	// When the query has more images than the provider supports inline, the
+	// first maxImageCount go through as multimodal content and the rest are
+	// processed via OCR so the model still gets text descriptions of them.
+	inlinePlaceholders := placeholders
+	overflowPlaceholders := []placeholderInfo(nil)
 	if len(placeholders) > maxImageCount {
-		a.Logger().Debug("[WARN] Query has %d images, but provider %s supports at most %d; truncating\n",
-			len(placeholders), a.getClientType(), maxImageCount)
-		placeholders = placeholders[:maxImageCount]
+		inlinePlaceholders = placeholders[:maxImageCount]
+		overflowPlaceholders = placeholders[maxImageCount:]
+		a.Logger().Debug("[WARN] Query has %d images, but provider %s supports at most %d inline; %d will be processed via OCR fallback\n",
+			len(placeholders), a.getClientType(), maxImageCount, len(overflowPlaceholders))
 	}
 
 	// Rewrite the query once, replacing every occurrence of each placeholder.
@@ -467,21 +468,30 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	// follow-up answers ("see image 2"). For single-image queries we keep
 	// the simpler "[image: foo.png]" form to avoid implying there's more.
 	cleanedQuery := query
-	multi := len(placeholders) > 1
-	for i, ph := range placeholders {
+	totalImages := len(placeholders)
+	multi := totalImages > 1
+	for i, ph := range inlinePlaceholders {
 		fileName := filepath.Base(ph.filePath)
 		var replacement string
 		if multi {
-			replacement = fmt.Sprintf("[image %d of %d: %s]", i+1, len(placeholders), fileName)
+			replacement = fmt.Sprintf("[image %d of %d: %s]", i+1, totalImages, fileName)
 		} else {
 			replacement = fmt.Sprintf("[image: %s]", fileName)
 		}
 		cleanedQuery = strings.ReplaceAll(cleanedQuery, ph.fullMatch, replacement)
 	}
+	// Replace overflow placeholders with numbered labels too (they'll get OCR
+	// descriptions appended below).
+	for i, ph := range overflowPlaceholders {
+		fileName := filepath.Base(ph.filePath)
+		idx := len(inlinePlaceholders) + i + 1
+		cleanedQuery = strings.ReplaceAll(cleanedQuery, ph.fullMatch,
+			fmt.Sprintf("[image %d of %d: %s]", idx, totalImages, fileName))
+	}
 
-	// Load image files.
+	// Load inline image files.
 	expectedDir := filepath.Join(cwd, console.PastedImageDirName)
-	for _, ph := range placeholders {
+	for _, ph := range inlinePlaceholders {
 		filePath := ph.filePath
 
 		// Resolve all paths to absolute for containment checking.
@@ -532,6 +542,12 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		a.Logger().Debug("[img] Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
 	}
 
+	// SP-103-D2: Process overflow images via OCR fallback so the model
+	// still gets text descriptions of images that exceed the inline limit.
+	if len(overflowPlaceholders) > 0 {
+		cleanedQuery = a.appendOCRFallback(cleanedQuery, overflowPlaceholders)
+	}
+
 	return images, cleanedQuery, nil
 }
 
@@ -568,7 +584,57 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 	return enhancedQuery, nil
 }
 
-// readImageAsImageData reads an image file from disk, validates it, detects
+// placeholderInfo is used by processImagesAsMultimodal to track image
+// placeholders and their file paths.
+type placeholderInfo struct {
+	fullMatch string
+	filePath  string
+}
+
+// appendOCRFallback processes overflow images (those exceeding the provider's
+// inline vision limit) through the OCR pipeline and appends the text
+// descriptions to the cleaned query.
+//
+// SP-103-D2: This ensures the model still sees overflow images as text
+// descriptions even when they can't fit inline.
+func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []placeholderInfo) string {
+	if len(overflowPlaceholders) == 0 {
+		return cleanedQuery
+	}
+
+	// Build a synthetic query containing only the overflow image paths.
+	// processImagesViaOCR → ProcessImagesInText uses regex to find image
+	// file references by extension, so we just need the paths present.
+	var ocrBuilder strings.Builder
+	ocrBuilder.WriteString("Please analyze the following images:\n")
+	for _, ph := range overflowPlaceholders {
+		ocrBuilder.WriteString(ph.filePath)
+		ocrBuilder.WriteString("\n")
+	}
+	ocrQuery := ocrBuilder.String()
+
+	enhanced, err := a.processImagesViaOCR(ocrQuery)
+	if err != nil {
+		a.Logger().Debug("[WARN] OCR fallback for %d overflow image(s) failed: %v\n",
+			len(overflowPlaceholders), err)
+		// Append a note so the model knows these images exist but couldn't
+		// be analyzed.
+		for _, ph := range overflowPlaceholders {
+			cleanedQuery += fmt.Sprintf("\n[OCR analysis unavailable for %s]", filepath.Base(ph.filePath))
+		}
+		return cleanedQuery
+	}
+
+	a.Logger().Debug("[img] OCR fallback processed %d overflow image(s)\n", len(overflowPlaceholders))
+
+	// Append the OCR-enhanced text. The enhanced query contains the original
+	// paths replaced with ## Image Analysis sections, which is exactly what
+	// we want to append.
+	cleanedQuery += "\n\n## Additional Image Analysis (OCR fallback)\n"
+	cleanedQuery += enhanced
+
+	return cleanedQuery
+}
 // the MIME type from magic bytes, optimizes the image for vision models, and
 // returns base64-encoded ImageData with the byte length of the (possibly
 // optimized) image data.

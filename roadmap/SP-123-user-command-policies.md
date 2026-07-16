@@ -1,6 +1,6 @@
 # SP-123 — User Command Policies
 
-**Status:** 🔵 Proposed  
+**Status:** ✅ Shipped (Phases 1–3, 2026-07-16)  
 **Created:** 2026-07-15  
 **Effort:** Phase 1 (~2 days), Phase 2 (~2 days), Phase 3 (~1 day)
 

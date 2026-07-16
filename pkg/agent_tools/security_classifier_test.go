@@ -123,9 +123,10 @@ func TestClassifyToolCallCategories(t *testing.T) {
 		{"shell check_background", "shell_command", map[string]interface{}{"check_background": "abc123"}, RiskCategoryReadOnly},
 		{"shell stop_background", "shell_command", map[string]interface{}{"stop_background": "abc123"}, RiskCategoryProcessManagement},
 
-		// Shell command — empty/invalid
-		{"shell empty command", "shell_command", map[string]interface{}{"command": ""}, RiskCategoryUnknown},
-		{"shell no command key", "shell_command", map[string]interface{}{}, RiskCategoryUnknown},
+		// Shell command — empty/invalid (Validate catches these before
+		// classification; classifier returns Safe to avoid triggering approval)
+		{"shell empty command", "shell_command", map[string]interface{}{"command": ""}, RiskCategoryReadOnly},
+		{"shell no command key", "shell_command", map[string]interface{}{}, RiskCategoryReadOnly},
 
 		// write_file — normal workspace path
 		{"write_file workspace", "write_file", map[string]interface{}{"path": "src/main.go", "content": "test"}, RiskCategoryFileWrite},

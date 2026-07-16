@@ -33,10 +33,12 @@ interface BootstrapResponse {
 }
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'layout-dashboard', order: 0 },
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
   { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 2 },
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
   { id: 'runners', label: 'Runners', href: '/runners', icon: 'server', order: 4 },
+  { id: 'workspaces', label: 'Workspaces', href: '/workspaces', icon: 'monitor', order: 5 },
 ];
 
 const LOCALHOST_DEFAULTS: RuntimeConfig = {

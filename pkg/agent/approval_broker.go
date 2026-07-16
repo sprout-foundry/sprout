@@ -40,6 +40,49 @@ type BrokerDecision struct {
 // It returns (BrokerDecision, error) — non-nil error means deny/hard-block,
 // nil means approved (or auto-approved).
 func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args map[string]interface{}) (BrokerDecision, error) {
+	// --- Command policy check (shell_command only) ---
+	// MUST be the very first check, before the Low-risk early return.
+	// If placed after the Low-risk check, "deny" and "ask" actions silently
+	// fail for commands the classifier rates as SAFE/Low.
+	skipAllowlist := false
+	if toolName == "shell_command" {
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			cfg := a.GetConfig()
+			if cfg != nil && cfg.CommandPolicies != nil {
+				if action, matchedPattern, matched := EvaluateCommandPolicy(cmd, cfg.CommandPolicies); matched {
+					switch action {
+					case configuration.CommandPolicyDeny:
+						a.logSecurityDecision(toolName, args, assessment, "blocked")
+						return BrokerDecision{
+								Approved:   false,
+								Decision:   security.ApprovalDeny,
+								Surface:    "command-policy",
+								Assessment: assessment,
+							}, agenterrors.NewSecurityErrorWithAssessment(
+								fmt.Sprintf("blocked by command policy: %s — %s", matchedPattern, assessment.Reason),
+								assessment.Explain(), nil,
+							)
+					case configuration.CommandPolicyAllow:
+						// Auto-approve: skip classifier, risk profile, and interactive prompt.
+						// Note: Critical-tier hard blocks are NOT overridden — the caller
+						// (ResolveToolRisk) would have already flagged IsHardBlock=true,
+						// and the Critical check below catches it.
+						return BrokerDecision{
+								Approved:   true,
+								Decision:   security.ApprovalApproveOnce,
+								Surface:    "command-policy",
+								Assessment: assessment,
+							}, nil
+					case configuration.CommandPolicyAsk:
+						// Force interactive prompt: skip the allowlist bypass below.
+						// The classifier risk is still computed for display.
+						skipAllowlist = true
+					}
+				}
+			}
+		}
+	}
+
 	// Low risk, no prompt needed — auto-approve
 	if assessment.Level == configuration.RiskLevelLow && !assessment.RequiresIntentConfirmation {
 		return BrokerDecision{
@@ -63,8 +106,9 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 
 	// --- Fast bypass paths ---
 
-	// Persistent allowlist for shell commands
-	if toolName == "shell_command" {
+	// Persistent allowlist for shell commands (skipped when a command policy
+	// "ask" rule matched — those must always prompt)
+	if !skipAllowlist && toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" && a.IsShellCommandAllowlisted(cmd) {
 			return BrokerDecision{
 				Approved:   true,

@@ -73,6 +73,7 @@ type AgentStateManager struct {
 	cachedTokens                int
 	cacheWriteTokens            int
 	cachedCostSavings           float64
+	imageTokens                 int
 	activeSkills                []string
 	activePersona               string
 	circuitBreaker              *CircuitBreakerState
@@ -496,6 +497,18 @@ func (s *AgentStateManager) SetCachedCostSavings(c float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cachedCostSavings = c
+}
+
+func (s *AgentStateManager) GetImageTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.imageTokens
+}
+
+func (s *AgentStateManager) SetImageTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.imageTokens = n
 }
 
 // --- Skills and persona ---

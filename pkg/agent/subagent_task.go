@@ -464,12 +464,11 @@ func (r *SubagentRunner) runTask(
 
 	// Apply a default timeout when the caller didn't set one explicitly.
 	// Without this, a hung subagent blocks the primary indefinitely — no
-	// caller in subagent_runners.go sets opts.Timeout. 10 minutes matches
-	// the WASM agent timeout and is generous enough for real work while
-	// still bounding the worst case. Applied here (rather than in Run /
-	// RunParallel) so both entry points get the default.
+	// caller in subagent_runners.go sets opts.Timeout. 20 minutes is
+	// generous enough for locally-hosted models (which may be slower than
+	// cloud APIs) while still bounding the worst case.
 	if opts.Timeout <= 0 {
-		opts.Timeout = 10 * time.Minute
+		opts.Timeout = 20 * time.Minute
 	}
 
 	// Setup

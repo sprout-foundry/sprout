@@ -1,6 +1,6 @@
 //go:build !js
 
-package cmd
+package cliui
 
 import (
 	"fmt"
@@ -15,11 +15,11 @@ import (
 	"golang.org/x/term"
 )
 
-// notifyTurnCompletion emits a terminal bell and/or OS notification when a turn
+// NotifyTurnCompletion emits a terminal bell and/or OS notification when a turn
 // completes after exceeding the configured minimum duration. Suppressed in
 // non-interactive sessions, when --skip-prompt is set, or for fast turns.
 // SP-070-2.
-func notifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPrompt bool) {
+func NotifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPrompt bool) {
 	// Skip if non-interactive
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return
@@ -50,13 +50,13 @@ func notifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPromp
 	}
 }
 
-// printAssistantHeader writes the dim "▌ assistant · <model>" header that
+// PrintAssistantHeader writes the dim "▌ assistant · <model>" header that
 // marks the start of an assistant turn. Honors NO_COLOR via the existing
 // color preference resolver. The brand cyan `▌` aligns visually with the
 // glyph vocabulary in pkg/console; the model name sits in dim grey so the
 // eye is drawn to the bar, not the metadata.
-func printAssistantHeader(model string) {
-	model = shortModelName(model)
+func PrintAssistantHeader(model string) {
+	model = ShortModelName(model)
 	colorOn := envutil.ResolveColorPreference(true)
 	if !colorOn {
 		fmt.Printf("▌ assistant · %s\n", model)
@@ -65,16 +65,16 @@ func printAssistantHeader(model string) {
 	fmt.Printf("\033[1;96m▌\033[0m \033[2massistant · %s\033[0m\n", model)
 }
 
-// shouldShowTurnStats returns true when stderr is connected to a TTY.
+// ShouldShowTurnStats returns true when stderr is connected to a TTY.
 // The turn-summary line is written to os.Stderr, so we must check stderr
 // (not stdout) to determine whether it will render cleanly. This matters
 // in piping scenarios like `sprout agent "query" > output.txt` where
 // stdout is piped but stderr is still the terminal. SP-048-5a.
-func shouldShowTurnStats() bool {
+func ShouldShowTurnStats() bool {
 	return term.IsTerminal(int(os.Stderr.Fd()))
 }
 
-// formatTurnStatsLine builds the dim single-line turn-summary string.
+// FormatTurnStatsLine builds the dim single-line turn-summary string.
 // When color is disabled (NO_COLOR), ANSI dim codes are stripped.
 // SP-048-5a.
 //
@@ -83,7 +83,7 @@ func shouldShowTurnStats() bool {
 // provider connections visible at a glance — they're the most common
 // cause of "is sprout stuck?" perception even when the actual model
 // run is fast once it starts streaming.
-func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, elapsed, ttft time.Duration) string {
+func FormatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, elapsed, ttft time.Duration) string {
 	colorOn := envutil.ResolveColorPreference(true)
 	var dim, reset string
 	if colorOn {
@@ -92,7 +92,7 @@ func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, el
 
 	ttftSeg := ""
 	if ttft > 0 {
-		ttftStr := compactDuration(ttft)
+		ttftStr := CompactDuration(ttft)
 		styled := ttftStr
 		if colorOn {
 			switch {
@@ -107,60 +107,60 @@ func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, el
 		ttftSeg = fmt.Sprintf(" · ttft %s", styled)
 	}
 
-	costSeg := compactCost(costDelta)
+	costSeg := CompactCost(costDelta)
 	if costDelta <= 0 {
 		costSeg = "" // omit "$0.0000" for models without pricing
 	}
 
 	return fmt.Sprintf("%s⎯ this turn: %s in / %s out%s%s · %s%s ⎯%s\n",
 		dim,
-		compactTokens(promptDelta),
-		compactTokens(completionDelta),
-		costPrefix(costSeg),
+		CompactTokens(promptDelta),
+		CompactTokens(completionDelta),
+		CostPrefix(costSeg),
 		costSeg,
-		compactDuration(elapsed),
+		CompactDuration(elapsed),
 		ttftSeg,
 		reset,
 	)
 }
 
-// costPrefix returns " · " when cost is non-empty, "" when empty, so
+// CostPrefix returns " · " when cost is non-empty, "" when empty, so
 // the turn-summary line omits the cost segment cleanly for models
 // without pricing.
-func costPrefix(cost string) string {
+func CostPrefix(cost string) string {
 	if cost == "" {
 		return ""
 	}
 	return " · "
 }
 
-// turnFirstTokenAt is set (atomically) to the Unix nano time of the
+// TurnFirstTokenAt is set (atomically) to the Unix nano time of the
 // first non-empty stream chunk in the current turn. Read by
-// printPerTurnSummary to compute time-to-first-token, then reset to 0
+// PrintPerTurnSummary to compute time-to-first-token, then reset to 0
 // at the start of each turn. Package-level so the streaming callback
 // in SetupAgentEvents (no agent-state to hang it on) can flip it.
-var turnFirstTokenAt int64
+var TurnFirstTokenAt int64
 
-// noteFirstStreamChunk is invoked once per turn from the streaming
+// NoteFirstStreamChunk is invoked once per turn from the streaming
 // callback. CompareAndSwap ensures only the very first non-empty chunk
 // updates the timestamp — later chunks are no-ops.
-func noteFirstStreamChunk() {
-	atomic.CompareAndSwapInt64(&turnFirstTokenAt, 0, time.Now().UnixNano())
+func NoteFirstStreamChunk() {
+	atomic.CompareAndSwapInt64(&TurnFirstTokenAt, 0, time.Now().UnixNano())
 }
 
-// resetTurnFirstToken clears the ttft tracker. Called by the REPL just
+// ResetTurnFirstToken clears the ttft tracker. Called by the REPL just
 // before submitting a turn so each turn's measurement is independent.
-func resetTurnFirstToken() {
-	atomic.StoreInt64(&turnFirstTokenAt, 0)
+func ResetTurnFirstToken() {
+	atomic.StoreInt64(&TurnFirstTokenAt, 0)
 }
 
-// printPerTurnSummary emits a dim single-line summary of what just happened
+// PrintPerTurnSummary emits a dim single-line summary of what just happened
 // in the LLM round-trip: input/output tokens consumed, $ spent, elapsed
 // wall time, plus ttft when available. Silent when no tokens were used
 // (e.g. the turn was a slash command or zsh fast path). Only shown when
 // stderr is a TTY (respects NO_COLOR for ANSI codes). SP-048-5a.
-func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int) {
-	if !shouldShowTurnStats() {
+func PrintPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int) {
+	if !ShouldShowTurnStats() {
 		return
 	}
 	promptDelta := chatAgent.GetPromptTokens() - promptBefore
@@ -171,17 +171,18 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 	elapsed := time.Since(start)
 
 	var ttft time.Duration
-	if firstAt := atomic.LoadInt64(&turnFirstTokenAt); firstAt > 0 {
+	if firstAt := atomic.LoadInt64(&TurnFirstTokenAt); firstAt > 0 {
 		ttft = time.Duration(firstAt - start.UnixNano())
 		if ttft < 0 {
 			ttft = 0
 		}
 	}
 
-	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, 0, elapsed, ttft))
+	fmt.Fprint(os.Stderr, FormatTurnStatsLine(promptDelta, completionDelta, 0, elapsed, ttft))
 }
 
-func compactTokens(n int) string {
+// CompactTokens formats token counts compactly.
+func CompactTokens(n int) string {
 	if n < 0 {
 		n = 0
 	}
@@ -191,7 +192,8 @@ func compactTokens(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-func compactCost(c float64) string {
+// CompactCost formats a cost value compactly.
+func CompactCost(c float64) string {
 	switch {
 	case c < 0:
 		return "$0.00"
@@ -204,7 +206,8 @@ func compactCost(c float64) string {
 	}
 }
 
-func compactDuration(d time.Duration) string {
+// CompactDuration formats a time.Duration compactly.
+func CompactDuration(d time.Duration) string {
 	if d < time.Second {
 		return fmt.Sprintf("%dms", d.Milliseconds())
 	}
@@ -216,22 +219,22 @@ func compactDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
-// shortModelName strips the lab/org prefix from a model ID for display.
+// ShortModelName strips the lab/org prefix from a model ID for display.
 // "deepseek-ai/DeepSeek-V4-Flash" → "DeepSeek-V4-Flash"
 // "meta-llama/Llama-3.3-70B-Instruct" → "Llama-3.3-70B-Instruct"
 // "glm-4.6" → "glm-4.6" (no slash, returned as-is)
-func shortModelName(model string) string {
+func ShortModelName(model string) string {
 	if i := strings.LastIndex(model, "/"); i >= 0 {
 		return model[i+1:]
 	}
 	return model
 }
 
-// buildPromptPrefix returns the interactive REPL prompt for the given
+// BuildPromptPrefix returns the interactive REPL prompt for the given
 // model. SP-048-5d. Format: "<model> ▸ " when a model name is available,
 // "sprout> " as the legacy fallback when it isn't.
-func buildPromptPrefix(model string) string {
-	model = strings.TrimSpace(shortModelName(model))
+func BuildPromptPrefix(model string) string {
+	model = strings.TrimSpace(ShortModelName(model))
 	if model == "" {
 		return "sprout> "
 	}

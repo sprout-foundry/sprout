@@ -1,6 +1,6 @@
 # SP-120: Codebase Organization & Test Infrastructure Cleanup
 
-**Status:** ✅ Phase 1 + Phase 2a + Phase 2b complete (2026-07-15). Phase 2c deferred. Phase 3 shipped (package guide).
+**Status:** ✅ Phase 1 + Phase 2a + Phase 2b + Phase 2c complete (2026-07-15). Phase 3 shipped (package guide). All four agent-display files (cmd/agent_terminal_subscriber.go, cmd/agent_tool_display.go, cmd/agent_subagent_display.go, cmd/agent_turn_stats.go) extracted to a new pkg/cliui/ package — ~2000 lines moved, ~150 lines of caller updates, zero behavior change.
 
 ## Problem
 

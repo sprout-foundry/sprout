@@ -684,3 +684,63 @@ func TestSafeRmRfTraversalEscape(t *testing.T) {
 		})
 	}
 }
+
+// TestClassifyChainedCommand tests SP-122 Phase 2: chained command splitting.
+// When a command uses &&, ||, ;, or |, the classifier should split it into
+// subcommands and classify each independently. The overall risk is the MAX
+// of the subcommand risks.
+func TestClassifyChainedCommand(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		wantRisk SecurityRisk
+	}{
+		// ── && chains ──────────────────────────────────────────────
+		{"&& two safe", "ls && pwd", SecuritySafe},
+		{"&& safe then dangerous", "ls && rm -rf src/", SecurityDangerous},
+		{"&& dangerous then safe", "rm -rf src/ && echo done", SecurityDangerous},
+		{"&& three safe", "echo a && echo b && echo c", SecuritySafe},
+		{"&& safe + dangerous + safe", "cp x y && rm -rf src/ && echo done", SecurityDangerous},
+		{"&& all dangerous", "rm -rf a/ && rm -rf b/ && rm -rf c/", SecurityDangerous},
+		{"&& safe rm -rf then safe", "rm -rf dist/ && mkdir -p dist && echo rebuilt", SecuritySafe},
+
+		// ── || chains ──────────────────────────────────────────────
+		{"|| two safe", "ls /tmp || mkdir /tmp", SecurityCaution},
+		{"|| safe then dangerous", "ls || rm -rf src/", SecurityDangerous},
+
+		// ── ; chains ───────────────────────────────────────────────
+		{"; two safe", "echo hello; echo world", SecuritySafe},
+		{"; safe then dangerous", "echo hello; rm -rf src/", SecurityDangerous},
+		{"; dangerous then safe", "rm -rf / ; echo done", SecurityDangerous},
+
+		// ── pipe chains ────────────────────────────────────────────
+		{"pipe two safe", "cat file.txt | grep foo", SecuritySafe},
+		{"pipe safe to xargs rm", "ls | xargs rm -rf", SecurityCaution}, // xargs rm -rf classified CAUTION (xargs prefix not matched by rm patterns)
+		{"pipe to bash (remote code execution)", "echo hello | bash", SecurityDangerous},
+		{"pipe to sh", "echo hello | sh", SecurityDangerous},
+
+		// ── mixed chains ───────────────────────────────────────────
+		{"mixed && and ;", "echo a && echo b; rm -rf src/", SecurityDangerous},
+		{"mixed && and |", "cat f && ls | grep x", SecuritySafe},
+		{"mixed ; and |", "echo a; ls | grep b", SecuritySafe},
+		{"mixed && || ;", "true && false || true; echo done", SecuritySafe},
+
+		// ── quote handling ────────────────────────────────────────
+		{"quoted && inside echo", `echo "a && b"`, SecuritySafe},
+		{"quoted | inside grep", `grep "a|b" file.txt`, SecuritySafe},
+		{"single-quoted ; inside echo", `echo 'a; b'`, SecuritySafe},
+		{"quoted pipe not a chain", `echo "hello | world"`, SecuritySafe},
+
+		// ── vendoring example from TODO ───────────────────────────
+		{"vendoring cleanup chain", "rm -rf internal/api/webui/dist/sprout-webui && mkdir -p internal/api/webui/dist && cp -r ../sprout/webui/dist/* internal/api/webui/dist/sprout-webui/", SecuritySafe},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.Risk != tt.wantRisk {
+				t.Errorf("classifyShellCommand(%q).Risk = %s, want %s (reasoning: %s)",
+					tt.command, result.Risk, tt.wantRisk, result.Reasoning)
+			}
+		})
+	}
+}

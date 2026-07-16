@@ -41,7 +41,7 @@ func (h *askUserHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	if env.AskUser != nil {
 		response, err = env.AskUser.Ask(ctx, req)
 	} else {
-		response, err = AskUser(req)
+		response, err = AskUser(ctx, req)
 	}
 	if err != nil {
 		if errors.Is(err, ErrAskUserNoChannel) {

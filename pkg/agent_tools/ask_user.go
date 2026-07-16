@@ -141,14 +141,17 @@ func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.Ev
 	select {
 	case result, ok := <-responseCh:
 		if !ok {
+			eventBus.Publish(events.EventTypeAskUserRequest, events.AskUserCancelledEvent(requestID, clientID))
 			return "", fmt.Errorf("response channel closed")
 		}
 		return result, nil
 	case <-timer.C:
 		log.Printf("Ask user request %s timed out after %v", requestID, timeout)
+		eventBus.Publish(events.EventTypeAskUserRequest, events.AskUserCancelledEvent(requestID, clientID))
 		return "", fmt.Errorf("user did not respond within %v", timeout)
 	case <-ctx.Done():
 		log.Printf("Ask user request %s cancelled: %v", requestID, ctx.Err())
+		eventBus.Publish(events.EventTypeAskUserRequest, events.AskUserCancelledEvent(requestID, clientID))
 		return "", fmt.Errorf("ask_user cancelled: %w", ctx.Err())
 	}
 }
@@ -208,10 +211,15 @@ func stdinIsTTY() bool {
 // on a non-TTY stdin fall back to the numbered list + freeform text
 // path so the tool remains scriptable.
 //
+// The context governs cancellation: when ctx is cancelled (tool-execution
+// timeout, interrupt, etc.) the function returns ctx.Err() immediately
+// so the deferred terminal-state restoration hooks fire and the caller
+// gets a clean error instead of silently swallowing the timeout.
+//
 // Returns ErrAskUserNoChannel if stdin is not a TTY (background daemon,
 // closed stdin, piped) so callers can distinguish "no input channel"
 // from a transient I/O error.
-func AskUser(req AskUserRequest) (string, error) {
+func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	if strings.TrimSpace(req.Question) == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
@@ -237,7 +245,7 @@ func AskUser(req AskUserRequest) (string, error) {
 	// support multi-select, and the legacy "1,3" comma-list text input
 	// remains the canonical path for that case).
 	if len(req.Options) > 0 && !req.MultiSelect {
-		return runAskUserSelectList(context.Background(), req)
+		return runAskUserSelectList(ctx, req)
 	}
 
 	renderCLIPrompt(os.Stdout, req)
@@ -249,10 +257,13 @@ func AskUser(req AskUserRequest) (string, error) {
 		// This allows pasting multiline text — a single newline between
 		// pasted lines is preserved; the user submits by pressing Enter
 		// on an empty line.
-		answer, err := readFreeformInput(reader)
+		answer, err := readFreeformInputCtx(ctx, reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return "", ErrAskUserNoChannel
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return "", err
 			}
 			return "", fmt.Errorf("read user input: %w", err)
 		}
@@ -263,10 +274,13 @@ func AskUser(req AskUserRequest) (string, error) {
 	}
 
 	// Option mode: single line is sufficient.
-	answer, err := reader.ReadString('\n')
+	answer, err := readLineCtx(ctx, reader)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return "", ErrAskUserNoChannel
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", err
 		}
 		return "", fmt.Errorf("read user input: %w", err)
 	}
@@ -306,6 +320,51 @@ func readFreeformInput(reader *bufio.Reader) (string, error) {
 			return strings.Join(lines, "\n"), nil
 		}
 		lines = append(lines, trimmed)
+	}
+}
+
+// readFreeformInputCtx is the context-aware variant of readFreeformInput.
+// It spawns a goroutine to perform the blocking stdin read and selects
+// on ctx.Done() so a tool-execution timeout or interrupt cancels the
+// read cleanly. The goroutine leaks on ctx cancellation (the blocked
+// syscall won't return until the user types something or stdin closes),
+// but this is acceptable: the agent process owns stdin and the next
+// reader will consume the stray input.
+func readFreeformInputCtx(ctx context.Context, reader *bufio.Reader) (string, error) {
+	type result struct {
+		answer string
+		err    error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		answer, err := readFreeformInput(reader)
+		resultCh <- result{answer, err}
+	}()
+	select {
+	case r := <-resultCh:
+		return r.answer, r.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+// readLineCtx reads a single line from reader, cancelling on ctx.Done().
+// Same goroutine-leak tradeoff as readFreeformInputCtx.
+func readLineCtx(ctx context.Context, reader *bufio.Reader) (string, error) {
+	type result struct {
+		line string
+		err  error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		line, err := reader.ReadString('\n')
+		resultCh <- result{line, err}
+	}()
+	select {
+	case r := <-resultCh:
+		return r.line, r.err
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
 }
 
@@ -445,10 +504,13 @@ func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, erro
 	if value == askUserCustomAnswerSentinel {
 		fmt.Fprint(os.Stdout, "> ")
 		reader := bufio.NewReader(os.Stdin)
-		answer, err := readFreeformInput(reader)
+		answer, err := readFreeformInputCtx(ctx, reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return "", ErrAskUserNoChannel
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return "", err
 			}
 			return "", fmt.Errorf("read user input: %w", err)
 		}
@@ -573,5 +635,5 @@ func AskUserWithEventBus(ctx context.Context, req AskUserRequest, eventBus *even
 	}
 
 	// CLI mode: read from stdin
-	return AskUser(req)
+	return AskUser(ctx, req)
 }

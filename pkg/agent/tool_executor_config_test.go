@@ -37,6 +37,15 @@ func TestGetToolTimeoutOther(t *testing.T) {
 	}
 }
 
+func TestGetToolTimeoutInteractive(t *testing.T) {
+	for _, name := range []string{"ask_user", "request_clarification"} {
+		timeout := getToolTimeout(name)
+		if timeout != 1*time.Hour {
+			t.Errorf("getToolTimeout(%q) = %v, want %v (interactive tools manage their own timeouts)", name, timeout, 1*time.Hour)
+		}
+	}
+}
+
 func TestGetToolTimeoutEnvOverride(t *testing.T) {
 	t.Setenv("SPROUT_TOOL_TIMEOUT", "60")
 	timeout := getToolTimeout("read_file")

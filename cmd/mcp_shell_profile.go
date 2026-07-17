@@ -11,13 +11,13 @@ import (
 
 // detectShellProfilePath returns the absolute path of the shell profile
 // file that should be edited for the current user. Detection order:
-//   1. $SHELL basename:
-//        - "bash" → ~/.bashrc (fallback to ~/.bash_profile if .bashrc missing)
-//        - "zsh"  → ~/.zshrc
-//        - "fish" → ~/.config/fish/config.fish
-//        - others → ~/.profile (POSIX fallback)
-//   2. If the detected file doesn't exist, ~/.bashrc is used as a final
-//      fallback because it is the most widely-supported login shell profile.
+//  1. $SHELL basename:
+//     - "bash" → ~/.bashrc (fallback to ~/.bash_profile if .bashrc missing)
+//     - "zsh"  → ~/.zshrc
+//     - "fish" → ~/.config/fish/config.fish
+//     - others → ~/.profile (POSIX fallback)
+//  2. If the detected file doesn't exist, ~/.bashrc is used as a final
+//     fallback because it is the most widely-supported login shell profile.
 //
 // On any failure (missing $HOME, etc.) the empty string is returned.
 func detectShellProfilePath() string {

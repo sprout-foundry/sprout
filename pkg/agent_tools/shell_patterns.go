@@ -357,7 +357,7 @@ func isCautionPattern(cmd string) bool {
 		return false
 	}
 	cautionPatterns := []string{
-		"rm ",     // single file deletion (rm without -rf/-fr; those are handled by isDangerousPattern)
+		"rm ",       // single file deletion (rm without -rf/-fr; those are handled by isDangerousPattern)
 		"docker rm", // container deletion
 	}
 

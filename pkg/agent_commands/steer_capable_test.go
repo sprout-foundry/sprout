@@ -30,9 +30,9 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"tools",
 		"keys",
 		"custom",
-		"persona",          // safe during steer
-		"subagent-persona", // alias for /persona - safe
-		"subagent-personas",// alias for /persona - safe
+		"persona",           // safe during steer
+		"subagent-persona",  // alias for /persona - safe
+		"subagent-personas", // alias for /persona - safe
 	}
 
 	for _, name := range safeCommands {
@@ -209,25 +209,25 @@ func TestDefaultRegistry_InitializesAllCommands(t *testing.T) {
 
 	// Check aliases
 	aliasesOf := map[string][]string{
-		"model":       {"m"},
-		"provider":     {"p"},
-		"exit":        {"x", "q"},
-		"help":        {"?", "h"},
-		"usage":       {"stats"},
-		"commit":      {"c"},
-		"search":      {"s"},
-		"index":       {"i"},
-		"edit":        {"e"},
-		"review":      {"r"},
-		"clear":       {"cl", "new"},
-		"compact":     {"cp"},
-		"status":      {"st"},
-		"rollback":    {"rb"},
-		"rewind":      {"rw"},
-		"changes":     {"ch"},
-		"codegraph":   {"cg"},
-		"sessions":    {"resume"},
-		"keys":        {"key"},
+		"model":     {"m"},
+		"provider":  {"p"},
+		"exit":      {"x", "q"},
+		"help":      {"?", "h"},
+		"usage":     {"stats"},
+		"commit":    {"c"},
+		"search":    {"s"},
+		"index":     {"i"},
+		"edit":      {"e"},
+		"review":    {"r"},
+		"clear":     {"cl", "new"},
+		"compact":   {"cp"},
+		"status":    {"st"},
+		"rollback":  {"rb"},
+		"rewind":    {"rw"},
+		"changes":   {"ch"},
+		"codegraph": {"cg"},
+		"sessions":  {"resume"},
+		"keys":      {"key"},
 	}
 	for canonical, als := range aliasesOf {
 		if !registered[canonical] {

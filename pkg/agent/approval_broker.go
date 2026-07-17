@@ -68,21 +68,21 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 						if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
 							a.logSecurityDecision(toolName, args, assessment, "blocked")
 							return BrokerDecision{
-								Approved:   false,
-								Decision:   security.ApprovalDeny,
-								Surface:    "command-policy",
-								Assessment: assessment,
-							}, agenterrors.NewSecurityErrorWithAssessment(
-								fmt.Sprintf("critical operation cannot be overridden by allow policy: %s", matchedPattern),
-								assessment.Explain(), nil,
-							)
+									Approved:   false,
+									Decision:   security.ApprovalDeny,
+									Surface:    "command-policy",
+									Assessment: assessment,
+								}, agenterrors.NewSecurityErrorWithAssessment(
+									fmt.Sprintf("critical operation cannot be overridden by allow policy: %s", matchedPattern),
+									assessment.Explain(), nil,
+								)
 						}
 						return BrokerDecision{
-								Approved:   true,
-								Decision:   security.ApprovalApproveOnce,
-								Surface:    "command-policy",
-								Assessment: assessment,
-							}, nil
+							Approved:   true,
+							Decision:   security.ApprovalApproveOnce,
+							Surface:    "command-policy",
+							Assessment: assessment,
+						}, nil
 					case configuration.CommandPolicyAsk:
 						// Force interactive prompt: skip the allowlist bypass below.
 						// The classifier risk is still computed for display.

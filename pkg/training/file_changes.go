@@ -40,8 +40,8 @@ type FileChangeExportResult struct {
 
 // FileChangeExample is one training example built from a file diff pair.
 type FileChangeExample struct {
-	Messages []OpenAIMessage             `json:"messages"`
-	Metadata FileChangeExampleMetadata   `json:"metadata"`
+	Messages []OpenAIMessage           `json:"messages"`
+	Metadata FileChangeExampleMetadata `json:"metadata"`
 }
 
 // FileChangeExampleMetadata holds metadata about a single file-change example.
@@ -95,12 +95,12 @@ const defaultMaxSize = 50000
 // changeMetadata mirrors the on-disk metadata.json written by the
 // history package. Only the fields needed for export are included.
 type changeMetadata struct {
-	Version      int    `json:"version"`
-	Filename     string `json:"filename"`
-	Description  string `json:"description"`
-	LLMMessage   string `json:"llm_message,omitempty"`
-	AgentModel   string `json:"agent_model,omitempty"`
-	FileRevHash  string `json:"file_revision_hash"`
+	Version     int    `json:"version"`
+	Filename    string `json:"filename"`
+	Description string `json:"description"`
+	LLMMessage  string `json:"llm_message,omitempty"`
+	AgentModel  string `json:"agent_model,omitempty"`
+	FileRevHash string `json:"file_revision_hash"`
 }
 
 // ---------------------------------------------------------------------------

@@ -650,7 +650,7 @@ func TestExtractSubagentExamples_ParallelWithShortOutput(t *testing.T) {
 	prompts := []string{"Task 1", "Task 2"}
 	outputs := map[string]string{
 		"task-1": strings.Repeat("Valid output here.", 5), // >50 chars
-		"task-2": "short",                                   // <50 chars, filtered
+		"task-2": "short",                                 // <50 chars, filtered
 	}
 
 	state := agent.ConversationState{
@@ -732,7 +732,7 @@ func TestExtractSubagentExamples_Redaction(t *testing.T) {
 	// Use a realistic OpenAI API key format that secretdetect catches
 	secretKey := "AKIAIOSFODNN7EXAMPLE"
 	prompt := "Fix the code with " + secretKey + " key."
-	output := strings.Repeat("The " + secretKey + " key was removed. ", 3)
+	output := strings.Repeat("The "+secretKey+" key was removed. ", 3)
 
 	state := agent.ConversationState{
 		SessionID: "test",
@@ -872,8 +872,8 @@ func TestParseToolCallArgs_Invalid(t *testing.T) {
 
 func TestExtractStringArg(t *testing.T) {
 	args := map[string]interface{}{
-		"str":   "value",
-		"num":   42,
+		"str":    "value",
+		"num":    42,
 		"absent": nil,
 	}
 	if got := extractStringArg(args, "str"); got != "value" {

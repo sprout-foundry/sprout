@@ -115,17 +115,19 @@ func TestValidateOptions_Valid(t *testing.T) {
 func TestMeetsThresholds(t *testing.T) {
 	state := sampleConversationState("sess1")
 
-	// sampleConversationState has 1 user-assistant turn (user→assistant with
-	// tool calls, then two more assistant-only messages via tool intermediaries)
-	// and 2 actions.
+	// sampleConversationState has 2 agentic turns (1 user→assistant + 1
+	// autonomous tool-calling assistant message) and 2 actions.
 	if !meetsThresholds(state, 1, 1) {
 		t.Fatal("expected session to pass thresholds")
 	}
 	if !meetsThresholds(state, 1, 2) {
 		t.Fatal("expected session to pass exact action threshold")
 	}
-	if meetsThresholds(state, 2, 1) {
-		t.Fatal("expected session to fail with too many min-turns (only 1 turn)")
+	if !meetsThresholds(state, 2, 1) {
+		t.Fatal("expected session to pass min-turns=2 with agentic turns")
+	}
+	if meetsThresholds(state, 3, 1) {
+		t.Fatal("expected session to fail with min-turns=3 (only 2 agentic turns)")
 	}
 	if meetsThresholds(state, 1, 3) {
 		t.Fatal("expected session to fail with too many min-actions")

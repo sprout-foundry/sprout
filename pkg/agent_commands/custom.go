@@ -23,6 +23,11 @@ func (c *CustomCommand) Name() string {
 	return "custom"
 }
 
+// SafeDuringSteer returns true - /custom is config, independent of active turn
+func (c *CustomCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description.
 func (c *CustomCommand) Description() string {
 	return "Manage custom OpenAI-compatible providers"

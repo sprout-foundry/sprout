@@ -7,7 +7,7 @@ package console
 // The handler reads the footer size via the global StatusFooter when
 // available, falls back to a sane default, and toggles the tooltip.
 //
-// CLI-UX-12: register Alt+V → output_verbosity.toggle so power users
+// CLI-UX-12: register Alt+V → output.verbosity.toggle so power users
 // can switch between default and verbose output with a single shortcut.
 //
 // Initialization is idempotent — multiple RegisterKeymapForFooter calls
@@ -47,7 +47,7 @@ func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
 		// Alt+T: footer tooltip toggle (CLI-D-3)
 		GlobalKeymap().Register(KeymapEntry{
 			Key:         "Alt+T",
-			Action:      "footer.tooltip.toggle",
+			Action:      "footer.breakdown.toggle",
 			Description: "Show / hide per-tool invocation breakdown above the status footer",
 			Handler: func() {
 				cols, rows := footerTooltipSize(footer)
@@ -59,7 +59,7 @@ func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
 		// Alt+V: output verbosity toggle (CLI-UX-12)
 		GlobalKeymap().Register(KeymapEntry{
 			Key:         "Alt+V",
-			Action:      "output_verbosity.toggle",
+			Action:      "output.verbosity.toggle",
 			Description: "Cycle output verbosity: default ↔ verbose (more tool detail)",
 			Handler: func() {
 				if cfg == nil {

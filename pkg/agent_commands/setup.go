@@ -17,6 +17,11 @@ type SetupCommand struct{}
 // Name returns the command name.
 func (s *SetupCommand) Name() string { return "setup" }
 
+// SafeDuringSteer returns false - /setup is interactive wizard, uses stdin
+func (s *SetupCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description.
 func (s *SetupCommand) Description() string {
 	return "Show persisted configuration (provider defaults, subagent config, skills, MCP, warnings)"

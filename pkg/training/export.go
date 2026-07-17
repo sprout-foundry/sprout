@@ -296,20 +296,31 @@ func loadSessionState(c candidateSession) (*agent.ConversationState, error) {
 }
 
 // meetsThresholds checks whether a conversation passes quality filters.
+// meetsThresholds checks if a session has enough substance for training.
+// The primary quality signal is agentic richness (tool calls + tool results),
+// not user turn count — automated workflow sessions may have a single user
+// prompt followed by a deep chain of subagent orchestration with dozens of
+// tool calls, which are high-value training data.
 func meetsThresholds(state agent.ConversationState, minTurns, minActions int) bool {
-	if countTurns(state.Messages) < minTurns {
+	if len(state.TaskActions) < minActions {
 		return false
 	}
-	if len(state.TaskActions) < minActions {
+	// Count turn-like exchanges: either user→assistant pairs OR assistant
+	// messages with tool calls (agentic turns that don't need a preceding
+	// user message, common in automated workflows).
+	turns := countAgenticTurns(state.Messages)
+	if turns < minTurns {
 		return false
 	}
 	return true
 }
 
-// countTurns counts user-assistant exchange pairs. Tool messages are ignored;
-// an assistant message is counted as a turn if the last non-tool message was a
-// user message (or if no user message has been consumed yet for this turn).
-func countTurns(messages []api.Message) int {
+// countAgenticTurns counts meaningful conversation turns, treating
+// assistant messages with tool calls as turns even without a preceding
+// user message. This ensures automated workflow sessions (1 user prompt →
+// many autonomous tool-calling turns) score high rather than being
+// filtered as single-turn.
+func countAgenticTurns(messages []api.Message) int {
 	turns := 0
 	pendingUser := false
 	for _, m := range messages {
@@ -320,6 +331,11 @@ func countTurns(messages []api.Message) int {
 			if pendingUser {
 				turns++
 				pendingUser = false
+			} else if len(m.ToolCalls) > 0 {
+				// Autonomous agentic turn — no user prompt needed.
+				// This captures workflow/automation sessions where the
+				// model chains tool calls autonomously.
+				turns++
 			}
 		case "tool":
 			// Tool messages don't affect turn counting.

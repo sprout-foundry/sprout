@@ -14,11 +14,7 @@ const CHANNEL_NAME = 'sprout-foundry-sync';
 
 export type SyncSource = 'dashboard' | 'editor';
 
-export type SyncMessageType =
-  | 'task_update'
-  | 'file_change'
-  | 'usage_update'
-  | 'session_change';
+export type SyncMessageType = 'task_update' | 'file_change' | 'usage_update' | 'session_change';
 
 export interface SyncMessage {
   source: SyncSource;
@@ -58,7 +54,9 @@ class CrossTabSync {
 
   subscribe(handler: SyncHandler): () => void {
     this.handlers.add(handler);
-    return () => { this.handlers.delete(handler); };
+    return () => {
+      this.handlers.delete(handler);
+    };
   }
 
   close(): void {

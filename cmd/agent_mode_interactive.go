@@ -421,6 +421,17 @@ func (s *agentFooterSource) TotalCost() float64 {
 	return s.agent.GetTotalCost()
 }
 
+// BillingType returns the current provider's billing model so the footer
+// can annotate subscription/free usage instead of showing "$0.0000".
+// Satisfies the optional billingTypeSource interface in pkg/console.
+// SP-113 Phase 3.
+func (s *agentFooterSource) BillingType() string {
+	if s == nil || s.agent == nil {
+		return ""
+	}
+	return s.agent.ResolveBillingType()
+}
+
 // TodoProgress returns (completed, total) from the agent's todo list.
 // Satisfies the optional todoProgressSource interface so the footer can
 // render a "3/7 done" badge during multi-step turns. CLI-UX-4.

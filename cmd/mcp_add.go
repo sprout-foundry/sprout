@@ -477,7 +477,8 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 
 // promptForGitHubToken prompts the user for a GitHub Personal Access Token.
 // It checks the environment first, and if not set, asks interactively.
-// If a new token is entered, it offers to add it to the user's shell profile.
+// If a new token is entered, it offers to add it to the user's shell profile
+// and writes the export line if the user agrees.
 func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 	githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
 
@@ -499,15 +500,39 @@ func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 			return "", errors.New("GitHub token is required for local MCP servers")
 		}
 
-		// Offer to set environment variable in the user's shell profile
-		fmt.Print("Add GITHUB_PERSONAL_ACCESS_TOKEN to your shell profile? (y/N): ")
-		setEnv, _ := reader.ReadString('\n')
-		if strings.ToLower(strings.TrimSpace(setEnv)) == "y" {
+		// Offer to write the token to the user's shell profile.
+		path := detectShellProfilePath()
+		if path == "" {
 			fmt.Println()
+			console.GlyphWarning.Fprintf(os.Stdout, "Could not detect shell profile; manual setup required")
 			fmt.Println("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
 			fmt.Printf("  export GITHUB_PERSONAL_ACCESS_TOKEN=\"<your-token-here>\"\n")
 			fmt.Println("(Paste the token you just entered above.)")
 			fmt.Println()
+		} else {
+			fmt.Print("Add GITHUB_PERSONAL_ACCESS_TOKEN to your shell profile? (y/N): ")
+			setEnv, err := reader.ReadString('\n')
+			if err != nil {
+				// EOF / read error on confirmation — treat as graceful decline,
+				// preserving the token read above.
+				return githubToken, nil
+			}
+			if strings.ToLower(strings.TrimSpace(setEnv)) == "y" {
+				if err := writeEnvToShellProfile(path, "GITHUB_PERSONAL_ACCESS_TOKEN", githubToken); err != nil {
+					// Fall back to print instructions so the user can paste manually.
+					fmt.Println()
+					console.GlyphWarning.Fprintf(os.Stdout, "Failed to write to %s: %v", path, err)
+					fmt.Println("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
+					fmt.Printf("  export GITHUB_PERSONAL_ACCESS_TOKEN=\"<your-token-here>\"\n")
+					fmt.Println("(Paste the token you just entered above.)")
+					fmt.Println()
+				} else {
+					fmt.Println()
+					console.GlyphSuccess.Fprintf(os.Stdout, "Added GITHUB_PERSONAL_ACCESS_TOKEN to %s", path)
+					fmt.Printf("  Run `source %s` (or open a new shell) to use it.\n", path)
+					fmt.Println()
+				}
+			}
 		}
 	}
 

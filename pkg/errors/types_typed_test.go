@@ -64,6 +64,51 @@ func TestNewNotFound(t *testing.T) {
 	}
 }
 
+func TestNewNotFoundCause_PreservesCause(t *testing.T) {
+	cause := errors.New("underlying")
+	te := NewNotFoundCause("foo", cause)
+
+	if te.Code != CodeNotFound {
+		t.Errorf("Code = %s; want %s", te.Code, CodeNotFound)
+	}
+	if te.Cause != cause {
+		t.Errorf("Cause not preserved: got %v, want %v", te.Cause, cause)
+	}
+	if te.Message != "foo not found" {
+		t.Errorf("Message = %q; want %q", te.Message, "foo not found")
+	}
+	if te.Status != http.StatusNotFound {
+		t.Errorf("Status = %d; want %d", te.Status, http.StatusNotFound)
+	}
+	if te.Severity != SeverityError {
+		t.Errorf("Severity = %s; want %s", te.Severity, SeverityError)
+	}
+	if te.Retryable {
+		t.Error("Retryable = true; want false")
+	}
+	// errors.Is traverses the chain to find the cause
+	if !errors.Is(te, cause) {
+		t.Error("errors.Is(te, cause) = false; want true")
+	}
+	// Unwrap returns the cause
+	if got := errors.Unwrap(te); got != cause {
+		t.Errorf("Unwrap returned %v, want %v", got, cause)
+	}
+}
+
+func TestNewNotFoundCause_NilCause(t *testing.T) {
+	te := NewNotFoundCause("foo", nil)
+	if te.Code != CodeNotFound {
+		t.Errorf("Code = %s; want %s", te.Code, CodeNotFound)
+	}
+	if te.Cause != nil {
+		t.Errorf("Cause should be nil when cause arg is nil")
+	}
+	if te.Message != "foo not found" {
+		t.Errorf("Message = %q; want %q", te.Message, "foo not found")
+	}
+}
+
 func TestNewTimeout(t *testing.T) {
 	err := NewTimeout("op", 5*time.Second)
 
@@ -448,6 +493,7 @@ func TestConstructorsSetRecentTime(t *testing.T) {
 	errs := []error{
 		NewValidation("x", nil),
 		NewNotFound("x"),
+		NewNotFoundCause("x", nil),
 		NewPermission("x", nil),
 		NewTimeout("x", time.Second),
 		NewNetwork("x", nil),

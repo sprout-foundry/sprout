@@ -315,6 +315,18 @@ func MergeConfig(base, override *Config) *Config {
 		result.Shell.WorkspaceOverlay = override.Shell.WorkspaceOverlay
 	}
 
+	// Merge Training configuration — override wins when Enabled is true
+	// or an Endpoint is provided. ExcludePaths are appended (deduped).
+	if override.Training.Enabled {
+		result.Training.Enabled = true
+	}
+	if override.Training.Endpoint != "" {
+		result.Training.Endpoint = override.Training.Endpoint
+	}
+	if len(override.Training.ExcludePaths) > 0 {
+		result.Training.ExcludePaths = mergeStringSlices(result.Training.ExcludePaths, override.Training.ExcludePaths)
+	}
+
 	return result
 }
 
@@ -358,4 +370,23 @@ func cloneConfig(cfg *Config) *Config {
 		out.SubagentTypes = defaultSubagentTypes()
 	}
 	return &out
+}
+
+// mergeStringSlices combines two string slices, removing duplicates.
+func mergeStringSlices(base, extra []string) []string {
+	seen := make(map[string]bool, len(base)+len(extra))
+	result := make([]string, 0, len(base)+len(extra))
+	for _, s := range base {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range extra {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }

@@ -41,6 +41,16 @@
   text-align: right;
 }
 
+.provider-table-col--billing {
+  text-align: left;
+}
+
+.provider-table-cell--billing {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary, var(--text-primary));
+  white-space: nowrap;
+}
+
 .provider-table-row {
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-default);

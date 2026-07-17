@@ -130,4 +130,54 @@ describe('ProviderTable', () => {
     expect(row).toHaveTextContent('$0.0000');
     expect(screen.getByTestId('provider-delta-google-flat')).toBeInTheDocument();
   });
+
+  it('renders Billing header column', () => {
+    render(<ProviderTable summary={makeSummary()} />);
+    expect(screen.getByTestId('provider-table')).toHaveTextContent('Billing');
+  });
+
+  it('renders billing type label for each provider', () => {
+    const summary = makeSummary({
+      by_provider_billing_type: {
+        openai: 'pay_per_token',
+        anthropic: 'subscription',
+      },
+    });
+    render(<ProviderTable summary={summary} />);
+
+    const openaiBilling = screen.getByTestId('provider-billing-openai');
+    expect(openaiBilling).toHaveTextContent('Pay-per-token');
+
+    const anthropicBilling = screen.getByTestId('provider-billing-anthropic');
+    expect(anthropicBilling).toHaveTextContent('Subscription');
+  });
+
+  it('defaults billing type to Pay-per-token when not specified', () => {
+    const summary = makeSummary({
+      by_provider_billing_type: {},
+    });
+    render(<ProviderTable summary={summary} />);
+
+    const openaiBilling = screen.getByTestId('provider-billing-openai');
+    expect(openaiBilling).toHaveTextContent('Pay-per-token');
+  });
+
+  it('formats free billing type correctly', () => {
+    const summary = makeSummary({
+      by_provider: { local: 0 },
+      by_provider_this_month: { local: 0 },
+      by_provider_last_month: { local: 0 },
+      by_provider_billing_type: { local: 'free' },
+    });
+    render(<ProviderTable summary={summary} />);
+
+    expect(screen.getByTestId('provider-billing-local')).toHaveTextContent('Free');
+  });
+
+  it('shows 5 skeleton cells per row in loading state', () => {
+    render(<ProviderTable summary={null} loading={true} />);
+    const firstSkeletonRow = document.querySelectorAll('.provider-table-row--skeleton')[0];
+    const cells = firstSkeletonRow.querySelectorAll('.provider-table-cell--skeleton');
+    expect(cells).toHaveLength(5);
+  });
 });

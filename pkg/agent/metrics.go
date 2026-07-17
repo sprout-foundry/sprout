@@ -118,24 +118,12 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 		}
 	}
 
-	// Fleet USD budget: per SP-113 Layer 4, only ChargedCost is debited.
-	// Subscription and free providers (chargedCost == 0) must NOT consume
-	// the fleet budget — there is no marginal spend to protect against.
-	if a.fleetUsdBudget != nil && chargedCost > 0 {
-		spent, crossed, justExceeded := a.fleetUsdBudget.Add(chargedCost)
-		_, limit := a.fleetUsdBudget.Snapshot()
-		for _, t := range crossed {
-			if cb, ok := a.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {
-				cb(t, spent, limit)
-			}
-		}
-		if justExceeded {
-			a.fleetBudgetTrunc.Store(true)
-			if cb, ok := a.budgetExceededCallback.Load().(func(spent, limit float64)); ok && cb != nil {
-				cb(spent, limit)
-			}
-		}
-	}
+	// Fleet USD budget: NOT debited here. TrackMetricsFromResponse is only
+	// called from subagent result rollup, where the subagent has already
+	// debited the shared fleet budget via accumulateResponseCost. Debiting
+	// again would double-count. The token fleet budget (above) is also
+	// double-debited in theory, but subagent tokens are already counted
+	// via the shared fleetBudgetTracker — leaving as-is to avoid scope creep.
 
 	// Calculate cost savings from cached tokens using the per-model pricing
 	// resolver. Returns 0 when the cached rate is unknown — no fabrication.

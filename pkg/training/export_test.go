@@ -138,10 +138,10 @@ func TestMeetsThresholds(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// countTurns tests
+// countAgenticTurns tests
 // ---------------------------------------------------------------------------
 
-func TestCountTurns(t *testing.T) {
+func TestCountAgenticTurns(t *testing.T) {
 	tests := []struct {
 		name     string
 		messages []api.Message
@@ -171,7 +171,7 @@ func TestCountTurns(t *testing.T) {
 			want: 2,
 		},
 		{
-			name: "assistant without preceding user",
+			name: "assistant without preceding user (no tools)",
 			messages: []api.Message{
 				{Role: "assistant", Content: "hello"},
 			},
@@ -184,12 +184,30 @@ func TestCountTurns(t *testing.T) {
 			},
 			want: 0,
 		},
+		{
+			name: "automated workflow: 1 user + autonomous tool calls",
+			messages: []api.Message{
+				{Role: "user", Content: "build the feature"},
+				{Role: "assistant", Content: "Let me start", ToolCalls: []api.ToolCall{{ID: "c1", Type: "function", Function: api.ToolCallFunction{Name: "read_file", Arguments: "{}"}}}},
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c2", Type: "function", Function: api.ToolCallFunction{Name: "write_file", Arguments: "{}"}}}},
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c3", Type: "function", Function: api.ToolCallFunction{Name: "shell_command", Arguments: "{}"}}}},
+			},
+			want: 3,
+		},
+		{
+			name: "pure automation: no user message but tool calls",
+			messages: []api.Message{
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c1", Type: "function", Function: api.ToolCallFunction{Name: "search", Arguments: "{}"}}}},
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c2", Type: "function", Function: api.ToolCallFunction{Name: "read_file", Arguments: "{}"}}}},
+			},
+			want: 2,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := countTurns(tt.messages)
+			got := countAgenticTurns(tt.messages)
 			if got != tt.want {
-				t.Errorf("countTurns() = %d, want %d", got, tt.want)
+				t.Errorf("countAgenticTurns() = %d, want %d", got, tt.want)
 			}
 		})
 	}

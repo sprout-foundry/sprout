@@ -31,6 +31,11 @@ func (p *ProvidersCommand) Name() string {
 	return "provider"
 }
 
+// SafeDuringSteer returns true - /provider is config for next turn only
+func (p *ProvidersCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (p *ProvidersCommand) Description() string {
 	return "Show current provider status and switch providers"

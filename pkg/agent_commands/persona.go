@@ -27,6 +27,11 @@ type PersonaCommand struct{}
 func (p *PersonaCommand) Name() string        { return "persona" }
 func (p *PersonaCommand) Description() string { return "List, activate, and enable/disable personas" }
 
+// SafeDuringSteer returns true - /persona is config for next turn only
+func (p *PersonaCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Usage returns the detailed help text shown by `/help persona`.
 func (p *PersonaCommand) Usage() string {
 	return strings.Join([]string{
@@ -51,6 +56,9 @@ func (s *SubagentPersonaCommand) Description() string { return "Alias for /perso
 // Usage returns the detailed help text shown by `/help subagent-persona`.
 func (s *SubagentPersonaCommand) Usage() string { return (&PersonaCommand{}).Usage() }
 
+// SafeDuringSteer returns true - delegates to /persona which is safe.
+func (s *SubagentPersonaCommand) SafeDuringSteer() bool { return true }
+
 func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return (&PersonaCommand{}).Execute(args, chatAgent)
 }
@@ -63,6 +71,9 @@ func (s *SubagentPersonasCommand) Description() string { return "Alias for /pers
 
 // Usage returns the detailed help text shown by `/help subagent-personas`.
 func (s *SubagentPersonasCommand) Usage() string { return (&PersonaCommand{}).Usage() }
+
+// SafeDuringSteer returns true - delegates to /persona which is safe.
+func (s *SubagentPersonasCommand) SafeDuringSteer() bool { return true }
 
 func (s *SubagentPersonasCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return (&PersonaCommand{}).Execute(nil, chatAgent)

@@ -161,7 +161,7 @@ func TestMigrateCommandPolicies_FromPatterns(t *testing.T) {
 
 func TestMigrateCommandPolicies_FromBoth(t *testing.T) {
 	cfg := &Config{
-		ApprovedShellCommands:      []string{"npm test"},
+		ApprovedShellCommands:        []string{"npm test"},
 		ApprovedShellCommandPatterns: []string{"rm -rf /tmp/*"},
 	}
 
@@ -210,7 +210,7 @@ func TestMigrateCommandPolicies_Idempotent(t *testing.T) {
 
 func TestMigrateCommandPolicies_EmptyFields(t *testing.T) {
 	cfg := &Config{
-		ApprovedShellCommands:      []string{},
+		ApprovedShellCommands:        []string{},
 		ApprovedShellCommandPatterns: []string{},
 	}
 
@@ -233,7 +233,7 @@ func TestMigrateCommandPolicies_NilFields(t *testing.T) {
 
 func TestMigrateCommandPolicies_SkipsEmptyStrings(t *testing.T) {
 	cfg := &Config{
-		ApprovedShellCommands:      []string{"npm test", "", "git status"},
+		ApprovedShellCommands:        []string{"npm test", "", "git status"},
 		ApprovedShellCommandPatterns: []string{"", "rm -rf /tmp/*"},
 	}
 

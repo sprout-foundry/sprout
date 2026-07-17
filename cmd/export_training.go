@@ -14,19 +14,19 @@ import (
 )
 
 var (
-	exportFormat            string
-	exportOutput            string
-	exportAll               bool
-	exportMinTurns          int
-	exportMinActions        int
-	exportNoToolRes         bool
-	exportIncludeSys        bool
-	exportSession           string
-	exportStructuredTools   bool
-	exportIncludeSubagents  bool
-	exportSource            string
-	exportMaxSize           int
-	exportExclude           string
+	exportFormat           string
+	exportOutput           string
+	exportAll              bool
+	exportMinTurns         int
+	exportMinActions       int
+	exportNoToolRes        bool
+	exportIncludeSys       bool
+	exportSession          string
+	exportStructuredTools  bool
+	exportIncludeSubagents bool
+	exportSource           string
+	exportMaxSize          int
+	exportExclude          string
 )
 
 var exportTrainingCmd = &cobra.Command{

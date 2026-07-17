@@ -67,12 +67,7 @@ function PolicyList({
             }
           }}
         />
-        <button
-          type="button"
-          className="settings-action-btn"
-          onClick={addRule}
-          disabled={draft.trim().length === 0}
-        >
+        <button type="button" className="settings-action-btn" onClick={addRule} disabled={draft.trim().length === 0}>
           Add
         </button>
       </div>

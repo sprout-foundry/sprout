@@ -199,6 +199,9 @@ func createChatAgent() (*agent.Agent, error) {
 		chatAgent.SetMaxIterations(maxIterations)
 	}
 
+	// Wire training data collection hooks (opt-in session recording).
+	wireTrainingHooks(chatAgent, chatAgent.GetConfigManager())
+
 	return chatAgent, nil
 }
 

@@ -18,6 +18,7 @@ export interface CostSummary {
   last_month?: number;
   top_sessions?: SessionCostRow[];
   by_billing_type?: Record<string, BillingTypeBreakdown>;
+  by_provider_billing_type?: Record<string, string>;
   charged_cost?: number;
   token_value?: number;
   /** All-time earliest recorded activity (ISO 8601 / RFC 3339 UTC). Optional; omitted when the store is empty. */

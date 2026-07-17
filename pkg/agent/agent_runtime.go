@@ -68,12 +68,11 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + resp.Usage.CompletionTokens)
 	a.state.SetLLMCallCount(a.state.GetLLMCallCount() + 1)
 
-	costForBudget := chargedCost
-	if costForBudget == 0 {
-		costForBudget = tokenCost
-	}
-	if a.fleetUsdBudget != nil && costForBudget > 0 {
-		spent, crossed, justExceeded := a.fleetUsdBudget.Add(costForBudget)
+	// Fleet USD budget: per SP-113 Layer 4, only ChargedCost is debited.
+	// Subscription and free providers (chargedCost == 0) must NOT consume
+	// the fleet budget — there is no marginal spend to protect against.
+	if a.fleetUsdBudget != nil && chargedCost > 0 {
+		spent, crossed, justExceeded := a.fleetUsdBudget.Add(chargedCost)
 		_, limit := a.fleetUsdBudget.Snapshot()
 		for _, t := range crossed {
 			if cb, ok := a.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {
@@ -113,6 +112,13 @@ func (a *Agent) resolveBillingType() string {
 		return BillingSubscription
 	}
 	return BillingPayPerToken
+}
+
+// ResolveBillingType is the exported wrapper around resolveBillingType so
+// the CLI footer (cmd package) can surface subscription/free billing
+// instead of "$0.0000". SP-113 Phase 3.
+func (a *Agent) ResolveBillingType() string {
+	return a.resolveBillingType()
 }
 
 // estimateCostFromPricing computes a cost estimate from token counts and the

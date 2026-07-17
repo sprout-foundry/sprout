@@ -306,6 +306,17 @@ type Agent struct {
 	// Used by the steer coordinator and WebUI to look up commands for mid-turn
 	// execution (SP-114 Phase 1).
 	slashCommands any // *commands.CommandRegistry — stored as any to avoid circular import
+
+	// Training data collection — opt-in session recording. The callback
+	// is wired from cmd/ (which imports both pkg/agent and pkg/training)
+	// to avoid a circular import. When trainingPushFn is non-nil and
+	// trainingEnabled is true, SaveStateScoped fires the callback in a
+	// goroutine after each save.
+	trainingMu       sync.RWMutex
+	trainingEnabled  bool
+	trainingEndpoint string
+	trainingExclude  []string
+	trainingPushFn   func(state ConversationState, endpoint string, excludePaths []string) error
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

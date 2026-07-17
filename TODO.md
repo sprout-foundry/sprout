@@ -337,6 +337,18 @@ day) since `IsRemoteSizeExceededError` already covers the size-cap case
 and most callers of PDF processing already wrap with typed errors. No
 spec change; just mechanical migration.
 
+- [x] **SP-103-A9b:** PDF-path typed-error migration. `classifyPDFProcessingErrorCode`
+      in `pkg/agent_tools/vision_utils.go:152-188` now prefers typed errors via
+      `errors.As(*TypedError)` → `typedErrorToVisionCode`, falling back to the
+      strings.Contains logic (now `legacyClassifyPDFError`) when no typed error
+      is in the chain. Failure sites in `vision_pdf.go` are wrapped with
+      `agenterrors.NewNotFound`/`NewNetwork`/`NewValidation` so typed errors
+      propagate through `fmt.Errorf("...: %w", ...)` chains. Tests:
+      `vision_types_pdf_error_test.go` got 13 new typed cases (NotFound,
+      Network, Validation, Timeout, Tool, wrapped-chain variants, legacy
+      fallback, nil). `vision_utils.go:13` and `vision_pdf.go:18` import
+      `agenterrors`. Build clean; `go test ./pkg/agent_tools/...` 42.5s pass.
+
 #### SP-103-D1: Inline-Image Cost into Budget Tracker
 
 When `processImagesAsMultimodal` embeds images into the chat message, per-image `image_tokens` / `cache_read_input_tokens` come back in the provider's chat response but are dropped before reaching `BudgetTracker.Deduct`. Bridge them so users see actual vision cost.

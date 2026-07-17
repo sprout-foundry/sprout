@@ -6,6 +6,19 @@ import './ProviderTable.css';
 /** Threshold below which a month-over-month delta is considered flat (in dollars). */
 const FLAT_DELTA_THRESHOLD = 0.00005;
 
+/** Map raw billing-type strings to human-readable labels for display. */
+function formatBillingType(billingType?: string): string {
+  switch (billingType) {
+    case 'subscription':
+      return 'Subscription';
+    case 'free':
+      return 'Free';
+    case 'pay_per_token':
+    default:
+      return 'Pay-per-token';
+  }
+}
+
 interface ProviderTableProps {
   summary: CostSummary | null;
   loading?: boolean;
@@ -42,12 +55,14 @@ export default function ProviderTable({ summary, loading = false, error = null }
     const providers = Object.keys(summary.by_provider).sort();
     const thisMonthMap = summary.by_provider_this_month ?? {};
     const lastMonthMap = summary.by_provider_last_month ?? {};
+    const billingTypeMap = summary.by_provider_billing_type ?? {};
 
     return providers.map((provider) => {
       const thisMonth = thisMonthMap[provider] ?? 0;
       const lastMonth = lastMonthMap[provider] ?? 0;
       const delta = computeDelta(thisMonth, lastMonth);
-      return { provider, thisMonth, lastMonth, delta };
+      const billingType = billingTypeMap[provider] ?? 'pay_per_token';
+      return { provider, thisMonth, lastMonth, delta, billingType };
     });
   }, [summary]);
 
@@ -69,6 +84,9 @@ export default function ProviderTable({ summary, loading = false, error = null }
             <tr>
               <th scope="col" className="provider-table-col--provider">
                 Provider
+              </th>
+              <th scope="col" className="provider-table-col--billing">
+                Billing
               </th>
               <th scope="col" className="provider-table-col--this-month">
                 This Month
@@ -92,6 +110,7 @@ export default function ProviderTable({ summary, loading = false, error = null }
                 <td className="provider-table-cell provider-table-cell--skeleton" />
                 <td className="provider-table-cell provider-table-cell--skeleton" />
                 <td className="provider-table-cell provider-table-cell--skeleton" />
+                <td className="provider-table-cell provider-table-cell--skeleton" />
               </tr>
             ))}
           </tbody>
@@ -110,6 +129,9 @@ export default function ProviderTable({ summary, loading = false, error = null }
               <th scope="col" className="provider-table-col--provider">
                 Provider
               </th>
+              <th scope="col" className="provider-table-col--billing">
+                Billing
+              </th>
               <th scope="col" className="provider-table-col--this-month">
                 This Month
               </th>
@@ -123,7 +145,7 @@ export default function ProviderTable({ summary, loading = false, error = null }
           </thead>
           <tbody>
             <tr>
-              <td colSpan={4} className="provider-table-empty">
+              <td colSpan={5} className="provider-table-empty">
                 No provider data available.
               </td>
             </tr>
@@ -141,6 +163,9 @@ export default function ProviderTable({ summary, loading = false, error = null }
             <th scope="col" className="provider-table-col--provider">
               Provider
             </th>
+            <th scope="col" className="provider-table-col--billing">
+              Billing
+            </th>
             <th scope="col" className="provider-table-col--this-month">
               This Month
             </th>
@@ -156,6 +181,12 @@ export default function ProviderTable({ summary, loading = false, error = null }
           {rows.map((row) => (
             <tr key={row.provider} className="provider-table-row" data-testid={`provider-row-${row.provider}`}>
               <td className="provider-table-cell provider-table-cell--provider">{row.provider}</td>
+              <td
+                className="provider-table-cell provider-table-cell--billing"
+                data-testid={`provider-billing-${row.provider}`}
+              >
+                {formatBillingType(row.billingType)}
+              </td>
               <td className="provider-table-cell">{formatDollar(row.thisMonth)}</td>
               <td className="provider-table-cell">{formatDollar(row.lastMonth)}</td>
               <td

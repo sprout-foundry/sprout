@@ -61,6 +61,25 @@ func (f *StatusFooter) composeLine(cols int) string {
 
 	costText := formatCost(cost)
 
+	// SP-113: When the charged cost is $0, annotate with the provider's
+	// billing type instead of showing the misleading "$0.0000". A
+	// subscription shows "included"; a self-hosted/free provider shows
+	// "free". Only applies when the cost is actually zero — any real
+	// spend (pay-per-token, or a mixed/fallback case) keeps the dollar
+	// amount so the user can see what they were charged. Sources that
+	// don't implement billingTypeSource fall through to the existing
+	// "$0.0000" rendering (backward compat).
+	if cost == 0 {
+		if bts, ok := f.source.(billingTypeSource); ok {
+			switch bts.BillingType() {
+			case "subscription":
+				costText = "included"
+			case "free":
+				costText = "free"
+			}
+		}
+	}
+
 	parts := []string{
 		styleSegment(badgeColorModel, model),
 		styleSegment(styleCtxColor(used, limit), formatCtx(used, limit)),

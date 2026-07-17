@@ -339,9 +339,11 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	isPrivilegedInstall := containsPrivilegedPackageInstall(cmd)
 	isCritical := isCriticalSystemOperation("shell_command", args)
 
-	// Only DANGEROUS commands trigger blocking/prompts.
-	// Exception: privileged package installation is CAUTION but still prompts.
-	shouldPrompt := maxRisk == SecurityDangerous || isPrivilegedInstall
+	// CAUTION and DANGEROUS commands prompt the user for approval.
+	// Only DANGEROUS commands additionally set ShouldBlock (so they can
+	// be blocked if no approval manager is available). IsHardBlock is
+	// set only by isCriticalSystemOperation above (rm -rf /, mkfs, etc.).
+	shouldPrompt := maxRisk >= SecurityCaution || isPrivilegedInstall
 
 	// Determine category based on risk level and command characteristics
 	var category RiskCategory
@@ -350,6 +352,10 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	} else if isSudoCommand(cmd) {
 		category = RiskCategoryPrivileged
 	} else if maxRisk == SecurityDangerous {
+		category = riskCategoryFromRiskType(getShellCommandRiskType(cmd, maxRisk, isCritical))
+	} else if maxRisk == SecurityCaution {
+		// CAUTION commands that were downgraded from DANGEROUS still get
+		// meaningful categories (destructive, privileged, etc.)
 		category = riskCategoryFromRiskType(getShellCommandRiskType(cmd, maxRisk, isCritical))
 	} else if maxRisk == SecuritySafe {
 		category = RiskCategoryReadOnly
@@ -437,16 +443,20 @@ func classifyChainedCommand(cmd string) []SecurityRisk {
 	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass).
 	// Strip quoted sections first to avoid false positives from | characters
 	// inside grep patterns, regex alternation, etc. (e.g., grep "a|b|c" | head).
-	// Use regex to handle any whitespace and multiple shell interpreters.
+	// Pipe-to-shell is CAUTION (prompt, don't block) — used for legitimate
+	// install scripts. We add it as a risk but continue classifying parts so
+	// genuinely dangerous commands in the chain (e.g., rm -rf /etc/) still
+	// elevate to DANGEROUS.
 	cmdLower := strings.ToLower(cmd)
 	stripped := stripQuotedSections(cmdLower)
-	if isPipeToShell(stripped) {
-		return []SecurityRisk{SecurityDangerous}
-	}
+	pipeToShell := isPipeToShell(stripped)
 
 	parts := SplitChainedCommand(cmd)
 
 	var risks []SecurityRisk
+	if pipeToShell {
+		risks = append(risks, SecurityCaution)
+	}
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -507,31 +517,18 @@ func classifySingleCommand(cmd string) SecurityRisk {
 	}
 
 	// Safe rm -rf commands must be checked BEFORE isCautionPattern,
-	// which catches all "rm " prefixed commands. Without this early
-	// return, safe nested paths like "rm -rf internal/api/dist/cache"
+	// which now catches all non-whitelisted "rm -rf " / "rm -fr " commands.
+	// Without this early return, safe nested paths like "rm -rf internal/api/dist/cache"
 	// would be classified as CAUTION instead of SAFE.
 	if isSafeRmRfPrefix(cmdLower) {
 		return SecuritySafe
 	}
 
 	// Check caution patterns BEFORE safe patterns, so that specific
-	// caution-level commands (like "docker rm") override broad safe matches.
+	// caution-level commands (like rm -rf, eval, docker rm) override
+	// broad safe matches.
 	if isCautionPattern(cmdLower) {
 		return SecurityCaution
-	}
-
-	// rm -rf / rm -fr whose target passes the safe-prefix whitelist
-	// (e.g., "rm -rf internal/api/webui/dist/sprout-webui") is a SAFE
-	// workspace cleanup. Without this branch, the dangerous check above
-	// already exempts these commands, but the absence of any explicit
-	// "safe" match would leave them at the default CAUTION fallback.
-	// isCautionPattern already skips rm -rf/-fr entirely (they route
-	// through isSafeRmRfPrefix via isDangerousPattern), so this branch
-	// fires only for commands the safe whitelist accepts.
-	if strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ") {
-		if isSafeRmRfPrefix(cmdLower) {
-			return SecuritySafe
-		}
 	}
 
 	if isSafeShellCommand(cmdLower) {
@@ -661,23 +658,24 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 		}
 	}
 
-	// Flag-aware dangerous-reset detection: --hard, --keep, --merge are
-	// destructive because they discard working-tree / index state.
+	// Flag-aware reset detection: --hard, --keep, --merge are destructive
+	// because they discard working-tree / index state. These prompt the user
+	// but do not hard-block.
 	argsStr, _ := args["args"].(string)
 	if op == "reset" && (hasToken(argsStr, "--hard") || hasToken(argsStr, "--keep") || hasToken(argsStr, "--merge")) {
 		return SecurityResult{
-			Risk: SecurityDangerous, Reasoning: "Destructive git reset with flag: " + op,
-			ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true,
+			Risk: SecurityCaution, Reasoning: "Destructive git reset with flag: " + op,
+			ShouldPrompt: true,
 			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
 		}
 	}
 
-	// Flag-aware dangerous-rebase detection: --onto and -i can rewrite
-	// history across multiple branches.
+	// Flag-aware rebase detection: --onto and -i can rewrite
+	// history across multiple branches. Prompt, don't block.
 	if op == "rebase" && (hasToken(argsStr, "--onto") || hasToken(argsStr, "-i")) {
 		return SecurityResult{
-			Risk: SecurityDangerous, Reasoning: "Destructive git rebase with flag: " + op,
-			ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true,
+			Risk: SecurityCaution, Reasoning: "History-rewriting git rebase with flag: " + op,
+			ShouldPrompt: true,
 			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
 		}
 	}
@@ -689,14 +687,12 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 		}
 	}
 
-	// Note: "clean" is intentionally only CAUTION-level here. Dangerous variants
-	// like "git clean -ff" and "git clean -fd" are caught by the shell-level
-	// security classifier (isDangerousPattern), which processes the full git
-	// command string including flags.
+	// Force-push and branch deletion prompt the user but do not hard-block.
+	// These can lose work but are recoverable via reflog in most cases.
 	dangerousOps := []string{"branch_delete", "push --force", "push -f"}
 	for _, danger := range dangerousOps {
 		if op == danger || (strings.HasPrefix(op, "push") && strings.Contains(opRaw, "--force")) {
-			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Dangerous git operation that may force-push or delete: " + op, ShouldBlock: true, ShouldPrompt: true, Category: RiskCategoryDestructive}
+			return SecurityResult{Risk: SecurityCaution, Reasoning: "Force-push or branch deletion: " + op, ShouldPrompt: true, Category: RiskCategoryDestructive}
 		}
 	}
 

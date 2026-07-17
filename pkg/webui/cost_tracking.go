@@ -218,19 +218,20 @@ type BillingTypeBreakdown struct {
 
 // CostSummary represents aggregated cost data
 type CostSummary struct {
-	TotalCost           float64                         `json:"total_cost"`
-	ByProvider          map[string]float64              `json:"by_provider"`
-	ByModel             map[string]float64              `json:"by_model"`
-	ByProviderThisMonth map[string]float64              `json:"by_provider_this_month"`
-	ByProviderLastMonth map[string]float64              `json:"by_provider_last_month"`
-	Last30Days          float64                         `json:"last_30_days"`
-	Last7Days           float64                         `json:"last_7_days"`
-	ThisMonth           float64                         `json:"this_month"`
-	LastMonth           float64                         `json:"last_month"`
-	TopSessions         []SessionCostRow                `json:"top_sessions"`
-	ByBillingType       map[string]BillingTypeBreakdown `json:"by_billing_type,omitempty"`
-	ChargedCost         float64                         `json:"charged_cost,omitempty"`
-	TokenValue          float64                         `json:"token_value,omitempty"`
+	TotalCost             float64                         `json:"total_cost"`
+	ByProvider            map[string]float64              `json:"by_provider"`
+	ByModel               map[string]float64              `json:"by_model"`
+	ByProviderThisMonth   map[string]float64              `json:"by_provider_this_month"`
+	ByProviderLastMonth   map[string]float64              `json:"by_provider_last_month"`
+	Last30Days            float64                         `json:"last_30_days"`
+	Last7Days             float64                         `json:"last_7_days"`
+	ThisMonth             float64                         `json:"this_month"`
+	LastMonth             float64                         `json:"last_month"`
+	TopSessions           []SessionCostRow                `json:"top_sessions"`
+	ByBillingType         map[string]BillingTypeBreakdown `json:"by_billing_type,omitempty"`
+	ByProviderBillingType map[string]string               `json:"by_provider_billing_type,omitempty"`
+	ChargedCost           float64                         `json:"charged_cost,omitempty"`
+	TokenValue            float64                         `json:"token_value,omitempty"`
 	// FirstActivity / LastActivity span all recorded records (not the
 	// requested time range), so the WebUI can show a "data is older than
 	// the current period" banner without re-fetching the raw history.
@@ -244,11 +245,12 @@ type CostSummary struct {
 func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 	now := time.Now()
 	summary := CostSummary{
-		ByProvider:          make(map[string]float64),
-		ByModel:             make(map[string]float64),
-		ByProviderThisMonth: make(map[string]float64),
-		ByProviderLastMonth: make(map[string]float64),
-		ByBillingType:       make(map[string]BillingTypeBreakdown),
+		ByProvider:            make(map[string]float64),
+		ByModel:               make(map[string]float64),
+		ByProviderThisMonth:   make(map[string]float64),
+		ByProviderLastMonth:   make(map[string]float64),
+		ByBillingType:         make(map[string]BillingTypeBreakdown),
+		ByProviderBillingType: make(map[string]string),
 	}
 
 	// Get last 30 days
@@ -320,6 +322,12 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 		key := r.Provider + ":" + r.Model
 		summary.ByModel[key] += r.Cost
 
+		// Track billing type per provider (SP-113 Phase 4). A provider's billing
+		// type is consistent across records, so last-seen wins.
+		if r.BillingType != "" {
+			summary.ByProviderBillingType[r.Provider] = r.BillingType
+		}
+
 		// Last 30 days
 		if r.Timestamp.After(start30) {
 			summary.Last30Days += r.Cost
@@ -354,6 +362,14 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 		summary.ByBillingType[bt] = bd
 		summary.ChargedCost += charged
 		summary.TokenValue += r.TokenCost
+	}
+
+	// For backward-compat: providers with old records (no billing_type field)
+	// get resolved from the provider config.
+	for provider := range summary.ByProvider {
+		if summary.ByProviderBillingType[provider] == "" {
+			summary.ByProviderBillingType[provider] = resolveBillingTypeForProvider(provider)
+		}
 	}
 
 	// Build TopSessions: sort by cost desc, take top 10

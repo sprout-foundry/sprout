@@ -115,17 +115,19 @@ func TestValidateOptions_Valid(t *testing.T) {
 func TestMeetsThresholds(t *testing.T) {
 	state := sampleConversationState("sess1")
 
-	// sampleConversationState has 1 user-assistant turn (user→assistant with
-	// tool calls, then two more assistant-only messages via tool intermediaries)
-	// and 2 actions.
+	// sampleConversationState has 2 agentic turns (1 user→assistant + 1
+	// autonomous tool-calling assistant message) and 2 actions.
 	if !meetsThresholds(state, 1, 1) {
 		t.Fatal("expected session to pass thresholds")
 	}
 	if !meetsThresholds(state, 1, 2) {
 		t.Fatal("expected session to pass exact action threshold")
 	}
-	if meetsThresholds(state, 2, 1) {
-		t.Fatal("expected session to fail with too many min-turns (only 1 turn)")
+	if !meetsThresholds(state, 2, 1) {
+		t.Fatal("expected session to pass min-turns=2 with agentic turns")
+	}
+	if meetsThresholds(state, 3, 1) {
+		t.Fatal("expected session to fail with min-turns=3 (only 2 agentic turns)")
 	}
 	if meetsThresholds(state, 1, 3) {
 		t.Fatal("expected session to fail with too many min-actions")
@@ -138,10 +140,10 @@ func TestMeetsThresholds(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// countTurns tests
+// countAgenticTurns tests
 // ---------------------------------------------------------------------------
 
-func TestCountTurns(t *testing.T) {
+func TestCountAgenticTurns(t *testing.T) {
 	tests := []struct {
 		name     string
 		messages []api.Message
@@ -171,7 +173,7 @@ func TestCountTurns(t *testing.T) {
 			want: 2,
 		},
 		{
-			name: "assistant without preceding user",
+			name: "assistant without preceding user (no tools)",
 			messages: []api.Message{
 				{Role: "assistant", Content: "hello"},
 			},
@@ -184,12 +186,30 @@ func TestCountTurns(t *testing.T) {
 			},
 			want: 0,
 		},
+		{
+			name: "automated workflow: 1 user + autonomous tool calls",
+			messages: []api.Message{
+				{Role: "user", Content: "build the feature"},
+				{Role: "assistant", Content: "Let me start", ToolCalls: []api.ToolCall{{ID: "c1", Type: "function", Function: api.ToolCallFunction{Name: "read_file", Arguments: "{}"}}}},
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c2", Type: "function", Function: api.ToolCallFunction{Name: "write_file", Arguments: "{}"}}}},
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c3", Type: "function", Function: api.ToolCallFunction{Name: "shell_command", Arguments: "{}"}}}},
+			},
+			want: 3,
+		},
+		{
+			name: "pure automation: no user message but tool calls",
+			messages: []api.Message{
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c1", Type: "function", Function: api.ToolCallFunction{Name: "search", Arguments: "{}"}}}},
+				{Role: "assistant", ToolCalls: []api.ToolCall{{ID: "c2", Type: "function", Function: api.ToolCallFunction{Name: "read_file", Arguments: "{}"}}}},
+			},
+			want: 2,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := countTurns(tt.messages)
+			got := countAgenticTurns(tt.messages)
 			if got != tt.want {
-				t.Errorf("countTurns() = %d, want %d", got, tt.want)
+				t.Errorf("countAgenticTurns() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -615,11 +635,13 @@ func TestBuildShareGPT(t *testing.T) {
 		t.Errorf("session name = %q, want %q", convos[0].Metadata.SessionName, "test session")
 	}
 
-	// Should contain user and assistant messages but no tool messages.
-	userCount, assistantCount := 0, 0
+	// Should contain user and assistant messages. Tool results are
+	// preserved as user-role messages with a "[Tool Result]" prefix — they
+	// are never dropped.
+	userCount, assistantCount, toolResultCount := 0, 0, 0
 	for _, msg := range convos[0].Messages {
 		if msg.Role == "tool" {
-			t.Error("tool messages should be filtered from ShareGPT")
+			t.Error("raw tool role should not leak into ShareGPT output (converted to user)")
 		}
 		if msg.Role == "user" {
 			userCount++
@@ -627,12 +649,25 @@ func TestBuildShareGPT(t *testing.T) {
 		if msg.Role == "assistant" {
 			assistantCount++
 		}
+		if strings.HasPrefix(msg.Content, "[Tool Result]") {
+			toolResultCount++
+		}
 	}
 	if userCount == 0 {
 		t.Error("expected at least one user message")
 	}
 	if assistantCount == 0 {
 		t.Error("expected at least one assistant message")
+	}
+	if toolResultCount == 0 {
+		t.Error("expected at least one tool-result message (preserved as user-role)")
+	}
+
+	// Regression: no consecutive assistant messages.
+	for i := 1; i < len(convos[0].Messages); i++ {
+		if convos[0].Messages[i].Role == "assistant" && convos[0].Messages[i-1].Role == "assistant" {
+			t.Fatalf("consecutive assistant messages at index %d — tool results should break them up", i)
+		}
 	}
 }
 
@@ -670,10 +705,27 @@ func TestBuildOpenAI(t *testing.T) {
 	if len(examples) != 1 {
 		t.Fatalf("expected 1 example, got %d", len(examples))
 	}
-	// Messages should not contain tool messages.
+
+	// Raw tool role should not leak — tool results are converted to
+	// user-role with "[Tool Result]" prefix. But the content must still be
+	// present.
+	toolResultCount := 0
 	for _, msg := range examples[0].Messages {
 		if msg.Role == "tool" {
-			t.Error("tool messages should be filtered from OpenAI examples")
+			t.Error("raw tool role should not leak into OpenAI output")
+		}
+		if strings.HasPrefix(msg.Content, "[Tool Result]") {
+			toolResultCount++
+		}
+	}
+	if toolResultCount == 0 {
+		t.Error("expected at least one tool-result message (preserved as user-role)")
+	}
+
+	// Regression: no consecutive assistant messages.
+	for i := 1; i < len(examples[0].Messages); i++ {
+		if examples[0].Messages[i].Role == "assistant" && examples[0].Messages[i-1].Role == "assistant" {
+			t.Fatalf("consecutive assistant messages at index %d", i)
 		}
 	}
 }
@@ -928,5 +980,392 @@ func TestFullPipeline_AllFormats(t *testing.T) {
 	}
 	if len(alpacaParsed) != 2 {
 		t.Errorf("parsed %d alpaca examples, want 2", len(alpacaParsed))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Regression tests: tool message preservation & structured tools (Bug 1-3)
+// ---------------------------------------------------------------------------
+
+// TestBuildShareGPT_ToolMessagesPreserved verifies that tool messages are
+// NOT dropped from the output. Previously, buildShareGPT had a
+// `if m.Role == "tool" { continue }` that silently skipped all tool
+// messages, creating consecutive assistant messages.
+func TestBuildShareGPT_ToolMessagesPreserved(t *testing.T) {
+	states := []agent.ConversationState{sampleConversationState("s1")}
+	opts := ExportOptions{NoToolResults: true}
+
+	convos, err := buildShareGPT(states, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(convos) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(convos))
+	}
+
+	// The sample conversation has 2 tool-result messages. They should
+	// appear as user-role messages with "[Tool Result]" prefix.
+	toolResultCount := 0
+	for _, msg := range convos[0].Messages {
+		if strings.HasPrefix(msg.Content, "[Tool Result]") {
+			toolResultCount++
+		}
+	}
+	if toolResultCount != 2 {
+		t.Errorf("expected 2 tool-result messages, got %d", toolResultCount)
+	}
+}
+
+// TestBuildOpenAI_ToolMessagesPreserved is the OpenAI-format counterpart.
+func TestBuildOpenAI_ToolMessagesPreserved(t *testing.T) {
+	states := []agent.ConversationState{sampleConversationState("s1")}
+	opts := ExportOptions{NoToolResults: true}
+
+	examples, err := buildOpenAI(states, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(examples) != 1 {
+		t.Fatalf("expected 1 example, got %d", len(examples))
+	}
+
+	toolResultCount := 0
+	for _, msg := range examples[0].Messages {
+		if strings.HasPrefix(msg.Content, "[Tool Result]") {
+			toolResultCount++
+		}
+	}
+	if toolResultCount != 2 {
+		t.Errorf("expected 2 tool-result messages, got %d", toolResultCount)
+	}
+}
+
+// TestNoConsecutiveAssistantMessages is the headline regression test for
+// Bug 1. With the old code, tool messages were dropped, causing consecutive
+// assistant messages (3,243 across 55 examples). This test verifies that
+// the sample conversation — which has the exact pattern (assistant→tool→
+// assistant→tool→assistant) — produces no consecutive assistants.
+func TestNoConsecutiveAssistantMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts ExportOptions
+	}{
+		{"non-structured", ExportOptions{NoToolResults: true}},
+		{"structured", ExportOptions{StructuredTools: true}},
+		{"keep-tool-results", ExportOptions{NoToolResults: false}},
+	} {
+		t.Run(tc.name+"/sharegpt", func(t *testing.T) {
+			states := []agent.ConversationState{sampleConversationState("s1")}
+			convos, err := buildShareGPT(states, tc.opts)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			for _, convo := range convos {
+				for i := 1; i < len(convo.Messages); i++ {
+					if convo.Messages[i].Role == "assistant" && convo.Messages[i-1].Role == "assistant" {
+						t.Fatalf("consecutive assistant messages at index %d:\n  [%d] %s\n  [%d] %s",
+							i, i-1, convo.Messages[i-1].Content, i, convo.Messages[i].Content)
+					}
+				}
+			}
+		})
+		t.Run(tc.name+"/openai", func(t *testing.T) {
+			states := []agent.ConversationState{sampleConversationState("s1")}
+			examples, err := buildOpenAI(states, tc.opts)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			for _, ex := range examples {
+				for i := 1; i < len(ex.Messages); i++ {
+					if ex.Messages[i].Role == "assistant" && ex.Messages[i-1].Role == "assistant" {
+						t.Fatalf("consecutive assistant messages at index %d:\n  [%d] %s\n  [%d] %s",
+							i, i-1, ex.Messages[i-1].Content, i, ex.Messages[i].Content)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestBuildShareGPT_StructuredTools verifies that --structured-tools
+// preserves the OpenAI function-calling schema: assistant messages keep
+// their tool_calls arrays and tool messages keep role:"tool" with
+// tool_call_id.
+func TestBuildShareGPT_StructuredTools(t *testing.T) {
+	states := []agent.ConversationState{sampleConversationState("s1")}
+	opts := ExportOptions{StructuredTools: true}
+
+	convos, err := buildShareGPT(states, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(convos) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(convos))
+	}
+
+	// In structured mode, tool messages should keep role:"tool" and have
+	// tool_call_id set. There should be no "[Tool Result]" conversions.
+	toolMsgCount := 0
+	for _, msg := range convos[0].Messages {
+		if msg.Role == "tool" {
+			toolMsgCount++
+			if msg.ToolCallID == "" {
+				t.Error("tool message should have tool_call_id in structured mode")
+			}
+		}
+		if strings.HasPrefix(msg.Content, "[Tool Result]") {
+			t.Error("structured mode should not produce [Tool Result] prefix conversions")
+		}
+	}
+	if toolMsgCount != 2 {
+		t.Errorf("expected 2 tool messages in structured mode, got %d", toolMsgCount)
+	}
+
+	// Assistant messages with tool calls should keep the ToolCalls array.
+	assistantWithToolCalls := 0
+	for _, msg := range convos[0].Messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			assistantWithToolCalls++
+			// Verify the tool call structure is preserved.
+			for _, tc := range msg.ToolCalls {
+				if tc.Function.Name == "" {
+					t.Error("structured tool call should have function name")
+				}
+			}
+		}
+	}
+	if assistantWithToolCalls != 2 {
+		t.Errorf("expected 2 assistant messages with tool_calls, got %d", assistantWithToolCalls)
+	}
+}
+
+// TestBuildOpenAI_StructuredTools is the OpenAI-format counterpart.
+func TestBuildOpenAI_StructuredTools(t *testing.T) {
+	states := []agent.ConversationState{sampleConversationState("s1")}
+	opts := ExportOptions{StructuredTools: true}
+
+	examples, err := buildOpenAI(states, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(examples) != 1 {
+		t.Fatalf("expected 1 example, got %d", len(examples))
+	}
+
+	toolMsgCount := 0
+	assistantWithToolCalls := 0
+	for _, msg := range examples[0].Messages {
+		switch msg.Role {
+		case "tool":
+			toolMsgCount++
+			if msg.ToolCallID == "" {
+				t.Error("tool message should have tool_call_id in structured mode")
+			}
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				assistantWithToolCalls++
+			}
+		}
+	}
+	if toolMsgCount != 2 {
+		t.Errorf("expected 2 tool messages, got %d", toolMsgCount)
+	}
+	if assistantWithToolCalls != 2 {
+		t.Errorf("expected 2 assistant messages with tool_calls, got %d", assistantWithToolCalls)
+	}
+}
+
+// TestDeduplicateConsecutive_ToolResultGuard verifies Bug 3: tool-result
+// messages (carrying "[Tool Result]" or "[tool result:") are never merged
+// with adjacent same-role messages, even when both have the same role.
+func TestDeduplicateConsecutive_ToolResultGuard(t *testing.T) {
+	// Scenario: tool result (user-role after conversion) followed by a real
+	// user message — they should NOT be merged.
+	messages := []api.Message{
+		{Role: "user", Content: "[Tool Result] file written"},
+		{Role: "user", Content: "now run the tests"},
+	}
+	result := deduplicateConsecutive(messages)
+	if len(result) != 2 {
+		t.Errorf("expected 2 messages (tool result should not merge with user), got %d", len(result))
+	}
+
+	// Scenario: assistant with "Tool call:" marker followed by a plain
+	// assistant message — they should NOT be merged.
+	messages2 := []api.Message{
+		{Role: "assistant", Content: "Tool call: read_file(...)"},
+		{Role: "assistant", Content: "Here are the results."},
+	}
+	result2 := deduplicateConsecutive(messages2)
+	if len(result2) != 2 {
+		t.Errorf("expected 2 messages (tool-call assistant should not merge), got %d", len(result2))
+	}
+
+	// Scenario: the old-style "[tool result:" placeholder should also be
+	// guarded.
+	messages3 := []api.Message{
+		{Role: "user", Content: "[tool result: result, 42 chars]"},
+		{Role: "user", Content: "next question"},
+	}
+	result3 := deduplicateConsecutive(messages3)
+	if len(result3) != 2 {
+		t.Errorf("expected 2 messages (old-style tool result should not merge), got %d", len(result3))
+	}
+}
+
+// TestFlattenStandardMessages_StructuredMode verifies that structured mode
+// preserves tool_calls on assistant messages and tool role/ids on tool
+// messages, and does NOT apply deduplication.
+func TestFlattenStandardMessages_StructuredMode(t *testing.T) {
+	opts := ExportOptions{StructuredTools: true, NoToolResults: true}
+	messages := []api.Message{
+		{Role: "user", Content: "hello"},
+		{
+			Role:    "assistant",
+			Content: "Let me read that file.",
+			ToolCalls: []api.ToolCall{
+				makeToolCall("c1", "read_file", `{"path":"f.go"}`),
+			},
+		},
+		{Role: "tool", Content: "file contents", ToolCallID: "c1"},
+		{Role: "assistant", Content: "Here is the file."},
+	}
+
+	result := flattenStandardMessages(messages, opts)
+
+	// Structured mode should preserve 4 messages (system stripped, but no
+	// system here). No dedup means we keep all distinct messages.
+	if len(result) != 4 {
+		t.Fatalf("expected 4 messages in structured mode, got %d", len(result))
+	}
+
+	// Assistant tool_calls should be preserved.
+	var foundToolCalls bool
+	for _, m := range result {
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			foundToolCalls = true
+			if m.ToolCalls[0].Function.Name != "read_file" {
+				t.Errorf("expected tool call function 'read_file', got %q", m.ToolCalls[0].Function.Name)
+			}
+		}
+	}
+	if !foundToolCalls {
+		t.Error("structured mode should preserve ToolCalls on assistant messages")
+	}
+
+	// Tool message should keep role:"tool" and ToolCallID.
+	var foundTool bool
+	for _, m := range result {
+		if m.Role == "tool" {
+			foundTool = true
+			if m.ToolCallID != "c1" {
+				t.Errorf("expected ToolCallID 'c1', got %q", m.ToolCallID)
+			}
+		}
+	}
+	if !foundTool {
+		t.Error("structured mode should preserve role:tool messages")
+	}
+}
+
+// TestFlattenStandardMessages_StructuredNoDedup verifies that structured
+// mode does not merge consecutive assistant messages even when they would
+// normally be deduplicated.
+func TestFlattenStandardMessages_StructuredNoDedup(t *testing.T) {
+	opts := ExportOptions{StructuredTools: true}
+	messages := []api.Message{
+		{Role: "assistant", Content: "Part 1"},
+		{Role: "assistant", Content: "Part 2"},
+	}
+
+	result := flattenStandardMessages(messages, opts)
+	if len(result) != 2 {
+		t.Errorf("structured mode should not deduplicate, expected 2 messages, got %d", len(result))
+	}
+}
+
+// TestExportSessions_StructuredToolsEndToEnd verifies the full pipeline
+// with structured tools enabled, checking the JSON output contains
+// tool_calls and tool_call_id fields.
+func TestExportSessions_StructuredToolsEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "sessions")
+	restore := agent.SetStateDirFuncForTesting(func() (string, error) {
+		return stateDir, nil
+	})
+	defer restore()
+
+	workingDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workingDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+
+	state := sampleConversationState("struct-test")
+	state.WorkingDirectory = workingDir
+	// Boost thresholds so it qualifies.
+	for i := 0; i < 8; i++ {
+		state.TaskActions = append(state.TaskActions, agent.TaskAction{Type: "file_modified", Description: "extra"})
+	}
+
+	if err := os.MkdirAll(workingDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := agent.WriteTestSessionFile(stateDir, state.SessionID, state.WorkingDirectory, &state); err != nil {
+		t.Fatalf("WriteTestSessionFile: %v", err)
+	}
+
+	outPath := filepath.Join(dir, "out.jsonl")
+	result, err := ExportSessions(ExportOptions{
+		Format:          "openai",
+		Output:          outPath,
+		All:             true,
+		StructuredTools: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.SessionsExported != 1 {
+		t.Fatalf("expected 1 exported, got %d", result.SessionsExported)
+	}
+
+	// Read and parse the JSONL output.
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 JSONL line, got %d", len(lines))
+	}
+
+	// Check for structured tool fields in the raw JSON.
+	raw := lines[0]
+	if !strings.Contains(raw, "tool_calls") {
+		t.Error("structured output should contain 'tool_calls' field")
+	}
+	if !strings.Contains(raw, "tool_call_id") {
+		t.Error("structured output should contain 'tool_call_id' field")
+	}
+
+	// Parse and verify.
+	var ex OpenAITrainingExample
+	if err := json.Unmarshal([]byte(raw), &ex); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	var foundToolCalls, foundToolRole bool
+	for _, msg := range ex.Messages {
+		if len(msg.ToolCalls) > 0 {
+			foundToolCalls = true
+		}
+		if msg.Role == "tool" {
+			foundToolRole = true
+		}
+	}
+	if !foundToolCalls {
+		t.Error("expected tool_calls in parsed output")
+	}
+	if !foundToolRole {
+		t.Error("expected role:tool messages in structured output")
 	}
 }

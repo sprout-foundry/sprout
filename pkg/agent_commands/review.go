@@ -46,6 +46,11 @@ func (c *ReviewCommand) Name() string {
 	return "review"
 }
 
+// SafeDuringSteer returns false - /review reads file state, may conflict
+func (c *ReviewCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (c *ReviewCommand) Description() string {
 	return "Perform AI-powered code review on staged Git changes"
@@ -89,6 +94,11 @@ func (c *ReviewDeepCommand) getContext() context.Context {
 // Name returns the command name
 func (c *ReviewDeepCommand) Name() string {
 	return "review-deep"
+}
+
+// SafeDuringSteer returns false - /review-deep reads file state, may conflict
+func (c *ReviewDeepCommand) SafeDuringSteer() bool {
+	return false
 }
 
 // Description returns the command description

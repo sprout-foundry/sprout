@@ -14,6 +14,11 @@ func (c *ClearCommand) Name() string {
 	return "clear"
 }
 
+// SafeDuringSteer returns false - /clear destroys conversation state
+func (c *ClearCommand) SafeDuringSteer() bool {
+	return false
+}
+
 func (c *ClearCommand) Description() string {
 	return "Close the current session and start a new one"
 }

@@ -17,6 +17,11 @@ func (c *SessionsCommand) Name() string {
 	return "sessions"
 }
 
+// SafeDuringSteer returns false - /sessions is session lifecycle, too risky
+func (c *SessionsCommand) SafeDuringSteer() bool {
+	return false
+}
+
 func (c *SessionsCommand) Description() string {
 	return "Show and load previous conversation sessions"
 }

@@ -818,3 +818,96 @@ func TestStatusFooter_ComposeLine_BaselineSourceOmitsTodoProgress(t *testing.T) 
 		t.Errorf("baseline source should not produce todo badge, got %q", line)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SP-113 Phase 3: billing-type-aware cost badge
+// ---------------------------------------------------------------------------
+
+// billingSrc is a ContentSource that also reports a billing type, used to
+// exercise the optional billingTypeSource interface.
+type billingSrc struct {
+	stubSource
+	billing string
+}
+
+func (s *billingSrc) BillingType() string { return s.billing }
+
+// SP-113: subscription + zero cost → "included" instead of "$0.0000".
+func TestStatusFooter_ComposeLine_SubscriptionZeroCost_ShowsIncluded(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x"},
+		billing:    "subscription",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "included") {
+		t.Errorf("subscription + zero cost should render 'included', got %q", line)
+	}
+	// Must NOT show the misleading dollar amount.
+	if strings.Contains(line, "$0.0000") {
+		t.Errorf("subscription + zero cost should not show '$0.0000', got %q", line)
+	}
+}
+
+// SP-113: free + zero cost → "free" instead of "$0.0000".
+func TestStatusFooter_ComposeLine_FreeZeroCost_ShowsFree(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x"},
+		billing:    "free",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "free") {
+		t.Errorf("free + zero cost should render 'free', got %q", line)
+	}
+	if strings.Contains(line, "$0.0000") {
+		t.Errorf("free + zero cost should not show '$0.0000', got %q", line)
+	}
+}
+
+// SP-113: a subscription provider that nonetheless reports a non-zero
+// charged cost (pay-per-token fallback, mixed billing, or partial spend)
+// shows the dollar amount, NOT "included". The annotation only kicks in
+// when the cost is genuinely zero.
+func TestStatusFooter_ComposeLine_SubscriptionNonZeroCost_ShowsDollarAmount(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0.05, workdir: "/x"},
+		billing:    "subscription",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "$0.05") {
+		t.Errorf("non-zero cost should render the dollar amount, got %q", line)
+	}
+	if strings.Contains(line, "included") {
+		t.Errorf("non-zero cost should NOT render 'included', got %q", line)
+	}
+}
+
+// SP-113: backward compat — a source that does NOT implement the optional
+// billingTypeSource interface renders the legacy "$0.0000" at zero cost
+// rather than any billing-type label.
+func TestStatusFooter_ComposeLine_BaselineZeroCost_ShowsDollarAmount(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "$0.0000") {
+		t.Errorf("baseline source with zero cost should show '$0.0000', got %q", line)
+	}
+	if strings.Contains(line, "included") || strings.Contains(line, "free") {
+		t.Errorf("baseline source should not render billing labels, got %q", line)
+	}
+}
+
+// SP-113: a billingTypeSource reporting "pay_per_token" at zero cost falls
+// through to the default dollar rendering — only subscription/free are
+// annotated, so pay-per-token with zero cost (e.g. fresh session, cached
+// tokens) still shows "$0.0000".
+func TestStatusFooter_ComposeLine_PayPerTokenZeroCost_ShowsDollarAmount(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x"},
+		billing:    "pay_per_token",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "$0.0000") {
+		t.Errorf("pay_per_token + zero cost should show '$0.0000', got %q", line)
+	}
+}

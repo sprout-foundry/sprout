@@ -20,6 +20,11 @@ func (c *SearchCommand) Name() string {
 	return "search"
 }
 
+// SafeDuringSteer returns true - /search is read-only
+func (c *SearchCommand) SafeDuringSteer() bool {
+	return true
+}
+
 func (c *SearchCommand) Description() string {
 	return "Search across saved sessions by content"
 }

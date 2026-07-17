@@ -18,6 +18,11 @@ func (c *RewindCommand) Name() string {
 	return "rewind"
 }
 
+// SafeDuringSteer returns false - /rewind is conversation state mutation
+func (c *RewindCommand) SafeDuringSteer() bool {
+	return false
+}
+
 func (c *RewindCommand) Description() string {
 	return "Rewind conversation to a previous turn"
 }

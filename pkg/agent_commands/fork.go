@@ -14,6 +14,11 @@ func (c *ForkCommand) Name() string {
 	return "fork"
 }
 
+// SafeDuringSteer returns false - /fork is session lifecycle
+func (c *ForkCommand) SafeDuringSteer() bool {
+	return false
+}
+
 func (c *ForkCommand) Description() string {
 	return "Fork the conversation at a user message breakpoint"
 }

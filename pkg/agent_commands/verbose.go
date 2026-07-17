@@ -16,6 +16,11 @@ type VerboseCommand struct{}
 
 func (c *VerboseCommand) Name() string { return "verbose" }
 
+// SafeDuringSteer returns true - /verbose is config change
+func (c *VerboseCommand) SafeDuringSteer() bool {
+	return true
+}
+
 func (c *VerboseCommand) Description() string {
 	return "Show or set output verbosity (compact|default|verbose)"
 }

@@ -120,6 +120,11 @@ func (c *CommitCommand) Name() string {
 	return "commit"
 }
 
+// SafeDuringSteer returns false - /commit is git mutation + agent interaction
+func (c *CommitCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (c *CommitCommand) Description() string {
 	return "Interactive commit workflow with dropdown selection - stage files and generate commit messages"

@@ -250,6 +250,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// friends. Slash commands also skip the per-turn cost summary
 			// since they don't consume LLM tokens.
 			registry := agent_commands.NewCommandRegistry()
+			chatAgent.SetSlashCommands(registry)
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
@@ -419,6 +420,17 @@ func (s *agentFooterSource) TotalCost() float64 {
 		return 0
 	}
 	return s.agent.GetTotalCost()
+}
+
+// BillingType returns the current provider's billing model so the footer
+// can annotate subscription/free usage instead of showing "$0.0000".
+// Satisfies the optional billingTypeSource interface in pkg/console.
+// SP-113 Phase 3.
+func (s *agentFooterSource) BillingType() string {
+	if s == nil || s.agent == nil {
+		return ""
+	}
+	return s.agent.ResolveBillingType()
 }
 
 // TodoProgress returns (completed, total) from the agent's todo list.

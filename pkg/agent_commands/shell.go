@@ -64,6 +64,11 @@ func (c *ShellCommand) Name() string {
 	return "shell"
 }
 
+// SafeDuringSteer returns false - /shell is shell execution
+func (c *ShellCommand) SafeDuringSteer() bool {
+	return false
+}
+
 func (c *ShellCommand) Description() string {
 	return "Generate shell scripts from natural language descriptions with full environmental context"
 }

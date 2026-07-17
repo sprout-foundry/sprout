@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -61,6 +62,31 @@ type UsageProvider interface {
 type CompletableCommand interface {
 	Command
 	Complete(args []string, chatAgent *agent.Agent) []string
+}
+
+// SteerCapable is implemented by commands that can safely run mid-turn
+// while an agent query is in progress. Commands that don't implement this
+// are treated as PromptOnly (not safe to run mid-turn).
+type SteerCapable interface {
+	// SafeDuringSteer returns true if this command is safe to run while
+	// an agent query is active. Read-only commands and config commands
+	// that don't interact with the active turn should return true.
+	SafeDuringSteer() bool
+}
+
+var (
+	defaultRegistry     *CommandRegistry
+	defaultRegistryOnce sync.Once
+)
+
+// DefaultRegistry returns the process-wide default command registry.
+// Used by ClassifyPromptIntent and other callers that need a quick
+// check without carrying a registry reference.
+func DefaultRegistry() *CommandRegistry {
+	defaultRegistryOnce.Do(func() {
+		defaultRegistry = NewCommandRegistry()
+	})
+	return defaultRegistry
 }
 
 // CommandRegistry manages all available slash commands

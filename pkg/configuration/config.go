@@ -305,6 +305,13 @@ type Config struct {
 	// message. Budget controls prevent unattended token burn loops.
 	Wakeup WakeupConfig `json:"wakeup,omitempty"`
 
+	// Training controls opt-in session recording for training data
+	// collection. When enabled, each saved session is PII-redacted and
+	// pushed to the configured endpoint as JSON. OFF by default — must
+	// be explicitly enabled via --train flag, SPROUT_TRAIN_ENABLED env,
+	// or config.json.
+	Training TrainingConfig `json:"training,omitempty"`
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 
@@ -332,6 +339,24 @@ func DefaultWakeupConfig() WakeupConfig {
 		MaxTokensPerSession:  5000,
 		MaxResumesPerSession: 10,
 	}
+}
+
+// TrainingConfig controls opt-in session recording for training data
+// collection. When enabled, PII-redacted conversation states are pushed
+// to the configured endpoint after each session save.
+type TrainingConfig struct {
+	// Endpoint is the URL to push training data to (e.g. http://localhost:8190).
+	// Sessions are POSTed to {Endpoint}/sessions as JSON.
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// Enabled controls whether training data is collected and pushed.
+	// ALWAYS false by default — must be explicitly enabled.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// ExcludePaths is a list of working directory prefixes to exclude from
+	// training data. Sessions whose working directory starts with any of
+	// these paths are silently skipped.
+	ExcludePaths []string `json:"exclude_paths,omitempty"`
 }
 
 // MCPConfig moved to pkg/mcp package for consolidation

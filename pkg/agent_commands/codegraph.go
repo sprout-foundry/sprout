@@ -24,6 +24,11 @@ func (c *CodegraphCommand) Name() string {
 	return "codegraph"
 }
 
+// SafeDuringSteer returns true - /codegraph is read-only stats or independent build
+func (c *CodegraphCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (c *CodegraphCommand) Description() string {
 	return "Code intelligence graph: build, stats, dead-code"

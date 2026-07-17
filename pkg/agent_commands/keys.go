@@ -20,6 +20,11 @@ func (k *KeysCommand) Name() string {
 	return "keys"
 }
 
+// SafeDuringSteer returns true - /keys is config, independent of active turn
+func (k *KeysCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (k *KeysCommand) Description() string {
 	return "Manage API credentials for providers"

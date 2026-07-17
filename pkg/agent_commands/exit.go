@@ -19,6 +19,11 @@ func (e *ExitCommand) Name() string {
 	return "exit"
 }
 
+// SafeDuringSteer returns false - /exit terminates session
+func (e *ExitCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (e *ExitCommand) Description() string {
 	return "Exit the interactive session"

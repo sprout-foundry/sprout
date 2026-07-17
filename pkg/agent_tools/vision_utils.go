@@ -3,6 +3,7 @@ package tools
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -161,6 +163,23 @@ func classifyPDFProcessingErrorCode(err error) string {
 	if err == nil {
 		return ErrCodePDFProcessingFailed
 	}
+
+	// Prefer typed-error chain: extract *TypedError and map its code.
+	var te *agenterrors.TypedError
+	if errors.As(err, &te) {
+		if code := typedErrorToVisionCode(te); code != "" {
+			return code
+		}
+	}
+
+	// Legacy fallback for untyped errors.
+	return legacyClassifyPDFError(err)
+}
+
+// legacyClassifyPDFError is the pre-typed-error strings.Contains classifier
+// for PDF processing errors. Preserved verbatim so behavior for untyped errors
+// does not regress.
+func legacyClassifyPDFError(err error) string {
 	msg := strings.ToLower(err.Error())
 
 	// Input path / retrieval failures.

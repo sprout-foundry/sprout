@@ -8,6 +8,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -23,6 +24,10 @@ var debugPprofAddr string
 var whyFlag bool
 var colorBlindFlag bool
 var autoDetectedWorkspaceDir string // set when auto-detection finds a git repo
+
+// Training data collection flags (opt-in session recording).
+var trainFlag bool
+var trainEndpoint string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -158,7 +163,58 @@ func initializeSystem() {
 		os.Exit(1)
 	}
 
+	// Apply training data collection config from CLI flags and env vars.
+	applyTrainingConfig()
+
 	runStartupChecks()
+}
+
+// applyTrainingConfig resolves training settings from CLI flags and env
+// vars, then persists them into the live config manager. The config values
+// are later read by the agent to wire the push callback.
+//
+// Precedence: CLI flag > env var > config.json value.
+func applyTrainingConfig() {
+	enabled := trainFlag
+	endpoint := trainEndpoint
+
+	// Env var fallbacks: SPROUT_TRAIN_ENABLED and SPROUT_TRAIN_ENDPOINT.
+	if !enabled {
+		if v := configuration.GetEnvSimple("TRAIN_ENABLED"); v == "1" || strings.EqualFold(v, "true") {
+			enabled = true
+		}
+	}
+	if endpoint == "" {
+		endpoint = configuration.GetEnvSimple("TRAIN_ENDPOINT")
+	}
+
+	// Only update config if something was explicitly set via flag or env.
+	if !enabled && endpoint == "" {
+		return
+	}
+
+	mgr, err := configuration.NewManager()
+	if err != nil {
+		return
+	}
+
+	finalEndpoint := endpoint
+	finalEnabled := enabled
+	_ = mgr.UpdateConfig(func(c *configuration.Config) error {
+		if finalEnabled {
+			c.Training.Enabled = true
+		}
+		if finalEndpoint != "" {
+			c.Training.Endpoint = finalEndpoint
+		}
+		return nil
+	})
+
+	// Print the warning message showing the effective endpoint.
+	cfg := mgr.GetConfig()
+	if cfg != nil && cfg.Training.Enabled {
+		fmt.Fprintf(os.Stderr, "[TRAINING] Session recording enabled. Conversations will be sent to: %s\n", cfg.Training.Endpoint)
+	}
 }
 
 func runStartupChecks() {
@@ -211,6 +267,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&debugPprofAddr, "debug-pprof", "", "If set, start a pprof HTTP server on this address (e.g. localhost:6060) for live memory/CPU profiling")
 	rootCmd.PersistentFlags().BoolVar(&whyFlag, "why", false, "Print detailed risk assessment on security errors")
 	rootCmd.PersistentFlags().BoolVar(&colorBlindFlag, "color-blind", false, "Swap the success/error/warning palette to a deuteranopia / protanopia-friendly scheme (also honors SPROUT_COLOR_BLIND=1)")
+	rootCmd.PersistentFlags().BoolVar(&trainFlag, "train", false, "Enable session recording for training data collection (OFF by default; also settable via SPROUT_TRAIN_ENABLED=true)")
+	rootCmd.PersistentFlags().StringVar(&trainEndpoint, "train-endpoint", "", "Training data collection endpoint URL (also settable via SPROUT_TRAIN_ENDPOINT)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

@@ -16,6 +16,11 @@ type ToolsCommand struct{}
 
 func (c *ToolsCommand) Name() string { return "tools" }
 
+// SafeDuringSteer returns true - /tools is read-only or config
+func (c *ToolsCommand) SafeDuringSteer() bool {
+	return true
+}
+
 func (c *ToolsCommand) Description() string {
 	return "Show or toggle per-tool invocation detail visibility"
 }

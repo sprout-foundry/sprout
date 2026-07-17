@@ -300,6 +300,12 @@ type Agent struct {
 	visionProbeModel    string
 	visionProbeProvider string
 	visionProbeResult   *bool
+
+	// slashCommands holds the command registry for this agent. Set via
+	// SetSlashCommands after the registry is created in cmd/agent_mode_interactive.go.
+	// Used by the steer coordinator and WebUI to look up commands for mid-turn
+	// execution (SP-114 Phase 1).
+	slashCommands any // *commands.CommandRegistry — stored as any to avoid circular import
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user
@@ -394,4 +400,22 @@ func (a *Agent) AllowAppForComputerUse(key string) {
 		a.computerUseAppAllowlist = make(map[string]bool)
 	}
 	a.computerUseAppAllowlist[key] = true
+}
+
+// ---------------------------------------------------------------------------
+// SP-114 Phase 1: Command Classification and Steer Allowlist
+// ---------------------------------------------------------------------------
+
+// SetSlashCommands stores the command registry on the agent.
+// Called after the registry is created in cmd/agent_mode_interactive.go.
+func (a *Agent) SetSlashCommands(registry any) {
+	a.slashCommands = registry
+}
+
+// SlashCommands returns the agent's command registry, or nil if not set.
+func (a *Agent) SlashCommands() any {
+	if a == nil {
+		return nil
+	}
+	return a.slashCommands
 }

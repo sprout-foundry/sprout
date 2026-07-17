@@ -21,6 +21,11 @@ func (c *RiskProfileCommand) Name() string {
 	return "risk-profile"
 }
 
+// SafeDuringSteer returns true - /risk-profile is config change, no turn interaction
+func (c *RiskProfileCommand) SafeDuringSteer() bool {
+	return true
+}
+
 func (c *RiskProfileCommand) Description() string {
 	return "Show or change the shell-command risk profile (readonly|cautious|default|permissive|unrestricted)"
 }

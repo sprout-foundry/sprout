@@ -16,6 +16,11 @@ func (c *IndexCommand) Name() string {
 	return "index"
 }
 
+// SafeDuringSteer returns false - /index may interfere with agent embeddings
+func (c *IndexCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (c *IndexCommand) Description() string {
 	return "Toggle workspace indexing on/off for semantic search and duplicate detection"

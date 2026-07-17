@@ -52,7 +52,7 @@ func ClassifyPromptIntent(chatAgent *agent.Agent, text string) PromptIntent {
 	// recognizes both "/foo" (with name validation) and "!cmd"
 	// (with non-empty payload) so we distinguish them here only to
 	// surface a more specific hint to the user.
-	if agent_commands.NewCommandRegistry().IsSlashCommand(text) {
+	if agent_commands.DefaultRegistry().IsSlashCommand(text) {
 		if strings.HasPrefix(text, "!") {
 			return IntentBangShell
 		}

@@ -578,7 +578,22 @@ func TestPathIsWorkspaceSafe(t *testing.T) {
 		{"/tmp/../etc/clean", "/tmp/../etc/ssh/sshd_config", false},
 		{"/tmp/subdir/../../etc", "/tmp/subdir/../../etc/passwd", false},
 		{"absolute /", "/", false},
-		{"absolute home", "/home/user/file.txt", false},
+		{"absolute home (Linux)", "/home/user/file.txt", true},
+		// ── User home directories (macOS /Users, Linux /home) ──
+		{"absolute /Users (macOS)", "/Users/alan/dev/project/file.txt", true},
+		{"absolute /Users root with file", "/Users/alan/.bashrc", true},
+		// Sensitive credential/config directories within home are BLOCKED
+		{"home with .ssh BLOCKED", "/home/user/.ssh/id_rsa", false},
+		{"home with .gnupg BLOCKED", "/home/user/.gnupg/secring.gpg", false},
+		{"home with .aws BLOCKED", "/home/user/.aws/credentials", false},
+		{"home with .kube BLOCKED", "/home/user/.kube/config", false},
+		{"home with .docker BLOCKED", "/home/user/.docker/config.json", false},
+		{"home with .netrc BLOCKED", "/home/user/.netrc", false},
+		{"home with .config/gh BLOCKED", "/home/user/.config/gh/hosts.yml", false},
+		{"Users with .ssh BLOCKED", "/Users/alan/.ssh/authorized_keys", false},
+		{"Users with .aws BLOCKED", "/Users/alan/.aws/credentials", false},
+		{"/root still blocked", "/root/.bashrc", false},
+		{"sibling repo path", "/Users/alan/dev/sprout-foundry/sprout-training-data/sprout-linux", true},
 		// Triple-dot directory name under /tmp — NOT traversal (path.Clean resolves ".." only)
 		{"/tmp/.../file (triple dot, not traversal)", "/tmp/.../file", true},
 		{"/tmp/.../subdir/file", "/tmp/.../subdir/file", true},
@@ -748,6 +763,10 @@ func TestSystemPathTargetEdgeCases(t *testing.T) {
 		{"cp -r safe source", "cp -r src/ dest/", SecuritySafe},
 		{"chown -R unsafe", "chown -R root /etc/", SecurityDangerous},
 		{"chown -R safe", "chown -R user:group src/", SecuritySafe},
+		// cp to /Users path (home dir destination) should be safe
+		{"cp to /Users path", "cp /tmp/sprout-linux /Users/alan/dev/sprout-foundry/sprout-training-data/sprout-linux", SecuritySafe},
+		// cp to sensitive home subdir (.ssh) should be dangerous
+		{"cp to /Users/.ssh DANGEROUS", "cp config /Users/alan/.ssh/authorized_keys", SecurityDangerous},
 	}
 
 	for _, tt := range tests {

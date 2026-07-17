@@ -650,6 +650,11 @@ func isSafeRmRfComponent(target string) bool {
 //   - It is under /tmp/ (temporary files)
 //   - It is /dev/null, /dev/stdout, or /dev/stderr
 //   - It is a hyphen ("-") which is stdin/stdout in many commands
+//   - It is under a user home directory: /Users/ (macOS) or /home/ (Linux),
+//     EXCEPT sensitive credential/config subdirectories (.ssh, .gnupg, .aws, .kube,
+//     .docker, .config/gh, .netrc) which are blocked
+//
+// Root's home (/root on Linux) is NOT safe — it is treated as a sensitive system dir.
 //
 // Path traversal is handled by path.Clean which resolves all ".." segments lexically.
 // If path.Clean produces a result starting with "/tmp/", all parent directory references
@@ -671,6 +676,26 @@ func pathIsWorkspaceSafe(pathStr string) bool {
 			return true
 		}
 		if cleaned == "/dev/null" || cleaned == "/dev/stdout" || cleaned == "/dev/stderr" {
+			return true
+		}
+		// User home directories (macOS /Users, Linux /home) are safe for
+		// workspace operations — developers regularly copy/move files between
+		// sibling repos and project directories under their home. Root's home
+		// (/root) stays blocked as a sensitive system directory.
+		// Note: callers (isDangerousPattern) may already lowercase the path,
+		// so the prefix check is case-insensitive.
+		cleanedLower := strings.ToLower(cleaned)
+		if strings.HasPrefix(cleanedLower, "/users/") || strings.HasPrefix(cleanedLower, "/home/") {
+			// Block sensitive credential/config directories within home
+			for _, sensitive := range []string{"/.ssh/", "/.gnupg/", "/.aws/", "/.kube/", "/.docker/"} {
+				if strings.Contains(cleanedLower, sensitive) {
+					return false
+				}
+			}
+			// Block sensitive credential files
+			if strings.HasSuffix(cleanedLower, "/.netrc") || strings.Contains(cleanedLower, "/.config/gh/") {
+				return false
+			}
 			return true
 		}
 		// All other absolute paths are unsafe

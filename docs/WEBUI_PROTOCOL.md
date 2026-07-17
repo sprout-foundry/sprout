@@ -425,11 +425,11 @@ interface WsEvent {
 
 ### Sequence Numbers (`__seq`)
 
-Every event associated with a chat session includes a `__seq` field — a monotonically increasing counter per chat. Stored in `OutboundEventRegistry.seqCounters`.
+Every event associated with a chat session includes a `__seq` field — a monotonically increasing counter per chat. Stored per-chat in `chatRunRingBuffer.nextSeq` (see `pkg/webui/chat_run_buffer.go`).
 
 ### Reattach-Buffered Event Types
 
-The following **8 event types** are buffered (up to 500 per chat) for reattach replay (defined in `reattachBufferedEventTypes` in `api_query.go`):
+The following **8 event types** are buffered (up to 5000 events per chat) for reattach replay (defined in `reattachBufferedEventTypes` in `api_query.go`):
 
 `query_started`, `query_progress`, `query_completed`, `stream_chunk`, `tool_start`, `tool_end`, `agent_message`, `error`
 
@@ -500,7 +500,7 @@ private reconnectWithReattach() {
 **5. Normal live events resume** after replay is complete.
 
 ### Key Constraints
-- **Buffer size**: Maximum 500 events per chat (`MaxBufferSize`)
+- **Buffer size**: Maximum 5000 events per chat (`defaultRunBufferMaxEvents`)
 - **Single chat**: Reattach works per chat session
 - **Seq is per-chat**: Independent sequence numbering per chat
 

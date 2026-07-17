@@ -115,6 +115,7 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 		"applyPersistentContextSettings",
 		"applySkillsSettings",
 		"applyWakeupSettings",
+		"applyCommandPoliciesSettings",
 	}
 	if len(partialSettingsAppliers) != len(want) {
 		t.Fatalf("applier count = %d, want %d (refactor may have added/dropped one)",

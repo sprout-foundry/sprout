@@ -23,12 +23,12 @@ func TestKeymapHintRow_ContainsRegisteredBindings(t *testing.T) {
 	globalKeymap = newKeymapRegistry()
 	GlobalKeymap().Register(KeymapEntry{
 		Key:         "Alt+T",
-		Action:      "footer.tooltip.toggle",
+		Action:      "footer.breakdown.toggle",
 		Description: "Show / hide per-tool invocation breakdown above the status footer",
 	})
 	GlobalKeymap().Register(KeymapEntry{
 		Key:         "Alt+V",
-		Action:      "output_verbosity.toggle",
+		Action:      "output.verbosity.toggle",
 		Description: "Cycle output verbosity: default ↔ verbose (more tool detail)",
 	})
 
@@ -185,24 +185,24 @@ func TestExtractShortLabel(t *testing.T) {
 			name: "action with dots → second-to-last segment",
 			entry: KeymapEntry{
 				Key:         "Alt+T",
-				Action:      "footer.tooltip.toggle",
+				Action:      "footer.breakdown.toggle",
 				Description: "Show / hide per-tool invocation breakdown above the status footer",
 			},
-			wantSubstr: "tooltip",
+			wantSubstr: "breakdown",
 		},
 		{
-			name: "action with underscores and dots → second-to-last segment",
+			name: "action with dots and clean labels → second-to-last segment",
 			entry: KeymapEntry{
 				Key:         "Alt+V",
-				Action:      "output_verbosity.toggle",
+				Action:      "output.verbosity.toggle",
 				Description: "Cycle output verbosity: default ↔ verbose (more tool detail)",
 			},
-			wantSubstr: "output_verbosity",
+			wantSubstr: "verbosity",
 		},
 		{
 			name: "action with one dot → first segment (head, no prevDot)",
 			entry: KeymapEntry{
-				Action: "footer.tooltip",
+				Action: "footer.breakdown",
 			},
 			wantSubstr: "footer",
 		},

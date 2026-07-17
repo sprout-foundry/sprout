@@ -28,6 +28,11 @@ func (m *MCPCommand) Name() string {
 	return "mcp"
 }
 
+// SafeDuringSteer returns true - /mcp list is read-only (add/remove handled in command itself)
+func (m *MCPCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (m *MCPCommand) Description() string {
 	return "Manage MCP (Model Context Protocol) servers - add, remove, list, test"

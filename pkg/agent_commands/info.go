@@ -19,6 +19,11 @@ func (c *InfoCommand) Name() string {
 	return "info"
 }
 
+// SafeDuringSteer returns true - /info is read-only
+func (c *InfoCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (c *InfoCommand) Description() string {
 	return "Quick overview of live agent state (model, context, cost, persona)"

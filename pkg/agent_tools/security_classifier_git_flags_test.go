@@ -38,9 +38,11 @@ func TestHasToken(t *testing.T) {
 }
 
 func TestClassifyGitOperation_FlagAwareReset(t *testing.T) {
-	dangerous := SecurityResult{
-		Risk: SecurityDangerous, ShouldBlock: true, ShouldPrompt: true,
-		IsHardBlock: true, RiskType: "destructive_git_operation",
+	// reset --hard/--keep/--merge are now CAUTION (downgraded from DANGEROUS)
+	// but still categorized as destructive with destructive_git_operation RiskType
+	destructiveCaution := SecurityResult{
+		Risk: SecurityCaution, ShouldBlock: false, ShouldPrompt: true,
+		IsHardBlock: false, RiskType: "destructive_git_operation",
 		Category: RiskCategoryDestructive,
 	}
 	caution := SecurityResult{
@@ -53,11 +55,11 @@ func TestClassifyGitOperation_FlagAwareReset(t *testing.T) {
 		args map[string]interface{}
 		want SecurityResult
 	}{
-		// Dangerous resets
-		{"reset --hard", map[string]interface{}{"operation": "reset", "args": "--hard HEAD~5"}, dangerous},
-		{"reset --keep", map[string]interface{}{"operation": "reset", "args": "--keep"}, dangerous},
-		{"reset --merge", map[string]interface{}{"operation": "reset", "args": "--merge"}, dangerous},
-		{"reset --hard mid-pos", map[string]interface{}{"operation": "reset", "args": "HEAD~3 --hard"}, dangerous},
+		// Destructive resets — now CAUTION (downgraded from DANGEROUS)
+		{"reset --hard", map[string]interface{}{"operation": "reset", "args": "--hard HEAD~5"}, destructiveCaution},
+		{"reset --keep", map[string]interface{}{"operation": "reset", "args": "--keep"}, destructiveCaution},
+		{"reset --merge", map[string]interface{}{"operation": "reset", "args": "--merge"}, destructiveCaution},
+		{"reset --hard mid-pos", map[string]interface{}{"operation": "reset", "args": "HEAD~3 --hard"}, destructiveCaution},
 		// Safe resets (stay CAUTION)
 		{"reset --soft", map[string]interface{}{"operation": "reset", "args": "--soft HEAD~1"}, caution},
 		{"reset --mixed", map[string]interface{}{"operation": "reset", "args": "--mixed"}, caution},
@@ -67,10 +69,10 @@ func TestClassifyGitOperation_FlagAwareReset(t *testing.T) {
 		{"reset --hardlink-test", map[string]interface{}{"operation": "reset", "args": "--hardlink-test"}, caution},
 		{"reset --hardcore-foo", map[string]interface{}{"operation": "reset", "args": "--hardcore-foo"}, caution},
 		// --hard alone (no trailing ref)
-		{"reset --hard only", map[string]interface{}{"operation": "reset", "args": "--hard"}, dangerous},
+		{"reset --hard only", map[string]interface{}{"operation": "reset", "args": "--hard"}, destructiveCaution},
 		// Case sensitivity: operation names are lowercased inside classifyGitOperation
-		{"reset --hard (MixedCase)", map[string]interface{}{"operation": "Reset", "args": "--hard"}, dangerous},
-		{"reset --hard (UPPERCASE)", map[string]interface{}{"operation": "RESET", "args": "--hard"}, dangerous},
+		{"reset --hard (MixedCase)", map[string]interface{}{"operation": "Reset", "args": "--hard"}, destructiveCaution},
+		{"reset --hard (UPPERCASE)", map[string]interface{}{"operation": "RESET", "args": "--hard"}, destructiveCaution},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,9 +97,11 @@ func TestClassifyGitOperation_FlagAwareReset(t *testing.T) {
 }
 
 func TestClassifyGitOperation_FlagAwareRebase(t *testing.T) {
-	dangerous := SecurityResult{
-		Risk: SecurityDangerous, ShouldBlock: true, ShouldPrompt: true,
-		IsHardBlock: true, RiskType: "destructive_git_operation",
+	// rebase -i/--onto are now CAUTION (downgraded from DANGEROUS)
+	// but still categorized as destructive with destructive_git_operation RiskType
+	destructiveCaution := SecurityResult{
+		Risk: SecurityCaution, ShouldBlock: false, ShouldPrompt: true,
+		IsHardBlock: false, RiskType: "destructive_git_operation",
 		Category: RiskCategoryDestructive,
 	}
 	caution := SecurityResult{
@@ -110,21 +114,21 @@ func TestClassifyGitOperation_FlagAwareRebase(t *testing.T) {
 		args map[string]interface{}
 		want SecurityResult
 	}{
-		// Dangerous rebases
-		{"rebase -i", map[string]interface{}{"operation": "rebase", "args": "-i HEAD~3"}, dangerous},
-		{"rebase -i -p", map[string]interface{}{"operation": "rebase", "args": "-i -p"}, dangerous},
-		{"rebase --onto", map[string]interface{}{"operation": "rebase", "args": "--onto master feature branch"}, dangerous},
+		// Destructive rebases — now CAUTION (downgraded from DANGEROUS)
+		{"rebase -i", map[string]interface{}{"operation": "rebase", "args": "-i HEAD~3"}, destructiveCaution},
+		{"rebase -i -p", map[string]interface{}{"operation": "rebase", "args": "-i -p"}, destructiveCaution},
+		{"rebase --onto", map[string]interface{}{"operation": "rebase", "args": "--onto master feature branch"}, destructiveCaution},
 		// Safe rebases (stay CAUTION)
 		{"rebase no flag", map[string]interface{}{"operation": "rebase", "args": "master"}, caution},
 		{"rebase no args", map[string]interface{}{"operation": "rebase"}, caution},
 		{"rebase empty args", map[string]interface{}{"operation": "rebase", "args": ""}, caution},
 		// Whole-token: -i sandwiched between other flags
-		{"rebase -x -i -y", map[string]interface{}{"operation": "rebase", "args": "-x -i -y"}, dangerous},
+		{"rebase -x -i -y", map[string]interface{}{"operation": "rebase", "args": "-x -i -y"}, destructiveCaution},
 		// Whole-token negatives: similar-looking flags must NOT match
 		{"rebase --no-onto", map[string]interface{}{"operation": "rebase", "args": "--no-onto"}, caution},
 		{"rebase -n", map[string]interface{}{"operation": "rebase", "args": "-n"}, caution},
 		// Case sensitivity
-		{"rebase -i (UPPERCASE)", map[string]interface{}{"operation": "REBASE", "args": "-i"}, dangerous},
+		{"rebase -i (UPPERCASE)", map[string]interface{}{"operation": "REBASE", "args": "-i"}, destructiveCaution},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

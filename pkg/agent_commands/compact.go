@@ -93,6 +93,11 @@ func (c *CompactCommand) Name() string {
 	return "compact"
 }
 
+// SafeDuringSteer returns false - /compact mutates conversation state + calls LLM
+func (c *CompactCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (c *CompactCommand) Description() string {
 	return "LLM-summarize the middle of the conversation, preserving the opening task anchor and the recent causal chain"

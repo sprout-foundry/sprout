@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
@@ -196,6 +197,12 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 		return
 	}
 	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
+		if intent == IntentSlash {
+			// Try to execute safe commands mid-turn
+			if c.executeSteerCommand(text) {
+				return
+			}
+		}
 		rejectCommandIntent(intent, text, "steer", "wait for the prompt to finish (Ctrl+C / Esc to interrupt now)")
 		return
 	}
@@ -285,4 +292,48 @@ func rejectCommandIntent(intent PromptIntent, text, mode, remedy string) {
 		"%s mode can't run a %s — %s. Dropped: %s",
 		mode, string(intent), remedy, preview,
 	)
+}
+
+// executeSteerCommand tries to run a slash command mid-turn. Returns true
+// if the command was handled (safe and executed, or unsafe and rejected).
+func (c *SteerCoordinator) executeSteerCommand(text string) bool {
+	parts := strings.Fields(strings.TrimPrefix(strings.TrimSpace(text), "/"))
+	if len(parts) == 0 {
+		return false
+	}
+	cmdName := parts[0]
+
+	registryRaw := c.agent.SlashCommands()
+	if registryRaw == nil {
+		return false
+	}
+	registry, ok := registryRaw.(*agent_commands.CommandRegistry)
+	if !ok {
+		return false
+	}
+
+	cmd, ok := registry.GetCommand(cmdName)
+	if !ok {
+		return false
+	}
+
+	sc, ok := cmd.(agent_commands.SteerCapable)
+	if !ok || !sc.SafeDuringSteer() {
+		return false // will fall through to rejectCommandIntent
+	}
+	// Execute in a goroutine to avoid blocking the steer reader goroutine.
+	// The command writes to stdout/stderr which is fine — the terminal subscriber
+	// will pick it up. Use recover to prevent a command panic from killing the
+	// steer goroutine.
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				console.GlyphError.Fprintf(os.Stderr, "command /%s panicked: %v", cmdName, r)
+			}
+		}()
+		if err := cmd.Execute(parts[1:], c.agent); err != nil {
+			console.GlyphError.Fprintf(os.Stderr, "command /%s: %v", cmdName, err)
+		}
+	}()
+	return true
 }

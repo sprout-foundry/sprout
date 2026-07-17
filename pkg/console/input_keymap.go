@@ -30,7 +30,7 @@ type KeymapEntry struct {
 	// Key is the user-facing combo, e.g. "Alt+T". Used for /help
 	// documentation; the dispatch path uses Action instead.
 	Key string
-	// Action is the internal name, e.g. "footer.tooltip.toggle".
+	// Action is the internal name, e.g. "footer.breakdown.toggle".
 	Action string
 	// Description is the /help blurb.
 	Description string
@@ -182,7 +182,7 @@ func KeymapHelpTable() string {
 // suitable for embedding in a footer or status bar.
 // Format: "Alt+T label1 · Alt+V label2 · ..."
 // The label is derived from the Action name (the second-to-last
-// dot-separated segment, e.g. "footer.tooltip.toggle" → "tooltip"),
+// dot-separated segment, e.g. "footer.breakdown.toggle" → "breakdown"),
 // falling back to the Description's first word when Action is empty.
 // Labels longer than 30 display columns are truncated with "…".
 // Returns empty string when no bindings have descriptions.
@@ -213,8 +213,8 @@ func KeymapHintRow() string {
 
 // extractShortLabel derives a compact label from a keymap entry for use in
 // footer hints. It takes the second-to-last dot-separated segment of the
-// Action name (e.g., "footer.tooltip.toggle" → "tooltip",
-// "output_verbosity.toggle" → "verbosity"). The middle segment is the
+// Action name (e.g., "footer.breakdown.toggle" → "breakdown",
+// "output.verbosity.toggle" → "verbosity"). The middle segment is the
 // "thing being controlled" — the most semantically useful for a hint.
 //
 // Edge cases:

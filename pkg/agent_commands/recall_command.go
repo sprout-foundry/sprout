@@ -18,6 +18,11 @@ func (c *RecallCommand) Name() string {
 	return "recall"
 }
 
+// SafeDuringSteer returns true - /recall is read-only
+func (c *RecallCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the short description shown in /help listings.
 func (c *RecallCommand) Description() string {
 	return "Search past sessions for relevant context"

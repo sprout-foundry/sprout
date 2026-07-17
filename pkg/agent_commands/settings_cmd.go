@@ -24,6 +24,11 @@ func (s *SettingsCommand) Name() string {
 	return "settings"
 }
 
+// SafeDuringSteer returns false - /settings is interactive browser
+func (s *SettingsCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (s *SettingsCommand) Description() string {
 	return "Browse and change settings interactively"

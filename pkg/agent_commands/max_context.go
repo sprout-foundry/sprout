@@ -19,6 +19,11 @@ type MaxContextCommand struct{}
 
 func (c *MaxContextCommand) Name() string { return "max-context" }
 
+// SafeDuringSteer returns true - /max-context is config change, no turn interaction
+func (c *MaxContextCommand) SafeDuringSteer() bool {
+	return true
+}
+
 func (c *MaxContextCommand) Description() string {
 	return "Show or set the max context token cap for cost control (0 = no cap)"
 }

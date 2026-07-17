@@ -34,6 +34,11 @@ func (c *TranscriptCommand) Name() string {
 	return "transcript"
 }
 
+// SafeDuringSteer returns true - /transcript is read-only
+func (c *TranscriptCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (c *TranscriptCommand) Description() string {
 	return "Capture a JSON snapshot of the current conversation for inspection (subcommands: preview, markdown, diff)"

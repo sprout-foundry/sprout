@@ -250,6 +250,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// friends. Slash commands also skip the per-turn cost summary
 			// since they don't consume LLM tokens.
 			registry := agent_commands.NewCommandRegistry()
+			chatAgent.SetSlashCommands(registry)
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))

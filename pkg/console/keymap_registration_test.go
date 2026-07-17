@@ -66,9 +66,9 @@ func TestOutputVerbosityToggleRoundTrip(t *testing.T) {
 	// guard that CLI-D-3 explicitly relies on.
 	RegisterKeymapForFooter(nil, cfg)
 
-	entry, ok := GlobalKeymap().Lookup("output_verbosity.toggle")
+	entry, ok := GlobalKeymap().Lookup("output.verbosity.toggle")
 	if !ok {
-		t.Fatal("output_verbosity.toggle not registered")
+		t.Fatal("output.verbosity.toggle not registered")
 	}
 	if entry.Key != "Alt+V" {
 		t.Errorf("Key = %q, want Alt+V", entry.Key)

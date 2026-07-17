@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -589,7 +590,54 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Handle slash commands during active query
 	if strings.HasPrefix(query.Query, "/") {
+		clientID := ws.resolveClientID(r)
+		chatID := ws.resolveChatID(r, clientID)
+
+		ws.mutex.RLock()
+		ctx := ws.clientContexts[clientID]
+		hasActiveQuery := ctx != nil && ctx.hasActiveQueryForChat(chatID)
+		ws.mutex.RUnlock()
+
+		if !hasActiveQuery {
+			http.Error(w, "No active query to steer", http.StatusConflict)
+			return
+		}
+
+		clientAgent, err := ws.getChatAgent(clientID, chatID)
+		if err != nil {
+			if isProviderConfigError(err) {
+				writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
+			} else {
+				http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		// Try to execute safe steer command
+		cmd, output, cmdErr := ws.executeSafeSteerCommand(query.Query, clientAgent)
+		if cmd != nil {
+			// Command was found and executed (success or error)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			resp := map[string]interface{}{
+				"accepted": cmdErr == nil,
+				"mode":     "steer",
+				"command":  cmd.Name(),
+				"target":   "primary",
+			}
+			if output != "" {
+				resp["output"] = output
+			}
+			if cmdErr != nil {
+				resp["error"] = cmdErr.Error()
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Command not found or not safe to run mid-turn
 		http.Error(w, "Slash commands cannot be steered while a query is running", http.StatusBadRequest)
 		return
 	}
@@ -740,4 +788,79 @@ func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Re
 		"active":  active,
 		"chat_id": chatID,
 	})
+}
+
+// executeSafeSteerCommand tries to execute a slash command mid-turn.
+// Returns (cmd, output, error) where:
+//   - cmd is the command if found and executed
+//   - output is the captured stdout from the command
+//   - error is any execution error
+//   - (nil, "", nil) is returned if the command was not found or not safe
+func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent.Agent) (agent_commands.Command, string, error) {
+	// Parse command name from input
+	trimmed := strings.TrimSpace(input)
+	if !strings.HasPrefix(trimmed, "/") {
+		return nil, "", nil
+	}
+	parts := strings.Fields(trimmed[1:]) // Remove leading /
+	if len(parts) == 0 {
+		return nil, "", nil
+	}
+	cmdName := parts[0]
+	args := parts[1:]
+
+	// Get the registry from the agent
+	registryRaw := chatAgent.SlashCommands()
+	if registryRaw == nil {
+		return nil, "", nil
+	}
+	registry, ok := registryRaw.(*agent_commands.CommandRegistry)
+	if !ok {
+		return nil, "", nil
+	}
+
+	cmd, ok := registry.GetCommand(cmdName)
+	if !ok {
+		return nil, "", nil
+	}
+
+	// Check if command is safe to run mid-turn
+	sc, ok := cmd.(agent_commands.SteerCapable)
+	if !ok || !sc.SafeDuringSteer() {
+		return nil, "", nil
+	}
+
+	// Capture stdout for the response. Use the same mutex as handleAPIQuery
+	// to serialize os.Stdout capture across concurrent chats — os.Stdout is
+	// process-global, so two simultaneous redirects would race (SC-1).
+	ws.stdoutCaptureMu.Lock()
+
+	oldStdout := os.Stdout
+	readEnd, writeEnd, _ := os.Pipe()
+	os.Stdout = writeEnd
+
+	var cmdErr error
+	var output string
+
+	// Execute the command
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				cmdErr = fmt.Errorf("command panicked: %v", rec)
+			}
+		}()
+		cmdErr = cmd.Execute(args, chatAgent)
+	}()
+
+	// Restore stdout and capture output
+	writeEnd.Close()
+	os.Stdout = oldStdout
+	buf := new(strings.Builder)
+	io.Copy(buf, readEnd)
+	readEnd.Close()
+	output = buf.String()
+
+	ws.stdoutCaptureMu.Unlock()
+
+	return cmd, output, cmdErr
 }

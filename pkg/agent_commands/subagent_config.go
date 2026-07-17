@@ -14,6 +14,11 @@ type SubagentConfigCommand struct {
 	configType string // "provider" or "model"
 }
 
+// SafeDuringSteer returns true - both provider and model config are safe mid-turn
+func (s *SubagentConfigCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Name returns the command name
 func (s *SubagentConfigCommand) Name() string {
 	if s.configType == "provider" {

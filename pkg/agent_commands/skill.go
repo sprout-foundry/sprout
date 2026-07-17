@@ -55,6 +55,11 @@ type SkillCommand struct{}
 
 func (c *SkillCommand) Name() string { return "skill" }
 
+// SafeDuringSteer returns true - /skill is independent of active turn
+func (c *SkillCommand) SafeDuringSteer() bool {
+	return true
+}
+
 func (c *SkillCommand) Description() string {
 	return "Install, update, remove, list, enable, or disable skills"
 }

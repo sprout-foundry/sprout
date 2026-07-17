@@ -20,6 +20,11 @@ func (m *ModelsCommand) Name() string {
 	return "model"
 }
 
+// SafeDuringSteer returns true - /model is config for next turn only
+func (m *ModelsCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (m *ModelsCommand) Description() string {
 	return "List available models and select which model to use"

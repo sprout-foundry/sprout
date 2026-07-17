@@ -310,14 +310,14 @@ func TestRegisterKeymapForFooter_Idempotent(t *testing.T) {
 	RegisterKeymapForFooter(nil, nil)
 	RegisterKeymapForFooter(nil, nil)
 
-	// Count entries with action footer.tooltip.toggle.
+	// Count entries with action footer.breakdown.toggle.
 	count := 0
 	for _, e := range GlobalKeymap().Entries() {
-		if e.Action == "footer.tooltip.toggle" {
+		if e.Action == "footer.breakdown.toggle" {
 			count++
 		}
 	}
 	if count != 1 {
-		t.Errorf("got %d footer.tooltip.toggle entries, want 1", count)
+		t.Errorf("got %d footer.breakdown.toggle entries, want 1", count)
 	}
 }

@@ -17,6 +17,11 @@ func (i *InitCommand) Name() string {
 	return "init"
 }
 
+// SafeDuringSteer returns false - /init is project init, state-changing
+func (i *InitCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (i *InitCommand) Description() string {
 	return "Generate or improve AGENTS.md with intelligent codebase analysis"

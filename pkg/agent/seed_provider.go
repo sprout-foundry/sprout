@@ -191,14 +191,11 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 
 	// Debit the fleet USD budget so the workflow runner's budget display
 	// ($X of $Y) reflects primary-agent LLM calls, not just subagents.
-	// Use chargedCost when available (pay_per_token), fall back to
-	// tokenCost for subscription/free providers.
-	costForBudget := chargedCost
-	if costForBudget == 0 {
-		costForBudget = tokenCost
-	}
-	if sp.agent.fleetUsdBudget != nil && costForBudget > 0 {
-		spent, crossed, justExceeded := sp.agent.fleetUsdBudget.Add(costForBudget)
+	// Per SP-113 Layer 4: only ChargedCost is debited — subscription and
+	// free providers (chargedCost == 0) must NOT consume the fleet budget
+	// because there is no marginal spend to protect against.
+	if sp.agent.fleetUsdBudget != nil && chargedCost > 0 {
+		spent, crossed, justExceeded := sp.agent.fleetUsdBudget.Add(chargedCost)
 		_, limit := sp.agent.fleetUsdBudget.Snapshot()
 		for _, t := range crossed {
 			if cb, ok := sp.agent.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {

@@ -308,5 +308,3 @@ func NewScriptedTextResponse(content string) *ScriptedResponse {
 		FinishReason: "stop",
 	}
 }
-
-

@@ -18,6 +18,7 @@ import (
 	"github.com/ledongthuc/pdf"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ============================================================================
@@ -69,7 +70,7 @@ func ProcessPDFForTextOnly(ctx context.Context, pdfPath string) (string, error) 
 func processPDFForOCROnly(ctx context.Context, pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
-		return "", fmt.Errorf("stat PDF file: %w", err)
+		return "", fmt.Errorf("stat PDF file: %w", agenterrors.NewNotFoundCause(pdfPath, err))
 	}
 	maxSize := int64(50 * 1024 * 1024)
 	if fileInfo.Size() > maxSize {
@@ -107,7 +108,7 @@ func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), e
 		}
 		resp, err := client.Do(req)
 		if err != nil {
-			return fmt.Errorf("download PDF: %w", err)
+			return agenterrors.NewNetwork("download PDF", err)
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
@@ -121,7 +122,7 @@ func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), e
 					RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
 				}
 			}
-			return fmt.Errorf("download PDF: status %d", resp.StatusCode)
+			return agenterrors.NewNetwork(fmt.Sprintf("download PDF: status %d", resp.StatusCode), nil)
 		}
 		data, err = io.ReadAll(io.LimitReader(resp.Body, 60*1024*1024))
 		if err != nil {
@@ -136,7 +137,7 @@ func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), e
 		return "", func() {}, fmt.Errorf("downloaded PDF is empty")
 	}
 	if !looksLikePDF(data) {
-		return "", func() {}, fmt.Errorf("downloaded content is not a valid PDF")
+		return "", func() {}, agenterrors.NewValidation("downloaded content is not a valid PDF", nil)
 	}
 	tmp, err := os.CreateTemp("", "sprout_pdf_*.pdf")
 	if err != nil {
@@ -159,7 +160,7 @@ func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), e
 func extractTextWithGoPDF(pdfPath string, charLimit int) (string, bool, error) {
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
-		return "", false, fmt.Errorf("stat PDF file: %w", err)
+		return "", false, fmt.Errorf("stat PDF file: %w", agenterrors.NewNotFoundCause(pdfPath, err))
 	}
 	if fileInfo.Size() > 50*1024*1024 {
 		return "", false, fmt.Errorf("PDF file too large (%d MB, max 50 MB)", fileInfo.Size()/1024/1024)

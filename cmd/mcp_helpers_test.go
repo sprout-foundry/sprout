@@ -389,6 +389,47 @@ func TestPromptForGitHubToken_EmptyTokenInput(t *testing.T) {
 }
 
 // =============================================================================
+// Test 12: promptForGitHubToken actually writes to shell profile
+// =============================================================================
+
+func TestPromptForGitHubToken_WritesToShellProfile(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	// Pre-create an empty .zshrc so detectShellProfilePath returns it.
+	profilePath := filepath.Join(tmp, ".zshrc")
+	if err := os.WriteFile(profilePath, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Provide stdin: token line + "y" confirmation line.
+	stdin := strings.NewReader("ghp_test_token\ny\n")
+
+	token, err := promptForGitHubToken(bufio.NewReader(stdin))
+	if err != nil {
+		t.Fatalf("promptForGitHubToken() returned error: %v", err)
+	}
+	if token != "ghp_test_token" {
+		t.Errorf("expected token 'ghp_test_token', got %q", token)
+	}
+
+	content, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatalf("failed to read profile after write: %v", err)
+	}
+	body := string(content)
+
+	if !strings.Contains(body, `export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_test_token"`) {
+		t.Errorf("expected export line in profile, got:\n%s", body)
+	}
+	if !strings.Contains(body, "# sprout-managed: GITHUB_PERSONAL_ACCESS_TOKEN") {
+		t.Errorf("expected sprout-managed marker in profile, got:\n%s", body)
+	}
+}
+
+// =============================================================================
 // guidedSetupFor dispatch tests
 //
 // These verify that the four rich guided setup functions (Git, GitHub,

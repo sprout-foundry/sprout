@@ -42,7 +42,7 @@ The configuration uses a flat structure focused on provider and model management
   "provider_models": {
     "openai": "gpt-5-mini",
     "zai": "GLM-4.6",
-    "deepinfra": "meta-llama/Llama-3.3-70B-Instruct",
+    "deepinfra": "deepseek-ai/DeepSeek-V3.1-Terminus",
     "openrouter": "openai/gpt-5",
     "ollama-local": "qwen3-coder:30b",
     "ollama-cloud": "deepseek-v3.1:671b"
@@ -227,7 +227,7 @@ If the input is not clearly a command, it will be passed to the AI as normal. Th
 CI=1 sprout agent "Review changes and generate commit message"
 
 # With specific provider/model
-sprout agent --provider deepinfra --model "meta-llama/Llama-3.3-70B-Instruct" "task"
+sprout agent --provider deepinfra --model "deepseek-ai/DeepSeek-V3.1-Terminus" "task"
 
 # Skip prompts for automation
 sprout agent --skip-prompt "Implement feature"

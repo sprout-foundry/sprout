@@ -1,7 +1,8 @@
 # SP-114 — Unify CLI and Steer Panel Command Execution
 
-**Status:** 🔵 Proposed
+**Status:** ✅ Phase 1 Complete
 **Created:** 2026-07-04
+**Phase 1 Completed:** 2026-07-17
 **Effort:** Phase 1 (~2 days), Phase 2 (~2-3 days)
 
 > **Note:** Renumbered from SP-112 (2026-07-05) to resolve a number collision with

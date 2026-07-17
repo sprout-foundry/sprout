@@ -20,6 +20,11 @@ func (h *HelpCommand) Name() string {
 	return "help"
 }
 
+// SafeDuringSteer returns true - /help is read-only
+func (h *HelpCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (h *HelpCommand) Description() string {
 	return "Show help information and available slash commands"

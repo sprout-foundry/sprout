@@ -87,14 +87,15 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 	compilePIIRegexps(cfg)
 
 	// Replace home directory paths first (most specific).
-	if homeDirRe != nil {
-		s = homeDirRe.ReplaceAllString(s, "$HOME")
+	if cfg.HomeDir != "" {
+		// No regex needed — strings.ReplaceAll is sufficient and safe.
 	}
 
 	// Replace any home directory paths (e.g. /home/aprice, /Users/alanp)
 	// so data from remote machines is redacted even when the local username
 	// differs. Extract remote usernames first (before replacing paths)
-	// so they can also be redacted as standalone words.
+	// so they can also be redacted as standalone words later.
+	var remoteUsers []string
 	for _, path := range anyHomeDirRe.FindAllString(s, -1) {
 		parts := strings.Split(path, string(os.PathSeparator))
 		if len(parts) < 3 {
@@ -102,14 +103,20 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 		}
 		remoteUser := parts[2] // username is always 3rd component
 		if remoteUser != "" && remoteUser != cfg.Username {
-			escaped := regexp.QuoteMeta(remoteUser)
-			re := regexp.MustCompile(`\b` + escaped + `\b`)
-			s = re.ReplaceAllString(s, "$USER")
+			remoteUsers = append(remoteUsers, remoteUser)
 		}
 	}
-	s = anyHomeDirRe.ReplaceAllString(s, "$HOME")
+	// Replace home dir paths with $HOME placeholder.
+	s = anyHomeDirRe.ReplaceAllString(s, "$$HOME")
 	// Also replace underscore-sanitized home dir paths from .sprout/changes/
-	s = anyHomeDirUnderscoreRe.ReplaceAllString(s, "$HOME")
+	s = anyHomeDirUnderscoreRe.ReplaceAllString(s, "$$HOME")
+
+	// Now redact the extracted remote usernames as standalone words.
+	for _, user := range remoteUsers {
+		escaped := regexp.QuoteMeta(user)
+		re := regexp.MustCompile(`\b` + escaped + `\b`)
+		s = re.ReplaceAllString(s, "$$USER")
+	}
 
 	// Replace the bare home dir (for cases without a trailing path).
 	if cfg.HomeDir != "" {
@@ -122,7 +129,7 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 
 	// Replace username as a standalone word.
 	if usernameRe != nil {
-		s = usernameRe.ReplaceAllString(s, "$USER")
+		s = usernameRe.ReplaceAllString(s, "$$USER")
 	}
 
 	// Replace hostname.
@@ -131,7 +138,7 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 	}
 
 	// Redact email addresses.
-	s = emailRe.ReplaceAllString(s, "$EMAIL")
+	s = emailRe.ReplaceAllString(s, "$$EMAIL")
 
 	// Redact git author tags like "(by alanprice)" or "Author: alanprice".
 	// Matches the username as a prefix of longer words (alanprice, alan228)
@@ -139,18 +146,18 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 	if cfg.Username != "" {
 		escaped := regexp.QuoteMeta(cfg.Username)
 		authorRe := regexp.MustCompile(`(?i)(by |author:*\s*)` + escaped + `\w*`)
-		s = authorRe.ReplaceAllString(s, "${1}$USER")
+		s = authorRe.ReplaceAllString(s, "$${1}$$USER")
 		// Also redact VCS mentions: @username in chat contexts
 		atRe := regexp.MustCompile(`@` + escaped + `\w*\b`)
-		s = atRe.ReplaceAllString(s, "@$USER")
+		s = atRe.ReplaceAllString(s, "@$$USER")
 		// Redact github.com/username in module paths
 		vcsRe := regexp.MustCompile(`(github\.com|gitlab\.com|bitbucket\.org)/` + escaped + `\w*`)
-		s = vcsRe.ReplaceAllString(s, "${1}/$USER")
+		s = vcsRe.ReplaceAllString(s, "$${1}/$$USER")
 		// Redact bare username-prefixed words that look like git authors.
 		// Matches lines where the username is a prefix of a longer word
 		// (eg. "alanprice" from git log --format='%an').
 		bareAuthorRe := regexp.MustCompile(`(?m)^` + escaped + `\w+$`)
-		s = bareAuthorRe.ReplaceAllString(s, "$USER")
+		s = bareAuthorRe.ReplaceAllString(s, "$$USER")
 	}
 
 	return s
@@ -287,13 +294,13 @@ func redactAdditionalUsernames(s string, users []string) string {
 		escaped := regexp.QuoteMeta(user)
 		// Standard word-boundary match (catches most cases).
 		re := regexp.MustCompile(`\b` + escaped + `\b`)
-		s = re.ReplaceAllString(s, "$USER")
+		s = re.ReplaceAllString(s, "$$USER")
 		// Also catch usernames preceded by literal \n (backslash-n)
 		// which occurs when command output is double-escaped in
 		// session storage. Without this, \naprice has no word boundary
 		// between the 'n' and 'a' characters.
 		re2 := regexp.MustCompile(`\\n` + escaped + `\b`)
-		s = re2.ReplaceAllString(s, "\\n$USER")
+		s = re2.ReplaceAllString(s, "\\n$$USER")
 	}
 	return s
 }

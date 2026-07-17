@@ -993,3 +993,83 @@ func TestCostSummaryBillingType_EmptyStore(t *testing.T) {
 		t.Errorf("ByBillingType should be empty, got %v", summary.ByBillingType)
 	}
 }
+
+// --- SP-113 Phase 4: ByProviderBillingType tests ---
+
+func TestCostSummary_ByProviderBillingType_FromRecords(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:   now,
+			Provider:    "openai",
+			Model:       "gpt-4",
+			Cost:        0.10,
+			BillingType: "pay_per_token",
+		},
+		{
+			Timestamp:   now,
+			Provider:    "zai-coding",
+			Model:       "glm-4",
+			Cost:        0,
+			BillingType: "subscription",
+		},
+		{
+			Timestamp:   now,
+			Provider:    "local",
+			Model:       "llama-3",
+			Cost:        0,
+			BillingType: "free",
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if got := summary.ByProviderBillingType["openai"]; got != "pay_per_token" {
+		t.Errorf("ByProviderBillingType[openai] = %q, want %q", got, "pay_per_token")
+	}
+	if got := summary.ByProviderBillingType["zai-coding"]; got != "subscription" {
+		t.Errorf("ByProviderBillingType[zai-coding] = %q, want %q", got, "subscription")
+	}
+	if got := summary.ByProviderBillingType["local"]; got != "free" {
+		t.Errorf("ByProviderBillingType[local] = %q, want %q", got, "free")
+	}
+}
+
+func TestCostSummary_ByProviderBillingType_OldRecordsFallbackToConfig(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Old record with no BillingType field set (backward compat).
+	// "zai-coding" resolves to "subscription" via the static fallback in
+	// resolveBillingTypeForProvider.
+	cs.records = []CostRecord{
+		{
+			Timestamp:   now,
+			Provider:    "zai-coding",
+			Model:       "glm-4",
+			Cost:        0.05,
+			BillingType: "", // missing — should fall back to config resolution
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if got := summary.ByProviderBillingType["zai-coding"]; got != "subscription" {
+		t.Errorf("ByProviderBillingType[zai-coding] = %q, want %q (config fallback)", got, "subscription")
+	}
+}
+
+func TestCostSummary_ByProviderBillingType_EmptyStore(t *testing.T) {
+	cs := makeCostStore(t)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.ByProviderBillingType == nil {
+		t.Fatal("ByProviderBillingType should be initialized (non-nil), even for empty store")
+	}
+	if len(summary.ByProviderBillingType) != 0 {
+		t.Errorf("ByProviderBillingType should be empty, got %v", summary.ByProviderBillingType)
+	}
+}

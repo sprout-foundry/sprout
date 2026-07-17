@@ -282,6 +282,12 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	err = os.WriteFile(stateFile, data, 0600)
 	if err == nil {
 		search.MarkSessionDirty(cleanSessionID)
+
+		// Fire-and-forget training data push. This never blocks or fails
+		// the session save — the goroutine logs errors to stderr.
+		// The push function (if wired) applies PII redaction before
+		// sending data over the network.
+		a.pushTrainingSession(state)
 	}
 	return err
 }

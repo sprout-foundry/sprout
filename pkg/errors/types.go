@@ -622,6 +622,22 @@ func NewNotFound(what string) *TypedError {
 	}
 }
 
+// NewNotFoundCause creates a TypedError indicating a resource was not found,
+// preserving the original error as the cause for errors.Is/errors.As traversal.
+// Use this when wrapping a *PathError, *os.LinkError, or other syscall-level
+// error so the underlying errno and operation context remain accessible.
+func NewNotFoundCause(what string, cause error) *TypedError {
+	return &TypedError{
+		Code:      CodeNotFound,
+		Severity:  SeverityFor(CodeNotFound),
+		Status:    StatusFor(CodeNotFound),
+		Retryable: RetryableFor(CodeNotFound),
+		Message:   what + " not found",
+		Cause:     cause,
+		Time:      time.Now(),
+	}
+}
+
 // NewPermission creates a TypedError for permission or authorization failures.
 func NewPermission(msg string, details map[string]any) *TypedError {
 	return &TypedError{

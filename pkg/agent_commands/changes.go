@@ -32,6 +32,11 @@ func (c *ChangesCommand) Name() string {
 	return "changes"
 }
 
+// SafeDuringSteer returns true - /changes is read-only
+func (c *ChangesCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (c *ChangesCommand) Description() string {
 	return "Show file changes tracked in the current session"
@@ -83,6 +88,11 @@ type StatusCommand struct{}
 // Name returns the command name
 func (s *StatusCommand) Name() string {
 	return "status"
+}
+
+// SafeDuringSteer returns true - /status is read-only
+func (s *StatusCommand) SafeDuringSteer() bool {
+	return true
 }
 
 // Description returns the command description
@@ -239,6 +249,11 @@ func (l *LogCommand) Name() string {
 	return "log"
 }
 
+// SafeDuringSteer returns true - /log is read-only
+func (l *LogCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (l *LogCommand) Description() string {
 	return "Show recent change history from all sessions"
@@ -273,6 +288,11 @@ type RollbackCommand struct{}
 // Name returns the command name
 func (r *RollbackCommand) Name() string {
 	return "rollback"
+}
+
+// SafeDuringSteer returns false - /rollback mutates file history
+func (r *RollbackCommand) SafeDuringSteer() bool {
+	return false
 }
 
 // Description returns the command description

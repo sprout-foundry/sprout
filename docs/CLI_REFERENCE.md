@@ -203,6 +203,8 @@ sprout export-training [flags]
 - `reviewer` — Code review and security review (alias: `code_reviewer`)
 - `researcher` — Combined local codebase analysis and external research
 - `web_scraper` — Web extraction and structured content collection
+- `coordinator` — Cross-project orchestration and task queue (alias: `executive_assistant`, `ea`)
+- `computer_user` — Desktop automation with screenshots, mouse, and keyboard
 
 ### Performance & Safety
 
@@ -298,7 +300,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 
 ## Agent Personas
 
-`sprout` supports 12 specialized personas, each optimized for different types of tasks. See [`docs/PERSONAS.md`](PERSONAS.md) for detailed descriptions.
+`sprout` supports 11 specialized personas, each optimized for different types of tasks. See [`docs/PERSONAS.md`](PERSONAS.md) for detailed descriptions.
 
 | Persona | Description |
 |---------|-------------|
@@ -312,6 +314,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | `researcher` | Combined local codebase analysis and external research |
 | `web_scraper` | Web extraction and structured content collection |
 | `coordinator` | Cross-project orchestration and task queue (alias: `executive_assistant`, `ea`) |
+| `computer_user` | Desktop automation with screenshots, mouse, and keyboard |
 
 For strategic project planning, use the `project-planning` skill instead: `activate_skill project-planning`.
 
@@ -323,6 +326,7 @@ sprout agent --persona reviewer "review my code"
 sprout agent --persona researcher "analyze codebase and external sources"
 sprout agent --persona web_scraper "extract structured content from web pages"
 sprout agent --persona refactor "refactor code while preserving behavior"
+sprout agent --persona computer_user "open the browser and navigate to example.com"
 ```
 
 ---

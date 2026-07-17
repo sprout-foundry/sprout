@@ -77,11 +77,37 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 	a.state.SetTotalTokens(a.state.GetTotalTokens() + totalTokens)
 	a.state.SetPromptTokens(a.state.GetPromptTokens() + promptTokens)
 	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + completionTokens)
-	a.state.AddCost(estimatedCost)
 	a.state.SetCachedTokens(a.state.GetCachedTokens() + cachedTokens)
 	a.state.SetCacheWriteTokens(a.state.GetCacheWriteTokens() + cacheWriteTokens)
 	// Track image tokens separately for display (already included in totals).
 	a.state.SetImageTokens(a.state.GetImageTokens() + imageTokens)
+
+	// Resolve billing type and compute dual costs (ChargedCost / TokenCost)
+	// using the same logic as seed_provider.go and agent_runtime.go.
+	billingType := a.resolveBillingType()
+	chargedCost := estimatedCost
+	if chargedCost == 0 && billingType == BillingPayPerToken && totalTokens > 0 {
+		chargedCost = a.estimateCostFromPricing(promptTokens, completionTokens)
+	}
+	var tokenCost float64
+	if billingType != BillingPayPerToken {
+		tokenCost = a.estimateCostFromPricing(promptTokens, completionTokens)
+	}
+
+	// AddCostEntry updates totalCost internally (for backward compat when
+	// ChargedCost > 0), so we must NOT also call AddCost — that would
+	// double-count.
+	a.state.AddCostEntry(CostEntry{
+		BillingType:      billingType,
+		Provider:         a.GetProvider(),
+		Model:            a.GetModel(),
+		ChargedCost:      chargedCost,
+		TokenCost:        tokenCost,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		CachedTokens:     cachedTokens,
+		ImageTokens:      imageTokens,
+	})
 
 	// Fleet budget tracking: debit tokens to the shared fleet tracker.
 	if a.fleetBudgetTracker != nil && a.fleetBudgetLimit > 0 {
@@ -92,12 +118,11 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 		}
 	}
 
-	// Fleet USD budget tracking: debit cost to the shared USD budget,
-	// emit threshold-crossing warnings, and set the truncation flag if
-	// the cap is hit. Shares the same truncation flag as the token
-	// budget so the conversation loop has one place to check.
-	if a.fleetUsdBudget != nil && estimatedCost > 0 {
-		spent, crossed, justExceeded := a.fleetUsdBudget.Add(estimatedCost)
+	// Fleet USD budget: per SP-113 Layer 4, only ChargedCost is debited.
+	// Subscription and free providers (chargedCost == 0) must NOT consume
+	// the fleet budget — there is no marginal spend to protect against.
+	if a.fleetUsdBudget != nil && chargedCost > 0 {
+		spent, crossed, justExceeded := a.fleetUsdBudget.Add(chargedCost)
 		_, limit := a.fleetUsdBudget.Snapshot()
 		for _, t := range crossed {
 			if cb, ok := a.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {

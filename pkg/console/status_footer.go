@@ -105,6 +105,15 @@ type ContentSource interface {
 	WorkingDir() string
 }
 
+// billingTypeSource is an optional addition to ContentSource for sources
+// that can report the current provider's billing type. When the concrete
+// source implements it AND the charged cost is zero, the footer renders
+// "included" (subscription) or "free" instead of the misleading
+// "$0.0000". SP-113.
+type billingTypeSource interface {
+	BillingType() string
+}
+
 // activeSubagentsSource is an optional addition to ContentSource for sources
 // that can report how many subagents are currently running. When the
 // concrete source implements it AND the count is non-zero, the footer

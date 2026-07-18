@@ -222,7 +222,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		if err == nil {
 			turn.ActionableSummary = safeActionableSummary
 			// FilesTouched, Duration, TokenUsage are left as zero values to be enriched later
-			_ = EmbedAndStoreTurn(context.Background(), a.GetEmbeddingManager(), turn)
+			_ = EmbedAndStoreTurn(context.Background(), a.GetEmbeddingManager(), turn, checkpoint.ID)
 
 			// Set session intent embedding from the first turn's prompt embedding.
 			// Uses atomic check-and-set to avoid TOCTOU races with concurrent turns.

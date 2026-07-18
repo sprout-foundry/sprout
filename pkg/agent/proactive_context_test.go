@@ -702,7 +702,7 @@ func TestRetrieveProactiveContext_HappyPath(t *testing.T) {
 	turn.Timestamp = now.Add(-1 * time.Hour)
 
 	// Store the turn using the existing embedding helper
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Fatalf("failed to embed and store turn: %v", err)
 	}
 
@@ -762,10 +762,10 @@ func TestRetrieveProactiveContext_WorkspaceScopedFiltering(t *testing.T) {
 	turnB.ActionableSummary = "Implement REST API"
 	turnB.Timestamp = now.Add(-1 * time.Hour)
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turnA); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turnA, ""); err != nil {
 		t.Fatalf("failed to store turn A: %v", err)
 	}
-	if err := EmbedAndStoreTurn(ctx, mgr, turnB); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turnB, ""); err != nil {
 		t.Fatalf("failed to store turn B: %v", err)
 	}
 
@@ -820,7 +820,7 @@ func TestRetrieveProactiveContext_DefaultConfigSkipsCrossWorkspace(t *testing.T)
 	}
 	turnOther.ActionableSummary = "Save Zendesk articles to archive"
 	turnOther.Timestamp = now.Add(-1 * time.Hour)
-	if err := EmbedAndStoreTurn(ctx, mgr, turnOther); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turnOther, ""); err != nil {
 		t.Fatalf("failed to store turn: %v", err)
 	}
 
@@ -861,7 +861,7 @@ func TestRetrieveProactiveContext_DefaultConfigKeepsSameWorkspace(t *testing.T) 
 	}
 	turn.ActionableSummary = "Implement REST API"
 	turn.Timestamp = now.Add(-1 * time.Hour)
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Fatalf("failed to store turn: %v", err)
 	}
 
@@ -903,10 +903,10 @@ func TestRetrieveProactiveContext_TimeDecayOrdering(t *testing.T) {
 	turnOld.ActionableSummary = "Implement REST API"
 	turnOld.Timestamp = now.Add(-60 * 24 * time.Hour) // 60 days old
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turnRecent); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turnRecent, ""); err != nil {
 		t.Fatalf("failed to store recent turn: %v", err)
 	}
-	if err := EmbedAndStoreTurn(ctx, mgr, turnOld); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turnOld, ""); err != nil {
 		t.Fatalf("failed to store old turn: %v", err)
 	}
 
@@ -962,7 +962,7 @@ func TestRetrieveProactiveContext_MaxResultsCap(t *testing.T) {
 		}
 		turn.ActionableSummary = "Implement REST API"
 		turn.Timestamp = now.Add(-time.Duration(i) * time.Minute)
-		if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 			t.Fatalf("failed to store turn %d: %v", i, err)
 		}
 	}
@@ -999,7 +999,7 @@ func TestRetrieveProactiveContext_MinRelevanceScoreFilter(t *testing.T) {
 	turn.ActionableSummary = "Bake chocolate cookies with butter and sugar"
 	turn.Timestamp = now.Add(-1 * time.Hour)
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Fatalf("failed to store turn: %v", err)
 	}
 
@@ -1044,7 +1044,7 @@ func TestRetrieveProactiveContext_CustomConfigPreserved(t *testing.T) {
 		}
 		turn.ActionableSummary = "Implement REST API"
 		turn.Timestamp = now.Add(-time.Duration(i) * time.Minute)
-		if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 			t.Fatalf("failed to store turn %d: %v", i, err)
 		}
 	}
@@ -1084,7 +1084,7 @@ func TestRetrieveProactiveContext_ZeroTimeUsesCurrent(t *testing.T) {
 	turn.ActionableSummary = "Implement REST API"
 	turn.Timestamp = now.Add(-1 * time.Hour)
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Fatalf("failed to store turn: %v", err)
 	}
 
@@ -1180,7 +1180,7 @@ func TestProactiveContext_FullRoundTrip(t *testing.T) {
 		}
 		turn.ActionableSummary = tc.summary
 		turn.Timestamp = now.Add(-time.Duration(i+1) * time.Hour)
-		if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 			t.Fatalf("failed to store turn: %v", err)
 		}
 	}
@@ -1343,7 +1343,7 @@ func TestInjectProactiveContext_WithResults(t *testing.T) {
 	}
 	turn.ActionableSummary = "Implemented REST API"
 	turn.Timestamp = now.Add(-1 * time.Hour)
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Fatalf("failed to embed and store: %v", err)
 	}
 
@@ -1921,7 +1921,7 @@ func TestRetrieveProactiveContext_TypeFiltering_ExcludesNonTurns(t *testing.T) {
 	require.NoError(t, err)
 	turn.ActionableSummary = "Implement REST API"
 	turn.Timestamp = now.Add(-1 * time.Hour)
-	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn))
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn, ""))
 
 	// Manually add a non-turn record to the store to test type filtering
 	nonTurnRecord := embedding.VectorRecord{
@@ -1969,7 +1969,7 @@ func TestRetrieveProactiveContext_WorkspaceDisabled_ReturnsCrossWorkspace(t *tes
 	require.NoError(t, err)
 	turn.ActionableSummary = "Implement REST API"
 	turn.Timestamp = now.Add(-1 * time.Hour)
-	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn))
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn, ""))
 
 	// Query from a different workspace with WorkspaceScoped disabled
 	config := DefaultProactiveContextConfig()
@@ -2006,7 +2006,7 @@ func TestRetrieveProactiveContext_MaxResultsCap_CapsResults(t *testing.T) {
 		require.NoError(t, err)
 		turn.ActionableSummary = "Implement REST API"
 		turn.Timestamp = now.Add(-time.Duration(i) * time.Minute)
-		require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn))
+		require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn, ""))
 	}
 
 	// Set a custom cap of 2
@@ -2038,14 +2038,14 @@ func TestRetrieveProactiveContext_TimeDecay_OlderRecordDecays(t *testing.T) {
 	require.NoError(t, err)
 	turnRecent.ActionableSummary = "Implement REST API"
 	turnRecent.Timestamp = now.Add(-1 * time.Hour)
-	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turnRecent))
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turnRecent, ""))
 
 	turnOld, err := NewConversationTurn("session-decay-old", 1,
 		"How do I implement a REST API in Go?", "/tmp/workspace")
 	require.NoError(t, err)
 	turnOld.ActionableSummary = "Implement REST API"
 	turnOld.Timestamp = now.Add(-60 * 24 * time.Hour) // 60 days old
-	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turnOld))
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turnOld, ""))
 
 	results, err := RetrieveProactiveContext(
 		ctx, mgr, DefaultProactiveContextConfig(),

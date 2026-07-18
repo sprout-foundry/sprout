@@ -29,7 +29,7 @@ We use a layered testing approach that balances speed, coverage, and cost:
 
 **Command**: `make test-unit`
 
-### Integration Tests (`integration_tests/`)
+### Integration Tests (`pkg/` / `cmd/` unit suites)
 
 **Purpose**: Test component interaction with mocked dependencies
 **Dependencies**: File system, mock AI model (`test:test`)
@@ -43,9 +43,9 @@ We use a layered testing approach that balances speed, coverage, and cost:
 - Configuration loading
 - Agent initialization
 
-**Command**: `make test-integration`
+**Command**: `make test-unit` (integration-style tests are covered by the unit test suite)
 
-### E2E Tests (`e2e_tests/`)
+### E2E Tests
 
 **Purpose**: Test complete user workflows with real AI models
 **Dependencies**: Real AI providers, API keys, internet
@@ -59,7 +59,7 @@ We use a layered testing approach that balances speed, coverage, and cost:
 - Real provider integrations
 - Full user journeys
 
-**Command**: `make test-e2e MODEL=openai:gpt-4`
+**Command**: Manual testing with `sprout agent "..." --model <your-model>` against real providers
 
 ### Smoke Tests (`smoke_tests/`)
 
@@ -164,7 +164,7 @@ sprout agent "test command" --model test:test
 - Verify test scripts have execute permissions
 
 **E2E tests expensive**:
-- Use cheaper models when possible: `deepinfra:deepseek-ai/DeepSeek-V3.1`
+- Use cheaper models when possible: `deepinfra:deepseek-ai/DeepSeek-V3.1-Terminus`
 - Run selectively, not all tests every time
 
 **Smoke tests failing**:

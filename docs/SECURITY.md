@@ -210,8 +210,8 @@ The previous flow had two bugs:
 | `~/.sprout/logs/` | Daemon logs, rotated (10MB, 5 backups) | Medium |
 | `~/.config/sprout/memories/` | Agent memory .md files | Medium |
 | `.sprout/workspace.log` | Per-workspace run log | Medium |
-| `.sprout/history/` | Change tracker revisions | Medium |
-| `.sprout/embeddings/` | Conversation turn embeddings | Medium |
+| `~/.config/sprout/embeddings/` | Conversation turn embeddings | Medium |
+| `.sprout/changes/` | Change tracker revisions | Medium |
 
 ### Credential Redaction
 
@@ -230,12 +230,12 @@ rm -rf .sprout/workspace.log
 
 ### Embeddings
 ```bash
-rm -rf .sprout/embeddings/
+rm -rf ~/.config/sprout/embeddings/
 ```
 
 ### Change history
 ```bash
-rm -rf .sprout/history/
+rm -rf .sprout/changes/
 ```
 
 ### Agent memories

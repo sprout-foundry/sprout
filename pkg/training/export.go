@@ -85,10 +85,10 @@ type ShareGPTConversation struct {
 
 // ShareGPTMessage is a single message in a ShareGPT conversation.
 type ShareGPTMessage struct {
-	Role       string          `json:"role"` // "system", "user", "assistant"
-	Content    string          `json:"content"`
-	ToolCalls  []api.ToolCall  `json:"tool_calls,omitempty"`
-	ToolCallID string          `json:"tool_call_id,omitempty"`
+	Role       string         `json:"role"` // "system", "user", "assistant"
+	Content    string         `json:"content"`
+	ToolCalls  []api.ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
 }
 
 // ShareGPTMetadata holds extra information about a ShareGPT conversation.
@@ -396,6 +396,7 @@ const toolCallMarker = "Tool call:"
 // preserved verbatim:
 //   - assistant messages keep their ToolCalls arrays (not flattened to text)
 //   - tool messages keep role:"tool" and their ToolCallID
+//
 // No deduplication is applied in this mode — structured messages must never
 // be merged.
 //
@@ -407,6 +408,7 @@ const toolCallMarker = "Tool call:"
 //   - tool messages are kept as role:"tool" through this function so the
 //     format builders can decide how to render them. (They carry
 //     placeholders when opts.NoToolResults is true.)
+//
 // Consecutive same-role messages are merged via deduplicateConsecutive,
 // which never merges messages carrying the tool markers.
 func flattenStandardMessages(messages []api.Message, opts ExportOptions) []api.Message {

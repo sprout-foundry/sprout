@@ -30,10 +30,7 @@
         "activate_skill",
         "TodoWrite",
         "TodoRead",
-        "manage_memory",
-        "task_queue_read",
-        "task_queue_publish",
-        "task_queue_add"
+        "manage_memory"
       ],
       "capabilities": [
         "git_write"
@@ -42,7 +39,7 @@
         "orchestrator"
       ],
       "delegatable": false,
-      "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority.",
+      "description": "Coordinates work across projects by delegating to orchestrator subagents. Operates on the user's behalf with elevated approval authority. Progress is tracked via TODO.md (persistent) plus the in-session TodoWrite tool (UI visibility) — the task_queue and EA queue mode were removed 2026-07-18.",
       "enabled": true,
       "id": "coordinator",
       "_rules_source": "declared:coordinator",

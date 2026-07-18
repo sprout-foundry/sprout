@@ -160,7 +160,6 @@ func TestRegistry_NoOrphanHandlers(t *testing.T) {
 		"search_files", "repo_map",
 		"rollback_changes", "view_history", "list_skills", "embedding_index",
 		"save_memory", "run_subagent", "run_parallel_subagents",
-		"task_queue_add", "task_queue_publish", "task_queue_read",
 		"TodoRead", "TodoWrite", "ask_user",
 		"activate_skill",
 		"browse_url", "web_search", "semantic_search",

@@ -105,16 +105,12 @@ func applyPathsAndContextSettings(cfg *configuration.Config, patch map[string]in
 			}
 		}
 	}
-	if v, ok := patch["ea_mode"]; ok {
+	// ea_mode was the coordinator's startup-mode flag (interactive|queue).
+	// Queue mode was disabled; the config field was removed in this build. We
+	// accept-and-ignore the key so GET→PUT round-trips of older configs
+	// (which still include ea_mode) don't return 400. The value is discarded.
+	if _, ok := patch["ea_mode"]; ok {
 		knownKeys["ea_mode"] = true
-		s, _ := v.(string)
-		s = strings.ToLower(strings.TrimSpace(truncateString(s, maxSettingEnumLength)))
-		switch s {
-		case "", "interactive", "queue":
-			cfg.EAMode = s
-		default:
-			return fmt.Errorf("validate ea_mode: must be 'interactive' or 'queue' (got %q)", s)
-		}
 	}
 	return nil
 }

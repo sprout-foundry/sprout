@@ -19,6 +19,7 @@ export interface UseSecurityHandlersReturn {
   handleSecurityApprovalResponse: (requestId: string, approved: boolean) => void;
   handleSecurityPromptResponse: (requestId: string, response: boolean) => void;
   handleAskUserResponse: (requestId: string, response: string) => void;
+  handlePasswordResponse: (requestId: string, password: string) => void;
   handleModelSelectionResponse: (model: string) => void;
   handleModelSelectionClose: () => void;
 }
@@ -64,6 +65,23 @@ export function useSecurityHandlers({
     [eventsProvider, setState],
   );
 
+  // handlePasswordResponse delivers the user's typed password back to the
+  // agent's broker. Empty password = cancel (shell sees EOF on stdin).
+  // CRITICAL: this hook never logs the password value — the dialog's
+  // state lives in React (not the store) so nothing in the persistence
+  // path captures it either.
+  const handlePasswordResponse = useCallback(
+    (requestId: string, password: string) => {
+      if (!eventsProvider.isConnected()) return;
+      eventsProvider.sendEvent({
+        type: 'password_response',
+        data: { request_id: requestId, password },
+      });
+      setState((_prev) => ({ passwordRequest: null }));
+    },
+    [eventsProvider, setState],
+  );
+
   const handleModelSelectionResponse = useCallback(
     (model: string) => {
       if (!eventsProvider.isConnected()) return;
@@ -84,6 +102,7 @@ export function useSecurityHandlers({
     handleSecurityApprovalResponse,
     handleSecurityPromptResponse,
     handleAskUserResponse,
+    handlePasswordResponse,
     handleModelSelectionResponse,
     handleModelSelectionClose,
   };

@@ -13,12 +13,12 @@ import (
 // =============================================================================
 
 // TestRiskGates_GlobalClassifierIsNotBypassedByPersona proves that the global
-// static classifier (tools.ClassifyToolCall) blocks dangerous operations even
-// when a persona's auto_approve_rules would classify them as low risk.
+// static classifier (tools.ClassifyToolCall) surfaces caution-level operations
+// even when a persona's auto_approve_rules would classify them as low risk.
 //
 // The global classifier has no knowledge of persona rules — it inspects raw
 // command strings. This test proves that invariant holds: no persona can
-// configure its way past the global block list.
+// configure its way past the global caution/proMPT list.
 func TestRiskGates_GlobalClassifierIsNotBypassedByPersona(t *testing.T) {
 	// Construct a dangerous persona config: "shell_command" is in LowRiskOps.
 	// This means the persona gate would auto-approve arbitrary shell commands
@@ -51,19 +51,20 @@ func TestRiskGates_GlobalClassifierIsNotBypassedByPersona(t *testing.T) {
 	}
 
 	// The global classifier has NO knowledge of persona rules.
-	// It should block the pipe-to-shell command regardless of what the persona says.
+	// It should surface the pipe-to-shell command as CAUTION that needs
+	// user attention, regardless of what the persona says.
 	result := tools.ClassifyToolCall("shell_command", map[string]interface{}{
 		"command": testCommand,
 	})
 
-	if result.Risk != tools.SecurityDangerous {
-		t.Errorf("global classifier: expected SecurityDangerous, got %s (reasoning: %s)", result.Risk, result.Reasoning)
+	if result.Risk != tools.SecurityCaution {
+		t.Errorf("global classifier: expected SecurityCaution, got %s (reasoning: %s)", result.Risk, result.Reasoning)
 	}
-	if !result.ShouldBlock {
-		t.Error("global classifier: expected ShouldBlock=true — persona bypass detected!")
+	if !result.ShouldPrompt {
+		t.Error("global classifier: expected ShouldPrompt=true — persona bypass detected!")
 	}
 	// Note: IsHardBlock is false for pipe-to-shell (not a critical system operation),
-	// but the command is still blocked via ShouldBlock=true.
+	// but the command is still flagged via ShouldPrompt=true.
 }
 
 // =============================================================================
@@ -115,12 +116,25 @@ func TestRiskGates_BothGatesEvaluate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Gate 1: Global static classifier (no persona awareness).
 			globalResult := tools.ClassifyToolCall(tt.toolName, tt.args)
-			if globalResult.Risk != tools.SecurityDangerous {
-				t.Errorf("Gate 1 (global classifier): expected SecurityDangerous for %q, got %s (reasoning: %s)",
-					tt.command, globalResult.Risk, globalResult.Reasoning)
+			// git push --force is now CAUTION (prompts for confirmation, doesn't hard-block).
+			// rm -rf / remains DANGEROUS (critical system operation).
+			wantRisk := tools.SecurityDangerous
+			wantGate1Block := true
+			wantGate1Prompt := true
+			if tt.name == "git push --force via shell_command" {
+				wantRisk = tools.SecurityCaution
+				wantGate1Block = false
+				wantGate1Prompt = true
 			}
-			if !globalResult.ShouldBlock {
-				t.Errorf("Gate 1 (global classifier): expected ShouldBlock=true for %q", tt.command)
+			if globalResult.Risk != wantRisk {
+				t.Errorf("Gate 1 (global classifier): expected %s for %q, got %s (reasoning: %s)",
+					wantRisk, tt.command, globalResult.Risk, globalResult.Reasoning)
+			}
+			if globalResult.ShouldBlock != wantGate1Block {
+				t.Errorf("Gate 1 (global classifier): expected ShouldBlock=%v for %q", wantGate1Block, tt.command)
+			}
+			if globalResult.ShouldPrompt != wantGate1Prompt {
+				t.Errorf("Gate 1 (global classifier): expected ShouldPrompt=%v for %q", wantGate1Prompt, tt.command)
 			}
 
 			// Gate 2: Persona risk cascade (EA rules).
@@ -170,13 +184,14 @@ func TestRiskGates_BothGatesEvaluate_GitTool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Gate 1: Global classifier on "git" tool.
+			// git push --force is now CAUTION (prompts for confirmation, doesn't hard-block).
 			globalResult := tools.ClassifyToolCall("git", tt.args)
-			if globalResult.Risk != tools.SecurityDangerous {
-				t.Errorf("Gate 1 (global classifier): expected SecurityDangerous for git op %q, got %s (reasoning: %s)",
+			if globalResult.Risk != tools.SecurityCaution {
+				t.Errorf("Gate 1 (global classifier): expected SecurityCaution for git op %q, got %s (reasoning: %s)",
 					tt.operation, globalResult.Risk, globalResult.Reasoning)
 			}
-			if !globalResult.ShouldBlock {
-				t.Errorf("Gate 1 (global classifier): expected ShouldBlock=true for git op %q", tt.operation)
+			if !globalResult.ShouldPrompt {
+				t.Errorf("Gate 1 (global classifier): expected ShouldPrompt=true for git op %q", tt.operation)
 			}
 
 			// Gate 2: Persona risk cascade.

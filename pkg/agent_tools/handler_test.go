@@ -778,8 +778,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 43 {
-		t.Fatalf("AllTools() returned %d tools, want 43", len(tools))
+	if len(tools) != 42 {
+		t.Fatalf("AllTools() returned %d tools, want 42", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -798,7 +798,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		"shell_command":           "shell_command",
 		"manage_memory":           "manage_memory",
 		"manage_settings":         "manage_settings",
-		"task_queue":              "task_queue",
+		// task_queue removed 2026-07-18 — see DISABLED note in all.go
 		"todo_write":              "todo_write",
 		"todo_read":               "todo_read",
 		"ask_user":                "ask_user",

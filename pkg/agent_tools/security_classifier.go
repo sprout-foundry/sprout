@@ -666,7 +666,7 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 		return SecurityResult{
 			Risk: SecurityCaution, Reasoning: "Destructive git reset with flag: " + op,
 			ShouldPrompt: true,
-			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
+			RiskType:     "destructive_git_operation", Category: RiskCategoryDestructive,
 		}
 	}
 
@@ -676,7 +676,7 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 		return SecurityResult{
 			Risk: SecurityCaution, Reasoning: "History-rewriting git rebase with flag: " + op,
 			ShouldPrompt: true,
-			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
+			RiskType:     "destructive_git_operation", Category: RiskCategoryDestructive,
 		}
 	}
 

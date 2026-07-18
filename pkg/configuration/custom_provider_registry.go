@@ -38,20 +38,19 @@ func GetProvidersDir() (string, error) {
 }
 
 // GetCustomProviderPath returns the path where a custom provider JSON
-// file is stored. This honors SPROUT_CONFIG / LEDIT_CONFIG so writes
-// follow the user's currently-active config directory — the same
-// scope as the rest of SaveCustomProvider / DeleteCustomProvider.
-//
-// LoadCustomProviders does NOT use this directory exclusively: custom
-// providers are conceptually a global resource, so reads also pull
-// from the default (home) providers dir. That keeps the /provider
-// listing (manager-driven, global-scope) and the switch path (factory-
-// driven, this function) consistent when SPROUT_CONFIG is overridden
-// to a workspace-local directory.
+// file is stored. Custom providers are a global resource — they are
+// always written to the default (home) providers directory so they're
+// visible across all workspaces. This deliberately ignores SPROUT_CONFIG
+// so that adding a provider from a workspace-scoped session doesn't
+// bury it in a .sprout/providers/ subdirectory that other sessions
+// can't find.
 func GetCustomProviderPath(name string) (string, error) {
-	providersDir, err := GetProvidersDir()
+	providersDir, err := getDefaultProvidersDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get providers directory: %w", err)
+	}
+	if err := os.MkdirAll(providersDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create providers directory: %w", err)
 	}
 	normalized, err := CanonicalizeCustomProviderName(name)
 	if err != nil {

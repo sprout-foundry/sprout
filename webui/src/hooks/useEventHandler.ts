@@ -942,6 +942,38 @@ export function useEventHandler({
         debugLog('[security] Prompt request:', eventData?.file_path, eventData?.concern);
         break;
 
+      case 'password_request':
+        // Shell command triggered a password prompt (sudo, passwd, ssh, etc.).
+        // Show the modal so the user can type the password in the browser;
+        // the broker delivers it to the agent via WS.
+        //
+        // CRITICAL: the password value itself NEVER appears in logs or
+        // store state — only the request_id, command, and prompt text
+        // (the prompt is sudo's "Password:" string, not the answer).
+        logEntry.category = 'system';
+        logEntry.level = 'warning';
+        if (eventData?.status === 'responded') {
+          // The Go side acknowledged a response — used to be no-op; here
+          // we also confirm the modal should be cleared, but the response
+          // handler in useSecurityHandlers.ts already does that. So this
+          // branch is purely diagnostic.
+          debugLog('[password] Response acknowledged:', eventData?.request_id);
+          break;
+        }
+        if (!eventData?.request_id) {
+          break;
+        }
+        setState((prev) => ({
+          passwordRequest: {
+            requestId: String(eventData.request_id),
+            command: String(eventData?.command || ''),
+            prompt: String(eventData?.prompt || ''),
+          },
+          logs: appendCappedLog(prev.logs, logEntry),
+        }));
+        debugLog('[password] Request:', eventData?.command);
+        break;
+
       case 'automate.session_started':
       case 'automate.session_ended':
       case 'automate.output_chunk':

@@ -417,12 +417,22 @@ func formatBytesShort(n int) string {
 }
 
 func (r *AssistantTurnRenderer) resetSegment() {
+	// Flush any buffered partial line BEFORE resetting. When a tool call
+	// interrupts mid-sentence prose, the unflushed text in lineBuf would
+	// be silently discarded — the user sees tool calls stream but never
+	// sees the explanatory prose that preceded them. Emitting the partial
+	// line ensures all streamed content reaches the terminal.
+	if r.lineBuf.Len() > 0 {
+		line := r.lineBuf.String()
+		r.lineBuf.Reset()
+		emitted := r.emitFormattedLine(line)
+		r.physicalLines += emitted
+	}
 	// Re-enable footer refresh now that the prose segment is done.
 	if r.footer != nil {
 		r.footer.SetProseStreaming(false)
 	}
 	r.seg.Reset()
-	r.lineBuf.Reset()
 	if r.streamFmt != nil {
 		r.streamFmt.Reset()
 	}

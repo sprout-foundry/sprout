@@ -11,7 +11,7 @@ This directory contains the system prompts for each specialized subagent persona
 5. **[Debugger](debugger.md)** - Bug investigation, root cause analysis, and fixes
 6. **[Researcher](researcher.md)** - Local codebase analysis combined with web research (hybrid)
 7. **[Web_Scraper](web_scraper.md)** - Web scraping and content extraction
-8. **[Coordinator](coordinator.md)** - Cross-project coordination, task queue management, delegation
+8. **[Coordinator](coordinator.md)** - Cross-project coordination and delegation
 9. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
 
 ## Quick Reference
@@ -25,7 +25,7 @@ This directory contains the system prompts for each specialized subagent persona
 | Debugger | Bug fixing, root cause | read_file, write_file, edit_file, search_files, shell_command |
 | Researcher | Local + web research | read_file, search_files, web_search, fetch_url |
 | Web_Scraper | Scraping web content | web_search, fetch_url, browse_url |
-| Coordinator | Cross-project coordination | run_subagent, task_queue_* |
+| Coordinator | Cross-project coordination | run_subagent |
 | General | Anything not specialized | all defaults |
 
 ## Usage
@@ -43,7 +43,7 @@ When delegating tasks to subagents, choose the persona that best matches the tas
 - **Fix a bug** → `debugger`
 - **Investigate codebase + find best practices** → `researcher`
 - **Scrape web content** → `web_scraper`
-- **Coordinate cross-project / manage task queue** → `coordinator`
+- **Coordinate cross-project work** → `coordinator`
 - **Hands-on shell / sysadmin** → `coder` or `general` (use `shell_command` directly)
 - **General-purpose task** → `general`
 

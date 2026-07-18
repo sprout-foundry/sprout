@@ -87,7 +87,10 @@ func ClassifyPathAccess(path, workspaceRoot, homeDir, cwd string) PathTier {
 	if workspaceRoot != "" && isUnderPrefix(abs, normalizePath(workspaceRoot)) {
 		return PathTierWorkspace
 	}
-	if isSystemPath(abs) {
+	// Use the original path for system path detection to handle symlinks.
+	// On systems where a system directory is itself a symlink (e.g., /etc → /system/etc),
+	// we want to recognize both the symlink path and the resolved path as system paths.
+	if isSystemPathWithOriginal(abs, path) {
 		return PathTierSensitive
 	}
 	if homeDir != "" {
@@ -144,9 +147,37 @@ func isSystemPath(absPath string) bool {
 	if absPath == "" {
 		return false
 	}
+	// Check the resolved path first (handles symlinks like macOS /var → /private/var).
 	for _, prefix := range systemPathPrefixes() {
 		if isUnderPrefix(absPath, prefix) {
 			return true
+		}
+	}
+	return false
+}
+
+// isSystemPathWithOriginal checks if a path is a system path, considering
+// both the resolved path and the original path (before symlink resolution).
+// This handles cases like Linux where /etc → /system/etc - we want both
+// /etc/passwd and /system/etc/passwd to be recognized as system paths.
+func isSystemPathWithOriginal(resolvedPath, originalPath string) bool {
+	if resolvedPath == "" {
+		return false
+	}
+	// Check the resolved path against system prefixes.
+	for _, prefix := range systemPathPrefixes() {
+		if isUnderPrefix(resolvedPath, prefix) {
+			return true
+		}
+	}
+	// Also check the original (unresolved) path against system prefixes.
+	// This handles cases where the system prefix itself is a symlink
+	// (e.g., /etc → /system/etc on some Linux systems).
+	if originalPath != "" && originalPath != resolvedPath {
+		for _, prefix := range systemPathPrefixes() {
+			if isUnderPrefix(originalPath, prefix) {
+				return true
+			}
 		}
 	}
 	return false
@@ -186,7 +217,7 @@ func isUnderPrefix(path, prefix string) bool {
 	if !strings.HasSuffix(prefix, sep) {
 		prefix += sep
 	}
-	return strings.HasPrefix(path, prefix)
+	return strings.HasPrefix(path, prefix) && len(path) > len(prefix)
 }
 
 // detectHomeDir returns the user's home directory or empty if it

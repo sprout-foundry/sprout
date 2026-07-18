@@ -94,14 +94,61 @@ func (c *slashCommandCache) getArgCompletions(cmdName string, args []string, cha
 // both the REPL prompt (Tab, via inputReader.SetCompleter) and the
 // mid-turn steer panel (Ctrl-], via steerCoord.SetCompleter — SP-078
 // Phase 2).
+//
+// This is the lightweight path — it calls the registry directly without
+// building CompletionCandidate structs, avoiding the allocation that
+// buildRichSlashCommandCompleter does. Used for Tab cycle completion
+// where descriptions aren't rendered.
 func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvider {
 	return func(line string, cursorPos int) []string {
-		candidates := buildRichSlashCommandCompleter(chatAgent)(line, cursorPos)
-		out := make([]string, len(candidates))
-		for i, c := range candidates {
-			out[i] = c.Text
+		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
+			return nil
 		}
-		return out
+
+		registry := globalSlashCache.getRegistry()
+
+		if !strings.ContainsAny(line, " \t") {
+			prefix := strings.ToLower(line[1:])
+			var matches []string
+			for _, name := range registry.CompletionCandidates() {
+				if strings.HasPrefix(strings.ToLower(name), prefix) {
+					matches = append(matches, "/"+name)
+				}
+			}
+			return matches
+		}
+
+		// Argument completion path
+		parts := strings.Fields(line)
+		cmdName := strings.TrimPrefix(strings.ToLower(parts[0]), "/")
+		cmd, exists := registry.GetCommand(cmdName)
+		if !exists {
+			return nil
+		}
+
+		var args []string
+		if len(parts) > 1 {
+			args = parts[1:]
+		}
+		if strings.HasSuffix(line, " ") {
+			args = append(args, "")
+		}
+
+		candidates := globalSlashCache.getArgCompletions(cmdName, args, chatAgent, cmd)
+		if len(candidates) == 0 {
+			return nil
+		}
+		var prefix string
+		if len(parts) > 1 {
+			prefix = strings.Join(parts[:len(parts)-1], " ") + " "
+		} else {
+			prefix = parts[0] + " "
+		}
+		result := make([]string, len(candidates))
+		for i, c := range candidates {
+			result[i] = prefix + c
+		}
+		return result
 	}
 }
 

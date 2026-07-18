@@ -57,9 +57,9 @@ func TestHandleAPICommandExecute_EmptyCommand(t *testing.T) {
 	ws, _ := newTestWebServer(t)
 
 	cases := map[string]string{
-		"empty":        `{"command":""}`,
-		"whitespace":   `{"command":"   "}`,
-		"missing":      `{}`,
+		"empty":      `{"command":""}`,
+		"whitespace": `{"command":"   "}`,
+		"missing":    `{}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -151,9 +151,9 @@ func TestCommandResponseShape(t *testing.T) {
 
 type echoCommand struct{}
 
-func (e *echoCommand) Name() string             { return "echo" }
-func (e *echoCommand) Description() string      { return "test: prints its args" }
-func (e *echoCommand) SafeDuringSteer() bool   { return true }
+func (e *echoCommand) Name() string          { return "echo" }
+func (e *echoCommand) Description() string   { return "test: prints its args" }
+func (e *echoCommand) SafeDuringSteer() bool { return true }
 func (e *echoCommand) Execute(args []string, _ *agent.Agent) error {
 	fmt.Fprintln(os.Stdout, strings.Join(args, " "))
 	return nil

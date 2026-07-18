@@ -178,35 +178,59 @@ func KeymapHelpTable() string {
 	return b.String()
 }
 
-// KeymapHintRow renders a single-line hint of registered keybindings
-// suitable for embedding in a footer or status bar.
-// Format: "Alt+T label1 · Alt+V label2 · ..."
-// The label is derived from the Action name (the second-to-last
-// dot-separated segment, e.g. "footer.breakdown.toggle" → "breakdown"),
-// falling back to the Description's first word when Action is empty.
-// Labels longer than 30 display columns are truncated with "…".
-// Returns empty string when no bindings have descriptions.
+// KeymapHintRow renders a single-line hint of keybindings suitable for
+// embedding in the footer hint row. It includes both the built-in
+// essential shortcuts (Ctrl+C, Enter) and any registered Alt+ bindings
+// from the GlobalKeymap.
+//
+// Format: "^C interrupt · Enter steer · Alt+T tools · Alt+V verbose"
+// Returns empty string when no bindings are registered.
 func KeymapHintRow() string {
 	entries := GlobalKeymap().Entries()
-	if len(entries) == 0 {
-		return ""
+
+	type hint struct {
+		key   string
+		label string
 	}
 
-	const maxLabelWidth = 30
-	var parts []string
+	// Built-in shortcuts that aren't in the GlobalKeymap (they're handled
+	// by the input reader / steer input directly). These come first because
+	// they're the most commonly needed.
+	hints := []hint{
+		{"^C", "interrupt"},
+		{"Enter", "steer"},
+		{"/", "commands"},
+		{"/settings", "settings"},
+		{"Tab", "autocomplete"},
+	}
+
+	// Append registered Alt+ bindings with human-readable labels.
+	labelMap := map[string]string{
+		"footer.breakdown.toggle":  "tools",
+		"output.verbosity.toggle":  "verbose",
+	}
+
 	for _, e := range entries {
 		if e.Description == "" {
 			continue
 		}
-		label := extractShortLabel(e)
-		if len(label) > maxLabelWidth {
-			label = truncateToWidth(label, maxLabelWidth, "…")
+		label, ok := labelMap[e.Action]
+		if !ok {
+			label = extractShortLabel(e)
+			if len(label) > 30 {
+				label = truncateToWidth(label, 30, "…")
+			}
 		}
-		parts = append(parts, e.Key+" "+label)
+		hints = append(hints, hint{e.Key, label})
 	}
 
-	if len(parts) == 0 {
+	if len(hints) == 0 {
 		return ""
+	}
+
+	parts := make([]string, 0, len(hints))
+	for _, h := range hints {
+		parts = append(parts, h.key+" "+h.label)
 	}
 	return strings.Join(parts, " · ")
 }

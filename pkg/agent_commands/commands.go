@@ -93,6 +93,11 @@ func DefaultRegistry() *CommandRegistry {
 type CommandRegistry struct {
 	commands map[string]Command
 	aliases  map[string]string // short → canonical command name
+
+	// candidatesCache memoizes CompletionCandidates() since the registry
+	// is immutable after NewCommandRegistry. Built once on first access.
+	candidatesOnce  sync.Once
+	candidatesCache []string
 }
 
 // NewCommandRegistry creates a new command registry
@@ -245,18 +250,21 @@ func (r *CommandRegistry) AliasesOf(canonical string) []string {
 
 // CompletionCandidates returns all valid slash-command names (canonical
 // plus aliases) sorted alphabetically. Used by the tab-completion
-// CompletionProvider in the input reader.
+// CompletionProvider in the input reader. The result is cached since
+// the registry is immutable after construction.
 func (r *CommandRegistry) CompletionCandidates() []string {
-	out := make([]string, 0, len(r.commands)+len(r.aliases))
-	for name := range r.commands {
-		out = append(out, name)
-	}
-	for alias := range r.aliases {
-		out = append(out, alias)
-	}
-	// Stable sort so cycle order is deterministic for the user.
-	sort.Strings(out)
-	return out
+	r.candidatesOnce.Do(func() {
+		out := make([]string, 0, len(r.commands)+len(r.aliases))
+		for name := range r.commands {
+			out = append(out, name)
+		}
+		for alias := range r.aliases {
+			out = append(out, alias)
+		}
+		sort.Strings(out)
+		r.candidatesCache = out
+	})
+	return r.candidatesCache
 }
 
 // Register adds a command to the registry

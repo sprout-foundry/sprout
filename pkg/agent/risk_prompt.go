@@ -18,8 +18,21 @@ import (
 func (a *Agent) highRiskApprovedForCommand(_ context.Context, command string) bool {
 	args := map[string]interface{}{"command": command}
 	assessment := a.ResolveToolRisk("shell_command", args)
-	_, err := a.RequestApproval(assessment, "shell_command", args)
+	decision, err := a.RequestApproval(assessment, "shell_command", args)
+	if decision.Analysis != nil {
+		// Print LLM analysis to stderr/log when present so CLI users see it.
+		console.PrintExternal(fmt.Sprintf("[security analysis] %s\n", renderSecurityAnalysisLine(decision.Analysis)))
+	}
 	return err == nil
+}
+
+// renderSecurityAnalysisLine formats a one-line summary of the analysis.
+// SP-124.
+func renderSecurityAnalysisLine(sa *SecurityAnalysis) string {
+	if sa == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s → %s (%s)", sa.Summary, sa.Recommendation, sa.RiskAssessment)
 }
 
 // approvalDecisionFromCLIChoice maps the CLI prompt's typed choice onto

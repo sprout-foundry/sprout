@@ -15,55 +15,28 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
-import { TerminalTabBar, type AttachableSession } from '@sprout/ui';
+import { TerminalTabBar } from '@sprout/ui';
 import { usePersistedBoolean, usePersistedNumber, useOutsideClickDismiss } from '../hooks/usePersistedPref';
 import { useTerminalPanes } from '../hooks/useTerminalPanes';
-import { ApiService, type ShellInfo } from '../services/api';
-import { clientFetch } from '../services/clientSession';
-import { notificationBus } from '../services/notificationBus';
-import { debugLog } from '../utils/log';
+import { useAvailableShells } from '../hooks/useAvailableShells';
+import { useAttachableSessions } from '../hooks/useAttachableSessions';
+import { useVerticalDragResize } from '../hooks/useVerticalDragResize';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
+import {
+  TERMINAL_HEIGHT_DEFAULT,
+  TERMINAL_HEIGHT_STORAGE_KEY,
+  parseTerminalHeight,
+  clampTerminalHeight,
+  FONT_SIZE_MIN,
+  FONT_SIZE_MAX,
+  FONT_SIZE_STORAGE_KEY,
+  parseFontSize,
+  clampFontSize,
+  COPY_ON_SELECT_STORAGE_KEY,
+  parseCopyOnSelect,
+} from './terminalPref';
 import TerminalPane from './TerminalPane';
-
-const TERMINAL_HEIGHT_MIN = 120;
-const TERMINAL_HEIGHT_DEFAULT = 400;
-const TERMINAL_HEIGHT_MAX_FACTOR = 100;
-const TERMINAL_HEIGHT_STORAGE_KEY = 'sprout-terminal-height';
-
-const FONT_SIZE_MIN = 8;
-const FONT_SIZE_MAX = 32;
-const FONT_SIZE_STORAGE_KEY = 'sprout-terminal-font-size';
-
-const COPY_ON_SELECT_STORAGE_KEY = 'sprout-terminal-copy-on-select';
-
-const parseTerminalHeight = (raw: string | null): number => {
-  if (!raw) return TERMINAL_HEIGHT_DEFAULT;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : TERMINAL_HEIGHT_DEFAULT;
-};
-
-const clampTerminalHeight = (value: number): number => {
-  if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
-  if (typeof window === 'undefined') return TERMINAL_HEIGHT_DEFAULT;
-  return Math.max(TERMINAL_HEIGHT_MIN, Math.min(window.innerHeight - TERMINAL_HEIGHT_MAX_FACTOR, value));
-};
-
-const parseFontSize = (raw: string | null): number => {
-  if (!raw) return FONT_SIZE_DEFAULT;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : FONT_SIZE_DEFAULT;
-};
-
-const clampFontSize = (value: number): number => {
-  if (!Number.isFinite(value)) return FONT_SIZE_DEFAULT;
-  return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, value));
-};
-
-const parseCopyOnSelect = (raw: string | null, fallback: boolean): boolean => {
-  if (raw === null) return fallback;
-  return raw === 'true';
-};
 
 /** @deprecated Re-exported for backward compatibility with existing tests. */
 export { nextActiveAfterClose } from '../hooks/useTerminalPanes';
@@ -95,18 +68,19 @@ function Terminal({
   const [isResizingVertical, setIsResizingVertical] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
 
-  // Shell selection state
-  const [availableShells, setAvailableShells] = useState<ShellInfo[]>([]);
-  const [shellsLoaded, setShellsLoaded] = useState(false);
-  const [selectedShell, setSelectedShell] = useState<string | null>(null);
+  // Shell selection state (extracted)
+  const { availableShells, shellsLoaded, selectedShell, setSelectedShell } = useAvailableShells();
   const [showShellMenu, setShowShellMenu] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const shellPickerRef = useRef<HTMLDivElement>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
 
-  // Attachable sessions
-  const [attachableSessions, setAttachableSessions] = useState<AttachableSession[]>([]);
-  const isFetchingSessionsRef = useRef(false);
+  // Attachable sessions (extracted)
+  const {
+    attachableSessions,
+    setAttachableSessions,
+    fetchAttachableSessions,
+  } = useAttachableSessions(isExpanded);
 
   // Font size
   const [fontSize, setFontSize] = usePersistedNumber(
@@ -122,36 +96,6 @@ function Terminal({
     COPY_ON_SELECT_DEFAULT,
     parseCopyOnSelect,
   );
-
-  /* ---- Attachable session fetching (owns state the hook depends on) ---- */
-  const fetchAttachableSessions = useCallback(async () => {
-    if (isFetchingSessionsRef.current) return;
-    isFetchingSessionsRef.current = true;
-    try {
-      const response = await clientFetch('/api/terminal/agent-sessions');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch sessions: ${response.status}`);
-      }
-      const data = await response.json();
-      interface RawSession {
-        id: string;
-        name?: string;
-        status?: string;
-      }
-      const rawSessions: RawSession[] = data?.sessions || [];
-      const sessions: AttachableSession[] = rawSessions.map((s) => ({
-        id: s.id,
-        name: s.name || s.id,
-        status: s.status === 'active' ? 'active' : 'inactive',
-      }));
-      setAttachableSessions(sessions);
-    } catch (err) {
-      debugLog('[Terminal] Failed to fetch attachable sessions:', err);
-      setAttachableSessions([]);
-    } finally {
-      isFetchingSessionsRef.current = false;
-    }
-  }, []);
 
   /* ---- Terminal panes hook ---- */
   const paneState = useTerminalPanes({
@@ -221,60 +165,6 @@ function Terminal({
     return () => window.removeEventListener('resize', updateCollapsedHeight);
   }, [getCollapsedHeight]);
 
-  // Load available shells
-  useEffect(() => {
-    let cancelled = false;
-    ApiService.getInstance()
-      .getAvailableShells()
-      .then((res) => {
-        if (cancelled) return;
-        const shells = res.shells || [];
-        setAvailableShells(shells);
-        const defaultShell = shells.find((s) => s.default) || shells[0];
-        if (defaultShell) {
-          setSelectedShell(defaultShell.name);
-        }
-        setShellsLoaded(true);
-      })
-      .catch((err) => {
-        debugLog('[Terminal] Failed to load available shells:', err);
-        notificationBus.notify('warning', 'Terminal', 'Failed to load available shells: ' + String(err));
-        setShellsLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Poll attachable sessions
-  useEffect(() => {
-    fetchAttachableSessions();
-    const intervalId = setInterval(() => {
-      if (isExpanded) {
-        fetchAttachableSessions();
-      }
-    }, 5000);
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [isExpanded, fetchAttachableSessions]);
-
-  // WS events trigger re-fetch
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (
-        detail?.type === 'terminal_output' ||
-        detail?.type === 'pty_exit' ||
-        detail?.type === 'agent_session_update'
-      ) {
-        fetchAttachableSessions();
-      }
-    };
-    window.addEventListener('sprout:wsevent', handler as EventListener);
-    return () => window.removeEventListener('sprout:wsevent', handler as EventListener);
-  }, [fetchAttachableSessions]);
-
   // Close menus on outside click / Escape
   useOutsideClickDismiss(showShellMenu, shellPickerRef, () => setShowShellMenu(false));
   useOutsideClickDismiss(showOverflowMenu, overflowMenuRef, () => setShowOverflowMenu(false));
@@ -308,33 +198,10 @@ function Terminal({
   }, [setCopyOnSelect]);
 
   /* ---- Terminal height resize ---- */
-  const handleVerticalResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const startY = e.clientY;
-      const startHeight = terminalHeight;
-
-      const onMove = (ev: MouseEvent) => {
-        const delta = startY - ev.clientY;
-        const next = clampTerminalHeight(startHeight + delta);
-        setTerminalHeight(next);
-      };
-
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-        setTerminalHeight((prev) => Math.round(prev));
-      };
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'row-resize';
-    },
-    [terminalHeight],
-  );
+  const handleVerticalResizeStart = useVerticalDragResize({
+    currentHeight: terminalHeight,
+    onResize: setTerminalHeight,
+  });
 
   /* ---- Initial mount animation guard ---- */
   const hasMountedRef = useRef(false);

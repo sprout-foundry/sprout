@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"math"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
@@ -98,6 +99,19 @@ func (a *Agent) refineRollupEnd(ctx context.Context, checkpoints []TurnCheckpoin
 // checkpoint, returning the vector slice in candidate order. Returns
 // ok=false when any vector is missing or when checkpoints lack the IDs
 // we need to look them up — boundary detection is opt-in.
+//
+// ID resolution contract:
+//   - Per-turn records (Type="conversation_turn"): metadata["checkpoint_id"]
+//     holds the TurnCheckpoint.ID ("cp-<uuid>"). r.ID is a 32-char hex turn
+//     ID and is ignored.
+//   - Rollup records (Type=checkpointRollupRecordType): metadata["checkpoint_id"]
+//     holds the RollupCheckpoint.ID (same as its source checkpoint IDs).
+//     r.ID has the form "rollup:<checkpoint_id>" so we strip the prefix as a
+//     fallback key.
+//
+// This dual-key strategy lets callers pass cp.ID ("cp-...") directly for
+// both per-turn and rollup candidates without needing to know which type
+// each one is.
 func collectCheckpointVectors(store *embedding.ConversationStore, cps []TurnCheckpoint) ([][]float32, bool) {
 	if store == nil {
 		return nil, false
@@ -107,20 +121,22 @@ func collectCheckpointVectors(store *embedding.ConversationStore, cps []TurnChec
 		return nil, false
 	}
 
-	// Index by the conversation-turn / rollup ID we wrote into Metadata.
+	// Index by checkpoint ID. See ID resolution contract above.
 	byID := make(map[string][]float32, len(all))
 	for _, r := range all {
 		if r.Type != checkpointRollupRecordType && r.Type != "conversation_turn" {
 			continue
 		}
+		// Primary key: checkpoint_id in metadata (works for both per-turn and rollup).
 		var cid string
-		if v, ok := r.Metadata["checkpoint_id"].(string); ok {
+		if v, ok := r.Metadata["checkpoint_id"].(string); ok && v != "" {
 			cid = v
 		}
 		if cid == "" {
-			// Legacy per-turn records may use the turn ID as VectorRecord.ID
-			// instead of the checkpoint_id metadata field.
-			cid = r.ID
+			// Fallback: r.ID stripped of "rollup:" prefix. This handles legacy
+			// per-turn records that have no checkpoint_id metadata, and also
+			// rollup records where only r.ID was written.
+			cid = strings.TrimPrefix(r.ID, "rollup:")
 		}
 		if cid == "" || len(r.Embedding) == 0 {
 			continue

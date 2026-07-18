@@ -43,6 +43,48 @@ export async function steerQuery(fetchFn: typeof fetch, query: string, chatId?: 
   }
 }
 
+/**
+ * SP-114 Phase 2: execute a slash command on the dedicated /api/command/execute
+ * surface. Returns the captured stdout from the command. Throws on error.
+ *
+ * Unlike steerQuery this endpoint does not require an active query — it's the
+ * canonical surface for invoking safe read-only / config commands from the
+ * WebUI command bar at any time.
+ */
+export interface ExecuteCommandResponse {
+  command: string;
+  output: string;
+  error: string;
+  accepted: boolean;
+}
+
+export async function executeCommand(
+  fetchFn: typeof fetch,
+  command: string,
+  chatId?: string,
+): Promise<ExecuteCommandResponse> {
+  const reqBody: Record<string, string> = { command };
+  if (chatId) reqBody.chat_id = chatId;
+  const response = await fetchFn('/api/command/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reqBody),
+  });
+  const data = (await response.json().catch(() => ({}))) as Partial<ExecuteCommandResponse> & {
+    error?: string;
+    message?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || data.message || `Command failed (HTTP ${response.status})`);
+  }
+  return {
+    command: data.command ?? '',
+    output: data.output ?? '',
+    error: data.error ?? '',
+    accepted: data.accepted ?? false,
+  };
+}
+
 export async function stopQuery(fetchFn: typeof fetch): Promise<void> {
   const response = await fetchFn('/api/query/stop', { method: 'POST' });
   if (!response.ok) throw new Error('Failed to stop query');

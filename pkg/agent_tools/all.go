@@ -5,7 +5,7 @@ package tools
 // Currently includes: read_file, list_directory, fetch_url, search_files,
 // repo_map, rollback_changes, view_history, list_skills, embedding_index,
 // write_file, write_structured_file, edit_file, shell_command,
-// manage_memory, manage_settings, task_queue, todo_write, todo_read,
+// manage_memory, manage_settings, todo_write, todo_read,
 // ask_user, patch_structured_file, commit, git, activate_skill,
 // web_search, semantic_search, analyze_image_content,
 // analyze_ui_screenshot, list_automate_workflows, list_changes,
@@ -58,8 +58,12 @@ func AllTools() []ToolHandler {
 		&manageMemoryHandler{},
 		// Settings management tool
 		&manageSettingsHandler{},
-		// Task queue — consolidated handler (replaces individual task_queue_add/publish/read)
-		&taskQueueHandler{},
+		// Task queue tool — DISABLED 2026-07-18. The Executive Assistant
+		// queue mode added prompt bloat without pulling its weight in
+		// regular sessions. Re-enable by uncommenting the line below;
+		// the data model (pkg/agent_tools/task_queue.go) and handlers
+		// are left in place to make restoration trivial.
+		// &taskQueueHandler{},
 		// Todo tools
 		&todoWriteHandler{},
 		&todoReadHandler{},

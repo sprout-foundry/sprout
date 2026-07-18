@@ -33,11 +33,25 @@ All 12 anchors are now under the 730-line mark (most under 250), with single-res
 | `pkg/agent_providers/generic_provider.go` | 1449 | 🔴 Open — next-tier candidate |
 | `pkg/webcontent/browser_rod.go` | 1398 | 🔴 Open — next-tier candidate |
 | `pkg/agent/change_tracking_shell.go` | 1344 | 🔴 Open — next-tier candidate |
-| `webui/src/components/Terminal.tsx` | 1320 | 🔴 Open — next-tier candidate |
+| `webui/src/components/Terminal.tsx` | 683 → 576 (was 1320) | 🟡 Partial — see "SP-075-extension" below |
 | `pkg/agent/seed_integration.go` | 1124 | ⚠️ Original target — reduced to ~29 lines (already shipped) |
 | `pkg/agent/subagent_runner.go` | 1059 | ⚠️ Original target — split into runner siblings (already shipped) |
 
 The original Phase 1 + Phase 2 targets are all done. The original Phase 3 (`generic_provider.go`, `browser_rod.go`, `Terminal.tsx`) is partially done (12 top-12 fully split); the remaining items are open for a future SP-075-extension if pursued.
+
+### SP-075-extension (Terminal.tsx, 2026-07-18)
+
+Following the Phase 3 anchor split (`Terminal.tsx` 1320 → 683 with `useTerminalPanes`), the outer Terminal.tsx remained a complex shell mixing attachable-sessions fetching, shell loading, vertical drag-resize, expand/collapse, and the JSX render. Three additional React-aware concerns were extracted into dedicated hooks, leaving Terminal.tsx at 576 lines with no behavior change:
+
+| Extraction | Lines moved | New file |
+|---|---|---|
+| `useAvailableShells()` | ~22 | `webui/src/hooks/useAvailableShells.ts` (52 lines) |
+| `useAttachableSessions(isExpanded)` | ~55 | `webui/src/hooks/useAttachableSessions.ts` (90 lines) |
+| `useVerticalDragResize({ currentHeight, onResize })` | ~30 | `webui/src/hooks/useVerticalDragResize.ts` (71 lines) |
+
+**Hook coverage:** 28 new tests across the three hook test files (`useAvailableShells.test.ts`: 7, `useAttachableSessions.test.ts`: 15, `useVerticalDragResize.test.ts`: 6) all green. The 69 existing `Terminal.test.tsx` tests continue to pass — extractions are transparent at the rendered-DOM level.
+
+**Verification:** `make build-all` green; `npm run type-check --prefix webui` clean; focused test sweep (5 files, 110 tests) all pass.
 
 ## Problem
 

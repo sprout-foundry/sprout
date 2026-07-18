@@ -6,11 +6,11 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-07-17):** 80 shipped · 3 pending · 1 on hold.
+**Counts (as of 2026-07-18):** 84 shipped · 5 pending · 2 parked in `future/`.
 
 ## Shipped
 
-Full spec bodies in [`_completed/`](./_completed/) (79 files).
+Full spec bodies in [`_completed/`](./_completed/) (83 files).
 
 | Spec | Title | Status |
 |------|-------|--------|
@@ -86,32 +86,36 @@ Full spec bodies in [`_completed/`](./_completed/) (79 files).
 | SP-086 | [Skill Install — Pull Skills from Git, URLs, and Registries](./_completed/SP-086-skill-install-command.md) | ✅ Implemented (2026-06-30) |
 | SP-087 | [SP-087 Acceptance Report](./_completed/SP-087-acceptance.md) | (supporting doc — see linked spec) |
 | SP-087b | [Full Playwright Coverage of the WebUI](./_completed/SP-087b-full-playwright-webui-coverage.md) | ✅ Implemented (2026-06-30; acceptance criterion 3 partial — trace/video/screenshot config deferred, see SP-087-acceptanc |
+| SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./_completed/SP-105-cli-interactive-panels.md) | ✅ Implemented — `/settings` interactive AskUser-driven panel + `/usage` Unicode bar-chart dashboard + `--json` flag; `/stats` aliased to `/usage`. `pkg/agent_commands/settings_cmd.go` + `usage_cmd.go`; 23 unit tests pass. |
 | SP-106 | [CLI Output Polish + SelectList Touch Scroll](./_completed/SP-106-cli-output-polish.md) | ✅ Implemented (all 3 features: markdown table rendering, nested list indentation + indented code blocks, SelectList mouse wheel scroll) |
 | SP-107 | [Code Intelligence Graph](./_completed/SP-107-code-intelligence-graph.md) | ✅ Implemented — auto-build on first query (`codegraph_handler.go:60`), embedding_index integration (`embedding_index_handler.go:267`), qualified-name edge fix (`repo_map.go:ToCodegraphSymbols`). 41 codegraph + 29 edge-extraction tests pass; `find_dead_code`/`get_callers`/`get_callees` produce real results. Spec reconciliation at `55c997e1`; primary wiring at `7ea9061d`, `ce0e6b48`, `82d40fa1`. |
 | SP-109 | [Single-Source Tool Definitions — Eliminate Dual Maintenance](./_completed/SP-109-single-source-tool-definitions.md) | ✅ Implemented (all 4 phases complete; legacy `ToolConfig` registry deleted; `ToolHandler.Definition()` is the single source of truth) |
 | SP-110 | [Background Completion Injection & Auto-Resume](./_completed/SP-110-background-completion-auto-resume.md) | ✅ Implemented — All 3 phases shipped at `6d31e17a` (`pkg/agent/notifications.go`, `pkg/webui/wakeup_poller.go` with 2s ticker + all-gates-checked polling loop, Settings → Agent → General → "Enable auto-resume" toggle, per-session tokens/resumes budgets, interrupt-safety via `DisableWakeup`). Off by default; opt-in. |
+| SP-115 | [CLI UX — Footer Keyboard Hint Row](./_completed/SP-115-cli-ux-10-keyboard-affordances.md) | ✅ Implemented — `KeymapHintRow()` formatter (`pkg/console/input_keymap.go:188`), `SetShowKeymapHint()` field + setter (`status_footer.go:240`), scroll-region-aware rendering at `status_footer.go:731`, hint-toggle plumbing wired into REPL bootstrap. Footer hint row shows accurate, useful shortcuts per commit `d33db212`. |
 | SP-116 | [Multi-Instance Isolation](./_completed/SP-116-multi-instance-isolation.md) | ✅ Implemented — git-repo auto-detection in `cmd/root.go` makes `.sprout/` isolation the default for repo-backed directories; bg processes scoped to config dir; layered config merges workspace overrides with global providers. Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). |
 | SP-118 | [Daemon Multi-Window Session Isolation](./_completed/SP-118-daemon-multi-window-sessions.md) | ✅ Implemented (Phases 1–5 shipped 2026-07-15; Phase 6 partial — TODO.md sync landed, README + Settings UI deferred per AGENTS.md "no documentation" rule). Mode 2 (daemon) supports N parallel browser windows per user via `agentEnforceSingleSession` dispatch + `UserConnections` registry; Mode 1 (`sprout agent`) keeps single-active semantics. `daemon_multi_session` feature flag defaulted ON; rollback via `sprout config set daemon_multi_session=false`. `active_ws_count_by_user` metric exposed at `/api/ws-metrics`. |
 | SP-119 | [Workspace-aware Directory Resolution](./_completed/SP-119-workspace-aware-directory-resolution.md) | ✅ Implemented — `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool and interface-handler paths so daemon-served workspaces find `<workspace>/automate/` instead of the daemon root. 3 phases shipped 2026-07-15 (`6608ecf3`, `aa2d05a9`). Out-of-scope follow-ups (~25 callsites across `pkg/agent/persistence.go`, `pkg/agent/skills.go`, `pkg/agent_tools/shell_native.go`, etc.) tracked under SP-091. |
 | SP-120 | [Codebase Organization & Test Infrastructure Cleanup](./_completed/SP-120-codebase-organization-cleanup.md) | ✅ Implemented — Phase 1 + 2a/2b/2c + Phase 3 all shipped 2026-07-15. The 199-file cmd/ god package lost another ~2000 lines to a new pkg/cliui/ (terminal subscriber, tool/subagent display, turn stats). Tests/builds all clean. |
+| SP-123 | [User-Level Command Policies](./_completed/SP-123-user-command-policies.md) | ✅ Shipped — Phases 1–3 (2026-07-16). Unified command-policy layer with `Always Allow` / `Always Prompt` / `Always Deny` actions across the five fragmented pre-existing config surfaces; overrides `permissive`-mode auto-approval. |
 
 ## Pending
 
-Specs still in flight (4 files). When a spec's core work
+Specs still in flight (5 files). When a spec's core work
 ships, it moves to [`_completed/`](./_completed/).
 
 | Spec | Title | Status |
 |------|-------|--------|
-| SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ✅ Phase 3 fully shipped 2026-07-16 — All 12 top-tier offenders (890-1500 lines) decomposed into 4-7 sibling files each (anchor + 3-6 siblings), all under 730 lines. Original `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines; plus 12 new splits in 2026-07. **Remaining open (next-tier):** `wasmshell/commands.go` (1633), `pkg/agent_providers/generic_provider.go` (1449), `pkg/webcontent/browser_rod.go` (1398), `pkg/agent/change_tracking_shell.go` (1344), `webui/src/components/Terminal.tsx` (1320) — single-responsibility files, deferred to a future SP-075-extension. |
-| SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
+| SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ✅ Phase 3 fully shipped 2026-07-16 — All 12 top-tier offenders (890-1500 lines) decomposed into 4-7 sibling files each (anchor + 3-6 siblings), all under 730 lines. Original `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines; plus 12 new splits in 2026-07. **Next-tier status (as of 2026-07-18):** All 5 next-tier candidates touched — `wasmshell/commands.go` (now split into 5 files, max 450); `generic_provider.go` (8 sibling files, max 602); `browser_rod.go` (5 files, max 668); `change_tracking_shell.go` (residual 464 + persist sibling + tests); `webui/src/components/Terminal.tsx` (683 → 576 lines via three new hooks: `useAvailableShells`, `useAttachableSessions`, `useVerticalDragResize` — each with dedicated test files, 28 new tests all green). 2026-07-18 SP-075-extension complete on Terminal.tsx; broader change-tracking split remains optional. |
 | SP-112 | [Platform Parity — Resolve Stubbed Feature Gaps](./SP-112-platform-parity.md) | 🔵 Proposed — 4 tiers. Windows process groups/signals, WASM tool exclusion, no-CGO embedding fallback, permanent limitation docs. Based on 2026-07-04 platform audit. |
 | SP-113 | [Multi-Billing-Model Cost Tracking](./SP-113-multi-billing-cost-tracking.md) | 🟢 Implemented (Phases 1–4 shipped `4552363c` 2026-07-02 as SP-080, then renumbered 2026-07-05). `bab487da` post-merge cleanup: subagent double-debit fix, fleet budget isolation, CLI footer "included"/"free" annotations, ProviderTable billing column. Spec kept at root as living reference for future scope (subscription quota tracking, per-billing-type cost alerts, Ollama Cloud credits). |
 | SP-114 | [Unify CLI and Steer Panel Command Execution](./SP-114-unify-command-execution.md) | 🟢 Phase 1 + Phase 2 shipped (`ab6c975e` + this session). Phase 2: `POST /api/command/execute` (dedicated command surface, separate from `/api/query/steer`); WebUI `onSendCommand` handler in `ChatView.tsx` routes safe commands to the new endpoint with notification-based output. Destructive commands (`/commit`, `/clear`, `/exit`, `/init`, etc.) remain CLI-only. Long-output WS streaming deferred. |
+| SP-124 | [LLM-Augmented Security Analysis](./SP-124-llm-security-analysis.md) | 🔵 Proposed — design phase (2026-07-16). Optional LLM pre-analysis of CAUTION/DANGEROUS commands before the approval prompt; closes the "complex piped command, plain warning, no context" gap left by the static classifier. |
 
 ## Future / On Hold
 
-Parked pending real demand — not scheduled. See [`future/`](./future/).
+Parked or suspended — not scheduled. See [`future/`](./future/).
 
 | Spec | Title | Reason |
 |------|-------|--------|
-| SP-007 | [Extend Configuration — Role-Based Configs](./future/SP-007-extend-config.md) | 🧊 On hold (parked 2026-06-14) — speculative; revisit only with evidence of user demand. See roadmap/00-INDEX.md "Future  |
+| SP-007 | [Extend Configuration — Role-Based Configs](./future/SP-007-extend-config.md) | 🧊 On hold (parked 2026-06-14) — speculative; revisit only with evidence of user demand. |
+| SP-080-desktop | [Desktop Release — Security, Compliance, Distribution Readiness](./future/SP-080-desktop-release-security.md) | 🔴 Suspended (2026-07-07). Desktop builds and CI disabled; electron deps removed from `package.json`. Re-enable only after explicit re-prioritization. |

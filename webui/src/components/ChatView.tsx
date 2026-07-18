@@ -4,9 +4,10 @@ import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { supportsExport, supportsSSH } from '../config/mode';
-import { rewindQuery } from '../services/api/chatApi';
+import { rewindQuery, executeCommand } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
+import { notificationBus } from '../services/notificationBus';
 import type { QueryProgress } from '../types/app';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, Message, ToolExecution } from './chat/types';
@@ -291,6 +292,38 @@ function Chat(props: ChatProps): JSX.Element {
     }
   }, []);
 
+  // SP-114 Phase 2: dedicated command-surface handler. Called when the user
+  // submits a slash command via the chat input's onSendCommand prop (Enter on
+  // a `/`-prefixed line while not actively chatting). Routes through
+  // /api/command/execute, which only accepts SteerCapable commands. The
+  // `/`-prefix requirement is enforced server-side; we just delegate errors
+  // verbatim so the UX is consistent with other command-surface failures.
+  //
+  // For now we surface the result via a notification. Long output (> ~500
+  // chars) is truncated with an ellipsis — full streaming via WebSocket is a
+  // Phase 2c follow-up.
+  const handleSendCommand = useCallback(
+    async (command: string) => {
+      try {
+        const result = await executeCommand(clientFetch, command, chatId);
+        const output = result.output || '(no output)';
+        const preview = output.length > 500 ? `${output.slice(0, 500)}\n…` : output;
+        if (result.error) {
+          notificationBus.notify('error', `/${result.command}`, result.error);
+        } else {
+          notificationBus.notify('success', `/${result.command}`, preview);
+        }
+      } catch (e) {
+        notificationBus.notify(
+          'error',
+          'Command',
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+    },
+    [chatId],
+  );
+
   const showOffline = needsHealthCheck && backendReachable === false && !isProcessing && messages.length === 0;
 
   return (
@@ -378,6 +411,7 @@ function Chat(props: ChatProps): JSX.Element {
           value={inputValue}
           onChange={onInputChange}
           onSend={onSendMessage}
+          onSendCommand={handleSendCommand}
           onQueue={onQueueMessage}
           onStop={onStopProcessing}
           placeholder={

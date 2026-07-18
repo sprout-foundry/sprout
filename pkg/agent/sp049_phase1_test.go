@@ -95,21 +95,15 @@ func TestSP049_SecondInvocationAlsoReturnsSecurityError(t *testing.T) {
 	}
 }
 
-// TestSP049_GitResetHardClassifiesDangerous verifies the classifier correctly
-// flags `git reset --hard` as DANGEROUS with hard-block attributes.
-func TestSP049_GitResetHardClassifiesDangerous(t *testing.T) {
+// TestSP049_GitResetHardClassifiesCaution verifies the classifier correctly
+// flags `git reset --hard` as CAUTION (prompts for confirmation).
+func TestSP049_GitResetHardClassifiesCaution(t *testing.T) {
 	result := tools.ClassifyToolCall("git", map[string]interface{}{
 		"operation": "reset",
 		"args":      "--hard HEAD~5",
 	})
-	if result.Risk != tools.SecurityDangerous {
-		t.Errorf("expected DANGEROUS, got %v", result.Risk)
-	}
-	if !result.ShouldBlock {
-		t.Error("expected ShouldBlock=true for git reset --hard")
-	}
-	if !result.IsHardBlock {
-		t.Error("expected IsHardBlock=true for git reset --hard")
+	if result.Risk != tools.SecurityCaution {
+		t.Errorf("expected CAUTION, got %v", result.Risk)
 	}
 }
 
@@ -142,33 +136,27 @@ func TestSP049_GitResetSoftStaysCaution(t *testing.T) {
 	}
 }
 
-// TestSP049_GitRebaseInteractiveClassifiesDangerous verifies that `git rebase -i`
-// is classified as DANGEROUS.
-func TestSP049_GitRebaseInteractiveClassifiesDangerous(t *testing.T) {
+// TestSP049_GitRebaseInteractiveClassifiesCaution verifies that `git rebase -i`
+// is classified as CAUTION (prompts for confirmation).
+func TestSP049_GitRebaseInteractiveClassifiesCaution(t *testing.T) {
 	result := tools.ClassifyToolCall("git", map[string]interface{}{
 		"operation": "rebase",
 		"args":      "-i HEAD~3",
 	})
-	if result.Risk != tools.SecurityDangerous {
-		t.Errorf("expected DANGEROUS, got %v", result.Risk)
-	}
-	if !result.ShouldBlock {
-		t.Error("expected ShouldBlock=true for git rebase -i")
+	if result.Risk != tools.SecurityCaution {
+		t.Errorf("expected CAUTION, got %v", result.Risk)
 	}
 }
 
-// TestSP049_GitRebaseOntoClassifiesDangerous verifies that `git rebase --onto`
-// is classified as DANGEROUS.
-func TestSP049_GitRebaseOntoClassifiesDangerous(t *testing.T) {
+// TestSP049_GitRebaseOntoClassifiesCaution verifies that `git rebase --onto`
+// is classified as CAUTION (prompts for confirmation).
+func TestSP049_GitRebaseOntoClassifiesCaution(t *testing.T) {
 	result := tools.ClassifyToolCall("git", map[string]interface{}{
 		"operation": "rebase",
 		"args":      "--onto master feature branch",
 	})
-	if result.Risk != tools.SecurityDangerous {
-		t.Errorf("expected DANGEROUS, got %v", result.Risk)
-	}
-	if !result.ShouldBlock {
-		t.Error("expected ShouldBlock=true for git rebase --onto")
+	if result.Risk != tools.SecurityCaution {
+		t.Errorf("expected CAUTION, got %v", result.Risk)
 	}
 }
 

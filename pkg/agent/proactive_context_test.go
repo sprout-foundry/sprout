@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1505,8 +1504,12 @@ func TestSweepExpiredEntries_EmptyStore(t *testing.T) {
 }
 
 func TestSweepExpiredEntries_NonExistentDir(t *testing.T) {
-	// Point to a directory that doesn't exist
-	indexPath := "/tmp/sprout-test-nonexistent-dir-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "/conversation_turns.hnsw"
+	// Use t.TempDir() to ensure the path is writable on this system.
+	// On platforms where /tmp has restricted permissions (e.g., Termux),
+	// a hardcoded /tmp path may fail before the "non-existent store" scenario
+	// is even exercised.
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "nonexistent_subdir", "conversation_turns.hnsw")
 
 	// The function creates the directory via NewHNSWStore, so this
 	// should not error — it will create the directory and find no records.

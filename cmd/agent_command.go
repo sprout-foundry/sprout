@@ -30,7 +30,6 @@ var (
 	agentSessionID             string
 	agentLastSession           bool
 	agentPersona               string
-	agentEAMode                string
 	agentDryRun                bool
 	maxIterations              int
 	agentNoStreaming           bool
@@ -180,21 +179,6 @@ func createChatAgent() (*agent.Agent, error) {
 		}
 	}
 
-	if agentEAMode != "" {
-		if agentEAMode != "interactive" && agentEAMode != "queue" {
-			return nil, fmt.Errorf("invalid --ea-mode value %q: must be 'interactive' or 'queue'", agentEAMode)
-		}
-		cm := chatAgent.GetConfigManager()
-		if cm != nil {
-			if err := cm.UpdateConfig(func(c *configuration.Config) error {
-				c.EAMode = agentEAMode
-				return nil
-			}); err != nil {
-				return nil, fmt.Errorf("failed to save EA mode config: %w", err)
-			}
-		}
-	}
-
 	if maxIterations > 0 {
 		chatAgent.SetMaxIterations(maxIterations)
 	}
@@ -214,7 +198,6 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentLastSession, "last-session", false, "Resume the most recent session from the current working directory scope")
 	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper)")
 	agentCmd.Flags().StringVar(&agentRiskProfile, "risk-profile", "", "Shell-command risk cascade profile: readonly | cautious | default | permissive | unrestricted. Overrides config.risk_profile for this session. Persona-defined rules still win.")
-	agentCmd.Flags().StringVar(&agentEAMode, "ea-mode", "", "Executive Assistant startup mode: 'interactive' (default) or 'queue' (autonomous task processing)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 0, "Maximum iterations per prompt before stopping (default: 0 = unlimited)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set SPROUT_NO_STREAM=1)")

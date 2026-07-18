@@ -798,7 +798,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"shell_command":           "shell_command",
 		"manage_memory":           "manage_memory",
 		"manage_settings":         "manage_settings",
-		// task_queue removed 2026-07-18 — see DISABLED note in all.go
 		"todo_write":              "todo_write",
 		"todo_read":               "todo_read",
 		"ask_user":                "ask_user",
@@ -914,18 +913,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "shell_command":
 			if len(def.Required) != 0 {
 				t.Errorf("shell_command Required = %v, want nil/empty", def.Required)
-			}
-		case "task_queue_add":
-			if len(def.Required) != 1 || def.Required[0] != "title" {
-				t.Errorf("task_queue_add Required = %v, want [\"title\"]", def.Required)
-			}
-		case "task_queue_publish":
-			if len(def.Required) != 2 || def.Required[0] != "task_id" || def.Required[1] != "status" {
-				t.Errorf("task_queue_publish Required = %v, want [\"task_id\" \"status\"]", def.Required)
-			}
-		case "task_queue_read":
-			if len(def.Required) != 0 {
-				t.Errorf("task_queue_read Required = %v, want nil/empty", def.Required)
 			}
 		case "todo_write":
 			if len(def.Required) != 1 || def.Required[0] != "todos" {

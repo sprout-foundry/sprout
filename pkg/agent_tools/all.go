@@ -58,12 +58,6 @@ func AllTools() []ToolHandler {
 		&manageMemoryHandler{},
 		// Settings management tool
 		&manageSettingsHandler{},
-		// Task queue tool — DISABLED 2026-07-18. The Executive Assistant
-		// queue mode added prompt bloat without pulling its weight in
-		// regular sessions. Re-enable by uncommenting the line below;
-		// the data model (pkg/agent_tools/task_queue.go) and handlers
-		// are left in place to make restoration trivial.
-		// &taskQueueHandler{},
 		// Todo tools
 		&todoWriteHandler{},
 		&todoReadHandler{},

@@ -56,7 +56,6 @@ func TestBuildSettingsOptions(t *testing.T) {
 			"anthropic": "claude-sonnet-4-20250514",
 		},
 		ReasoningEffort: "medium",
-		EAMode:          "interactive",
 		HistoryScope:    "project",
 		OutputVerbosity: "default",
 	}
@@ -128,7 +127,6 @@ func TestGetEnumOptions(t *testing.T) {
 		{"reasoning_effort", true, 3, []string{"low", "medium", "high"}},
 		{"disable_thinking", true, 2, []string{"false", "true"}},
 		{"history_scope", true, 2, []string{"project", "global"}},
-		{"ea_mode", true, 2, []string{"interactive", "queue"}},
 		{"output_verbosity", true, 3, []string{"compact", "default", "verbose"}},
 		{"provider", false, 0, nil},
 		{"model", false, 0, nil},

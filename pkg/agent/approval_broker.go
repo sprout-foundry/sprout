@@ -2,8 +2,10 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -19,6 +21,11 @@ type BrokerDecision struct {
 	Outcome    security.ApprovalOutcome
 	Surface    string         // "webui" or "cli" — which surface answered
 	Assessment RiskAssessment // echoed for caller diagnostics
+	// Analysis holds the LLM-derived security analysis when available (SP-124).
+	// Nil when: tracking disabled, no LLM call needed (Low risk), LLM timed
+	// out, LLM errored, or analysis JSON failed to parse. Callers must treat
+	// nil as "fall back to static classifier reasoning".
+	Analysis *SecurityAnalysis
 }
 
 // RequestApproval performs the unified approval flow for a RiskAssessment.
@@ -170,6 +177,34 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 		}, nil
 	}
 
+	// --- SP-124 Phase 1: optional LLM analysis for shell commands ---
+	// Only run for Medium/High risk shell commands (skip Low; skip Critical
+	// hard-blocks since those don't reach prompts). On error or timeout,
+	// securityAnalysis stays nil and we fall through to the static-classifier
+	// prompt.
+	var securityAnalysis *SecurityAnalysis
+	if toolName == "shell_command" &&
+		(assessment.Level == configuration.RiskLevelMedium ||
+			assessment.Level == configuration.RiskLevelHigh) {
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			// Cache check — identical commands in the same session reuse
+			// the cached analysis.
+			if cached, ok := a.getSecurityAnalysisCache().Get(cmd); ok {
+				securityAnalysis = cached
+			} else {
+				ctx, cancel := context.WithTimeout(a.interruptCtx, 2*time.Second)
+				sa, err := AnalyzeShellCommand(ctx, a, cmd, a.effectiveCwd())
+				cancel()
+				if err == nil && sa != nil {
+					securityAnalysis = sa
+					a.getSecurityAnalysisCache().Set(cmd, sa)
+				}
+				// On error or timeout: securityAnalysis stays nil; fall through
+				// to static-classifier prompt.
+			}
+		}
+	}
+
 	// --- Interactive approval surfaces ---
 
 	isSubagent := a.IsSubagent()
@@ -201,6 +236,13 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 		}
 		if assessment.RequiresIntentConfirmation {
 			extras["intent_confirmation"] = "true"
+		}
+
+		// SP-124 Phase 1: attach LLM analysis to the WebUI extras so the
+		// approval dialog can display it (Phase 2).
+		if securityAnalysis != nil {
+			jsonBytes, _ := json.Marshal(securityAnalysis)
+			extras["security_analysis"] = string(jsonBytes)
 		}
 
 		riskLabel := string(assessment.Level)
@@ -251,6 +293,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				Outcome:    outcome,
 				Surface:    "webui",
 				Assessment: assessment,
+				Analysis:   securityAnalysis,
 			}, nil
 		}
 		// Outcome was TimedOut/NoChannel — fall through to CLI
@@ -311,6 +354,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 						Approved: true, Decision: security.ApprovalApproveOnce,
 						Outcome: security.ApprovalOutcomeResponded, Surface: "cli",
 						Assessment: assessment,
+						Analysis:   securityAnalysis,
 					}, nil
 				}
 			}
@@ -347,6 +391,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 					Outcome:    security.ApprovalOutcomeResponded,
 					Surface:    "cli",
 					Assessment: assessment,
+					Analysis:   securityAnalysis,
 				}, nil
 			}
 		}
@@ -378,6 +423,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 			Outcome:    security.ApprovalOutcomeResponded,
 			Surface:    "cli",
 			Assessment: assessment,
+			Analysis:   securityAnalysis,
 		}, nil
 	}
 
@@ -392,6 +438,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 			Decision:   security.ApprovalApproveOnce,
 			Surface:    "non-interactive",
 			Assessment: assessment,
+			Analysis:   securityAnalysis,
 		}, nil
 	}
 

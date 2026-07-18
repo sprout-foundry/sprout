@@ -317,6 +317,20 @@ type Agent struct {
 	trainingEndpoint string
 	trainingExclude  []string
 	trainingPushFn   func(state ConversationState, endpoint string, excludePaths []string) error
+
+	// securityAnalysisCache holds session-scoped LLM security analyses of
+	// shell commands. Populated lazily by AnalyzeShellCommand when an
+	// approval prompt fires for a CAUTION/DANGEROUS shell command. Cleared
+	// on Agent.Reset() / Clear() (match the lifecycle of similar state).
+	//
+	// SP-124. Nil until first use.
+	securityAnalysisCache *SecurityAnalysisCache
+
+	// securityAnalysisCacheMu guards securityAnalysisCache against
+	// concurrent lazy-init (getSecurityAnalysisCache) and reset
+	// (ClearSecurityAnalysisCache). The cache itself has its own RWMutex
+	// for map access; this mutex only protects the pointer.
+	securityAnalysisCacheMu sync.Mutex
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

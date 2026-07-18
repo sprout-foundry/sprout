@@ -102,9 +102,9 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	resp := map[string]interface{}{
-		"command": cmd.Name(),
-		"output":  output,
-		"error":   "",
+		"command":  cmd.Name(),
+		"output":   output,
+		"error":    "",
 		"accepted": cmdErr == nil,
 	}
 	if cmdErr != nil {

@@ -24,46 +24,20 @@ import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
+import {
+  TERMINAL_HEIGHT_DEFAULT,
+  TERMINAL_HEIGHT_STORAGE_KEY,
+  parseTerminalHeight,
+  clampTerminalHeight,
+  FONT_SIZE_MIN,
+  FONT_SIZE_MAX,
+  FONT_SIZE_STORAGE_KEY,
+  parseFontSize,
+  clampFontSize,
+  COPY_ON_SELECT_STORAGE_KEY,
+  parseCopyOnSelect,
+} from './terminalPref';
 import TerminalPane from './TerminalPane';
-
-const TERMINAL_HEIGHT_MIN = 120;
-const TERMINAL_HEIGHT_DEFAULT = 400;
-const TERMINAL_HEIGHT_MAX_FACTOR = 100;
-const TERMINAL_HEIGHT_STORAGE_KEY = 'sprout-terminal-height';
-
-const FONT_SIZE_MIN = 8;
-const FONT_SIZE_MAX = 32;
-const FONT_SIZE_STORAGE_KEY = 'sprout-terminal-font-size';
-
-const COPY_ON_SELECT_STORAGE_KEY = 'sprout-terminal-copy-on-select';
-
-const parseTerminalHeight = (raw: string | null): number => {
-  if (!raw) return TERMINAL_HEIGHT_DEFAULT;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : TERMINAL_HEIGHT_DEFAULT;
-};
-
-const clampTerminalHeight = (value: number): number => {
-  if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
-  if (typeof window === 'undefined') return TERMINAL_HEIGHT_DEFAULT;
-  return Math.max(TERMINAL_HEIGHT_MIN, Math.min(window.innerHeight - TERMINAL_HEIGHT_MAX_FACTOR, value));
-};
-
-const parseFontSize = (raw: string | null): number => {
-  if (!raw) return FONT_SIZE_DEFAULT;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : FONT_SIZE_DEFAULT;
-};
-
-const clampFontSize = (value: number): number => {
-  if (!Number.isFinite(value)) return FONT_SIZE_DEFAULT;
-  return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, value));
-};
-
-const parseCopyOnSelect = (raw: string | null, fallback: boolean): boolean => {
-  if (raw === null) return fallback;
-  return raw === 'true';
-};
 
 /** @deprecated Re-exported for backward compatibility with existing tests. */
 export { nextActiveAfterClose } from '../hooks/useTerminalPanes';

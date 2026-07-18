@@ -408,6 +408,31 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		registry := agent_commands.NewCommandRegistry()
 
 		if registry.IsSlashCommand(query.Query) {
+			// SP-114 Phase 2: gate the legacy /api/query slash-command path on
+			// SteerCapable so destructive commands (/commit, /clear, /exit,
+			// /init, etc.) can't be invoked from the WebUI chat input. The
+			// canonical safe-surface is /api/command/execute; this branch is
+			// kept for backwards-compat with the no-active-query case (e.g. a
+			// user types /info in a fresh chat).
+			parts := strings.Fields(strings.TrimSpace(query.Query))
+			var headCmd string
+			if len(parts) > 0 {
+				headCmd = strings.TrimPrefix(parts[0], "/")
+			}
+			canRunFromWebUI := false
+			if headCmd != "" {
+				if cmd, ok := registry.GetCommand(headCmd); ok {
+					if sc, ok := cmd.(agent_commands.SteerCapable); ok && sc.SafeDuringSteer() {
+						canRunFromWebUI = true
+					}
+				}
+			}
+			if !canRunFromWebUI {
+				writeJSONErr(w, http.StatusBadRequest, "command_not_safe",
+					"Command /"+headCmd+" is not safe to run from the WebUI. Use the CLI or the /api/command/execute safe surface.")
+				return
+			}
+
 			log.Printf("handleAPIQuery: executing slash command: %s", query.Query)
 			queryEventData := events.QueryStartedEvent(
 				query.Query,

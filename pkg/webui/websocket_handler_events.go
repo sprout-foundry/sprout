@@ -302,6 +302,21 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			ws.handleAskUserResponse(safeConn, data, clientID)
 		})
 
+	case AllowedMessageTypePasswordResponse:
+		data, err := parseAndValidateData[PasswordResponseData](msg.Data, func(d *PasswordResponseData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
+		}
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
+			ws.handlePasswordResponse(safeConn, data, clientID)
+		})
+
 	case AllowedMessageTypeHydrateRequest:
 		// SP-046: client requests cold-hydrate of workspace files.
 		// Runs in a goroutine so the read loop stays responsive.

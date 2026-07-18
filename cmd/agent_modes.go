@@ -191,11 +191,28 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				chatAgent.InjectWebUIManagers(webServer.GetSecurityPromptMgr(), webServer.GetAskUserMgr())
 
 				// Wire up the WebUI client check so security prompts route
-				// correctly: use the event bus only when a browser tab is open,
-				// otherwise fall back to CLI prompting (avoids 5-min timeouts).
-				chatAgent.SetHasActiveWebUIClients(webServer.HasActiveWebUIClients)
+			// correctly: use the event bus only when a browser tab is open,
+			// otherwise fall back to CLI prompting (avoids 5-min timeouts).
+			chatAgent.SetHasActiveWebUIClients(webServer.HasActiveWebUIClients)
 
-				// In shared mode (non-daemon interactive), seed the agent's
+			// Register the password prompter mux so shell commands that trigger
+// sudo/passwd prompts route through the most appropriate surface:
+//   1. WebUI prompter (browser dialog) when a tab is open — best UX
+//   2. CLI prompter (terminal ReadPassword) when no tab is open
+//   3. Neither — sudo prompts hang as before (safe default)
+//
+// The mux is necessary because the agent_creation.go path sets a CLI
+// prompter unconditionally when stdin is a TTY. Setting only the WebUI
+// prompter here would clobber the CLI fallback and leave headless runs
+// with no prompt surface at all.
+if existing := chatAgent.GetPasswordPrompter(); existing != nil {
+	chatAgent.SetPasswordPrompter(agent.NewCascadingPasswordPrompter(
+		agent.NewWebUIPasswordPrompter(chatAgent),
+		existing,
+	))
+} else {
+	chatAgent.SetPasswordPrompter(agent.NewWebUIPasswordPrompter(chatAgent))
+}// In shared mode (non-daemon interactive), seed the agent's
 				// event metadata with the default client/chat IDs so that
 				// CLI-initiated queries publish events the WebUI can route.
 				// Without this, CLI events lack client_id/chat_id and the

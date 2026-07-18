@@ -150,6 +150,11 @@ export interface AppState {
     multiSelect?: boolean;
     default?: string;
   } | null;
+  passwordRequest: {
+    requestId: string;
+    command: string;
+    prompt: string;
+  } | null;
   shellApprovalRequest: {
     requestId: string;
     command: string;

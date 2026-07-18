@@ -80,6 +80,7 @@ export type ServerEventType =
   | 'security_approval_request'
   | 'security_prompt_request'
   | 'ask_user_request'
+  | 'password_request'
   | 'agent_message'
   | 'workspace_changed'
   | 'session_terminated'

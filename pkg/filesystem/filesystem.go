@@ -285,20 +285,32 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 	return resolvedAbs, nil
 }
 
-// isInTmpPath checks if a path is within /tmp (or the OS-equivalent temp dir).
+// isInTmpPath checks if a path is within the OS temp directory (os.TempDir()).
+// This handles platforms like Termux where the temp dir is not /tmp.
 func isInTmpPath(path string) bool {
-	// Check for /tmp paths — macOS resolves /tmp to /private/tmp via symlink,
-	// so check both the cleaned path and the original /tmp prefix.
 	cleanPath := filepath.Clean(path)
+	tempDir := os.TempDir()
+	tempClean := filepath.Clean(tempDir)
+
+	// Check if the path is within the OS temp directory
+	// This handles /tmp, /private/tmp (macOS), /data/data/com.termux/files/usr/tmp (Termux), etc.
+	if strings.HasPrefix(cleanPath, tempClean+string(filepath.Separator)) || cleanPath == tempClean {
+		return true
+	}
+
+	// Also check for /tmp and /private/tmp as fallbacks (for cross-platform compatibility
+	// even if os.TempDir() returns something else on some platforms).
 	if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" ||
 		strings.HasPrefix(cleanPath, "/private/tmp/") || cleanPath == "/private/tmp" {
 		return true
 	}
+
 	// Also check for Windows-style temp paths
 	lowerPath := strings.ToLower(cleanPath)
 	if strings.Contains(lowerPath, "\\temp\\") || strings.Contains(lowerPath, "\\tmp\\") {
 		return true
 	}
+
 	return false
 }
 

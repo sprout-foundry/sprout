@@ -6,7 +6,7 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-07-15):** 79 shipped · 4 pending · 1 on hold.
+**Counts (as of 2026-07-17):** 80 shipped · 3 pending · 1 on hold.
 
 ## Shipped
 
@@ -105,7 +105,8 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ✅ Phase 3 fully shipped 2026-07-16 — All 12 top-tier offenders (890-1500 lines) decomposed into 4-7 sibling files each (anchor + 3-6 siblings), all under 730 lines. Original `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines; plus 12 new splits in 2026-07. **Remaining open (next-tier):** `wasmshell/commands.go` (1633), `pkg/agent_providers/generic_provider.go` (1449), `pkg/webcontent/browser_rod.go` (1398), `pkg/agent/change_tracking_shell.go` (1344), `webui/src/components/Terminal.tsx` (1320) — single-responsibility files, deferred to a future SP-075-extension. |
 | SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
 | SP-112 | [Platform Parity — Resolve Stubbed Feature Gaps](./SP-112-platform-parity.md) | 🔵 Proposed — 4 tiers. Windows process groups/signals, WASM tool exclusion, no-CGO embedding fallback, permanent limitation docs. Based on 2026-07-04 platform audit. |
-| SP-113 | [Multi-Billing-Model Cost Tracking](./SP-113-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
+| SP-113 | [Multi-Billing-Model Cost Tracking](./SP-113-multi-billing-cost-tracking.md) | 🟢 Implemented (Phases 1–4 shipped `4552363c` 2026-07-02 as SP-080, then renumbered 2026-07-05). `bab487da` post-merge cleanup: subagent double-debit fix, fleet budget isolation, CLI footer "included"/"free" annotations, ProviderTable billing column. Spec kept at root as living reference for future scope (subscription quota tracking, per-billing-type cost alerts, Ollama Cloud credits). |
+| SP-114 | [Unify CLI and Steer Panel Command Execution](./SP-114-unify-command-execution.md) | 🟢 Phase 1 + Phase 2 shipped (`ab6c975e` + this session). Phase 2: `POST /api/command/execute` (dedicated command surface, separate from `/api/query/steer`); WebUI `onSendCommand` handler in `ChatView.tsx` routes safe commands to the new endpoint with notification-based output. Destructive commands (`/commit`, `/clear`, `/exit`, `/init`, etc.) remain CLI-only. Long-output WS streaming deferred. |
 
 ## Future / On Hold
 

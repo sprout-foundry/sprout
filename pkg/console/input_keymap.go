@@ -206,8 +206,8 @@ func KeymapHintRow() string {
 
 	// Append registered Alt+ bindings with human-readable labels.
 	labelMap := map[string]string{
-		"footer.breakdown.toggle":  "tools",
-		"output.verbosity.toggle":  "verbose",
+		"footer.breakdown.toggle": "tools",
+		"output.verbosity.toggle": "verbose",
 	}
 
 	for _, e := range entries {

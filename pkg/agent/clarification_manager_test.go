@@ -332,13 +332,16 @@ func TestCleanup_RemovesExpired(t *testing.T) {
 		cm.RequestClarification(context.Background(), "delegate-1", "Will expire")
 	}()
 
-	// Wait briefly for request to register
-	time.Sleep(50 * time.Millisecond)
+	// Poll until the goroutine registers the pending entry, with a
+	// generous timeout. The previous time.Sleep(50ms) approach flaked
+	// on slow CI/sandboxed runners where the goroutine wasn't scheduled
+	// in time.
+	require.Eventually(t, func() bool {
+		return len(cm.GetPendingClarifications("delegate-1")) == 1
+	}, 2*time.Second, 5*time.Millisecond, "pending entry should register within 2s")
 
-	pending := cm.GetPendingClarifications("delegate-1")
-	require.Len(t, pending, 1)
-
-	// Wait past timeout
+	// Wait past the 100ms timeout (test setup + Eventually overhead is
+	// typically >100ms by now, but sleep to be deterministic).
 	time.Sleep(150 * time.Millisecond)
 
 	// Cleanup should remove expired entry

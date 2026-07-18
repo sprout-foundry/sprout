@@ -318,13 +318,16 @@ func (r *AssistantTurnRenderer) emitFormattedLine(line string) int {
 	return lineCount
 }
 
-// OnExternalWrite finalizes the current segment without re-rendering it.
-// Wire this into the OutputRouter's writeTerminalMessage so that tool-log
-// lines, agent messages, and any other non-prose terminal output break the
-// prose segment cleanly. A fresh segment begins on the next WriteChunk.
+// OnExternalWrite finalizes the current segment, flushing any buffered
+// partial line to the terminal before resetting. Wire this into the
+// OutputRouter's writeTerminalMessage so that tool-log lines, agent
+// messages, and any other non-prose terminal output break the prose
+// segment cleanly. A fresh segment begins on the next WriteChunk.
 func (r *AssistantTurnRenderer) OnExternalWrite() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
 	r.resetSegment()
 }
 
@@ -342,11 +345,19 @@ func (r *AssistantTurnRenderer) OnExternalWrite() {
 func (r *AssistantTurnRenderer) OnExternalWriteRows(n int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
+	// Flush buffered prose before resetting (same rationale as
+	// resetSegment — don't discard unflushed text).
+	if r.lineBuf.Len() > 0 {
+		line := r.lineBuf.String()
+		r.lineBuf.Reset()
+		r.emitFormattedLine(line)
+	}
 	r.physicalLines += n
 	r.atLineStart = true
 	r.curLineRunes = 0
 	r.seg.Reset()
-	r.lineBuf.Reset()
 	if r.streamFmt != nil {
 		r.streamFmt.Reset()
 	}
@@ -417,12 +428,22 @@ func formatBytesShort(n int) string {
 }
 
 func (r *AssistantTurnRenderer) resetSegment() {
+	// Flush any buffered partial line BEFORE resetting. When a tool call
+	// interrupts mid-sentence prose, the unflushed text in lineBuf would
+	// be silently discarded — the user sees tool calls stream but never
+	// sees the explanatory prose that preceded them. Emitting the partial
+	// line ensures all streamed content reaches the terminal.
+	if r.lineBuf.Len() > 0 {
+		line := r.lineBuf.String()
+		r.lineBuf.Reset()
+		emitted := r.emitFormattedLine(line)
+		r.physicalLines += emitted
+	}
 	// Re-enable footer refresh now that the prose segment is done.
 	if r.footer != nil {
 		r.footer.SetProseStreaming(false)
 	}
 	r.seg.Reset()
-	r.lineBuf.Reset()
 	if r.streamFmt != nil {
 		r.streamFmt.Reset()
 	}

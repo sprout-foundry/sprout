@@ -22,7 +22,6 @@ var agentHelpAll bool
 var advancedAgentFlags = []string{
 	"no-connection-check",
 	"risk-profile",
-	"ea-mode",
 	"max-iterations",
 	"show-reasoning-terminal",
 	"system-prompt",

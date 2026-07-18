@@ -28,7 +28,6 @@ Use `manage_settings` to get, set, and test settings. Values are persisted acros
 | `disable_thinking` | boolean | `true`, `false` | Disable extended thinking mode (Qwen3, GLM, Minimax, etc.) |
 | `resource_directory` | string | Any valid path | Directory for captured web/vision resources |
 | `history_scope` | enum | `project`, `global` | Whether change history is scoped to current project or shared globally |
-| `ea_mode` | enum | `interactive`, `queue` | Executive Assistant operating mode |
 | `subagent_provider` | string | Any provider name | Default provider for subagent tasks |
 | `subagent_model` | string | Any model ID | Default model for subagent tasks |
 
@@ -210,112 +209,17 @@ manage_settings(operation="set", key="disable_thinking", value="false")  # Turn 
 ```
 Affects models like Qwen3, GLM, and Minimax that support extended thinking.
 
-### Set Up the EA (Executive Assistant) Workflow
+### Run an Autonomous Workflow Over a TODO List
 
-The EA workflow is Sprout's autonomous task processing system. You plan tasks (often from a project-planning session), queue them, and the EA processes them one by one without human intervention. This is ideal for batch work like processing a roadmap TODO list.
+For batch work like processing a roadmap TODO list without human intervention, use the autonomous workflow system. The coordinator persona reads `TODO.md`, delegates each item to a specialist, and commits results — see the `workflow-automation` skill for the full walkthrough.
 
-**How it works:**
-1. Tasks live in a persistent queue at `~/.config/sprout/task_queue.json`
-2. Each task has a title, description, priority, persona, and working directory
-3. In **queue mode**, the EA reads pending tasks, delegates each to the right subagent, and marks them completed/failed
-4. The queue survives restarts — add tasks in one session, process them later
-
-**Step 1: Plan tasks with project-planning**
 ```
-activate_skill("project-planning")
-```
-This skill walks through project discovery and produces a structured TODO.md. Each TODO item becomes a task.
-
-**Step 2: Add tasks to the queue**
-```
-# Add tasks individually
-task_queue_add(
-  title="Implement user authentication middleware",
-  description="Add JWT validation middleware to the API layer. See TODO.md item 3a.",
-  priority="high",
-  persona="coder",
-  working_dir="/home/user/my-project"
-)
-
-task_queue_add(
-  title="Write tests for auth middleware",
-  description="Unit tests for JWT validation, expired tokens, missing headers. See TODO.md item 3b.",
-  priority="high",
-  persona="tester",
-  working_dir="/home/user/my-project"
-)
-
-task_queue_add(
-  title="Review auth implementation",
-  description="Code review of auth middleware + tests for security best practices.",
-  priority="medium",
-  persona="reviewer",
-  working_dir="/home/user/my-project"
-)
+1. activate_skill("project-planning")          # Plan tasks into TODO.md
+2. activate_skill("workflow-automation")       # Generate an automate/workflow.json
+3. sprout automate run automate/workflow.json  # Run it autonomously
 ```
 
-**Step 3: Check the queue**
-```
-task_queue_read(status="pending")    # See what's queued
-task_queue_read(status="all")        # See everything including completed
-```
-
-**Step 4: Process the queue**
-
-Two ways to run the EA:
-
-**Option A — Interactive (recommended for first use):**
-Use the agent normally. It sees the queue and processes tasks one at a time with you watching.
-
-**Option B — Autonomous queue mode:**
-```
-# Set EA mode to queue (processes all pending tasks then exits)
-manage_settings(operation="set", key="ea_mode", value="queue")
-```
-Or launch directly: `sprout --ea-mode queue`
-
-In queue mode the EA:
-- Reads all pending tasks sorted by priority (high → medium → low)
-- Marks each as `in_progress`
-- Delegates to the specified persona via `run_subagent`
-- Marks as `completed` or `failed` with a result summary
-- Loops until the queue is empty, then exits
-
-**Switch back to interactive:**
-```
-manage_settings(operation="set", key="ea_mode", value="interactive")
-```
-
-**Task lifecycle:**
-| Status | Meaning |
-|--------|---------|
-| `pending` | Queued, waiting to be processed |
-| `in_progress` | Currently being worked on |
-| `completed` | Done successfully (has a result summary) |
-| `failed` | Errored out (has error details) |
-| `blocked` | Cannot proceed, needs human intervention |
-
-**Update a task's status manually:**
-```
-task_queue_publish(task_id="task-abc123", status="completed", result="Auth middleware added to pkg/api/auth.go")
-task_queue_publish(task_id="task-abc123", status="failed", result="Missing dependency: jwt-go module not found")
-task_queue_publish(task_id="task-abc123", status="blocked", result="Needs decision on token refresh strategy")
-```
-
-**Break a large task into subtasks:**
-```
-task_queue_publish(
-  task_id="task-abc123",
-  status="in_progress",
-  subtasks=[
-    {"title": "Research token refresh patterns", "persona": "researcher"},
-    {"title": "Implement refresh endpoint", "persona": "coder"},
-    {"title": "Write refresh token tests", "persona": "tester"}
-  ]
-)
-```
-
-**Practical tip:** If the user ran project-planning and has a TODO.md, offer to convert the TODO items into queued tasks. Read the file, parse the items, and call `task_queue_add` for each one with the right persona and priority.
+The `TODO.md → [x]` transition is the only persistent state. Progress shows up live via the TodoWrite UI indicator. No task queue file is involved.
 
 ---
 
@@ -328,9 +232,6 @@ task_queue_publish(
 | `add_memory` | Persist preferences learned during setup (e.g., "user prefers OpenRouter + Claude") |
 | `list_skills` | Discover available skills |
 | `activate_skill` | Load a skill's instructions into context |
-| `task_queue_add` | Add a task to the persistent EA task queue |
-| `task_queue_read` | Read pending/completed/failed tasks from the queue |
-| `task_queue_publish` | Update task status, mark completed/failed, or break into subtasks |
 | `run_subagent` | Delegate a task to a specialist persona (coder, tester, etc.) |
 
 ### Common Patterns
@@ -346,7 +247,7 @@ task_queue_publish(
 ```
 → Check current: manage_settings(operation="get", key="subagent_model")
 → Suggest a cost/performance appropriate model for their use case
-→ Set it: manage_settings(operation="set", key="subagent_model", value="<model>")
+→ Set it: manage_settings(operation="set", key="subagent_model", value="gpt-4o")
 ```
 
 **User asks "how do I set up code review?"**
@@ -364,18 +265,16 @@ task_queue_publish(
 
 **User asks "how do I batch-process my TODO list?"**
 ```
-→ Explain the EA workflow (see section 3 above)
-→ Offer to read their TODO.md and convert items to queued tasks
-→ Set up personas: coder for implementation, tester for tests, reviewer for review
-→ Offer to run in queue mode or process interactively
+→ Point them at activate_skill("workflow-automation") for the autonomous TODO processor
+→ The coordinator reads TODO.md, delegates each item, commits, marks [x]
+→ The same workflow runs locally via the CLI or via automate/run_automate
 ```
 
 **User asks "set up my project for autonomous work"**
 ```
 1. activate_skill("project-planning") to plan
-2. Convert plan to tasks with task_queue_add
-3. manage_settings(operation="set", key="ea_mode", value="queue")
-4. Run: sprout --ea-mode queue
+2. activate_skill("workflow-automation") to generate the autonomous workflow
+3. Run: sprout automate run automate/workflow.json
 ```
 
 ---

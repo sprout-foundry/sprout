@@ -44,12 +44,6 @@ export default function AgentBehaviorSettingsTab({
       {renderToggle('skip_prompt', 'Skip confirmation prompt')}
       {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
       {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
-      {renderSelect(
-        'ea_mode',
-        'Executive Assistant mode',
-        ['', 'interactive', 'queue'],
-        'Controls how the EA persona starts. interactive = wait for prompts (default); queue = autonomous task processing. Empty inherits the default.',
-      )}
       {/*
         SP-058: risk profile selector. Empty string ("") means "use
         the built-in default", which lets the user clear an override
@@ -62,7 +56,7 @@ export default function AgentBehaviorSettingsTab({
         'risk_profile',
         'Risk profile',
         riskProfileOptions,
-        'Shell-command gating: readonly (blocks writes) → cautious (prompts) → default → permissive → unrestricted. Persona-defined rules (e.g. EA) still win. See docs/SECURITY.md#risk-profiles.',
+        'Shell-command gating: readonly (blocks writes) → cautious (prompts) → default → permissive → unrestricted. Persona-defined rules (e.g. coordinator) still win. See docs/SECURITY.md#risk-profiles.',
       )}
       {renderTextareaInput(
         'system_prompt_text',

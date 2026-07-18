@@ -34,9 +34,6 @@ func TestAllToolsRegistered(t *testing.T) {
 		"activate_skill",
 		"manage_memory",
 		"manage_settings",
-		// task_queue removed 2026-07-18 — see DISABLED note in
-		// pkg/agent_tools/all.go. Re-enable by uncommenting &taskQueueHandler{}
-		// and adding "task_queue" back here.
 		"run_automate",
 		"list_automate_workflows",
 		"mcp_refresh",

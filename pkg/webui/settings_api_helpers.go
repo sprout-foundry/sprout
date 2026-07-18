@@ -149,7 +149,6 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		// desktop-control tools. Exposed read-only here; edits round-trip
 		// through applyPartialSettings.
 		"computer_use":            cfg.ComputerUse,
-		"ea_mode":                 cfg.EAMode,
 		"subagent_max_depth":      cfg.SubagentMaxDepth,
 		"approved_shell_commands": cfg.ApprovedShellCommands,
 		"command_policies":        cfg.CommandPolicies,

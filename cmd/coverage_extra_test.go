@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/service"
 )
@@ -69,41 +68,6 @@ func TestFormatSpawnLine_IncludesMaxContext(t *testing.T) {
 	withoutCtx := cliui.FormatSpawnLine(a, 1, "coder", 0, "")
 	if strings.Contains(withoutCtx, "ctx)") {
 		t.Errorf("should not have ctx suffix when maxCtx is 0, got: %q", withoutCtx)
-	}
-}
-
-// =============================================================================
-// agent_modes.go — buildQueueTaskQuery (coverage for uncovered branches)
-// =============================================================================
-
-func TestBuildQueueTaskQuery_CoverageExtra(t *testing.T) {
-	task := tools.Task{
-		ID:           "task-cov",
-		Title:        "coverage task",
-		Description:  "cov description",
-		WorkingDir:   "/tmp/cov",
-		Persona:      "coder",
-		Priority:     "high",
-		ParentTaskID: "parent-cov",
-	}
-	query := buildQueueTaskQuery(task)
-	if !strings.Contains(query, "coverage task") {
-		t.Errorf("expected 'coverage task' in query, got: %q", query)
-	}
-	if !strings.Contains(query, "cov description") {
-		t.Errorf("expected 'cov description' in query, got: %q", query)
-	}
-	if !strings.Contains(query, "/tmp/cov") {
-		t.Errorf("expected '/tmp/cov' in query, got: %q", query)
-	}
-	if !strings.Contains(query, "coder") {
-		t.Errorf("expected 'coder' in query, got: %q", query)
-	}
-	if !strings.Contains(query, "parent-cov") {
-		t.Errorf("expected 'parent-cov' in query, got: %q", query)
-	}
-	if !strings.Contains(query, "run_subagent") {
-		t.Errorf("expected 'run_subagent' hint when persona specified, got: %q", query)
 	}
 }
 

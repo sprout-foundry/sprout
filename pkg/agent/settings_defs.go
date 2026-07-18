@@ -125,23 +125,6 @@ var settingDefs = []settingDef{
 		EnumValues: []string{"project", "global"},
 	},
 	{
-		Key:         "ea_mode",
-		Description: "Executive Assistant mode",
-		ValidValues: "interactive, queue",
-		GetValue:    func(cfg *configuration.Config) string { return cfg.EAMode },
-		SetValue: func(cfg *configuration.Config, value string) error {
-			switch strings.ToLower(value) {
-			case "interactive", "queue", "":
-				cfg.EAMode = strings.ToLower(value)
-				return nil
-			default:
-				return agenterrors.NewValidation(fmt.Sprintf("ea_mode must be interactive or queue, got %q", value), nil)
-			}
-		},
-		EnumValues: []string{"interactive", "queue"},
-	},
-	// --- Subagent settings ---
-	{
 		Key:         "subagent_provider",
 		Description: "Provider used for subagents",
 		ValidValues: "provider name or empty to inherit from provider",

@@ -138,7 +138,7 @@ func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
 	turn.ActionableSummary = "Implement a REST API using net/http package with handlers for GET and POST endpoints"
 
 	// Call EmbedAndStoreTurn
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn returned unexpected error: %v", err)
 	}
 
@@ -195,7 +195,7 @@ func TestEmbedAndStoreTurn_EmptySummary(t *testing.T) {
 	// Leave ActionableSummary empty
 
 	// Call EmbedAndStoreTurn
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn returned unexpected error: %v", err)
 	}
 
@@ -238,7 +238,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilManager(t *testing.T) {
 	}
 
 	// Call EmbedAndStoreTurn with nil manager - should not panic or return error
-	if err := EmbedAndStoreTurn(ctx, nil, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, nil, turn, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
 	}
 
@@ -256,7 +256,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
 	defer mgr.Close()
 
 	// Call EmbedAndStoreTurn with nil turn - should not panic or return error
-	if err := EmbedAndStoreTurn(ctx, mgr, nil); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, nil, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
 	}
 }
@@ -274,7 +274,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilContext(t *testing.T) {
 	}
 
 	// Call EmbedAndStoreTurn with nil context - should not panic or return error
-	if err := EmbedAndStoreTurn(nil, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(nil, mgr, turn, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
 	}
 
@@ -303,7 +303,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_CancelledContext(t *testing.T) {
 	// The mock provider does not check context cancellation (it returns
 	// instantly), so the function may succeed and store the record. The
 	// contract being tested is that no error is returned either way.
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
 	}
 
@@ -327,7 +327,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt(t *testing.T) {
 		WorkingDir: "/tmp/workspace",
 	}
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
 	}
 
@@ -471,7 +471,7 @@ func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
 	}
 	turn1.ActionableSummary = "Implement a REST API using net/http package with handlers for GET and POST endpoints"
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turn1); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn1, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn returned unexpected error for turn1: %v", err)
 	}
 
@@ -487,7 +487,7 @@ func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
 	}
 	turn2.ActionableSummary = "Channels are for communication between goroutines, mutexes are for protecting shared state from concurrent access"
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turn2); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn2, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn returned unexpected error for turn2: %v", err)
 	}
 
@@ -589,6 +589,81 @@ func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
 	}
 }
 
+// TestEmbedAndStoreTurn_StampsCheckpointID proves that passing a non-empty
+// checkpointID ends up in the stored record's metadata. This is the
+// production-side complement to TestRefineRollupEnd_FindsTopicShift: that
+// test asserts the boundary detector finds records when metadata is set
+// correctly; this one proves the production code sets it correctly.
+func TestEmbedAndStoreTurn_StampsCheckpointID(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestEmbeddingMgr(t)
+	defer mgr.Close()
+
+	turn, err := NewConversationTurn("sess-cp", 1, "fix the auth bug", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, "cp-test-stamp"); err != nil {
+		t.Fatalf("EmbedAndStoreTurn failed: %v", err)
+	}
+
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("get conversation store: %v", err)
+	}
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("load all records: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(all))
+	}
+
+	got, ok := all[0].Metadata["checkpoint_id"].(string)
+	if !ok {
+		t.Fatalf("metadata[\"checkpoint_id\"] missing or wrong type: %#v", all[0].Metadata["checkpoint_id"])
+	}
+	if got != "cp-test-stamp" {
+		t.Errorf("checkpoint_id = %q, want %q", got, "cp-test-stamp")
+	}
+}
+
+// TestEmbedAndStoreTurn_OmitsEmptyCheckpointID confirms we don't pollute
+// metadata with empty-string sentinel values. collectCheckpointVectors
+// treats `cid == ""` as a skip, so an empty-string key would confuse the
+// lookup logic.
+func TestEmbedAndStoreTurn_OmitsEmptyCheckpointID(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestEmbeddingMgr(t)
+	defer mgr.Close()
+
+	turn, err := NewConversationTurn("sess-no-cp", 1, "set up CI", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
+		t.Fatalf("EmbedAndStoreTurn failed: %v", err)
+	}
+
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("get conversation store: %v", err)
+	}
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("load all records: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(all))
+	}
+
+	if _, present := all[0].Metadata["checkpoint_id"]; present {
+		t.Errorf("metadata[\"checkpoint_id\"] should be absent when caller passed empty string, got: %#v", all[0].Metadata["checkpoint_id"])
+	}
+}
+
 // TestEmbedAndStoreTurn_GracefulFailure_ProviderUnavailable tests graceful failure
 // when the embedding manager points to an unwritable directory and cannot initialize.
 func TestEmbedAndStoreTurn_GracefulFailure_ProviderUnavailable(t *testing.T) {
@@ -628,7 +703,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_ProviderUnavailable(t *testing.T) {
 	turn.ActionableSummary = "Test summary"
 
 	// Call EmbedAndStoreTurn - should return nil (graceful failure, not an error)
-	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+	if err := EmbedAndStoreTurn(ctx, mgr, turn, ""); err != nil {
 		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
 	}
 

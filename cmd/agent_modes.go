@@ -426,8 +426,16 @@ if existing := chatAgent.GetPasswordPrompter(); existing != nil {
 
 	// Check for queue mode before interactive mode
 	// (skip when agent is nil in daemon mode — provider not configured yet)
+	// EA queue mode is DISABLED 2026-07-18 — the autonomous dispatch loop
+	// is left in cmd/agent_mode_queue.go for potential restoration, but
+	// the dispatch gate here falls through to standard interactive/direct
+	// mode with a one-time notice. Re-enable by removing the gate.
 	if chatAgent != nil && chatAgent.GetConfigManager().GetConfig().GetEAMode() == "queue" {
-		return runQueueMode(ctx, chatAgent, eventBus, indicator)
+		mode := "direct"
+		if isInteractive {
+			mode = "interactive"
+		}
+		console.GlyphWarning.Printf("EA queue mode is disabled in this build; falling through to %s mode.\n", mode)
 	}
 
 	// When agent is nil (provider not configured in daemon mode), skip to

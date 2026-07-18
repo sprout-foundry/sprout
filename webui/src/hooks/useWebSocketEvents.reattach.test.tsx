@@ -92,6 +92,7 @@ function createDefaultState(overrides?: Partial<AppState>): AppState {
     securityApprovalRequest: null,
     securityPromptRequest: null,
     askUserRequest: null,
+    passwordRequest: null,
     editApprovalRequest: null,
     ...overrides,
   };

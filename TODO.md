@@ -476,9 +476,9 @@ called for by the spec (`RetryableError`, `RateLimitError`,
 ## SP-096: Roadmap status sync (full audit + 14 spec-header fixes)
 
 _All 14 spec-header fixes shipped at commit `81ec1f87`. Three specs
-remain genuinely Proposed (SP-105, SP-112, SP-114) — all 1-day-old
-specs with no implementation. See git history for the original spec
-body; archived to `roadmap/_completed/` once the runner finishes
+remain Proposed (SP-105, SP-112, SP-114 Phase 2) — SP-114 Phase 1
+shipped at `ab6c975e`. See git history for the original spec body;
+archived to `roadmap/_completed/` once the runner finishes
 moving spec files._
 
 ---
@@ -719,10 +719,13 @@ that were still marked 🔵 Proposed:
   Doc-drift caught in the 2026-07-15 sweep; status flipped from
   🟡 Partially Implemented to ✅ Implemented.
 - SP-112 — verified NOT shipped (1-day-old spec). Stays Proposed.
-- SP-114 — verified NOT shipped (1-day-old spec). Stays Proposed.
+- SP-114 — Phase 1 shipped (`ab6c975e`, 2026-07-16): unified CLI and
+  WebUI steer command execution path (`SteerCommands` → `ProcessQuery`).
+  Phase 2 (structured output, error propagation, WebUI rendering)
+  remains Proposed.
 
-No further drift to fix. The remaining "Proposed" set (SP-105,
-SP-112, SP-114) is the genuinely-open backlog.
+No further drift to fix. The remaining "Proposed" set is SP-105,
+SP-112, and SP-114 Phase 2.
 
 ---
 
@@ -990,7 +993,10 @@ MCP, subagent, auth, billing, task, and mode flows.
 
 ✅L5:** GitHub PAT "add to shell profile" prompt only prints
       instructions, doesn't edit the file.
-      **Files**: `cmd/mcp_add.go:446-456`
+      **Status:** Fixed — `471be703` (merged 2026-07-16). Now detects
+      shell profile (bash/zsh/fish), writes the `export` line via atomic
+      rename, uses sprout-managed block for idempotent updates.
+      **Files**: `cmd/mcp_add.go`, `cmd/mcp_shell_profile.go`
 
 ### Cross-cutting observations
 

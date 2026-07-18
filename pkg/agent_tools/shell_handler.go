@@ -230,14 +230,17 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	// --- Security classification ---
 	secResult := ClassifyToolCall("shell_command", args)
 
-	if secResult.ShouldBlock {
+	// Only truly unrecoverable operations (IsHardBlock) are blocked outright.
+	// ShouldBlock without IsHardBlock falls through to the approval prompt
+	// below — the user can still approve or reject it interactively.
+	if secResult.IsHardBlock {
 		return ToolResult{
 			Output:  fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning),
 			IsError: true,
 		}, agenterrors.NewPermission(fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning), nil)
 	}
 
-	if secResult.ShouldPrompt && env.ApprovalManager != nil {
+	if (secResult.ShouldPrompt || secResult.ShouldBlock) && env.ApprovalManager != nil {
 		result := env.ApprovalManager.RequestApproval(
 			"", "shell_command", secResult.Risk.String(),
 			fmt.Sprintf("Execute shell command: %s\n\n%s", command, secResult.Reasoning),

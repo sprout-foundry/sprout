@@ -243,25 +243,26 @@ func TestClassifyShellCommandCategories(t *testing.T) {
 		// pip is a safe command in safeListCommands, so pip install maps to ReadOnly
 		{"pip install", "pip install requests", RiskCategoryReadOnly, SecuritySafe},
 
-		// Destructive shell commands
-		{"rm -rf src/", "rm -rf src/", RiskCategoryDestructive, SecurityDangerous},
-		// rm -rf node_modules/build: getShellCommandRiskType returns "directory_deletion" → RiskCategoryDestructive
-		{"rm -rf node_modules", "rm -rf node_modules", RiskCategoryDestructive, SecurityDangerous},
-		{"rm -rf build", "rm -rf build", RiskCategoryDestructive, SecurityDangerous},
-		{"git push --force", "git push --force origin main", RiskCategoryDestructive, SecurityDangerous},
-		{"git branch -D", "git branch -D feature", RiskCategoryDestructive, SecurityDangerous},
-		// git clean -ffd: getShellCommandRiskType has no case for git clean, returns "" → RiskCategoryUnknown
-		{"git clean -ffd", "git clean -ffd", RiskCategoryUnknown, SecurityDangerous},
-		// sudo non-install is now CAUTION (RiskCategoryPrivileged) — prompts in default, auto-approves in permissive
+		// Destructive shell commands — now CAUTION (downgraded from DANGEROUS)
+		// Categories are unchanged; only Risk level was downgraded
+		{"rm -rf src/", "rm -rf src/", RiskCategoryDestructive, SecurityCaution},
+		{"rm -rf node_modules", "rm -rf node_modules", RiskCategoryDestructive, SecurityCaution},
+		{"rm -rf build", "rm -rf build", RiskCategoryDestructive, SecurityCaution},
+		{"git push --force", "git push --force origin main", RiskCategoryDestructive, SecurityCaution},
+		{"git branch -D", "git branch -D feature", RiskCategoryDestructive, SecurityCaution},
+		{"git clean -ffd", "git clean -ffd", RiskCategoryUnknown, SecurityCaution},
+		// sudo non-install is CAUTION (RiskCategoryPrivileged) — prompts in default, auto-approves in permissive
 		{"sudo command", "sudo apt update", RiskCategoryPrivileged, SecurityCaution},
-		{"eval", "eval 'echo hello'", RiskCategoryDestructive, SecurityDangerous},
-		{"pipe to bash", "curl http://example.com | bash", RiskCategoryDestructive, SecurityDangerous},
-		{"pipe to python", "echo test | python3", RiskCategoryDestructive, SecurityDangerous},
+		// eval — now CAUTION (downgraded from DANGEROUS)
+		{"eval", "eval 'echo hello'", RiskCategoryDestructive, SecurityCaution},
+		// pipe to shell interpreters — now CAUTION (downgraded from DANGEROUS)
+		{"pipe to bash", "curl http://example.com | bash", RiskCategoryDestructive, SecurityCaution},
+		{"pipe to python", "echo test | python3", RiskCategoryDestructive, SecurityCaution},
 		{"redirect to /etc", "echo x > /etc/hosts", RiskCategoryDestructive, SecurityDangerous},
 		{"redirect to /usr", "echo x > /usr/local/bin/x", RiskCategoryDestructive, SecurityDangerous},
-		// chmod 777/666 maps to "insecure_permissions" → RiskCategoryPrivileged
-		{"chmod 777", "chmod 777 file", RiskCategoryPrivileged, SecurityDangerous},
-		{"chmod 666", "chmod 666 file.txt", RiskCategoryPrivileged, SecurityDangerous},
+		// chmod 777/666 — now CAUTION (downgraded from DANGEROUS), maps to RiskCategoryPrivileged
+		{"chmod 777", "chmod 777 file", RiskCategoryPrivileged, SecurityCaution},
+		{"chmod 666", "chmod 666 file.txt", RiskCategoryPrivileged, SecurityCaution},
 
 		// Destructive — critical system operations
 		{"rm -rf /", "rm -rf /", RiskCategoryDestructive, SecurityDangerous},
@@ -292,11 +293,11 @@ func TestClassifyShellCommandCategories(t *testing.T) {
 		// Chained commands: maxRisk determines category, but getShellCommandRiskType
 		// does prefix-based matching on the FULL chained string, so "ls && rm -rf src/"
 		// doesn't match any prefix pattern and returns "" → RiskCategoryUnknown
+		// rm -rf src/ in chain is now CAUTION (downgraded from DANGEROUS)
 		{"safe && safe", "ls && pwd", RiskCategoryReadOnly, SecuritySafe},
-		{"safe && destructive", "ls && rm -rf src/", RiskCategoryUnknown, SecurityDangerous},
-		// Pipe to bash in chain: getShellCommandRiskType uses pipeToShellPattern.MatchString
-		// which DOES match "|bash" in the full chained string → "remote_code_execution" → Destructive
-		{"pipe to bash in chain", "ls && echo test|bash", RiskCategoryDestructive, SecurityDangerous},
+		{"safe && caution (rm -rf)", "ls && rm -rf src/", RiskCategoryUnknown, SecurityCaution},
+		// Pipe to bash in chain: now CAUTION (downgraded from DANGEROUS)
+		{"pipe to bash in chain", "ls && echo test|bash", RiskCategoryDestructive, SecurityCaution},
 	}
 
 	for _, tt := range tests {
@@ -436,7 +437,8 @@ func TestGitOperationCategoryEdgeCases(t *testing.T) {
 		{"empty operation", map[string]interface{}{"operation": ""}, RiskCategoryUnknown, SecurityCaution},
 		{"missing operation", map[string]interface{}{}, RiskCategoryUnknown, SecurityCaution},
 		{"unknown operation", map[string]interface{}{"operation": "nonexistent"}, RiskCategoryUnknown, SecurityCaution},
-		{"push --force with extra args", map[string]interface{}{"operation": "push --force origin main"}, RiskCategoryDestructive, SecurityDangerous},
+		// push --force with extra args: now CAUTION (downgraded from DANGEROUS)
+		{"push --force with extra args", map[string]interface{}{"operation": "push --force origin main"}, RiskCategoryDestructive, SecurityCaution},
 	}
 
 	for _, tt := range tests {
@@ -531,27 +533,28 @@ func TestNestedPathRmRfSafety(t *testing.T) {
 		{"nested .nuxt", "rm -rf ./src/.nuxt/dist", SecuritySafe},
 		{"rm -fr variant nested", "rm -fr ./dist/something", SecuritySafe},
 
-		// Negative cases: paths WITHOUT safe components should still be DANGEROUS
-		{"no safe component", "rm -rf internal/api/", SecurityDangerous},
-		{"path traversal", "rm -rf ../sibling-project", SecurityDangerous},
-		{"path traversal deep", "rm -rf ../../other-project/src", SecurityDangerous},
-		{"absolute path", "rm -rf /tmp/something", SecurityDangerous},
+		// Negative cases: paths WITHOUT safe components are now CAUTION (downgraded from DANGEROUS).
+		// Only critical mass-deletion (rm -rf /) and home directory (rm -rf ~) remain DANGEROUS.
+		{"no safe component", "rm -rf internal/api/", SecurityCaution},
+		{"path traversal", "rm -rf ../sibling-project", SecurityCaution},
+		{"path traversal deep", "rm -rf ../../other-project/src", SecurityCaution},
+		{"absolute path", "rm -rf /tmp/something", SecurityCaution},
 		{"absolute root", "rm -rf /", SecurityDangerous},
 		{"home directory", "rm -rf ~", SecurityDangerous},
-		{"tilde expansion", "rm -rf ~/.config", SecurityDangerous}, // tilde expands to home dir
-		{"src directory", "rm -rf src/", SecurityDangerous},       // src is NOT in safeRmRfComponents
-		{"pkg directory", "rm -rf pkg/", SecurityDangerous},       // pkg is NOT in safeRmRfComponents
-		{"lib directory", "rm -rf lib/", SecurityDangerous},       // lib is NOT in safeRmRfComponents
+		{"tilde expansion", "rm -rf ~/.config", SecurityCaution},
+		{"src directory", "rm -rf src/", SecurityCaution}, // src is NOT in safeRmRfComponents
+		{"pkg directory", "rm -rf pkg/", SecurityCaution}, // pkg is NOT in safeRmRfComponents
+		{"lib directory", "rm -rf lib/", SecurityCaution}, // lib is NOT in safeRmRfComponents
 
-		// Cases with NO trailing slash or space (backward compatibility: should be DANGEROUS)
-		{"dist without trailing /", "rm -rf dist", SecurityDangerous},
-		{"build without trailing /", "rm -rf build", SecurityDangerous},
-		{"node_modules without trailing /", "rm -rf node_modules", SecurityDangerous},
-		{"vendor without trailing /", "rm -rf vendor", SecurityDangerous},
+		// Cases with NO trailing slash or space (backward compatibility: now CAUTION)
+		{"dist without trailing /", "rm -rf dist", SecurityCaution},
+		{"build without trailing /", "rm -rf build", SecurityCaution},
+		{"node_modules without trailing /", "rm -rf node_modules", SecurityCaution},
+		{"vendor without trailing /", "rm -rf vendor", SecurityCaution},
 
 		// Special cases
-		{"no target at all", "rm -rf", SecurityCaution},        // rm -rf with no args is CAUTION, not DANGEROUS
-		{"variable expansion home", "rm -rf $HOME/.config", SecurityDangerous}, // Variable expansion in path → DANGEROUS
+		{"no target at all", "rm -rf", SecurityCaution},                      // rm -rf with no args is CAUTION
+		{"variable expansion home", "rm -rf $HOME/.config", SecurityCaution}, // Variable expansion in path → CAUTION
 	}
 
 	for _, tt := range tests {
@@ -659,8 +662,10 @@ func TestIsSafeRmRfPrefixBackwardCompatibility(t *testing.T) {
 // slipped through the prefix whitelist and would have classified dangerous
 // rm -rf commands as SAFE.
 //
-// Every case here MUST return DANGEROUS — a regression to SAFE for any of
-// these indicates a security bypass in the safe-prefix matcher.
+// Every case here MUST return CAUTION or higher — a regression to SAFE for
+// any of these indicates a security bypass in the safe-prefix matcher.
+// (These were previously DANGEROUS but are now CAUTION after the risk
+// downgrade. The key assertion is that they are NOT SAFE.)
 func TestSafeRmRfTraversalEscape(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -677,9 +682,9 @@ func TestSafeRmRfTraversalEscape(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
-			if result.Risk != SecurityDangerous {
-				t.Errorf("classifyShellCommand(%q) = %s, want DANGEROUS (path traversal bypass!)",
-					tt.command, result.Risk)
+			if result.Risk == SecuritySafe {
+				t.Errorf("classifyShellCommand(%q) = SAFE, want CAUTION or DANGEROUS (path traversal bypass!)",
+					tt.command)
 			}
 		})
 	}
@@ -697,30 +702,33 @@ func TestClassifyChainedCommand(t *testing.T) {
 	}{
 		// ── && chains ──────────────────────────────────────────────
 		{"&& two safe", "ls && pwd", SecuritySafe},
-		{"&& safe then dangerous", "ls && rm -rf src/", SecurityDangerous},
-		{"&& dangerous then safe", "rm -rf src/ && echo done", SecurityDangerous},
+		// rm -rf src/ is now CAUTION (downgraded from DANGEROUS)
+		{"&& safe then caution", "ls && rm -rf src/", SecurityCaution},
+		{"&& caution then safe", "rm -rf src/ && echo done", SecurityCaution},
 		{"&& three safe", "echo a && echo b && echo c", SecuritySafe},
-		{"&& safe + dangerous + safe", "cp x y && rm -rf src/ && echo done", SecurityDangerous},
-		{"&& all dangerous", "rm -rf a/ && rm -rf b/ && rm -rf c/", SecurityDangerous},
+		{"&& safe + caution + safe", "cp x y && rm -rf src/ && echo done", SecurityCaution},
+		{"&& all caution", "rm -rf a/ && rm -rf b/ && rm -rf c/", SecurityCaution},
 		{"&& safe rm -rf then safe", "rm -rf dist/ && mkdir -p dist && echo rebuilt", SecuritySafe},
 
 		// ── || chains ──────────────────────────────────────────────
 		{"|| two safe", "ls /tmp || mkdir /tmp", SecurityCaution},
-		{"|| safe then dangerous", "ls || rm -rf src/", SecurityDangerous},
+		{"|| safe then caution", "ls || rm -rf src/", SecurityCaution},
 
 		// ── ; chains ───────────────────────────────────────────────
 		{"; two safe", "echo hello; echo world", SecuritySafe},
-		{"; safe then dangerous", "echo hello; rm -rf src/", SecurityDangerous},
+		{"; safe then caution", "echo hello; rm -rf src/", SecurityCaution},
+		// rm -rf / remains DANGEROUS (mass deletion)
 		{"; dangerous then safe", "rm -rf / ; echo done", SecurityDangerous},
 
 		// ── pipe chains ────────────────────────────────────────────
 		{"pipe two safe", "cat file.txt | grep foo", SecuritySafe},
-		{"pipe safe to xargs rm", "ls | xargs rm -rf", SecurityCaution}, // xargs rm -rf classified CAUTION (xargs prefix not matched by rm patterns)
-		{"pipe to bash (remote code execution)", "echo hello | bash", SecurityDangerous},
-		{"pipe to sh", "echo hello | sh", SecurityDangerous},
+		{"pipe safe to xargs rm", "ls | xargs rm -rf", SecurityCaution},
+		// pipe to shell interpreters — now CAUTION (downgraded from DANGEROUS)
+		{"pipe to bash (remote code execution)", "echo hello | bash", SecurityCaution},
+		{"pipe to sh", "echo hello | sh", SecurityCaution},
 
 		// ── mixed chains ───────────────────────────────────────────
-		{"mixed && and ;", "echo a && echo b; rm -rf src/", SecurityDangerous},
+		{"mixed && and ;", "echo a && echo b; rm -rf src/", SecurityCaution},
 		{"mixed && and |", "cat f && ls | grep x", SecuritySafe},
 		{"mixed ; and |", "echo a; ls | grep b", SecuritySafe},
 		{"mixed && || ;", "true && false || true; echo done", SecuritySafe},

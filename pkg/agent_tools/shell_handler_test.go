@@ -172,9 +172,11 @@ func TestShellCommandHandler_Execute_SecurityBlock(t *testing.T) {
 	h := &shellCommandHandler{}
 	ctx := newTestCtx(dir)
 
-	// pipeToShell pattern should be blocked
+	// mkfs is a genuinely DANGEROUS command (disk destruction) that should
+	// always be hard-blocked regardless of approval manager presence.
+	// (pipe-to-bash was downgraded to CAUTION, so we test a still-DANGEROUS op)
 	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
-		"command": "echo secret | bash -c 'cat /etc/passwd'",
+		"command": "mkfs.ext4 /dev/sda1",
 	})
 	require.Error(t, err)
 	require.True(t, res.IsError)

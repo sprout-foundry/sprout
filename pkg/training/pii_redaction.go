@@ -284,6 +284,7 @@ func scanWorkingDirsForUsernames(workingDirs []string) []string {
 	}
 	return result
 }
+
 // These are typically usernames from remote machines discovered during
 // a pre-scan with CollectRemoteUsernames.
 func redactAdditionalUsernames(s string, users []string) string {

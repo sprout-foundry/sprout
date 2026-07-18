@@ -73,7 +73,7 @@ func TestToolThreading_NoCorruptionMultiTurn(t *testing.T) {
 	}
 
 	// Validate threading on raw state after turn 1
-	msgs := agent.state.GetMessages()
+	msgs := agent.GetMessages()
 	violations := validateToolThreading(msgs)
 	consecutive := countConsecutiveAssistants(msgs)
 	t.Logf("After turn 1: %d msgs, %d violations, %d consecutive assistants", len(msgs), violations, consecutive)
@@ -85,8 +85,8 @@ func TestToolThreading_NoCorruptionMultiTurn(t *testing.T) {
 	// Turn 2: swap to a fresh client with more responses — re-create the
 	// agent so it picks up the new client, but first snapshot the messages
 	// to carry over conversation history.
-	prevMsgs := agent.state.GetMessages()
-	prevCheckpoints := agent.state.GetTurnCheckpoints()
+	prevMsgs := agent.GetMessages()
+	prevCheckpoints := agent.GetTurnCheckpoints()
 	agent.Shutdown()
 
 	client2 := NewScriptedClient(
@@ -101,8 +101,8 @@ func TestToolThreading_NoCorruptionMultiTurn(t *testing.T) {
 	defer agent2.Shutdown()
 	agent2.SetMaxIterations(20)
 	// Restore conversation history so the second query sees prior turns.
-	agent2.state.SetMessages(prevMsgs)
-	agent2.state.SetTurnCheckpoints(prevCheckpoints)
+	agent2.SetMessages(prevMsgs)
+	agent2.ReplaceTurnCheckpoints(prevCheckpoints)
 
 	output2, err := agent2.ProcessQuery("Go deeper into the main entry point")
 	if err != nil {
@@ -111,7 +111,7 @@ func TestToolThreading_NoCorruptionMultiTurn(t *testing.T) {
 	_ = output2
 
 	// Validate threading on raw state after turn 2
-	msgs2 := agent2.state.GetMessages()
+	msgs2 := agent2.GetMessages()
 	violations2 := validateToolThreading(msgs2)
 	consecutive2 := countConsecutiveAssistants(msgs2)
 	t.Logf("After turn 2: %d msgs, %d violations, %d consecutive assistants", len(msgs2), violations2, consecutive2)
@@ -121,8 +121,8 @@ func TestToolThreading_NoCorruptionMultiTurn(t *testing.T) {
 	}
 
 	// Turn 3: even more tool calls to build up history
-	prevMsgs2 := agent2.state.GetMessages()
-	prevCheckpoints2 := agent2.state.GetTurnCheckpoints()
+	prevMsgs2 := agent2.GetMessages()
+	prevCheckpoints2 := agent2.GetTurnCheckpoints()
 	agent2.Shutdown()
 
 	client3 := NewScriptedClient(
@@ -138,8 +138,8 @@ func TestToolThreading_NoCorruptionMultiTurn(t *testing.T) {
 	}
 	defer agent3.Shutdown()
 	agent3.SetMaxIterations(20)
-	agent3.state.SetMessages(prevMsgs2)
-	agent3.state.SetTurnCheckpoints(prevCheckpoints2)
+	agent3.SetMessages(prevMsgs2)
+	agent3.ReplaceTurnCheckpoints(prevCheckpoints2)
 
 	_, err = agent3.ProcessQuery("Give me a comprehensive overview")
 	if err != nil {
@@ -147,7 +147,7 @@ func TestToolThreading_NoCorruptionMultiTurn(t *testing.T) {
 	}
 
 	// Final validation
-	msgs3 := agent3.state.GetMessages()
+	msgs3 := agent3.GetMessages()
 	violations3 := validateToolThreading(msgs3)
 	consecutive3 := countConsecutiveAssistants(msgs3)
 	t.Logf("After turn 3: %d msgs, %d violations, %d consecutive assistants", len(msgs3), violations3, consecutive3)
@@ -195,7 +195,7 @@ func TestToolThreading_RapidToolCalls(t *testing.T) {
 		t.Fatal("Empty output")
 	}
 
-	msgs := agent.state.GetMessages()
+	msgs := agent.GetMessages()
 	violations := validateToolThreading(msgs)
 	consecutive := countConsecutiveAssistants(msgs)
 
@@ -308,5 +308,3 @@ func NewScriptedTextResponse(content string) *ScriptedResponse {
 		FinishReason: "stop",
 	}
 }
-
-

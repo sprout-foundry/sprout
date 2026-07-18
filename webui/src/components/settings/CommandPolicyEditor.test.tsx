@@ -22,10 +22,13 @@ import CommandPolicyEditor from './CommandPolicyEditor';
 // ---------------------------------------------------------------------------
 
 function createMockSettings(commandPolicies?: unknown) {
-  return commandPolicies ? { command_policies: commandPolicies } : ({});
+  return commandPolicies ? { command_policies: commandPolicies } : {};
 }
 
-function renderEditor(settings: Record<string, unknown> | null, updateSetting: (key: string, value: unknown) => Promise<void>) {
+function renderEditor(
+  settings: Record<string, unknown> | null,
+  updateSetting: (key: string, value: unknown) => Promise<void>,
+) {
   return render(
     createElement(CommandPolicyEditor, {
       settings: settings as any,

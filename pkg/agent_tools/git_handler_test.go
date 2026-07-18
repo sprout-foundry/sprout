@@ -99,11 +99,13 @@ func TestGitHandler_ResetHard_WithAM_Approved(t *testing.T) {
 		t.Fatalf("expected 1 approval call, got %d", got)
 	}
 	c := am.calls[0]
-	if c.riskLevel != "critical" {
-		t.Errorf("riskLevel = %q, want 'critical'", c.riskLevel)
+	// reset --hard is now CAUTION (downgraded from DANGEROUS), so it goes
+	// through the dangerousOps fallback path with "high" risk level
+	if c.riskLevel != "high" {
+		t.Errorf("riskLevel = %q, want 'high'", c.riskLevel)
 	}
-	if !strings.Contains(c.prompt, "DESTRUCTIVE") {
-		t.Errorf("prompt missing DESTRUCTIVE: %s", c.prompt)
+	if !strings.Contains(c.prompt, "dangerous git operation") {
+		t.Errorf("prompt missing 'dangerous git operation': %s", c.prompt)
 	}
 }
 
@@ -130,14 +132,9 @@ func TestGitHandler_ResetHard_WithoutAM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if !result.IsError {
-		t.Fatalf("should be error without AM: %s", result.Output)
-	}
-	if !strings.Contains(result.Output, "destructive") {
-		t.Errorf("should mention 'destructive': %s", result.Output)
-	}
-	if !strings.Contains(result.Output, "approval") {
-		t.Errorf("should mention 'approval': %s", result.Output)
+	// reset --hard is now CAUTION — without AM it warns but proceeds (does NOT block)
+	if result.IsError {
+		t.Fatalf("CAUTION operation should proceed without AM (may fail from git itself): %s", result.Output)
 	}
 }
 
@@ -156,8 +153,9 @@ func TestGitHandler_ResetKeep_WithAM(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("should not be error when approved: %s", result.Output)
 	}
-	if len(am.calls) != 1 || am.calls[0].riskLevel != "critical" {
-		t.Errorf("expected 1 critical call, got %d calls (last risk=%q)", len(am.calls), am.calls[0].riskLevel)
+	// reset --keep is now CAUTION — goes through dangerousOps fallback with "high" risk
+	if len(am.calls) != 1 || am.calls[0].riskLevel != "high" {
+		t.Errorf("expected 1 high call, got %d calls (last risk=%q)", len(am.calls), am.calls[0].riskLevel)
 	}
 }
 
@@ -168,8 +166,9 @@ func TestGitHandler_ResetKeep_WithoutAM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if !result.IsError {
-		t.Fatalf("should be error without AM: %s", result.Output)
+	// reset --keep is now CAUTION — without AM it warns but proceeds
+	if result.IsError {
+		t.Fatalf("CAUTION operation should proceed without AM: %s", result.Output)
 	}
 }
 
@@ -184,8 +183,9 @@ func TestGitHandler_ResetMerge_WithoutAM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if !result.IsError {
-		t.Fatalf("should be error without AM: %s", result.Output)
+	// reset --merge is now CAUTION — without AM it warns but proceeds
+	if result.IsError {
+		t.Fatalf("CAUTION operation should proceed without AM: %s", result.Output)
 	}
 }
 
@@ -266,11 +266,13 @@ func TestGitHandler_RebaseInteractive_WithAM(t *testing.T) {
 		t.Fatalf("expected 1 call, got %d", len(am.calls))
 	}
 	c := am.calls[0]
-	if c.riskLevel != "critical" {
-		t.Errorf("riskLevel = %q, want 'critical'", c.riskLevel)
+	// rebase -i is now CAUTION (downgraded from DANGEROUS) — goes through
+	// dangerousOps fallback with "high" risk level
+	if c.riskLevel != "high" {
+		t.Errorf("riskLevel = %q, want 'high'", c.riskLevel)
 	}
-	if !strings.Contains(c.prompt, "DESTRUCTIVE") {
-		t.Errorf("prompt missing DESTRUCTIVE: %s", c.prompt)
+	if !strings.Contains(c.prompt, "dangerous git operation") {
+		t.Errorf("prompt missing 'dangerous git operation': %s", c.prompt)
 	}
 }
 
@@ -281,11 +283,9 @@ func TestGitHandler_RebaseInteractive_WithoutAM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if !result.IsError {
-		t.Fatalf("should be error without AM: %s", result.Output)
-	}
-	if !strings.Contains(result.Output, "destructive") {
-		t.Errorf("should mention 'destructive': %s", result.Output)
+	// rebase -i is now CAUTION — without AM it warns but proceeds
+	if result.IsError {
+		t.Fatalf("CAUTION operation should proceed without AM: %s", result.Output)
 	}
 }
 
@@ -297,8 +297,9 @@ func TestGitHandler_RebaseOnto_WithAM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if len(am.calls) != 1 || am.calls[0].riskLevel != "critical" {
-		t.Errorf("expected 1 critical call, got %d calls (risk=%q)", len(am.calls), am.calls[0].riskLevel)
+	// rebase --onto is now CAUTION — goes through dangerousOps fallback with "high" risk
+	if len(am.calls) != 1 || am.calls[0].riskLevel != "high" {
+		t.Errorf("expected 1 high call, got %d calls (risk=%q)", len(am.calls), am.calls[0].riskLevel)
 	}
 }
 
@@ -337,8 +338,10 @@ func TestGitHandler_BranchDelete_WithAM(t *testing.T) {
 	if len(am.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(am.calls))
 	}
-	if am.calls[0].riskLevel != "critical" {
-		t.Errorf("riskLevel = %q, want 'critical'", am.calls[0].riskLevel)
+	// branch_delete is now CAUTION (downgraded from DANGEROUS) — goes through
+	// dangerousOps fallback with "high" risk level
+	if am.calls[0].riskLevel != "high" {
+		t.Errorf("riskLevel = %q, want 'high'", am.calls[0].riskLevel)
 	}
 }
 
@@ -349,8 +352,9 @@ func TestGitHandler_BranchDelete_WithoutAM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if !result.IsError {
-		t.Fatalf("should be error without AM: %s", result.Output)
+	// branch_delete is now CAUTION — without AM it warns but proceeds
+	if result.IsError {
+		t.Fatalf("CAUTION operation should proceed without AM: %s", result.Output)
 	}
 }
 

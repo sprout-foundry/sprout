@@ -190,26 +190,80 @@ func hasRedirectionTraversalToSystemDir(cmd string) bool {
 	return false
 }
 
-// getShellCommandReasoning returns a human-readable reasoning string
+// getShellCommandReasoning returns a human-readable reasoning string.
+// For CAUTION and DANGEROUS, uses getShellCommandRiskType to produce
+// specific, actionable guidance tailored to the operation.
 func getShellCommandReasoning(cmd string, risk SecurityRisk) string {
 	switch risk {
 	case SecuritySafe:
 		return "Read-only or safe workspace operation"
 	case SecurityCaution:
 		if containsPrivilegedPackageInstall(cmd) {
-			return "Privileged package installation requested - review before continuing"
+			return "Privileged package installation requested — review before continuing."
 		}
-		return "Potentially risky operation - review carefully"
+		return getCautionReasoning(cmd)
 	case SecurityDangerous:
-		return "Dangerous operation detected - may cause data loss or system damage"
+		return getDangerousReasoning(cmd)
 	default:
 		return "Unknown operation type"
 	}
 }
 
-// getShellCommandRiskType returns a risk category string for user-facing messages
+// getCautionReasoning returns specific reasoning for CAUTION-level commands.
+func getCautionReasoning(cmd string) string {
+	rt := getShellCommandRiskType(cmd, SecurityCaution, false)
+	switch rt {
+	case "directory_deletion":
+		return "Recursively deletes a directory. This cannot be undone — verify the path is correct before approving."
+	case "source_code_destruction":
+		return "Recursively deletes a source code directory. This will destroy source files — verify the path before approving."
+	case "insecure_permissions":
+		return "Sets world-writable permissions. Other users on this system can modify the file. Usually unnecessary in development."
+	case "arbitrary_code_execution":
+		return "Executes a dynamically-constructed string as a shell command. Review what the string evaluates to before approving."
+	case "remote_code_execution":
+		return "Downloads and executes a script from the internet. Review the URL and verify the source is trusted before approving."
+	case "destructive_git_operation":
+		if strings.HasPrefix(strings.ToLower(cmd), "git push --force") || strings.HasPrefix(strings.ToLower(cmd), "git push -f") {
+			return "Overwrites remote history. Other developers' work on this branch may be lost. Use --force-with-lease if unsure."
+		}
+		if strings.Contains(strings.ToLower(cmd), "git branch -d") || strings.Contains(strings.ToLower(cmd), "git branch -D") {
+			return "Force-deletes a local branch, discarding unmerged commits. Verify no unmerged work exists on this branch."
+		}
+		return "Force-removes untracked files and directories. These files are not in git and cannot be recovered after deletion."
+	case "privilege_escalation":
+		return "Runs with elevated (sudo) privileges. Review the command before approving."
+	default:
+		return "This operation modifies files or state. Review the command before approving."
+	}
+}
+
+// getDangerousReasoning returns specific reasoning for DANGEROUS-level commands.
+func getDangerousReasoning(cmd string) string {
+	rt := getShellCommandRiskType(cmd, SecurityDangerous, true)
+	switch rt {
+	case "mass_deletion":
+		return "Deletes everything from the root directory. This will destroy the entire filesystem."
+	case "disk_destruction":
+		return "Formats or overwrites a disk device. All data on the target disk will be permanently destroyed."
+	case "system_integrity":
+		if strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/") {
+			return "Writes to a device file. This can corrupt disk data or crash the system."
+		}
+		return "Writes output to a system directory. This can overwrite critical system files."
+	case "system_instability":
+		return "Kills processes or destabilizes the system. This can make the system unresponsive."
+	case "critical_system_operation":
+		return "Critical system operation that can cause permanent, unrecoverable damage."
+	default:
+		return "Modifies files in a system directory. This can break OS functionality if the wrong file is changed."
+	}
+}
+
+// getShellCommandRiskType returns a risk category string for user-facing messages.
+// Works for both CAUTION and DANGEROUS risk levels. For SAFE, returns "".
 func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) string {
-	if risk != SecurityDangerous {
+	if risk == SecuritySafe {
 		return ""
 	}
 

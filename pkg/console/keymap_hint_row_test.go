@@ -42,6 +42,23 @@ func TestKeymapHintRow_ContainsRegisteredBindings(t *testing.T) {
 		t.Errorf("KeymapHintRow() = %q, want contains Alt+V", got)
 	}
 
+	// Must contain the built-in essentials.
+	if !strings.Contains(got, "^C") {
+		t.Errorf("KeymapHintRow() = %q, want contains ^C (built-in interrupt)", got)
+	}
+	if !strings.Contains(got, "Enter") {
+		t.Errorf("KeymapHintRow() = %q, want contains Enter (built-in steer)", got)
+	}
+	if !strings.Contains(got, "/ commands") {
+		t.Errorf("KeymapHintRow() = %q, want contains / commands hint", got)
+	}
+	if !strings.Contains(got, "/settings") {
+		t.Errorf("KeymapHintRow() = %q, want contains /settings hint", got)
+	}
+	if !strings.Contains(got, "Tab") {
+		t.Errorf("KeymapHintRow() = %q, want contains Tab autocomplete hint", got)
+	}
+
 	// Must be single-line (no embedded newlines).
 	if strings.Contains(got, "\n") {
 		t.Errorf("KeymapHintRow() = %q, must be single-line (no newlines)", got)
@@ -52,23 +69,12 @@ func TestKeymapHintRow_ContainsRegisteredBindings(t *testing.T) {
 		t.Errorf("KeymapHintRow() = %q, want separator ' · ' between entries", got)
 	}
 
-	// Labels must be distinct — the hint is useless if both bindings
-	// surface the same word. Catches regressions where label
-	// extraction collapses to "toggle" for every .toggle Action.
-	parts := strings.Split(got, " · ")
-	labels := make(map[string]struct{}, len(parts))
-	for _, p := range parts {
-		// Each part is "Alt+X <label>" — split off the label.
-		fields := strings.SplitN(p, " ", 2)
-		if len(fields) < 2 {
-			t.Errorf("KeymapHintRow() part %q missing label", p)
-			continue
-		}
-		labels[fields[1]] = struct{}{}
+	// Must use human-readable labels, not raw action segments.
+	if strings.Contains(got, "breakdown") {
+		t.Errorf("KeymapHintRow() = %q, should use 'tools' label not 'breakdown'", got)
 	}
-	if len(labels) != len(parts) {
-		t.Errorf("KeymapHintRow() = %q, labels not distinct (%d parts, %d unique)",
-			got, len(parts), len(labels))
+	if strings.Contains(got, "verbosity") {
+		t.Errorf("KeymapHintRow() = %q, should use 'verbose' label not 'verbosity'", got)
 	}
 }
 
@@ -89,8 +95,12 @@ func TestKeymapHintRow_EmptyRegistry(t *testing.T) {
 	globalKeymap = newKeymapRegistry()
 
 	got := KeymapHintRow()
-	if got != "" {
-		t.Errorf("KeymapHintRow() with empty registry = %q, want empty string", got)
+	// Even with an empty keymap registry, the built-in essentials
+	// (^C, Enter, /, /settings, Tab) are always shown.
+	for _, want := range []string{"^C", "Enter", "/", "/settings", "Tab"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("KeymapHintRow() with empty registry = %q, want built-in %q hint", got, want)
+		}
 	}
 }
 

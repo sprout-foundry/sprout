@@ -21,6 +21,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerCoreRoutes(mux)
 	ws.registerTerminalRoutes(mux, ctx)
 	ws.registerQueryRoutes(mux)
+	ws.registerCommandRoutes(mux)
 	ws.registerDiagnosticsRoutes(mux)
 	ws.registerFileRoutes(mux)
 	ws.registerSettingsRoutes(mux)
@@ -80,6 +81,14 @@ func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
 	mux.HandleFunc("/api/proxy/chat/status", ws.handleAPIProxyChatStatus)
 	mux.HandleFunc("/api/proxy/stats", ws.handleAPIProxyStats)
+}
+
+// registerCommandRoutes mounts SP-114 Phase 2 endpoints. /api/command/execute
+// is the dedicated command surface (separate from /api/query/steer which is
+// for mid-turn steering of an active LLM query). Commands here must be
+// SteerCapable — destructive commands stay CLI-only.
+func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/command/execute", ws.handleAPICommandExecute)
 }
 
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {

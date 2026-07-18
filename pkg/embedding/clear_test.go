@@ -184,7 +184,12 @@ func TestRemoveFilesSilently_AllExist(t *testing.T) {
 }
 
 func TestRemoveFilesSilently_NoneExist(t *testing.T) {
-	count, err := removeFilesSilently([]string{"/nonexistent"})
+	// Use t.TempDir() to ensure the path is writable on this system.
+	// On platforms where / is mounted read-only (e.g., Termux),
+	// os.Remove("/nonexistent") fails with "read-only file system"
+	// instead of the expected "file does not exist".
+	nonexistent := filepath.Join(t.TempDir(), "does_not_exist")
+	count, err := removeFilesSilently([]string{nonexistent})
 	if err != nil || count != 0 {
 		t.Errorf("expected 0,nil got %d,%v", count, err)
 	}

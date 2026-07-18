@@ -20,6 +20,10 @@ func TestZAIProviderIsolated(t *testing.T) {
 		t.Skip("ZAI_API_KEY not set, skipping ZAI isolation test")
 	}
 
+	if os.Getenv("SKIP_NETWORK_TESTS") != "" {
+		t.Skip("SKIP_NETWORK_TESTS is set, skipping ZAI isolation test")
+	}
+
 	// Create provider using factory
 	factory := NewProviderFactory()
 	if err := factory.LoadConfigFromFile("configs/zai.json"); err != nil {
@@ -86,6 +90,10 @@ func TestZAIProviderDirect(t *testing.T) {
 
 	if os.Getenv("ZAI_API_KEY") == "" {
 		t.Skip("ZAI_API_KEY not set, skipping ZAI direct test")
+	}
+
+	if os.Getenv("SKIP_NETWORK_TESTS") != "" {
+		t.Skip("SKIP_NETWORK_TESTS is set, skipping ZAI direct test")
 	}
 
 	fmt.Println("[search] Testing ZAI provider directly...")

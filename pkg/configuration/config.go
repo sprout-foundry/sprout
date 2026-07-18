@@ -205,11 +205,6 @@ type Config struct {
 	SubagentParallelEnabled *bool  `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
 	SubagentMaxDepth        int    `json:"subagent_max_depth,omitempty"`        // Maximum subagent nesting depth (default: 2)
 
-	// EAMode controls how the Executive Assistant persona operates.
-	// "interactive" = standard chat interface (default)
-	// "queue" = autonomous task processing, exits when queue is empty
-	EAMode string `json:"ea_mode,omitempty"`
-
 	// Commit Configuration
 	CommitProvider string `json:"commit_provider,omitempty"` // Provider for commit message generation (defaults to LastUsedProvider)
 	CommitModel    string `json:"commit_model,omitempty"`    // Model for commit message generation (defaults to provider's default model)
@@ -418,11 +413,6 @@ func NewConfig() *Config {
 			MaxResults:          3,
 		},
 	}
-}
-
-// GetEAMode returns the current EA mode setting.
-func (c *Config) GetEAMode() string {
-	return c.EAMode
 }
 
 // Validate checks the configuration for consistency and returns an error

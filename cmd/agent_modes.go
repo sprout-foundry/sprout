@@ -325,10 +325,9 @@ if existing := chatAgent.GetPasswordPrompter(); existing != nil {
 				// to the foreground process group when the tty hangs
 				// up. Treating that as "reload" leaves an orphaned
 				// sprout running with PPID=1 forever (it keeps
-				// heartbeating to instances.json and holding the
-				// task_queue.json flock against new sessions). Fall
-				// through to the shutdown path so terminal close cleans
-				// up the process.
+				// heartbeating to instances.json against new sessions).
+				// Fall through to the shutdown path so terminal close
+				// cleans up the process.
 				if sig == syscall.SIGHUP && daemonMode {
 					fmt.Println()
 					console.GlyphAction.Printf("Received SIGHUP, reloading configuration...")
@@ -422,20 +421,6 @@ if existing := chatAgent.GetPasswordPrompter(); existing != nil {
 	// Set up event publishing for agent (skip when agent is nil in daemon mode)
 	if chatAgent != nil {
 		SetupAgentEvents(chatAgent, eventBus, indicator)
-	}
-
-	// Check for queue mode before interactive mode
-	// (skip when agent is nil in daemon mode — provider not configured yet)
-	// EA queue mode is DISABLED 2026-07-18 — the autonomous dispatch loop
-	// is left in cmd/agent_mode_queue.go for potential restoration, but
-	// the dispatch gate here falls through to standard interactive/direct
-	// mode with a one-time notice. Re-enable by removing the gate.
-	if chatAgent != nil && chatAgent.GetConfigManager().GetConfig().GetEAMode() == "queue" {
-		mode := "direct"
-		if isInteractive {
-			mode = "interactive"
-		}
-		console.GlyphWarning.Printf("EA queue mode is disabled in this build; falling through to %s mode.\n", mode)
 	}
 
 	// When agent is nil (provider not configured in daemon mode), skip to

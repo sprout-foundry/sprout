@@ -80,8 +80,7 @@ When you run a full autonomous TODO workflow, the work flows through **three lay
 The coordinator is the `initial.persona` in the workflow JSON. It receives the prompt from `automate/workflow_prompt.md`, which drives a loop like this:
 
 1. Read `TODO.md`, find the first `[ ]` item
-2. Create a `task_queue` entry for tracking
-3. **Delegate to orchestrator** via `run_subagent(persona="orchestrator")` with verbatim instructions (see below)
+2. **Delegate to orchestrator** via `run_subagent(persona="orchestrator")` with verbatim instructions (see below)
 4. **Verify the orchestrator delegated** — check its output for `run_subagent` calls to coder/tester/reviewer. If it did the work directly, treat as failure and retry
 5. Verify the build passes
 6. Commit the changes (coordinator is the ONLY layer that touches git)
@@ -274,7 +273,7 @@ This repo's `automate/workflow.json` is the reference implementation of a full a
 The coordinator's instructions come from `automate/workflow_prompt.md` (referenced via `initial.prompt_file`). Its structure:
 
 1. **Role definition** — "You are an autonomous Coordinator agent processing a TODO.md list"
-2. **Per-item workflow** — the 10-step loop: read TODO.md → create task_queue entry → delegate to orchestrator → verify delegation → verify build → commit → mark `[x]` → update task_queue → next item
+2. **Per-item workflow** — the 10-step loop: read TODO.md → delegate to orchestrator → verify delegation → verify build → commit → mark `[x]` → next item
 3. **Rules** — max 200 items, 2-attempt retry on failure, no `git add .`, commit after each item
 4. **Git safety rules** — explicit forbidden operations (push, rebase, reset --hard, checkout, restore, switch, amend, fixup, force push)
 5. **Isolation rules** — focus only on current TODO item, don't touch other changes, retry on external conflicts up to 3 times, mark blocked if conflicts persist
@@ -605,7 +604,7 @@ Each persona key here routes spawned subagents to a specific provider/model inst
 
 The coordinator loops through TODO.md: picks each `[ ]` item, delegates to an orchestrator (which further delegates to coder → tester → reviewer), verifies the build, commits, marks `[x]`, then moves on.
 
-**TODO.md is the persistent record.** The `[ ]` → `[x]` transition in the markdown file is the only state that survives the run. `TodoWrite` is a transient UI helper, NOT a persistence layer — don't reach for `task_queue` here; this workflow doesn't use it.
+**TODO.md is the persistent record.** The `[ ]` → `[x]` transition in the markdown file is the only state that survives the run. `TodoWrite` is a transient UI helper, NOT a persistence layer — the `task_queue` tool was removed entirely in 2026-07-18; this workflow doesn't need any persistence beyond TODO.md.
 
 **See "The Coordinated Flow" section above** for the full operational breakdown — what the coordinator, orchestrator, and leaf workers actually do, the separation-of-concerns matrix, and the verbatim orchestrator prompt the coordinator pastes.
 

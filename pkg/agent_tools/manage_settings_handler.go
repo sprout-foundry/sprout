@@ -309,7 +309,6 @@ var supportedSettings = map[string]string{
 	"disable_thinking":         "Disable thinking mode (true/false)",
 	"resource_directory":       "Directory for captured web/vision resources",
 	"history_scope":            "Change history scope (project/global)",
-	"ea_mode":                  "Coordinator persona startup mode (interactive/queue). Legacy name retained for compatibility.",
 	"subagent_provider":        "Provider used for subagents",
 	"subagent_model":           "Model used for subagents",
 	"default_subagent_persona": "Persona used when run_subagent omits the persona argument",
@@ -365,8 +364,6 @@ func getConfigField(cfg *configuration.Config, key string) (string, error) {
 		return cfg.ResourceDirectory, nil
 	case "history_scope":
 		return cfg.HistoryScope, nil
-	case "ea_mode":
-		return cfg.EAMode, nil
 	case "subagent_provider":
 		return cfg.SubagentProvider, nil
 	case "subagent_model":
@@ -427,13 +424,6 @@ func setConfigField(cfg *configuration.Config, key, value string) error {
 			cfg.HistoryScope = strings.ToLower(value)
 		default:
 			return fmt.Errorf("history_scope must be project or global, got %q", value)
-		}
-	case "ea_mode":
-		switch strings.ToLower(value) {
-		case "interactive", "queue", "":
-			cfg.EAMode = strings.ToLower(value)
-		default:
-			return fmt.Errorf("ea_mode must be interactive or queue, got %q", value)
 		}
 	case "subagent_provider":
 		cfg.SubagentProvider = value

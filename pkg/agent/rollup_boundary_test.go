@@ -1,8 +1,12 @@
 package agent
 
 import (
+	"context"
 	"math"
 	"testing"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // TestCosineSimilarity_Basic exercises the math on hand-picked vectors
@@ -86,5 +90,54 @@ func TestLargestSimilarityDrop_TooFewVectors(t *testing.T) {
 		if idx != 0 || drop != 0 {
 			t.Errorf("case %d: expected (0,0), got (%d, %f)", i, idx, drop)
 		}
+	}
+}
+
+// TestCollectCheckpointVectors_LegacyRollupRecord verifies that
+// collectCheckpointVectors resolves a legacy rollup record using the
+// "rollup:" prefix stripped from r.ID when no checkpoint_id metadata is
+// present. This proves the fallback path in the ID resolution contract.
+func TestCollectCheckpointVectors_LegacyRollupRecord(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestEmbeddingMgr(t)
+	defer mgr.Close()
+
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	// Build a legacy record: ID has "rollup:" prefix, NO checkpoint_id metadata.
+	// This is what legacy records look like before the SP-066 Phase 3d fix.
+	const legacyCPID = "cp-legacy"
+	vec := make([]float32, 128)
+	vec[0] = 1.0
+	vec[1] = 0.5
+
+	legacyRecord := embedding.VectorRecord{
+		ID:        "rollup:" + legacyCPID, // ID format for legacy rollup records
+		Signature: "legacy rollup",
+		Embedding: vec,
+		IndexedAt: time.Now().UTC(),
+		Type:      checkpointRollupRecordType,
+		Metadata:  map[string]interface{}{}, // NO checkpoint_id — proves the fallback works
+	}
+
+	if err := store.Store([]embedding.VectorRecord{legacyRecord}); err != nil {
+		t.Fatalf("failed to store legacy record: %v", err)
+	}
+
+	// Look up using the checkpoint ID (without "rollup:" prefix).
+	checkpoints := []TurnCheckpoint{{ID: legacyCPID}}
+
+	vectors, ok := collectCheckpointVectors(store, checkpoints)
+	if !ok {
+		t.Fatal("collectCheckpointVectors returned false; expected true for legacy record")
+	}
+	if len(vectors) != 1 {
+		t.Fatalf("expected 1 vector, got %d", len(vectors))
+	}
+	if len(vectors[0]) != 128 {
+		t.Errorf("expected 128-dim vector, got %d-dim", len(vectors[0]))
 	}
 }

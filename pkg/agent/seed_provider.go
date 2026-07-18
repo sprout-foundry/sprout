@@ -333,15 +333,19 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// terminal as inline text — it appears as a batch dump at turn end.
 	//
 	// Detect this case: if the streaming buffer is empty (no "assistant_text"
-	// chunks were streamed) but the response has non-empty content, invoke
-	// the callback with that content so it displays inline via the normal
-	// RouteStreamChunk path.
+	// chunks were streamed) but the response has non-empty content, stream
+	// it to the terminal line-by-line via RouteStreamChunk so the renderer
+	// formats each line with markdown as it emits (not one giant blob).
 	if resp != nil && len(resp.Choices) > 0 {
 		msgContent := resp.Choices[0].Message.Content
 		if sp.agent.output.GetStreamingBuffer().Len() == 0 && strings.TrimSpace(msgContent) != "" {
 			sp.agent.output.GetStreamingBuffer().WriteString(msgContent)
 			if router := sp.agent.OutputRouter(); router != nil {
-				router.RouteStreamChunk(msgContent, "assistant_text")
+				for _, line := range strings.SplitAfter(msgContent, "\n") {
+					if line != "" {
+						router.RouteStreamChunk(line, "assistant_text")
+					}
+				}
 			}
 		}
 	}

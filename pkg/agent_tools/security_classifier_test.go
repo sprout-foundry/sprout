@@ -542,9 +542,9 @@ func TestNestedPathRmRfSafety(t *testing.T) {
 		{"absolute root", "rm -rf /", SecurityDangerous},
 		{"home directory", "rm -rf ~", SecurityDangerous},
 		{"tilde expansion", "rm -rf ~/.config", SecurityCaution},
-		{"src directory", "rm -rf src/", SecurityCaution},        // src is NOT in safeRmRfComponents
-		{"pkg directory", "rm -rf pkg/", SecurityCaution},        // pkg is NOT in safeRmRfComponents
-		{"lib directory", "rm -rf lib/", SecurityCaution},        // lib is NOT in safeRmRfComponents
+		{"src directory", "rm -rf src/", SecurityCaution}, // src is NOT in safeRmRfComponents
+		{"pkg directory", "rm -rf pkg/", SecurityCaution}, // pkg is NOT in safeRmRfComponents
+		{"lib directory", "rm -rf lib/", SecurityCaution}, // lib is NOT in safeRmRfComponents
 
 		// Cases with NO trailing slash or space (backward compatibility: now CAUTION)
 		{"dist without trailing /", "rm -rf dist", SecurityCaution},
@@ -553,7 +553,7 @@ func TestNestedPathRmRfSafety(t *testing.T) {
 		{"vendor without trailing /", "rm -rf vendor", SecurityCaution},
 
 		// Special cases
-		{"no target at all", "rm -rf", SecurityCaution},                // rm -rf with no args is CAUTION
+		{"no target at all", "rm -rf", SecurityCaution},                      // rm -rf with no args is CAUTION
 		{"variable expansion home", "rm -rf $HOME/.config", SecurityCaution}, // Variable expansion in path → CAUTION
 	}
 

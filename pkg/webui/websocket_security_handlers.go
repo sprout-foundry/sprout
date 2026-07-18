@@ -104,3 +104,38 @@ func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, data *AskUse
 		})
 	}
 }
+
+// handlePasswordResponse processes password responses from the webui.
+// The webui sends a { "type": "password_response", "data": { "request_id": "...", "password": "..." } }
+// message when the user enters a password in the password prompt dialog.
+//
+// CRITICAL: The password value must NEVER appear in any log output.
+func (ws *ReactWebServer) handlePasswordResponse(safeConn *SafeConn, data *PasswordResponseData, clientID string) {
+	ag := ws.resolveEditAgent()
+	if ag == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Agent is not available for password response"},
+		})
+		return
+	}
+
+	delivered := ag.RespondToPasswordRequest(data.RequestID, data.Password)
+	if !delivered {
+		log.Printf("Password response: request_id=%s not found or already responded", data.RequestID)
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": fmt.Sprintf("Password request %s not found or already responded", data.RequestID)},
+		})
+		return
+	}
+
+	log.Printf("Password response received: request_id=%s", data.RequestID)
+	_ = safeConn.WriteJSON(map[string]interface{}{
+		"type":        "password_responded",
+		"data": map[string]interface{}{
+			"request_id": data.RequestID,
+			"responded":  true,
+		},
+	})
+}

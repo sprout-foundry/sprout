@@ -12,6 +12,7 @@ import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
 import OnboardingDialog from './components/OnboardingDialog';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
+import PasswordPromptDialog from './components/PasswordPromptDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
 import UIManager from './components/UIManager';
 import UpdateNotification from './components/UpdateNotification';
@@ -84,6 +85,7 @@ function App() {
       securityApprovalRequest: null,
       securityPromptRequest: null,
       askUserRequest: null,
+      passwordRequest: null,
       editApprovalRequest: null,
       shellApprovalRequest: null,
       modelSelectionRequest: null,
@@ -249,6 +251,7 @@ function AppInner() {
     handleSecurityApprovalResponse,
     handleSecurityPromptResponse,
     handleAskUserResponse,
+    handlePasswordResponse,
     handleModelSelectionResponse,
     handleModelSelectionClose,
   } = useSecurityHandlers({
@@ -447,6 +450,15 @@ function AppInner() {
                         multiSelect={state.askUserRequest.multiSelect}
                         defaultValue={state.askUserRequest.default}
                         onRespond={handleAskUserResponse}
+                      />
+                    )}
+                    {state.passwordRequest && (
+                      <PasswordPromptDialog
+                        key={state.passwordRequest.requestId}
+                        requestId={state.passwordRequest.requestId}
+                        command={state.passwordRequest.command}
+                        prompt={state.passwordRequest.prompt}
+                        onRespond={handlePasswordResponse}
                       />
                     )}
                     {state.editApprovalRequest && (

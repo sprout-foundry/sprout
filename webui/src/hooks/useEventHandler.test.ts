@@ -113,6 +113,9 @@ function createDefaultState(overrides?: Partial<AppState>): AppState {
     perChatCache: {},
     securityApprovalRequest: null,
     securityPromptRequest: null,
+    askUserRequest: null,
+    passwordRequest: null,
+    editApprovalRequest: null,
     ...overrides,
   };
 }

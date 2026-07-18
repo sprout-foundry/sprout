@@ -41,6 +41,8 @@ const (
 	AllowedMessageTypeSecurityPromptResponse = "security_prompt_response"
 	// AllowedMessageTypeAskUserResponse is the "ask_user_response" message type
 	AllowedMessageTypeAskUserResponse = "ask_user_response"
+	// AllowedMessageTypePasswordResponse is the "password_response" message type
+	AllowedMessageTypePasswordResponse = "password_response"
 
 	// AllowedMessageTypeSessionTakeover is the "session_takeover" message type (SP-046)
 	AllowedMessageTypeSessionTakeover = "session_takeover"
@@ -81,6 +83,7 @@ var allowedMessageTypes = map[string]bool{
 	AllowedMessageTypeSecurityApprovalResponse: true,
 	AllowedMessageTypeSecurityPromptResponse:   true,
 	AllowedMessageTypeAskUserResponse:          true,
+	AllowedMessageTypePasswordResponse:         true,
 	AllowedMessageTypeSessionTakeover:          true,
 	AllowedMessageTypeHydrateRequest:           true,
 	AllowedMessageTypeSyncRecover:              true,
@@ -329,6 +332,32 @@ func (d *SecurityPromptResponseData) Validate() error {
 type AskUserResponseData struct {
 	RequestID string `json:"request_id"`
 	Response  string `json:"response"`
+}
+
+// PasswordResponseData is the data payload for "password_response" messages.
+// The WebUI sends this when the user types a password in the password prompt
+// dialog. The server delivers it to the agent's password broker so the
+// blocked shell command (sudo, ssh, passwd, etc.) can proceed.
+//
+// CRITICAL: The Password field must NEVER appear in any log output.
+type PasswordResponseData struct {
+	RequestID string `json:"request_id"`
+	Password  string `json:"password"`
+}
+
+// Validate performs field-level validation on PasswordResponseData.
+func (d *PasswordResponseData) Validate() error {
+	d.RequestID = strings.TrimSpace(d.RequestID)
+	if d.RequestID == "" {
+		return fmt.Errorf("request_id is required")
+	}
+	if len(d.RequestID) > maxRequestIDLen {
+		return fmt.Errorf("request_id too long: %d characters (max %d)", len(d.RequestID), maxRequestIDLen)
+	}
+	if len(d.Password) > 256 {
+		return fmt.Errorf("password too long: %d characters (max 256)", len(d.Password))
+	}
+	return nil
 }
 
 // Validate performs field-level validation on AskUserResponseData.

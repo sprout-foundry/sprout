@@ -124,6 +124,24 @@ func TestRenderer_OnExternalWriteResetsSegment(t *testing.T) {
 	require.NotContains(t, rest, "\x1b[", "plain prose line should have no ANSI formatting")
 }
 
+func TestRenderer_OnExternalWriteFlushesBufferedProse(t *testing.T) {
+	// Regression test: when a tool call interrupts mid-sentence prose,
+	// the unflushed text in lineBuf must NOT be silently discarded.
+	// The model streams "Let me check something" (no newline), then a
+	// tool call fires OnExternalWrite. The partial line should appear
+	// in the terminal output.
+	r := NewAssistantTurnRenderer(80, nil) // no formatter — raw emit
+	out := captureRendererStdout(t, func() {
+		r.WriteChunk("Let me check something") // no \n — stays in lineBuf
+		r.OnExternalWrite()                    // tool call interrupts
+		r.WriteChunk("Done.\n")                // next segment
+		r.FinalizeAtTurnEnd()
+	})
+	require.Contains(t, out, "Let me check something",
+		"partial line must be flushed before resetSegment, not discarded")
+	require.Contains(t, out, "Done.")
+}
+
 func TestPhysicalRowsMath(t *testing.T) {
 	// width=80, len=80 → fits exactly in 1 row
 	require.Equal(t, 1, physicalRows(80, 80))

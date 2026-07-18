@@ -271,7 +271,13 @@ func isSafeShellCommand(cmd string) bool {
 	return false
 }
 
-// isDangerousPattern checks for dangerous patterns
+// isDangerousPattern checks for genuinely dangerous patterns that can cause
+// irreversible system damage or data loss. Only operations targeting system
+// directories or raw devices belong here.
+//
+// Operations that are risky but recoverable (rm -rf of project dirs, eval,
+// chmod 777, git push --force, curl|bash) are handled by isCautionPattern
+// instead — they prompt the user but don't hard-block.
 func isDangerousPattern(cmd string) bool {
 	cmdLower := strings.ToLower(cmd)
 
@@ -283,43 +289,9 @@ func isDangerousPattern(cmd string) bool {
 		evalCmd = evalCmd[5:]
 	}
 
-	if strings.HasPrefix(evalCmd, "eval ") || evalCmd == "eval" {
-		return true
-	}
-	if strings.Contains(evalCmd, "chmod 777") || strings.Contains(evalCmd, "chmod 666") {
-		return true
-	}
-
-	// Pipe-to-shell patterns are checked in classifyChainedCommand on the
-	// full command string (with quoted sections stripped). No need to check
-	// again here on individual command parts — any | remaining in a part
-	// after chain splitting is inside quotes (e.g., grep regex alternation).
-
-	// curl/wget piped to shell
-	if (strings.Contains(evalCmd, "curl") || strings.Contains(evalCmd, "wget")) &&
-		(strings.Contains(evalCmd, "| bash") || strings.Contains(evalCmd, "| sh")) {
-		return true
-	}
-
-	// Dangerous git operations
-	dangerousGit := []string{"git push --force", "git push -f", "git branch -D", "git branch -d", "git clean -ff", "git clean -fd", "git clean -ffd"}
-	for _, op := range dangerousGit {
-		if strings.HasPrefix(evalCmd, op) {
-			return true
-		}
-	}
-
-	// Check for rm -rf or rm -fr (case-insensitive) - default to dangerous
-	// Check if an rm -rf target is safe (O(1) map lookup)
-	if isSafeRmRfPrefix(evalCmd) {
-		return false
-	}
-	// All other rm -rf commands not in the safe allowlist are dangerous
-	if strings.HasPrefix(evalCmd, "rm -rf ") || strings.HasPrefix(evalCmd, "rm -fr ") {
-		return true
-	}
-
-	// Dangerous system operations
+	// Dangerous system operations that damage disks or crash the system.
+	// (mkfs and dd to block devices are also caught by IsCriticalOperation,
+	// but fdisk/parted/init/shutdown are NOT — so we keep them here.)
 	dangerousSys := []string{"mkfs", "dd if=/dev/zero", "dd if=/dev/urandom", "fdisk", "parted", "gparted", "init 0", "init 6", "reboot", "shutdown -h"}
 	for _, op := range dangerousSys {
 		if strings.Contains(evalCmd, op) {
@@ -327,7 +299,8 @@ func isDangerousPattern(cmd string) bool {
 		}
 	}
 
-	// Check for workspace commands targeting system directories
+	// Check for workspace commands targeting system directories.
+	// This catches cp/mv/chmod/etc. that modify files in /etc/, /usr/, etc.
 	prefixes := []string{"chmod ", "chown ", "chgrp ", "cp ", "mv ", "mkdir -p", "touch ", "tee ", "ln ", "install ", "strip "}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(evalCmd, prefix) {
@@ -341,26 +314,62 @@ func isDangerousPattern(cmd string) bool {
 	return false
 }
 
-// isCautionPattern checks for caution-level patterns.
-// This is deliberately minimal — almost everything is SAFE now.
-// Only true deletion operations remain as CAUTION (never DANGEROUS).
+// isCautionPattern checks for caution-level patterns — operations that are
+// risky but recoverable. These prompt the user for approval but do not
+// hard-block. They include:
+//   - rm -rf / rm -fr of non-whitelisted directories (whitelisted dirs are SAFE)
+//   - rm (single file deletion)
+//   - docker rm (container deletion)
+//   - eval (dynamic code execution)
+//   - chmod 777 / chmod 666 (insecure permissions)
+//   - curl/wget piped to shell (remote code execution)
+//   - Dangerous git operations (push --force, branch -D, clean -ff/-fd)
 //
-// Note: rm -rf and rm -fr are NOT matched here because they are specifically
-// handled by isDangerousPattern (via isSafeRmRfPrefix). The "rm -" prefix check
-// guards against rm -rf and rm -fr accidentally matching the "rm " pattern via
-// HasPrefix.
+// Note: rm -rf of whitelisted safe directories (node_modules/, dist/, etc.)
+// is checked earlier in classifySingleCommand via isSafeRmRfPrefix and
+// returns SAFE before this function is reached.
 func isCautionPattern(cmd string) bool {
 	cmdLower := strings.ToLower(cmd)
-	// Skip rm -rf / rm -fr entirely — those are dispatched to
-	// isDangerousPattern via isSafeRmRfPrefix.
-	if strings.HasPrefix(cmdLower, "rm -rf") || strings.HasPrefix(cmdLower, "rm -fr") {
-		return false
-	}
-	cautionPatterns := []string{
-		"rm ",     // single file deletion (rm without -rf/-fr; those are handled by isDangerousPattern)
-		"docker rm", // container deletion
+
+	// eval — executes a dynamically-constructed string
+	if strings.HasPrefix(cmdLower, "eval ") || cmdLower == "eval" {
+		return true
 	}
 
+	// Insecure world-writable permissions
+	if strings.Contains(cmdLower, "chmod 777") || strings.Contains(cmdLower, "chmod 666") {
+		return true
+	}
+
+	// curl/wget piped to a shell or interpreter — remote code execution
+	if isPipeToShell(cmdLower) {
+		return true
+	}
+
+	// Dangerous git operations — history-rewriting or force operations
+	dangerousGit := []string{
+		"git push --force", "git push -f",
+		"git branch -d", "git branch -D",
+		"git clean -ff", "git clean -fd", "git clean -ffd",
+	}
+	for _, op := range dangerousGit {
+		if strings.HasPrefix(cmdLower, op) {
+			return true
+		}
+	}
+
+	// rm -rf / rm -fr of non-whitelisted directories.
+	// Whitelisted dirs (node_modules/, dist/, etc.) return SAFE earlier
+	// in classifySingleCommand via isSafeRmRfPrefix.
+	if strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ") {
+		return true
+	}
+
+	// Single file deletion and container removal
+	cautionPatterns := []string{
+		"rm ",       // single file deletion (rm without -rf/-fr)
+		"docker rm", // container deletion
+	}
 	for _, pattern := range cautionPatterns {
 		if strings.HasPrefix(cmdLower, pattern) {
 			return true
@@ -650,6 +659,11 @@ func isSafeRmRfComponent(target string) bool {
 //   - It is under /tmp/ (temporary files)
 //   - It is /dev/null, /dev/stdout, or /dev/stderr
 //   - It is a hyphen ("-") which is stdin/stdout in many commands
+//   - It is under a user home directory: /Users/ (macOS) or /home/ (Linux),
+//     EXCEPT sensitive credential/config subdirectories (.ssh, .gnupg, .aws, .kube,
+//     .docker, .config/gh, .netrc) which are blocked
+//
+// Root's home (/root on Linux) is NOT safe — it is treated as a sensitive system dir.
 //
 // Path traversal is handled by path.Clean which resolves all ".." segments lexically.
 // If path.Clean produces a result starting with "/tmp/", all parent directory references
@@ -671,6 +685,26 @@ func pathIsWorkspaceSafe(pathStr string) bool {
 			return true
 		}
 		if cleaned == "/dev/null" || cleaned == "/dev/stdout" || cleaned == "/dev/stderr" {
+			return true
+		}
+		// User home directories (macOS /Users, Linux /home) are safe for
+		// workspace operations — developers regularly copy/move files between
+		// sibling repos and project directories under their home. Root's home
+		// (/root) stays blocked as a sensitive system directory.
+		// Note: callers (isDangerousPattern) may already lowercase the path,
+		// so the prefix check is case-insensitive.
+		cleanedLower := strings.ToLower(cleaned)
+		if strings.HasPrefix(cleanedLower, "/users/") || strings.HasPrefix(cleanedLower, "/home/") {
+			// Block sensitive credential/config directories within home
+			for _, sensitive := range []string{"/.ssh/", "/.gnupg/", "/.aws/", "/.kube/", "/.docker/"} {
+				if strings.Contains(cleanedLower, sensitive) {
+					return false
+				}
+			}
+			// Block sensitive credential files
+			if strings.HasSuffix(cleanedLower, "/.netrc") || strings.Contains(cleanedLower, "/.config/gh/") {
+				return false
+			}
 			return true
 		}
 		// All other absolute paths are unsafe

@@ -635,6 +635,7 @@ func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []pl
 
 	return cleanedQuery
 }
+
 // the MIME type from magic bytes, optimizes the image for vision models, and
 // returns base64-encoded ImageData with the byte length of the (possibly
 // optimized) image data.

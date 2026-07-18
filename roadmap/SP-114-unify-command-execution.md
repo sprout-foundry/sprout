@@ -1,6 +1,6 @@
 # SP-114 — Unify CLI and Steer Panel Command Execution
 
-**Status:** ✅ Phase 1 Complete
+**Status:** ✅ Phase 1 Complete — Phase 2 complete (2026-07-17). Phase 1: `SteerCapable` interface + 31-command classification + CLI/WebUI steer allowlist (`ab6c975e`). Phase 2: `POST /api/command/execute` (`pkg/webui/api_command.go`) reuses `executeSafeSteerCommand` for stdout-capture; WebUI `onSendCommand` handler in `ChatView.tsx` routes safe commands via `notificationBus`. Long-output WebSocket streaming (§2c) deferred to a follow-up.
 **Created:** 2026-07-04
 **Phase 1 Completed:** 2026-07-17
 **Effort:** Phase 1 (~2 days), Phase 2 (~2-3 days)

@@ -96,8 +96,8 @@ func TestExplain_mkfs_ext3(t *testing.T) {
 
 func TestExplain_git_reset_hard_backward(t *testing.T) {
 	out := captureExplainOutput(t, "git reset --hard HEAD~5")
-	if !strings.Contains(out, "CRITICAL") {
-		t.Errorf("expected CRITICAL level, got:\n%s", out)
+	if !strings.Contains(out, "HIGH") {
+		t.Errorf("expected HIGH level, got:\n%s", out)
 	}
 	if !strings.Contains(out, "git-history-rewrite") {
 		t.Errorf("expected git-history-rewrite source, got:\n%s", out)
@@ -106,8 +106,8 @@ func TestExplain_git_reset_hard_backward(t *testing.T) {
 
 func TestExplain_git_rebase_interactive(t *testing.T) {
 	out := captureExplainOutput(t, "git rebase -i HEAD~10")
-	if !strings.Contains(out, "CRITICAL") {
-		t.Errorf("expected CRITICAL level, got:\n%s", out)
+	if !strings.Contains(out, "HIGH") {
+		t.Errorf("expected HIGH level, got:\n%s", out)
 	}
 	if !strings.Contains(out, "git-history-rewrite") {
 		t.Errorf("expected git-history-rewrite source, got:\n%s", out)
@@ -116,8 +116,8 @@ func TestExplain_git_rebase_interactive(t *testing.T) {
 
 func TestExplain_git_branch_delete(t *testing.T) {
 	out := captureExplainOutput(t, "git branch -d feature")
-	if !strings.Contains(out, "CRITICAL") {
-		t.Errorf("expected CRITICAL level, got:\n%s", out)
+	if !strings.Contains(out, "HIGH") {
+		t.Errorf("expected HIGH level, got:\n%s", out)
 	}
 	if !strings.Contains(out, "git-history-rewrite") {
 		t.Errorf("expected git-history-rewrite source, got:\n%s", out)
@@ -126,8 +126,8 @@ func TestExplain_git_branch_delete(t *testing.T) {
 
 func TestExplain_git_branch_force_delete(t *testing.T) {
 	out := captureExplainOutput(t, "git branch -D feature")
-	if !strings.Contains(out, "CRITICAL") {
-		t.Errorf("expected CRITICAL level, got:\n%s", out)
+	if !strings.Contains(out, "HIGH") {
+		t.Errorf("expected HIGH level, got:\n%s", out)
 	}
 	if !strings.Contains(out, "git-history-rewrite") {
 		t.Errorf("expected git-history-rewrite source, got:\n%s", out)
@@ -136,8 +136,8 @@ func TestExplain_git_branch_force_delete(t *testing.T) {
 
 func TestExplain_git_tag_delete(t *testing.T) {
 	out := captureExplainOutput(t, "git tag -d v1.0")
-	if !strings.Contains(out, "CRITICAL") {
-		t.Errorf("expected CRITICAL level, got:\n%s", out)
+	if !strings.Contains(out, "HIGH") {
+		t.Errorf("expected HIGH level, got:\n%s", out)
 	}
 	if !strings.Contains(out, "git-history-rewrite") {
 		t.Errorf("expected git-history-rewrite source, got:\n%s", out)

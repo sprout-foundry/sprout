@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -177,6 +178,19 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 
 	// Classify this git operation using the security classifier
 	secResult := classifyGitOperation(args)
+
+	// Defensive hard-block guard. classifyGitOperation currently never
+	// returns IsHardBlock=true (it only emits Safe/Caution), but if a
+	// future classifier change adds hard-block detection for git ops
+	// (e.g. clean -fdx, force-push to protected branches), this ensures
+	// the block is enforced unconditionally — before any Gate1AutoApproved
+	// bypass — matching the shell handler's invariant.
+	if secResult.IsHardBlock {
+		return ToolResult{
+			Output:  fmt.Sprintf("security block: git %s — %s", operation, secResult.Reasoning),
+			IsError: true,
+		}, agenterrors.NewPermission(fmt.Sprintf("security block: git %s — %s", operation, secResult.Reasoning), nil)
+	}
 
 	// Three-tier approval based on classifier result
 	switch secResult.Risk {

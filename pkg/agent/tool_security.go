@@ -298,6 +298,11 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.Notifier = agent
 		// Propagate subagent depth for memory gate and other subagent-specific behaviors.
 		env.SubagentDepth = agent.subagentDepth
+		// Propagate Gate 1's auto-approve decision so handler-level gates
+		// (Gate 2) skip their interactive prompt, matching Gate 1. Covers
+		// both --unsafe mode and elevated risk profiles; hard blocks are
+		// still enforced by the handlers' own IsHardBlock early-returns.
+		env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

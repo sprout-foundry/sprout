@@ -26,6 +26,7 @@ import {
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog, error as logError } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
+import { parseSecurityAnalysis } from '../utils/parseSecurityAnalysis';
 
 const MAX_TOOL_EXECUTIONS = 200;
 
@@ -891,6 +892,12 @@ export function useEventHandler({
           debugLog('[security] Approval response acknowledged:', eventData?.request_id);
           break;
         }
+
+        // SP-124-2: parse the JSON-encoded security_analysis field (if present).
+        // Silent fall-through on malformed JSON per the SP-124 "analyzer is
+        // non-blocking" contract (the prompt still renders without analysis).
+        const securityAnalysis = parseSecurityAnalysis(eventData);
+
         setState((prev) => {
           const kindRaw = String(eventData?.kind || '');
           let fsKind: 'fs_external' | 'fs_sensitive' | undefined;
@@ -910,6 +917,7 @@ export function useEventHandler({
               fsKind,
               fsFolder: eventData?.folder != null ? String(eventData.folder) : undefined,
               fsPath: eventData?.path != null ? String(eventData.path) : undefined,
+              securityAnalysis,
             },
             logs: appendCappedLog(prev.logs, logEntry),
           };

@@ -7,44 +7,85 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
-// GetUnsafeMode returns whether unsafe mode is enabled
-func (a *Agent) GetUnsafeMode() bool { return a.security.GetUnsafeMode() }
+// GetUnsafeMode returns whether unsafe mode is enabled.
+// Returns false when the security submanager is unset (typical for
+// partially-constructed agents in unit tests).
+func (a *Agent) GetUnsafeMode() bool {
+	if a == nil || a.security == nil {
+		return false
+	}
+	return a.security.GetUnsafeMode()
+}
 
-// SetUnsafeMode sets the unsafe mode flag
-func (a *Agent) SetUnsafeMode(unsafe bool) { a.security.SetUnsafeMode(unsafe) }
+// SetUnsafeMode sets the unsafe mode flag. No-op when the security
+// submanager is unset so bare-agent tests don't panic.
+func (a *Agent) SetUnsafeMode(unsafe bool) {
+	if a == nil || a.security == nil {
+		return
+	}
+	a.security.SetUnsafeMode(unsafe)
+}
 
-// GetUnsafeShellMode returns whether unsafe shell mode is enabled
-func (a *Agent) GetUnsafeShellMode() bool { return a.security.GetUnsafeShellMode() }
+// GetUnsafeShellMode returns whether unsafe shell mode is enabled.
+// Returns false when the security submanager is unset.
+func (a *Agent) GetUnsafeShellMode() bool {
+	if a == nil || a.security == nil {
+		return false
+	}
+	return a.security.GetUnsafeShellMode()
+}
 
-// SetUnsafeShellMode sets the unsafe shell mode flag
-func (a *Agent) SetUnsafeShellMode(unsafe bool) { a.security.SetUnsafeShellMode(unsafe) }
+// SetUnsafeShellMode sets the unsafe shell mode flag. No-op when the
+// security submanager is unset.
+func (a *Agent) SetUnsafeShellMode(unsafe bool) {
+	if a == nil || a.security == nil {
+		return
+	}
+	a.security.SetUnsafeShellMode(unsafe)
+}
 
 // IsSecurityBypassApproved returns whether the user has approved any
 // external filesystem access this session. Coarse signal: prefer the
 // per-path IsFolderSessionAllowed for new code.
+// Returns false when the security submanager is unset.
 func (a *Agent) IsSecurityBypassApproved() bool {
+	if a == nil || a.security == nil {
+		return false
+	}
 	return a.security.IsSecurityBypassApproved()
 }
 
 // IsFolderSessionAllowed reports whether absPath sits under a folder
 // the user has allowlisted via "Allow this folder for the rest of the
-// session" on the filesystem approval dialog.
+// session" on the filesystem approval dialog. Returns false when the
+// security submanager is unset.
 func (a *Agent) IsFolderSessionAllowed(absPath string) bool {
+	if a == nil || a.security == nil {
+		return false
+	}
 	return a.security.IsFolderSessionAllowed(absPath)
 }
 
 // AddSessionAllowedFolder records the folder picked by the user from
 // the filesystem approval dialog so future accesses under it are
-// auto-approved for the rest of this session.
+// auto-approved for the rest of this session. No-op when the security
+// submanager is unset.
 func (a *Agent) AddSessionAllowedFolder(folder string) {
+	if a == nil || a.security == nil {
+		return
+	}
 	a.security.AddSessionAllowedFolder(folder)
 }
 
 // SnapshotSessionAllowedFolders returns a copy of the session
 // allowlist. Used by SubagentRunner to seed a new subagent's
 // allowlist from the parent (so previously approved folders remain
-// usable inside delegated work).
+// usable inside delegated work). Returns nil when the security
+// submanager is unset.
 func (a *Agent) SnapshotSessionAllowedFolders() []string {
+	if a == nil || a.security == nil {
+		return nil
+	}
 	return a.security.SnapshotSessionAllowedFolders()
 }
 

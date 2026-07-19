@@ -285,7 +285,12 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			if name == "shell_command" {
 				if cmd, ok := args["command"].(string); ok && cmd != "" {
 					prompt := buildShellApprovalPrompt(secResult)
-					choice := logger.AskForApprovalWithOptions(prompt, cmd)
+					// SP-124 Phase 3: this is the legacy seed-side CLI
+					// fallback; the unified broker path (approval_broker.go)
+					// runs the analyzer and renders the panel. We pass nil
+					// here so the picker renders identically to pre-Phase-3 —
+					// the analyzer runs at the broker layer, not this seed.
+					choice := logger.AskForApprovalWithOptions(prompt, cmd, nil)
 					decision := approvalDecisionFromCLIChoice(choice)
 					if !decision.Approved() {
 						return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil), name, args)

@@ -298,6 +298,10 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.Notifier = agent
 		// Propagate subagent depth for memory gate and other subagent-specific behaviors.
 		env.SubagentDepth = agent.subagentDepth
+		// Propagate session elevation so handler-level security gates
+		// (Gate 2) can skip approval prompts for non-hard-block operations,
+		// matching the decision Gate 1 (above) already made.
+		env.SessionElevated = agent.IsSessionElevated()
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

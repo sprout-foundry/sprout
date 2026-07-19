@@ -148,13 +148,19 @@ type ToolEnv struct {
 	// subagent, 2 = second-level, etc.). Used by memory gate and other subagent-specific
 	// tool behaviors. Default 0 means not in subagent context.
 	SubagentDepth int
-	// SessionElevated reports whether the agent's risk profile is permissive
-	// or unrestricted (i.e., agent.IsSessionElevated()). When true, handlers
-	// that run their own security classification (Gate 2) skip the
-	// interactive approval prompt for non-hard-block operations, matching
-	// the decision Gate 1 (ExecuteTool) already made. Hard blocks
-	// (IsHardBlock) are NEVER bypassed regardless of elevation.
-	SessionElevated bool
+	// Gate1AutoApproved reports whether Gate 1 (ExecuteTool via
+	// staticGateAutoApprove) already auto-approved this tool call. This
+	// happens when the agent is in --unsafe mode OR the session risk
+	// profile is elevated (permissive/unrestricted) for a non-hard-block
+	// operation. When true, handlers that run their own security
+	// classification (Gate 2) skip their interactive approval prompt to
+	// match Gate 1's decision and avoid double-prompting.
+	//
+	// Hard blocks (IsHardBlock) are NEVER bypassed regardless of this
+	// flag — staticGateAutoApprove returns true for hard blocks only under
+	// full --unsafe mode, and handlers must still honor their own
+	// IsHardBlock early-returns.
+	Gate1AutoApproved bool
 	// RawArgsJSON is the raw JSON string of the tool arguments as sent by the
 	// LLM. When set, handlers can parse this to recover the original key
 	// insertion order of nested maps (e.g., the "data" field in

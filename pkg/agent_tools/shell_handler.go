@@ -240,7 +240,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		}, agenterrors.NewPermission(fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning), nil)
 	}
 
-	if (secResult.ShouldPrompt || secResult.ShouldBlock) && env.ApprovalManager != nil && !(env.SessionElevated && !secResult.IsHardBlock) {
+	if (secResult.ShouldPrompt || secResult.ShouldBlock) && env.ApprovalManager != nil && !(env.Gate1AutoApproved && !secResult.IsHardBlock) {
 		result := env.ApprovalManager.RequestApproval(
 			"", "shell_command", secResult.Risk.String(),
 			fmt.Sprintf("Execute shell command: %s\n\n%s", command, secResult.Reasoning),

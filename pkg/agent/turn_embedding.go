@@ -10,9 +10,13 @@ import (
 // actionable summary using the static embedding provider, then stores the result
 // as a VectorRecord in the ConversationStore.
 //
+// The checkpointID is stamped into the record's metadata so that
+// collectCheckpointVectors can look it up during SP-066 Phase 3d rollup boundary
+// detection. Pass "" when no checkpoint ID is available (e.g. in tests).
+//
 // Graceful failure: Errors are logged but not returned. The caller (checkpoint
 // recording) should always succeed regardless of embedding failures.
-func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, turn *ConversationTurn) error {
+func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, turn *ConversationTurn, checkpointID string) error {
 	// Validate inputs. These are routine "feature unavailable" paths that
 	// fire on every turn when embedding is unconfigured — demoted to debug
 	// so they don't spam the default log.
@@ -93,6 +97,13 @@ func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, tur
 
 	// Convert to VectorRecord
 	record := turn.ToVectorRecord()
+
+	// Stamp checkpoint_id into metadata so collectCheckpointVectors can look it
+	// up during rollup boundary detection (SP-066 Phase 3d). The lookup uses
+	// this field as the primary key; empty string is intentionally skipped.
+	if checkpointID != "" {
+		record.Metadata["checkpoint_id"] = checkpointID
+	}
 
 	// Store in conversation store
 	if err := store.Store([]embedding.VectorRecord{record}); err != nil {

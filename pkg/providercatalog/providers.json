@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-15T11:01:20Z",
+  "updated_at": "2026-07-19T10:42:35Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -422,8 +422,8 @@
         {
           "id": "glm-5.2",
           "name": "glm-5.2",
-          "input_cost": 0.8805999999999999,
-          "output_cost": 2.7676
+          "input_cost": 0.266,
+          "output_cost": 0.8360000000000001
         },
         {
           "id": "gpt-oss:120b",
@@ -442,14 +442,14 @@
         {
           "id": "kimi-k2.6",
           "name": "kimi-k2.6",
-          "input_cost": 0.66,
-          "output_cost": 3.41
+          "input_cost": 0.684,
+          "output_cost": 3.42
         },
         {
           "id": "kimi-k2.7-code",
           "name": "kimi-k2.7-code",
-          "input_cost": 0.719,
-          "output_cost": 3.49
+          "input_cost": 0.85,
+          "output_cost": 3.8
         },
         {
           "id": "minimax-m2.5",
@@ -460,8 +460,8 @@
         {
           "id": "minimax-m2.7",
           "name": "minimax-m2.7",
-          "input_cost": 0.3,
-          "output_cost": 1.2
+          "input_cost": 0.25,
+          "output_cost": 1
         },
         {
           "id": "minimax-m3",
@@ -877,14 +877,6 @@
           ],
           "input_cost": 2,
           "output_cost": 10
-        },
-        {
-          "id": "arcee-ai/coder-large",
-          "name": "Arcee AI: Coder Large",
-          "description": "Coder‑Large is a 32 B‑parameter offspring of Qwen 2.5‑Instruct that has been further trained on permissively‑licensed GitHub, CodeSearchNet and synthetic bug‑fix corpora. It supports a 32k context window, enabling multi‑file...",
-          "context_length": 32768,
-          "input_cost": 0.5,
-          "output_cost": 0.7999999999999999
         },
         {
           "id": "arcee-ai/trinity-large-thinking",
@@ -1482,8 +1474,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.08,
-          "output_cost": 0.44999999999999996
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.3
         },
         {
           "id": "google/gemma-3-4b-it",
@@ -1519,8 +1511,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.3
+          "input_cost": 0.07,
+          "output_cost": 0.33999999999999997
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -1545,8 +1537,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.12,
-          "output_cost": 0.37
+          "input_cost": 0.22,
+          "output_cost": 0.55
         },
         {
           "id": "google/gemma-4-31b-it:free",
@@ -1724,8 +1716,8 @@
           "tags": [
             "structured_output"
           ],
-          "input_cost": 0.75,
-          "output_cost": 1
+          "input_cost": 0.5,
+          "output_cost": 0.75
         },
         {
           "id": "meta-llama/llama-3.1-70b-instruct",
@@ -1750,18 +1742,6 @@
           ],
           "input_cost": 0.049999999999999996,
           "output_cost": 0.08
-        },
-        {
-          "id": "meta-llama/llama-3.2-11b-vision-instruct",
-          "name": "Meta: Llama 3.2 11B Vision Instruct",
-          "description": "Llama 3.2 11B Vision is a multimodal model with 11 billion parameters, designed to handle tasks combining visual and textual data. It excels in tasks such as image captioning and...",
-          "context_length": 131072,
-          "tags": [
-            "vision",
-            "structured_output"
-          ],
-          "input_cost": 0.345,
-          "output_cost": 0.345
         },
         {
           "id": "meta-llama/llama-3.2-1b-instruct",
@@ -1848,6 +1828,20 @@
           "output_cost": 0.18
         },
         {
+          "id": "meta/muse-spark-1.1",
+          "name": "Meta: Muse Spark 1.1",
+          "description": "Muse Spark 1.1 is a multimodal reasoning model from Meta, built for agentic tasks. It accepts text, images, video, audio, and PDF documents and returns text, with a 1M-token context...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1.25,
+          "output_cost": 4.25
+        },
+        {
           "id": "microsoft/phi-4",
           "name": "Microsoft: Phi 4",
           "description": "[Microsoft Research](/microsoft) Phi-4 is designed to perform well in complex reasoning tasks and can operate efficiently in situations with limited memory or where quick responses are needed. At 14 billion...",
@@ -1902,8 +1896,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.255,
-          "output_cost": 1.02
+          "input_cost": 0.3,
+          "output_cost": 1.2
         },
         {
           "id": "minimax/minimax-m2-her",
@@ -1949,8 +1943,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2
+          "input_cost": 0.25,
+          "output_cost": 1
         },
         {
           "id": "minimax/minimax-m3",
@@ -2115,8 +2109,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.02,
-          "output_cost": 0.04
+          "input_cost": 0.019000000000000003,
+          "output_cost": 0.03
         },
         {
           "id": "mistralai/mistral-saba",
@@ -2264,8 +2258,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.66,
-          "output_cost": 3.41
+          "input_cost": 0.684,
+          "output_cost": 3.42
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -2278,8 +2272,22 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.719,
-          "output_cost": 3.49
+          "input_cost": 0.85,
+          "output_cost": 3.8
+        },
+        {
+          "id": "moonshotai/kimi-k3",
+          "name": "MoonshotAI: Kimi K3",
+          "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 3,
+          "output_cost": 15
         },
         {
           "id": "morph/morph-v3-fast",
@@ -2377,19 +2385,6 @@
             "structured_output"
           ],
           "input_cost": 0.13,
-          "output_cost": 0.39999999999999997
-        },
-        {
-          "id": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-          "name": "NVIDIA: Llama 3.3 Nemotron Super 49B V1.5",
-          "description": "Llama-3.3-Nemotron-Super-49B-v1.5 is a 49B-parameter, English-centric reasoning/chat model derived from Meta’s Llama-3.3-70B-Instruct with a 128K context. It’s post-trained for agentic workflows (RAG, tool calling) via SFT across math, code, science, and...",
-          "context_length": 131072,
-          "tags": [
-            "tools",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.39999999999999997,
           "output_cost": 0.39999999999999997
         },
         {
@@ -3407,6 +3402,20 @@
           "output_cost": -1000000
         },
         {
+          "id": "openrouter/auto-beta",
+          "name": "Auto Router (Beta)",
+          "description": "Auto Router (Beta) is a task-aware router from OpenRouter. It classifies each request, then routes it the [most popular model](/rankings#task-spend) for that task based on aggregate spend, filtered by your...",
+          "context_length": 2000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": -1000000,
+          "output_cost": -1000000
+        },
+        {
           "id": "openrouter/bodybuilder",
           "name": "Body Builder (beta)",
           "description": "Transform your natural language requests into structured OpenRouter API request objects. Describe what you want to accomplish with AI models, and Body Builder will construct the appropriate API calls. Example:...",
@@ -3648,8 +3657,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.24
+          "input_cost": 0.22749999999999998,
+          "output_cost": 0.9099999999999999
         },
         {
           "id": "qwen/qwen3-235b-a22b",
@@ -3699,8 +3708,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.12,
-          "output_cost": 0.5
+          "input_cost": 0.13,
+          "output_cost": 0.52
         },
         {
           "id": "qwen/qwen3-30b-a3b-instruct-2507",
@@ -3798,7 +3807,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.12,
+          "input_cost": 0.11,
           "output_cost": 0.7999999999999999
         },
         {
@@ -4001,8 +4010,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.195,
-          "output_cost": 1.56
+          "input_cost": 0.26,
+          "output_cost": 2.6
         },
         {
           "id": "qwen/qwen3.5-35b-a3b",
@@ -4029,8 +4038,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44999999999999996,
-          "output_cost": 3
+          "input_cost": 0.39,
+          "output_cost": 2.34
         },
         {
           "id": "qwen/qwen3.5-9b",
@@ -4167,8 +4176,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.25,
-          "output_cost": 3.75
+          "input_cost": 1.475,
+          "output_cost": 4.425
         },
         {
           "id": "qwen/qwen3.7-plus",
@@ -4395,6 +4404,19 @@
           ],
           "input_cost": 0.39999999999999997,
           "output_cost": 0.39999999999999997
+        },
+        {
+          "id": "thinkingmachines/inkling",
+          "name": "Thinking Machines: Inkling",
+          "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 1,
+          "output_cost": 4.05
         },
         {
           "id": "undi95/remm-slerp-l2-13b",
@@ -4665,8 +4687,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.8805999999999999,
-          "output_cost": 2.7676
+          "input_cost": 0.266,
+          "output_cost": 0.8360000000000001
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -4770,15 +4792,15 @@
           "id": "~moonshotai/kimi-latest",
           "name": "MoonshotAI Kimi Latest",
           "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
-          "context_length": 262144,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "vision",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.66,
-          "output_cost": 3.41
+          "input_cost": 3,
+          "output_cost": 15
         },
         {
           "id": "~openai/gpt-latest",
@@ -4977,19 +4999,6 @@
           ],
           "input_cost": 0.5,
           "output_cost": 2.9999999999999996
-        },
-        {
-          "id": "deepreinforce-ai/Ornith-1.0-35B",
-          "name": "deepreinforce-ai/Ornith-1.0-35B",
-          "description": "Ornith-1.0-35B is DeepReinforce's open (MIT-licensed) agentic-coding model: an RL post-train of Qwen3.5-35B-A3B, a 35B-total / ~3B-active Mixture-of-Experts with hybrid Gated-DeltaNet attention. It targets state-of-the-art open-model coding-agent performance (SWE-bench Verified 75.6, Terminal-Bench 2.1 64.2) with a 262K-token context, thinking/reasoning mode, tool calling, and image + video understanding.",
-          "context_length": 262144,
-          "tags": [
-            "tools",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.1,
-          "output_cost": 0.7499999999999999
         },
         {
           "id": "deepseek-ai/DeepSeek-R1-0528",
@@ -5395,8 +5404,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.02,
-          "output_cost": 0.04
+          "input_cost": 0.019,
+          "output_cost": 0.030000000000000002
         },
         {
           "id": "mistralai/Mistral-Small-24B-Instruct-2501",

@@ -3,7 +3,7 @@
 **Status:** 🟢 Implemented — Phases 1–4 shipped (`4552363c` 2026-07-02, originally numbered SP-080 before renumber). Post-merge cleanup (`bab487da` 2026-07-16): subagent double-debit fix, fleet budget isolation, CLI footer annotations, ProviderTable billing column. Spec retained at root as living reference for future scope (subscription quota tracking, per-billing-type cost alerts, Ollama Cloud credits).
 
 > **Note:** Renumbered from SP-080 (2026-07-05) to resolve a number collision with
-> the completed SP-080 "Type the Unknown-Tool Error" spec in `_completed/`.
+> the completed SP-080 "Type the Unknown-Tool Error" spec.
 
 ## Problem
 

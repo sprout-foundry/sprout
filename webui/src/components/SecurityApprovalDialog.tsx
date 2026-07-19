@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { Check, TriangleAlert, X } from 'lucide-react';
+import { Check, Eye, TriangleAlert, X } from 'lucide-react';
 import type { SecurityApprovalAction } from '../hooks/useSecurityApproval';
 import './ThemedDialog.css';
 
@@ -23,10 +23,53 @@ export interface SecurityApprovalDialogProps {
   fsKind?: 'fs_external' | 'fs_sensitive';
   fsFolder?: string;
   fsPath?: string;
+  // SP-124-2: LLM-generated analysis. Rendered above the command block when present.
+  securityAnalysis?: {
+    summary: string;
+    modifies: string;
+    riskAssessment: string;
+    recommendation: string;
+  };
   onRespond: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
 }
 
 type RiskKey = 'safe' | 'caution' | 'dangerous';
+
+// SP-124-2: recommendation badge colors
+type RecommendationKey = 'approve' | 'review' | 'reject';
+const RECOMMENDATION_ICON: Record<RecommendationKey, JSX.Element> = {
+  approve: <Check size={14} />,
+  review: <Eye size={14} />,
+  reject: <X size={14} />,
+};
+const RECOMMENDATION_LABEL: Record<RecommendationKey, string> = {
+  approve: 'Safe to approve',
+  review: 'Review carefully',
+  reject: 'Not recommended',
+};
+const RECOMMENDATION_COLOR: Record<RecommendationKey, string> = {
+  approve: 'var(--accent-success)',
+  review: 'var(--accent-warning)',
+  reject: 'var(--accent-error)',
+};
+const RECOMMENDATION_BG: Record<RecommendationKey, string> = {
+  approve: 'var(--bg-success)',
+  review: 'var(--bg-warning)',
+  reject: 'var(--bg-error)',
+};
+const RECOMMENDATION_FG: Record<RecommendationKey, string> = {
+  approve: 'var(--accent-success)',
+  review: 'var(--accent-warning-fg)',
+  reject: 'var(--accent-error)',
+};
+
+// Risk assessment pill colors
+type RiskAssessmentKey = 'low' | 'moderate' | 'high';
+const RISK_ASSESSMENT_COLOR: Record<RiskAssessmentKey, string> = {
+  low: 'var(--accent-success)',
+  moderate: 'var(--accent-warning)',
+  high: 'var(--accent-error)',
+};
 
 const RISK_ICON: Record<RiskKey, JSX.Element> = {
   safe: <Check size={16} />,
@@ -59,6 +102,7 @@ function SecurityApprovalDialog({
   fsKind,
   fsFolder,
   fsPath,
+  securityAnalysis,
   onRespond,
 }: SecurityApprovalDialogProps): JSX.Element {
   const risk = toRiskKey(riskLevel);
@@ -165,6 +209,55 @@ function SecurityApprovalDialog({
 
           {/* Risk type category */}
           {riskType && <div className="security-approval-risk-type">{riskType}</div>}
+
+          {/* LLM analysis block (SP-124-2) */}
+          {securityAnalysis && (
+            <div className="security-approval-analysis-block">
+              {/* Header row */}
+              <div className="security-approval-analysis-header">
+                <span className="security-approval-analysis-label">
+                  <Eye size={14} />
+                  What this command does
+                </span>
+                {securityAnalysis.recommendation && (
+                  <span
+                    className="security-approval-analysis-recommendation"
+                    style={{
+                      background: RECOMMENDATION_BG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--bg-tertiary)',
+                      color: RECOMMENDATION_FG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--text-muted)',
+                    }}
+                  >
+                    {RECOMMENDATION_ICON[securityAnalysis.recommendation as RecommendationKey] ?? null}
+                    {RECOMMENDATION_LABEL[securityAnalysis.recommendation as RecommendationKey] ?? securityAnalysis.recommendation}
+                  </span>
+                )}
+              </div>
+              {/* Summary */}
+              {securityAnalysis.summary && (
+                <p className="security-approval-analysis-summary-text">{securityAnalysis.summary}</p>
+              )}
+              {/* Modifies line */}
+              {securityAnalysis.modifies && (
+                <p className="security-approval-analysis-modifies">
+                  <span className="security-approval-analysis-modifies-label">Modifies: </span>
+                  {securityAnalysis.modifies}
+                </p>
+              )}
+              {/* Risk assessment pill */}
+              {securityAnalysis.riskAssessment && (
+                <span
+                  className="security-approval-analysis-risk-pill"
+                  style={{
+                    color: RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ?? 'var(--text-muted)',
+                    background: 'var(--bg-elevated)',
+                    borderColor: RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ?? 'var(--border-default)',
+                  }}
+                >
+                  {securityAnalysis.riskAssessment}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Command (for shell_command) */}
           {command && (

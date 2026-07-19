@@ -1,9 +1,30 @@
 import type { ShellApprovalPartData, ShellApprovalRequestData } from '@sprout/events';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, Eye, X } from 'lucide-react';
 import './ShellApprovalPanel.css';
 
 type PartDecision = 'pending' | 'approved' | 'rejected';
+
+// SP-124-2: recommendation colors matching design-system tokens
+type RecommendationKey = 'approve' | 'review' | 'reject';
+const RECOMMENDATION_COLOR: Record<RecommendationKey, string> = {
+  approve: 'var(--accent-success)',
+  review: 'var(--accent-warning)',
+  reject: 'var(--accent-error)',
+};
+const RECOMMENDATION_BG: Record<RecommendationKey, string> = {
+  approve: 'var(--bg-success)',
+  review: 'var(--bg-warning)',
+  reject: 'var(--bg-error)',
+};
+
+// Risk assessment colors
+type RiskAssessmentKey = 'low' | 'moderate' | 'high';
+const RISK_ASSESSMENT_COLOR: Record<RiskAssessmentKey, string> = {
+  low: 'var(--accent-success)',
+  moderate: 'var(--accent-warning)',
+  high: 'var(--accent-error)',
+};
 
 interface ShellApprovalPanelProps {
   request: {
@@ -12,6 +33,14 @@ interface ShellApprovalPanelProps {
     parts: ShellApprovalPartData[];
     unified_view: string;
     risk_level: string;
+    // SP-124-2: LLM-generated analysis. Rendered as a collapsible block above
+    // the command when present.
+    security_analysis?: {
+      summary: string;
+      modifies: string;
+      risk_assessment: string;
+      recommendation: string;
+    };
   };
   onSubmit: (decisions: Record<string, boolean>) => void | Promise<void>;
   onCancel?: () => void;
@@ -51,7 +80,7 @@ function decisionLabel(status: PartDecision): string {
  * the parent POSTs to /api/shell-approvals/{id}/decision.
  */
 function ShellApprovalPanel({ request, onSubmit, onCancel }: ShellApprovalPanelProps): JSX.Element {
-  const { request_id, command, parts, unified_view, risk_level } = request;
+  const { request_id, command, parts, unified_view, risk_level, security_analysis } = request;
 
   // Per-part decisions keyed by part id.
   const [decisions, setDecisions] = useState<Record<string, PartDecision>>(() =>
@@ -61,12 +90,15 @@ function ShellApprovalPanel({ request, onSubmit, onCancel }: ShellApprovalPanelP
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUnified, setShowUnified] = useState(false);
+  // SP-124-2: collapsible LLM analysis section
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   // Reset when a new request arrives.
   useEffect(() => {
     setDecisions(Object.fromEntries(parts.map((p) => [p.id, defaultDecisionForRisk(p.risk)])));
     setError(null);
     setShowUnified(false);
+    setShowAnalysis(false);
   }, [request_id, parts]);
 
   const togglePart = useCallback((partId: string) => {
@@ -169,6 +201,52 @@ function ShellApprovalPanel({ request, onSubmit, onCancel }: ShellApprovalPanelP
             Reset to defaults
           </button>
         </div>
+
+        {/* LLM analysis (SP-124-2) — collapsible, rendered above the command */}
+        {security_analysis && (
+          <details
+            className="shell-approval-analysis"
+            open={showAnalysis}
+            onToggle={(e) => setShowAnalysis(e.currentTarget.open)}
+          >
+            <summary className="shell-approval-analysis-summary">
+              <Eye size={12} />
+              <span>LLM analysis</span>
+              {security_analysis.recommendation && (
+                <span
+                  className="shell-approval-analysis-recommendation"
+                  style={{
+                    color: RECOMMENDATION_COLOR[security_analysis.recommendation as RecommendationKey] ?? 'var(--text-muted)',
+                    background: RECOMMENDATION_BG[security_analysis.recommendation as RecommendationKey] ?? 'var(--bg-tertiary)',
+                  }}
+                >
+                  {security_analysis.recommendation}
+                </span>
+              )}
+              {security_analysis.risk_assessment && (
+                <span
+                  className="shell-approval-analysis-risk"
+                  style={{
+                    color: RISK_ASSESSMENT_COLOR[security_analysis.risk_assessment as RiskAssessmentKey] ?? 'var(--text-muted)',
+                  }}
+                >
+                  {security_analysis.risk_assessment}
+                </span>
+              )}
+            </summary>
+            <div className="shell-approval-analysis-body">
+              {security_analysis.summary && (
+                <p className="shell-approval-analysis-summary-text">{security_analysis.summary}</p>
+              )}
+              {security_analysis.modifies && (
+                <p className="shell-approval-analysis-modifies">
+                  <span className="shell-approval-analysis-label">Modifies: </span>
+                  {security_analysis.modifies}
+                </p>
+              )}
+            </div>
+          </details>
+        )}
 
         {/* Full command */}
         <div className="shell-approval-command-block">

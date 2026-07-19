@@ -130,4 +130,71 @@ describe('ShellApprovalPanel', () => {
       });
     });
   });
+
+  // SP-124-2: security_analysis tests
+  it('hides analysis block when security_analysis is absent', () => {
+    renderPanel();
+    expect(screen.queryByText('LLM analysis')).not.toBeInTheDocument();
+  });
+
+  it('shows analysis block when security_analysis is provided', () => {
+    renderPanel({
+      request: {
+        ...TEST_REQUEST,
+        security_analysis: {
+          summary: 'Downloads a script from example.com and pipes it to bash',
+          modifies: 'Executes arbitrary code from the remote URL',
+          risk_assessment: 'high',
+          recommendation: 'review',
+        },
+      },
+    });
+    expect(screen.getByText('LLM analysis')).toBeInTheDocument();
+    expect(screen.getByText('Downloads a script from example.com and pipes it to bash')).toBeInTheDocument();
+  });
+
+  it('renders the recommendation badge for approve', () => {
+    renderPanel({
+      request: {
+        ...TEST_REQUEST,
+        security_analysis: {
+          summary: 'Echoes text to stdout',
+          modifies: 'Nothing',
+          risk_assessment: 'low',
+          recommendation: 'approve',
+        },
+      },
+    });
+    expect(screen.getByText('approve')).toBeInTheDocument();
+  });
+
+  it('renders the recommendation badge for review', () => {
+    renderPanel({
+      request: {
+        ...TEST_REQUEST,
+        security_analysis: {
+          summary: 'Downloads remote content',
+          modifies: 'Remote execution possible',
+          risk_assessment: 'moderate',
+          recommendation: 'review',
+        },
+      },
+    });
+    expect(screen.getByText('review')).toBeInTheDocument();
+  });
+
+  it('renders the recommendation badge for reject', () => {
+    renderPanel({
+      request: {
+        ...TEST_REQUEST,
+        security_analysis: {
+          summary: 'Deletes the root filesystem',
+          modifies: 'Everything on the system',
+          risk_assessment: 'high',
+          recommendation: 'reject',
+        },
+      },
+    });
+    expect(screen.getByText('reject')).toBeInTheDocument();
+  });
 });

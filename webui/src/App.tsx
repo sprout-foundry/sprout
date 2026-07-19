@@ -12,6 +12,7 @@ import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
 import OnboardingDialog from './components/OnboardingDialog';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
+import ShellApprovalPanel from './components/ShellApprovalPanel';
 import PasswordPromptDialog from './components/PasswordPromptDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
 import UIManager from './components/UIManager';
@@ -429,6 +430,7 @@ function AppInner() {
                         fsKind={state.securityApprovalRequest.fsKind}
                         fsFolder={state.securityApprovalRequest.fsFolder}
                         fsPath={state.securityApprovalRequest.fsPath}
+                        securityAnalysis={state.securityApprovalRequest.securityAnalysis}
                         onRespond={handleSecurityApprovalResponse}
                       />
                     )}
@@ -468,6 +470,29 @@ function AppInner() {
                         unifiedDiff={state.editApprovalRequest.unifiedDiff}
                         hunks={state.editApprovalRequest.hunks}
                         onRespond={handleEditApprovalResolved}
+                      />
+                    )}
+                    {state.shellApprovalRequest && (
+                      <ShellApprovalPanel
+                        request={{
+                          request_id: state.shellApprovalRequest.requestId,
+                          command: state.shellApprovalRequest.command,
+                          parts: state.shellApprovalRequest.parts,
+                          unified_view: state.shellApprovalRequest.unifiedView,
+                          risk_level: state.shellApprovalRequest.riskLevel,
+                          security_analysis: state.shellApprovalRequest.securityAnalysis
+                            ? {
+                                summary: state.shellApprovalRequest.securityAnalysis.summary,
+                                modifies: state.shellApprovalRequest.securityAnalysis.modifies,
+                                risk_assessment: state.shellApprovalRequest.securityAnalysis.riskAssessment,
+                                recommendation: state.shellApprovalRequest.securityAnalysis.recommendation,
+                              }
+                            : undefined,
+                        }}
+                        onSubmit={async () => {
+                          // Clear the request on submit; the handler POSTs the decision
+                          setState(() => ({ shellApprovalRequest: null }));
+                        }}
                       />
                     )}
                     {state.driftNotification && (

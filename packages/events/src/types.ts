@@ -183,6 +183,25 @@ export interface SecurityApprovalRequestData {
   risk_type?: string;
   target?: string;
   status?: string;
+  /** LLM-generated analysis attached by the backend (SP-124-2). The Go broker
+   *  JSON-marshals `pkg/agent.SecurityAnalysis` into a string and shoves it
+   *  into `extras["security_analysis"]`, which then lands here verbatim —
+   *  a JSON-encoded string, not an object. Consumers (the WebUI handler)
+   *  parse it on receive. We expose both shapes: `security_analysis` is the
+   *  raw wire value (string for true CSP-safe transport), and the typed
+   *  `SecurityAnalysisData` interface documents the parsed shape. */
+  security_analysis?: string;
+}
+
+/** LLM-generated analysis of a shell command. The full struct lives in
+ *  `pkg/agent.SecurityAnalysis` (Go) and serializes to JSON over the
+ *  wire — callers receive it as the SecurityAnalysisData shape, not a
+ *  string. SP-124-2. */
+export interface SecurityAnalysisData {
+  summary: string;
+  modifies: string;
+  risk_assessment: 'low' | 'moderate' | 'high';
+  recommendation: 'approve' | 'review' | 'reject';
 }
 
 export interface SecurityPromptRequestData {

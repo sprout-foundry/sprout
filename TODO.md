@@ -120,15 +120,15 @@ commands are perfectly safe but got blocked by association.
 
 ## SP-116: Multi-Instance Isolation
 
-_Spec: `roadmap/_completed/SP-116-multi-instance-isolation.md`. ✅ Implemented — Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). Auto-detect in `cmd/root.go::detectGitRepo`, scoped background processes, layered config (`agent.NewAgentWithLayers`). The spec is archived; the test coverage is in `cmd/root_test.go` and `pkg/configuration/isolated_config_test.go`. Daemon-side skip-via-`SPROUT_SERVICE=1` guard ensures system services stay global._
+_Spec archived; ✅ Implemented — Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). Auto-detect in `cmd/root.go::detectGitRepo`, scoped background processes, layered config (`agent.NewAgentWithLayers`). The spec is archived; the test coverage is in `cmd/root_test.go` and `pkg/configuration/isolated_config_test.go`. Daemon-side skip-via-`SPROUT_SERVICE=1` guard ensures system services stay global._
 
 ## SP-118: Daemon Multi-Window Session Isolation
 
-_Spec: `roadmap/_completed/SP-118-daemon-multi-window-sessions.md`. ✅ Implemented — Phases 1–5 shipped 2026-07-15; Phase 6 partial. `agentEnforceSingleSession` dispatch + `UserConnections` registry lets the daemon (`sprout service`) accept N parallel browser windows per user while `sprout agent` keeps single-active semantics byte-identical. `daemon_multi_session` flag defaulted ON with `sprout config set daemon_multi_session=false` rollback path. `/api/ws-metrics` exposes `active_ws_count_by_user` and `ws_count_per_user`. Phase 6 (README + Settings UI) intentionally deferred per AGENTS.md "no documentation" rule; TODO.md sync landed and `multi_device_takeover.go` deprecation comment shipped in Phase 1. Commits: `629fd42b`, `16f55278`, `2a07a9ba`, `4cf55ddc`, `81f46b7c`, `6b013bce`._
+_Spec archived; ✅ Implemented — Phases 1–5 shipped 2026-07-15; Phase 6 partial. `agentEnforceSingleSession` dispatch + `UserConnections` registry lets the daemon (`sprout service`) accept N parallel browser windows per user while `sprout agent` keeps single-active semantics byte-identical. `daemon_multi_session` flag defaulted ON with `sprout config set daemon_multi_session=false` rollback path. `/api/ws-metrics` exposes `active_ws_count_by_user` and `ws_count_per_user`. Phase 6 (README + Settings UI) intentionally deferred per AGENTS.md "no documentation" rule; TODO.md sync landed and `multi_device_takeover.go` deprecation comment shipped in Phase 1. Commits: `629fd42b`, `16f55278`, `2a07a9ba`, `4cf55ddc`, `81f46b7c`, `6b013bce`._
 
 ## SP-119: Workspace-aware directory resolution in daemon-mode tools
 
-_Spec: `roadmap/_completed/SP-119-workspace-aware-directory-resolution.md`. ✅ Implemented — 3 phases shipped 2026-07-15. `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool paths (`handleRunAutomate`, `handleListAutomateWorkflows`, `workflowRequiresApproval`) and the interface-based registry handler (`list_automate_workflows_handler.go`). Tests: `TestDirIn` (4 cases) + `TestListAutomateWorkflowsHandler` (3 cases). Out-of-scope ~25 CWD-vs-workspace callsites tracked under SP-091. Commits: `6608ecf3`, `aa2d05a9`._
+_Spec archived; ✅ Implemented — 3 phases shipped 2026-07-15. `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool paths (`handleRunAutomate`, `handleListAutomateWorkflows`, `workflowRequiresApproval`) and the interface-based registry handler (`list_automate_workflows_handler.go`). Tests: `TestDirIn` (4 cases) + `TestListAutomateWorkflowsHandler` (3 cases). Out-of-scope ~25 CWD-vs-workspace callsites tracked under SP-091. Commits: `6608ecf3`, `aa2d05a9`._
 
 ---
 
@@ -381,14 +381,12 @@ B2 and A9 are quick wins (1 day combined). D1, D2, D3 are follow-ups that add va
 ## SP-092: Persistent Recall via `/recall` and Cross-Turn Hints
 
 _All three phases shipped (`cd528da3`, `e461c546`, `c22f2fc1`). See git
-history for the spec body; archived to `roadmap/_completed/` once the
-runner finishes moving spec files._
+history for the spec body._
 
 ## SP-093: Edit Approval for Destructive Shell Commands
 
 _All three phases shipped (`003b0a26`, `be521b02`, `1a6c0e12`). See git
-history for the spec body; archived to `roadmap/_completed/` once the
-runner finishes moving spec files._
+history for the spec body._
 
 ---
 
@@ -477,9 +475,7 @@ called for by the spec (`RetryableError`, `RateLimitError`,
 
 _All 14 spec-header fixes shipped at commit `81ec1f87`. Three specs
 remain Proposed (SP-105, SP-112, SP-114 Phase 2) — SP-114 Phase 1
-shipped at `ab6c975e`. See git history for the original spec body;
-archived to `roadmap/_completed/` once the runner finishes
-moving spec files._
+shipped at `ab6c975e`. See git history for the original spec body._
 
 ---
 
@@ -547,8 +543,7 @@ have been split by SP-075 / Refactor-A work.
 _All three phases shipped (`e2dd7276` + `076c0ecf`). `Makefile:80` has
 `TEST_RACE ?= -race`; `docs/adr-0007-locking-strategy.md` exists;
 `go test -race ./...` is green on CI. See git history for the spec
-body; archived to `roadmap/_completed/` once the runner finishes
-moving spec files._
+body._
 
 
 ---

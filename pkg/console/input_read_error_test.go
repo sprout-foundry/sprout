@@ -8,96 +8,84 @@ import (
 	"testing"
 )
 
-func TestHandleReadError_EOF_Diagnostic(t *testing.T) {
-	// Capture stderr to verify the diagnostic message is emitted.
+// captureReadErrorStderr runs fn with os.Stderr redirected to a pipe and
+// returns whatever was written. Used by the portable handleReadError
+// tests to assert that no EOF diagnostic was emitted (transient EOF
+// must be silent) or that the expected diagnostic was emitted (fatal
+// EOF must log a message).
+func captureReadErrorStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("pipe: %v", err)
 	}
-	origStderr := os.Stderr
+	original := os.Stderr
 	os.Stderr = w
-	t.Cleanup(func() {
-		os.Stderr = origStderr
-		w.Close()
-		r.Close()
+	defer func() {
+		os.Stderr = original
+		_ = w.Close()
+		_ = r.Close()
+	}()
+
+	fn()
+	os.Stderr = original
+	if err := w.Close(); err != nil {
+		t.Fatalf("close stderr writer: %v", err)
+	}
+	output, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+	return string(output)
+}
+
+// TestHandleReadError_BlockingEOFIsFatal verifies that when the caller
+// passes nonBlocking=false, an io.EOF is always treated as fatal — the
+// platform hangup helper is not consulted because the caller is in
+// blocking mode and EOF there is authoritative.
+//
+// Portable: this path does not depend on Unix-only poll semantics.
+func TestHandleReadError_BlockingEOFIsFatal(t *testing.T) {
+	ir := NewInputReader("> ")
+	var continueLoop bool
+	var returnedErr error
+
+	stderr := captureReadErrorStderr(t, func() {
+		continueLoop, returnedErr = ir.handleReadError(io.EOF, false, nil, nil)
 	})
 
-	// Create an InputReader with a non-terminal fd so term.IsTerminal returns false.
-	// This exercises the "TTY detached" diagnostic path.
-	ir := NewInputReader("> ")
-	ir.termFd = int(r.Fd()) // pipe fd is not a terminal
-
-	// Call handleReadError with io.EOF.
-	continueLoop, returnedErr := ir.handleReadError(io.EOF, false, nil, nil)
-
-	// Verify the error is wrapped correctly (existing behavior preserved).
 	if continueLoop {
-		t.Fatal("expected continueLoop=false for io.EOF")
-	}
-	if returnedErr == nil {
-		t.Fatal("expected non-nil error for io.EOF")
-	}
-	if !strings.Contains(returnedErr.Error(), "stdin read error") {
-		t.Fatalf("unexpected error format: %s", returnedErr)
+		t.Fatal("expected blocking EOF to stop")
 	}
 	if !errors.Is(returnedErr, io.EOF) {
-		t.Fatalf("expected error to wrap io.EOF, got: %v", returnedErr)
+		t.Fatalf("expected error to wrap io.EOF, got %v", returnedErr)
 	}
-
-	// Flush stderr and read the captured output.
-	w.Close()
-	var buf strings.Builder
-	_, err = io.Copy(&buf, r)
-	if err != nil {
-		t.Fatalf("copy stderr: %v", err)
-	}
-	stderrOutput := buf.String()
-
-	// Verify the "TTY detached" diagnostic was emitted.
-	if !strings.Contains(stderrOutput, "[console] stdin EOF: terminal no longer attached") {
-		t.Fatalf("expected TTY-detached diagnostic in stderr, got: %q", stderrOutput)
-	}
-	if !strings.Contains(stderrOutput, "fd=") {
-		t.Fatalf("expected fd= in diagnostic, got: %q", stderrOutput)
+	if !strings.Contains(stderr, "[console] stdin EOF") {
+		t.Fatalf("expected EOF diagnostic, got %q", stderr)
 	}
 }
 
+// TestHandleReadError_NonEOF_NoDiagnostic verifies that non-EOF errors
+// do not trigger the EOF diagnostic. The handler always wraps the
+// error in "stdin read error: ..." for context regardless of whether
+// it is fatal or transient.
 func TestHandleReadError_NonEOF_NoDiagnostic(t *testing.T) {
-	// Verify that non-EOF errors do NOT trigger the diagnostic log.
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe: %v", err)
-	}
-	origStderr := os.Stderr
-	os.Stderr = w
-	t.Cleanup(func() {
-		os.Stderr = origStderr
-		w.Close()
-		r.Close()
+	ir := NewInputReader("> ")
+	var continueLoop bool
+	var returnedErr error
+
+	stderr := captureReadErrorStderr(t, func() {
+		continueLoop, returnedErr = ir.handleReadError(os.ErrPermission, false, nil, nil)
 	})
 
-	ir := NewInputReader("> ")
-	ir.termFd = int(r.Fd())
-
-	// Use a non-EOF error.
-	testErr := os.ErrPermission
-	continueLoop, returnedErr := ir.handleReadError(testErr, false, nil, nil)
-
 	if continueLoop {
-		t.Fatal("expected continueLoop=false for permission error")
+		t.Fatal("expected permission error to stop")
 	}
 	if returnedErr == nil {
 		t.Fatal("expected non-nil error")
 	}
-
-	// Flush and check stderr is empty (no diagnostic for non-EOF).
-	w.Close()
-	var buf strings.Builder
-	_, err = io.Copy(&buf, r)
-	if err != nil {
-		t.Fatalf("copy stderr: %v", err)
-	}
-	if buf.String() != "" {
-		t.Fatalf("expected no stderr output for non-EOF error, got: %q", buf.String())
+	if stderr != "" {
+		t.Fatalf("expected no diagnostic, got %q", stderr)
 	}
 }

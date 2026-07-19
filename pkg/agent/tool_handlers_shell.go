@@ -153,6 +153,13 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	//              else: reject (non-interactive can't ask).
 	//   Medium   → allow; persona system prompt guides reasoning.
 	//   Low      → allow.
+	//
+	// historyRewriteAlreadyApproved tracks whether the High-tier prompt
+	// below already approved this command, so the git history-rewrite
+	// gate doesn't re-prompt for the same operation (e.g. git reset
+	// --hard is HighRiskNever → High, then also matches the
+	// history-rewrite gate).
+	historyRewriteAlreadyApproved := false
 	if risk := a.EvaluateOperationRisk(command); risk == configuration.RiskLevelCritical {
 		return "", agenterrors.NewSecurityError(
 			fmt.Sprintf("critical operation blocked (cannot be approved by any profile or persona): '%s'", command), nil,
@@ -163,13 +170,18 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 				fmt.Sprintf("high-risk operation rejected by persona risk cascade: %s (command: '%s')", risk, command), nil,
 			)
 		}
+		historyRewriteAlreadyApproved = true
 	}
 
-	// Block git commands that lose commit history unless the workspace
-	// has opted into the more-permissive `AllowGitHistoryRewrite` mode.
-	if isGitHistoryRewriteCommand(command) {
+	// Prompt for git commands that can lose commit history (recoverable
+	// via reflog). AllowGitHistoryRewrite=true skips the prompt entirely.
+	// If the persona cascade above already prompted and approved (e.g.
+	// git reset --hard is HighRiskNever → High), skip the re-prompt.
+	if isGitHistoryRewriteCommand(command) && !historyRewriteAlreadyApproved {
 		if cfg := a.GetConfig(); cfg == nil || !cfg.AllowGitHistoryRewrite {
-			return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and is blocked by default. Use the git tool for explicit user approval, or set allow_git_history_rewrite=true in config to opt in (command: '%s')", extractGitSubcommand(command), command), nil)
+			if !a.highRiskApprovedForCommand(ctx, command) {
+				return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and was not approved (command: '%s')", extractGitSubcommand(command), command), nil)
+			}
 		}
 	}
 

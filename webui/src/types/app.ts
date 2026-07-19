@@ -135,6 +135,14 @@ export interface AppState {
     // The exact filesystem path being accessed; shown verbatim in the
     // dialog so the user can verify they're approving the right path.
     fsPath?: string;
+    // SP-124-2: LLM-generated analysis of the command. Rendered above the
+    // command block when present.
+    securityAnalysis?: {
+      summary: string;
+      modifies: string;
+      riskAssessment: string;
+      recommendation: string;
+    };
   } | null;
   securityPromptRequest: {
     requestId: string;
@@ -167,6 +175,14 @@ export interface AppState {
     }>;
     unifiedView: string;
     riskLevel: string;
+    // SP-124-2: LLM-generated analysis of the command. Rendered above the
+    // command block when present.
+    securityAnalysis?: {
+      summary: string;
+      modifies: string;
+      riskAssessment: string;
+      recommendation: string;
+    };
   } | null;
   editApprovalRequest: {
     requestId: string;

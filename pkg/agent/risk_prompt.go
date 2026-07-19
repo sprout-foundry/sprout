@@ -19,20 +19,13 @@ func (a *Agent) highRiskApprovedForCommand(_ context.Context, command string) bo
 	args := map[string]interface{}{"command": command}
 	assessment := a.ResolveToolRisk("shell_command", args)
 	decision, err := a.RequestApproval(assessment, "shell_command", args)
-	if decision.Analysis != nil {
-		// Print LLM analysis to stderr/log when present so CLI users see it.
-		console.PrintExternal(fmt.Sprintf("[security analysis] %s\n", renderSecurityAnalysisLine(decision.Analysis)))
-	}
+	// SP-124 Phase 3: the LLM analysis now renders above the 4-option
+	// picker at the moment of decision (via pkg/console/security_prompt.go),
+	// so CLI users see the recommendation BEFORE choosing. The earlier
+	// post-decision log here was redundant with that and ran after the
+	// user had already committed to an action — removed.
+	_ = decision.Analysis
 	return err == nil
-}
-
-// renderSecurityAnalysisLine formats a one-line summary of the analysis.
-// SP-124.
-func renderSecurityAnalysisLine(sa *SecurityAnalysis) string {
-	if sa == nil {
-		return ""
-	}
-	return fmt.Sprintf("%s → %s (%s)", sa.Summary, sa.Recommendation, sa.RiskAssessment)
 }
 
 // approvalDecisionFromCLIChoice maps the CLI prompt's typed choice onto

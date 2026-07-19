@@ -231,3 +231,39 @@ func (a *Agent) GetSubagentRunner() *SubagentRunner {
 	}
 	return a.subagentRunner
 }
+
+// getSecurityAnalysisCache returns the session-scoped LLM security analysis cache,
+// creating it lazily on first use. Nil-safe. Uses double-checked locking
+// (similar to GetVisionProcessor) so the fast path is a single read.
+func (a *Agent) getSecurityAnalysisCache() *SecurityAnalysisCache {
+	if a == nil {
+		return nil
+	}
+	a.securityAnalysisCacheMu.Lock()
+	defer a.securityAnalysisCacheMu.Unlock()
+	if a.securityAnalysisCache == nil {
+		a.securityAnalysisCache = NewSecurityAnalysisCache()
+	}
+	return a.securityAnalysisCache
+}
+
+// ClearSecurityAnalysisCache resets the cache to empty. Call this when
+// the session resets to avoid stale analyses from a previous session.
+// Guards the pointer swap so a concurrent get/Set can't see a torn cache.
+func (a *Agent) ClearSecurityAnalysisCache() {
+	if a == nil {
+		return
+	}
+	a.securityAnalysisCacheMu.Lock()
+	defer a.securityAnalysisCacheMu.Unlock()
+	// Replace the map contents under the new cache's write lock rather
+	// than swapping the pointer, so any goroutine that already held a
+	// reference to the old cache (via a prior get/Set) keeps operating
+	// on a valid map.
+	cache := a.securityAnalysisCache
+	if cache == nil {
+		a.securityAnalysisCache = NewSecurityAnalysisCache()
+		return
+	}
+	cache.Clear()
+}

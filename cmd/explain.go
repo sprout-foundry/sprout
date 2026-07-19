@@ -385,8 +385,8 @@ func explainSourcesFor(toolName string, res tools.SecurityResult, args map[strin
 			if isGitHistoryRewriteCommand(cmd) {
 				sources = append(sources, explainSource{
 					id:      "git-history-rewrite",
-					explain: "git history-rewrite blocked unless allow_git_history_rewrite=true",
-					level:   configuration.RiskLevelCritical,
+					explain: "git history-rewrite — promptable; auto-approved when allow_git_history_rewrite=true",
+					level:   configuration.RiskLevelHigh,
 				})
 			}
 		}
@@ -447,8 +447,7 @@ func combinedAssessment(toolName string, secResult tools.SecurityResult, args ma
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if isGitHistoryRewriteCommand(cmd) {
-				level = configuration.RiskLevelCritical
-				hardBlock = true
+				level = configuration.RiskLevelHigh
 			}
 		}
 	}

@@ -85,6 +85,16 @@ func (ir *InputReader) footerSize() (cols, rows int) {
 // read loop should continue (EAGAIN/EINTR) or abort. Returns (continueLoop bool, err error).
 // When continueLoop is true, err is nil and the caller should `continue` the read loop.
 // When err is non-nil, the caller should return it.
+//
+// Non-blocking EOF handling no longer relies on a one-shot latch that
+// could outlive the underlying recovery and turn an unrelated later
+// transient EOF fatal. Instead, each EOF consults the descriptor's
+// actual hangup state via nonblockingEOFIsTransient (see
+// input_hangup_unix.go): the fd is polled for POLLHUP/POLLERR/POLLNVAL
+// and an EOF is treated as transient only when the descriptor is
+// provably still attached. Repeated idle EOFs on a healthy fd continue
+// to be treated as transient (because poll returns no hangup bits),
+// while a true writer-close / TTY-revoke surfaces POLLHUP and exits.
 func (ir *InputReader) handleReadError(err error, nonBlocking bool, resizeCh chan os.Signal, parser *EscapeParser) (bool, error) {
 	errStr := err.Error()
 	// Check if it's just "no data available" (EAGAIN/EWOULDBLOCK)
@@ -96,7 +106,22 @@ func (ir *InputReader) handleReadError(err error, nonBlocking bool, resizeCh cha
 	isInterrupted := strings.Contains(errStr, "interrupted system call") ||
 		errStr == "EINTR"
 
+	if nonBlocking && errors.Is(err, io.EOF) {
+		// Ask the platform-aware helper whether the fd is still a
+		// usable read source. When it returns false (fd < 0, poll
+		// errored, or POLLHUP/POLLERR/POLLNVAL observed), fall through
+		// to the fatal-EOF path below so we exit the REPL.
+		if nonblockingEOFIsTransient(ir.termFd) {
+			if !ir.processPendingResize(resizeCh, parser) {
+				time.Sleep(pastePollInterval)
+			}
+			return true, nil
+		}
+	}
 	if nonBlocking && isNoData {
+		// EAGAIN/EWOULDBLOCK proves the fd is still attached — it's
+		// just idle. No state needs clearing because the EOF path
+		// above queries the fd directly rather than tracking a latch.
 		if ir.processPendingResize(resizeCh, parser) {
 			return true, nil
 		}

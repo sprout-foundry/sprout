@@ -364,7 +364,21 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				if assessment.RequiresIntentConfirmation {
 					prompt = "High-risk operation — your active risk profile gates this command."
 				}
-				choice := logger.AskForApprovalWithOptions(prompt, cmd)
+				// SP-124 Phase 3: convert the agent-level analysis to the
+				// leaf-level utils view so the arrow-key picker can render
+				// it above the option list. nil when the analyzer timed
+				// out / errored / wasn't produced; the picker omits the
+				// panel in that case.
+				var analysisView *utils.SecurityAnalysisView
+				if securityAnalysis != nil {
+					analysisView = &utils.SecurityAnalysisView{
+						Summary:         securityAnalysis.Summary,
+						Modifies:        securityAnalysis.Modifies,
+						RiskAssessment:  securityAnalysis.RiskAssessment,
+						Recommendation:  securityAnalysis.Recommendation,
+					}
+				}
+				choice := logger.AskForApprovalWithOptions(prompt, cmd, analysisView)
 				decision := approvalDecisionFromCLIChoice(choice)
 				a.applyApprovalDecision(decision, cmd)
 				if !decision.Approved() {

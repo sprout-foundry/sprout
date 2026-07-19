@@ -182,7 +182,10 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	switch secResult.Risk {
 	case SecurityDangerous:
 		// Destructive operation (e.g., reset --hard, rebase -i)
-		if env.ApprovalManager != nil {
+		if env.Gate1AutoApproved && !secResult.IsHardBlock {
+			// Gate 1 already auto-approved — skip the prompt to avoid
+			// double-prompting.
+		} else if env.ApprovalManager != nil {
 			result := env.ApprovalManager.RequestApproval(
 				operation,
 				"git",
@@ -208,7 +211,9 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 		// Caution-level operation (e.g., reset --soft, plain reset/rebase)
 		// Fall through to legacy dangerousOps map for backward compat
 		if dangerousOps[operation] {
-			if env.ApprovalManager != nil {
+			if env.Gate1AutoApproved && !secResult.IsHardBlock {
+				// Gate 1 already auto-approved — skip approval.
+			} else if env.ApprovalManager != nil {
 				result := env.ApprovalManager.RequestApproval(
 					operation,
 					"git",

@@ -191,6 +191,9 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	env.RawArgsJSON = "" // seed registry doesn't have raw JSON args
 	env.Notifier = agent
 	env.SubagentDepth = agent.subagentDepth
+	// Propagate session elevation so handler-level security gates (Gate 2)
+	// skip approval prompts for non-hard-block operations, matching Gate 1.
+	env.SessionElevated = agent.IsSessionElevated()
 	return env
 }
 

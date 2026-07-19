@@ -93,7 +93,10 @@ func saveConversationTurnFunc(_ js.Value, args []js.Value) interface{} {
 		// conversation store (when available), and graceful failure for
 		// us. The return value is ignored deliberately — the function
 		// logs but doesn't return errors that should surface to JS.
-		_ = agent.EmbedAndStoreTurn(ctx, mgr, &turn)
+		// The checkpointID arg (SP-066 Phase 3d) is empty here: WASM
+		// saveConversationTurn is a manual save, not a turn-boundary
+		// hook, so there's no checkpoint boundary to attach to.
+		_ = agent.EmbedAndStoreTurn(ctx, mgr, &turn, "")
 		return map[string]interface{}{"ok": true, "id": turn.ID}, nil
 	})
 }

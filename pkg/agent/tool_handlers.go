@@ -55,7 +55,7 @@ func stripQuotedContent(s string) string {
 // Tier B history-loss ops (`rebase`, `reset --hard <commit-ish>`,
 // `branch -D`, `tag -d`) are routed through isGitHistoryRewriteCommand
 // instead — that gate has its own opt-in flag (AllowGitHistoryRewrite)
-// and produces a clearer error for the caller.
+// and prompts the user (auto-approved when AllowGitHistoryRewrite=true).
 func isGitWriteCommand(command string) bool {
 	// Strip quoted content to avoid false positives from JSON payloads etc.
 	command = stripQuotedContent(command)

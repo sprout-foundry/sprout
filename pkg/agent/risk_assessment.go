@@ -121,16 +121,18 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 				assessmentFromPersonaCascade(level, fmt.Sprintf("persona/profile risk cascade: %s", level)),
 			)
 
-			// 3. Git history-rewrite gate
+			// 3. Git history-rewrite gate (promptable, not a hard block).
+			// These operations are recoverable via reflog, so they prompt the
+			// user rather than being hard-blocked. AllowGitHistoryRewrite=true
+			// skips the prompt entirely (config-level opt-in).
 			if isGitHistoryRewriteCommand(cmd) {
 				cfg := a.GetConfig()
 				if cfg == nil || !cfg.AllowGitHistoryRewrite {
 					assessment = assessment.combine(
 						RiskAssessment{
-							Level:       configuration.RiskLevelCritical,
-							IsHardBlock: true,
-							Sources:     []RiskSource{RiskSourceGitHistoryRewrite},
-							Reason:      "git history-rewrite operation blocked by default",
+							Level:   configuration.RiskLevelHigh,
+							Sources: []RiskSource{RiskSourceGitHistoryRewrite},
+							Reason:  "git history-rewrite operation requires approval",
 						},
 					)
 				}

@@ -3,105 +3,106 @@
 Roadmap specifications for the sprout project. Each spec describes
 a major architectural area, its current state, and open work.
 
-Specs ship to [`./_completed/`](./_completed/) once their core work lands.
-The root directory only contains specs still receiving active changes.
+Specs land at the root until core work ships; once shipped, the spec body
+lives in git history (no per-spec archive file). The root directory contains
+only specs still receiving active changes or retained as living reference.
 
 **Counts (as of 2026-07-18):** 84 shipped · 5 pending · 2 parked in `future/`.
 
 ## Shipped
 
-Full spec bodies in [`_completed/`](./_completed/) (83 files).
+Spec bodies preserved in git history; no per-spec archive (83 historical specs).
 
 | Spec | Title | Status |
 |------|-------|--------|
-| SP-001 | [Agent Core Architecture](./_completed/SP-001-agent-core.md) | ✅ Active (recently refactored) |
-| SP-002 | [Configuration, Credentials & Providers](./_completed/SP-002-configuration.md) | ✅ Active |
-| SP-003 | [Webui & Frontend Architecture](./_completed/SP-003-webui.md) | ✅ Active (under active development) |
-| SP-004 | [Security, Validation & MCP](./_completed/SP-004-security.md) | ✅ Active |
-| SP-005 | [Supporting Systems & Infrastructure](./_completed/SP-005-infrastructure.md) | ✅ Active |
-| SP-008 | [Reliability Engineering — Concurrency & Observability](./_completed/SP-008-reliability-engineering.md) | ✅ Shipped (Tracks A + B complete 2026-06) |
-| SP-009 | [Component Library Maturation — Storybook + @sprout/ui](./_completed/SP-009-component-library-maturation.md) | ✅ Implemented (Storybook + MDX docs + Chromatic visual regression; webui imports @sprout/ui as monorepo sibling) |
-| SP-010 | [Editor Modernization](./_completed/SP-010-editor-modernization.md) | ✅ Implemented (EditorPane 2604→513 lines; EditorCore extracted; React.memo + 18 bug fixes) |
-| SP-011 | [Terminal Parity & Bug Fixes](./_completed/SP-011-terminal-parity.md) | ✅ Shipped (all 3 phases complete 2026-06) |
-| SP-012 | [UX Polish](./_completed/SP-012-ux-polish.md) | ✅ Implemented (a11y gap-closure shipped 2026-07-01: `role="treeitem"`/`aria-expanded` on FileTree rows, `aria-live="polite"` on ChatPanel log region, global `:focus-visible` styles in `webui/src/index.css`, `notificationBus.markAllRead()` + NotificationCenter "Mark all read" button. Broader SP-012 surface shipped 2026-06-23 → 2026-06-30 per the spec history.) |
-| SP-013 | [Agent Settings Management Tool](./_completed/SP-013-agent-settings-skill.md) | ✅ Implemented (manage_settings tool registered; pkg/agent/settings_handler.go) |
-| SP-014 | [Agent Terminal Sessions — Hidden PTY Routing + Background Mode](./_completed/SP-014-agent-terminal-sessions.md) | ✅ Implemented (Hidden PTY routing + background mode shipped) |
-| SP-015 | [Cloud Platform Integration](./_completed/SP-015-cloud-platform.md) | ✅ Implemented (sprout-side; 2026-06-26) — R1–R7 complete in this repo. Cross-repo evolution lives in `../sprout-foundry` |
-| SP-016 | [Embedding Index — Duplicate Detection & Semantic Search](./_completed/SP-016-embedding-duplicate-detection.md) | ✅ Implemented (core infrastructure complete; expanded scope in SP-016b) |
-| SP-016b | [Expanded Embedding Index — Full Workspace Semantic Search](./_completed/SP-016b-expanded-embedding-index.md) | ✅ Shipped (backend complete 2026-06; minor SearchView.tsx UI gap) |
-| SP-017 | [Settings Panel Rework — Scoped Collapsible Sections](./_completed/SP-017-settings-panel-rework.md) | ✅ Partially Implemented (scoped labels shipped; collapsible sections pending → see SP-101) |
-| SP-018 | [Memory System](./_completed/SP-018-memory-system.md) | ✅ Implemented |
-| SP-019 | [Multi-Chat Sessions](./_completed/SP-019-multi-chat-sessions.md) | ✅ Implemented |
-| SP-020 | [Trace/Dataset Mode](./_completed/SP-020-trace-dataset-mode.md) | ✅ Implemented |
-| SP-022 | [Remote Provider Registry](./_completed/SP-022-remote-provider-registry.md) | ✅ Implemented |
-| SP-022 | [Workspace Management & Project Detection](./_completed/SP-022-workspace-management.md) | ✅ Implemented (WorkspacePicker + WorkspacePane + LocationSwitcher + WorkspaceBar) |
-| SP-023 | [In-Process Subagent Execution](./_completed/SP-023-in-process-subagents.md) | ✅ Active |
-| SP-024 | [Context Management — File Read Optimization](./_completed/SP-024-context-management.md) | ✅ Phase 1-3, Phase 4 complete (Phase 2 deferred; tree-sitter in SP-025) |
-| SP-025 | [Tree-Sitter Integration — Real AST for Multi-Language Symbol Extraction](./_completed/SP-025-tree-sitter-integration.md) | ✅ Shipped (all 5 phases complete 2026-06) |
-| SP-026 | [Coordinator Persona (formerly "Executive Assistant")](./_completed/SP-026-executive-assistant.md) | ✅ Implemented (renamed 2026-06-03, see commit `516a9d41`) |
-| SP-027 | [Persistent Context & Conversational Memory](./_completed/SP-027-persistent-context.md) | ✅ Shipped (all 4 phases complete 2026-06) |
-| SP-039 | [SP-039 — UI Consolidation Decision](./_completed/SP-039-DECISION.md) | ✅ Decision made |
-| SP-039 | [Component Categorization](./_completed/SP-039-component-categorization.md) | (supporting doc — see linked spec) |
-| SP-045 | [WASM Build Feature Parity](./_completed/SP-045-wasm-feature-parity.md) | ✅ Shipped (Tiers 1-3 complete 2026-06) |
-| SP-046 | [Browser-Primary Workspace Sync Model](./_completed/SP-046-workspace-sync-model.md) | ✅ Shipped (all 5 numbered items complete 2026-06) |
-| SP-048 | [CLI Delight — Terminal UX Polish](./_completed/SP-048-cli-delight.md) | ✅ Partially Implemented (status footer + glyph vocabulary shipped; tool timeline + silence-fill pending → see SP-101) |
-| SP-049 | [Shell Permission Overhaul — User-Configurable Policy & Headless Hardening](./_completed/SP-049-shell-permission-overhaul.md) | ✅ Implemented (Phases 3a–3d complete) |
-| SP-050 | [Orchestrator Persona Collapse — One Persona, Configurable Git-Write](./_completed/SP-050-orchestrator-persona-collapse.md) | ✅ Implemented |
-| SP-051 | [Depth-Aware Subagent UI — Visible Nesting in the CLI](./_completed/SP-051-depth-aware-subagent-ui.md) | ✅ Implemented |
-| SP-053 | [WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer](./_completed/SP-053-webui-cli-parity.md) | ✅ Implemented |
-| SP-054 | [LSP Language Coverage Expansion](./_completed/SP-054-lsp-language-coverage.md) | ✅ Shipped (all 3 phases complete 2026-06) |
-| SP-055 | [CLI Pinned Input — Always-On Steering Panel](./_completed/SP-055-cli-pinned-input.md) | ✅ Shipped — Phases 1/2/3 + 3b (done-queue mode) + 3c (UTF-8) + OPOST fix. |
-| SP-056 | [CLI Reasoning Fold — Collapsed Thinking Indicator](./_completed/SP-056-cli-reasoning-fold.md) | ✅ Implemented (2026-06-30) |
-| SP-057 | [CLI Output Consistency — Glyph Migration & Unified Picker](./_completed/SP-057-cli-output-consistency.md) | ✅ Shipped (all 5 phases, 2026-05-25) |
-| SP-058 | [Selective Grammar Embedding for WASM and Daemon](./_completed/SP-058-selective-grammar-embed.md) | ✅ Implemented (Daemon binary 149 MB per 899d667f; 22 MB below 171 MB target) |
-| SP-059 | [Subagent ↔ Primary Interaction Overhaul + Delegate Retirement](./_completed/SP-059-subagent-interaction.md) | ✅ Implemented (Phases 1–6 complete; delegate tool retired; audited 2026-06-27) |
-| SP-059 | [SP-059-6a — Delegate Feature Porting Review](./_completed/SP-059-6a-review.md) | (supporting doc — see linked spec) |
-| SP-060 | [Desktop App — Per-Workspace Server Mode](./_completed/SP-060-desktop-serve.md) | ✅ Implemented (Phase A + Phase B shipped and verified) |
-| SP-061 | [Remove Static Embedding Provider, Consolidate on ONNX](./_completed/SP-061-remove-static-embeddings.md) | ✅ Implemented (Static embedding provider removed via SP-091-2) |
-| SP-062 | [CLI-Native Background Shell Execution](./_completed/SP-062-cli-background-shell.md) | ✅ Implemented (BackgroundProcessManager wired into shell dispatch) |
-| SP-063 | [Destructive-App Denylist — Pre-Click Gate for Computer-Use Actions](./_completed/SP-063-destructive-denylist-design.md) | (supporting doc — see linked spec) |
-| SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./_completed/SP-063-computer-use-persona.md) | ✅ Implemented — all safety gates shipped as of 2026-06-30 (including gate 4h destructive-app denylist) |
-| SP-063 | [Panic Key — Emergency Stop for Computer-Use Action Loops](./_completed/SP-063-panic-key-design.md) | (supporting doc — see linked spec) |
-| SP-064 | [Automate CLI — Status, Stop, Logs](./_completed/SP-064-automate-cli-monitoring.md) | ✅ Implemented (sprout automate status/stop/logs) |
-| SP-065 | [WebUI Automations Panel](./_completed/SP-065-automate-webui-panel.md) | ✅ Implemented (live WS event stream; commit 4f0a81c5) |
-| SP-066 | [Never-Ending Context — Substitution-First Context Management, Hierarchical Rollups, and Embedded Memory Recall](./_completed/SP-066-never-ending-context.md) | ✅ Substantially Shipped (Phase 3d deferred) |
-| SP-067 | [Automate Workflow Completion Injection](./_completed/SP-067-automate-completion-injection.md) | ✅ Implemented (2026-06-06) |
-| SP-068 | [Security Check Consolidation — One Risk Scale, One Resolver, One Broker](./_completed/SP-068-security-check-consolidation.md) | ✅ Implemented (Phases 1–3 shipped: single resolver, single broker, sprout explain) |
-| SP-069 | [Pull Request Creation — Close the "agent did the work, now what?" Gap](./_completed/SP-069-pull-request-creation.md) | ✅ Implemented |
-| SP-070 | [Agent Completion Notifications — Tell the User When It's Their Turn](./_completed/SP-070-completion-notifications.md) | ✅ Implemented |
-| SP-071 | [Conversation Rewind & Edit-and-Resend — Undo a Wrong Turn](./_completed/SP-071-conversation-rewind.md) | ✅ Implemented |
-| SP-072 | [Per-Hunk Diff Approval — Optional Approve-Before-Apply for Agent Edits](./_completed/SP-072-diff-approval.md) | ✅ Implemented |
-| SP-073 | [Cooperative Cancellation — Thread Context So Stop Actually Aborts](./_completed/SP-073-cooperative-cancellation.md) | ✅ Implemented (zero TODO(SP-034-1c) markers remain; all 10 sites threaded) |
-| SP-074 | [Finish the Tool-Registry Migration — Retire the Dual-Dispatch Shim](./_completed/SP-074-tool-registry-migration.md) | ✅ Shipped (Phases 1–4 complete; 2026-06-26) |
-| SP-076 | [WebUI Streaming Fix + Verbosity Modes](./_completed/SP-076-webui-streaming-verbosity.md) | ✅ Implemented (2026-06-26) |
-| SP-077 | [ChangeTracker Reverts Committed Work During Git Operations](./_completed/SP-077-changetracker-reverts-committed-work.md) | ✅ Implemented (Phase 1 + Phase 2) |
-| SP-078 | [Steer-Panel UX Parity — Wrap-Aware Rendering, Tab Completion](./_completed/SP-078-steer-panel-ux-parity.md) | ✅ Implemented (2026-06-30; Phases 1–4 complete) |
-| SP-079 | [Migrate Stub Tool Handlers off the Legacy `*Agent` Path](./_completed/SP-079-migrate-stub-tool-handlers.md) | ✅ Implemented (2026-06-30) |
-| SP-080 | [Type the Unknown-Tool Error in ToolRegistry](./_completed/SP-080-type-unknown-tool-error.md) | ✅ Implemented (2026-06-30) |
-| SP-081 | [Delete the Dead `pkg/tools/global.go` Executor](./_completed/SP-081-delete-dead-global-executor.md) | ✅ Implemented (2026-06-30) |
-| SP-082 | [Preserve Key Insertion Order in Structured File Tools](./_completed/SP-082-preserve-structured-file-key-order.md) | ✅ Implemented (2026-06-30) — supersedes the original SP-066 key-order proposal |
-| SP-083 | [Cross-Session Search — Find Past Conversations by Content](./_completed/SP-083-cross-session-search.md) | ✅ Implemented (2026-06-30) |
-| SP-084 | [Export Sessions to Shareable Markdown / HTML](./_completed/SP-084-export-session-markdown.md) | ✅ Implemented (2026-06-30) |
-| SP-085 | [Cost Analytics Dashboard — Model / Provider / Day Breakdown](./_completed/SP-085-cost-analytics-dashboard.md) | ✅ Implemented (2026-06-30) |
-| SP-086 | [Skill Install — Pull Skills from Git, URLs, and Registries](./_completed/SP-086-skill-install-command.md) | ✅ Implemented (2026-06-30) |
-| SP-087 | [SP-087 Acceptance Report](./_completed/SP-087-acceptance.md) | (supporting doc — see linked spec) |
-| SP-087b | [Full Playwright Coverage of the WebUI](./_completed/SP-087b-full-playwright-webui-coverage.md) | ✅ Implemented (2026-06-30; acceptance criterion 3 partial — trace/video/screenshot config deferred, see SP-087-acceptanc |
-| SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./_completed/SP-105-cli-interactive-panels.md) | ✅ Implemented — `/settings` interactive AskUser-driven panel + `/usage` Unicode bar-chart dashboard + `--json` flag; `/stats` aliased to `/usage`. `pkg/agent_commands/settings_cmd.go` + `usage_cmd.go`; 23 unit tests pass. |
-| SP-106 | [CLI Output Polish + SelectList Touch Scroll](./_completed/SP-106-cli-output-polish.md) | ✅ Implemented (all 3 features: markdown table rendering, nested list indentation + indented code blocks, SelectList mouse wheel scroll) |
-| SP-107 | [Code Intelligence Graph](./_completed/SP-107-code-intelligence-graph.md) | ✅ Implemented — auto-build on first query (`codegraph_handler.go:60`), embedding_index integration (`embedding_index_handler.go:267`), qualified-name edge fix (`repo_map.go:ToCodegraphSymbols`). 41 codegraph + 29 edge-extraction tests pass; `find_dead_code`/`get_callers`/`get_callees` produce real results. Spec reconciliation at `55c997e1`; primary wiring at `7ea9061d`, `ce0e6b48`, `82d40fa1`. |
-| SP-109 | [Single-Source Tool Definitions — Eliminate Dual Maintenance](./_completed/SP-109-single-source-tool-definitions.md) | ✅ Implemented (all 4 phases complete; legacy `ToolConfig` registry deleted; `ToolHandler.Definition()` is the single source of truth) |
-| SP-110 | [Background Completion Injection & Auto-Resume](./_completed/SP-110-background-completion-auto-resume.md) | ✅ Implemented — All 3 phases shipped at `6d31e17a` (`pkg/agent/notifications.go`, `pkg/webui/wakeup_poller.go` with 2s ticker + all-gates-checked polling loop, Settings → Agent → General → "Enable auto-resume" toggle, per-session tokens/resumes budgets, interrupt-safety via `DisableWakeup`). Off by default; opt-in. |
-| SP-115 | [CLI UX — Footer Keyboard Hint Row](./_completed/SP-115-cli-ux-10-keyboard-affordances.md) | ✅ Implemented — `KeymapHintRow()` formatter (`pkg/console/input_keymap.go:188`), `SetShowKeymapHint()` field + setter (`status_footer.go:240`), scroll-region-aware rendering at `status_footer.go:731`, hint-toggle plumbing wired into REPL bootstrap. Footer hint row shows accurate, useful shortcuts per commit `d33db212`. |
-| SP-116 | [Multi-Instance Isolation](./_completed/SP-116-multi-instance-isolation.md) | ✅ Implemented — git-repo auto-detection in `cmd/root.go` makes `.sprout/` isolation the default for repo-backed directories; bg processes scoped to config dir; layered config merges workspace overrides with global providers. Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). |
-| SP-118 | [Daemon Multi-Window Session Isolation](./_completed/SP-118-daemon-multi-window-sessions.md) | ✅ Implemented (Phases 1–5 shipped 2026-07-15; Phase 6 partial — TODO.md sync landed, README + Settings UI deferred per AGENTS.md "no documentation" rule). Mode 2 (daemon) supports N parallel browser windows per user via `agentEnforceSingleSession` dispatch + `UserConnections` registry; Mode 1 (`sprout agent`) keeps single-active semantics. `daemon_multi_session` feature flag defaulted ON; rollback via `sprout config set daemon_multi_session=false`. `active_ws_count_by_user` metric exposed at `/api/ws-metrics`. |
-| SP-119 | [Workspace-aware Directory Resolution](./_completed/SP-119-workspace-aware-directory-resolution.md) | ✅ Implemented — `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool and interface-handler paths so daemon-served workspaces find `<workspace>/automate/` instead of the daemon root. 3 phases shipped 2026-07-15 (`6608ecf3`, `aa2d05a9`). Out-of-scope follow-ups (~25 callsites across `pkg/agent/persistence.go`, `pkg/agent/skills.go`, `pkg/agent_tools/shell_native.go`, etc.) tracked under SP-091. |
-| SP-120 | [Codebase Organization & Test Infrastructure Cleanup](./_completed/SP-120-codebase-organization-cleanup.md) | ✅ Implemented — Phase 1 + 2a/2b/2c + Phase 3 all shipped 2026-07-15. The 199-file cmd/ god package lost another ~2000 lines to a new pkg/cliui/ (terminal subscriber, tool/subagent display, turn stats). Tests/builds all clean. |
-| SP-123 | [User-Level Command Policies](./_completed/SP-123-user-command-policies.md) | ✅ Shipped — Phases 1–3 (2026-07-16). Unified command-policy layer with `Always Allow` / `Always Prompt` / `Always Deny` actions across the five fragmented pre-existing config surfaces; overrides `permissive`-mode auto-approval. |
+| SP-001 | Agent Core Architecture | ✅ Active (recently refactored) |
+| SP-002 | Configuration, Credentials & Providers | ✅ Active |
+| SP-003 | Webui & Frontend Architecture | ✅ Active (under active development) |
+| SP-004 | Security, Validation & MCP | ✅ Active |
+| SP-005 | Supporting Systems & Infrastructure | ✅ Active |
+| SP-008 | Reliability Engineering — Concurrency & Observability | ✅ Shipped (Tracks A + B complete 2026-06) |
+| SP-009 | Component Library Maturation — Storybook + @sprout/ui | ✅ Implemented (Storybook + MDX docs + Chromatic visual regression; webui imports @sprout/ui as monorepo sibling) |
+| SP-010 | Editor Modernization | ✅ Implemented (EditorPane 2604→513 lines; EditorCore extracted; React.memo + 18 bug fixes) |
+| SP-011 | Terminal Parity & Bug Fixes | ✅ Shipped (all 3 phases complete 2026-06) |
+| SP-012 | UX Polish | ✅ Implemented (a11y gap-closure shipped 2026-07-01: `role="treeitem"`/`aria-expanded` on FileTree rows, `aria-live="polite"` on ChatPanel log region, global `:focus-visible` styles in `webui/src/index.css`, `notificationBus.markAllRead()` + NotificationCenter "Mark all read" button. Broader SP-012 surface shipped 2026-06-23 → 2026-06-30 per the spec history.) |
+| SP-013 | Agent Settings Management Tool | ✅ Implemented (manage_settings tool registered; pkg/agent/settings_handler.go) |
+| SP-014 | Agent Terminal Sessions — Hidden PTY Routing + Background Mode | ✅ Implemented (Hidden PTY routing + background mode shipped) |
+| SP-015 | Cloud Platform Integration | ✅ Implemented (sprout-side; 2026-06-26) — R1–R7 complete in this repo. Cross-repo evolution lives in `../sprout-foundry` |
+| SP-016 | Embedding Index — Duplicate Detection & Semantic Search | ✅ Implemented (core infrastructure complete; expanded scope in SP-016b) |
+| SP-016b | Expanded Embedding Index — Full Workspace Semantic Search | ✅ Shipped (backend complete 2026-06; minor SearchView.tsx UI gap) |
+| SP-017 | Settings Panel Rework — Scoped Collapsible Sections | ✅ Partially Implemented (scoped labels shipped; collapsible sections pending → see SP-101) |
+| SP-018 | Memory System | ✅ Implemented |
+| SP-019 | Multi-Chat Sessions | ✅ Implemented |
+| SP-020 | Trace/Dataset Mode | ✅ Implemented |
+| SP-022 | Remote Provider Registry | ✅ Implemented |
+| SP-022 | Workspace Management & Project Detection | ✅ Implemented (WorkspacePicker + WorkspacePane + LocationSwitcher + WorkspaceBar) |
+| SP-023 | In-Process Subagent Execution | ✅ Active |
+| SP-024 | Context Management — File Read Optimization | ✅ Phase 1-3, Phase 4 complete (Phase 2 deferred; tree-sitter in SP-025) |
+| SP-025 | Tree-Sitter Integration — Real AST for Multi-Language Symbol Extraction | ✅ Shipped (all 5 phases complete 2026-06) |
+| SP-026 | Coordinator Persona (formerly "Executive Assistant") | ✅ Implemented (renamed 2026-06-03, see commit `516a9d41`) |
+| SP-027 | Persistent Context & Conversational Memory | ✅ Shipped (all 4 phases complete 2026-06) |
+| SP-039 | SP-039 — UI Consolidation Decision | ✅ Decision made |
+| SP-039 | Component Categorization | (supporting doc — see linked spec) |
+| SP-045 | WASM Build Feature Parity | ✅ Shipped (Tiers 1-3 complete 2026-06) |
+| SP-046 | Browser-Primary Workspace Sync Model | ✅ Shipped (all 5 numbered items complete 2026-06) |
+| SP-048 | CLI Delight — Terminal UX Polish | ✅ Partially Implemented (status footer + glyph vocabulary shipped; tool timeline + silence-fill pending → see SP-101) |
+| SP-049 | Shell Permission Overhaul — User-Configurable Policy & Headless Hardening | ✅ Implemented (Phases 3a–3d complete) |
+| SP-050 | Orchestrator Persona Collapse — One Persona, Configurable Git-Write | ✅ Implemented |
+| SP-051 | Depth-Aware Subagent UI — Visible Nesting in the CLI | ✅ Implemented |
+| SP-053 | WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer | ✅ Implemented |
+| SP-054 | LSP Language Coverage Expansion | ✅ Shipped (all 3 phases complete 2026-06) |
+| SP-055 | CLI Pinned Input — Always-On Steering Panel | ✅ Shipped — Phases 1/2/3 + 3b (done-queue mode) + 3c (UTF-8) + OPOST fix. |
+| SP-056 | CLI Reasoning Fold — Collapsed Thinking Indicator | ✅ Implemented (2026-06-30) |
+| SP-057 | CLI Output Consistency — Glyph Migration & Unified Picker | ✅ Shipped (all 5 phases, 2026-05-25) |
+| SP-058 | Selective Grammar Embedding for WASM and Daemon | ✅ Implemented (Daemon binary 149 MB per 899d667f; 22 MB below 171 MB target) |
+| SP-059 | Subagent ↔ Primary Interaction Overhaul + Delegate Retirement | ✅ Implemented (Phases 1–6 complete; delegate tool retired; audited 2026-06-27) |
+| SP-059 | SP-059-6a — Delegate Feature Porting Review | (supporting doc — see linked spec) |
+| SP-060 | Desktop App — Per-Workspace Server Mode | ✅ Implemented (Phase A + Phase B shipped and verified) |
+| SP-061 | Remove Static Embedding Provider, Consolidate on ONNX | ✅ Implemented (Static embedding provider removed via SP-091-2) |
+| SP-062 | CLI-Native Background Shell Execution | ✅ Implemented (BackgroundProcessManager wired into shell dispatch) |
+| SP-063 | Destructive-App Denylist — Pre-Click Gate for Computer-Use Actions | (supporting doc — see linked spec) |
+| SP-063 | Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent | ✅ Implemented — all safety gates shipped as of 2026-06-30 (including gate 4h destructive-app denylist) |
+| SP-063 | Panic Key — Emergency Stop for Computer-Use Action Loops | (supporting doc — see linked spec) |
+| SP-064 | Automate CLI — Status, Stop, Logs | ✅ Implemented (sprout automate status/stop/logs) |
+| SP-065 | WebUI Automations Panel | ✅ Implemented (live WS event stream; commit 4f0a81c5) |
+| SP-066 | Never-Ending Context — Substitution-First Context Management, Hierarchical Rollups, and Embedded Memory Recall | ✅ Substantially Shipped (Phase 3d deferred) |
+| SP-067 | Automate Workflow Completion Injection | ✅ Implemented (2026-06-06) |
+| SP-068 | Security Check Consolidation — One Risk Scale, One Resolver, One Broker | ✅ Implemented (Phases 1–3 shipped: single resolver, single broker, sprout explain) |
+| SP-069 | Pull Request Creation — Close the "agent did the work, now what?" Gap | ✅ Implemented |
+| SP-070 | Agent Completion Notifications — Tell the User When It's Their Turn | ✅ Implemented |
+| SP-071 | Conversation Rewind & Edit-and-Resend — Undo a Wrong Turn | ✅ Implemented |
+| SP-072 | Per-Hunk Diff Approval — Optional Approve-Before-Apply for Agent Edits | ✅ Implemented |
+| SP-073 | Cooperative Cancellation — Thread Context So Stop Actually Aborts | ✅ Implemented (zero TODO(SP-034-1c) markers remain; all 10 sites threaded) |
+| SP-074 | Finish the Tool-Registry Migration — Retire the Dual-Dispatch Shim | ✅ Shipped (Phases 1–4 complete; 2026-06-26) |
+| SP-076 | WebUI Streaming Fix + Verbosity Modes | ✅ Implemented (2026-06-26) |
+| SP-077 | ChangeTracker Reverts Committed Work During Git Operations | ✅ Implemented (Phase 1 + Phase 2) |
+| SP-078 | Steer-Panel UX Parity — Wrap-Aware Rendering, Tab Completion | ✅ Implemented (2026-06-30; Phases 1–4 complete) |
+| SP-079 | Migrate Stub Tool Handlers off the Legacy `*Agent` Path | ✅ Implemented (2026-06-30) |
+| SP-080 | Type the Unknown-Tool Error in ToolRegistry | ✅ Implemented (2026-06-30) |
+| SP-081 | Delete the Dead `pkg/tools/global.go` Executor | ✅ Implemented (2026-06-30) |
+| SP-082 | Preserve Key Insertion Order in Structured File Tools | ✅ Implemented (2026-06-30) — supersedes the original SP-066 key-order proposal |
+| SP-083 | Cross-Session Search — Find Past Conversations by Content | ✅ Implemented (2026-06-30) |
+| SP-084 | Export Sessions to Shareable Markdown / HTML | ✅ Implemented (2026-06-30) |
+| SP-085 | Cost Analytics Dashboard — Model / Provider / Day Breakdown | ✅ Implemented (2026-06-30) |
+| SP-086 | Skill Install — Pull Skills from Git, URLs, and Registries | ✅ Implemented (2026-06-30) |
+| SP-087 | SP-087 Acceptance Report | (supporting doc — see linked spec) |
+| SP-087b | Full Playwright Coverage of the WebUI | ✅ Implemented (2026-06-30; acceptance criterion 3 partial — trace/video/screenshot config deferred, see SP-087-acceptanc |
+| SP-105 | CLI Interactive Panels — Settings Browser & Usage Dashboard | ✅ Implemented — `/settings` interactive AskUser-driven panel + `/usage` Unicode bar-chart dashboard + `--json` flag; `/stats` aliased to `/usage`. `pkg/agent_commands/settings_cmd.go` + `usage_cmd.go`; 23 unit tests pass. |
+| SP-106 | CLI Output Polish + SelectList Touch Scroll | ✅ Implemented (all 3 features: markdown table rendering, nested list indentation + indented code blocks, SelectList mouse wheel scroll) |
+| SP-107 | Code Intelligence Graph | ✅ Implemented — auto-build on first query (`codegraph_handler.go:60`), embedding_index integration (`embedding_index_handler.go:267`), qualified-name edge fix (`repo_map.go:ToCodegraphSymbols`). 41 codegraph + 29 edge-extraction tests pass; `find_dead_code`/`get_callers`/`get_callees` produce real results. Spec reconciliation at `55c997e1`; primary wiring at `7ea9061d`, `ce0e6b48`, `82d40fa1`. |
+| SP-109 | Single-Source Tool Definitions — Eliminate Dual Maintenance | ✅ Implemented (all 4 phases complete; legacy `ToolConfig` registry deleted; `ToolHandler.Definition()` is the single source of truth) |
+| SP-110 | Background Completion Injection & Auto-Resume | ✅ Implemented — All 3 phases shipped at `6d31e17a` (`pkg/agent/notifications.go`, `pkg/webui/wakeup_poller.go` with 2s ticker + all-gates-checked polling loop, Settings → Agent → General → "Enable auto-resume" toggle, per-session tokens/resumes budgets, interrupt-safety via `DisableWakeup`). Off by default; opt-in. |
+| SP-115 | CLI UX — Footer Keyboard Hint Row | ✅ Implemented — `KeymapHintRow()` formatter (`pkg/console/input_keymap.go:188`), `SetShowKeymapHint()` field + setter (`status_footer.go:240`), scroll-region-aware rendering at `status_footer.go:731`, hint-toggle plumbing wired into REPL bootstrap. Footer hint row shows accurate, useful shortcuts per commit `d33db212`. |
+| SP-116 | Multi-Instance Isolation | ✅ Implemented — git-repo auto-detection in `cmd/root.go` makes `.sprout/` isolation the default for repo-backed directories; bg processes scoped to config dir; layered config merges workspace overrides with global providers. Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). |
+| SP-118 | Daemon Multi-Window Session Isolation | ✅ Implemented (Phases 1–5 shipped 2026-07-15; Phase 6 partial — TODO.md sync landed, README + Settings UI deferred per AGENTS.md "no documentation" rule). Mode 2 (daemon) supports N parallel browser windows per user via `agentEnforceSingleSession` dispatch + `UserConnections` registry; Mode 1 (`sprout agent`) keeps single-active semantics. `daemon_multi_session` feature flag defaulted ON; rollback via `sprout config set daemon_multi_session=false`. `active_ws_count_by_user` metric exposed at `/api/ws-metrics`. |
+| SP-119 | Workspace-aware Directory Resolution | ✅ Implemented — `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool and interface-handler paths so daemon-served workspaces find `<workspace>/automate/` instead of the daemon root. 3 phases shipped 2026-07-15 (`6608ecf3`, `aa2d05a9`). Out-of-scope follow-ups (~25 callsites across `pkg/agent/persistence.go`, `pkg/agent/skills.go`, `pkg/agent_tools/shell_native.go`, etc.) tracked under SP-091. |
+| SP-120 | Codebase Organization & Test Infrastructure Cleanup | ✅ Implemented — Phase 1 + 2a/2b/2c + Phase 3 all shipped 2026-07-15. The 199-file cmd/ god package lost another ~2000 lines to a new pkg/cliui/ (terminal subscriber, tool/subagent display, turn stats). Tests/builds all clean. |
+| SP-123 | User-Level Command Policies | ✅ Shipped — Phases 1–3 (2026-07-16). Unified command-policy layer with `Always Allow` / `Always Prompt` / `Always Deny` actions across the five fragmented pre-existing config surfaces; overrides `permissive`-mode auto-approval. |
 
 ## Pending
 
-Specs still in flight (5 files). When a spec's core work
-ships, it moves to [`_completed/`](./_completed/).
+Specs still in flight. When a spec's core work ships, it is closed at HEAD
+and the spec body lives in git history.
 
 | Spec | Title | Status |
 |------|-------|--------|

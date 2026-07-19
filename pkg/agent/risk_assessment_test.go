@@ -232,7 +232,7 @@ func TestResolveToolRisk_NilAgent(t *testing.T) {
 // ResolveToolRisk — Git history-rewrite gate
 // ---------------------------------------------------------------------------
 
-func TestResolveToolRisk_GitHistoryRewriteBlocked(t *testing.T) {
+func TestResolveToolRisk_GitHistoryRewritePromptable(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
@@ -255,11 +255,11 @@ func TestResolveToolRisk_GitHistoryRewriteBlocked(t *testing.T) {
 		t.Errorf("Sources %v should contain git-history-rewrite for git rebase", assessment.Sources)
 	}
 
-	if assessment.Level != configuration.RiskLevelCritical {
-		t.Errorf("Level = %q, want Critical for git rebase when AllowGitHistoryRewrite is false", assessment.Level)
+	if assessment.Level != configuration.RiskLevelHigh {
+		t.Errorf("Level = %q, want High for git rebase when AllowGitHistoryRewrite is false (promptable, not hard-blocked)", assessment.Level)
 	}
-	if !assessment.IsHardBlock {
-		t.Error("IsHardBlock should be true for git rebase when AllowGitHistoryRewrite is false")
+	if assessment.IsHardBlock {
+		t.Error("IsHardBlock should be false for git rebase — recoverable via reflog, so promptable not hard-blocked")
 	}
 }
 

@@ -34,6 +34,7 @@ import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
+import { parseSecurityAnalysis } from '../utils/parseSecurityAnalysis';
 import {
   createLogEntry,
   type EventHandlerContext,
@@ -978,6 +979,11 @@ const handleShellApprovalRequest = (ctx: EventHandlerContext): void => {
       }))
     : [];
 
+  // SP-124-2: parse the JSON-encoded security_analysis field if present.
+  // Silent fall-through on malformed JSON per the SP-124 "analyzer is
+  // non-blocking" contract.
+  const securityAnalysis = parseSecurityAnalysis(data);
+
   setState((prev) => ({
     shellApprovalRequest: {
       requestId: String(data.request_id),
@@ -985,6 +991,7 @@ const handleShellApprovalRequest = (ctx: EventHandlerContext): void => {
       parts,
       unifiedView: data.unified_view != null ? String(data.unified_view) : '',
       riskLevel: String(data.risk_level || 'High'),
+      securityAnalysis,
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));

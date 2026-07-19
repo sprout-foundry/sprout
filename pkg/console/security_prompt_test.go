@@ -2,6 +2,8 @@ package console
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -57,7 +59,7 @@ func TestSecurityApprovalBell(t *testing.T) {
 	var buf bytes.Buffer
 	// The function writes \a + header + footnote, then fails on Run()
 	// returning ApprovalChoiceDeny because the buffer is not a TTY.
-	choice := askForSecurityApprovalWriter(&buf, "High-risk operation", "rm -rf /tmp/foo")
+	choice := askForSecurityApprovalWriter(&buf, "High-risk operation", "rm -rf /tmp/foo", nil)
 	if choice != utils.ApprovalChoiceDeny {
 		t.Logf("approval choice was %v (expected Deny on non-TTY)", choice)
 	}
@@ -85,5 +87,168 @@ func TestFilesystemSecurityApprovalBell(t *testing.T) {
 	}
 	if out[0] != '\a' {
 		t.Errorf("expected first byte to be bell (\\a, 0x07), got 0x%02x (%q)", out[0], out[:min(len(out), 20)])
+	}
+}
+
+// TestWriteSecurityAnalysisPanel verifies the panel renders the analysis
+// summary, recommendation, and modifies string with the correct tone
+// indicator. SP-124 Phase 3.
+func TestWriteSecurityAnalysisPanel(t *testing.T) {
+	cases := []struct {
+		name    string
+		view    *utils.SecurityAnalysisView
+		want    []string // substrings that must appear in the rendered output
+		noColor bool    // disable colorization to verify the fallback path
+	}{
+		{
+			name: "approve recommendation renders check + green tone",
+			view: &utils.SecurityAnalysisView{
+				Summary:        "Removes only files matching /tmp/cache/*.",
+				Modifies:       "files under /tmp/cache",
+				RiskAssessment: "low",
+				Recommendation: "approve",
+			},
+			want: []string{
+				"Removes only files matching /tmp/cache/*.",
+				"files under /tmp/cache",
+				"Looks safe",
+				"low",
+			},
+		},
+		{
+			name: "review recommendation renders amber tone",
+			view: &utils.SecurityAnalysisView{
+				Summary:        "Touches a tracked file outside CWD.",
+				Modifies:       "/etc/hosts",
+				RiskAssessment: "moderate",
+				Recommendation: "review",
+			},
+			want: []string{
+				"Touches a tracked file outside CWD.",
+				"/etc/hosts",
+				"Review needed",
+				"moderate",
+			},
+		},
+		{
+			name: "reject recommendation renders red tone",
+			view: &utils.SecurityAnalysisView{
+				Summary:        "Drops a remote DB without a dry-run or backup.",
+				Modifies:       "production Postgres on staging.example.com",
+				RiskAssessment: "high",
+				Recommendation: "reject",
+			},
+			want: []string{
+				"Drops a remote DB without a dry-run or backup.",
+				"production Postgres",
+				"Recommend reject",
+				"high",
+			},
+		},
+		{
+			name: "empty modifies is suppressed",
+			view: &utils.SecurityAnalysisView{
+				Summary:        "Read-only diagnostic.",
+				Modifies:       "",
+				RiskAssessment: "low",
+				Recommendation: "approve",
+			},
+			want: []string{"Read-only diagnostic.", "Looks safe"},
+		},
+		{
+			name:    "no-color path still renders all fields",
+			view:    sampleAnalysis(),
+			want:    []string{"Read-only diagnostic.", "Looks safe", "low"},
+			noColor: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.noColor {
+				t.Setenv("NO_COLOR", "1")
+			}
+			var buf bytes.Buffer
+			writeSecurityAnalysisPanel(&buf, tc.view)
+			out := buf.String()
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("expected output to contain %q, got:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
+// TestWriteSecurityAnalysisPanel_NilSafe verifies that a nil analysis does
+// not panic and emits no output — callers gate the panel render on a
+// non-nil analysis, but a defensive no-op is required since the picker
+// runs in user-facing prompts and panic recovery would be intrusive.
+func TestWriteSecurityAnalysisPanel_NilSafe(t *testing.T) {
+	var buf bytes.Buffer
+	writeSecurityAnalysisPanel(&buf, nil)
+	if buf.Len() != 0 {
+		t.Errorf("expected no output for nil analysis, got %q", buf.String())
+	}
+}
+
+// TestAskForSecurityApproval_RendersAnalysisBeforePicker verifies that when
+// an analysis is supplied, the rendered output places the panel BEFORE the
+// picker footer. SP-124 Phase 3 — the user must see the LLM's reasoning
+// at decision time, not after.
+func TestAskForSecurityApproval_RendersAnalysisBeforePicker(t *testing.T) {
+	var buf bytes.Buffer
+	view := &utils.SecurityAnalysisView{
+		Summary:        "Removes only the configured stale-build directory.",
+		Modifies:       "/home/me/project/build",
+		RiskAssessment: "low",
+		Recommendation: "approve",
+	}
+
+	// Inject a stub picker that emits a footer marker to the writer and
+	// returns Deny. We can't drive the real SelectList (TTY only), but the
+	// writer is the same one the panel renders into, so positional checks
+	// remain valid.
+	prev := SetApprovalPickerForTest(func(w io.Writer, sl *SelectList) (string, bool) {
+		fmt.Fprintln(w, "[picker footer marker]")
+		return "", false
+	})
+	t.Cleanup(func() { SetApprovalPickerForTest(prev) })
+
+	askForSecurityApprovalWriter(&buf, "High-risk operation", "rm -rf /home/me/project/build", view)
+	out := buf.String()
+
+	summaryIdx := strings.Index(out, "Removes only the configured stale-build directory.")
+	footerIdx := strings.Index(out, "[picker footer marker]")
+
+	if summaryIdx == -1 {
+		t.Fatalf("expected summary to appear in output, got:\n%s", out)
+	}
+	if footerIdx == -1 {
+		t.Fatalf("expected picker footer marker to appear in output, got:\n%s", out)
+	}
+	if summaryIdx > footerIdx {
+		t.Errorf("summary must appear BEFORE picker footer (decision-time visibility):\n%s", out)
+	}
+}
+
+// TestAskForSecurityApproval_OmitsPanelWhenNil verifies that omitting the
+// analysis does NOT change the existing output beyond the new parameter.
+// Existing CLI behavior (no panel rendered) is the contract.
+func TestAskForSecurityApproval_OmitsPanelWhenNil(t *testing.T) {
+	var buf bytes.Buffer
+	askForSecurityApprovalWriter(&buf, "High-risk operation", "rm -rf /tmp/foo", nil)
+	out := buf.String()
+	if strings.Contains(out, "security analysis") {
+		t.Errorf("expected no analysis panel when view is nil, got:\n%s", out)
+	}
+}
+
+func sampleAnalysis() *utils.SecurityAnalysisView {
+	return &utils.SecurityAnalysisView{
+		Summary:        "Read-only diagnostic.",
+		Modifies:       "",
+		RiskAssessment: "low",
+		Recommendation: "approve",
 	}
 }

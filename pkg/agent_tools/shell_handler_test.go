@@ -384,3 +384,88 @@ func createTestFile(dir, name, content string) string {
 	os.WriteFile(path, []byte(content), 0o644) //nolint:errcheck
 	return path
 }
+
+// ---------------------------------------------------------------------------
+// Gate 2 bypass — Gate1AutoApproved
+//
+// These tests verify that when Gate1AutoApproved is true (Gate 1 already
+// auto-approved via --unsafe mode or session elevation), the shell handler's
+// Gate 2 classifier skips its interactive approval prompt for non-hard-block
+// operations. Hard blocks are still enforced.
+//
+// Classification reference (verified against ClassifyToolCall):
+//   - "rm test.txt"          → CAUTION,  ShouldPrompt=true,  IsHardBlock=false
+//   - "rm -rf /"             → DANGEROUS, ShouldBlock=true,  IsHardBlock=true
+// ---------------------------------------------------------------------------
+
+// newShellEnv builds a ToolEnv for the shell handler with an approval manager.
+func newShellEnv(t *testing.T, dir string, am ApprovalManager) ToolEnv {
+	t.Helper()
+	env := newTestEnv(t, dir)
+	env.ApprovalManager = am
+	return env
+}
+
+// TestShellHandler_PromptOp_Gate1AutoApproved_SkipsPrompt verifies that a
+// Caution-tier command (rm test.txt → ShouldPrompt, not hard block) skips the
+// Gate 2 approval prompt when Gate1AutoApproved is true.
+func TestShellHandler_PromptOp_Gate1AutoApproved_SkipsPrompt(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// Create the file so the rm doesn't error from a missing-file exit code.
+	createTestFile(dir, "test.txt", "data")
+
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	env.Gate1AutoApproved = true
+
+	_, err := h.Execute(ctx, env, map[string]any{"command": "rm test.txt"})
+	// rm may succeed or produce a non-zero exit; what matters is no approval
+	// was requested and no permission error was returned from the Gate 2 prompt.
+	if err != nil {
+		// A tool execution error (e.g. non-zero exit) is acceptable; a
+		// permission rejection from the Gate 2 prompt is NOT.
+		require.NotContains(t, err.Error(), "rejected")
+	}
+	require.Equal(t, 0, len(am.calls), "Gate1AutoApproved should skip Gate 2 prompt")
+}
+
+// TestShellHandler_PromptOp_NotGate1AutoApproved_Prompts verifies that the
+// same Caution-tier command DOES trigger the Gate 2 approval prompt when
+// Gate1AutoApproved is false.
+func TestShellHandler_PromptOp_NotGate1AutoApproved_Prompts(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	createTestFile(dir, "test.txt", "data")
+
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	// Gate1AutoApproved defaults to false.
+
+	_, _ = h.Execute(ctx, env, map[string]any{"command": "rm test.txt"})
+	require.Equal(t, 1, len(am.calls), "Gate 2 should prompt when Gate1AutoApproved is false")
+}
+
+// TestShellHandler_HardBlock_Still_Blocked_Under_Gate1AutoApproved verifies
+// that even with Gate1AutoApproved=true, a hard-block command (rm -rf /) is
+// still blocked by the handler's IsHardBlock early-return. No approval is
+// requested.
+func TestShellHandler_HardBlock_Still_Blocked_Under_Gate1AutoApproved(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	env.Gate1AutoApproved = true
+
+	res, err := h.Execute(ctx, env, map[string]any{"command": "rm -rf /"})
+	require.Error(t, err)
+	require.True(t, res.IsError, "hard block should return IsError")
+	require.Contains(t, res.Output, "security block")
+	require.Equal(t, 0, len(am.calls), "hard block early-returns before any approval request")
+}

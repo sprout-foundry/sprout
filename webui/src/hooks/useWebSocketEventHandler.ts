@@ -13,6 +13,7 @@ import type {
   FileChangedData,
   ErrorData,
   MetricsUpdateData,
+  ContextManagementDiagnosticData,
   WorkspaceChangedData,
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
@@ -1017,6 +1018,30 @@ const handleDriftDetected = (ctx: EventHandlerContext): void => {
   }));
 };
 
+/**
+ * Handles context_management_diagnostic events: per-iteration telemetry
+ * from the agent's context-management layer (cache hit rate, reserved
+ * budget slices, iteration counter). The backend emits one of these per
+ * OnIteration callback so SP-066's substitution/rollup behavior can be
+ * observed live. We keep it out of the chat transcript and out of the
+ * Logs pane — the structured Stats card is the right home — but still
+ * log it at debug level so engineers can inspect from the console when
+ * investigating context pressure.
+ */
+const handleContextManagementDiagnostic = (ctx: EventHandlerContext): void => {
+  const { event } = ctx;
+  const data = (event.data ?? {}) as ContextManagementDiagnosticData;
+  debugLog('[context_diag]', {
+    iteration: data.iteration,
+    currentTokens: data.current_tokens,
+    maxTokens: data.max_tokens,
+    cacheHitRate: data.cache_hit_rate,
+    cachedTokens: data.cached_tokens,
+    promptTokens: data.prompt_tokens,
+    cacheWriteTokens: data.cache_write_tokens,
+  });
+};
+
 // Handle input_required event (SP-070-4: desktop notification)
 const handleInputRequired = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
@@ -1180,6 +1205,8 @@ export function useWebSocketEventHandler({
           return handleInputRequired(ctx);
         case 'drift_detected':
           return handleDriftDetected(ctx);
+        case 'context_management_diagnostic':
+          return handleContextManagementDiagnostic(ctx);
         case 'chat_run_restored':
           return handleChatRunRestored(ctx);
         default:

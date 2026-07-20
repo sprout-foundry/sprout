@@ -2,15 +2,10 @@
 
 package automate
 
-import (
-	"errors"
-	"syscall"
-)
+import "github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 
+// IsProcessAlive (Unix) — see pidalive_windows.go for the rationale and
+// SP-112-3 for the deduplication.
 func IsProcessAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
+	return pidalive.IsAlive(pid)
 }

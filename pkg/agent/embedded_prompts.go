@@ -4,6 +4,7 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -11,6 +12,11 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
+
+// agentsMdLargeTokenThreshold is the token count above which AGENTS.md (and
+// sibling context files) triggers a size warning in Low-Context Mode. The file
+// is still injected regardless — this is advisory only.
+const agentsMdLargeTokenThreshold = 4000
 
 //go:embed prompts/system_prompt.md
 var systemPromptContent string
@@ -106,6 +112,21 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 
 	contextFiles, err := LoadContextFiles()
 	if err == nil && contextFiles != "" {
+		// SP-125: AGENTS.md is always injected (project conventions are
+		// mandatory in every mode). In LCM only, warn once if the file is
+		// large so the user understands the context cost and can shrink it.
+		if profile.Mode == configuration.ContextModeLowContext {
+			tokens := EstimateTokens(contextFiles)
+			if tokens > agentsMdLargeTokenThreshold {
+				pct := tokens * 100 / 32_000
+				fmt.Fprintf(os.Stderr,
+					"⚠ AGENTS.md is large (~%d tokens, ~%d%% of a 32K window).\n"+
+						"  It will still be injected — project conventions are mandatory.\n"+
+						"  To shrink it: move reference material to linked docs, split into\n"+
+						"  per-package AGENTS.md files, or trim historical notes.\n",
+					tokens, pct)
+			}
+		}
 		promptContent = promptContent + contextFiles
 	}
 

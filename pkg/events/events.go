@@ -710,14 +710,22 @@ func CompactStartedEvent(source string, messageCount, checkpointCount int) map[s
 	}
 }
 
-// ContextManagementDiagnosticEvent (SP-066 Phase 1) reports the model-aware
-// context-budget math at a single iteration. Subscribers (WebUI metrics
-// panel, telemetry pipelines) use it to verify substitution is doing the
-// heavy lifting and the LLM fall-through stays approximately never.
+// ContextManagementDiagnosticEvent (SP-066 Phase 1, SP-126) reports the
+// model-aware context-budget math at a single iteration. Subscribers (WebUI
+// metrics panel, telemetry pipelines) use it to verify substitution is doing
+// the heavy lifting and the LLM fall-through stays approximately never.
 //
 // Fields:
 //   - current_tokens: tokenizer-estimated size of the prompt going to the model.
-//   - max_tokens: model's hard context-window limit.
+//   - max_tokens: the EFFECTIVE max — the smaller of the model's native window
+//     and the user's MaxContextTokens cap (SP-126). This is the value seed's
+//     budget math operates against. Renamed semantically from the SP-066
+//     "hard context-window limit" wording because SP-126 makes the cap a
+//     first-class concept; pre-SP-126 the two were identical (no cap).
+//   - native_max_tokens: the model's UNCAPPED native window. Equal to
+//     max_tokens when no user cap is set; larger than max_tokens when a
+//     cap is active. Lets subscribers render "X / 300K of 1M tokens"
+//     (effective vs native) distinctly in the metrics panel.
 //   - effective_max: max_tokens minus reservation budget; substitution
 //     triggers when current_tokens exceeds trigger_fraction × max_tokens.
 //   - trigger_fraction: share of max_tokens at which seed triggers compaction
@@ -733,7 +741,7 @@ func CompactStartedEvent(source string, messageCount, checkpointCount int) map[s
 //     (Anthropic cache_create_input_tokens). May be 0 if not tracked.
 //   - cache_hit_rate: cached_tokens / prompt_tokens, or 0 when prompt_tokens
 //     is 0. Lets the UI render cache effectiveness at a glance.
-func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFraction, reservedResponse, reservedThinking, reservedToolIO float64, iteration, messageCount int, cachedTokens, promptTokens, cacheWriteTokens int) map[string]interface{} {
+func ContextManagementDiagnosticEvent(currentTokens, maxTokens, nativeMaxTokens int, triggerFraction, reservedResponse, reservedThinking, reservedToolIO float64, iteration, messageCount int, cachedTokens, promptTokens, cacheWriteTokens int) map[string]interface{} {
 	effectiveMax := 0
 	if maxTokens > 0 {
 		effectiveMax = int(float64(maxTokens) * triggerFraction)
@@ -745,6 +753,7 @@ func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFract
 	return map[string]interface{}{
 		"current_tokens":     currentTokens,
 		"max_tokens":         maxTokens,
+		"native_max_tokens":  nativeMaxTokens,
 		"effective_max":      effectiveMax,
 		"trigger_fraction":   triggerFraction,
 		"reserved_response":  reservedResponse,

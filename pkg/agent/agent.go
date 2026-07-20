@@ -73,9 +73,16 @@ type Agent struct {
 	conversationStartTime time.Time
 
 	// Configuration
-	configManager *configuration.Manager
-	workspaceRoot string
-	debug         bool
+	configManager   *configuration.Manager
+	workspaceRoot   string
+	debug           bool
+	// contextProfile (SP-125) is the resolved set of context-engine
+	// levers (tool allowlist, prompt path, compaction trigger, etc.).
+	// Resolved once at agent creation by ResolveContextProfile and read
+	// by every call site that depends on it (conversation.go,
+	// embedded_prompts.go, context_budget.go, seed_query.go, rollup.go).
+	// Zero-value means full-context mode (all defaults).
+	contextProfile  configuration.ContextProfile
 
 	// Shell CWD tracking — updated by cd commands in handleShellCommand.
 	// Tools like commit use this instead of workspaceRoot when available,

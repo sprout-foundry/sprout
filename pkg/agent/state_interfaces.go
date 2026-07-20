@@ -220,3 +220,35 @@ type FalseStopStore interface {
 	IsFalseStopDetectionEnabled() bool
 	SetFalseStopDetectionEnabled(bool)
 }
+
+// StateManager is the composed interface of all 28 state sub-interfaces.
+type StateManager interface {
+	MessageStore
+	SessionStore
+	CheckpointStore
+	SummaryStore
+	OptimizerStore
+	ContextBudgetStore
+	TaskActionStore
+	CostTracker
+	TokenCounter
+	LLMCallTracker
+	ToolCallTracker
+	CacheStats
+	PersonaStore
+	CircuitBreakerStore
+	PendingStateStore
+	TerminationStore
+	ConversationPrunerStore
+	CommandHistoryStore
+	PauseStore
+	TraceStore
+	SessionConfigStore
+	ConfigOverrideStore
+	IterationStore
+	SessionIntentStore
+	ProviderErrorStore
+	EstimatedTokenStore
+	ToolGuidanceStore
+	FalseStopStore
+}

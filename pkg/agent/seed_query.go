@@ -149,8 +149,9 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// distinctive substring so cosmetic edits to the wording don't break
 	// the dedup guard (the prior literal drifted and re-injected context
 	// on every cold restore).
-	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
+			alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
 	shouldInjectProactiveContext := !alreadyInjected &&
+		!a.contextProfile.SkipProactiveContext &&
 		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")
 	if shouldInjectProactiveContext {
 		injectCtx, injectCancel := context.WithTimeout(context.Background(), 5*time.Second)

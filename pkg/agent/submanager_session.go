@@ -25,8 +25,19 @@ type SessionManager interface {
 	SessionIntentStore
 }
 
-// AgentSessionManager implements SessionManager, holding all session/scoped state
-// previously owned by AgentStateManager.
+// AgentSessionManager implements SessionManager, holding all
+// session-scoped state previously owned by AgentStateManager. Implements:
+// MessageStore, SessionStore, CheckpointStore, SummaryStore,
+// OptimizerStore, ContextBudgetStore, ConversationPrunerStore,
+// CommandHistoryStore, PauseStore, SessionConfigStore,
+// ConfigOverrideStore, IterationStore, SessionIntentStore
+// (13 sub-interfaces).
+//
+// All methods are nil-safe: calling any getter/setter on a nil
+// *AgentSessionManager returns the zero value without panicking. This
+// preserves the legacy behavior of *AgentStateManager (which had a single
+// underlying mu, so a nil receiver returned zero values from the methods
+// defined on a nil struct literal in tests).
 type AgentSessionManager struct {
 	mu sync.RWMutex // General mutex for protecting most shared state
 

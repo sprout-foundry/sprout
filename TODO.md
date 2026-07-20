@@ -969,8 +969,18 @@ split:
       tighter field types" — an optional optimization, not a
       correctness change).
 
-- [ ] **SP-115-3:** Update docstrings, run `go test -race`, verify no
+- [x] **SP-115-3:** Update docstrings, run `go test -race`, verify no
       regressions in 28-interface callers. ~0.5 week.
+      **SHIPPED.** Docstrings on `AgentStateManager` (the facade)
+      and `AgentSessionManager` now list which of the 28 sub-interfaces
+      each sub-manager implements and steer new code to prefer the
+      focused sub-manager type over `*StateManager` when only one
+      domain is needed. `go test ./pkg/agent/...` clean (38.7s);
+      all 28 interface callers still work via Go method promotion.
+      `go test -race` was not run on this Termux/Android host
+      (race detector unsupported here); the nil-receiver pattern
+      added to every sub-manager method preserves backward
+      compatibility with bare `&AgentStateManager{}` test literals.
 
 ### Acceptance
 

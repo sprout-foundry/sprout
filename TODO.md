@@ -935,13 +935,40 @@ split:
 
 ### Phase order
 
-- [ ] **SP-115-1:** Extract `SecuritySubManager`, `OutputSubManager`,
+- [x] **SP-115-1:** Extract `SecuritySubManager`, `OutputSubManager`,
       `MCPSubManager`, `PlanSubManager`, `SessionSubManager`. Make
       `AgentStateManager` a facade that holds them and delegates.
       `go build ./...` and `go test ./pkg/agent/...` clean. ~1 week.
+      **SHIPPED 2026-07-19** (commit `2d729d22`). Extracted 4 of 5
+      planned sub-managers (`AgentSessionManager`,
+      `AgentMetricsManager`, `AgentPersonaManager`,
+      `AgentSecurityStateManager`) plus the pre-existing
+      `AgentSecurityManager`/`AgentOutputManager`/`AgentMCPManager`
+      (already wired on the Agent struct since before this refactor).
+      `AgentStateManager` shrunk from 756 lines to 21 lines via Go
+      struct embedding — the 4 sub-managers are embedded as fields
+      and method promotion satisfies all 28 sub-interfaces. Zero
+      interface changes, zero callsite churn (all `a.state.X()`
+      calls work unchanged). Deferred: `PlanSubManager` — the spec
+      references a `PlanStateManager` interface that doesn't exist
+      in the 28 sub-interfaces; this is a spec gap that should be
+      resolved (add the interface or remove from the spec) before
+      extracting a Plan sub-manager.
+
 - [ ] **SP-115-2:** Migrate callsites. Grep
       `*StateManager`/`s.state.` and rewrite each to use the focused
       sub-manager where the callsite only needs one domain. ~0.5 week.
+      **No-op after SP-115-1's embedding approach.** Because the
+      facade uses struct embedding (not delegation), every
+      `a.state.GetMessages()` etc. call resolves transparently to the
+      embedded `*AgentSessionManager`. Only one struct-literal
+      `&AgentStateManager{circuitBreaker: cb}` had to be migrated
+      (in `tool_executor_circuit_breaker_test.go`). No further
+      callsite migration is needed. Recommend retiring this item
+      (or repurposing it to "migrate callsites that benefit from
+      tighter field types" — an optional optimization, not a
+      correctness change).
+
 - [ ] **SP-115-3:** Update docstrings, run `go test -race`, verify no
       regressions in 28-interface callers. ~0.5 week.
 

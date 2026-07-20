@@ -127,7 +127,7 @@ _Consumes SP-122's `SplitChainedCommand` + `classifyChainedCommand` (do not dupl
 
 ### Phase 1: Backend batch analysis (single end-to-end item)
 
-- [ ] **SP-124b-1:** Implement SP-124b Phase 1 end-to-end as a single
+- [x] **SP-124b-1:** Implement SP-124b Phase 1 end-to-end as a single
       delivery, in this exact order (coder MUST do all 5 sub-steps
       before declaring done, not one per sub-item):
       1. `pkg/agent_tools/security_classifier.go`: add
@@ -182,6 +182,27 @@ _Consumes SP-122's `SplitChainedCommand` + `classifyChainedCommand` (do not dupl
       - The cache key prefix change is mandatory: writing Phase 1
         data under the SP-124 prefix is a guaranteed bug when
         prior-session cache entries exist.
+
+      **SHIPPED 2026-07-19** at commit `ad0c20d0`. All 5 sub-steps landed
+      in a single conventional commit. `pkg/agent_tools/security_classifier.go`
+      gains `ChainedClassification` + `ClassifyChainedCommand` (backwards
+      compatible — `classifyChainedCommand` and `SplitChainedCommand` from
+      SP-122 untouched). `pkg/agent/security_analyzer.go` gains `Chain`,
+      `ParseChain` (delegates to SP-122 splitter), `AnalyzeChain` (chain-aware
+      prompt when `len(Subcommands) > 1`, SP-124 prompt when `== 1`), and a
+      quote-aware `tokenizeChain` that emits operator tokens (AND/OR/PIPE/SEQ)
+      into the cache key so `a && b` and `a || b` no longer collide. Cache
+      keys carry the `sp-124b:v1:` namespace prefix so prior-session SP-124
+      entries are invalid by design. `pkg/agent/security_analyzer_cache.go`
+      `Get`/`Set` normalize via `ChainCacheKey` so any new caller benefits
+      automatically. Approval broker updated to use `ChainCacheKey`. 647-line
+      test file `pkg/agent/security_analyzer_sp124b_test.go` covers ParseChain
+      match-against-SplitChainedCommand, quote preservation (`'a && b'` stays
+      one subcommand), prompt selection by chain length, single-LLM-call
+      guarantee, cache hit on whitespace normalization, cache miss on
+      operator change, and per-subcommand populated Reasoning + Category.
+      Single-command SP-124 regression tests (`TestAnalyzeShellCommand_*`)
+      unchanged and still pass.
 
 ## SP-116: Multi-Instance Isolation
 

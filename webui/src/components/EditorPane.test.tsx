@@ -123,7 +123,22 @@ vi.mock('./SvgPreview', () => ({ default: () => null }));
 // Mock useEditorExtensions to avoid deep CodeMirror dependency cascade
 vi.mock('../hooks/useEditorExtensions', () => ({
   useEditorExtensions: () => ({
-    compartments: {},
+    compartments: {
+      hotkeys: new Compartment(),
+      lineWrapping: new Compartment(),
+      relativeLineNumbers: new Compartment(),
+      language: new Compartment(),
+      minimap: new Compartment(),
+      whitespaceRendering: new Compartment(),
+      emmet: new Compartment(),
+      autoCloseTag: new Compartment(),
+      fontSize: new Compartment(),
+      tabSize: new Compartment(),
+      lsp: new Compartment(),
+      inlayHints: new Compartment(),
+      signatureHelp: new Compartment(),
+      history: new Compartment(),
+    },
     buildExtensions: () => [],
   }),
   TAB_SIZE_DEFAULT: 4,
@@ -400,8 +415,31 @@ vi.mock('../hooks/useLivePreview', () => ({
   }),
 }));
 
-vi.mock('../hooks/useEditorViewInit', () => ({
-  useEditorViewInit: vi.fn(),
+// Mock the LSP bootstrap so test runs don't attempt network fetches.
+// `useCMView` (now the sole view owner) calls our `bootstrapLSP` callback,
+// which in production fetches LSP server status. Here we short-circuit it
+// to an empty extension list — the editor still mounts cleanly.
+//
+// Also stub `registerEditorView` / `unregisterEditorView` and the global
+// display-file callback installer/reader; the lspExtensions module
+// re-exports these from lspClientService, and the EditorPane mount
+// hooks (onDidMount / onWillDestroy) call them.
+vi.mock('../services/lspClientService', () => ({
+  getLSPClientService: () => ({
+    getStatus: vi.fn().mockResolvedValue({ supported: false }),
+    getClientForLanguage: vi.fn().mockResolvedValue(null),
+  }),
+  LSP_SUPPORTED_LANGUAGES: new Set(),
+  LSPClientService: { lspClientService: { dispatchSyncToClient: vi.fn() } },
+  registerEditorView: vi.fn(),
+  unregisterEditorView: vi.fn(),
+  findEditorView: vi.fn(),
+  setGlobalDisplayFileCallback: vi.fn(),
+  getGlobalDisplayFileCallback: vi.fn(() => null),
+  getFileURI: (path: string) => `file://${path}`,
+  uriToFilePath: (uri: string) => uri.replace(/^file:\/\//, ''),
+  createTransport: vi.fn(),
+  getInstance: vi.fn(),
 }));
 
 vi.mock('./useEditorReconfigure', () => ({
@@ -609,13 +647,30 @@ vi.mock('@codemirror/view', () => ({
   EditorView: class MockEditorView {
     state: any;
     dom: any;
-    constructor({ state, _parent }: any) {
+    isDestroyed: boolean = false;
+    static instances: MockEditorView[] = [];
+    constructor({ state, parent }: any) {
       this.state = state;
-      this.dom = { querySelector: () => null, classList: { add: () => {} } };
+      // Append a real `.cm-editor` div to the parent so tests that count
+      // `.cm-editor` elements observe the same DOM shape the real view
+      // produces. This lets the regression test "exactly one .cm-editor
+      // inside the editor div" catch a re-introduced double-mount.
+      const cmEditor = document.createElement('div');
+      cmEditor.className = 'cm-editor';
+      if (parent) {
+        parent.appendChild(cmEditor);
+      }
+      this.dom = cmEditor;
+      MockEditorView.instances.push(this);
     }
     dispatch() {}
     focus() {}
-    destroy() {}
+    destroy() {
+      if (this.dom?.parentNode) {
+        this.dom.parentNode.removeChild(this.dom);
+      }
+      this.isDestroyed = true;
+    }
     static lineWrapping: any = [];
     static theme = (spec: any) => spec;
     static updateListener: { of: (fn: any) => any } = { of: (fn: any) => fn };
@@ -1248,6 +1303,35 @@ describe('EditorPane', () => {
       expect(paneContent).toBeFalsy();
     });
   }); // context menu
+
+  // ── mount lifecycle ──
+
+  describe('mount', () => {
+    // Regression: SP-XXX
+    //   Previously, EditorPane mounted the editor via useCMView while
+    //   EditorCore still created its own EditorView, producing a second
+    //   view against the same DOM div. The browser showed `.cm-editor`
+    //   elements nested two levels deep, with only one visible.
+    //
+    //   useCMView now owns the lifecycle exclusively. EditorCore does
+    //   not instantiate an EditorView. This test enforces that contract.
+    it('mounts exactly one .cm-editor inside the editor div', async () => {
+      // eslint-disable-next-line testing-library/no-unnecessary-act
+      await act(async () => {
+        root.render(<EditorPane paneId="pane-1" />);
+      });
+      // Microtask + macrotask flush (CM inserts the cm-editor async in jsdom).
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      await flushPromises();
+
+      const editorDiv = container.querySelector('.editor');
+      expect(editorDiv).toBeTruthy();
+      const cmEditors = editorDiv!.querySelectorAll('.cm-editor');
+      expect(cmEditors.length).toBe(1);
+    });
+  }); // mount
 
   // ── Language override tests ──
 

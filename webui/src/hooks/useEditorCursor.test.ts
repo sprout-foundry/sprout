@@ -127,7 +127,14 @@ function renderTestHook(
     },
   };
 
-  const isExternalUpdateRef = { current: false };
+  // Mock CodeMirror view API ref — the hook reads `cmViewApiRef.current?.isExternalUpdate()`.
+  // The default `isExternalUpdate: () => false` lets the cursor-update path run normally;
+  // tests that exercise the gate pass a different mock here.
+  const cmViewApiRef = {
+    current: {
+      isExternalUpdate: () => false,
+    },
+  };
 
   let hookReturn: any = null;
 
@@ -135,7 +142,7 @@ function renderTestHook(
     hookReturn = useEditorCursor({
       bufferRef,
       updateBufferCursor,
-      isExternalUpdateRef,
+      cmViewApiRef,
     });
     return null;
   }

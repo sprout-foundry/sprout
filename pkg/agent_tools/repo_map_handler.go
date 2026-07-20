@@ -34,7 +34,10 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		directory = "."
 	}
 
-	depth := 3 // default: full symbols
+	depth := env.RepoMapDefaultDepth // SP-125: profile override (1 in LCM, 0 = default 3)
+	if depth <= 0 {
+		depth = 3 // default: full symbols
+	}
 	if d, ok := args["depth"]; ok {
 		switch v := d.(type) {
 		case int:

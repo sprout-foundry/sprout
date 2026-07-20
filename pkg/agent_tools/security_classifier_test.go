@@ -752,3 +752,130 @@ func TestClassifyChainedCommand(t *testing.T) {
 		})
 	}
 }
+
+// TestClassifyXargsInvocation exercises the structured xargs sub-classifier.
+// xargs is dangerous only insofar as the command it invokes is dangerous;
+// the inner command is recursively classified after stripping xargs flags.
+//
+// Regression case: `ls | xargs rm -rf` (test above) MUST remain CAUTION.
+// Here we verify the per-subcommand classifier routes xargs-prefixed
+// invocations correctly in isolation and in pipelines.
+func TestClassifyXargsInvocation(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		wantRisk SecurityRisk
+	}{
+		// Safe read-only inner commands become SAFE.
+		{"xargs du -sh", "xargs du -sh", SecuritySafe},
+		{"xargs wc -l", "xargs wc -l", SecuritySafe},
+		{"xargs grep pattern", "xargs grep pattern", SecuritySafe},
+		{"xargs cat", "xargs cat", SecuritySafe},
+		{"xargs sort", "xargs sort", SecuritySafe},
+
+		// Flag stripping: short flag + separate value.
+		{"xargs -n 1 du -sh", "xargs -n 1 du -sh", SecuritySafe},
+		{"xargs -n 4 wc -l", "xargs -n 4 wc -l", SecuritySafe},
+		{"xargs -I REPL grep p REPL", "xargs -I REPL grep p REPL", SecuritySafe},
+		// xargs -i grep p: GNU xargs treats `grep` as REPL (optional),
+		// running `p {}` per line. Our stripper also consumes `grep`
+		// as REPL, leaving inner `p` — unknown command → CAUTION.
+		// This is a conservative false negative; see flag map comment.
+		{"xargs -i grep p", "xargs -i grep p", SecurityCaution},
+		{"xargs -e EOF wc -l", "xargs -e EOF wc -l", SecuritySafe},
+		{"xargs -L 1 du -sh", "xargs -L 1 du -sh", SecuritySafe},
+
+		// Flag stripping: short flag with embedded value (cluster).
+		{"xargs -n1 du -sh", "xargs -n1 du -sh", SecuritySafe},
+		{"xargs -I{} grep p {}", "xargs -I{} grep p {}", SecuritySafe},
+		{"xargs -eEOF du -sh", "xargs -eEOF du -sh", SecuritySafe},
+
+		// Flag stripping: bare short flags.
+		{"xargs -0 du -shc --files0-from=-", "xargs -0 du -shc --files0-from=-", SecuritySafe},
+		{"xargs -r du -sh", "xargs -r du -sh", SecuritySafe},
+		{"xargs -rt du -sh", "xargs -rt du -sh", SecuritySafe},
+
+		// Flag stripping: long flags.
+		{"xargs --null du -sh", "xargs --null du -sh", SecuritySafe},
+		{"xargs --no-run-if-empty du -sh", "xargs --no-run-if-empty du -sh", SecuritySafe},
+		{"xargs --max-args=4 du -sh", "xargs --max-args=4 du -sh", SecuritySafe},
+		{"xargs --max-args 4 du -sh", "xargs --max-args 4 du -sh", SecuritySafe},
+
+		// Dangerous inner commands remain CAUTION via recursion into
+		// the inner command's classifier (isCautionPattern catches
+		// "rm -rf ", "chmod 777", etc.).
+		{"xargs rm -rf", "xargs rm -rf", SecurityCaution},
+		{"xargs rm file", "xargs rm file", SecurityCaution},
+		{"xargs chmod 777", "xargs chmod 777", SecurityCaution},
+		{"xargs chmod 666", "xargs chmod 666", SecurityCaution},
+		{"xargs -n 1 rm -rf", "xargs -n 1 rm -rf", SecurityCaution},
+		{"xargs --max-args 1 rm -rf", "xargs --max-args 1 rm -rf", SecurityCaution},
+		// sudo-prefixed inner command — must NOT lower to SAFE; the
+		// top-level critical-operation detector catches this via the
+		// invokesCommand("rm") path that recognizes "sudo" as a
+		// prefix-to-invocation. The carve-out preserves this.
+		{"xargs sudo rm -rf", "xargs sudo rm -rf", SecurityCaution},
+
+		// Critical-system elevation: xargs rm -rf / is DANGEROUS,
+		// not just CAUTION. The inner command is a known critical
+		// operation (rm -rf of /), so we elevate via the explicit
+		// IsCriticalOperation check in classifyXargsInvocation. This
+		// prevents `xargs rm -rf /` from slipping through as CAUTION
+		// just because the top-level detector doesn't know xargs
+		// invokes its argument.
+		{"xargs rm -rf /", "xargs rm -rf /", SecurityDangerous},
+
+		// Shell-interpreter carve-out: xargs sh -c "..." cannot be
+		// statically inspected, so we conservatively return CAUTION.
+		// List covers common shells (sh/bash/zsh/dash/fish/ksh/csh/tcsh);
+		// shells not in this list (ash, mksh, yash, etc.) fall through
+		// to inner-command classification, which is also CAUTION or
+		// worse because the inner script body can't be statically
+		// inspected — but the conservative path is to enumerate the
+		// common shells explicitly so the reasoning surfaces as
+		// "shell-interpreter carve-out" rather than "unknown command".
+		{"xargs sh -c \"rm -rf /\"", "xargs sh -c \"rm -rf /\"", SecurityCaution},
+		{"xargs bash -c \"rm -rf /\"", "xargs bash -c \"rm -rf /\"", SecurityCaution},
+		{"xargs zsh -c \"rm -rf /\"", "xargs zsh -c \"rm -rf /\"", SecurityCaution},
+		{"xargs dash -c \"rm -rf /\"", "xargs dash -c \"rm -rf /\"", SecurityCaution},
+		{"xargs fish -c \"rm -rf /\"", "xargs fish -c \"rm -rf /\"", SecurityCaution},
+		{"xargs ksh -c \"rm -rf /\"", "xargs ksh -c \"rm -rf /\"", SecurityCaution},
+		{"xargs csh -c \"rm -rf /\"", "xargs csh -c \"rm -rf /\"", SecurityCaution},
+		{"xargs tcsh -c \"rm -rf /\"", "xargs tcsh -c \"rm -rf /\"", SecurityCaution},
+		// `--` separator before a shell interpreter.
+		{"xargs -- sh -c \"rm\"", "xargs -- sh -c \"rm\"", SecurityCaution},
+		// eval-prefixed inner command — eval is a caution prefix.
+		{"xargs eval \"rm\"", "xargs eval \"rm\"", SecurityCaution},
+
+		// Recursion depth 2: xargs xargs rm -rf — inner = "xargs rm -rf",
+		// recursive classifySingleCommand classifies that and falls
+		// through to default-CAUTION (because the inner cmd starts
+		// with "xargs" not "rm -rf"). This is a false negative on
+		// the dangerous case, but xargs xargs is exotic and the
+		// chained-command classifier still catches it at the pipe
+		// level (CAUTION via maxRisk aggregation).
+		{"xargs xargs rm -rf", "xargs xargs rm -rf", SecurityCaution},
+
+		// Degenerate forms.
+		{"bare xargs", "xargs", SecurityCaution},
+		{"xargs with only flags", "xargs -n 4", SecurityCaution},
+
+		// Full user-reported case: the entire pipeline classifies as
+		// SAFE because every stage is SAFE individually.
+		{"full user pipeline",
+			"find ~/Library/Caches -type d -size +5G 2>/dev/null | xargs du -sh | sort -hr",
+			SecuritySafe},
+
+		// Regression: existing dangerous-pipe test must not flip to SAFE.
+		{"regression: ls | xargs rm -rf", "ls | xargs rm -rf", SecurityCaution},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.Risk != tt.wantRisk {
+				t.Errorf("classifyShellCommand(%q).Risk = %s, want %s (reasoning: %s)",
+					tt.command, result.Risk, tt.wantRisk, result.Reasoning)
+			}
+		})
+	}
+}

@@ -166,7 +166,12 @@ type ToolEnv struct {
 	// insertion order of nested maps (e.g., the "data" field in
 	// write_structured_file) before Go's map iteration randomizes it.
 	RawArgsJSON string
-	Notifier    BackgroundNotifier
+	// RepoMapDefaultDepth (SP-125) overrides the repo_map tool's default
+	// depth when the caller doesn't specify one. Zero means use the tool's
+	// built-in default (3 = full symbols). Low-Context Mode sets this to 1
+	// (directory tree only) to keep repo_map output under ~800 tokens.
+	RepoMapDefaultDepth int
+	Notifier            BackgroundNotifier
 	// Agent is the *pkg/agent.Agent instance. Only set for tools that explicitly
 	// need agent access (e.g., run_subagent, run_parallel_subagents).
 	// For all other tools this is nil. Use with care — it creates a tight

@@ -140,11 +140,25 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			return nil, err
 		}
 		agent.contextProfile = profile
-		if profile.Mode == configuration.ContextModeLowContext && params.debug {
-			_, _ = os.Stderr.Write([]byte(
-				fmt.Sprintf("[low-context] mode=%s tools=%d prompt=%s trigger=%.2f\n",
-					profile.Mode, len(profile.ToolAllowlist),
-					profile.SystemPromptPath, profile.CompactionTriggerFraction)))
+		if profile.Mode == configuration.ContextModeLowContext {
+			// Distinguish auto-detected LCM from explicit config. When the
+			// user explicitly set context_mode: "low_context", they already
+			// know — no notice needed. When it was auto-detected from the
+			// model's context window, surface a one-time notice so they
+			// understand why the experience is different.
+			explicit := cfg != nil && cfg.ContextMode == configuration.ContextModeLowContext
+			if !explicit {
+				_, _ = fmt.Fprintf(os.Stderr,
+					"⚠ %dK context detected — Low-Context Mode active\n"+
+						"  8 tools, lite prompt, AGENTS.md kept\n"+
+						"  Set context_mode: \"full\" in config to override, or /model to switch.\n",
+					agent.state.GetMaxContextTokens()/1000)
+			} else if params.debug {
+				_, _ = fmt.Fprintf(os.Stderr,
+					"[low-context] explicit config: tools=%d prompt=%s trigger=%.2f\n",
+					len(profile.ToolAllowlist), profile.SystemPromptPath,
+					profile.CompactionTriggerFraction)
+			}
 		}
 
 		// Clean up old sessions once per process. Uses sync.Once so daemon

@@ -84,6 +84,22 @@ type Agent struct {
 	// Zero-value means full-context mode (all defaults).
 	contextProfile  configuration.ContextProfile
 
+	// effectiveContextCap (SP-126) is the resolved maximum number of
+	// context tokens sprout will use for any request in this session.
+	// Always equal to the smaller of (a) the model's native context
+	// window and (b) the user's configured MaxContextTokens cap. Zero
+	// means "no cap" — the native window flows through unconstrained.
+	//
+	// Resolved exactly once at agent creation by
+	// configuration.ResolveEffectiveContextCap and re-read by every
+	// call site that needs the ceiling (seed_provider.Info(),
+	// seed_query.OnIteration). Call sites MUST NEVER re-derive it
+	// from Config.MaxContextTokens and MUST NEVER call
+	// client.GetModelContextLimit() directly — those paths bypass the
+	// cap. Independent of ContextProfile: a 1M model can run in full
+	// mode with a 300K cap; a 32K model can run in LCM with no cap.
+	effectiveContextCap int
+
 	// Shell CWD tracking — updated by cd commands in handleShellCommand.
 	// Tools like commit use this instead of workspaceRoot when available,
 	// so that git operations run in the correct directory after the agent

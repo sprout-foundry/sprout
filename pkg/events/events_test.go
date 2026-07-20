@@ -259,15 +259,20 @@ func TestRecallDiagnosticEvent_EmptyScores(t *testing.T) {
 	}
 }
 
-// TestContextManagementDiagnosticEvent (SP-066 Phase 1) verifies the
+// TestContextManagementDiagnosticEvent (SP-066 Phase 1, SP-126) verifies the
 // diagnostic payload carries the model-aware trigger math fields the
 // WebUI metrics panel and downstream telemetry expect, with the
 // effective_max precomputed from max_tokens × trigger_fraction so
 // consumers don't redo the arithmetic.
+//
+// SP-126: also asserts that native_max_tokens is emitted alongside
+// max_tokens so subscribers can distinguish the effective (post-cap)
+// from the native (pre-cap) value.
 func TestContextManagementDiagnosticEvent(t *testing.T) {
 	event := ContextManagementDiagnosticEvent(
 		70000,            // current_tokens
-		200000,           // max_tokens
+		200000,           // max_tokens (effective post-cap)
+		1_000_000,        // native_max_tokens (uncapped model window)
 		0.70,             // trigger_fraction
 		0.15, 0.10, 0.05, // reserved response/thinking/tool_io
 		3,    // iteration
@@ -279,6 +284,7 @@ func TestContextManagementDiagnosticEvent(t *testing.T) {
 
 	assert.Equal(t, 70000, event["current_tokens"])
 	assert.Equal(t, 200000, event["max_tokens"])
+	assert.Equal(t, 1_000_000, event["native_max_tokens"], "native_max_tokens must equal the uncapped model window")
 	assert.Equal(t, 140000, event["effective_max"]) // 200000 * 0.70
 	assert.Equal(t, 0.70, event["trigger_fraction"])
 	assert.Equal(t, 0.15, event["reserved_response"])
@@ -298,9 +304,18 @@ func TestContextManagementDiagnosticEvent(t *testing.T) {
 // loaded). effective_max must not panic on the multiplication and
 // should report 0 so downstream UIs don't render misleading values.
 func TestContextManagementDiagnosticEvent_ZeroMaxTokens(t *testing.T) {
-	event := ContextManagementDiagnosticEvent(0, 0, 0.70, 0.15, 0.10, 0.05, 0, 0, 0, 0, 0)
+	event := ContextManagementDiagnosticEvent(0, 0, 0, 0.70, 0.15, 0.10, 0.05, 0, 0, 0, 0, 0)
 	assert.Equal(t, 0, event["effective_max"])
 	assert.Equal(t, 0.0, event["cache_hit_rate"]) // prompt_tokens is 0
+}
+
+// TestContextManagementDiagnosticEvent_NoCap (SP-126) verifies that when
+// no user cap is set, native_max_tokens equals max_tokens. The two are
+// distinct only when a cap is active.
+func TestContextManagementDiagnosticEvent_NoCap(t *testing.T) {
+	event := ContextManagementDiagnosticEvent(100, 1000, 1000, 0.70, 0.15, 0.10, 0.05, 0, 0, 0, 0, 0)
+	assert.Equal(t, 1000, event["max_tokens"])
+	assert.Equal(t, 1000, event["native_max_tokens"], "native_max_tokens must equal max_tokens when no cap is active")
 }
 
 // TestEventBus_PublishAfterUnsubscribeDoesNotPanic guards the race where a

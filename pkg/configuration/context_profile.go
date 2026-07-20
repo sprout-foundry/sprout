@@ -213,3 +213,98 @@ func ResolveContextProfile(cfg *Config, modelContextWindow int) (ContextProfile,
 		return fullContextProfile, nil
 	}
 }
+
+// EffectiveContextCapMinimum (SP-126) is the minimum cap a user may
+// explicitly set via Config.MaxContextTokens. Below this, the agent is
+// not operable: every prompt exceeds the cap on the first iteration,
+// compaction fires immediately, and the model produces nothing
+// user-visible. The minimum matches the value already enforced by the
+// /max-context slash command (max_context.go:64) and the settings
+// validator (settings_defs.go), so users see a consistent message
+// regardless of which surface they used to set the cap.
+//
+// Set at 1024: enough for a system prompt + one tool round-trip on
+// the most aggressive LCM profile, and small enough that no one
+// accidentally gets a "sprout produces no output" experience.
+//
+// Nil/zero caps (no cap configured) bypass this minimum and resolve
+// to the native window — only EXPLICITLY SET caps below this minimum
+// trigger the error.
+const EffectiveContextCapMinimum = 1024
+
+// EffectiveContextCapErrorf builds the error message returned when a
+// user-configured cap falls below EffectiveContextCapMinimum. The
+// wording matches the existing /max-context and settings_defs
+// validators exactly so users see the same message regardless of
+// which surface they used:
+//
+//	"value must be at least 1024 when setting a cap (got X)"
+//
+// Centralized here so the three call sites (slash command, settings
+// validator, resolver) stay in sync.
+func EffectiveContextCapErrorf(got int) error {
+	return fmt.Errorf("value must be at least %d when setting a cap (got %d)", EffectiveContextCapMinimum, got)
+}
+
+// ResolveEffectiveContextCap returns the user's effective context cap
+// for this session — the smaller of (a) the model's native context
+// window and (b) the user's configured MaxContextTokens cap. This is
+// the single source of truth for the cap; every call site in sprout
+// MUST read the value returned here (typically once at agent creation,
+// then stored on the Agent for hot-path access) and MUST NOT
+// re-derive it from Config.MaxContextTokens or call
+// client.GetModelContextLimit() directly — those paths bypass the cap.
+//
+// Inputs:
+//   - cfg: the user's config. May be nil (no cap, no error).
+//   - nativeContextWindow: the model's native context window in
+//     tokens. May be 0 or negative (unknown). When unknown, the cap
+//     is the user-configured value alone; if neither is known the
+//     return is 0, which callers treat as "no cap".
+//
+// Output:
+//   - cap: the resolved effective cap in tokens. 0 means "no cap".
+//
+// Errors:
+//   - Returns an error ONLY when the user explicitly set a cap below
+//     EffectiveContextCapMinimum (1024). The nil/zero cap (no cap
+//     configured) bypasses the minimum and resolves to the native
+//     window — only EXPLICITLY SET caps below the minimum trigger the
+//     error. The error message matches the /max-context and
+//     settings_defs validators exactly so users see consistent
+//     feedback across surfaces.
+//
+// Precedence (highest first):
+//
+//  1. If cfg.MaxContextTokens is non-nil and > 0, AND the native
+//     window is known (> 0), return min(native, *cfg.MaxContextTokens).
+//  2. If only one of the two is known, return that one.
+//  3. If neither is known, return 0. Call sites treat 0 as "unknown"
+//     and fall back to whatever default is appropriate (typically the
+//     native value reported by the client, or a hardcoded fallback).
+//
+// Independent of ContextProfile (SP-125): a 1M model can run in full
+// mode with a 300K cap; a 32K model can run in LCM with no cap. Both
+// are valid. The cap and the profile are deliberately separate
+// concerns — the cap is a user cost preference, the profile is a
+// model-size accommodation.
+func ResolveEffectiveContextCap(cfg *Config, nativeContextWindow int) (int, error) {
+	if cfg == nil || cfg.MaxContextTokens == nil || *cfg.MaxContextTokens <= 0 {
+		return nativeContextWindow, nil
+	}
+	cap := *cfg.MaxContextTokens
+
+	// Reject explicitly-set caps below the minimum. nil and 0 cap (no
+	// cap configured) bypass this — they resolve to the native window.
+	if cap < EffectiveContextCapMinimum {
+		return 0, EffectiveContextCapErrorf(cap)
+	}
+
+	if nativeContextWindow <= 0 {
+		return cap, nil
+	}
+	if cap < nativeContextWindow {
+		return cap, nil
+	}
+	return nativeContextWindow, nil
+}

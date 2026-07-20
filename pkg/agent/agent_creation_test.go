@@ -290,3 +290,85 @@ func TestAgentAddMessage(t *testing.T) {
 		t.Errorf("message content = %q, want %q", msgs[0].Content, "hello")
 	}
 }
+
+// TestContextCapActivationNotice tests that when a context cap is set lower than the
+// native window, the effectiveContextCap is properly set on the agent.
+func TestContextCapActivationNotice(t *testing.T) {
+	// Create a temp config directory with a config that has MaxContextTokens set
+	configDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	// Test: When cap is set lower than native, the agent should have effectiveContextCap set
+	t.Run("agent has effectiveContextCap when cap is below native", func(t *testing.T) {
+		// Create a fresh isolated config directory
+		configDir := t.TempDir() + "/sprout_cap"
+		mgr, err := configuration.NewManagerWithDir(configDir)
+		if err != nil {
+			t.Fatalf("NewManagerWithDir failed: %v", err)
+		}
+		t.Setenv("LEDIT_CONFIG", configDir)
+		t.Setenv("SPROUT_CONFIG", configDir)
+
+		// Set a cap of 64K (lower than test client's 128K context)
+		cap := 64_000
+		if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			cfg.MaxContextTokens = &cap
+			return nil
+		}); err != nil {
+			t.Fatalf("failed to set MaxContextTokens: %v", err)
+		}
+
+		// Create agent with the test client (128K native) - this should apply the cap
+		agent, err := NewAgentWithClient(
+			&factory.TestClient{},
+			api.TestClientType,
+			mgr,
+		)
+		if err != nil {
+			t.Fatalf("NewAgentWithClient failed: %v", err)
+		}
+		defer agent.Shutdown()
+
+		// Verify that effectiveContextCap is set to the cap (64K), not the native (128K)
+		effectiveCap := agent.GetEffectiveContextCap()
+		if effectiveCap != 64_000 {
+			t.Errorf("expected effectiveContextCap = 64000, got %d", effectiveCap)
+		}
+
+		// Verify that native is larger than cap
+		native := agent.getNativeModelContextLimit()
+		if native <= effectiveCap {
+			t.Errorf("expected native (%d) > effectiveCap (%d)", native, effectiveCap)
+		}
+	})
+
+	t.Run("agent uses native when cap is not set", func(t *testing.T) {
+		// Create a fresh isolated config manager
+		configDir := t.TempDir() + "/sprout"
+		mgr, err := configuration.NewManagerWithDir(configDir)
+		if err != nil {
+			t.Fatalf("NewManagerWithDir failed: %v", err)
+		}
+		t.Setenv("LEDIT_CONFIG", configDir)
+		t.Setenv("SPROUT_CONFIG", configDir)
+
+		// Create agent without setting MaxContextTokens
+		agent, err := NewAgentWithClient(
+			&factory.TestClient{},
+			api.TestClientType,
+			mgr,
+		)
+		if err != nil {
+			t.Fatalf("NewAgentWithClient failed: %v", err)
+		}
+		defer agent.Shutdown()
+
+		// When no cap is set, effective should equal native
+		effectiveCap := agent.GetEffectiveContextCap()
+		native := agent.getNativeModelContextLimit()
+		if effectiveCap != native {
+			t.Errorf("expected effectiveCap (%d) == native (%d)", effectiveCap, native)
+		}
+	})
+}

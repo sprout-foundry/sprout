@@ -242,3 +242,97 @@ func assertLowContextProfile(t *testing.T, profile ContextProfile) {
 		RepoMapDefaultDepth:       1,
 	}, profile)
 }
+
+// TestResolveEffectiveContextCap tests the SP-126 context cap resolver.
+func TestResolveEffectiveContextCap(t *testing.T) {
+	tests := []struct {
+		name           string
+		cfg            *Config
+		nativeWindow   int
+		expected       int
+		expectedErr    bool
+		description    string
+	}{
+		{
+			name:         "no cap - native flows through",
+			cfg:          nil,
+			nativeWindow: 1_000_000,
+			expected:     1_000_000,
+			description:  "no cap → native flows through",
+		},
+		{
+			name:         "cap below native - cap applies",
+			cfg:          &Config{MaxContextTokens: ptr(300_000)},
+			nativeWindow: 1_000_000,
+			expected:     300_000,
+			description:  "cap < native → cap",
+		},
+		{
+			name:         "cap above native - native applies",
+			cfg:          &Config{MaxContextTokens: ptr(2_000_000)},
+			nativeWindow: 1_000_000,
+			expected:     1_000_000,
+			description:  "cap > native → native (cap is no-op)",
+		},
+		{
+			name:         "cap equals native - native applies",
+			cfg:          &Config{MaxContextTokens: ptr(1_000_000)},
+			nativeWindow: 1_000_000,
+			expected:     1_000_000,
+			description:  "cap == native → native",
+		},
+		{
+			name:         "native unknown - cap applies",
+			cfg:          &Config{MaxContextTokens: ptr(300_000)},
+			nativeWindow: 0,
+			expected:     300_000,
+			description:  "native unknown, cap set → cap",
+		},
+		{
+			name:         "neither known - returns zero",
+			cfg:          nil,
+			nativeWindow: 0,
+			expected:     0,
+			description:  "neither known → 0",
+		},
+		{
+			name:         "nil cfg with known native - native applies",
+			cfg:          nil,
+			nativeWindow: 128_000,
+			expected:     128_000,
+			description:  "nil cfg (no config manager) → native",
+		},
+		{
+			name:         "negative native - cap applies defensively",
+			cfg:          &Config{MaxContextTokens: ptr(50_000)},
+			nativeWindow: -1,
+			expected:     50_000,
+			description:  "negative native → cap (defensive)",
+		},
+		{
+			name:         "tiny cap rejected by resolver",
+			cfg:          &Config{MaxContextTokens: ptr(100)},
+			nativeWindow: 1_000_000,
+			expected:     0,
+			expectedErr:  true,
+			description:  "cap below minimum triggers error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveEffectiveContextCap(tt.cfg, tt.nativeWindow)
+			if tt.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, got, tt.description)
+			}
+		})
+	}
+}
+
+// ptr returns a pointer to the given value, for use in test tables.
+func ptr[T any](v T) *T {
+	return &v
+}

@@ -36,6 +36,24 @@ func (a *Agent) GetMaxContextTokens() int {
 	return a.getModelContextLimit()
 }
 
+// GetEffectiveContextCap (SP-126) returns the user-facing effective
+// context cap for this session — the smaller of the model's native
+// window and the user's MaxContextTokens setting. Returns 0 when no
+// cap was set (native window flows through unconstrained). This is
+// the same value state.MaxContextTokens is initialized with and
+// updated with on every OnIteration; the Agent field is the
+// authoritative source, the state field is a copy kept in sync by
+// the callback. Prefer reading the Agent field directly when both
+// are available, and prefer this method over Agent.GetMaxContextTokens()
+// for new code that wants to render "effective" vs "native" window
+// values distinctly.
+func (a *Agent) GetEffectiveContextCap() int {
+	if a.effectiveContextCap > 0 {
+		return a.effectiveContextCap
+	}
+	return a.getModelContextLimit()
+}
+
 // GetConfigManager returns the configuration manager
 func (a *Agent) GetConfigManager() *configuration.Manager {
 	return a.configManager

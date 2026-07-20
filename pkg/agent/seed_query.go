@@ -263,7 +263,18 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	opts.OnIteration = func(iteration, messages, tokenEstimate, contextSize int) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
+
+		// SP-126: re-apply the effective context cap here as a defensive
+		// measure. The cap is also applied at the source (seed_provider.Info()),
+		// but this guard catches any path that bypasses ProviderInfo — future
+		// seed internal changes, mock providers in tests, etc. Reading from
+		// a.effectiveContextCap keeps the cap authoritative regardless of
+		// how contextSize reaches us.
+		if cap := a.effectiveContextCap; cap > 0 && (contextSize == 0 || contextSize > cap) {
+			contextSize = cap
+		}
 		a.state.SetMaxContextTokens(contextSize)
+
 		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages, a.GetCachedTokens(), a.GetPromptTokens(), 0)
 	}
 

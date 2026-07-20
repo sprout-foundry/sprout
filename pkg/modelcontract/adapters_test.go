@@ -117,7 +117,7 @@ func TestEligibility(t *testing.T) {
 	}{
 		{"big+tools", CanonicalModel{ContextWindow: 200000, Capabilities: Capabilities{Tools: Bool(true)}}, []string{RolePrimary, RoleSubagent}},
 		{"warn-band+tools", CanonicalModel{ContextWindow: 64000, Capabilities: Capabilities{Tools: Bool(true)}}, []string{RoleSubagent}},
-		{"below-floor+tools", CanonicalModel{ContextWindow: 32000, Capabilities: Capabilities{Tools: Bool(true)}}, nil},
+		{"below-floor+tools", CanonicalModel{ContextWindow: 32000, Capabilities: Capabilities{Tools: Bool(true)}}, []string{RoleLowContext}},
 		{"big+no-tools", CanonicalModel{ContextWindow: 200000, Capabilities: Capabilities{Tools: Bool(false)}}, nil},
 		{"big+unknown-tools", CanonicalModel{ContextWindow: 200000}, []string{RolePrimary, RoleSubagent}},
 		{"small", CanonicalModel{ContextWindow: 8000, Capabilities: Capabilities{Tools: Bool(true)}}, nil},
@@ -147,8 +147,11 @@ func TestContextWarning(t *testing.T) {
 	if ContextWarning(96000) == "" {
 		t.Error("64K–128K band should carry a strong warning")
 	}
-	if w := ContextWarning(32000); w != "" {
-		t.Errorf("hard-blocked context should have no warning (it has no roles), got %q", w)
+	if w := ContextWarning(32000); w == "" {
+		t.Error("SP-125: 16K–64K band should now carry an LCM warning (not empty)")
+	}
+	if w := ContextWarning(8000); w != "" {
+		t.Errorf("hard-blocked context (below 16K) should have no warning, got %q", w)
 	}
 }
 
@@ -156,7 +159,8 @@ func TestFillEligibleRoles_AttachesContextWarning(t *testing.T) {
 	models := []CanonicalModel{
 		{ID: "big", ContextWindow: 200000, Capabilities: Capabilities{Tools: Bool(true)}},
 		{ID: "warn", ContextWindow: 80000, Capabilities: Capabilities{Tools: Bool(true)}},
-		{ID: "blocked", ContextWindow: 16000, Capabilities: Capabilities{Tools: Bool(true)}},
+		{ID: "low_context", ContextWindow: 32000, Capabilities: Capabilities{Tools: Bool(true)}},
+		{ID: "blocked", ContextWindow: 8000, Capabilities: Capabilities{Tools: Bool(true)}},
 	}
 	FillEligibleRoles(models)
 	if len(models[0].Warnings) != 0 {
@@ -165,8 +169,13 @@ func TestFillEligibleRoles_AttachesContextWarning(t *testing.T) {
 	if len(models[1].Warnings) == 0 || len(models[1].EligibleRoles) == 0 {
 		t.Errorf("warn: expected subagent role + a warning, got roles=%v warnings=%v", models[1].EligibleRoles, models[1].Warnings)
 	}
-	if len(models[2].EligibleRoles) != 0 || len(models[2].Warnings) != 0 {
-		t.Errorf("blocked: expected no roles and no warning, got roles=%v warnings=%v", models[2].EligibleRoles, models[2].Warnings)
+	// SP-125: 32K is now RoleLowContext (not blocked) with an LCM warning.
+	if !RoleHas(models[2].EligibleRoles, RoleLowContext) || len(models[2].Warnings) == 0 {
+		t.Errorf("low_context: expected RoleLowContext + a warning, got roles=%v warnings=%v", models[2].EligibleRoles, models[2].Warnings)
+	}
+	// Below LowContextMinContext (16K) is still a hard block.
+	if len(models[3].EligibleRoles) != 0 || len(models[3].Warnings) != 0 {
+		t.Errorf("blocked: expected no roles and no warning, got roles=%v warnings=%v", models[3].EligibleRoles, models[3].Warnings)
 	}
 }
 

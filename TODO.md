@@ -1211,7 +1211,7 @@ for small-context models.
 | Band | Range | Behavior |
 |---|---|---|
 | Full | ≥ 64K | default sprout (all tools, full prompt) |
-| Low-Context (LCM) | 8K–64K | lite prompt, 8-tool allowlist, AGENTS.md skipped |
+| Low-Context (LCM) | 8K–64K | lite prompt, 8-tool allowlist, AGENTS.md **always injected** (warned if large) |
 | Refused | < 8K (`ContextFloor`) | hard error at agent creation |
 
 ### Steps to ship
@@ -1263,11 +1263,20 @@ for small-context models.
       **Acceptance:** Token count of the 32K system prompt is ~1.5K (measured
       via `EstimateTokens`), down from ~6.6K.
 
-- [ ] **SP-125-7:** Lever 3 — skip AGENTS.md. In `GetEmbeddedSystemPrompt`
-      (`embedded_prompts.go:54`), gate `LoadContextFiles()` behind
-      `if !profile.SkipAgentsMd`. ~30 min.
-      **Acceptance:** At 32K with an `AGENTS.md` present in cwd, the file is
-      not injected; at 128K+, it is.
+- [ ] **SP-125-7:** Lever 3 — AGENTS.md size warning (revised 2026-07-20).
+      `AGENTS.md` is **always injected** in every mode — it carries core
+      project conventions and must never be silently dropped. The only
+      LCM-specific behavior is an advisory warning when the file is large
+      (>4K tokens). In `GetEmbeddedSystemPrompt` (`embedded_prompts.go:54`),
+      after loading context files, if `profile.Mode == ContextModeLowContext`
+      and `EstimateTokens(contextFiles) > 4000`, emit a one-time stderr
+      warning directing the user to shrink the file if they want (never
+      suppress it). Remove the `SkipAgentsMd` field from `ContextProfile`
+      and any test assertions on it. ~45 min.
+      **Acceptance:** At 32K with an `AGENTS.md` present in cwd, the file
+      IS injected (not skipped); a large file (>4K tokens) triggers the
+      advisory warning once; a small file injects silently; the
+      `SkipAgentsMd` field no longer exists on `ContextProfile`.
 
 - [ ] **SP-125-8:** Lever 4 — compaction trigger. In `context_budget.go`,
       `computeCompactionTriggerFraction()` returns
@@ -1299,21 +1308,23 @@ for small-context models.
 
 - [ ] **SP-125-12:** Activation notice. When `ResolveContextProfile` picks LCM
       via auto-detect (not explicit config), print a one-time stderr notice:
-      `⚠ 32K context detected — Low-Context Mode active (8 tools, lite prompt,
-      AGENTS.md skipped). /context full to override.` ~1 hr.
+      `⚠ 32K context detected — Low-Context Mode active (8 tools, lite
+      prompt, AGENTS.md kept). /context full to override.` ~1 hr.
       **Acceptance:** Notice appears once on first turn at 32K; does not appear
       at 128K+; does not appear if user explicitly set `context_mode: "low_context"`.
 
 - [ ] **SP-125-13:** Integration test. Spin up an agent against a mock 32K
       model and verify: (a) 8 tools registered, (b) lite prompt loaded, (c)
-      AGENTS.md skipped, (d) proactive context disabled, (e) compaction trigger
-      at 0.85, (f) floor error fires at 4K. ~3 hrs.
+      AGENTS.md **is** injected (with warning if >4K tokens), (d) proactive
+      context disabled, (e) compaction trigger at 0.85, (f) floor error fires
+      at 4K. ~3 hrs.
       **Acceptance:** Test passes; `go test ./pkg/agent/...` clean.
 
 - [ ] **SP-125-14:** Validate token budget empirically. Run a real session
       against a 32K model (Ollama/LM Studio) with sprout's token instrumentation
       (`metrics.go` `GetMaxContextTokens`, `output_router.go:410` usage %).
-      Confirm fixed floor is ~2.5K tokens and a 3-file edit session completes
+      Confirm fixed floor is ~6.4K tokens (lite prompt + 8 tools + AGENTS.md)
+      and a 3-file edit session completes
       without truncation. ~2 hrs.
       **Acceptance:** Measured floor within 20% of the spec's ~2.5K estimate;
       session completes 3+ tool round-trips at 32K.

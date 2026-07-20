@@ -14,7 +14,7 @@ The design defines three thresholds that carve the context-window spectrum:
 | Band | Range | Behavior |
 |---|---|---|
 | **Full** | ≥ 64K (`SubagentMinContext`) | Default sprout — all tools, full prompt, AGENTS.md, proactive context |
-| **Low-Context (LCM)** | 8K–64K | Lite prompt, 8-tool allowlist, AGENTS.md skipped, tighter compaction |
+| **Low-Context (LCM)** | 8K–64K | Lite prompt, 8-tool allowlist, AGENTS.md **always injected** (warned if large), tighter compaction |
 | **Refused** | < 8K (`ContextFloor`) | Hard error at agent creation — sprout will not start |
 
 The 8K floor is non-negotiable and not user-tunable. Below it, even the lite
@@ -210,25 +210,54 @@ That's the point — it's for direct work.
 
 ---
 
-### Lever 3: Skip `AGENTS.md` Injection
+### Lever 3: Keep `AGENTS.md`, warn when large  ⚠️ revised 2026-07-20
 
 **Today:** `AGENTS.md` (~3,930 tokens) is unconditionally injected when
 present in the repo root.
 
-**Proposal:** In LCM, skip `AGENTS.md` unless the user explicitly requests
-it (e.g. `--include-agents-md` flag or a `/context full` slash command).
+**Original proposal (withdrawn):** Skip `AGENTS.md` in LCM to save tokens.
 
-**Savings:** **−3,930 tokens (~12% of window).**
+**Why it was withdrawn:** `AGENTS.md` is a core concept for all agents —
+it carries the project-specific conventions (design system tokens, test
+isolation rules, git policies, context architecture) that distinguish a
+correct edit from a subtly wrong one. Silently dropping it produces
+edits that *look* right but violate conventions the model never saw.
+This is worse than a model that refuses for lack of context — it's a
+model that confidently does the wrong thing. **`AGENTS.md` must always
+be injected in every mode, including LCM.**
 
-**Cost:** Near zero — one condition in the prompt-build path.
+**Revised proposal:** `AGENTS.md` is always injected. In LCM only, if
+the file exceeds a size threshold (e.g. >4K tokens), emit a one-time
+warning so the user understands the context cost and can act if they
+choose:
 
-**Trade-off:** Model loses project-specific conventions (design system
-tokens, test isolation rules, context architecture notes). For a quick
-single-file edit, these usually don't matter. For anything touching the
-design system or test infrastructure, the user opts back in. **This is the
-most dangerous lever** — silently dropping conventions causes subtle
-violations. Should probably default to "warn and skip" rather than "skip
-silently."
+```
+⚠ AGENTS.md is large (~5.2K tokens, 16% of a 32K window).
+  It will still be injected — project conventions are mandatory.
+  To shrink it: move reference material to linked docs, split into
+  per-package AGENTS.md files, or trim historical notes.
+```
+
+The warning is advisory only — it never suppresses the file. The user's
+recourse is to edit their `AGENTS.md` down, not to have sprout hide it.
+
+**Savings:** **0 tokens.** This lever no longer reduces the fixed floor.
+
+**Cost:** Near zero — the size check is one `EstimateTokens()` call plus
+a stderr print, gated on `profile.Mode == ContextModeLowContext` and a
+size threshold. No change to the injection path itself.
+
+**Trade-off:** None. Conventions are preserved. The LCM budget math in
+§"Combined Budget" is updated below to reflect `AGENTS.md` staying in.
+
+**What this means for the `ContextProfile` struct:** the `SkipAgentsMd`
+field is removed. The `lowContextProfile` preset no longer sets it. The
+size-warning behavior is derived from `profile.Mode ==
+ContextModeLowContext` combined with the measured file size at injection
+time — no new struct field needed. (The automation's first pass
+implemented `SkipAgentsMd: true` in the preset — that field and its test
+assertions must be removed before SP-125 ships. See the correction note
+in §"Implementation Design".)
 
 ---
 
@@ -289,20 +318,26 @@ positive at 32K.
 
 ## Combined Budget at 32K with All Levers
 
-```
 Lever 1 (tool subset, 8 tools):  −3,685
 Lever 2 (lite prompt):          −5,100
-Lever 3 (skip AGENTS.md):       −3,930
+Lever 3 (AGENTS.md kept):         +0  (revised 2026-07-20 — no longer skipped)
 Lever 4 (tighter trigger):      +4,800 effective
 Lever 5 (no proactive ctx):     −1,000
 ─────────────────────────────────────────
-New fixed floor:  ~2,500 tokens  (8% of 32K)   [was ~16,000 / 50%]
-New usable room: ~24,000 tokens  (75% of 32K)  [was ~6,400 / 20%]
+New fixed floor:  ~6,400 tokens  (20% of 32K)   [was ~16,000 / 50%]
+New usable room: ~20,200 tokens  (63% of 32K)  [was ~6,400 / 20%]
 ```
 
-**A 32K model with all levers has ~3.7× more working room than stock sprout.**
-That's enough for a real session: 8–12 tool round-trips, or reading 3–4
-files and editing 2 of them.
+**A 32K model with all levers has ~3.2× more working room than stock sprout.**
+That's enough for a real session: 6–10 tool round-trips, or reading 2–3
+files and editing 1–2 of them. Keeping `AGENTS.md` (Lever 3 revised) costs
+~3,930 tokens versus the original skip-everything budget, but preserves
+the project conventions that make edits correct rather than just plausible.
+
+> **Note on the floor math:** the ~6,400 floor breaks down as:
+> ~1,500 (lite prompt) + ~815 (8 tools) + ~3,930 (AGENTS.md) + ~150
+> (preamble). Without `AGENTS.md` the floor would be ~2,500 tokens — but
+> the convention-violation risk isn't worth the savings.
 
 ---
 
@@ -317,7 +352,7 @@ When the selected model reports `ContextWindow < 64_000` (already known via
 
 ```
 ⚠ 32K context detected — activating Low-Context Mode
-  (12 tools, lite prompt, AGENTS.md skipped)
+  (8 tools, lite prompt, AGENTS.md kept)
   Run /context full to override, or /model to switch.
 ```
 
@@ -397,7 +432,7 @@ With the config-driven `ContextProfile` design (above), the cost shifts: more up
 | Wire profile into `Agent` | `agent_creation.go`, `agent.go` | ~2 hrs | Store resolved profile on agent |
 | Lever 1 (tool subset) — read `ToolAllowlist` | `conversation.go` | ~1 hr | One `if len(allow) > 0` block |
 | Lever 2 (lite prompt) — read `SystemPromptPath` | `embedded_prompts.go` | ~1 hr | Second `//go:embed`, select in extractor |
-| Lever 3 (skip AGENTS.md) — read `SkipAgentsMd` | `embedded_prompts.go` | ~30 min | One `if !profile.SkipAgentsMd` |
+| Lever 3 (AGENTS.md size warning) | `embedded_prompts.go` | ~30 min | One `if profile.Mode == LCM && tokens > threshold` warn block. **AGENTS.md is always injected.** |
 | Lever 4 (compaction trigger) — read `CompactionTriggerFraction` | `context_budget.go` | ~1 hr | Override default if set |
 | Lever 5 (no proactive ctx) — read `SkipProactiveContext` | `seed_query.go` | ~30 min | One condition in existing `&&` chain |
 | Lever 6 (repo_map depth) — read `RepoMapDefaultDepth` | `repo_map.go` | ~30 min | Default param override |
@@ -407,7 +442,7 @@ With the config-driven `ContextProfile` design (above), the cost shifts: more up
 | Activation notice | agent creation path | ~1 hr | One-time stderr print on auto-detect |
 | **Total** | | **~25 hrs (3–4 days)** | |
 
-The config-driven approach adds ~6 hours over the naive if-check approach (the abstraction + wiring) but pays it back in testability, maintainability, and zero full-mode regression risk. Each lever's test is a 10-line unit test that constructs a `ContextProfile{SkipAgentsMd: true}` and asserts the prompt-builder skips the file — no full agent spin-up needed.
+The config-driven approach adds ~6 hours over the naive if-check approach (the abstraction + wiring) but pays it back in testability, maintainability, and zero full-mode regression risk. Each lever's test is a 10-line unit test that constructs a `ContextProfile{SkipProactiveContext: true}` and asserts the prompt-builder skips the recall injection — no full agent spin-up needed.
 
 The levers remain independently shippable. Lever 1 + 2 (tool subset + lite prompt) recover ~8.8K tokens — over half the fixed floor — and can ship first behind the `ContextProfile` abstraction even before levers 3–6 are wired.
 
@@ -448,9 +483,6 @@ type ContextProfile struct {
     // ("system_prompt.md" vs "system_prompt.lite.md"). Empty = default.
     SystemPromptPath string `json:"system_prompt_path,omitempty"`
 
-    // SkipAgentsMd disables AGENTS.md/Claude.md/cursor.md injection.
-    SkipAgentsMd bool `json:"skip_agents_md,omitempty"`
-
     // SkipProactiveContext disables embedding-based recall injection.
     SkipProactiveContext bool `json:"skip_proactive_context,omitempty"`
 
@@ -486,7 +518,6 @@ var lowContextProfile = ContextProfile{
         "search_files", "commit", "list_changes", "recover_file",
     },
     SystemPromptPath:          "prompts/system_prompt.lite.md",
-    SkipAgentsMd:              true,
     SkipProactiveContext:      true,
     CompactionTriggerFraction: 0.85,
     RecentTurnsToPreserve:     2,
@@ -563,7 +594,7 @@ type Config struct {
 }
 ```
 
-One field, one selector. No `LowContextToolAllowlist`, no `SkipAgentsMd` flag, no per-lever toggles exposed to the user. The profile owns those; the user picks a mode. If a power user wants to mix-and-match (e.g. low-context tools but keep AGENTS.md), they'd need a user-defined profile map — deliberately out of scope for v1. Keep the surface tiny.
+One field, one selector. No `LowContextToolAllowlist`, no per-lever toggles exposed to the user. The profile owns those; the user picks a mode. (`AGENTS.md` isn't a toggle at all — it's always injected in every mode.) If a power user wants to mix-and-match (e.g. low-context tools but keep the full prompt), they'd need a user-defined profile map — deliberately out of scope for v1. Keep the surface tiny.
 
 ### Call-site changes — read the field, don't branch on mode
 
@@ -612,12 +643,23 @@ if err == nil && contextFiles != "" {
     promptContent += contextFiles
 }
 
-// After:
-if !profile.SkipAgentsMd {
-    contextFiles, err := LoadContextFiles()
-    if err == nil && contextFiles != "" {
-        promptContent += contextFiles
+// After: AGENTS.md is ALWAYS injected. The only LCM-specific behavior
+// is an advisory size warning — never suppression. The warning fires
+// once per session, in low-context mode only, when the file is large.
+contextFiles, err := LoadContextFiles()
+if err == nil && contextFiles != "" {
+    if profile.Mode == ContextModeLowContext && !agentsMdWarningShown {
+        if tokens := EstimateTokens(contextFiles); tokens > 4000 {
+            fmt.Fprintf(os.Stderr,
+                "⚠ AGENTS.md is large (~%d tokens, %d%% of a 32K window).\n"+
+                "  It will still be injected — project conventions are mandatory.\n"+
+                "  To shrink it: move reference material to linked docs, split into\n"+
+                "  per-package AGENTS.md files, or trim historical notes.\n",
+                tokens, tokens*100/32_000)
+            agentsMdWarningShown = true
+        }
     }
+    promptContent += contextFiles
 }
 ```
 
@@ -688,7 +730,7 @@ func ClassifyEligibleRoles(m CanonicalModel) []string {
 ### Why this is clean
 
 1. **One struct, one field on Config.** No explosion of boolean flags. A new lever is one field on `ContextProfile` + one preset value — not a new config key.
-2. **Call sites read data, not mode.** `if profile.SkipAgentsMd` reads a boolean; it never asks "am I in low context mode?". A future "medium context" profile sets the same fields differently with zero call-site changes.
+2. **Call sites read data, not mode.** `if profile.SkipProactiveContext` reads a boolean; it never asks "am I in low context mode?". A future "medium context" profile sets the same fields differently with zero call-site changes. (The `AGENTS.md` size warning is the one exception — it reads `profile.Mode` directly because the warning is mode-specific advisory text, not a behavior toggle. The injection itself is unconditional.)
 3. **Presets are code, not config.** The tool allowlist and prompt path are tightly coupled to what the prompt actually says and which tools exist. Letting users edit them via config would let them request `system_prompt.lite.md` while keeping all 44 tools — a broken combination. Presets stay in sprout's control.
 4. **Resolution is centralized.** `ResolveContextProfile` is the *only* place that decides which profile is active. Every call site gets a resolved `ContextProfile` from the agent; none of them re-derive it.
 5. **Full mode is untouched.** `fullContextProfile` is the zero-value default. Every field is empty/zero/false, which every call site already treats as "use built-in default." There is literally no behavior change for 128K+ models unless the user explicitly opts in via `config.context_mode = "low_context"`.
@@ -706,7 +748,7 @@ On resolution, if the profile came from auto-detect (not explicit config), emit 
 
 ```
 ⚠ 32K context detected — Low-Context Mode active
-  8 tools, lite prompt, AGENTS.md skipped
+  8 tools, lite prompt, AGENTS.md kept
   /context full to override, /model to switch
 ```
 
@@ -719,13 +761,16 @@ The lite prompt will drift from the full prompt as the full one evolves.
 **Mitigation:** A CI check that diffs shared sections (git rules, tool
 guidelines) between the two prompts, or a periodic manual review cadence.
 
-### R2: Silent convention violations
-Skipping `AGENTS.md` means the model won't know about, e.g., the design
-system token rules or test isolation conventions. Edits to those areas
-may violate conventions silently.
-**Mitigation:** Warn when skipping. Recommend `--include-agents-md` for
-tasks touching CSS, tests, or config. The `/context full` escape hatch
-should be prominent.
+### R2: Convention violations ✅ resolved 2026-07-20
+**Original concern:** skipping `AGENTS.md` means the model won't know
+about the design system token rules or test isolation conventions, and
+edits to those areas may violate conventions silently.
+**Resolution:** `AGENTS.md` is no longer skipped in any mode (see
+§"Lever 3" revision). The file is always injected. The only LCM-specific
+behavior is an advisory warning when the file is large — the user is
+told the context cost and directed to shrink the file if they want, but
+the file is never suppressed. This eliminates the silent-violation class
+of risk entirely.
 
 ### R3: Does the capability probe work at 32K?
 The probe (`pkg/modelprobe/`) runs a multi-step agentic test to verify
@@ -743,7 +788,7 @@ needs a separate decision because subagent context limits flow through
 ### R5: Stream ordering
 Tool filtering happens in `conversation.go:80-130`. Prompt selection and
 proactive-context gating need to happen in the same path. The ordering
-matters: tool subset → prompt selection → skip AGENTS.md → proactive ctx.
+matters: tool subset → prompt selection → AGENTS.md always injected (with size warning in LCM) → proactive ctx.
 All four are in the prompt-build hot path; no architectural change needed,
 just careful sequencing.
 

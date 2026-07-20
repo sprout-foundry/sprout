@@ -104,7 +104,7 @@ func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
 // augmentation (context files, memories, timestamp). In LCM the lite prompt
 // (~1K tokens) replaces the full prompt (~6.6K). AGENTS.md is still injected
 // by the context-files step regardless of profile — conventions are mandatory.
-func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string) (string, error) {
+func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int) (string, error) {
 	promptContent, err := extractSystemPromptForProfile(profile)
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
@@ -118,13 +118,19 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 		if profile.Mode == configuration.ContextModeLowContext {
 			tokens := EstimateTokens(contextFiles)
 			if tokens > agentsMdLargeTokenThreshold {
-				pct := tokens * 100 / 32_000
+				windowLabel := "the context window"
+				windowK := contextWindow / 1000
+				pct := 0
+				if contextWindow > 0 {
+					pct = tokens * 100 / contextWindow
+					windowLabel = fmt.Sprintf("a %dK window", windowK)
+				}
 				fmt.Fprintf(os.Stderr,
-					"⚠ AGENTS.md is large (~%d tokens, ~%d%% of a 32K window).\n"+
+					"⚠ AGENTS.md is large (~%d tokens, ~%d%% of %s).\n"+
 						"  It will still be injected — project conventions are mandatory.\n"+
 						"  To shrink it: move reference material to linked docs, split into\n"+
 						"  per-package AGENTS.md files, or trim historical notes.\n",
-					tokens, pct)
+					tokens, pct, windowLabel)
 			}
 		}
 		promptContent = promptContent + contextFiles

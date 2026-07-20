@@ -37,6 +37,20 @@ type SecurityAnalysisView struct {
 	// the CLI panel ("✓ Looks safe" / "⚠ Review needed" /
 	// "✗ Recommend reject").
 	Recommendation string
+
+	// ChainLength is the number of subcommands in the analyzed chain.
+	// 0 for single-command analyses (regression-guard: legacy CLI/WebUI
+	// callers pass nil/zero and see no chain UI). SP-124b Phase 2.
+	ChainLength int
+
+	// ChainSubcommands are the per-subcommand strings (in order). Rendered
+	// as a stepper in CLI/WebUI when ChainLength > 1. SP-124b Phase 2.
+	ChainSubcommands []string
+
+	// ChainClassifications is the per-subcommand risk ("low"/"moderate"/
+	// "high"), parallel to ChainSubcommands. Drives the colored dots on
+	// the stepper. SP-124b Phase 2.
+	ChainClassifications []string
 }
 
 // renderSecurityAnalysisFallbackLine returns a single-line plain-text

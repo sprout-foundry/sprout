@@ -18,6 +18,16 @@ import { useEditorSettings } from '../hooks/useEditorSettings';
 import { useEditorSymbols } from '../hooks/useEditorSymbols';
 import { useEditorUpdate } from '../hooks/useEditorUpdate';
 import { useLivePreview } from '../hooks/useLivePreview';
+import { resolveLanguageId } from '../extensions/languageRegistry';
+import {
+  buildLSPPluginExtensions,
+  lspSyncOnDocChange,
+  registerEditorView,
+  unregisterEditorView,
+  setGlobalDisplayFileCallback,
+  type DisplayFileCallback,
+} from '../extensions/lspExtensions';
+import { getLSPClientService } from '../services/lspClientService';
 import type { EditorBuffer } from '../types/editor';
 import BinaryFileViewer from './BinaryFileViewer';
 import EditorContextMenu from './EditorContextMenu';
@@ -33,11 +43,25 @@ import MediaViewer from './MediaViewer';
 import { useEditorToolbarActions } from './useEditorToolbarActions';
 import WelcomeTab from './WelcomeTab';
 import './EditorPane.css';
+import {
+  useCMView,
+  type CMViewAPI,
+  type CMViewKeymaps,
+  type CMViewSettings,
+  type OpenWorkspaceBufferFn,
+} from '../hooks/useCMView';
 
 interface EditorPaneProps {
   paneId: string;
   onOpenCommandPalette?: () => void;
 }
+
+// Module-level guard: `setGlobalDisplayFileCallback` must be invoked once
+// per app (it stores a single global callback). The previous view-init
+// layer used `globalDisplayFileRegistered` for the same purpose; we
+// replicate that here, per-view, so the first pane to mount registers
+// the callback and subsequent mounts are no-ops.
+let displayFileCallbackRegistered = false;
 
 function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -90,19 +114,33 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const { fetchDiagnosticsRef, isSemanticLanguage } = useEditorDiagnostics(viewRef, buffer);
 
-  // Shared ref that tracks whether an external (non-user) content update is in flight.
-  // This is passed to useEditorCursor to guard against saving cursor positions
-  // during external replacements (file reloads, auto-reload, initial loads).
-  const isExternalUpdateRef = useRef<boolean>(false);
+  // Buffer ref + keymap/settings refs are needed before hooks that use them.
+  // Assign during render (no useEffect mirror) so the first CM updateListener
+  // invocation already reads the latest values.
+  //
+  // These are typed to the central hook's own shapes (`CMViewKeymaps` /
+  // `CMViewSettings`) since `useCMView` is now the sole consumer — the
+  // legacy `EditorViewInitKeymaps` / `EditorViewInitSettings` types are gone.
+  const keymapsRef = useRef<CMViewKeymaps | null>(null);
+  const settingsRef = useRef<CMViewSettings | null>(null);
+  const handleSaveRef = useRef<() => Promise<void>>(async () => {});
+
+  // cmViewApi is produced by useCMView (called later in this component) but
+  // is read by hooks above via this ref indirection. The ref is populated
+  // after useCMView returns on each render; the listener path inside the
+  // CM view always reads the latest value. Until the first useCMView runs,
+  // isExternalUpdate() returns false (no gating), which matches the
+  // pre-refactor behavior of an uninitialized flag.
+  const cmViewApiRef = useRef<CMViewAPI | null>(null);
 
   const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({
     bufferRef,
     updateBufferCursor,
-    isExternalUpdateRef,
+    cmViewApiRef,
   });
 
   const { handleSave, saveRef } = useEditorFileIO(
-    viewRef,
+    cmViewApiRef,
     buffer,
     bufferRef,
     compartments,
@@ -119,7 +157,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       setEditorUsesTabs: settings.setEditorUsesTabs,
       setLineEnding: settings.setLineEnding,
     },
-    isExternalUpdateRef,
   );
 
   const { handleScrollUpdate, cancelPendingFlush } = useEditorScrollSync({
@@ -131,26 +168,40 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     isLinkedScrollEnabled,
   });
 
+  // useEditorUpdate.onUpdate identity changes when localContent changes (it's
+  // in the dep array). Reading it via a ref-mirror avoids recreating the
+  // EditorView on every keystroke. The mirror is written during render — no
+  // useEffect — so the listener always sees the latest callback.
+  const onUpdateRef = useRef<(update: import('@codemirror/view').ViewUpdate) => void>(() => {});
+
   const { localContentRef, onUpdate } = useEditorUpdate({
     bufferRef,
     localContent,
     setLocalContent,
-    isExternalUpdateRef,
+    cmViewApiRef,
     fetchDiagnosticsRef,
     handleCursorUpdate,
     handleScrollUpdate,
     updateBufferContent,
     setBufferModified,
   });
+  onUpdateRef.current = onUpdate;
 
-  // Wrap onUpdate in a ref so the init effect doesn't re-run on every keystroke.
-  // onUpdate's identity changes whenever localContent changes (it's in the dep array
-  // of useEditorUpdate), which would destroy/recreate the EditorView and reset
-  // scroll position, losing user focus. Using a ref stabilizes the dependency.
-  const onUpdateRef = useRef(onUpdate);
-  useEffect(() => {
-    onUpdateRef.current = onUpdate;
-  }, [onUpdate]);
+  // Single-hop save ref — written during render, read by the API's save()
+  // method inside the CM updateListener (e.g., search panel). No useEffect
+  // mirror, no actionsRef indirection.
+  handleSaveRef.current = handleSave;
+
+  // openWorkspaceBuffer from EditorManagerContext is itself a stable callback
+  // across renders, but we still wire it through a ref because the CM
+  // extensions builder reads `openWorkspaceBufferRef.current.getOpenWorkspaceBuffer()`
+  // inside handlers that fire after mount (e.g., when LSP client opens a
+  // file from `textDocument/definition`). Without a render-time `.current`
+  // assignment, a stale value from the first render would persist. The
+  // legacy code used `useRef(openWorkspaceBuffer)` which silently *never*
+  // updated; that's the bug we're fixing here.
+  const openWorkspaceBufferRef = useRef<OpenWorkspaceBufferFn>(openWorkspaceBuffer);
+  openWorkspaceBufferRef.current = openWorkspaceBuffer;
 
   const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(hotkeys, viewRef, bufferRef);
 
@@ -182,17 +233,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const keymaps = buildKeymaps(keymapActions);
 
-  // Stable refs for keymaps, settings, and actions — passed to hooks so that
-  // the dependency arrays don't change on every render, which would destroy
-  // and recreate the EditorView (breaking editing and resetting scroll).
-  // Writes happen in useEffect (not during render) so concurrent renders see
-  // consistent values.
-  const keymapsRef = useRef(keymaps);
-  useEffect(() => {
-    keymapsRef.current = keymaps;
-  }, [keymaps]);
-
-  const settingsRef = useRef({
+  // Refs are written during render (no useEffect mirror) so the CM view
+  // mounts with the latest values and configures compartments correctly
+  // on the very first updateListener invocation. This eliminates the
+  // "stale settings" bug where the previous render's settings were applied
+  // to the current keystroke.
+  keymapsRef.current = keymaps;
+  settingsRef.current = {
     wordWrapEnabled: settings.wordWrapEnabled,
     relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
     minimapEnabled: settings.minimapEnabled,
@@ -202,34 +249,100 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     whitespaceRenderingMode: settings.whitespaceRenderingMode,
     inlayHintsEnabled: settings.inlayHintsEnabled,
     signatureHelpEnabled: settings.signatureHelpEnabled,
-  });
-  useEffect(() => {
-    settingsRef.current = {
-      wordWrapEnabled: settings.wordWrapEnabled,
-      relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
-      minimapEnabled: settings.minimapEnabled,
-      editorFontSize: settings.editorFontSize,
-      editorTabSize: settings.editorTabSize,
-      editorUsesTabs: settings.editorUsesTabs,
-      whitespaceRenderingMode: settings.whitespaceRenderingMode,
-      inlayHintsEnabled: settings.inlayHintsEnabled,
-      signatureHelpEnabled: settings.signatureHelpEnabled,
-    };
-  }, [
-    settings.wordWrapEnabled,
-    settings.relativeLineNumbersEnabled,
-    settings.minimapEnabled,
-    settings.editorFontSize,
-    settings.editorTabSize,
-    settings.editorUsesTabs,
-    settings.whitespaceRenderingMode,
-    settings.inlayHintsEnabled,
-    settings.signatureHelpEnabled,
-  ]);
+  };
 
-  const actionsRef = useRef({ getSaveFn: () => saveRef.current });
-  // actionsRef holds only a stable closure over the ref-mirrored saveRef —
-  // no actual changing state. Initialized once; no need to update.
+  // Resolve language for the current buffer. The CM extensions builder
+  // needs this to load the right syntax highlighter.
+  const resolvedLanguage = resolveLanguageId(
+    buffer?.languageOverride,
+    buffer?.file?.ext?.replace(/^\./, ''),
+    buffer?.file?.name,
+  );
+
+  // LSP bootstrap — owned here in EditorPane. Called once by `useCMView`
+  // when the view mounts for a buffer with a supported language id.
+  // Errors are best-effort: a failed LSP service must not abort editor
+  // mounting.
+  const bootstrapLSP = useCallback(async (langId: string, filePath: string) => {
+    const lspService = getLSPClientService();
+    try {
+      // status check is best-effort; proceed without aborting on failure
+      await lspService.getStatus();
+    } catch {
+      // swallow — LSP server may not be reachable yet
+    }
+    const client = await lspService.getClientForLanguage(langId);
+    if (!client) return [];
+    return [
+      ...buildLSPPluginExtensions(client, filePath, langId),
+      ...lspSyncOnDocChange(langId),
+    ];
+  }, []);
+
+  // Per-view mount hook. Registers the view with the LSP service so
+  // `gotoDefinition` et al. can find it by filePath. Installs the
+  // global `setGlobalDisplayFileCallback` exactly once across the app
+  // via the module-level `displayFileCallbackRegistered` flag.
+  const onDidMount = useCallback((view: CMEditorView, filePath: string | undefined) => {
+    if (filePath && !filePath.startsWith('__workspace/')) {
+      registerEditorView(filePath, view);
+    }
+    if (!displayFileCallbackRegistered) {
+      displayFileCallbackRegistered = true;
+      const cb: DisplayFileCallback = async (fp: string) => {
+        const fileName = fp.split('/').pop() || fp;
+        const dotIndex = fileName.lastIndexOf('.');
+        const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+        openWorkspaceBufferRef.current({ kind: 'file', path: fp, title: fileName, ext });
+        return null;
+      };
+      setGlobalDisplayFileCallback(cb);
+    }
+  }, []);
+
+  // Per-view destroy hook. Cancels any pending scroll/diagnostic flush
+  // and unregisters the view so future LSP requests for the same filePath
+  // don't dispatch into a torn-down EditorView.
+  const onWillDestroy = useCallback(
+    (_view: CMEditorView) => {
+      cancelPendingFlush();
+      const buf = bufferRef.current;
+      const filePath = buf?.file?.path;
+      if (filePath && !filePath.startsWith('__workspace/')) {
+        unregisterEditorView(filePath);
+      }
+    },
+    [cancelPendingFlush],
+  );
+
+  // Single CM view API instance for this pane. The hook returns a stable
+  // object reference (apiRef.current never reassigns); mutations to api.view
+  // and api.isMounted are in place. The handleSaveRef, settingsRef, and
+  // keymapsRef are read at call time inside the CM updateListener, so
+  // there's no useEffect mirroring and no stale-closure race.
+  const cmViewApi = useCMView({
+    paneId,
+    editorRef,
+    buffer,
+    bufferRef,
+    languageId: resolvedLanguage.languageId,
+    handleSaveRef,
+    openWorkspaceBufferRef,
+    onUpdateRef,
+    settingsRef,
+    keymapsRef,
+    compartments,
+    buildExtensions,
+    themePack,
+    customHighlightStyle,
+    bootstrapLSP,
+    onDidMount,
+    onWillDestroy,
+  });
+  // Make the API available to hooks called earlier in this component via
+  // the ref indirection. Writes are safe during render — the ref object
+  // is stable, only its `.current` changes.
+  cmViewApiRef.current = cmViewApi;
 
   // Tracks whether this pane is the active one. Updated on every render so
   // useEditorEvents' stable handler can read the latest value via the ref
@@ -327,42 +440,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onFormatDocument: handleFormatDocument,
   });
 
-  // EditorCore documents that `initOptions` must stay reference-stable so the
-  // EditorView isn't torn down per keystroke. `localContent` is therefore
-  // *not* in the dep array — `useEditorViewInit` reads it once for the
-  // initial view content; subsequent updates flow through `onUpdateRef`.
-  const editorCoreInitOptions = useMemo(
-    () => ({
-      paneId,
-      buffer,
-      localContent,
-      compartments,
-      buildExtensions,
-      themePack,
-      customHighlightStyle,
-      keymapsRef,
-      localContentRef,
-      openWorkspaceBuffer,
-      onCancelPendingFlush: cancelPendingFlush,
-      onUpdateRef,
-      settingsRef,
-      actionsRef,
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }),
-    [
-      paneId,
-      buffer,
-      compartments,
-      buildExtensions,
-      themePack,
-      customHighlightStyle,
-      openWorkspaceBuffer,
-      cancelPendingFlush,
-      onUpdateRef,
-      settingsRef,
-      actionsRef,
-    ],
-  );
+  // EditorCore no longer takes `initOptions`. The EditorView lifecycle is
+  // owned here in EditorPane via `useCMView`; EditorCore only handles the
+  // memoized DOM container plus compartment reconfiguration.
 
   const editorCoreReconfigureOptions = useMemo(
     () => ({
@@ -439,9 +519,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     );
   }
 
-  // EditorCore documents that `initOptions` must stay reference-stable so the
-  // EditorView isn't torn down per keystroke. These useMemos are declared
-  // above (before the early returns) to comply with react-hooks/rules-of-hooks.
+  // useMemos (reconfigureOptions) are declared above (before the early
+  // returns) to comply with react-hooks/rules-of-hooks.
 
   return (
     <div className="editor-pane" data-testid="editor-pane">
@@ -485,7 +564,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       <EditorCore
         editorRef={editorRef}
         viewRef={viewRef}
-        initOptions={editorCoreInitOptions}
         reconfigureOptions={editorCoreReconfigureOptions}
         loading={loading}
         error={error}

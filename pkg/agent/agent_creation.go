@@ -279,7 +279,24 @@ func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, c
 	}
 
 	providerName := api.GetProviderName(clientType)
-	systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
+
+	// SP-125: resolve the context profile before loading the system prompt
+	// so the lite prompt is selected when LCM is active. The profile is also
+	// re-resolved inside initAgentFromResolvedProvider (after the agent's
+	// state manager is initialized and MaxContextTokens is set); the two
+	// resolutions agree because they use the same inputs (config + window).
+	contextWindow := 0
+	if limit, err := client.GetModelContextLimit(); err == nil {
+		contextWindow = limit
+	}
+	profile, profileErr := configuration.ResolveContextProfile(
+		configManager.GetConfig(), contextWindow,
+	)
+	if profileErr != nil {
+		return nil, agenterrors.NewPermanentError("context profile resolution failed", profileErr)
+	}
+
+	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName)
 	if err != nil {
 		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
 	}

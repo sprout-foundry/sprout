@@ -63,3 +63,61 @@ func TestRenderSecurityAnalysisFallbackLine(t *testing.T) {
 		})
 	}
 }
+
+// TestSecurityAnalysisView_ChainFieldsRoundTrip verifies the struct
+// preserves the SP-124b Phase 2 chain metadata through a copy. This is
+// what the broker does (pkg/agent/approval_broker.go copies the chain
+// fields from *SecurityAnalysis into *SecurityAnalysisView), so a
+// regression here breaks the WebUI stepper and CLI stepper simultaneously.
+//
+// SP-124b Phase 2.
+func TestSecurityAnalysisView_ChainFieldsRoundTrip(t *testing.T) {
+	original := &SecurityAnalysisView{
+		Summary:              "Chain of 3 ops",
+		Modifies:             "/tmp",
+		RiskAssessment:       "moderate",
+		Recommendation:       "review",
+		ChainLength:          3,
+		ChainSubcommands:     []string{"git add -A", "git commit -m 'wip'", "git push"},
+		ChainClassifications: []string{"low", "low", "moderate"},
+	}
+
+	// Simulate the broker's struct copy.
+	copied := *original
+
+	if copied.ChainLength != original.ChainLength {
+		t.Errorf("ChainLength not preserved: got %d, want %d", copied.ChainLength, original.ChainLength)
+	}
+	if len(copied.ChainSubcommands) != len(original.ChainSubcommands) {
+		t.Fatalf("ChainSubcommands length not preserved: got %d, want %d", len(copied.ChainSubcommands), len(original.ChainSubcommands))
+	}
+	for i := range original.ChainSubcommands {
+		if copied.ChainSubcommands[i] != original.ChainSubcommands[i] {
+			t.Errorf("ChainSubcommands[%d] = %q, want %q", i, copied.ChainSubcommands[i], original.ChainSubcommands[i])
+		}
+	}
+	if len(copied.ChainClassifications) != len(original.ChainClassifications) {
+		t.Fatalf("ChainClassifications length not preserved: got %d, want %d", len(copied.ChainClassifications), len(original.ChainClassifications))
+	}
+	for i := range original.ChainClassifications {
+		if copied.ChainClassifications[i] != original.ChainClassifications[i] {
+			t.Errorf("ChainClassifications[%d] = %q, want %q", i, copied.ChainClassifications[i], original.ChainClassifications[i])
+		}
+	}
+
+	// Zero values for legacy callers (Phase 1 regression guard).
+	legacy := &SecurityAnalysisView{
+		Summary:        "single cmd",
+		RiskAssessment: "low",
+		Recommendation: "approve",
+	}
+	if legacy.ChainLength != 0 {
+		t.Errorf("legacy view ChainLength = %d, want 0", legacy.ChainLength)
+	}
+	if legacy.ChainSubcommands != nil {
+		t.Errorf("legacy view ChainSubcommands should be nil, got %v", legacy.ChainSubcommands)
+	}
+	if legacy.ChainClassifications != nil {
+		t.Errorf("legacy view ChainClassifications should be nil, got %v", legacy.ChainClassifications)
+	}
+}

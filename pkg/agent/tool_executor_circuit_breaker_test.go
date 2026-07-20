@@ -12,34 +12,41 @@ import (
 
 func newTestToolExecutorWithCircuitBreaker() *ToolExecutor {
 	cb := &CircuitBreakerState{Actions: make(map[string]*CircuitBreakerAction)}
-	state := &AgentStateManager{circuitBreaker: cb}
-	return &ToolExecutor{
-		agent: &Agent{state: state},
+	state := &AgentStateManager{
+		AgentSessionManager:        NewAgentSessionManager(false),
+		AgentMetricsManager:        NewAgentMetricsManager(),
+		AgentPersonaManager:       NewAgentPersonaManager(),
+		AgentSecurityStateManager: &AgentSecurityStateManager{circuitBreaker: cb},
 	}
+	return &ToolExecutor{agent: &Agent{state: state}}
 }
 
 func newTestToolExecutorWithCircuitBreakerAndProvider(provider string) *ToolExecutor {
 	cb := &CircuitBreakerState{Actions: make(map[string]*CircuitBreakerAction)}
-	state := &AgentStateManager{circuitBreaker: cb}
+	state := &AgentStateManager{
+		AgentSessionManager:        NewAgentSessionManager(false),
+		AgentMetricsManager:        NewAgentMetricsManager(),
+		AgentPersonaManager:       NewAgentPersonaManager(),
+		AgentSecurityStateManager: &AgentSecurityStateManager{circuitBreaker: cb},
+	}
 	if provider != "" {
-		state.SetSessionProvider(api.ClientType(provider)) // stored as string via GetSessionProvider
+		state.SetSessionProvider(api.ClientType(provider))
 	}
-	return &ToolExecutor{
-		agent: &Agent{state: state},
-	}
+	return &ToolExecutor{agent: &Agent{state: state}}
 }
 
 func newTestToolExecutorNilState() *ToolExecutor {
-	return &ToolExecutor{
-		agent: &Agent{},
-	}
+	return &ToolExecutor{agent: &Agent{}}
 }
 
 func newTestToolExecutorNilCircuitBreaker() *ToolExecutor {
-	state := &AgentStateManager{}
-	return &ToolExecutor{
-		agent: &Agent{state: state},
+	state := &AgentStateManager{
+		AgentSessionManager:        NewAgentSessionManager(false),
+		AgentMetricsManager:        NewAgentMetricsManager(),
+		AgentPersonaManager:       NewAgentPersonaManager(),
+		AgentSecurityStateManager: &AgentSecurityStateManager{circuitBreaker: nil},
 	}
+	return &ToolExecutor{agent: &Agent{state: state}}
 }
 
 func updateCircuitBreakerCount(te *ToolExecutor, toolName string, args map[string]interface{}) {

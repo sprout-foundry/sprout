@@ -20,9 +20,74 @@ _Spec: `roadmap/SP-123-user-command-policies.md`._
 ## SP-122: Security Classifier — Chained Command Handling
 
 **Status:** ✅ Shipped — Phase 1 + Phase 2 both implemented.
+**Reviewed:** 2026-07-20 — implementation verified, test counts corrected, follow-ups noted below.
 
 - Phase 1 (nested safe-path matching): `safeRmRfComponents` set in `shell_patterns.go` + `isSafeRmRfComponent` helper. Nested paths like `rm -rf internal/api/webui/dist/sprout-webui` classify SAFE because `dist` is a known build artifact. Path traversal (`../`) and absolute system paths rejected.
 - Phase 2 (chained command splitting): `classifyChainedCommand` in `security_classifier.go` splits on `&&`, `||`, `;`, `|` (quote-aware), classifies each subcommand independently, and returns the max risk. Safe portions of a chain don't elevate to DANGEROUS.
+
+### Review 2026-07-20
+
+Verified every claim against the code at `main` @ `32fd9ac9`. The core
+implementation is sound and shipping. Three categories of findings.
+
+**Test-count corrections (the SHIPPED notes were inaccurate):**
+
+The SP-122-1b entry listed six test functions with specific case counts.
+Two of the six functions **do not exist**, and the counts for the rest
+were slightly off. Actual state (counted via `go test -v`):
+
+| Function | Claimed | Actual |
+|---|---:|---:|
+| `TestIsSafeRmRfPrefix_NestedPaths` | 46 | **does not exist** |
+| `TestIsSafeRmRfPrefix_NestedPathsClassifiedSafe` | 5 | **does not exist** |
+| `TestIsSafeRmRfComponent` | 23 | 22 |
+| `TestIsSafeRmRfPrefixBackwardCompatibility` | 16 | 17 |
+| `TestSafeRmRfTraversalEscape` | 6 | 6 ✓ |
+| `TestClassifyChainedCommand` | 25 | 25 ✓ |
+
+The two missing functions' coverage appears to have been folded into
+`TestNestedPathRmRfSafety` (31 cases) — the nested-path classification
+behavior is well-tested, just under a different name than the SHIPPED
+note records. **Net coverage is solid (~101 subtests across 5 functions);
+only the documentation was wrong.**
+
+**Follow-up: `xargs rm -rf` classification gap (non-security, low priority):**
+
+The TODO documents this as a "known gap": `ls | xargs rm -rf` classifies
+as CAUTION. Verified and traced — the chain splits on `|` into `ls`
+(SAFE) and `xargs rm -rf`. The `xargs rm -rf` subcommand doesn't match
+the `rm -rf ` prefix in `isCautionPattern` (because it starts with
+`xargs`), so it falls through to the default `return SecurityCaution`
+at `security_classifier.go:538`.
+
+CAUTION still prompts the user, so this is **not a security bypass** —
+the user sees a confirmation dialog. But the *reason* for the prompt is
+imprecise: it's flagged as a generic caution rather than recognizing
+the `rm -rf` semantic. A future improvement would detect `xargs`-fed
+destructive verbs (`xargs rm`, `xargs rm -rf`) and elevate to a
+destructive-classification prompt with a clearer message. **Defer until
+a user reports confusion about the prompt wording** — the current
+behavior is safe, just not maximally informative.
+
+**Convention finding: file-size violations (tech debt, not a blocker):**
+
+Two files in the classifier exceed the AGENTS.md 500-line guideline:
+
+| File | Lines | Limit |
+|---|---:|---:|
+| `pkg/agent_tools/security_classifier.go` | 858 | 500 |
+| `pkg/agent_tools/shell_patterns.go` | 767 | 500 |
+
+`security_classifier.go` carries the main classifier logic, chain
+splitting, the `classifySingleCommand` dispatch, and the
+`classifyReadOnlyForLoop` helper. `shell_patterns.go` carries the
+safe/caution/dangerous pattern tables plus the matching helpers.
+
+These are candidates for SP-098 (Large-File Decomposition Second Pass)
+but are **not blocking** — the code is well-organized within each file
+and the size grew naturally as the classifier gained the nested-path
+and chained-command features. Flagging here so SP-098's file table can
+be updated when it runs.
 
 **Priority**: High — blocks safe dev workflows (vendoring, build cycles)
 

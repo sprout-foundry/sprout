@@ -955,7 +955,7 @@ split:
       resolved (add the interface or remove from the spec) before
       extracting a Plan sub-manager.
 
-- [ ] **SP-115-2:** Migrate callsites. Grep
+- [x] **SP-115-2:** Migrate callsites. Grep
       `*StateManager`/`s.state.` and rewrite each to use the focused
       sub-manager where the callsite only needs one domain. ~0.5 week.
       **No-op after SP-115-1's embedding approach.** Because the
@@ -1126,6 +1126,140 @@ MCP, subagent, auth, billing, task, and mode flows.
 3. **Terminal-state discipline is inconsistent** — codebase has
    infrastructure for REPL-safe prompts but `/rewind` and onboarding
    fallback bypass it (H5, L1).
+
+---
+
+## SP-125: Low-Context Mode (32K context support)
+
+**Spec:** `roadmap/SP-125-low-context-mode.md`
+**Status:** 🔵 Scoping — design complete, not yet approved for implementation
+**Created:** 2026-07-20
+
+Goal: make sprout usable at 32K context (local/offline inference — Ollama,
+LM Studio, llama.cpp) by reducing fixed per-turn overhead from ~16K tokens
+(50% of 32K) to ~2.5K tokens (8%), via a config-driven `ContextProfile`
+abstraction. Not a replacement for the 128K+ workflow — an opt-in fallback
+for small-context models.
+
+### Thresholds
+
+| Band | Range | Behavior |
+|---|---|---|
+| Full | ≥ 64K | default sprout (all tools, full prompt) |
+| Low-Context (LCM) | 8K–64K | lite prompt, 8-tool allowlist, AGENTS.md skipped |
+| Refused | < 8K (`ContextFloor`) | hard error at agent creation |
+
+### Steps to ship
+
+- [ ] **SP-125-1:** Core abstraction. Create `pkg/configuration/context_profile.go`
+      with `ContextMode` type, `ContextProfile` struct (8 lever fields), two baked
+      presets (`fullContextProfile` zero-value default, `lowContextProfile` 8-tool
+      preset), `ResolveContextProfile(cfg, modelContextWindow)` resolver, and
+      `ContextFloor = 8_000` constant with the hard-error branch. Unit tests for
+      resolution precedence (explicit config > auto-detect > default) and the
+      floor error. ~3 hrs.
+      **Acceptance:** `go test ./pkg/configuration/...` passes; zero-value
+      `ContextProfile` produces full-mode defaults; context window 4096 returns
+      the floor error.
+
+- [ ] **SP-125-2:** Config surface. Add `ContextMode ContextMode` field to
+      `Config` in `pkg/configuration/config.go` (mirror the `RiskProfile`
+      pattern). Update `config_merge.go` so explicit `ContextMode` wins on merge.
+      ~1 hr.
+      **Acceptance:** `config.context_mode = "low_context"` round-trips through
+      save/load; empty value means "auto" (existing behavior unchanged).
+
+- [ ] **SP-125-3:** Lite system prompt. Write `pkg/agent/prompts/system_prompt.lite.md`
+      (~80–120 lines, ~1.5K tokens) — core identity, tool guidelines, git safety
+      rules (verbatim), terse error recovery + completion criteria. Strip
+      delegation/review/persona/skills/memory/duplicate-detection sections.
+      ~4 hrs.
+      **Acceptance:** Lite prompt is < 2K tokens; git safety rules match the full
+      prompt verbatim; no reference to subagents or skills.
+
+- [ ] **SP-125-4:** Wire `ContextProfile` into `Agent`. Store the resolved
+      profile on the `Agent` struct in `agent_creation.go` (call
+      `ResolveContextProfile` once at creation). Add the `//go:embed` for
+      `system_prompt.lite.md`. ~2 hrs.
+      **Acceptance:** Agent creation succeeds at 32K (LCM auto-activated) and
+      at 4K (floor error surfaces cleanly); 128K+ models get full profile with
+      zero behavior change.
+
+- [ ] **SP-125-5:** Lever 1 — tool subset. In `pkg/agent/conversation.go:81`,
+      after `BuildToolDefinitions()`, filter by `profile.ToolAllowlist` when
+      non-empty (reuse existing `filterToolsByName`). ~1 hr.
+      **Acceptance:** At 32K, exactly 8 tools are registered
+      (`shell_command, read_file, write_file, edit_file, search_files, commit,
+      list_changes, recover_file`); at 128K+, all 44 tools register unchanged.
+
+- [ ] **SP-125-6:** Lever 2 — lite prompt selection. In `embedded_prompts.go`,
+      select `systemPromptContent` vs `systemPromptLiteContent` based on
+      `profile.SystemPromptPath`. ~1 hr.
+      **Acceptance:** Token count of the 32K system prompt is ~1.5K (measured
+      via `EstimateTokens`), down from ~6.6K.
+
+- [ ] **SP-125-7:** Lever 3 — skip AGENTS.md. In `GetEmbeddedSystemPrompt`
+      (`embedded_prompts.go:54`), gate `LoadContextFiles()` behind
+      `if !profile.SkipAgentsMd`. ~30 min.
+      **Acceptance:** At 32K with an `AGENTS.md` present in cwd, the file is
+      not injected; at 128K+, it is.
+
+- [ ] **SP-125-8:** Lever 4 — compaction trigger. In `context_budget.go`,
+      `computeCompactionTriggerFraction()` returns
+      `profile.CompactionTriggerFraction` when > 0, else the computed default.
+      In `rollup.go`, `recentTurnsToPreserve` reads
+      `profile.RecentTurnsToPreserve` when > 0 (convert const → var + accessor).
+      ~2 hrs.
+      **Acceptance:** At 32K, trigger fraction is 0.85 and recency is 2;
+      at 128K+, defaults (0.70 / 5) are unchanged.
+
+- [ ] **SP-125-9:** Lever 5 — disable proactive context. In `seed_query.go:153`,
+      add `!a.contextProfile.SkipProactiveContext` to the
+      `shouldInjectProactiveContext` condition chain. ~30 min.
+      **Acceptance:** At 32K, no proactive context is injected after turn 1;
+      at 128K+, it is.
+
+- [ ] **SP-125-10:** Lever 6 — repo_map depth. Default depth reads
+      `profile.RepoMapDefaultDepth` when > 0, else 3. (repo_map is not in the
+      8-tool allowlist, but this covers the case where a user forces LCM via
+      config while keeping repo_map.) ~30 min.
+      **Acceptance:** Depth override applies when set; default unchanged when 0.
+
+- [ ] **SP-125-11:** Eligibility update. In `pkg/modelcontract/eligibility.go`,
+      add `RoleLowContext = "low_context"` and `LowContextMinContext = 16_000`;
+      `ClassifyEligibleRoles` returns `[]string{RoleLowContext}` for the 16K–64K
+      band. Update `ContextWarning` to mention LCM auto-activation. ~2 hrs.
+      **Acceptance:** A model with 32K context window is classified
+      `RoleLowContext` (not `nil`); the `/models` listing shows the LCM warning.
+
+- [ ] **SP-125-12:** Activation notice. When `ResolveContextProfile` picks LCM
+      via auto-detect (not explicit config), print a one-time stderr notice:
+      `⚠ 32K context detected — Low-Context Mode active (8 tools, lite prompt,
+      AGENTS.md skipped). /context full to override.` ~1 hr.
+      **Acceptance:** Notice appears once on first turn at 32K; does not appear
+      at 128K+; does not appear if user explicitly set `context_mode: "low_context"`.
+
+- [ ] **SP-125-13:** Integration test. Spin up an agent against a mock 32K
+      model and verify: (a) 8 tools registered, (b) lite prompt loaded, (c)
+      AGENTS.md skipped, (d) proactive context disabled, (e) compaction trigger
+      at 0.85, (f) floor error fires at 4K. ~3 hrs.
+      **Acceptance:** Test passes; `go test ./pkg/agent/...` clean.
+
+- [ ] **SP-125-14:** Validate token budget empirically. Run a real session
+      against a 32K model (Ollama/LM Studio) with sprout's token instrumentation
+      (`metrics.go` `GetMaxContextTokens`, `output_router.go:410` usage %).
+      Confirm fixed floor is ~2.5K tokens and a 3-file edit session completes
+      without truncation. ~2 hrs.
+      **Acceptance:** Measured floor within 20% of the spec's ~2.5K estimate;
+      session completes 3+ tool round-trips at 32K.
+
+**Total estimate:** ~24 hrs (3 focused days). Levers are independently
+shippable — SP-125-5 + SP-125-6 (tool subset + lite prompt) recover ~8.8K
+tokens and can ship first behind the abstraction, before levers 3–6 are wired.
+
+**Non-goals (deferred):** dynamic mid-session mode switching; user-defined
+profile maps; subagent LCM inheritance (R4 in spec); a lite capability probe
+variant (R3 in spec).
 
 ---
 

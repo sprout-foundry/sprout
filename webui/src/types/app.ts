@@ -142,6 +142,13 @@ export interface AppState {
       modifies: string;
       riskAssessment: string;
       recommendation: string;
+      // SP-124b Phase 2: chain metadata for the per-subcommand stepper.
+      // Present only when chain_length > 1 (i.e. the analyzer analyzed a
+      // chained command). Length/array fields are guarded by the parser
+      // (webui/src/utils/parseSecurityAnalysis.ts).
+      chainLength?: number;
+      chainSubcommands?: string[];
+      chainClassifications?: ('low' | 'moderate' | 'high')[];
     };
   } | null;
   securityPromptRequest: {

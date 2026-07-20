@@ -340,65 +340,8 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 	return models, nil
 }
 
-type lmStudioListModelsWrapper struct{}
-
-func (w *lmStudioListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	baseURL := os.Getenv("LMSTUDIO_BASE_URL")
-	if baseURL == "" {
-		baseURL = "http://127.0.0.1:1234/v1"
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/models", nil)
-	if err != nil {
-		return nil, agenterrors.NewNetwork("failed to create request", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, agenterrors.NewNetwork("failed to fetch LM Studio models", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, agenterrors.NewProviderError("failed to fetch LM Studio models", FormatHTTPResponseError(resp.StatusCode, resp.Header, body), "lmstudio", "")
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, agenterrors.NewNetwork("failed to read response body", err)
-	}
-
-	var modelsResp struct {
-		Data []struct {
-			ID      string `json:"id"`
-			Object  string `json:"object"`
-			OwnedBy string `json:"owned_by"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, agenterrors.NewConfig("failed to decode LM Studio models", err)
-	}
-
-	// Convert to ModelInfo format
-	models := make([]ModelInfo, 0, len(modelsResp.Data))
-	for _, model := range modelsResp.Data {
-		modelInfo := ModelInfo{
-			ID:            model.ID,
-			Name:          model.ID, // Use ID as name since name field isn't provided
-			Description:   fmt.Sprintf("LM Studio model: %s", model.ID),
-			Provider:      "lmstudio",
-			ContextLength: 32768, // Assume 32k context length for LM Studio models
-		}
-		models = append(models, modelInfo)
-	}
-
-	return models, nil
-}
+// lmStudioListModelsWrapper and the OpenAI-compat fallback live in
+// lmstudio_models.go to keep this file under the 500-line ceiling.
 
 type mistralListModelsWrapper struct{}
 

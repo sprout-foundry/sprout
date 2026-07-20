@@ -16,6 +16,16 @@ type localOllamaListModel struct {
 	Name string `json:"name"`
 }
 
+// localOllamaShowResponse is the JSON shape returned by Ollama's POST /api/show.
+type localOllamaShowResponse struct {
+	ModelInfo localOllamaModelInfo `json:"model_info"`
+}
+
+// localOllamaModelInfo carries model metadata reported by Ollama.
+type localOllamaModelInfo struct {
+	ContextLength int `json:"context_length"`
+}
+
 // localOllamaChatRequest mirrors the JSON body POSTed to /api/chat.
 type localOllamaChatRequest struct {
 	Model     string               `json:"model"`

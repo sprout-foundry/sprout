@@ -140,6 +140,45 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			return nil, err
 		}
 		agent.contextProfile = profile
+
+		// SP-126: resolve the effective context cap once at agent creation
+		// and store on the Agent. Every downstream call site (seed_provider.Info,
+		// seed_query.OnIteration) reads this field rather than re-deriving
+		// from Config.MaxContextTokens or calling client.GetModelContextLimit()
+		// directly. The state.MaxContextTokens write above uses the same
+		// resolved value (getModelContextLimit routes through this resolver
+		// via the config check), so state and Agent stay in sync.
+		//
+		// A cap explicitly set below EffectiveContextCapMinimum (1024)
+		// returns an error that surfaces to the caller — matches the
+		// /max-context and settings_defs validators' behavior so users
+		// see consistent feedback regardless of which surface set the cap.
+		nativeWindow := agent.getNativeModelContextLimit()
+		resolvedCap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
+		if capErr != nil {
+			return nil, fmt.Errorf("resolving effective context cap: %w", capErr)
+		}
+		agent.effectiveContextCap = resolvedCap
+
+		// Activation notice: when the user explicitly set a cap below the
+		// native window, emit a one-time stderr line so they can verify
+		// it's active. Skip when the cap equals the native window (no-op)
+		// and skip when no cap was set (no point announcing "you're using
+		// the full window"). This matches SP-125's LCM auto-detect notice
+		// pattern — same idea, different lever.
+		if cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 &&
+			agent.effectiveContextCap > 0 &&
+			agent.effectiveContextCap < nativeWindow {
+			_, _ = fmt.Fprintf(os.Stderr,
+				"⚡ Context cap active: %s (native: %s)\n"+
+					"  All requests will use at most %s of context.\n"+
+					"  /max-context clear to remove, /max-context <N> to change.\n",
+				agent.formatTokenCount(agent.effectiveContextCap),
+				agent.formatTokenCount(nativeWindow),
+				agent.formatTokenCount(agent.effectiveContextCap),
+			)
+		}
+
 		if profile.Mode == configuration.ContextModeLowContext {
 			// Distinguish auto-detected LCM from explicit config. When the
 			// user explicitly set context_mode: "low_context", they already

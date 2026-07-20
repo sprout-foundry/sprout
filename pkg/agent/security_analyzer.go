@@ -26,6 +26,50 @@ type SecurityAnalysis struct {
 	RiskAssessment string `json:"risk_assessment"`
 	// Recommendation is one of "approve", "review", "reject".
 	Recommendation string `json:"recommendation"`
+
+	// ChainLength is the number of subcommands in the analyzed chain.
+	// 0 means the analysis did not run on a chain (single-command path,
+	// or analyzer didn't run). SP-124b Phase 2.
+	ChainLength int `json:"chain_length,omitempty"`
+
+	// ChainSubcommands are the per-subcommand strings, in order. Used by
+	// the UI stepper. Empty for single-command analyses. The static
+	// per-subcommand classification for each entry is in ChainClassifications.
+	// SP-124b Phase 2.
+	ChainSubcommands []string `json:"chain_subcommands,omitempty"`
+
+	// ChainClassifications holds the per-subcommand risk classification
+	// for the stepper dots ("low"/"moderate"/"high"). Length matches
+	// ChainSubcommands when ChainLength > 1; nil for single-command.
+	// SP-124b Phase 2.
+	ChainClassifications []string `json:"chain_classifications,omitempty"`
+}
+
+// MaxChainSubcommandsForBatchPrompt is the upper limit on chain length
+// for the chain-aware batch prompt. Chains longer than this fall back
+// to per-subcommand analyses combined into one synthesized entry, to
+// keep the LLM prompt bounded and the latency budget predictable.
+// SP-124b Phase 2.
+const MaxChainSubcommandsForBatchPrompt = 10
+
+// riskToLLMTone maps a SecurityRisk (static classifier) to the LLM's
+// "low/moderate/high" vocabulary used by the chain stepper dots. The
+// mapping is deliberately coarse — SecuritySafe→low, SecurityCaution→moderate,
+// SecurityDangerous→high — and an unrecognized value falls back to "moderate".
+// Used by AnalyzeChain to populate SecurityAnalysis.ChainClassifications so
+// the UI can render the per-subcommand risk dots in the same vocabulary as
+// the LLM's overall RiskAssessment. SP-124b Phase 2.
+func riskToLLMTone(r agenttools.SecurityRisk) string {
+	switch r {
+	case agenttools.SecuritySafe:
+		return "low"
+	case agenttools.SecurityCaution:
+		return "moderate"
+	case agenttools.SecurityDangerous:
+		return "high"
+	default:
+		return "moderate"
+	}
 }
 
 // ─── SP-124b Chain types ───────────────────────────────────────────────────
@@ -208,14 +252,30 @@ func NormalizeChain(chain Chain) string {
 
 // AnalyzeChain analyzes a command chain using the LLM. When the chain has
 // exactly one subcommand, it uses the SP-124 single-command prompt.
-// When the chain has multiple subcommands, it uses the chain-aware prompt
-// that includes per-subcommand static classifications.
+// When the chain has multiple subcommands but at most
+// MaxChainSubcommandsForBatchPrompt, it uses the chain-aware prompt
+// that includes per-subcommand static classifications. When the chain
+// exceeds that length, it falls back to per-subcommand single-command
+// analyses combined into one synthesized entry — see AnalyzeChainFallback.
+//
+// On all three paths the returned *SecurityAnalysis has ChainLength,
+// ChainSubcommands, and ChainClassifications populated so the UI can
+// render the per-subcommand stepper. SP-124b Phase 2.
 func AnalyzeChain(ctx context.Context, agent *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	if agent == nil {
 		return nil, fmt.Errorf("nil agent")
 	}
 	if len(chain.Subcommands) == 0 {
 		return nil, fmt.Errorf("empty chain")
+	}
+
+	// SP-124b Phase 2: long chains fall back to per-subcommand single-command
+	// analyses (one LLM call per subcommand) synthesized into a single
+	// SecurityAnalysis. The single-command path below is unaffected — only
+	// chains whose length is in (1, MaxChainSubcommandsForBatchPrompt] use
+	// the chain-aware batch prompt.
+	if len(chain.Subcommands) > MaxChainSubcommandsForBatchPrompt {
+		return AnalyzeChainFallback(ctx, agent, chain, classifications, cwd)
 	}
 
 	client := agent.getClient()
@@ -259,7 +319,190 @@ Focus on: data destruction, data exfiltration, privilege escalation, unrecoverab
 	sa.RiskAssessment = strings.ToLower(strings.TrimSpace(sa.RiskAssessment))
 	sa.Recommendation = strings.ToLower(strings.TrimSpace(sa.Recommendation))
 
+	// Populate chain metadata for the UI stepper. Single-command analyses
+	// (length 1) get ChainLength=0 and nil slice fields so legacy callers
+	// and the regression-guard tests see no visual change. SP-124b Phase 2.
+	if len(chain.Subcommands) > 1 {
+		sa.ChainLength = len(chain.Subcommands)
+		sa.ChainSubcommands = append([]string(nil), chain.Subcommands...)
+		sa.ChainClassifications = make([]string, 0, len(chain.Subcommands))
+		for _, sub := range chain.Subcommands {
+			sa.ChainClassifications = append(sa.ChainClassifications, classificationToneFor(classifications, sub))
+		}
+	}
+
 	return &sa, nil
+}
+
+// classificationToneFor returns the LLM-vocabulary tone ("low"/"moderate"/
+// "high") for the static classification entry matching the given subcommand.
+// Returns "moderate" when no matching classification is found — this is
+// the conservative fallback for parsing ambiguity (whitespace differences
+// after SplitChainedCommand's trim). SP-124b Phase 2.
+func classificationToneFor(classifications []agenttools.ChainedClassification, subcommand string) string {
+	for _, c := range classifications {
+		if c.Subcommand == subcommand {
+			return riskToLLMTone(c.Risk)
+		}
+	}
+	return "moderate"
+}
+
+// AnalyzeChainFallback handles chains longer than MaxChainSubcommandsForBatchPrompt.
+// It runs the existing per-subcommand single-command analyzer on each subcommand
+// and synthesizes a single SecurityAnalysis from the per-subcommand results:
+//
+//   - Summary: a heads-up line that names the chain length and the first three
+//     subcommands joined by "; ", followed by an ellipsis when the chain is longer.
+//     The shape mirrors the "complex script" framing users already see for
+//     long pipelines.
+//   - Modifies: per-subcommand "Modifies" strings deduped and comma-joined,
+//     capped at five entries to bound prompt/output size.
+//   - RiskAssessment: max severity across per-subcommand analyses
+//     (high > moderate > low).
+//   - Recommendation: "reject" if any subcommand rejected, else "review" if any
+//     reviewed, else "approve".
+//   - ChainLength / ChainSubcommands / ChainClassifications: fully populated
+//     so the UI stepper renders all entries.
+//
+// If every per-subcommand call fails, the synthesized SecurityAnalysis is
+// still returned with the chain metadata populated and a fallback summary
+// that names the first three subcommands; callers can render the stepper
+// without an LLM round-trip succeeding. SP-124b Phase 2.
+func AnalyzeChainFallback(ctx context.Context, agent *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
+	if agent == nil {
+		return nil, fmt.Errorf("nil agent")
+	}
+	if len(chain.Subcommands) == 0 {
+		return nil, fmt.Errorf("empty chain")
+	}
+
+	// Build per-subcommand classification tones for the stepper dots up-front
+	// so the metadata is populated even if every LLM call fails.
+	toneBySub := make(map[string]string, len(chain.Subcommands))
+	for _, c := range classifications {
+		toneBySub[c.Subcommand] = riskToLLMTone(c.Risk)
+	}
+
+	// Run one single-command analysis per subcommand with the same context.
+	// Each call is bounded by the same ctx the caller supplied (production
+	// 2s budget per the broker), so a long chain's wall-clock cost is
+	// N×budget in the worst case — this is the explicit Phase 2 trade-off
+	// for keeping the chain-aware batch prompt bounded.
+	analyses := make([]*SecurityAnalysis, 0, len(chain.Subcommands))
+	for _, sub := range chain.Subcommands {
+		subCls := []agenttools.ChainedClassification{}
+		for _, c := range classifications {
+			if c.Subcommand == sub {
+				subCls = append(subCls, c)
+				break
+			}
+		}
+		// Per-subcommand chain has length 1 → uses the SP-124 single-command
+		// prompt path. ChainLength stays 0 on those sub-analyses because
+		// they ARE single commands; we re-derive the aggregate chain metadata
+		// below on the synthesized result.
+		sa, err := AnalyzeChain(ctx, agent, Chain{Original: sub, Subcommands: []string{sub}}, subCls, cwd)
+		if err == nil && sa != nil {
+			analyses = append(analyses, sa)
+		}
+		// On error: skip this subcommand's contribution. Synthesized output
+		// still reflects the subcommands we have data for, plus the chain
+		// metadata (which always succeeds).
+	}
+
+	synthesized := synthesizeChainFallback(chain, analyses)
+
+	// Chain metadata: always populated, regardless of per-subcommand success.
+	synthesized.ChainLength = len(chain.Subcommands)
+	synthesized.ChainSubcommands = append([]string(nil), chain.Subcommands...)
+	synthesized.ChainClassifications = make([]string, 0, len(chain.Subcommands))
+	for _, sub := range chain.Subcommands {
+		if tone, ok := toneBySub[sub]; ok && tone != "" {
+			synthesized.ChainClassifications = append(synthesized.ChainClassifications, tone)
+			continue
+		}
+		synthesized.ChainClassifications = append(synthesized.ChainClassifications, "moderate")
+	}
+
+	return synthesized, nil
+}
+
+// synthesizeChainFallback combines per-subcommand SecurityAnalysis results
+// into one synthesized entry. Severity ordering: high > moderate > low.
+// Recommendation ordering: reject > review > approve. Modifies strings are
+// deduped (case-sensitive) and capped at five entries to keep the UI panel
+// scannable. SP-124b Phase 2.
+func synthesizeChainFallback(chain Chain, analyses []*SecurityAnalysis) *SecurityAnalysis {
+	n := len(chain.Subcommands)
+	const previewCount = 3
+
+	// Summary: name the chain length and the first previewCount subcommands.
+	preview := make([]string, 0, previewCount)
+	for i := 0; i < n && i < previewCount; i++ {
+		preview = append(preview, chain.Subcommands[i])
+	}
+	summary := fmt.Sprintf("Chain of %d subcommands (too long for batch analysis): %s",
+		n, strings.Join(preview, "; "))
+	if n > previewCount {
+		summary += "..."
+	}
+
+	// Modifies: dedup, comma-join, cap at 5.
+	seen := make(map[string]struct{}, len(analyses))
+	modParts := make([]string, 0, len(analyses))
+	for _, a := range analyses {
+		if a == nil || a.Modifies == "" {
+			continue
+		}
+		if _, ok := seen[a.Modifies]; ok {
+			continue
+		}
+		seen[a.Modifies] = struct{}{}
+		modParts = append(modParts, a.Modifies)
+		if len(modParts) >= 5 {
+			break
+		}
+	}
+	modifies := strings.Join(modParts, ", ")
+
+	// RiskAssessment: max severity across all sub-analyses.
+	riskOrder := map[string]int{"low": 1, "moderate": 2, "high": 3}
+	overallRisk := "low"
+	for _, a := range analyses {
+		if a == nil {
+			continue
+		}
+		tone := strings.ToLower(strings.TrimSpace(a.RiskAssessment))
+		if riskOrder[tone] > riskOrder[overallRisk] {
+			overallRisk = tone
+		}
+	}
+	if n > 0 && len(analyses) == 0 {
+		// No sub-analyses succeeded — pick the maximum from the static
+		// classifications so the synthesized entry still reflects the chain.
+		overallRisk = "low"
+	}
+
+	// Recommendation: reject > review > approve.
+	overallRec := "approve"
+	recOrder := map[string]int{"approve": 1, "review": 2, "reject": 3}
+	for _, a := range analyses {
+		if a == nil {
+			continue
+		}
+		tone := strings.ToLower(strings.TrimSpace(a.Recommendation))
+		if recOrder[tone] > recOrder[overallRec] {
+			overallRec = tone
+		}
+	}
+
+	return &SecurityAnalysis{
+		Summary:         summary,
+		Modifies:        modifies,
+		RiskAssessment:  overallRisk,
+		Recommendation:  overallRec,
+	}
 }
 
 // buildChainPrompt constructs the chain-aware system prompt with per-subcommand

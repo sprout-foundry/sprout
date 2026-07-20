@@ -371,13 +371,21 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				// it above the option list. nil when the analyzer timed
 				// out / errored / wasn't produced; the picker omits the
 				// panel in that case.
+				//
+				// SP-124b Phase 2: copy the chain metadata fields too so
+				// the CLI stepper can render per-subcommand dots when
+				// ChainLength > 1. Legacy single-command callers still
+				// pass nil/zero and see no chain UI.
 				var analysisView *utils.SecurityAnalysisView
 				if securityAnalysis != nil {
 					analysisView = &utils.SecurityAnalysisView{
-						Summary:         securityAnalysis.Summary,
-						Modifies:        securityAnalysis.Modifies,
-						RiskAssessment:  securityAnalysis.RiskAssessment,
-						Recommendation:  securityAnalysis.Recommendation,
+						Summary:              securityAnalysis.Summary,
+						Modifies:             securityAnalysis.Modifies,
+						RiskAssessment:       securityAnalysis.RiskAssessment,
+						Recommendation:       securityAnalysis.Recommendation,
+						ChainLength:          securityAnalysis.ChainLength,
+						ChainSubcommands:     securityAnalysis.ChainSubcommands,
+						ChainClassifications: securityAnalysis.ChainClassifications,
 					}
 				}
 				choice := logger.AskForApprovalWithOptions(prompt, cmd, analysisView)

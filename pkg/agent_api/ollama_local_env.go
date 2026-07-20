@@ -12,18 +12,37 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
+const (
+	ollamaModelsCacheTTL      = 5 * time.Minute
+	defaultOllamaContextLimit = 32000
+)
+
+type ollamaLocalConfig struct {
+	DefaultContextLimit int `json:"default_context_limit"`
+}
+
 // OllamaLocalClient handles local Ollama API requests
 type OllamaLocalClient struct {
 	*TPSBase
+	// model is set at construction and via SetModel, which is invoked only
+	// from agent-creation paths (not on the chat hot path). It is read
+	// concurrently from chat/list/vision code without a lock; this is
+	// safe because there is no path that mutates model during a chat
+	// session. If that assumption changes, add a dedicated mutex.
 	model         string
 	debug         bool
 	clientFactory ollamaClientFactory
+	config        ollamaLocalConfig
+	cacheMu       sync.RWMutex
+	cachedModels  []ModelInfo
+	cachedAt      time.Time
 }
 
 func isWSL() bool {
@@ -123,6 +142,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 					model:         model,
 					debug:         false,
 					clientFactory: factory,
+					config:        ollamaLocalConfig{DefaultContextLimit: defaultOllamaContextLimit},
 				}, nil
 			}
 		}
@@ -141,6 +161,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 		model:         model,
 		debug:         false,
 		clientFactory: factory,
+		config:        ollamaLocalConfig{DefaultContextLimit: defaultOllamaContextLimit},
 	}, nil
 }
 

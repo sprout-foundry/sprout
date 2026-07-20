@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 )
 
 type instanceInfoDTO struct {
@@ -133,7 +134,7 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 	instances := make([]instanceInfoDTO, 0, len(instancesMap))
 	staleCutoff := time.Now().Add(-12 * time.Second)
 	for _, instance := range instancesMap {
-		if instance.PID <= 0 || instance.LastPing.Before(staleCutoff) || !isPIDAlive(instance.PID) {
+		if instance.PID <= 0 || instance.LastPing.Before(staleCutoff) || !pidalive.IsAlive(instance.PID) {
 			continue
 		}
 		instances = append(instances, instanceInfoDTO{
@@ -180,7 +181,7 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		http.Error(w, "pid is required", http.StatusBadRequest)
 		return
 	}
-	if !isPIDAlive(req.PID) {
+	if !pidalive.IsAlive(req.PID) {
 		http.Error(w, "selected instance is not alive", http.StatusBadRequest)
 		return
 	}

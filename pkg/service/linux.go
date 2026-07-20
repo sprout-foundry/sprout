@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
@@ -430,7 +431,7 @@ func (m *pidFileManager) Start() error {
 	}
 
 	// Check if already running via PID file
-	if pid, err := m.readPID(); err == nil && isPIDAlive(pid) {
+	if pid, err := m.readPID(); err == nil && pidalive.IsAlive(pid) {
 		fmt.Printf("Daemon already running (PID %d)\n", pid)
 		return nil
 	}
@@ -509,7 +510,7 @@ func (m *pidFileManager) Start() error {
 
 	// Brief wait to check if it exited immediately
 	time.Sleep(200 * time.Millisecond)
-	if !isPIDAlive(cmd.Process.Pid) {
+	if !pidalive.IsAlive(cmd.Process.Pid) {
 		os.Remove(m.pidPath())
 		return fmt.Errorf("daemon exited immediately; check ~/.sprout/logs/daemon.stderr.log")
 	}
@@ -521,7 +522,7 @@ func (m *pidFileManager) Start() error {
 
 func (m *pidFileManager) Stop() error {
 	pid, err := m.readPID()
-	if err == nil && isPIDAlive(pid) {
+	if err == nil && pidalive.IsAlive(pid) {
 		// We have a known PID — stop it
 		if err := m.stopProcess(pid); err != nil {
 			return err
@@ -560,11 +561,11 @@ func (m *pidFileManager) stopProcess(pid int) error {
 	}
 	for i := 0; i < 150; i++ {
 		time.Sleep(100 * time.Millisecond)
-		if !isPIDAlive(pid) {
+		if !pidalive.IsAlive(pid) {
 			break
 		}
 	}
-	if isPIDAlive(pid) {
+	if pidalive.IsAlive(pid) {
 		syscall.Kill(pid, syscall.SIGKILL)
 		time.Sleep(200 * time.Millisecond)
 	}
@@ -573,7 +574,7 @@ func (m *pidFileManager) stopProcess(pid int) error {
 
 func (m *pidFileManager) Status() (bool, error) {
 	pid, err := m.readPID()
-	if err == nil && isPIDAlive(pid) {
+	if err == nil && pidalive.IsAlive(pid) {
 		return true, nil
 	}
 	// No PID file or stale PID — check if port is in use (e.g. pre-existing daemon)

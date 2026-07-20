@@ -19,24 +19,31 @@ func NewSecurityAnalysisCache() *SecurityAnalysisCache {
 	return &SecurityAnalysisCache{items: make(map[string]*SecurityAnalysis)}
 }
 
-// Get returns the cached analysis for a command, or false if not found.
-func (c *SecurityAnalysisCache) Get(command string) (*SecurityAnalysis, bool) {
+// Get returns the cached analysis for a normalized cache key, or false if not found.
+// The caller is responsible for normalizing via ChainCacheKey(cmd) before calling.
+// A pre-normalized key is accepted directly so that callers who have already
+// normalized (e.g., the broker that calls ChainCacheKey before Set/Get) are
+// not double-normalized.
+func (c *SecurityAnalysisCache) Get(normalizedKey string) (*SecurityAnalysis, bool) {
 	if c == nil {
 		return nil, false
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	sa, ok := c.items[command]
+	sa, ok := c.items[normalizedKey]
 	return sa, ok
 }
 
-// Set stores an analysis in the cache.
-func (c *SecurityAnalysisCache) Set(command string, sa *SecurityAnalysis) {
-	if c == nil || sa == nil {
+// Set stores an analysis under a normalized cache key. The caller is responsible
+// for normalizing via ChainCacheKey(cmd) before calling. A pre-normalized key
+// is accepted directly so that callers who have already normalized (e.g., the
+// broker that calls ChainCacheKey before Set/Get) are not double-normalized.
+func (c *SecurityAnalysisCache) Set(normalizedKey string, sa *SecurityAnalysis) {
+	if c == nil || sa == nil || normalizedKey == "" {
 		return
 	}
 	c.mu.Lock()
-	c.items[command] = sa
+	c.items[normalizedKey] = sa
 	c.mu.Unlock()
 }
 

@@ -188,8 +188,10 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 			assessment.Level == configuration.RiskLevelHigh) {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			// Cache check — identical commands in the same session reuse
-			// the cached analysis.
-			if cached, ok := a.getSecurityAnalysisCache().Get(cmd); ok {
+			// the cached analysis. SP-124b: use normalized cache key so that
+			// whitespace-equivalent commands share the same cache entry.
+			key := ChainCacheKey(cmd)
+			if cached, ok := a.getSecurityAnalysisCache().Get(key); ok {
 				securityAnalysis = cached
 			} else {
 				ctx, cancel := context.WithTimeout(a.interruptCtx, 2*time.Second)
@@ -197,7 +199,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				cancel()
 				if err == nil && sa != nil {
 					securityAnalysis = sa
-					a.getSecurityAnalysisCache().Set(cmd, sa)
+					a.getSecurityAnalysisCache().Set(key, sa)
 				}
 				// On error or timeout: securityAnalysis stays nil; fall through
 				// to static-classifier prompt.

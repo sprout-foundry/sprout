@@ -50,11 +50,11 @@ func itoa(n int) string {
 // TestPickRollupTarget_TriggersAtThreshold confirms a rollup fires when the
 // level-0 count, *minus* the recency window, reaches the trigger.
 //
-// Trigger requires (count − recentTurnsToPreserve) ≥ rollupTriggerCount,
+// Trigger requires (count − recentTurnsToPreserveDefault) ≥ rollupTriggerCount,
 // i.e. (30 − 10) = 20 = trigger threshold.
 func TestPickRollupTarget_TriggersAtThreshold(t *testing.T) {
-	checkpoints := makeLevelZeroCheckpoints(rollupTriggerCount + recentTurnsToPreserve)
-	start, end, level, ok := pickRollupTarget(checkpoints)
+	checkpoints := makeLevelZeroCheckpoints(rollupTriggerCount + recentTurnsToPreserveDefault)
+	start, end, level, ok := pickRollupTarget(checkpoints, recentTurnsToPreserveDefault)
 	if !ok {
 		t.Fatalf("expected rollup to fire at threshold; counts: %d", len(checkpoints))
 	}
@@ -74,8 +74,8 @@ func TestPickRollupTarget_TriggersAtThreshold(t *testing.T) {
 // so the trigger should not fire.
 func TestPickRollupTarget_PreservesRecencyWindow(t *testing.T) {
 	// One fewer than the trigger threshold + recency window — should not fire.
-	checkpoints := makeLevelZeroCheckpoints(rollupTriggerCount + recentTurnsToPreserve - 1)
-	_, _, _, ok := pickRollupTarget(checkpoints)
+	checkpoints := makeLevelZeroCheckpoints(rollupTriggerCount + recentTurnsToPreserveDefault - 1)
+	_, _, _, ok := pickRollupTarget(checkpoints, recentTurnsToPreserveDefault)
 	if ok {
 		t.Fatalf("rollup fired before threshold reached (count=%d)", len(checkpoints))
 	}
@@ -85,7 +85,7 @@ func TestPickRollupTarget_PreservesRecencyWindow(t *testing.T) {
 // when there's nothing to fold.
 func TestPickRollupTarget_NoOpUnderThreshold(t *testing.T) {
 	checkpoints := makeLevelZeroCheckpoints(5)
-	_, _, _, ok := pickRollupTarget(checkpoints)
+	_, _, _, ok := pickRollupTarget(checkpoints, recentTurnsToPreserveDefault)
 	if ok {
 		t.Fatalf("rollup fired with only 5 checkpoints; want no-op")
 	}
@@ -118,7 +118,7 @@ func TestPickRollupTarget_LevelOnePromotion(t *testing.T) {
 		})
 	}
 
-	start, end, level, ok := pickRollupTarget(checkpoints)
+	start, end, level, ok := pickRollupTarget(checkpoints, recentTurnsToPreserveDefault)
 	if !ok {
 		t.Fatalf("expected level-1 rollup to fire")
 	}

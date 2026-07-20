@@ -118,6 +118,71 @@ commands are perfectly safe but got blocked by association.
 
 ---
 
+## SP-124b: Batch Security Analysis for Chained Commands
+
+_Active phase: Phase 1 (the only one defined so far). Phase 2 deferred until Phase 1 commits._
+_Spec: `roadmap/SP-124b-batch-analysis.md` — read this file in full before starting._
+_Subsumes SP-124 "Future considerations" item #1._
+_Consumes SP-122's `SplitChainedCommand` + `classifyChainedCommand` (do not duplicate that work)._
+
+### Phase 1: Backend batch analysis (single end-to-end item)
+
+- [ ] **SP-124b-1:** Implement SP-124b Phase 1 end-to-end as a single
+      delivery, in this exact order (coder MUST do all 5 sub-steps
+      before declaring done, not one per sub-item):
+      1. `pkg/agent_tools/security_classifier.go`: add
+         `ChainedClassification` struct + `ClassifyChainedCommand(cmd
+         string) []ChainedClassification`. Populate `Subcommand`,
+         `Risk`, `Reasoning`, `Category` per part. Wrap the existing
+         `classifyChainedCommand`; its `[]SecurityRisk` return stays
+         intact for backwards compat. Existing
+         `security_classifier_test.go` must continue to pass
+         unchanged.
+      2. `pkg/agent/security_analyzer.go`: add `Chain` struct +
+         `ParseChain(s string) Chain`. **Delegate the actual splitting
+         to `pkg/agent_tools.SplitChainedCommand` — do NOT write a
+         new splitter.**
+      3. Same file: add `AnalyzeChain(ctx, chain,
+         []ChainedClassification) (*SecurityAnalysis, error)`.
+         Prompt selection: chain-aware when `len(chain.Subcommands) >
+         1`, SP-124 single-command prompt when `== 1`. Embed the
+         per-subcommand classification table in the chain prompt.
+      4. Same file: switch cache key from raw string to normalized
+         chain (whitespace-collapse per subcommand, operators
+         preserved). Bump cache key prefix from the SP-124 namespace
+         to an SP-124b namespace so prior sessions' entries are
+         invalid (no mixed-schema reads).
+      5. Build + tests: `go build ./...`, `go test ./...`,
+         `make build-all` all clean. New tests covering:
+         - `ParseChain` matches `SplitChainedCommand` on the same input.
+         - Quote-preservation: `ParseChain("echo 'a && b'")` →
+           one subcommand.
+         - Prompt selection by chain length (mock provider captures
+           the system prompt; assert single vs chain variant).
+         - One LLM call per `AnalyzeChain` (mock provider asserts
+           `ProviderChat` called exactly once).
+         - Cache hit on normalization (`a && b` ↔ `a  &&  b`);
+           cache miss on operator change (`a && b` vs `a || b`).
+         - Per-subcommand `ChainedClassification` populated with
+           non-empty `Reasoning` and a valid `Category`.
+
+      **Acceptance**: all 5 sub-steps committed together as one
+      conventional commit (e.g. `feat(security): batch LLM analysis
+      for chained commands (SP-124b Phase 1)`). Build + tests
+      clean. Single-command path behavior unchanged (regression
+      covered by existing SP-124 tests).
+
+      **Hard constraints**:
+      - DO NOT touch `pkg/agent_tools/SplitChainedCommand` or
+        `pkg/agent_tools/classifyChainedCommand` — they belong to
+        SP-122 and are shipped.
+      - DO NOT touch `SecurityAnalysis` struct fields; if Phase 1
+        genuinely needs new fields, add new optional fields with
+        nil-safe defaults so the schema is forward-compatible.
+      - The cache key prefix change is mandatory: writing Phase 1
+        data under the SP-124 prefix is a guaranteed bug when
+        prior-session cache entries exist.
+
 ## SP-116: Multi-Instance Isolation
 
 _Spec archived; ✅ Implemented — Phases 1–4 shipped 2026-07-15 (`ac4d72e6`, `ef47144d`, `c7c4047b`, `99991ba2`, `c0602add`). Auto-detect in `cmd/root.go::detectGitRepo`, scoped background processes, layered config (`agent.NewAgentWithLayers`). The spec is archived; the test coverage is in `cmd/root_test.go` and `pkg/configuration/isolated_config_test.go`. Daemon-side skip-via-`SPROUT_SERVICE=1` guard ensures system services stay global._

@@ -535,6 +535,20 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecuritySafe
 	}
 
+	// xargs is safe iff the command it invokes is safe. Delegate to a
+	// structured sub-classifier that strips xargs flags and recursively
+	// classifies the inner command. Without this carve-out, every
+	// `xargs <safe-cmd>` invocation defaults to CAUTION via the
+	// fallback below — including safe pipelines like `find … | xargs
+	// du -sh`. `isCautionPattern` does not match xargs-prefixed
+	// commands (it checks prefixes like "rm -rf ", "eval ", etc., not
+	// "xargs rm -rf"), so this check correctly handles dangerous
+	// `xargs rm` / `xargs chmod` cases by recursion into the inner
+	// command's classification.
+	if risk, ok := classifyXargsInvocation(cmdLower); ok {
+		return risk
+	}
+
 	return SecurityCaution
 }
 

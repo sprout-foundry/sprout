@@ -14,6 +14,14 @@ import (
 //go:embed prompts/system_prompt.md
 var systemPromptContent string
 
+// SP-125: lite prompt for Low-Context Mode (8K–64K context windows).
+// Selected by ContextProfile.SystemPromptPath at agent creation. Roughly
+// ~1K tokens vs the full prompt's ~6.6K — strips delegation/review/persona
+// sections that reference tools unavailable in LCM.
+//
+//go:embed prompts/system_prompt.lite.md
+var systemPromptLiteContent string
+
 //go:embed prompts/planning_prompt.md
 var planningPromptContent string
 

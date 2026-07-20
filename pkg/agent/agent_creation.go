@@ -122,6 +122,31 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.state.SetCurrentContextTokens(0)
 		agent.state.SetContextWarningIssued(false)
 
+		// SP-125: resolve the context profile once at agent creation.
+		// Uses the now-known model context window to auto-detect LCM.
+		// Explicit config.context_mode overrides auto-detection. A window
+		// below ContextFloor (8K) returns an error that surfaces to the
+		// caller — the agent refuses to start rather than producing a
+		// broken session.
+		var cfg *configuration.Config
+		if agent.configManager != nil {
+			cfg = agent.configManager.GetConfig()
+		}
+		profile, err := configuration.ResolveContextProfile(
+			cfg,
+			agent.state.GetMaxContextTokens(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		agent.contextProfile = profile
+		if profile.Mode == configuration.ContextModeLowContext && params.debug {
+			_, _ = os.Stderr.Write([]byte(
+				fmt.Sprintf("[low-context] mode=%s tools=%d prompt=%s trigger=%.2f\n",
+					profile.Mode, len(profile.ToolAllowlist),
+					profile.SystemPromptPath, profile.CompactionTriggerFraction)))
+		}
+
 		// Clean up old sessions once per process. Uses sync.Once so daemon
 		// mode (which creates agents per chat session) only runs cleanup on
 		// the very first agent, not on every subsequent chat session.

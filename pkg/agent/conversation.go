@@ -80,6 +80,14 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// optimisation path stay in sync.
 	tools := BuildToolDefinitions()
 
+	// SP-125: Low-Context Mode tool allowlist. Applied first (before the
+	// subagent and persona filters) so it's the broadest narrowing pass —
+	// downstream filters can only further restrict, never widen beyond the
+	// LCM allowlist. An empty ToolAllowlist (full mode) is a no-op.
+	if allow := a.contextProfile.ToolAllowlist; len(allow) > 0 {
+		tools = filterToolsByName(tools, makeAllowedToolSet(allow))
+	}
+
 	// Filter out run_subagent and run_parallel_subagents when
 	// the agent is not allowed to spawn subagents (depth limit or NO_SUBAGENTS env).
 	if !a.CanSpawnSubagents() {

@@ -198,6 +198,55 @@ The previous flow had two bugs:
    tools used the global bypass. Approving in one didn't carry over
    to the other. The unified allowlist fixes that too.
 
+### Dual-path prompt coverage
+
+Every file-touching tool honors the same approval flow on both
+surfaces — CLI (terminal picker) and WebUI (event-bus dialog). The
+bridge is `pkg/agent_tools.FilesystemGate` (an interface the handler
+receives on `ToolEnv`) and `pkg/agent.filesystemGateAdapter` (the
+implementation that delegates to `handleFileSecurityError`).
+
+The coverage matrix:
+
+| Tool | Resolve path consulted by the gate? | Notes |
+|---|---|---|
+| `write_file` | ✅ via `WriteFile` helper | `SafeResolvePathForWriteWithBypass` is wrapped in `withFilesystemApproval`. |
+| `edit_file` | ✅ via `EditFile` helper | `resolveAndValidateFileWithGate` wraps the resolve + stat sequence. |
+| `read_file` | ✅ via `ReadFile` / `ReadFileWithRange` | `resolveReadPathWithGate` covers text reads; `handlePDF` covers PDFs. |
+| `list_directory` | ✅ | The handler explicitly wraps the resolve call (because `pkg/filesystem` doesn't read the gate from ctx). |
+| `write_structured_file` | ✅ | Reuses `WriteFile`'s gate wrapper. |
+| `patch_structured_file` | ✅ | The handler previously used raw `os.ReadFile` / `os.WriteFile`, bypassing the resolver. Now wrapped. |
+
+Both surfaces — the CLI picker (`utils.AskForFilesystemApproval`) and
+the WebUI event-bus dialog (`security.ApprovalManager.RequestToolApprovalDecision`)
+— route through the same `handleFileSecurityError` function and the
+same `applyFilesystemDecision` reducer. A "Allow once" click in the
+WebUI dialog lets the same operation succeed from a CLI session in
+the same agent context, and vice versa.
+
+### Symlink disclosure
+
+When the user-supplied path is a symlink, the approval dialog shows
+**both** the user-supplied path and the canonical (symlink-resolved)
+target — so a workspace path like `workspace/link` that resolves to
+`/etc/passwd` is not silently approved under a benign-looking
+display string. The bridge helper `resolveCanonicalForDisplay`
+(`pkg/agent_tools/filesystem_gate.go`) symlink-resolves with a 3s
+timeout (matching `pkg/filesystem.evalSymlinksWithTimeout`) and
+passes the canonical target to the gate. Both surfaces receive the
+resolved target: the WebUI dialog via the flattened `target` payload
+field (formatted as `"<userPath>\n   (resolves to: <resolved>)"`)
+and a structured `resolved_path` extra, and the CLI picker via the
+`displayPath` argument to `AskForFilesystemApproval`. If the
+canonical target can't be resolved (missing file, broken symlink,
+timeout), the helper returns "" and the dialog falls back to
+displaying the user-supplied path only.
+
+Follow-up: SP-127 proposes folding this handler-side gate into the
+static Gate-1 classifier so a single call site decides file access
+policy. The current architecture is correct but has a wart (two
+mental models, easy to forget the wrapper on new handlers).
+
 ## Data Handling
 
 ### Files on Disk

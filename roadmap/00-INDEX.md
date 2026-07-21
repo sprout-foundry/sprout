@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-07-18):** 84 shipped · 5 pending · 2 parked in `future/`.
+**Counts (as of 2026-07-20):** 84 shipped · 6 pending · 2 parked in `future/`.
 
 ## Shipped
 
@@ -112,6 +112,7 @@ and the spec body lives in git history.
 | SP-114 | [Unify CLI and Steer Panel Command Execution](./SP-114-unify-command-execution.md) | 🟢 Phase 1 + Phase 2 shipped (`ab6c975e` + this session). Phase 2: `POST /api/command/execute` (dedicated command surface, separate from `/api/query/steer`); WebUI `onSendCommand` handler in `ChatView.tsx` routes safe commands to the new endpoint with notification-based output. Destructive commands (`/commit`, `/clear`, `/exit`, `/init`, etc.) remain CLI-only. Long-output WS streaming deferred. |
 | SP-124 | [LLM-Augmented Security Analysis](./SP-124-llm-security-analysis.md) | 🟢 Phase 1, 2, 3 shipped (2026-07-19) — backend `AnalyzeShellCommand` + cache + broker plumbing; WebUI dialog renders analysis panel with risk-tone badge (`SecurityApprovalDialog.tsx`); CLI picker renders analysis + Elevate option via `pkg/utils.SecurityAnalysisView` shared helper. |
 | SP-124b | [Batch Security Analysis for Chained Commands](./SP-124b-batch-analysis.md) | 🔵 Proposed — chain-aware LLM analysis (one call for `cmd1 && cmd2 \| ...`); cache by normalized chain; raises SP-124 future-item #1 to tracked status. |
+| SP-127 | [Promote Filesystem Gate to Gate-1](./SP-127-filesystem-gate-promotion.md) | 🔵 Proposed — fold the handler-side `FilesystemGate` (added in `fix/file-tools-filesystem-gate`) into `staticGateAutoApprove` so a single call site decides file access policy. Closes the `patch_structured_file` retrofit gap, removes the dual-mental-model wart, and centralizes path-tier classification. |
 
 ## Future / On Hold
 

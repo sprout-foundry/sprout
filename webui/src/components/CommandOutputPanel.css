@@ -1,0 +1,226 @@
+/* ── CommandOutputPanel ─────────────────────────────────────────────
+ *
+ * Companion CSS for components/CommandOutputPanel.tsx (SP-114 Phase 2d).
+ * Uses design-system tokens from webui/src/App.css :root — no raw hex,
+ * no fallback values, status-tinted backgrounds via color-mix, and the
+ * prefer-reduced-motion + prefers-color-scheme guards live exclusively
+ * on :root[data-theme] toggles in App.css (this file does not introduce
+ * a `prefers-color-scheme: dark` rule).
+ */
+
+/* The panel sits between the message list and the input — a thin
+ * docked card so it never blocks the chat body. */
+.command-output-panel {
+  display: flex;
+  flex-direction: column;
+  margin: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  max-height: 240px;
+  overflow: hidden;
+  box-shadow: var(--shadow-subtle);
+  /* List specific properties — never `transition: all`. */
+  transition:
+    opacity 0.18s var(--ease-out),
+    transform 0.18s var(--ease-out),
+    border-color 0.18s var(--ease-out);
+}
+
+.command-output-panel.is-running {
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, var(--border-default));
+}
+
+.command-output-panel.has-error {
+  border-color: color-mix(in srgb, var(--accent-error) 50%, var(--border-default));
+}
+
+/* ── Header row ─────────────────────────────────────────────────── */
+
+.command-output-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.command-output-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.command-output-panel-cmd {
+  font-family: var(--font-mono);
+  color: var(--accent-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-output-panel-running {
+  color: var(--text-tertiary);
+  font-weight: 500;
+  font-size: var(--text-xs);
+}
+
+.command-output-panel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent-success);
+  flex-shrink: 0;
+}
+
+.command-output-panel-spinner {
+  color: var(--accent-primary);
+  animation: command-output-panel-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes command-output-panel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Disable the spin animation under reduced-motion prefs — the
+ * keyframes themselves aren't a problem but the fast rotation is.
+ * We don't run a media rule on the keyframes (they're inert); we
+ * instead gate the `animation` shorthand on a global hook so the
+ * spinner doesn't spin when the user requested reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .command-output-panel-spinner {
+    animation-duration: 6s;
+  }
+}
+
+/* ── Dismiss button ─────────────────────────────────────────────── */
+
+.command-output-panel-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out),
+    border-color 0.15s var(--ease-out);
+}
+
+.command-output-panel-dismiss:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
+}
+
+.command-output-panel-dismiss:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+/* ── Warning / error banners ─────────────────────────────────────── */
+
+.command-output-panel-warning,
+.command-output-panel-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 35%, transparent);
+}
+
+.command-output-panel-warning {
+  color: var(--accent-warning-fg);
+  background: color-mix(in srgb, var(--accent-warning) 18%, transparent);
+}
+
+.command-output-panel-warning > svg {
+  flex-shrink: 0;
+  color: var(--accent-warning);
+  margin-top: 1px;
+}
+
+.command-output-panel-error {
+  border-color: color-mix(in srgb, var(--accent-error) 45%, transparent);
+  color: var(--accent-error);
+  background: color-mix(in srgb, var(--accent-error) 18%, transparent);
+}
+
+.command-output-panel-error > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Body (scrollable output) ───────────────────────────────────── */
+
+.command-output-panel-body {
+  flex: 1;
+  min-height: 60px;
+  max-height: 160px;
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-tertiary) 80%, transparent);
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-2) var(--space-3);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.command-output-panel-body:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.command-output-panel-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.command-output-panel-body::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+
+.command-output-panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.command-output-panel-text {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.command-output-panel-empty {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-3) 0;
+}

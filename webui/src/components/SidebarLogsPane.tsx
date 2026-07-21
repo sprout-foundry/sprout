@@ -65,6 +65,15 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
       }
       case 'metrics_update':
         return `Model: ${String(d?.model || '?')} | Provider: ${String(d?.provider || '?')}`;
+      case 'context_management_diagnostic': {
+        const iter = d?.iteration;
+        const hitRate = typeof d?.cache_hit_rate === 'number' ? (d.cache_hit_rate as number) : 0;
+        const cached = typeof d?.cached_tokens === 'number' ? (d.cached_tokens as number) : 0;
+        const prompt = typeof d?.prompt_tokens === 'number' ? (d.prompt_tokens as number) : 0;
+        const pct = (hitRate * 100).toFixed(1);
+        const iterLabel = typeof iter === 'number' ? ` iter=${iter}` : '';
+        return `cache: ${pct}% (${cached}/${prompt})${iterLabel}`;
+      }
       default:
         return `${logEntry.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
     }

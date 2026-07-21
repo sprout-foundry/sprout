@@ -59,6 +59,12 @@ func (h *listDirHandler) Validate(args map[string]any) error {
 }
 
 func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// Wire the agent's filesystem gate into ctx before the resolve
+	// step so off-workspace directories prompt for approval (matching
+	// the file handlers' behavior). Without this, list_directory on a
+	// sibling directory would hard-error with the bare sentinel.
+	ctx = WithFilesystemGateFromEnv(ctx, env)
+
 	// Extract parameters
 	targetPath := "."
 	if p, exists := args["path"]; exists && p != nil {
@@ -74,8 +80,19 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		}
 	}
 
-	// Resolve path securely
-	resolvedPath, err := filesystem.SafeResolvePathWithBypass(ctx, targetPath)
+	// Resolve path securely through the FilesystemGate so off-workspace
+	// directories prompt for approval (matching the file handlers'
+	// behavior). Without this wrap, list_directory on a sibling
+	// directory would still hard-error with the bare sentinel — the
+	// gate goes into ctx but pkg/filesystem has no awareness of it,
+// so the resolve call needs the explicit hook here. See the
+// FilesystemGate interface in handler.go and withFilesystemApproval
+// in filesystem_gate.go for the contract.
+	resolvedPath, err := withFilesystemApproval(ctx, FilesystemGateFromContext(ctx), "list_directory", targetPath,
+		func(ctx context.Context) (string, error) {
+			return filesystem.SafeResolvePathWithBypass(ctx, targetPath)
+		},
+	)
 	if err != nil {
 		return ToolResult{
 			Output:  "",

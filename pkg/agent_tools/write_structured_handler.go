@@ -82,6 +82,12 @@ func (h *writeStructuredFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// WriteFile helper below extracts the FilesystemGate from ctx
+	// before resolving the path. Without this injection, an
+	// off-workspace write of a JSON/YAML config would hard-error
+	// instead of presenting the approve dialog.
+	ctx = WithFilesystemGateFromEnv(ctx, env)
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err

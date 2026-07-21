@@ -111,6 +111,13 @@ type ToolEnv struct {
 	OutputWriter io.Writer
 	// ApprovalManager for security approvals; nil if approvals are not supported
 	ApprovalManager ApprovalManager
+	// FilesystemGate bridges file-touching handlers to the agent's
+	// off-workspace approval flow. When non-nil, handlers call it on
+	// SafeResolve* errors so the user can approve, session-allowlist,
+	// or elevate instead of receiving a hard error. Nil means the
+	// handler runs in a context without filesystem gate support
+	// (unit tests, agents constructed without the seed dispatch path).
+	FilesystemGate FilesystemGate
 	// MaxTokensFunc returns the current token budget limit
 	MaxTokensFunc func() int
 	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
@@ -203,6 +210,61 @@ type ApprovalManager interface {
 	// RequestApproval asks the user to approve a tool execution.
 	// Returns an ApprovalResult with the outcome and optional context.
 	RequestApproval(requestID, toolName, riskLevel, prompt string, extras map[string]string) ApprovalResult
+}
+
+// FilesystemGate is the bridge between file-touching tool handlers and
+// the agent's filesystem security policy. The tool layer (this package)
+// must not import pkg/agent directly — that would create a cycle — so
+// handlers receive the gate through ToolEnv and call it when
+// SafeResolvePath[ForWrite]WithBypass returns ErrOutsideWorkingDirectory
+// or ErrWriteOutsideWorkingDirectory.
+//
+// A nil FilesystemGate is the test/non-agent default: handlers should
+// fall through and return the error to the caller (preserving the
+// historical behavior for tests that bypass the agent context).
+//
+// When non-nil, RequestPathApproval classifies the path (Sensitive vs
+// External), presents the appropriate dialog through the active
+// surface (CLI picker or WebUI event bus), and returns a context with
+// the security bypass token set if the user approved. The caller
+// retries the original operation with the returned context; if the
+// retry still fails, the operation aborts.
+//
+// Approval choices:
+//
+//   - Deny               → returns the original ctx, approved=false.
+//   - Approve (once)     → returns wrapped ctx, approved=true. No
+//                          persistence; the next access re-prompts.
+//   - Allow folder
+//     (this session)     → External tier only: persists the folder to
+//                          the agent's session allowlist so subsequent
+//                          writes under the same folder skip the
+//                          prompt for the rest of the session.
+//   - Elevate (session)  → marks the agent's risk profile permissive
+//                          so the static classifier + this gate + the
+//                          shell cascade all skip prompts until the
+//                          session ends.
+//
+// Sensitive-tier paths never enter the allowlist — they're always
+// one-shot, even when the client requests a session allow. The
+// implementation is responsible for that invariant (the existing
+// applyFilesystemDecision does this).
+//
+// `filePath` is the user-supplied path the LLM passed to the tool.
+// `resolvedPath` is the canonical target after symlink resolution
+// (i.e. the actual filesystem object that would be touched). The
+// adapter displays both so the user can verify the destination is
+// what they expect — a symlink `workspace/link` pointing to
+// `/etc/passwd` would otherwise be approved without the user
+// noticing the resolved target. Pass "" for `resolvedPath` when
+// the caller cannot compute it (it will be omitted from display).
+type FilesystemGate interface {
+	// RequestPathApproval asks the user to approve an off-workspace
+	// file access. Returns a possibly-wrapped context and a bool —
+	// true means the caller may retry the operation with the returned
+	// context. False means deny; surface the original error to the
+	// caller.
+	RequestPathApproval(ctx context.Context, toolName, filePath, resolvedPath string, err error) (context.Context, bool)
 }
 
 // ---------------------------------------------------------------------------

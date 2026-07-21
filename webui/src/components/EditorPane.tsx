@@ -480,6 +480,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     return <WelcomeTab onOpenCommandPalette={onOpenCommandPalette} />;
   }
 
+  // Hoisted hooks (e.g. editorCoreReconfigureOptions) must stay above these
+  // early returns; otherwise react-hooks/rules-of-hooks fires when a hook
+  // would be skipped by an early return on a subsequent render.
+
   if (fileType.isImage && buffer) {
     return (
       <div className="editor-pane">
@@ -518,9 +522,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       </div>
     );
   }
-
-  // useMemos (reconfigureOptions) are declared above (before the early
-  // returns) to comply with react-hooks/rules-of-hooks.
 
   return (
     <div className="editor-pane" data-testid="editor-pane">

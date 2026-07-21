@@ -50,7 +50,7 @@ export interface UseEditorReconfigureOptions {
     signatureHelp: Compartment;
   };
   hotkeys: unknown;
-  keymapsRef: React.MutableRefObject<{ customKeymap: Extension }>;
+  keymapsRef: React.MutableRefObject<{ customKeymap: Extension } | null>;
   editorFontSize: number;
   editorTabSize: number;
   editorUsesTabs: boolean;
@@ -148,7 +148,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     if (!view) return;
 
     view.dispatch({
-      effects: compartments.hotkeys.reconfigure(keymapsRef.current.customKeymap),
+      effects: compartments.hotkeys.reconfigure(keymapsRef.current?.customKeymap ?? []),
     });
   }, [hotkeys, keymapsRef]);
 

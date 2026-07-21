@@ -49,7 +49,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		result, err := tools.ReadFileWithRange(ctx, path, startLine, endLine)
 
 		if err != nil {
-			if ctx2, approved := handleFileSecurityError(ctx, a, "read_file", path, err); approved {
+			if ctx2, approved := handleFileSecurityError(ctx, a, "read_file", path, "", err); approved {
 				result, err = tools.ReadFileWithRange(ctx2, path, startLine, endLine)
 			}
 		}
@@ -76,7 +76,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	result, err := tools.ReadFile(ctx, path)
 
 	if err != nil {
-		if ctx2, approved := handleFileSecurityError(ctx, a, "read_file", path, err); approved {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "read_file", path, "", err); approved {
 			result, err = tools.ReadFile(ctx2, path)
 		}
 	}
@@ -470,7 +470,7 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	result, err := tools.WriteFile(ctx, path, content)
 
 	if err != nil {
-		if ctx2, approved := handleFileSecurityError(ctx, a, "write_file", path, err); approved {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "write_file", path, "", err); approved {
 			result, err = tools.WriteFile(ctx2, path, content)
 		}
 	}
@@ -537,7 +537,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	// Read original for diff, handling filesystem security errors
 	originalContent, err := tools.ReadFile(ctx, path)
 	if err != nil {
-		if ctx2, approved := handleFileSecurityError(ctx, a, "edit_file", path, err); approved {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "edit_file", path, "", err); approved {
 			ctx = ctx2 // reuse bypassed context for subsequent operations
 			originalContent, err = tools.ReadFile(ctx, path)
 		}
@@ -589,7 +589,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	result, err := tools.EditFile(ctx, path, oldStr, newStr)
 
 	if err != nil {
-		if ctx2, approved := handleFileSecurityError(ctx, a, "edit_file", path, err); approved {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "edit_file", path, "", err); approved {
 			ctx = ctx2
 			originalContent, err = tools.ReadFile(ctx, path)
 			if err != nil {

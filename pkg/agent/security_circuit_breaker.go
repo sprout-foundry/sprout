@@ -36,8 +36,8 @@ const securityBlockThreshold = 2
 
 // generateSecurityBlockKey builds a deterministic key for a tool+args combo,
 // namespaced under "sec:" so it never collides with the general circuit
-// breaker (which uses "toolName:argsJSON"). Mirrors generateActionKey in
-// tool_executor_circuit_breaker.go.
+// breaker (which uses "toolName:argsJSON"). Mirrors the hashing pattern in
+// pkg/agent/seed_tool_execution.go.
 func generateSecurityBlockKey(toolName string, args map[string]interface{}) string {
 	argsJSON, _ := json.Marshal(args)
 	return fmt.Sprintf("sec:%s:%s", toolName, string(argsJSON))

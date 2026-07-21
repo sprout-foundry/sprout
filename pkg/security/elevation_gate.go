@@ -30,9 +30,10 @@ type SecretPrompter interface {
 // (whichever they choose).
 //
 // SAFETY: A single Gate instance is used from one agent goroutine (sequential
-// tool execution in pkg/agent/tool_executor_sequential.go), so no mutex is
-// required. If parallel tool execution is ever introduced, this type must be
-// protected with a sync.Mutex or sync.RWMutex.
+// tool execution driven by seed core.ToolRegistry via
+// pkg/agent/processQueryWithSeed), so no mutex is required. If parallel
+// tool execution is ever introduced, this type must be protected with a
+// sync.Mutex or sync.RWMutex.
 type ElevationGate struct {
 	vault       map[string]SecretAction // per-secret vaultKey -> resolved action
 	sourceAllow map[string]bool         // sources the user has whitelisted for the session

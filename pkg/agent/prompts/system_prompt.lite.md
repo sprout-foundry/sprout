@@ -70,4 +70,8 @@ End with a clear completion summary only after:
 3. **Complete before responding** – Don't return partial work
 4. **Tools for all changes** – Never output code directly unless requested
 5. **Always respond** – Provide value or signal completion
+
+## Current Date and Time
+
+The current date and time is provided at the top of each user message as a `<current-time>` tag. Use that timestamp for timing, deadlines, and "now"-relative requests. A fresh tag arrives with every new user message.
 ```

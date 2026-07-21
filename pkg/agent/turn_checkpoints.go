@@ -329,6 +329,23 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 		// This checkpoint is consumed (applied to the compaction)
 		compacted = append(compacted, messages[nextIndex:checkpoint.StartIndex]...)
 
+		// SP-128 §fix: When this checkpoint is about to drop a user message at
+		// the boundary (messages[nextIndex] with role="user"), preserve it in the
+		// compacted output before inserting the assistant summary. Without this,
+		// strict-syntax chat templates (Qwen3.5, any provider with raise_exception
+		// guards) reject the request with "No user query found in messages" because
+		// the compacted conversation would contain zero role:user entries.
+		//
+		// The condition: nextIndex==checkpoint.StartIndex means the slice
+		// messages[nextIndex:checkpoint.StartIndex] is empty — i.e., there are no
+		// messages to preserve from the gap, and messages[nextIndex] (which is
+		// about to be consumed) would be dropped. We preserve it if it's a user
+		// message so the conversation always has at least one user turn for strict
+		// chat templates that require it.
+		if nextIndex == checkpoint.StartIndex && nextIndex < len(messages) && messages[nextIndex].Role == "user" {
+			compacted = append(compacted, messages[nextIndex])
+		}
+
 		// FIX 4: Use ActionableSummary if available, prepended to the base summary.
 		summaryText := checkpoint.Summary
 		if checkpoint.ActionableSummary != "" {
@@ -376,6 +393,42 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	// message whose tool_call_id has no parent assistant tool_calls block
 	// immediately preceding it.
 	compacted = dropOrphanToolMessages(compacted, a.debug)
+
+	// SP-128 §belt-and-suspenders: ensure at least one user message exists in
+	// the compacted output. Strict-syntax chat templates (Qwen3.5, others with
+	// raise_exception) reject requests with zero role:user entries. This guards
+	// against future code path changes that might bypass the per-checkpoint
+	// preservation above.
+	//
+	// lastSummaryIdx is intentionally NOT updated when we prepend the fallback.
+	// The fallback lands at index 0, and lastSummaryIdx still points to the last
+	// *real* summary — so the consecutive-assistant boundary check below still
+	// scans the correct pair (summary, message-after-summary), unaffected by the
+	// prepended fallback.
+	hasUserMessage := false
+	for _, m := range compacted {
+		if m.Role == "user" {
+			hasUserMessage = true
+			break
+		}
+	}
+	if !hasUserMessage && len(compacted) > 0 {
+		// Inject a minimal fallback user message. Prefer the original task
+		// content from messages[0] if it was a user message, otherwise use a
+		// generic placeholder.
+		fallbackContent := "Continue the task."
+		if len(messages) > 0 && messages[0].Role == "user" && messages[0].Content != "" {
+			fallbackContent = messages[0].Content
+		}
+		fallbackMsg := api.Message{
+			Role:    "user",
+			Content: fallbackContent,
+		}
+		compacted = append([]api.Message{fallbackMsg}, compacted...)
+		if a.debug {
+			a.Logger().Debug("[compaction] injected fallback user message — no user role found in compacted output\n")
+		}
+	}
 
 	// FIX: Ensure we don't have consecutive assistant messages at the boundary.
 	// If the last inserted summary is followed by an assistant message without tool_calls,

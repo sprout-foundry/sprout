@@ -149,8 +149,9 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// distinctive substring so cosmetic edits to the wording don't break
 	// the dedup guard (the prior literal drifted and re-injected context
 	// on every cold restore).
-	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
+			alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
 	shouldInjectProactiveContext := !alreadyInjected &&
+		!a.contextProfile.SkipProactiveContext &&
 		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")
 	if shouldInjectProactiveContext {
 		injectCtx, injectCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -262,7 +263,18 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	opts.OnIteration = func(iteration, messages, tokenEstimate, contextSize int) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
+
+		// SP-126: re-apply the effective context cap here as a defensive
+		// measure. The cap is also applied at the source (seed_provider.Info()),
+		// but this guard catches any path that bypasses ProviderInfo — future
+		// seed internal changes, mock providers in tests, etc. Reading from
+		// a.effectiveContextCap keeps the cap authoritative regardless of
+		// how contextSize reaches us.
+		if cap := a.effectiveContextCap; cap > 0 && (contextSize == 0 || contextSize > cap) {
+			contextSize = cap
+		}
 		a.state.SetMaxContextTokens(contextSize)
+
 		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages, a.GetCachedTokens(), a.GetPromptTokens(), 0)
 	}
 

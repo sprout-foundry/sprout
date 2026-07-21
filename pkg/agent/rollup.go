@@ -36,10 +36,15 @@ import (
 // of dormant code. See roadmap/SP-066-never-ending-context.md "Adjacent
 // question raised by the audit".
 const (
-	// recentTurnsToPreserve is the number of most-recent Level=0 checkpoints
-	// kept at full fidelity. The rollup worker never folds entries in this
-	// window even if the level-0 count exceeds the threshold.
-	recentTurnsToPreserve = 5
+	// recentTurnsToPreserveDefault is the number of most-recent Level=0
+	// checkpoints kept at full fidelity. The rollup worker never folds
+	// entries in this window even if the level-0 count exceeds the threshold.
+	//
+	// SP-125: Low-Context Mode overrides this to 2 (via
+	// ContextProfile.RecentTurnsToPreserve) because LCM sessions are short
+	// (2–4 round-trips) and the recency window is nearly the whole
+	// conversation. See recentTurnsToPreserveFor for the profile-aware value.
+	recentTurnsToPreserveDefault = 5
 
 	// rollupSourceCount is the number of source checkpoints folded into a
 	// single rollup at any level. Same N at every level for simplicity.
@@ -114,7 +119,7 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 		return nil
 	}
 
-	startIdx, endIdx, level, ok := pickRollupTarget(checkpoints)
+	startIdx, endIdx, level, ok := pickRollupTarget(checkpoints, a.recentTurnsToPreserveFor())
 	if !ok {
 		return nil
 	}
@@ -146,6 +151,15 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 	return nil
 }
 
+// recentTurnsToPreserveFor returns the profile-aware recency window size.
+// SP-125: Low-Context Mode overrides this to 2; full mode uses the default (5).
+func (a *Agent) recentTurnsToPreserveFor() int {
+	if n := a.contextProfile.RecentTurnsToPreserve; n > 0 {
+		return n
+	}
+	return recentTurnsToPreserveDefault
+}
+
 // pickRollupTarget walks the checkpoint list and returns the index range
 // + level of the oldest contiguous block of `rollupSourceCount` checkpoints
 // at the same level that would benefit from being folded. Returns ok=false
@@ -153,7 +167,7 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 //
 // Level 0 (per-turn) has the recency window applied: the most-recent
 // `recentTurnsToPreserve` per-turn checkpoints are never folded.
-func pickRollupTarget(checkpoints []TurnCheckpoint) (start, end, level int, ok bool) {
+func pickRollupTarget(checkpoints []TurnCheckpoint, recentTurnsToPreserve int) (start, end, level int, ok bool) {
 	// Count per level, then pick the lowest level that's over budget. Lower
 	// levels overflow first; folding them up reduces pressure on higher
 	// levels naturally.

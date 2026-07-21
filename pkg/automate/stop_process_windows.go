@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"golang.org/x/sys/windows"
+	"github.com/sprout-foundry/sprout/pkg/utils/console"
 )
 
 // StopProcess escalates signals to gracefully (then forcefully) stop a process.
@@ -19,7 +19,7 @@ func StopProcess(pid int) (bool, error) {
 	// Try graceful shutdown via CTRL_BREAK_EVENT. This only works if the
 	// target process shares our console. If it fails we fall through to
 	// TerminateProcess.
-	_ = sendCtrlBreak(pid)
+	_ = console.SendCtrlBreak(pid)
 	if !waitForDeath(pid, 10*time.Second) {
 		// Forceful termination via TerminateProcess.
 		process, err := os.FindProcess(pid)
@@ -36,14 +36,6 @@ func StopProcess(pid int) (bool, error) {
 	}
 
 	return !IsProcessAlive(pid), nil
-}
-
-// sendCtrlBreak sends a CTRL_BREAK_EVENT to the process with the given PID.
-// This is the Windows equivalent of SIGINT — it signals console applications
-// to shut down gracefully. Returns an error if the event could not be sent
-// (e.g. the process doesn't share our console).
-func sendCtrlBreak(pid int) error {
-	return windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(pid))
 }
 
 func waitForDeath(pid int, d time.Duration) bool {

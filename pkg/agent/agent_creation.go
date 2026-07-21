@@ -122,6 +122,84 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.state.SetCurrentContextTokens(0)
 		agent.state.SetContextWarningIssued(false)
 
+		// SP-125: resolve the context profile once at agent creation.
+		// Uses the now-known model context window to auto-detect LCM.
+		// Explicit config.context_mode overrides auto-detection. A window
+		// below ContextFloor (8K) returns an error that surfaces to the
+		// caller — the agent refuses to start rather than producing a
+		// broken session.
+		var cfg *configuration.Config
+		if agent.configManager != nil {
+			cfg = agent.configManager.GetConfig()
+		}
+		profile, err := configuration.ResolveContextProfile(
+			cfg,
+			agent.state.GetMaxContextTokens(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		agent.contextProfile = profile
+
+		// SP-126: resolve the effective context cap once at agent creation
+		// and store on the Agent. Every downstream call site (seed_provider.Info,
+		// seed_query.OnIteration) reads this field rather than re-deriving
+		// from Config.MaxContextTokens or calling client.GetModelContextLimit()
+		// directly. The state.MaxContextTokens write above uses the same
+		// resolved value (getModelContextLimit routes through this resolver
+		// via the config check), so state and Agent stay in sync.
+		//
+		// A cap explicitly set below EffectiveContextCapMinimum (1024)
+		// returns an error that surfaces to the caller — matches the
+		// /max-context and settings_defs validators' behavior so users
+		// see consistent feedback regardless of which surface set the cap.
+		nativeWindow := agent.getNativeModelContextLimit()
+		resolvedCap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
+		if capErr != nil {
+			return nil, fmt.Errorf("resolving effective context cap: %w", capErr)
+		}
+		agent.effectiveContextCap = resolvedCap
+
+		// Activation notice: when the user explicitly set a cap below the
+		// native window, emit a one-time stderr line so they can verify
+		// it's active. Skip when the cap equals the native window (no-op)
+		// and skip when no cap was set (no point announcing "you're using
+		// the full window"). This matches SP-125's LCM auto-detect notice
+		// pattern — same idea, different lever.
+		if cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 &&
+			agent.effectiveContextCap > 0 &&
+			agent.effectiveContextCap < nativeWindow {
+			_, _ = fmt.Fprintf(os.Stderr,
+				"⚡ Context cap active: %s (native: %s)\n"+
+					"  All requests will use at most %s of context.\n"+
+					"  /max-context clear to remove, /max-context <N> to change.\n",
+				agent.formatTokenCount(agent.effectiveContextCap),
+				agent.formatTokenCount(nativeWindow),
+				agent.formatTokenCount(agent.effectiveContextCap),
+			)
+		}
+
+		if profile.Mode == configuration.ContextModeLowContext {
+			// Distinguish auto-detected LCM from explicit config. When the
+			// user explicitly set context_mode: "low_context", they already
+			// know — no notice needed. When it was auto-detected from the
+			// model's context window, surface a one-time notice so they
+			// understand why the experience is different.
+			explicit := cfg != nil && cfg.ContextMode == configuration.ContextModeLowContext
+			if !explicit {
+				_, _ = fmt.Fprintf(os.Stderr,
+					"⚠ %dK context detected — Low-Context Mode active\n"+
+						"  8 tools, lite prompt, AGENTS.md kept\n"+
+						"  Set context_mode: \"full\" in config to override, or /model to switch.\n",
+					agent.state.GetMaxContextTokens()/1000)
+			} else if params.debug {
+				_, _ = fmt.Fprintf(os.Stderr,
+					"[low-context] explicit config: tools=%d prompt=%s trigger=%.2f\n",
+					len(profile.ToolAllowlist), profile.SystemPromptPath,
+					profile.CompactionTriggerFraction)
+			}
+		}
+
 		// Clean up old sessions once per process. Uses sync.Once so daemon
 		// mode (which creates agents per chat session) only runs cleanup on
 		// the very first agent, not on every subsequent chat session.
@@ -254,7 +332,24 @@ func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, c
 	}
 
 	providerName := api.GetProviderName(clientType)
-	systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
+
+	// SP-125: resolve the context profile before loading the system prompt
+	// so the lite prompt is selected when LCM is active. The profile is also
+	// re-resolved inside initAgentFromResolvedProvider (after the agent's
+	// state manager is initialized and MaxContextTokens is set); the two
+	// resolutions agree because they use the same inputs (config + window).
+	contextWindow := 0
+	if limit, err := client.GetModelContextLimit(); err == nil {
+		contextWindow = limit
+	}
+	profile, profileErr := configuration.ResolveContextProfile(
+		configManager.GetConfig(), contextWindow,
+	)
+	if profileErr != nil {
+		return nil, agenterrors.NewPermanentError("context profile resolution failed", profileErr)
+	}
+
+	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow)
 	if err != nil {
 		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
 	}

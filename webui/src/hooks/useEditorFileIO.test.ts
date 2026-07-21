@@ -237,8 +237,36 @@ function setupHook(opts = {}) {
   const bufferRef = { current: buffer };
   const indentManuallySetRef = { current: false };
   const fetchDiagnosticsRef = { current: vi.fn() };
-  const isExternalUpdateRef = { current: false };
   const paneId = 'pane-1';
+
+  // Mock CodeMirror view API. The mock view's dispatch is the same vi.fn()
+  // the test asserts against, so passing through `dispatch` still records
+  // the call. `withExternalUpdate` runs the function and toggles a local
+  // gate so the cursor-skip behavior can be exercised in dedicated tests.
+  let externalUpdateGate = false;
+  const cmViewApiRef = {
+    current: {
+      view: viewRef.current,
+      isMounted: true,
+      dispatch: (tr) => viewRef.current?.dispatch(tr),
+      withExternalUpdate: (fn) => {
+        const prev = externalUpdateGate;
+        externalUpdateGate = true;
+        try {
+          return fn();
+        } finally {
+          externalUpdateGate = prev;
+        }
+      },
+      isExternalUpdate: () => externalUpdateGate,
+      save: vi.fn(),
+      getFilePath: () => viewRef.current?.state?.doc?.toString?.(),
+      getFileExt: () => undefined,
+      getContent: () => '',
+      subscribe: () => () => {},
+      compartments: undefined as any,
+    },
+  };
 
   const setters = {
     setLoading: vi.fn(),
@@ -258,11 +286,11 @@ function setupHook(opts = {}) {
 
   return {
     viewRef,
+    cmViewApiRef,
     buffer,
     bufferRef,
     indentManuallySetRef,
     fetchDiagnosticsRef,
-    isExternalUpdateRef,
     paneId,
     setters,
     compartments,
@@ -302,7 +330,7 @@ function renderHook(setup) {
   let hookReturn = null;
   function Wrapper() {
     hookReturn = useEditorFileIO(
-      setup.viewRef,
+      setup.cmViewApiRef,
       setup.buffer,
       setup.bufferRef,
       setup.compartments,
@@ -310,7 +338,6 @@ function renderHook(setup) {
       setup.fetchDiagnosticsRef,
       setup.paneId,
       setup.setters,
-      setup.isExternalUpdateRef,
     );
     return null;
   }
@@ -350,7 +377,7 @@ describe('loadFile — normal file loading', () => {
     expect(setup.setters.setSelectionInfo).toHaveBeenCalledWith(null);
   });
 
-  it('sets isExternalUpdateRef to false after load completes', async () => {
+  it('clears external-update gate after load completes', async () => {
     const setup = setupHook();
     const hook = renderHook(setup);
 
@@ -358,7 +385,9 @@ describe('loadFile — normal file loading', () => {
       await hook.loadFile('/test/file.ts');
     });
 
-    expect(setup.isExternalUpdateRef.current).toBe(false);
+    // After load, the gate is back to false. If withExternalUpdate were
+    // buggy (e.g., failed to restore in finally), this would be true.
+    expect(setup.cmViewApiRef.current.isExternalUpdate()).toBe(false);
   });
 });
 
@@ -731,6 +760,7 @@ describe('handleSave', () => {
   it('does nothing when viewRef is null', async () => {
     const setup = setupHook();
     setup.viewRef.current = null;
+    setup.cmViewApiRef.current.view = null;
     const hook = renderHook(setup);
 
     await act(async () => {
@@ -756,6 +786,5 @@ describe('return value', () => {
     expect(typeof hook.handleSave).toBe('function');
     expect(hook.saveRef).toBeDefined();
     expect(typeof hook.saveRef.current).toBe('function');
-    expect(hook.isExternalUpdateRef).toBe(setup.isExternalUpdateRef);
   });
 });

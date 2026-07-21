@@ -80,12 +80,12 @@ func (t *TestClient) GetProvider() string {
 }
 
 func (t *TestClient) GetModelContextLimit() (int, error) {
-	return 4096, nil
+	return 128_000, nil
 }
 
 func (t *TestClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return []api.ModelInfo{
-		{Name: "test-model", ContextLength: 4096},
+		{Name: "test-model", ContextLength: 128_000},
 	}, nil
 }
 

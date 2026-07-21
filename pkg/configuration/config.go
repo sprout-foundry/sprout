@@ -126,6 +126,14 @@ type Config struct {
 	// value.
 	RiskProfile string `json:"risk_profile,omitempty"`
 
+	// ContextMode selects a named context-engine preset: "" (full
+	// default) | "full" | "low_context". Resolved into a ContextProfile
+	// via ResolveContextProfile at agent creation; call sites read
+	// fields off the resolved profile rather than this string directly.
+	// Empty/unrecognized values fall through to auto-detection by the
+	// resolver (which honors a small enough model window).
+	ContextMode ContextMode `json:"context_mode,omitempty"`
+
 	// RiskProfiles allows the user to override the baked-in rules
 	// for any named profile. Keys are profile names (readonly,
 	// cautious, default, permissive, unrestricted, or any

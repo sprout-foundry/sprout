@@ -244,8 +244,10 @@ func TestMockLLMProvider_GetModelContextLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if limit != 4096 {
-		t.Errorf("expected context limit 4096, got: %d", limit)
+	// Default mock context window is 128K (realistic for agentic use).
+	// Tests needing a smaller window use NewMockLLMProviderWithLimit.
+	if limit != 128_000 {
+		t.Errorf("expected context limit 128000, got: %d", limit)
 	}
 }
 

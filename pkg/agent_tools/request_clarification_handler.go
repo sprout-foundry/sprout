@@ -20,6 +20,15 @@ import (
 // eliminating the need for this indirection.
 var RequestClarificationFunc func(ctx context.Context, args map[string]any) (string, error)
 
+// requestClarificationTimeout is the seed-registry-level wrapper timeout for
+// the request_clarification tool. It must exceed
+// pkg/agent/clarification_manager.go::DefaultClarificationTimeout (60s) so the
+// inner ClarificationManager can enforce its own deadline first; otherwise the
+// outer wrapper would cancel the caller's context and silently drop the user's
+// in-progress answer. Keep this synchronized with DefaultClarificationTimeout
+// if that constant is ever changed.
+const requestClarificationTimeout = 65 * time.Second
+
 // requestClarificationHandler implements ToolHandler for the
 // request_clarification tool. It is called by subagents when they need
 // clarification from their parent agent.
@@ -70,8 +79,10 @@ func (h *requestClarificationHandler) Execute(ctx context.Context, env ToolEnv, 
 	return ToolResult{Output: result}, nil
 }
 
-func (h *requestClarificationHandler) Aliases() []string      { return nil }
-func (h *requestClarificationHandler) Timeout() time.Duration { return 65 * time.Second }
-func (h *requestClarificationHandler) MaxResultSize() int     { return 0 }
-func (h *requestClarificationHandler) SafeForParallel() bool  { return false }
-func (h *requestClarificationHandler) Interactive() bool      { return true }
+func (h *requestClarificationHandler) Aliases() []string { return nil }
+func (h *requestClarificationHandler) Timeout() time.Duration {
+	return requestClarificationTimeout
+}
+func (h *requestClarificationHandler) MaxResultSize() int    { return 0 }
+func (h *requestClarificationHandler) SafeForParallel() bool { return false }
+func (h *requestClarificationHandler) Interactive() bool     { return true }

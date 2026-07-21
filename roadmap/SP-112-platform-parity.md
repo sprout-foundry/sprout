@@ -144,42 +144,63 @@ fixes already exist or whether proposed solutions duplicate existing code.
 becomes a refactor, SP-112-4 deferred). Tier 2 drops from ~2 days to ~1 day
 (SPM-112-6/7/8 partially shipped). Net: ~4–5 days instead of 5–7.
 
+### ✅ Adjustments applied (2026-07-20)
+
+All six recommended adjustments from this review have been incorporated
+into the spec body below:
+
+1. **SP-112-4 dropped** — the underlying issue is real but `steer_termios_other.go`
+   documents that the OPOST-staircase does not manifest on Windows terminals
+   (Windows CR/LF handling is different from Unix). SP-112-4 is deferred to
+   `roadmap/future/` pending an empirical repro.
+2. **SP-112-2 rewritten as a refactor** — Tier 1 table now specifies
+   "Refactor: extract `sendCtrlBreak` into `pkg/utils/windows_console.go`".
+3. **SP-112-6/7/8 re-audited** — Tier 2 table marks SP-112-7 as ✅ shipped,
+   SP-112-6 and SP-112-8 as **Open**. SP-112-5 deferred to `roadmap/future/`.
+4. **SP-112-3 dedup** added as **SP-112-3b** (extracting
+   `pkg/utils/pidalive`).
+5. **Testing strategy section added** (see below).
+6. **"31 feature areas" headline updated** to the current count (59 files).
+
 
 
 ## Problem
 
-Sprout builds on five targets (Linux, macOS, Windows, WASM, no-CGO). An
-audit (2026-07-04) found **31 feature areas** with platform-specific stubs.
-Most are inherent limitations (WASM can't spawn processes). Some are
-fixable gaps where the stub degrades UX unnecessarily.
+Sprout builds on five targets (Linux, macOS, Windows, WASM, no-CGO). A
+platform-specific audit found **59 non-test files** with `*_windows.go`,
+`*_linux.go`, `*_darwin.go`, `*_wasm.go`, `*_js.go`, `*_unix.go`, or
+`*_other.go` build constraints. Most are inherent limitations (WASM
+can't spawn processes). Some are fixable gaps where the stub degrades
+UX unnecessarily.
 
 This spec prioritizes the fixable gaps and documents the inherent
 limitations as permanent constraints.
 
 ## Priority tiers
 
-### Tier 1 — Fixable Windows gaps (~2 days)
+### Tier 1 — Fixable Windows gaps (~1.5 days)
 
 These affect real users on Windows and have known solutions:
 
 | Item | Current | Fix | Effort |
 |------|---------|-----|--------|
 | **SP-112-1:** Process groups on Windows | `SetProcessGroup` is a no-op; `killProcessGroup` kills only the parent | Use Windows Job Objects (`CreateJobObject` + `AssignProcessToJobObject`) for group kill | ~4h |
-| **SP-112-2:** Graceful signal escalation on Windows | `interruptProcessGroup` → `Kill()` (no graceful interrupt) | Use `GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT)` for graceful, fall back to `TerminateProcess` | ~2h |
-| **SP-112-3:** PID-alive check precision | `FindProcess` succeeds for dead PIDs on Windows | Use `OpenProcess` + `WaitForSingleObject(0)` or `GetExitCodeProcess` | ~2h |
-| **SP-112-4:** Terminal raw mode OPOST preservation | `term.MakeRaw` disables OPOST (staircase rendering) | Replicate the Unix ioctl approach using Windows Console Mode APIs (`SetConsoleMode`) | ~4h |
+| **SP-112-2:** Graceful signal escalation on Windows | `interruptProcessGroup` → `Kill()` (no graceful interrupt). A working `sendCtrlBreak` already exists in `pkg/automate/stop_process_windows.go` | **Refactor**: extract `sendCtrlBreak` into `pkg/utils/windows_console.go`; have `interruptProcessGroup` call it. Do NOT duplicate the implementation. | ~2h |
+| **SP-112-3a:** PID-alive check precision (fix) | `FindProcess` succeeds for dead PIDs on Windows | Use `OpenProcess` + `WaitForSingleObject(0)` or `GetExitCodeProcess` | ~2h |
+| **SP-112-3b:** PID-alive check deduplication | The same `FindProcess` weakness exists in three files: `pkg/webui/pid_alive_windows.go`, `pkg/automate/pid_alive_windows.go`, `pkg/service/pid_alive_windows.go` | Extract a shared `pkg/utils/pidalive/pidalive_windows.go` (and unix counterpart) so all three callers delegate to one helper. AGENTS.md "No duplication" rule. | ~2h |
 
-### Tier 2 — WASM UX improvements (~2 days)
+### Tier 2 — WASM UX improvements (~1 day)
 
 These can't be "fixed" (WASM can't spawn processes), but the error
-messages and fallback behavior can be improved:
+messages and fallback behavior can be improved. **Audit 2026-07-20:**
+two of the originally-proposed WASM exclusions are already shipped.
 
-| Item | Current | Fix | Effort |
-|------|---------|-----|--------|
-| **SP-112-5:** Shell streaming on WASM | Output captured as single string | Pipe output through the JS executor in chunks if the executor supports streaming | ~4h |
-| **SP-112-6:** Vision tool graceful degradation | Returns error string | Detect WASM at registration time and exclude vision tools from the WASM tool roster instead of returning errors | ~2h |
-| **SP-112-7:** Codegraph tool exclusion on WASM | Returns error string | Same as SP-112-6 — exclude from WASM tool roster | ~1h |
-| **SP-112-8:** Background process tool exclusion on WASM | Returns error string | Same — exclude `run_automate`, background shell tools from WASM | ~1h |
+| Item | Current | Fix | Effort | Status |
+|------|---------|-----|--------|--------|
+| **SP-112-5:** Shell streaming on WASM | Output captured as single string | **Deferred.** `pkg/agent_tools/shell_js.go` documents that `wasmshell` is a single-shot command runner with no streaming surface today. Implementing chunked streaming requires first extending the JS executor contract; out of scope for this spec. | — | Dropped (tracked in `roadmap/future/`) |
+| **SP-112-6:** Vision tool graceful degradation | `pkg/agent_tools/vision_stubs_js.go` returns success/no-op or error strings at *execution* time, but the tools remain in the WASM tool roster | Mirror the `all_codegraph_wasm.go` pattern: split vision handlers into `all_vision.go` (`!js`, registers) and `all_vision_js.go` (`js`, returns nil). Update the comment block at the top of `pkg/agent_tools/all.go`. | ~2h | **Open** |
+| **SP-112-7:** Codegraph tool exclusion on WASM | Already excluded at registration | (No action — `all_codegraph_wasm.go` returns `nil` since prior work.) | — | ✅ **Shipped** |
+| **SP-112-8:** Background process tool exclusion on WASM | `runAutomateHandler.Execute` returns "not available" at runtime but the tool is still advertised to the model | Mirror the `all_browse_url_wasm.go` pattern: split `run_automate` registration into `all_run_automate.go` (`!js`) and `all_run_automate_js.go` (`js`, returns nil). Update the comment block in `all.go`. | ~1h | **Open** |
 
 ### Tier 3 — no-CGO embedding fallback (~1 day)
 
@@ -206,9 +227,39 @@ These are platform constraints, not bugs:
 - **non-Darwin/Linux:** No `osascript` (macOS) or `xdotool`/`xrecord`
   (Linux) for foreground app detection or key chord monitoring.
 
+## Testing strategy
+
+Windows-specific logic cannot be unit-tested on Linux/macOS dev machines
+(the project has zero `*_windows_test.go` files and exactly one
+`*_linux_test.go` counterpart, `foreground_linux_test.go`). Platform
+behavior is gated by CI's Windows matrix leg (`.github/workflows/build.yml`,
+`runs-on: windows-latest`).
+
+For each Tier 1 item, follow this pattern:
+
+1. **Extract the decision logic** (e.g. "which signal escalation path to
+   take", "does this PID look alive?") into a platform-agnostic helper
+   in `pkg/utils` that is testable cross-platform with a mockable
+   platform-specific backend.
+2. **Leave only the thin syscall wrappers** behind `//go:build windows`
+   tags.
+3. **Add a `*_windows_test.go`** that runs only in CI's Windows leg and
+   verifies the syscall wrapper compiles and produces expected behavior
+   against real Windows processes.
+4. **Document in the spec** that `make build-all` on Linux does NOT
+   verify Windows behavior despite compiling cross-platform code —
+   Windows correctness is gated by CI's `windows-latest` matrix leg.
+
+For Tier 2 (WASM exclusions), the build tag system itself enforces
+correctness — the test is whether `GOOS=js go build ./...` compiles
+without the excluded tool's handler types being referenced. Add a
+smoke test that builds the WASM target and asserts the tool count.
+
 ## Acceptance
 
 - All Tier 1 items have working implementations + tests
 - WASM build excludes unavailable tools at registration time (Tier 2)
 - README platform matrix is accurate and maintained
 - `make build-all` passes on all targets
+- `GOOS=js go build ./...` passes and produces the expected tool roster
+  (excluded tools must not appear)

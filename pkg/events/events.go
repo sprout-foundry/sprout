@@ -111,6 +111,22 @@ const (
 	// recall is surfacing useful matches and to tune the half-life and
 	// similarity threshold from real data.
 	EventTypeRecallDiagnostic = "recall_diagnostic"
+
+	// EventTypeCommandOutput (SP-114 Phase 2c) is emitted for every chunk
+	// of stdout captured from a safe slash command executed via
+	// POST /api/command/execute. The chat session's WebSocket subscribers
+	// fan out the chunk so the WebUI can stream the output in real time.
+	// The HTTP response still returns the aggregated output for
+	// non-WebSocket callers (backwards-compatible).
+	EventTypeCommandOutput = "command_output"
+
+	// EventTypeCommandOutputDropped (SP-114 Phase 2c) is emitted when
+	// the bounded backpressure ring overflows and one or more chunks
+	// had to be dropped. The payload's `dropped_bytes` field reports
+	// how many bytes of command output were discarded since the last
+	// warning. WebUI consumers should display a "some output was
+	// dropped" indicator.
+	EventTypeCommandOutputDropped = "command_output_dropped"
 	// SP-065 Phase 2: Automate session lifecycle events
 	EventTypeAutomateSessionStarted = "automate.session_started"
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"

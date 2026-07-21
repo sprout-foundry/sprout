@@ -72,6 +72,11 @@ func (h *editFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// See writeFileHandler for context — EditFile calls EditFile helper,
+	// which in turn calls resolveAndValidateFileWithGate. The gate
+	// reaches the resolve step through FilesystemGateFromContext.
+	ctx = WithFilesystemGateFromEnv(ctx, env)
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err

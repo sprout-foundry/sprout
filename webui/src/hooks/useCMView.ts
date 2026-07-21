@@ -228,8 +228,6 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
 
   useEffect(() => {
     const parent = editorRef.current;
-    // eslint-disable-next-line no-console
-    console.log('[useCMView] useEffect fired, parent=', parent);
     if (!parent) return undefined;
 
     // Caller guarantees these refs are populated during render before mount;
@@ -299,18 +297,14 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
       doc: initialContent,
       extensions,
     });
-    // eslint-disable-next-line no-console
-    console.log('[useCMView] EditorState.create done, state=', state);
     let view: EditorView;
     try {
       view = new EditorView({ state, parent });
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[useCMView] EditorView ctor threw:', e);
+      // Re-throw after invalidating any in-flight async work so the boundary
+      // surfaces the failure and the cleanup path runs.
       throw e;
     }
-    // eslint-disable-next-line no-console
-    console.log('[useCMView] created view, view dom has appendChild?', typeof view.dom?.appendChild, 'has outerHTML?', typeof view.dom?.outerHTML, 'outerHTML=', view.dom?.outerHTML, 'prototype=', Object.getPrototypeOf(view.dom)?.constructor?.name, 'is Node?', view.dom instanceof window.Node);
     const capturedView = view;
 
     apiRef.current.view = capturedView;
@@ -339,8 +333,6 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
     }
 
     return () => {
-      // eslint-disable-next-line no-console
-      console.log('[useCMView] cleanup: parent.children=', parent.children.length, 'view.dom=', capturedView.dom?.outerHTML?.substring(0,200));
       // Invalidate async work before destroying the view. The captured-view
       // check in the bootstrap continuation will then reject late results.
       try {

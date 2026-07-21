@@ -1,8 +1,13 @@
-import type { EditorView as CMEditorView } from '@codemirror/view';
+import { EditorView, type EditorView as CMEditorView } from '@codemirror/view';
 import type { RefObject, MutableRefObject } from 'react';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+
+const { editorViewConstructorSpy, editorViewDestroySpy } = vi.hoisted(() => ({
+  editorViewConstructorSpy: vi.fn(),
+  editorViewDestroySpy: vi.fn(),
+}));
 
 beforeAll(() => {
   // @ts-expect-error — assigning to undeclared globalThis property for React act() mode
@@ -16,6 +21,23 @@ afterAll(() => {
 // ── Mocks ────────────────────────────────────────────────────────
 // All mocks return null to avoid React-version JSX issues in factories.
 //
+// EditorCore must never construct or destroy this class. Tests create one
+// explicit parent-owned instance, then verify compartment reconfiguration
+// continues to target that same instance across React re-renders.
+vi.mock('@codemirror/view', () => ({
+  EditorView: class MockEditorView {
+    dispatch = vi.fn();
+
+    constructor() {
+      editorViewConstructorSpy(this);
+    }
+
+    destroy() {
+      editorViewDestroySpy(this);
+    }
+  },
+}));
+
 // Note: as of the useCMView migration, EditorCore owns no EditorView
 // lifecycle at all. The central `useCMView` in EditorPane is the sole
 // owner. EditorCore only calls `useEditorReconfigure`. We still mock
@@ -168,6 +190,52 @@ describe('EditorCore', () => {
       // longer fans out into a second view creator).
       expect((callArgs as any).initOptions).toBeUndefined();
       expect((callArgs as any).editorRef).toBeUndefined();
+    });
+
+    it('compartment reconfigure preserves EditorView identity', () => {
+      const parentOwnedView = new EditorView({ state: {} as any });
+      const viewRef = { current: parentOwnedView } as MutableRefObject<CMEditorView | null>;
+      const themeCompartment = {
+        reconfigure: vi.fn((fontSize: number) => ({ type: 'font-size', fontSize })),
+      };
+
+      // Model the production hook's observable behavior at EditorCore's seam:
+      // each settings render dispatches a compartment effect into the view it
+      // was given. EditorCore itself must not take ownership of that view.
+      vi.mocked(useEditorReconfigure).mockImplementation((options: any) => {
+        options.viewRef.current?.dispatch({
+          effects: themeCompartment.reconfigure(options.editorFontSize),
+        });
+      });
+
+      const firstProps = createBaseProps({
+        viewRef,
+        reconfigureOptions: { editorFontSize: 13 } as any,
+      });
+      renderComponent(firstProps);
+
+      act(() => {
+        root.render(
+          createElement(EditorCore, {
+            ...firstProps,
+            // A changed settings object forces EditorCore's memoized body to
+            // run and the compartment value to be reconfigured.
+            reconfigureOptions: { editorFontSize: 18 } as any,
+          }),
+        );
+      });
+
+      expect(themeCompartment.reconfigure).toHaveBeenNthCalledWith(1, 13);
+      expect(themeCompartment.reconfigure).toHaveBeenNthCalledWith(2, 18);
+      expect(parentOwnedView.dispatch).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(useEditorReconfigure).mock.calls[0][0].viewRef.current).toBe(parentOwnedView);
+      expect(vi.mocked(useEditorReconfigure).mock.calls[1][0].viewRef.current).toBe(parentOwnedView);
+
+      // One constructor call is the explicit parent-owned instance above.
+      // Any additional call would mean EditorCore recreated the view while
+      // applying a settings-only compartment update.
+      expect(editorViewConstructorSpy).toHaveBeenCalledTimes(1);
+      expect(editorViewDestroySpy).not.toHaveBeenCalled();
     });
 
     it('spreads reconfigureOptions into useEditorReconfigure call', () => {

@@ -12,6 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/service"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 )
 
 // =============================================================================
@@ -140,24 +141,24 @@ func TestRedirectGoLogToWorkspace_Coverage(t *testing.T) {
 }
 
 // =============================================================================
-// pid_alive_unix.go — isPIDAlive
+// pidalive.IsAlive (canonical helper — replaces cmd/pid_alive_*.go)
 // =============================================================================
 
-func TestIsPIDAlive_Coverage(t *testing.T) {
+func TestPidaliveIsAlive_Coverage(t *testing.T) {
 	// PID 1 (init) should always be alive on Linux
-	if !isPIDAlive(1) {
+	if !pidalive.IsAlive(1) {
 		t.Error("PID 1 should be alive")
 	}
 	// PID 0 should return false
-	if isPIDAlive(0) {
+	if pidalive.IsAlive(0) {
 		t.Error("PID 0 should return false")
 	}
 	// Negative PID should return false
-	if isPIDAlive(-1) {
+	if pidalive.IsAlive(-1) {
 		t.Error("negative PID should return false")
 	}
 	// Very large PID that likely doesn't exist
-	if isPIDAlive(999999999) {
+	if pidalive.IsAlive(999999999) {
 		t.Error("very large PID should return false")
 	}
 }

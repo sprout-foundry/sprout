@@ -169,10 +169,3 @@ func processContextContent(content string) string {
 
 	return result
 }
-
-// regenerateContextCache forces regeneration of context cache
-func regenerateContextCache() {
-	// Remove any cached context files
-	cachePath := filepath.Join(".sprout", "context_cache.md")
-	os.Remove(cachePath)
-}

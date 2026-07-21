@@ -4,7 +4,6 @@ package webui
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -242,9 +241,4 @@ func WaitForEditDecision(ch <-chan editDecisionPayload, timeout time.Duration) *
 	case <-time.After(timeout):
 		return nil
 	}
-}
-
-// formatEditHunkSummary creates a display summary string for a hunk.
-func formatEditHunkSummary(adds, deletes int) string {
-	return fmt.Sprintf("+%d/-%d", adds, deletes)
 }

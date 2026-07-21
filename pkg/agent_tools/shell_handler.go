@@ -419,14 +419,6 @@ func (h *shellCommandHandler) MaxResultSize() int     { return 0 }
 func (h *shellCommandHandler) SafeForParallel() bool  { return false }
 func (h *shellCommandHandler) Interactive() bool      { return false }
 
-// truncateForEvent truncates a string for event logging.
-func truncateForEvent(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
-}
-
 type bgResult struct {
 	SessionID string `json:"session_id"`
 	Status    string `json:"status"`

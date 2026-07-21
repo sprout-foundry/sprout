@@ -349,7 +349,7 @@ func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, c
 		return nil, agenterrors.NewPermanentError("context profile resolution failed", profileErr)
 	}
 
-	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow)
+	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, workspaceRoot)
 	if err != nil {
 		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
 	}

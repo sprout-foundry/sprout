@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-07-21):** 87 shipped · 0 pending · 2 parked in `future/`.
+**Counts (as of 2026-07-21):** 87 shipped · 1 pending · 2 parked in `future/`.
 
 ## Shipped
 
@@ -118,6 +118,7 @@ the root directory._
 | SP-124b | [Batch Security Analysis for Chained Commands](./SP-124b-batch-analysis.md) | 🟢 Phase 1 + Phase 2 shipped (2026-07-19 / 2026-07-20, `ad0c20d0` + `bb2464c6`) — `Chain` type + `ParseChain` (delegates to SP-122 `SplitChainedCommand`), `ChainedClassification` + `ClassifyChainedCommand`, `AnalyzeChain` with chain-aware prompt when `len(Subcommands) > 1`, normalized cache key under `sp-124b:v1:` namespace (collapses whitespace, preserves operators, separates `&&`/`||`/`;`/`|`). Phase 2: 10-subcommand cap → per-subcommand fallback, chain stepper in `SecurityApprovalDialog.tsx` with per-subcommand risk dots, CLI per-subcommand badge rendering. 1300-line test footprint across `pkg/agent/security_analyzer_sp124b_*_test.go`, `pkg/console/security_prompt_test.go`, `pkg/utils/security_analysis_view_test.go`, `webui/src/components/SecurityApprovalDialog.test.tsx`. |
 | SP-125 | [Low-Context Mode (32K context support)](./SP-125-low-context-mode.md) | 🟢 Shipped (2026-07-20 / 2026-07-21, 14 sub-item commits). Core abstraction + 6 levers wired (`f43ffb07`, `344f2c8b`, `cbc031ee`, `a5cb2ef3`, `102ff7cb`, `a7fb45fb`, `751b81a4`, `fc927d28`, `6da4d466`, `a6663af0`, `4a4d34a4`, `0c9d1f53`). `/context` slash command ships at `0c9d1f53` (show / set full / set low / clear, aliases, tab-completion). Activation notice + model eligibility + integration tests + AGENTS.md size warning all included. Open non-goals: R3 (lite capability probe variant) and R4 (subagent LCM inheritance) — both deferred per TODO. |
 | SP-126 | [Effective Context Cap (Honor `Config.MaxContextTokens` End-to-End)](./SP-126-effective-context-cap.md) | 🟢 Shipped (2026-07-20, `35c66b24`) — `ResolveEffectiveContextCap(cfg, nativeContextWindow)` in `pkg/configuration/context_profile.go:291` + `EffectiveContextCapErrorf` helper. `seed_provider.Info()` now applies the cap so seed's internal budget math receives the capped value; `seed_query.OnIteration` re-applies the cap defensively from `a.effectiveContextCap`. The `OnIteration` callback no longer clobbers the user's cap on turn 1+ (Bug 2 root cause). Activation notice printed to stderr when the user explicitly set a cap lower than the native window. Min cap = 1024 (mirrors existing `/max-context` validator). Regression tests at `pkg/agent/seed_provider_info_cap_test.go` + `pkg/agent/seed_query_oniteration_cap_test.go`. |
+| SP-127 | [Promote Filesystem Gate to Gate-1](./SP-127-filesystem-gate-promotion.md) | 🔵 Proposed — fold the handler-side `FilesystemGate` (added in `fix/file-tools-filesystem-gate`) into `staticGateAutoApprove` so a single call site decides file access policy. Closes the `patch_structured_file` retrofit gap, removes the dual-mental-model wart, and centralizes path-tier classification. |
 
 ## Future / On Hold
 

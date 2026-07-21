@@ -439,47 +439,36 @@ describe('useCMView — bug-class regression', () => {
     expect(api.getContent()).toBe('new content');
   });
 
-  it('reads openWorkspaceBufferRef.current at call time (no stale capture)', () => {
-    // The bug: in the prior architecture, useEditorFileIO captured the FIRST
-    // render's openWorkspaceBuffer in setGlobalDisplayFileCallback. Later
-    // re-renders swapped the callback (e.g. EditorManagerContext identity
-    // changed), but the captured reference still pointed at fn1, so the new
-    // context's openWorkspaceBuffer was silently bypassed.
-    //
-    // The fix: useCMView passes `actions.getOpenWorkspaceBuffer` (a closure
-    // that returns openWorkspaceBufferRef.current at call time) into
-    // buildExtensions. Callers like the global display-file callback invoke
-    // this closure each time the display-file path fires, so they always see
-    // the latest callback identity.
-    //
-    // This test mocks buildExtensions to capture the getOpenWorkspaceBuffer
-    // function passed in via `opts.actions`, then verifies the closure
-    // observes the ref's current value lazily — both before and after the
-    // ref is mutated to a new callback.
-    const fn1 = vi.fn();
-    const fn2 = vi.fn();
-    const openWorkspaceBufferRef: React.MutableRefObject<any> = { current: fn1 };
+  it('LSP-style callback fired after mount reads latest openWorkspaceBufferRef', () => {
+    const openWorkspaceBufferV1 = vi.fn();
+    const openWorkspaceBufferV2 = vi.fn();
+    const openWorkspaceBufferRef: React.MutableRefObject<any> = {
+      current: openWorkspaceBufferV1,
+    };
 
-    let capturedGetOpenWorkspaceBuffer: () => any = () => null;
+    let getOpenWorkspaceBuffer: (() => any) | null = null;
+    let displayFileCallback: ((filePath: string) => void) | null = null;
+    let api: CMViewAPI | null = null;
 
     const compartments = makeCompartments();
     const buildExtensions = vi.fn((opts: any) => {
-      capturedGetOpenWorkspaceBuffer = opts.actions.getOpenWorkspaceBuffer;
+      // This is the same stable action captured by CodeMirror/LSP extensions
+      // when the view is built. It must resolve the ref lazily when the
+      // registered callback eventually fires.
+      getOpenWorkspaceBuffer = opts.actions.getOpenWorkspaceBuffer;
       return [
         EditorView.editable.of(true),
         compartments.hotkeys.of([]),
         ...(opts.extraKeymaps ?? []),
       ];
     });
-
     const editorRef: React.RefObject<HTMLDivElement | null> = { current: container };
-    const bufferRef: React.MutableRefObject<any> = {
-      current: {
-        id: 'buf-1',
-        file: { path: '/test/file.ts', name: 'file.ts', ext: '.ts' },
-        content: 'initial content',
-      },
+    const buffer = {
+      id: 'buf-1',
+      file: { path: '/test/file.ts', name: 'file.ts', ext: '.ts' },
+      content: 'initial content',
     };
+    const bufferRef: React.MutableRefObject<any> = { current: buffer };
     const handleSaveRef: React.MutableRefObject<() => Promise<void>> = {
       current: async () => {},
     };
@@ -497,12 +486,33 @@ describe('useCMView — bug-class regression', () => {
         semanticKeymap: [],
       },
     };
+    const themePack = { mode: 'light', editorSyntaxStyle: 'default' };
 
-    function Wrapper() {
-      useCMView({
+    const onDidMount = vi.fn(() => {
+      // Mirrors EditorPane's setGlobalDisplayFileCallback registration: this
+      // callback is installed at mount, but invoked later by an LSP request.
+      displayFileCallback = (filePath: string) => {
+        const fileName = filePath.split('/').pop() || filePath;
+        const dotIndex = fileName.lastIndexOf('.');
+        const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+        getOpenWorkspaceBuffer!()({
+          kind: 'file',
+          path: filePath,
+          title: fileName,
+          ext,
+        });
+      };
+    });
+
+    function Wrapper({ openWorkspaceBuffer }: { openWorkspaceBuffer: (request: any) => void }) {
+      // EditorPane performs this assignment during every render. The
+      // CodeMirror extension itself remains mounted with the getter captured
+      // during the first render.
+      openWorkspaceBufferRef.current = openWorkspaceBuffer;
+      api = useCMView({
         paneId: 'pane-1',
         editorRef,
-        buffer: bufferRef.current,
+        buffer,
         bufferRef,
         languageId: 'typescript',
         handleSaveRef,
@@ -512,32 +522,38 @@ describe('useCMView — bug-class regression', () => {
         keymapsRef,
         compartments,
         buildExtensions,
-        themePack: { mode: 'light', editorSyntaxStyle: 'default' },
+        themePack,
         customHighlightStyle: null,
+        onDidMount,
       });
       return null;
     }
 
     act(() => {
-      root.render(createElement(Wrapper));
+      root.render(createElement(Wrapper, { openWorkspaceBuffer: openWorkspaceBufferV1 }));
+    });
+    const viewAtMount = api!.view;
+    expect(viewAtMount).not.toBeNull();
+    expect(onDidMount).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root.render(createElement(Wrapper, { openWorkspaceBuffer: openWorkspaceBufferV2 }));
     });
 
-    // buildExtensions was invoked during the mount effect; its captured
-    // closure should resolve to whatever openWorkspaceBufferRef.current is
-    // at call time, NOT the value captured at mount.
-    expect(capturedGetOpenWorkspaceBuffer()).toBe(fn1);
+    // The callback identity change is not a view-lifecycle input. The callback
+    // registered after mount must use v2 without rebuilding the EditorView.
+    expect(api!.view).toBe(viewAtMount);
+    expect(onDidMount).toHaveBeenCalledTimes(1);
 
-    // Simulate a re-render where the EditorManagerContext's openWorkspaceBuffer
-    // callback identity has changed. The caller (EditorPane) reassigns
-    // openWorkspaceBufferRef.current during every render, so .current is now
-    // fn2.
-    openWorkspaceBufferRef.current = fn2;
+    displayFileCallback!('/workspace/new-file.ts');
 
-    // Code paths like setGlobalDisplayFileCallback that read the ref at
-    // CALL TIME (after mount) must observe fn2, not the stale fn1.
-    expect(capturedGetOpenWorkspaceBuffer()).toBe(fn2);
-
-    // Sanity check: fn1 and fn2 are genuinely distinct callbacks.
-    expect(fn1).not.toBe(fn2);
+    expect(openWorkspaceBufferV1).not.toHaveBeenCalled();
+    expect(openWorkspaceBufferV2).toHaveBeenCalledTimes(1);
+    expect(openWorkspaceBufferV2).toHaveBeenCalledWith({
+      kind: 'file',
+      path: '/workspace/new-file.ts',
+      title: 'new-file.ts',
+      ext: '.ts',
+    });
   });
 });

@@ -301,9 +301,15 @@ export function useEditorFileIO(
           const { top, left } = buf.scrollPosition;
           const viewAtLoadTime = cmViewApiRef.current.view;
           // Use setTimeout with 0 to ensure this runs after the current render cycle
-          // and after CodeMirror has finished layout
+          // and after CodeMirror has finished layout. Verify the view hasn't been
+          // swapped out from under us during the timeout — a buffer switch or
+          // remount could install a new view before this callback fires.
           setTimeout(() => {
-            if (viewAtLoadTime && viewAtLoadTime.scrollDOM) {
+            if (
+              viewAtLoadTime &&
+              viewAtLoadTime.scrollDOM &&
+              cmViewApiRef.current?.view === viewAtLoadTime
+            ) {
               viewAtLoadTime.scrollDOM.scrollTop = top;
               viewAtLoadTime.scrollDOM.scrollLeft = left;
             }

@@ -1,8 +1,12 @@
 package agent
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 func TestGetEmbeddedSystemPrompt(t *testing.T) {
@@ -99,5 +103,76 @@ func TestReadEmbeddedPromptFileWithRepoRelativePath(t *testing.T) {
 	}
 	if len(strings.TrimSpace(string(content))) == 0 {
 		t.Fatal("expected non-empty embedded prompt content")
+	}
+}
+
+// TestSystemPromptContainsCwd verifies every system-prompt builder injects a
+// "Current Working Directory" section with the real cwd. Fallback to "." is
+// allowed but should never appear if os.Getwd succeeds.
+func TestSystemPromptContainsCwd(t *testing.T) {
+	realCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("test pre-condition: os.Getwd failed: %v", err)
+	}
+
+	builders := []struct {
+		name string
+		fn   func() (string, error)
+	}{
+		{"GetEmbeddedSystemPrompt", GetEmbeddedSystemPrompt},
+		{"GetEmbeddedSystemPromptWithProvider", func() (string, error) {
+			return GetEmbeddedSystemPromptWithProvider("zai")
+		}},
+		{"GetEmbeddedSystemPromptForProfile/full", func() (string, error) {
+			return GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{
+				Mode: configuration.ContextModeFull,
+			}, "zai", 200000, "")
+		}},
+		{"GetEmbeddedSystemPromptForProfile/lite", func() (string, error) {
+			return GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{
+				Mode: configuration.ContextModeLowContext,
+			}, "zai", 32000, "")
+		}},
+	}
+
+	for _, tc := range builders {
+		t.Run(tc.name, func(t *testing.T) {
+			prompt, err := tc.fn()
+			if err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+			if !strings.Contains(prompt, "## Current Working Directory") {
+				t.Error("prompt should contain '## Current Working Directory' section header")
+			}
+			expected := fmt.Sprintf("`%s`", realCwd)
+			if !strings.Contains(prompt, expected) {
+				t.Errorf("prompt should contain the actual cwd %q", expected)
+			}
+		})
+	}
+}
+
+// TestSystemPromptCwdOrdering verifies cwd is positioned AFTER all static
+// content (system prompt body, context files, memories) and BEFORE the volatile
+// date/time block. The order matters for prompt-prefix cache eligibility:
+// volatile per-call content must be grouped at the tail so the large static
+// prefix remains cacheable across requests.
+func TestSystemPromptCwdOrdering(t *testing.T) {
+	prompt, err := GetEmbeddedSystemPrompt()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	cwdIdx := strings.Index(prompt, "## Current Working Directory")
+	dateTimeIdx := strings.Index(prompt, "## Current Date and Time")
+
+	if cwdIdx == -1 {
+		t.Fatal("prompt missing '## Current Working Directory'")
+	}
+	if dateTimeIdx == -1 {
+		t.Fatal("prompt missing '## Current Date and Time'")
+	}
+	if cwdIdx >= dateTimeIdx {
+		t.Errorf("cwd section (idx %d) must appear BEFORE date/time section (idx %d) — cwd is volatile per-call content and must be grouped with the date/time tail to preserve prompt-prefix cache eligibility", cwdIdx, dateTimeIdx)
 	}
 }

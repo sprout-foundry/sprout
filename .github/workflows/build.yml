@@ -11,7 +11,11 @@ on:
 jobs:
   test:
     name: Run Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
@@ -148,6 +152,28 @@ jobs:
 
     - name: Run smoke tests
       run: make test-smoke
+
+  # WASM tool roster smoke test — runs once on Linux regardless of
+  # the test job's matrix. The script cross-compiles the WASM target
+  # and asserts the SP-112-6/8 excluded tools stay excluded; it
+  # doesn't need to run on macOS/Windows because the build output
+  # is OS-agnostic (it's a list of .go file inclusion decisions).
+  wasm-smoke:
+    name: WASM tool roster smoke
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.25
+
+    - name: Run WASM tool roster smoke test
+      shell: bash
+      run: bash scripts/wasm-tool-roster-smoke.sh
 
   build:
     name: Build Binaries

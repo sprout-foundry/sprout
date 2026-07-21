@@ -1,8 +1,9 @@
 # SP-112: Platform Parity — Resolve Stubbed Feature Gaps
 
-**Status:** 🔵 Proposed (under review — see §"Review 2026-07-20" below)
+**Status:** 🟢 Shipped (Tier 1 + Tier 2 + SP-112-9 complete; Tier 4 deferred)
 **Created:** 2026-07-04
 **Reviewed:** 2026-07-20
+**Shipped:** 2026-07-20 (`3ecd290a` Tier 1+2; `c7be8b5` SP-112-9)
 **Effort:** Phased (~5–7 days total)
 
 ## Review 2026-07-20
@@ -182,31 +183,31 @@ limitations as permanent constraints.
 
 These affect real users on Windows and have known solutions:
 
-| Item | Current | Fix | Effort |
-|------|---------|-----|--------|
-| **SP-112-1:** Process groups on Windows | `SetProcessGroup` is a no-op; `killProcessGroup` kills only the parent | Use Windows Job Objects (`CreateJobObject` + `AssignProcessToJobObject`) for group kill | ~4h |
-| **SP-112-2:** Graceful signal escalation on Windows | `interruptProcessGroup` → `Kill()` (no graceful interrupt). A working `sendCtrlBreak` already exists in `pkg/automate/stop_process_windows.go` | **Refactor**: extract `sendCtrlBreak` into `pkg/utils/windows_console.go`; have `interruptProcessGroup` call it. Do NOT duplicate the implementation. | ~2h |
-| **SP-112-3a:** PID-alive check precision (fix) | `FindProcess` succeeds for dead PIDs on Windows | Use `OpenProcess` + `WaitForSingleObject(0)` or `GetExitCodeProcess` | ~2h |
-| **SP-112-3b:** PID-alive check deduplication | The same `FindProcess` weakness exists in three files: `pkg/webui/pid_alive_windows.go`, `pkg/automate/pid_alive_windows.go`, `pkg/service/pid_alive_windows.go` | Extract a shared `pkg/utils/pidalive/pidalive_windows.go` (and unix counterpart) so all three callers delegate to one helper. AGENTS.md "No duplication" rule. | ~2h |
+| Item | Current | Fix | Effort | Status |
+|------|---------|-----|--------|--------|
+| **SP-112-1:** Process groups on Windows | `SetProcessGroup` is a no-op; `killProcessGroup` kills only the parent | Use Windows Job Objects (`CreateJobObject` + `AssignProcessToJobObject`) for group kill | ~4h | ✅ **Shipped** (`3ecd290a`) |
+| **SP-112-2:** Graceful signal escalation on Windows | `interruptProcessGroup` → `Kill()` (no graceful interrupt). A working `sendCtrlBreak` already exists in `pkg/automate/stop_process_windows.go` | **Refactor**: extract `sendCtrlBreak` into `pkg/utils/windows_console.go`; have `interruptProcessGroup` call it. Do NOT duplicate the implementation. | ~2h | ✅ **Shipped** (`3ecd290a`) |
+| **SP-112-3a:** PID-alive check precision (fix) | `FindProcess` succeeds for dead PIDs on Windows | Use `OpenProcess` + `WaitForSingleObject(0)` or `GetExitCodeProcess` | ~2h | ✅ **Shipped** (prior) |
+| **SP-112-3b:** PID-alive check deduplication | The same `FindProcess` weakness exists in three files: `pkg/webui/pid_alive_windows.go`, `pkg/automate/pid_alive_windows.go`, `pkg/service/pid_alive_windows.go` | Extract a shared `pkg/utils/pidalive/pidalive_windows.go` (and unix counterpart) so all three callers delegate to one helper. AGENTS.md "No duplication" rule. | ~2h | ✅ **Shipped** (prior — `pkg/utils/pidalive` exists and all three callers delegate) |
 
 ### Tier 2 — WASM UX improvements (~1 day)
 
 These can't be "fixed" (WASM can't spawn processes), but the error
 messages and fallback behavior can be improved. **Audit 2026-07-20:**
-two of the originally-proposed WASM exclusions are already shipped.
+all four Tier 2 (WASM exclusion) items are now shipped as of `3ecd290a`.
 
 | Item | Current | Fix | Effort | Status |
 |------|---------|-----|--------|--------|
 | **SP-112-5:** Shell streaming on WASM | Output captured as single string | **Deferred.** `pkg/agent_tools/shell_js.go` documents that `wasmshell` is a single-shot command runner with no streaming surface today. Implementing chunked streaming requires first extending the JS executor contract; out of scope for this spec. | — | Dropped (tracked in `roadmap/future/`) |
-| **SP-112-6:** Vision tool graceful degradation | `pkg/agent_tools/vision_stubs_js.go` returns success/no-op or error strings at *execution* time, but the tools remain in the WASM tool roster | Mirror the `all_codegraph_wasm.go` pattern: split vision handlers into `all_vision.go` (`!js`, registers) and `all_vision_js.go` (`js`, returns nil). Update the comment block at the top of `pkg/agent_tools/all.go`. | ~2h | **Open** |
+| **SP-112-6:** Vision tool graceful degradation | `pkg/agent_tools/vision_stubs_js.go` returns success/no-op or error strings at *execution* time, but the tools remain in the WASM tool roster | Mirror the `all_codegraph_wasm.go` pattern: split vision handlers into `all_vision.go` (`!js`, registers) and `all_vision_js.go` (`js`, returns nil). Update the comment block at the top of `pkg/agent_tools/all.go`. | ~2h | ✅ **Shipped** (`3ecd290a`) |
 | **SP-112-7:** Codegraph tool exclusion on WASM | Already excluded at registration | (No action — `all_codegraph_wasm.go` returns `nil` since prior work.) | — | ✅ **Shipped** |
-| **SP-112-8:** Background process tool exclusion on WASM | `runAutomateHandler.Execute` returns "not available" at runtime but the tool is still advertised to the model | Mirror the `all_browse_url_wasm.go` pattern: split `run_automate` registration into `all_run_automate.go` (`!js`) and `all_run_automate_js.go` (`js`, returns nil). Update the comment block in `all.go`. | ~1h | **Open** |
+| **SP-112-8:** Background process tool exclusion on WASM | `runAutomateHandler.Execute` returns "not available" at runtime but the tool is still advertised to the model | Mirror the `all_browse_url_wasm.go` pattern: split `run_automate` registration into `all_run_automate.go` (`!js`) and `all_run_automate_js.go` (`js`, returns nil). Update the comment block in `all.go`. | ~1h | ✅ **Shipped** (`3ecd290a`) |
 
 ### Tier 3 — no-CGO embedding fallback (~1 day)
 
-| Item | Current | Fix | Effort |
-|------|---------|-----|--------|
-| **SP-112-9:** Embedding quality without CGO | Hash-based fallback (low quality) | Add a gopkg.in/yaml-based TF-IDF provider as a middle ground between hash and ONNX | ~6h |
+| Item | Current | Fix | Effort | Status |
+|------|---------|-----|--------|--------|
+| **SP-112-9:** Cross-platform testing strategy (CI matrix) | No Windows/macOS test files; only `foreground_linux_test.go` exists; WASM roster had no smoke test | Add CI matrix for windows-latest + macos-latest; add `*_windows_test.go` for the Job Object code path; add `scripts/wasm-tool-roster-smoke.sh` that asserts the expected tool count on `GOOS=js` | ~3h | ✅ **Shipped** (`c7be8b5`) |
 
 ### Tier 4 — Documentation / permanent constraints (~0.5 day)
 

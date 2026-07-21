@@ -72,24 +72,26 @@ func GetEmbeddedSystemPrompt() (string, error) {
 	}
 
 	// Add memories (user preferences and learned patterns)
-	// Semi-static content — also placed before the volatile timestamp.
+	// Semi-static content — also placed before the volatile tail.
 	memories := LoadMemoriesForPrompt()
 	if memories != "" {
 		promptContent = promptContent + memories
 	}
 
-	// Add current date and time for temporal context LAST. This is the only
-	// volatile (per-call) content; keeping it at the end preserves cache
-	// eligibility for the large static prefix (system prompt + context files
-	// + memories). Providers like Anthropic cache prompt prefixes, so a
-	// second-resolution timestamp anywhere but the tail would force a full
-	// re-process of everything after it on every request.
+	// Add the current working directory LAST among semi-static content (and
+	// just before the volatile timestamp). Volatile per-call content (cwd +
+	// date/time) is grouped at the tail to preserve prompt-prefix cache
+	// eligibility for the large static prefix. Providers like Anthropic cache
+	// prompt prefixes; placing cwd at the start would force a full re-process
+	// of every subsequent request.
+	cwdString := buildCurrentWorkingDirectorySection("")
+
 	currentTime := time.Now()
 	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
 		currentTime.Format("2006-01-02"),
 		currentTime.Format("15:04:05"),
 		currentTime.Location().String())
-	promptContent = promptContent + dateTimeString
+	promptContent = promptContent + cwdString + dateTimeString
 
 	return promptContent, nil
 }
@@ -104,7 +106,7 @@ func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
 // augmentation (context files, memories, timestamp). In LCM the lite prompt
 // (~1K tokens) replaces the full prompt (~6.6K). AGENTS.md is still injected
 // by the context-files step regardless of profile — conventions are mandatory.
-func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int) (string, error) {
+func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int, workspaceRoot string) (string, error) {
 	promptContent, err := extractSystemPromptForProfile(profile)
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
@@ -141,14 +143,37 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 		promptContent = promptContent + memories
 	}
 
+	// Add the current working directory LAST among semi-static content (and
+	// just before the volatile timestamp). Grouped with date/time at the tail
+	// to preserve prompt-prefix cache eligibility for the static prefix.
+	cwdString := buildCurrentWorkingDirectorySection(workspaceRoot)
+
 	currentTime := time.Now()
 	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
 		currentTime.Format("2006-01-02"),
 		currentTime.Format("15:04:05"),
 		currentTime.Location().String())
-	promptContent = promptContent + dateTimeString
+	promptContent = promptContent + cwdString + dateTimeString
 
 	return promptContent, nil
+}
+
+// buildCurrentWorkingDirectorySection formats the "Current Working Directory"
+// block injected at the tail of every system prompt. When workspaceRoot is
+// non-empty it is used directly; otherwise falls back to os.Getwd() then ".".
+// This ordering is intentional: workspaceRoot is the authoritative value in
+// daemon mode, while os.Getwd() is correct in CLI/test mode (where
+// workspaceRoot is empty).
+func buildCurrentWorkingDirectorySection(workspaceRoot string) string {
+	cwd := workspaceRoot
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil || cwd == "" {
+			cwd = "."
+		}
+	}
+	return fmt.Sprintf("\n\n## Current Working Directory\n\n`%s`\n\n---\n", cwd)
 }
 
 // extractSystemPromptForProfile selects the full or lite prompt content based

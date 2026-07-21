@@ -311,3 +311,113 @@ func TestAutocomplete_ClearRowsUseCarriageReturn(t *testing.T) {
 			buggySeq, output)
 	}
 }
+
+func TestHandleEvent_HistoryVsAutocompleteRouting(t *testing.T) {
+	const slash = "/he"
+
+	tests := []struct {
+		name    string
+		history []string
+		// setup puts the InputReader in the state the scenario starts from
+		// (historyIndex/line/hasEditedLine), returning the events to send.
+		setup func(ir *InputReader) []*InputEvent
+		// assert inspects the post-event state.
+		assert func(t *testing.T, ir *InputReader)
+	}{
+		{
+			name:    "Up crosses recalled slash entry to older normal entry",
+			history: []string{"normal-old", slash},
+			setup: func(ir *InputReader) []*InputEvent {
+				return []*InputEvent{
+					{Type: EventUp}, // recalls slash entry
+					{Type: EventUp}, // must cross it
+				}
+			},
+			assert: func(t *testing.T, ir *InputReader) {
+				if ir.line != "normal-old" || ir.historyIndex != 0 {
+					t.Errorf("line=%q historyIndex=%d, want normal-old/0", ir.line, ir.historyIndex)
+				}
+				if ir.autocomplete.visible {
+					t.Error("autocomplete should be hidden after leaving the slash entry")
+				}
+			},
+		},
+		{
+			name:    "Down crosses recalled slash entry to newer entry",
+			history: []string{"older", slash, "newer"},
+			setup: func(ir *InputReader) []*InputEvent {
+				return []*InputEvent{
+					{Type: EventUp},   // recalls "newer"
+					{Type: EventUp},   // recalls slash entry
+					{Type: EventDown}, // must cross to "newer"
+				}
+			},
+			assert: func(t *testing.T, ir *InputReader) {
+				if ir.line != "newer" || ir.historyIndex != 2 {
+					t.Errorf("line=%q historyIndex=%d, want newer/2", ir.line, ir.historyIndex)
+				}
+				if ir.autocomplete.visible {
+					t.Error("autocomplete should be hidden after leaving the slash entry")
+				}
+			},
+		},
+		{
+			name:    "Down from newest recalled slash entry exits history",
+			history: []string{"older", slash},
+			setup: func(ir *InputReader) []*InputEvent {
+				return []*InputEvent{
+					{Type: EventUp},   // recalls newest slash entry
+					{Type: EventDown}, // must exit history
+				}
+			},
+			assert: func(t *testing.T, ir *InputReader) {
+				if ir.line != "" || ir.historyIndex != -1 {
+					t.Errorf("line=%q historyIndex=%d, want \"\"/-1", ir.line, ir.historyIndex)
+				}
+				if ir.autocomplete.visible {
+					t.Error("autocomplete should be hidden after line clears")
+				}
+			},
+		},
+		{
+			name:    "Up/Down on edited slash buffer navigates autocomplete",
+			history: []string{"history-1", "history-2"},
+			setup: func(ir *InputReader) []*InputEvent {
+				ir.line = slash
+				ir.cursorPos = len(ir.line)
+				ir.hasEditedLine = true
+				ir.Refresh()
+				return []*InputEvent{
+					{Type: EventUp},   // wraps 0 → 2
+					{Type: EventDown}, // wraps 2 → 0
+					{Type: EventDown}, // advances 0 → 1
+				}
+			},
+			assert: func(t *testing.T, ir *InputReader) {
+				if ir.autocomplete.selected != 1 {
+					t.Errorf("autocomplete.selected=%d, want 1", ir.autocomplete.selected)
+				}
+				if ir.line != slash {
+					t.Errorf("line=%q, want %q (history must not be touched)", ir.line, slash)
+				}
+				if ir.historyIndex != -1 {
+					t.Errorf("historyIndex=%d, want -1", ir.historyIndex)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ir := NewInputReader("> ")
+			ir.terminalWidth = 80
+			ir.richCompleter = mockRichCompleter
+			ir.SetHistory(tt.history)
+
+			for _, ev := range tt.setup(ir) {
+				ir.HandleEvent(ev)
+			}
+			tt.assert(t, ir)
+		})
+	}
+}

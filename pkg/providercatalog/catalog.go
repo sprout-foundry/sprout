@@ -58,7 +58,7 @@ func inTestBinary() bool {
 //go:embed providers.json
 var embeddedCatalogJSON []byte
 
-const defaultCatalogURL = "https://raw.githubusercontent.com/alantheprice/sprout/main/pkg/providercatalog/providers.json"
+const defaultCatalogURL = "https://raw.githubusercontent.com/sprout-foundry/sprout/main/pkg/providercatalog/providers.json"
 const maxCatalogBytes int64 = 1 << 20
 
 type Catalog struct {
@@ -95,15 +95,21 @@ type Model struct {
 }
 
 var (
-	mu            sync.RWMutex
-	current       Catalog
-	loadOnce      sync.Once
-	lastRefreshAt time.Time
+	mu                 sync.RWMutex
+	current            Catalog
+	loadOnce           sync.Once
+	catalogRefreshOnce sync.Once
 )
 
 func ensureLoaded() {
 	loadOnce.Do(func() {
 		current = mustParseCatalog(embeddedCatalogJSON)
+	})
+}
+
+func init() {
+	catalogRefreshOnce.Do(func() {
+		RefreshFromRemoteAsync("")
 	})
 }
 
@@ -134,7 +140,6 @@ func SetCatalog(catalog Catalog) {
 	mu.Lock()
 	defer mu.Unlock()
 	current = cloneCatalog(catalog)
-	lastRefreshAt = time.Now()
 }
 
 func FindProvider(id string) (Provider, bool) {

@@ -101,6 +101,12 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	"sync_replay_start":    {},
 	"sync_replay_file":     {},
 	"sync_replay_complete": {},
+
+	// SP-114 Phase 2c: live streaming of /api/command/execute stdout
+	// over the chat session's WebSocket. Chunks arrive in order with
+	// monotonic seq; the final chunk has is_final=true.
+	events.EventTypeCommandOutput:       {},
+	events.EventTypeCommandOutputDropped: {},
 }
 
 // devModeCached caches the SPROUT_DEV env check so we don't re-parse it

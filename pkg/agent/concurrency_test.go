@@ -130,16 +130,13 @@ func TestRace_AgentMCPManager_initErr(t *testing.T) {
 // Test 4: CircuitBreakerAction.Count — pointer escapes lock scope (TOCTOU)
 // ---------------------------------------------------------------------------
 //
-// BUG: In checkCircuitBreaker(), the *CircuitBreakerAction pointer is copied
-// out of the RLock scope (lines ~24-29 in tool_executor_circuit_breaker.go),
-// then action.Count is read (line ~50) AFTER the lock has been released.
-// Meanwhile, updateCircuitBreaker() increments action.Count under Lock.
-// This is a classic TOCTOU race: the pointer escape means Count can be
-// read without any synchronization at all.
-//
-// FIX: Do not copy the pointer outside the lock. Instead, read the Count
-// value inside the lock scope and return the value (int), not the pointer.
-// Alternatively, use atomic.Int64 for Count.
+// Documents the TOCTOU pattern that previously lived in the (now-removed)
+// legacy ToolExecutor's checkCircuitBreaker/updateCircuitBreaker. The same
+// CircuitBreakerAction type is still alive (pkg/agent/security_circuit_breaker.go
+// uses it), so this test continues to assert correct concurrent-update semantics
+// — it just no longer mirrors a specific in-tree race. The fix is the same:
+// read Count inside the lock scope, not after releasing it.
+
 func TestRace_CircuitBreakerAction_Count_TOCTOU(t *testing.T) {
 	action := &CircuitBreakerAction{
 		ActionType: "edit_file",
@@ -151,9 +148,9 @@ func TestRace_CircuitBreakerAction_Count_TOCTOU(t *testing.T) {
 	var mu sync.RWMutex
 	var wg sync.WaitGroup
 
-	// Readers: simulate the FIXED checkCircuitBreaker that reads Count INSIDE
-	// the RLock scope rather than escaping the *CircuitBreakerAction pointer
-	// past RUnlock (which would TOCTOU-race the writers' Count++ below).
+	// Readers: read Count INSIDE the RLock scope to avoid the TOCTOU race
+	// that the previous checkCircuitBreaker pattern suffered from (escaping
+	// the *CircuitBreakerAction pointer past RUnlock).
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func() {
@@ -167,9 +164,9 @@ func TestRace_CircuitBreakerAction_Count_TOCTOU(t *testing.T) {
 		}()
 	}
 
-	// Writers: simulate updateCircuitBreaker — write Count under Lock.
-	// The real code holds Lock when modifying Count, but readers read Count
-	// outside any lock, so the Lock does not synchronize with the readers.
+	// Writers: simulate a Count++ under Lock. The Lock must serialize
+	// against the readers above; if the readers read Count outside the
+	// lock, the race detector flags the unsynchronized access.
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {

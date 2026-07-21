@@ -75,6 +75,11 @@ func (h *readFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// ReadFile / ReadFileWithRange / handlePDF all flow through
+	// withFilesystemApproval on the resolve step; the gate reaches
+	// them through FilesystemGateFromContext.
+	ctx = WithFilesystemGateFromEnv(ctx, env)
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
@@ -106,18 +111,16 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return h.handlePDF(ctx, env, path)
 	}
 
-	// Use existing read logic
+	// Use existing read logic. ReadFile / ReadFileWithRange route
+	// off-workspace errors through the agent's FilesystemGate so
+	// the user can approve once, session-allowlist the folder, or
+	// elevate — same dialog as writes use.
 	var content string
 	if startLine > 0 || endLine > 0 {
 		content, err = ReadFileWithRange(ctx, path, startLine, endLine)
 	} else {
 		content, err = ReadFile(ctx, path)
 	}
-
-	// NOTE: Security approvals for path traversal are handled by the legacy
-	// dispatch path (tool_definitions.go). In the new ToolHandler path,
-	// errors from SafeResolvePathWithBypass are returned directly.
-	// To enable cross-directory reads, use workspace configuration or unsafe mode.
 
 	if err != nil {
 		return ToolResult{
@@ -145,8 +148,16 @@ func (h *readFileHandler) Interactive() bool      { return false }
 
 // handlePDF processes a PDF file and returns it as base64 data URI for vision-capable models.
 func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {
-	// Resolve path securely
-	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
+	// Resolve path securely. The Execute caller already wired
+	// env.FilesystemGate into ctx, so this resolve consults the gate
+	// on off-workspace PDFs and surfaces the approve dialog instead
+	// of hard-erroring. Mirrors ReadFileWithRange's behavior for
+	// non-PDF paths.
+	cleanPath, err := withFilesystemApproval(ctx, FilesystemGateFromContext(ctx), "read_file", path,
+		func(ctx context.Context) (string, error) {
+			return filesystem.SafeResolvePathWithBypass(ctx, path)
+		},
+	)
 	if err != nil {
 		return ToolResult{
 			Output:  "",

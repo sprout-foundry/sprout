@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
@@ -822,6 +823,25 @@ func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Re
 //   - error is any execution error
 //   - (nil, "", nil) is returned if the command was not found or not safe
 func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent.Agent) (agent_commands.Command, string, error) {
+	return ws.executeSafeSteerCommandStreaming(input, chatAgent, nil)
+}
+
+// executeSafeSteerCommandStreaming is the streaming variant of
+// executeSafeSteerCommand (SP-114 Phase 2c). When onChunk is non-nil it
+// receives each UTF-8-safe chunk of stdout as the command produces it,
+// in addition to being appended to the aggregated output string. When
+// onChunk is nil the behavior is byte-for-byte identical to the
+// non-streaming executeSafeSteerCommand — the /api/query/steer call
+// site relies on this and uses the non-streaming entry point.
+//
+// onChunk is invoked from a goroutine that reads the stdout pipe
+// concurrently with Execute. It MUST be safe to call concurrently with
+// the rest of the program; in particular it must not block on slow
+// consumers (callers are expected to fan out to the WebSocket
+// non-blockingly via the event bus). The reader goroutine exits once
+// Execute returns and writeEnd is closed; onChunk will not be called
+// after this function returns.
+func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAgent *agent.Agent, onChunk func(string)) (agent_commands.Command, string, error) {
 	// Parse command name from input
 	trimmed := strings.TrimSpace(input)
 	if !strings.HasPrefix(trimmed, "/") {
@@ -865,9 +885,26 @@ func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent
 	os.Stdout = writeEnd
 
 	var cmdErr error
-	var output string
 
-	// Execute the command
+	// Streaming reads must run concurrently with Execute, otherwise a
+	// command that writes more than the OS pipe buffer (64 KB on Linux)
+	// blocks on Write before the close+read-back pattern completes.
+	// When onChunk is nil we keep the original sequential behavior —
+	// read after close — so the non-streaming callers stay
+	// byte-for-byte identical.
+	buf := new(strings.Builder)
+	var readerDone <-chan struct{}
+	if onChunk != nil {
+		done := make(chan struct{})
+		readerDone = done
+		go func() {
+			defer close(done)
+			streamPipeChunks(readEnd, buf, onChunk)
+		}()
+	}
+
+	// Execute the command. The panic recovery stays in the Execute
+	// goroutine so cmdErr is set even if the command blows up.
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -877,15 +914,85 @@ func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent
 		cmdErr = cmd.Execute(args, chatAgent)
 	}()
 
-	// Restore stdout and capture output
+	// Close the writer so the reader sees EOF. Then restore stdout.
 	writeEnd.Close()
 	os.Stdout = oldStdout
-	buf := new(strings.Builder)
-	io.Copy(buf, readEnd)
-	readEnd.Close()
-	output = buf.String()
+
+	// Drain the pipe. Streaming path waits for the goroutine; the
+	// non-streaming path does the synchronous copy. Both paths close
+	// readEnd after draining.
+	if onChunk == nil {
+		io.Copy(buf, readEnd)
+		readEnd.Close()
+	} else {
+		<-readerDone
+		// Close the read end here in the parent so the close happens
+		// exactly once regardless of which branch (EOF vs read error)
+		// caused the reader goroutine to exit. The reader goroutine
+		// deliberately doesn't touch the FD; centralizing the close
+		// avoids the double-close that would result if both paths did.
+		readEnd.Close()
+	}
+
+	output := buf.String()
 
 	ws.stdoutCaptureMu.Unlock()
 
 	return cmd, output, cmdErr
+}
+
+// streamPipeChunks drains r into buf while invoking onChunk for each
+// UTF-8-safe chunk. It buffers trailing partial runes so onChunk never
+// receives an incomplete multi-byte rune, then emits a single event per
+// pipe read containing every complete rune from that read. Callers can
+// batch events from multiple reads (the WebUI panel will append
+// monotonically). The chunk size (4 KB) is large enough to amortize
+// per-chunk overhead but small enough that WebSocket latency stays low.
+// Public for tests; production code uses it via
+// executeSafeSteerCommandStreaming.
+func streamPipeChunks(r io.Reader, buf *strings.Builder, onChunk func(string)) {
+	const chunkSize = 4096
+	pending := make([]byte, 0, chunkSize)
+	scratch := make([]byte, chunkSize)
+	for {
+		n, err := r.Read(scratch)
+		if n > 0 {
+			buf.Write(scratch[:n])
+			pending = append(pending, scratch[:n]...)
+			// Walk the pending buffer once and emit each complete
+			// rune. We collect them into a per-read builder so a
+			// 4 KB pipe-read becomes ONE onChunk call (not 4096
+			// per-byte calls), which keeps the event bus / WS
+			// pipeline from drowning under flood pressure during
+			// normal-speed commands. Trailing partial runes stay in
+			// `pending` for the next read.
+			i := 0
+			out := make([]byte, 0, len(pending))
+			for i < len(pending) {
+				if !utf8.FullRune(pending[i:]) {
+					break
+				}
+				rn, size := utf8.DecodeRune(pending[i:])
+				var rb [utf8.UTFMax]byte
+				sz := utf8.EncodeRune(rb[:], rn)
+				out = append(out, rb[:sz]...)
+				i += size
+			}
+			if len(out) > 0 {
+				onChunk(string(out))
+			}
+			if i > 0 {
+				pending = pending[:copy(pending, pending[i:])]
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// Pipe closed mid-read or other read error. We can't do
+			// much — the command's writer is gone. Stop streaming
+			// and let the caller assemble whatever we captured.
+			break
+		}
+	}
 }

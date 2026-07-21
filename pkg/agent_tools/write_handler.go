@@ -58,6 +58,12 @@ func (h *writeFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// Wire the agent's filesystem gate into ctx so WriteFile's resolve
+	// step surfaces the approve / session-allow / elevate dialog on
+	// off-workspace paths. See FilesystemGate in handler.go and
+	// withFilesystemApproval in filesystem_gate.go.
+	ctx = WithFilesystemGateFromEnv(ctx, env)
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err

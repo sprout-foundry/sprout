@@ -303,6 +303,12 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		// both --unsafe mode and elevated risk profiles; hard blocks are
 		// still enforced by the handlers' own IsHardBlock early-returns.
 		env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
+		// Wire the filesystem approval gate so file-touching handlers
+		// surface the approve / session-allow / elevate dialog on
+		// off-workspace paths instead of returning the raw
+		// ErrOutsideWorkingDirectory sentinel. See
+		// newFilesystemGateAdapter and handleFileSecurityError.
+		env.FilesystemGate = newFilesystemGateAdapter(agent)
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }
@@ -618,9 +624,16 @@ func formatRiskType(riskType string) string {
 	}
 }
 
-// handleFileSecurityError checks if an error is due to filesystem security and prompts the user
-// Returns a context with security bypass enabled if user approves, original context otherwise
-func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePath string, err error) (context.Context, bool) {
+// handleFileSecurityError checks if an error is due to filesystem security and prompts the user.
+// Returns a context with security bypass enabled if user approves, original context otherwise.
+//
+// `resolvedPath` is the canonical target after symlink resolution (the
+// actual filesystem object that would be touched). When non-empty, it
+// is shown alongside the user-supplied `filePath` in the approval
+// dialog so the user can verify the destination is what they expect.
+// Pass "" when the caller cannot compute it; display falls back to
+// `filePath` alone.
+func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePath, resolvedPath string, err error) (context.Context, bool) {
 	// Check if this is a filesystem security error
 	if !errors.Is(err, filesystem.ErrOutsideWorkingDirectory) && !errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
 		return ctx, false
@@ -659,6 +672,16 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	tier := ClassifyPathAccess(filePath, agent.GetWorkspaceRoot(), detectHomeDir(), agent.effectiveCwd())
 	folder := filepath.Dir(filePath)
 
+	// Display target = the user-typed path, with the canonical target
+	// appended when it diverges (i.e. when filePath is a symlink).
+	// Without this, a workspace symlink to /etc/passwd would prompt
+	// "Allow access to workspace/link?" and approval would silently
+	// widen access to /etc/passwd.
+	displayPath := filePath
+	if resolvedPath != "" && resolvedPath != filePath {
+		displayPath = filePath + "\n   (resolves to: " + resolvedPath + ")"
+	}
+
 	// Subagents cannot prompt — return unapproved so the error propagates
 	if agent.IsSubagent() {
 		agent.debugLog("Subagent encountered filesystem security error for %s, delegating to primary agent\n", filePath)
@@ -680,9 +703,12 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory.", toolName)
 		extras := map[string]string{
 			"risk_type": "Filesystem Security",
-			"target":    filePath,
-			"path":      filePath,
+			"target":    displayPath,
+			"path":      displayPath,
 			"kind":      kind,
+		}
+		if resolvedPath != "" && resolvedPath != filePath {
+			extras["resolved_path"] = resolvedPath
 		}
 		if tier == PathTierExternal {
 			extras["folder"] = folder
@@ -703,7 +729,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		}
 		// No leading glyph — the picker renderer prepends the ⚠ (avoids "⚠ ⚠").
 		prompt := fmt.Sprintf("Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory.", toolName)
-		choice := logger.AskForFilesystemApproval(prompt, filePath, folder, promptTier)
+		choice := logger.AskForFilesystemApproval(prompt, displayPath, folder, promptTier)
 		decision := filesystemDecisionFromCLIChoice(choice)
 		return applyFilesystemDecision(ctx, agent, decision, filePath, folder, tier)
 	}
@@ -875,4 +901,46 @@ func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, p
 		Approved: decision.Approved(),
 		Reason:   reason,
 	}
+}
+
+// filesystemGateAdapter implements tools.FilesystemGate by delegating to
+// the agent's existing handleFileSecurityError function. It is the
+// bridge that brings the file-touching tool handlers (write_file,
+// edit_file, read_file, list_directory, write_structured_file, …) onto
+// the same approve / session-allow / elevate flow the legacy
+// tool_handlers_file.go path already used. Before this adapter
+// existed, those handlers hard-errored on off-workspace paths because
+// the live seed dispatch path never reached handleFileSecurityError.
+type filesystemGateAdapter struct {
+	agent *Agent
+}
+
+// newFilesystemGateAdapter returns a tools.FilesystemGate backed by the
+// agent's filesystem approval flow. Returns nil when agent is nil so
+// callers can safely pass the result into ToolEnv without nil checks.
+func newFilesystemGateAdapter(agent *Agent) tools.FilesystemGate {
+	if agent == nil {
+		return nil
+	}
+	return &filesystemGateAdapter{agent: agent}
+}
+
+// RequestPathApproval implements tools.FilesystemGate. It defers
+// entirely to handleFileSecurityError, which already handles both
+// surfaces (WebUI event-bus dialog when a browser is connected,
+// CLI picker otherwise) and persists session-scoped decisions
+// (folder allowlist, elevation).
+//
+// `resolvedPath` is the canonical target after symlink resolution
+// (the actual filesystem object that would be touched). When
+// non-empty, it is shown alongside the user-supplied `filePath` in
+// the approval dialog so the user can verify the destination is
+// what they expect — a symlink `workspace/link` pointing to
+// `/etc/passwd` would otherwise be approved without the user
+// noticing the resolved target.
+func (a *filesystemGateAdapter) RequestPathApproval(ctx context.Context, toolName, filePath, resolvedPath string, err error) (context.Context, bool) {
+	if a == nil || a.agent == nil {
+		return ctx, false
+	}
+	return handleFileSecurityError(ctx, a.agent, toolName, filePath, resolvedPath, err)
 }

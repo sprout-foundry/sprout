@@ -307,7 +307,7 @@ func TestElevationBypassesFilesystemGate(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	newCtx, approved := handleFileSecurityError(ctx, a, "read_file", extPath, filesystem.ErrOutsideWorkingDirectory)
+	newCtx, approved := handleFileSecurityError(ctx, a, "read_file", extPath, "", filesystem.ErrOutsideWorkingDirectory)
 	if !approved {
 		t.Error("external path should be auto-approved under session elevation")
 	}

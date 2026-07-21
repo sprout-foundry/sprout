@@ -107,7 +107,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	resolvedPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
 	if err != nil {
-		if ctx2, approved := handleFileSecurityError(ctx, a, "patch_structured_file", path, err); approved {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "patch_structured_file", path, "", err); approved {
 			resolvedPath, err = filesystem.SafeResolvePathWithBypass(ctx2, path)
 		}
 		if err != nil {

@@ -2,8 +2,6 @@ import type { EditorView as CMEditorView } from '@codemirror/view';
 import { Skeleton } from '@sprout/ui';
 import { AlertTriangle } from 'lucide-react';
 import React, { useRef } from 'react';
-import { useEditorViewInit } from '../hooks/useEditorViewInit';
-import type { UseEditorViewInitOptions } from '../hooks/useEditorViewInit';
 import MarkdownPreview from './MarkdownPreview';
 import { useEditorReconfigure } from './useEditorReconfigure';
 
@@ -13,7 +11,6 @@ import type { UseEditorReconfigureOptions } from './useEditorReconfigure';
 export interface EditorCoreProps {
   editorRef: React.RefObject<HTMLDivElement | null>;
   viewRef: React.MutableRefObject<CMEditorView | null>;
-  initOptions: Omit<UseEditorViewInitOptions, 'editorRef' | 'viewRef' | 'lastInitLanguageKey'>;
   reconfigureOptions: Omit<UseEditorReconfigureOptions, 'viewRef' | 'lastInitLanguageKey'>;
   loading: boolean;
   error: string | null;
@@ -26,9 +23,14 @@ export interface EditorCoreProps {
 
 /**
  * Custom equality check for EditorCore.
- * Uses reference equality for `initOptions` and `reconfigureOptions` (the
- * parent is responsible for keeping these stable), and reference equality for
- * ref objects and function props.  Primitive props are compared by value.
+ * Uses reference equality for `reconfigureOptions` (the parent is responsible
+ * for keeping it stable), and reference equality for ref objects and function
+ * props. Primitive props are compared by value.
+ *
+ * The view lifecycle is owned by `useCMView` in the parent (EditorPane); this
+ * component is a memoized DOM wrapper plus compartment-reconfigure. It does
+ * NOT call `new EditorView(...)` — doing so would race with the central
+ * `useCMView` and produce two views on the same editor div.
  */
 export function areEditorCorePropsEqual(prev: EditorCoreProps, next: EditorCoreProps): boolean {
   // ref objects are stable by definition
@@ -44,8 +46,7 @@ export function areEditorCorePropsEqual(prev: EditorCoreProps, next: EditorCoreP
   if (prev.isMarkdownFile !== next.isMarkdownFile) return false;
   if (prev.localContent !== next.localContent) return false;
 
-  // reference equality for the two option objects (parent must keep these stable)
-  if (prev.initOptions !== next.initOptions) return false;
+  // reference equality for reconfigureOptions (parent must keep it stable)
   if (prev.reconfigureOptions !== next.reconfigureOptions) return false;
 
   return true;
@@ -55,7 +56,6 @@ const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
   const {
     editorRef,
     viewRef,
-    initOptions,
     reconfigureOptions,
     loading,
     error,
@@ -66,14 +66,17 @@ const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
     markdownPreviewBodyRef,
   } = props;
 
+  // useEditorReconfigure reads this ref to skip language re-init when the
+  // key matches the previous render's key. This is the same dedupe the
+  // legacy view-init layer performed; `useCMView` now handles language
+  // init in EditorPane via its `bootstrapLSP` callback, but
+  // `useEditorReconfigure` still uses this for reconfigure-fire dedupe.
+  //
+  // We initialize it once with `null`. The first reconfigure effect that
+  // runs compares against `null` and fires (since the first buffer id is
+  // not the empty string). On subsequent renders with the same buffer
+  // key the effect skips — matching legacy behavior.
   const lastInitLanguageKey = useRef<string | null>(null);
-
-  useEditorViewInit({
-    ...initOptions,
-    editorRef,
-    viewRef,
-    lastInitLanguageKey,
-  });
 
   useEditorReconfigure({
     ...reconfigureOptions,

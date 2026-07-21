@@ -188,8 +188,10 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 			assessment.Level == configuration.RiskLevelHigh) {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			// Cache check — identical commands in the same session reuse
-			// the cached analysis.
-			if cached, ok := a.getSecurityAnalysisCache().Get(cmd); ok {
+			// the cached analysis. SP-124b: use normalized cache key so that
+			// whitespace-equivalent commands share the same cache entry.
+			key := ChainCacheKey(cmd)
+			if cached, ok := a.getSecurityAnalysisCache().Get(key); ok {
 				securityAnalysis = cached
 			} else {
 				ctx, cancel := context.WithTimeout(a.interruptCtx, 2*time.Second)
@@ -197,7 +199,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				cancel()
 				if err == nil && sa != nil {
 					securityAnalysis = sa
-					a.getSecurityAnalysisCache().Set(cmd, sa)
+					a.getSecurityAnalysisCache().Set(key, sa)
 				}
 				// On error or timeout: securityAnalysis stays nil; fall through
 				// to static-classifier prompt.
@@ -369,13 +371,21 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				// it above the option list. nil when the analyzer timed
 				// out / errored / wasn't produced; the picker omits the
 				// panel in that case.
+				//
+				// SP-124b Phase 2: copy the chain metadata fields too so
+				// the CLI stepper can render per-subcommand dots when
+				// ChainLength > 1. Legacy single-command callers still
+				// pass nil/zero and see no chain UI.
 				var analysisView *utils.SecurityAnalysisView
 				if securityAnalysis != nil {
 					analysisView = &utils.SecurityAnalysisView{
-						Summary:         securityAnalysis.Summary,
-						Modifies:        securityAnalysis.Modifies,
-						RiskAssessment:  securityAnalysis.RiskAssessment,
-						Recommendation:  securityAnalysis.Recommendation,
+						Summary:              securityAnalysis.Summary,
+						Modifies:             securityAnalysis.Modifies,
+						RiskAssessment:       securityAnalysis.RiskAssessment,
+						Recommendation:       securityAnalysis.Recommendation,
+						ChainLength:          securityAnalysis.ChainLength,
+						ChainSubcommands:     securityAnalysis.ChainSubcommands,
+						ChainClassifications: securityAnalysis.ChainClassifications,
 					}
 				}
 				choice := logger.AskForApprovalWithOptions(prompt, cmd, analysisView)

@@ -474,6 +474,16 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 
 func (sp *sproutProvider) Info() core.ProviderInfo {
 	ctxLimit, _ := sp.currentClient().GetModelContextLimit()
+	// SP-126: apply the effective context cap so seed's internal budget
+	// math and the per-iteration OnIteration callback receive the capped
+	// value, not the model's native window. Reading from sp.agent rather
+	// than calling client.GetModelContextLimit() a second time keeps the
+	// cap authoritative for all downstream readers of this Info().
+	if sp.agent != nil {
+		if cap := sp.agent.effectiveContextCap; cap > 0 && ctxLimit > cap {
+			ctxLimit = cap
+		}
+	}
 	return core.ProviderInfo{
 		Model:       sp.currentClient().GetModel(),
 		ContextSize: ctxLimit,

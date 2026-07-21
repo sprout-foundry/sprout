@@ -128,10 +128,10 @@ func TestSecurityCautionClassification(t *testing.T) {
 // TestSecurityCautionErrorPrefix verifies that the "security caution:" error
 // prefix is detectable by the tool executor for the SECURITY_CAUTION_REQUIRED flow.
 // This tests the contract between tool_definitions.go (which generates the prefix)
-// and tool_executor_sequential.go (which detects and converts it).
+// and pkg/agent/seed_tool_security.go (which detects and converts it).
 func TestSecurityCautionErrorPrefix(t *testing.T) {
 	// Verify that caution-level shell commands produce errors containing
-	// the "security caution:" prefix, which tool_executor_sequential.go
+	// the "security caution:" prefix, which pkg/agent/seed_tool_security.go
 	// detects to generate SECURITY_CAUTION_REQUIRED messages.
 	cautionCommands := []string{
 		"rm test.txt",
@@ -209,7 +209,7 @@ func TestSecurityCautionVsDangerousBoundary(t *testing.T) {
 //
 //  1. ClassifyToolCall (pkg/agent_tools/security_classifier.go) → classifies risk
 //  2. ExecuteTool (pkg/agent/tool_definitions.go) → returns "security caution:" error for non-interactive CAUTION
-//  3. Tool executor (pkg/agent/tool_executor_sequential.go) → detects prefix, returns SECURITY_CAUTION_REQUIRED
+//  3. Tool executor (pkg/agent/seed_tool_security.go) → detects prefix, returns SECURITY_CAUTION_REQUIRED
 //  4. LLM sees the message → can re-assert safety and retry, ask user, or abort
 func TestSecurityCautionWorkflowIntegration(t *testing.T) {
 	// Simulate the classification step
@@ -232,7 +232,7 @@ func TestSecurityCautionWorkflowIntegration(t *testing.T) {
 		t.Fatal("classification reasoning is empty; the LLM would have no context for the block")
 	}
 
-	// Step 3: Verify the new error format is detectable by tool_executor_sequential.go.
+	// Step 3: Verify the new error format is detectable by pkg/agent/seed_tool_security.go.
 	// The executor classifies SecurityError as ActionEscalate (via ClassifyError).
 	// We simulate the error format:
 	simulatedError := "security confirmation required: shell_command — " + classification.Reasoning +

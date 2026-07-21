@@ -535,6 +535,20 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecuritySafe
 	}
 
+	// xargs is safe iff the command it invokes is safe. Delegate to a
+	// structured sub-classifier that strips xargs flags and recursively
+	// classifies the inner command. Without this carve-out, every
+	// `xargs <safe-cmd>` invocation defaults to CAUTION via the
+	// fallback below — including safe pipelines like `find … | xargs
+	// du -sh`. `isCautionPattern` does not match xargs-prefixed
+	// commands (it checks prefixes like "rm -rf ", "eval ", etc., not
+	// "xargs rm -rf"), so this check correctly handles dangerous
+	// `xargs rm` / `xargs chmod` cases by recursion into the inner
+	// command's classification.
+	if risk, ok := classifyXargsInvocation(cmdLower); ok {
+		return risk
+	}
+
 	return SecurityCaution
 }
 
@@ -806,4 +820,53 @@ func isScreenshotPathAllowed(cleanedPath string) bool {
 	}
 
 	return false
+}
+
+// ChainedClassification is a per-subcommand classification result.
+// The existing []SecurityRisk return type from classifyChainedCommand
+// is preserved for backwards compatibility; new code uses this richer
+// type. SP-124b.
+type ChainedClassification struct {
+	Subcommand string       // the subcommand text (trimmed, not normalized)
+	Risk       SecurityRisk
+	Reasoning  string       // human-readable why
+	Category   RiskCategory
+}
+
+// ClassifyChainedCommand is the exported wrapper around the internal
+// classifyChainedCommand. It returns one ChainedClassification per
+// subcommand with populated Subcommand, Risk, Reasoning, and Category.
+//
+// This is a thin adapter — the heavy lifting (splitting, per-subcommand
+// classification) is done by classifyChainedCommand and SplitChainedCommand
+// from SP-122, which are not modified.
+//
+// Implementation:
+//   - parts := SplitChainedCommand(cmd)
+//   - For each part, call classifySingleCommand(part) to get the SecurityRisk
+//   - Call classifyShellCommand({"command": part}) to populate Reasoning and Category
+//   - Skip empty/blank subcommands (SplitChainedCommand already drops them,
+//     but we are defensive)
+func ClassifyChainedCommand(cmd string) []ChainedClassification {
+	parts := SplitChainedCommand(cmd)
+	var results []ChainedClassification
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		risk := classifySingleCommand(part)
+		// classifyShellCommand populates Reasoning and Category.
+		// It has special-case early returns for empty/invalid commands
+		// and for check_background/stop_background modes — both are
+		// safe fallbacks for a classification table cell.
+		result := classifyShellCommand(map[string]interface{}{"command": part})
+		results = append(results, ChainedClassification{
+			Subcommand: part,
+			Risk:       risk,
+			Reasoning:  result.Reasoning,
+			Category:   result.Category,
+		})
+	}
+	return results
 }

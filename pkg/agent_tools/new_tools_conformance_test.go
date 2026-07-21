@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Note: run_subagent / run_parallel_subagents are intentionally NOT handlers in
@@ -368,6 +369,37 @@ func TestAskUserHandlerConformance(t *testing.T) {
 	}
 	if result.IsError {
 		t.Logf("Execute returned error result (expected in test env): %s", result.Output)
+	}
+}
+
+// Wrapper timeout must match the inner AskUserManager deadline so the seed
+// registry's 5-minute DefaultTimeout doesn't fire first and drop the user's
+// in-progress answer. Regression test for the ask_user short-context-deadline
+// bug.
+func TestAskUserHandlerWrapperTimeout(t *testing.T) {
+	h := &askUserHandler{}
+	got := h.Timeout()
+	if got != DefaultAskUserTimeout {
+		t.Errorf("askUserHandler.Timeout() = %v, want %v (must equal DefaultAskUserTimeout so the seed wrapper does not fire before the inner manager)", got, DefaultAskUserTimeout)
+	}
+	if got <= 0 {
+		t.Errorf("askUserHandler.Timeout() = %v, must be > 0; 0 lets seed default to 5 min and silently drop user answers", got)
+	}
+}
+
+// Parallel regression test for request_clarification: the seed-registry wrapper
+// timeout must exceed the inner ClarificationManager's deadline (60s in
+// pkg/agent/clarification_manager.go::DefaultClarificationTimeout) so the
+// inner manager enforces its own timeout first instead of being killed by the
+// outer wrapper. The constant mirrors the inner value with a 5-second slack.
+func TestRequestClarificationHandlerWrapperTimeout(t *testing.T) {
+	h := &requestClarificationHandler{}
+	got := h.Timeout()
+	if got <= 0 {
+		t.Errorf("requestClarificationHandler.Timeout() = %v, must be > 0; 0 lets seed default to 5 min", got)
+	}
+	if got <= 60*time.Second {
+		t.Errorf("requestClarificationHandler.Timeout() = %v, must exceed 60s (DefaultClarificationTimeout) so the inner manager fires first; otherwise the outer wrapper silently drops user answers", got)
 	}
 }
 

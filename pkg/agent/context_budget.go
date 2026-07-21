@@ -46,6 +46,14 @@ func totalReservedFraction() float64 {
 // With the conservative 15/10/5 defaults the trigger fires at 70% of the
 // context window instead of seed's hardcoded 85%, which restores enough
 // headroom to keep thinking-budget models from emitting empty responses.
+//
+// SP-125: in Low-Context Mode the profile overrides this with a tighter
+// fraction (0.85) — LCM sessions are short (2–4 round-trips) and the
+// reservation math assumes a full tool roster. Tightening the trigger gives
+// the model more working room at the cost of compacting sooner.
 func (a *Agent) computeCompactionTriggerFraction() float64 {
+	if f := a.contextProfile.CompactionTriggerFraction; f > 0 {
+		return f
+	}
 	return 1.0 - totalReservedFraction()
 }

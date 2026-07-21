@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // Note: run_subagent / run_parallel_subagents are intentionally NOT handlers in
@@ -547,8 +549,8 @@ func TestPatchStructuredFileHandlerConformance(t *testing.T) {
 	jsonPath := filepath.Join(tmpDir, "test.json")
 	os.WriteFile(jsonPath, []byte(`{"name": "original", "value": 1}`), 0644)
 
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{

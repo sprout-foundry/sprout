@@ -172,6 +172,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Cost control
 	registry.Register(&MaxContextCommand{})
 
+	// SP-125: Low-Context Mode inspection and override
+	registry.Register(&ContextCommand{})
+
 	registry.Register(&SetupCommand{})
 
 	// SP-105 Phase 2: interactive settings browser

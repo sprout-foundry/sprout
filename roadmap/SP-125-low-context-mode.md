@@ -1,11 +1,12 @@
 # SP-125 — Low-Context Mode (32K Context Support)
 
-**Status:** 🔵 Scoping — not yet approved for implementation
+**Status:** 🟢 Implemented (core + all 6 levers + `/context` command)
 **Created:** 2026-07-20
 **Renumbered:** 2026-07-20 (was draft SP-115; SP-115 was in use for the
 StateManager refactor + CLI keyboard hints, which surfaced during pre-commit
 git inspection. Renumbered to SP-125, the next free slot.)
-**Type:** Feature scoping / design exercise
+**Type:** Feature (was scoping / design exercise — promoted to implemented
+once the config-driven `ContextProfile` design landed and all levers wired)
 
 ## Context Window Bands
 
@@ -32,6 +33,61 @@ Switch to a larger-context model (/model) or raise the model's context limit.
 
 This floor lives in `ResolveContextProfile` (the single point where the decision
 is made), not scattered across call sites. See §"Implementation Design".
+
+## Implementation Status — ✅ Shipped
+
+The config-driven `ContextProfile` design (see §"Implementation Design") landed
+and every lever is wired into its call site. The feature is functional and
+covered by unit + integration tests.
+
+**Core abstraction** — `pkg/configuration/context_profile.go`:
+`ContextProfile` struct, `ContextMode` (`"full"` / `"low_context"`), the 8K
+`ContextFloor`, and `ResolveContextProfile()` (precedence: hard floor →
+explicit config → auto-detect from model window → default full). Two baked
+presets: `fullContextProfile` (zero-value) and `lowContextProfile`.
+
+**Lever wiring** (all six, plus rollup recency):
+
+| Lever | Call site |
+|---|---|
+| 1. 8-tool allowlist | `pkg/agent/conversation.go` — `filterToolsByName` |
+| 2. Lite system prompt | `pkg/agent/prompts/system_prompt.lite.md` + `extractSystemPromptForProfile` |
+| 3. AGENTS.md kept + size warning | `pkg/agent/embedded_prompts.go` (`GetEmbeddedSystemPromptForProfile`) |
+| 4. Compaction trigger 0.85 | `pkg/agent/context_budget.go` (`computeCompactionTriggerFraction`) |
+| 5. No proactive context | `pkg/agent/seed_query.go` |
+| 6. `repo_map` depth=1 | `pkg/agent/tool_definitions_handler.go` |
+| Rollup recency=2 | `pkg/agent/rollup.go` (`recentTurnsToPreserveFor`) |
+
+**Eligibility** — `pkg/modelcontract/eligibility.go`: added `RoleLowContext`
+and `LowContextMinContext` (16K). Models in the 16K–64K band are now eligible
+for LCM rather than hard-blocked.
+
+**Config surface** — `Config.ContextMode` (`json:"context_mode,omitempty"`)
+with merge support in `config_merge.go`. One field, two named values; typos
+fall through to auto-detection.
+
+**Activation** — auto-detect (select a sub-64K model), explicit config
+(`context_mode: "low_context"`), and the `/context` slash command
+(`pkg/agent_commands/context.go`). The `/context` command persists to config
+and takes effect on the next session start — the live agent's prompt and tool
+set are already baked in and are not mutated mid-session.
+
+**Activation notice** — `pkg/agent/agent_creation.go` prints a one-time stderr
+notice when LCM is auto-detected (suppressed when explicitly configured).
+
+**Tests** — `pkg/configuration/context_profile_test.go` (unit) and
+`pkg/agent/sp125_low_context_integration_test.go` (4 integration tests: 32K
+auto-activates LCM, 128K stays full, 4K floor errors, explicit config works).
+`pkg/agent_commands/context_test.go` covers the `/context` command.
+
+### Known open items (non-blocking)
+
+- **R3 (probe at 32K)** — the capability probe's own token usage at 32K has
+  not been measured. May need a lite probe variant if the probe itself
+  overflows small windows.
+- **R4 (subagent inheritance)** — a 128K primary delegating to a 32K
+  subagent does not auto-activate LCM on the subagent. Needs a hook in
+  `subagent_creation.go`; separate decision.
 
 ## Problem
 

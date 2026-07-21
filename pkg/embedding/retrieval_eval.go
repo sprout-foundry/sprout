@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,19 +14,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
-
-func cosineSim(a, b []float32) float32 {
-	var dot, normA, normB float64
-	for i := range a {
-		dot += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-	return float32(dot / (math.Sqrt(normA) * math.Sqrt(normB)))
-}
 
 type queryTest struct {
 	name     string

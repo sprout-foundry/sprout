@@ -15,10 +15,12 @@ afterAll(() => {
 
 // ── Mocks ────────────────────────────────────────────────────────
 // All mocks return null to avoid React-version JSX issues in factories.
-
-vi.mock('../hooks/useEditorViewInit', () => ({
-  useEditorViewInit: vi.fn(),
-}));
+//
+// Note: as of the useCMView migration, EditorCore owns no EditorView
+// lifecycle at all. The central `useCMView` in EditorPane is the sole
+// owner. EditorCore only calls `useEditorReconfigure`. We still mock
+// it so the test verifies the component passes the expected options
+// to it without triggering any real CodeMirror or DOM work.
 
 vi.mock('./useEditorReconfigure', () => ({
   useEditorReconfigure: vi.fn(),
@@ -38,7 +40,6 @@ vi.mock('lucide-react', () => ({
 }));
 
 // ── Imports after mocks ──────────────────────────────────────────
-import { useEditorViewInit } from '../hooks/useEditorViewInit';
 import EditorCore, { areEditorCorePropsEqual } from './EditorCore';
 import type { EditorCoreProps } from './EditorCore';
 import { useEditorReconfigure } from './useEditorReconfigure';
@@ -48,7 +49,6 @@ function createBaseProps(overrides?: Partial<EditorCoreProps>): EditorCoreProps 
   return {
     editorRef: { current: null },
     viewRef: { current: null },
-    initOptions: {} as EditorCoreProps['initOptions'],
     reconfigureOptions: {} as EditorCoreProps['reconfigureOptions'],
     loading: false,
     error: null,
@@ -145,28 +145,9 @@ describe('EditorCore', () => {
 
   // ── hook calls ───
   describe('hook calls', () => {
-    it('calls useEditorViewInit once', () => {
-      renderComponent(createBaseProps());
-      expect(useEditorViewInit).toHaveBeenCalledTimes(1);
-    });
-
     it('calls useEditorReconfigure once', () => {
       renderComponent(createBaseProps());
       expect(useEditorReconfigure).toHaveBeenCalledTimes(1);
-    });
-
-    it('passes editorRef to useEditorViewInit', () => {
-      const props = createBaseProps();
-      renderComponent(props);
-      const callArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
-      expect(callArgs.editorRef).toBe(props.editorRef);
-    });
-
-    it('passes viewRef to useEditorViewInit', () => {
-      const props = createBaseProps();
-      renderComponent(props);
-      const callArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
-      expect(callArgs.viewRef).toBe(props.viewRef);
     });
 
     it('passes viewRef to useEditorReconfigure', () => {
@@ -176,18 +157,17 @@ describe('EditorCore', () => {
       expect(callArgs.viewRef).toBe(props.viewRef);
     });
 
-    it('shares lastInitLanguageKey ref between both hooks', () => {
+    it('does NOT instantiate an EditorView (lifecycle is owned by useCMView in EditorPane)', () => {
+      // This regression check enforces the architectural boundary:
+      // EditorCore must not create its own EditorView. Previously it
+      // fanned out into a second view creator against the same
+      // editorRef.current, producing duplicate DOM (.cm-editor count = 2).
       renderComponent(createBaseProps());
-      const initArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
-      const reconfigArgs = vi.mocked(useEditorReconfigure).mock.calls[0][0];
-      expect(initArgs.lastInitLanguageKey).toBe(reconfigArgs.lastInitLanguageKey);
-    });
-
-    it('spreads initOptions into useEditorViewInit call', () => {
-      const initOptions = { paneId: 'test-pane' };
-      renderComponent(createBaseProps({ initOptions }));
-      const callArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
-      expect(callArgs.paneId).toBe('test-pane');
+      const callArgs = vi.mocked(useEditorReconfigure).mock.calls[0][0];
+      // Expectation: callArgs has no `initOptions` shape (EditorCore no
+      // longer fans out into a second view creator).
+      expect((callArgs as any).initOptions).toBeUndefined();
+      expect((callArgs as any).editorRef).toBeUndefined();
     });
 
     it('spreads reconfigureOptions into useEditorReconfigure call', () => {
@@ -296,14 +276,12 @@ describe('EditorCore', () => {
     const sharedViewRef = { current: null } as MutableRefObject<CMEditorView | null>;
     const sharedMarkdownPreviewBodyRef = { current: null } as RefObject<HTMLDivElement | null>;
     const sharedOnContextMenu = vi.fn();
-    const sharedInitOptions = {};
     const sharedReconfigureOptions = {};
 
     function makeProps(overrides: Partial<EditorCoreProps> = {}): EditorCoreProps {
       return {
         editorRef: sharedEditorRef,
         viewRef: sharedViewRef,
-        initOptions: sharedInitOptions,
         reconfigureOptions: sharedReconfigureOptions,
         loading: false,
         error: null,
@@ -344,11 +322,10 @@ describe('EditorCore', () => {
         expect(areEditorCorePropsEqual(prev, next)).toBe(true);
       });
 
-      it('same initOptions and reconfigureOptions references (explicit override)', () => {
-        const initOptions = { paneId: 'test' };
+      it('same reconfigureOptions reference (explicit override)', () => {
         const reconfigureOptions = { hotkeys: [] };
-        const prev = makeProps({ initOptions, reconfigureOptions });
-        const next = makeProps({ initOptions, reconfigureOptions });
+        const prev = makeProps({ reconfigureOptions });
+        const next = makeProps({ reconfigureOptions });
         expect(areEditorCorePropsEqual(prev, next)).toBe(true);
       });
     });
@@ -407,13 +384,6 @@ describe('EditorCore', () => {
       it('different localContent', () => {
         const prev = makeProps({ localContent: '' });
         const next = makeProps({ localContent: 'hello' });
-        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
-      });
-
-      it('different initOptions reference', () => {
-        const prev = makeProps({ initOptions: { paneId: 'a' } });
-        const next = makeProps({ initOptions: { paneId: 'a' } });
-        // Same values but different object references — should be false
         expect(areEditorCorePropsEqual(prev, next)).toBe(false);
       });
 

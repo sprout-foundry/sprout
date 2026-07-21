@@ -32,6 +32,7 @@ export type {
   TerminalOutputData,
   TerminalPtyExitData,
   DriftDetectedData,
+  ContextManagementDiagnosticData,
 } from './types';
 export { EventsContextProvider, useEvents } from './context';
 export type { EventsContextProviderProps } from './context';

@@ -7,8 +7,7 @@ package tools
 // write_file, write_structured_file, edit_file, shell_command,
 // manage_memory, manage_settings, todo_write, todo_read,
 // ask_user, patch_structured_file, commit, git, activate_skill,
-// web_search, semantic_search, analyze_image_content,
-// analyze_ui_screenshot, list_automate_workflows, list_changes,
+// web_search, semantic_search, list_automate_workflows, list_changes,
 // revert_my_changes, recover_file, create_pull_request, run_automate,
 // mcp_refresh, run_subagent, run_parallel_subagents,
 // request_clarification, and respond_clarification.
@@ -17,6 +16,19 @@ package tools
 // (build-tagged): it requires a host-side headless browser (rod/Chromium)
 // that is unavailable in WASM builds, so it is excluded from the WASM
 // tool set rather than advertised as a tool that can never succeed.
+//
+// vision tools (analyze_image_content, analyze_ui_screenshot) are
+// registered conditionally via registerVisionTools() (build-tagged):
+// the vision processor pipeline requires CGo and native HTTP clients
+// that are unavailable in WASM builds, so the tools are excluded from
+// the WASM tool set rather than advertised as a tool that always
+// returns "not available". (SP-112-6.)
+//
+// run_automate is registered conditionally via registerRunAutomateTool()
+// (build-tagged): the function-pointer bridge (tools.RunAutomateFunc) is
+// set by pkg/agent at startup; WASM builds don't run pkg/agent, so the
+// tool is excluded from the WASM tool set rather than advertised as a
+// tool that always returns "not available". (SP-112-8.)
 //
 // Memory operations (add/read/list/delete/search) are exposed as the
 // consolidated manage_memory tool registered in
@@ -75,9 +87,6 @@ func AllTools() []ToolHandler {
 		// because it requires a host-side headless browser unavailable in WASM.
 		&webSearchHandler{},
 		&semanticSearchHandler{},
-		// Image/analysis tools
-		&analyzeImageContentHandler{},
-		&analyzeUIScreenshotHandler{},
 		// SP-109 Phase 3 Batch A2 — change-tracking & automate tools
 		&listAutomateWorkflowsHandler{},
 		&listChangesHandler{},
@@ -85,7 +94,6 @@ func AllTools() []ToolHandler {
 		&recoverFileHandler{},
 		// SP-109 Phase 3 Batch A3 — agent-dependent function-pointer tools
 		&createPullRequestHandler{},
-		&runAutomateHandler{},
 		&mcpRefreshHandler{},
 		// SP-109 Phase 3 Batch B — subagent function-pointer tools
 		&runSubagentHandler{},
@@ -99,5 +107,18 @@ func AllTools() []ToolHandler {
 	// Code intelligence graph tools — platform-specific (nil on WASM via
 	// build-tagged stub).
 	tools = append(tools, registerBrowseURLTool()...)
+	// Vision analysis tools — platform-specific (nil on WASM via
+	// build-tagged stub). The vision processor pipeline requires CGo and
+	// native HTTP clients, so the tools are excluded from the WASM roster
+	// rather than advertised as a tool that always returns "not available".
+	//
+	// SP-112-6.
+	tools = append(tools, registerVisionTools()...)
+	// run_automate — platform-specific (nil on WASM via build-tagged stub).
+	// The function-pointer bridge (tools.RunAutomateFunc) is set by pkg/agent
+	// at startup; WASM builds don't run pkg/agent, so the tool is excluded
+	// from the WASM roster rather than advertised as a tool that always
+	// returns "not available". SP-112-8.
+	tools = append(tools, registerRunAutomateTool()...)
 	return append(tools, registerCodegraphTools()...)
 }

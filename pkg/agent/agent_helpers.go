@@ -78,38 +78,6 @@ func collapseSystemMessagesToFront(messages []api.Message) []api.Message {
 	return result
 }
 
-// stripImagesFromMessages creates a copy of messages with all image data removed,
-// returning the stripped copy and whether any images were found.
-func stripImagesFromMessages(messages []api.Message) ([]api.Message, bool) {
-	if messages == nil {
-		return nil, false
-	}
-
-	hadImages := false
-	result := make([]api.Message, len(messages))
-	for i, msg := range messages {
-		if len(msg.Images) > 0 {
-			hadImages = true
-			msg.Images = nil
-		}
-		result[i] = msg
-	}
-	return result, hadImages
-}
-
-// estimateCompletionTokensFromResponse estimates completion tokens from a chat response.
-func estimateCompletionTokensFromResponse(resp *api.ChatResponse) int {
-	if resp == nil || len(resp.Choices) == 0 {
-		return 0
-	}
-	content := resp.Choices[0].Message.Content
-	completionTokens := EstimateTokens(content)
-	if resp.Choices[0].Message.ReasoningContent != "" {
-		completionTokens += EstimateTokens(resp.Choices[0].Message.ReasoningContent)
-	}
-	return completionTokens
-}
-
 // joinMessageContent joins a slice of message content strings with the given separator.
 func joinMessageContent(parts []string, sep string) string {
 	filtered := make([]string, 0, len(parts))

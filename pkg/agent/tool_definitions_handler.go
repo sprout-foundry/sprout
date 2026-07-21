@@ -188,6 +188,7 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	env.WebBrowser = tools.NewBrowserAdapter()
 	env.SkillLoader = newSkillLoaderAdapter(agent)
 	env.SearchEngine = newSearchEngineAdapter(agent)
+	env.RepoMapDefaultDepth = agent.contextProfile.RepoMapDefaultDepth
 	env.RawArgsJSON = "" // seed registry doesn't have raw JSON args
 	env.Notifier = agent
 	env.SubagentDepth = agent.subagentDepth

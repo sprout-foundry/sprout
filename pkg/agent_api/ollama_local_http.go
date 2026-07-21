@@ -15,6 +15,7 @@ import (
 // ollamaClient is the interface our OllamaLocalClient talks to.
 type ollamaClient interface {
 	List(ctx context.Context) (*localOllamaListResponse, error)
+	Show(ctx context.Context, name string) (*localOllamaShowResponse, error)
 	Chat(ctx context.Context, req *localOllamaChatRequest, fn func(*localOllamaChatResponse) error) error
 }
 
@@ -58,6 +59,39 @@ func (c *httpOllamaClient) List(ctx context.Context) (*localOllamaListResponse, 
 	var out localOllamaListResponse
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, fmt.Errorf("ollama list decode: %w", err)
+	}
+	return &out, nil
+}
+
+func (c *httpOllamaClient) Show(ctx context.Context, name string) (*localOllamaShowResponse, error) {
+	body, err := json.Marshal(map[string]string{"name": name})
+	if err != nil {
+		return nil, fmt.Errorf("marshal show request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/show", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build show request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("ollama show: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("ollama show read error response: %w", readErr)
+		}
+		return nil, fmt.Errorf("ollama show status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var out localOllamaShowResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("ollama show decode: %w", err)
 	}
 	return &out, nil
 }

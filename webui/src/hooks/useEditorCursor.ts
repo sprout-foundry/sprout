@@ -12,6 +12,7 @@
 import type { ViewUpdate } from '@codemirror/view';
 import { useState, useCallback } from 'react';
 import type { EditorBuffer } from '../types/editor';
+import type { CMViewAPI } from './useCMView';
 import { debugLog } from '../utils/log';
 
 export interface SelectionInfo {
@@ -24,8 +25,10 @@ export interface UseEditorCursorOptions {
   bufferRef: React.RefObject<EditorBuffer | null | undefined>;
   /** From EditorManagerContext — updates cursor position in buffer state */
   updateBufferCursor: (bufferId: string, pos: { line: number; column: number }) => void;
-  /** Ref that tracks whether an external (non-user) content update is in flight */
-  isExternalUpdateRef: React.RefObject<boolean>;
+  /** Ref to the CodeMirror view API. The ref is populated by EditorPane
+   *  after `useCMView` returns. Reading `cmViewApiRef.current?.isExternalUpdate()`
+   *  is safe at any time — it returns `false` until the API is available. */
+  cmViewApiRef: React.MutableRefObject<CMViewAPI | null>;
 }
 
 export interface UseEditorCursorReturn {
@@ -45,7 +48,7 @@ export interface UseEditorCursorReturn {
  * local selection info state for UI display (e.g., footer status).
  */
 export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCursorReturn {
-  const { bufferRef, updateBufferCursor, isExternalUpdateRef } = options;
+  const { bufferRef, updateBufferCursor, cmViewApiRef } = options;
 
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
 
@@ -54,7 +57,8 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
       // Skip cursor position saves during external content replacements
       // (e.g., file reloads, auto-reload, initial loads) to avoid saving
       // the wrong cursor position (post-replacement, usually line 1).
-      if (isExternalUpdateRef.current) return;
+      // Reading through the API ref — synchronous, no useEffect race.
+      if (cmViewApiRef.current?.isExternalUpdate()) return;
 
       // Skip if selection hasn't changed (e.g., only viewport/scroll changed)
       if (!update.selectionSet) return;
@@ -93,7 +97,7 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
         }
       }
     },
-    [bufferRef, updateBufferCursor, isExternalUpdateRef],
+    [bufferRef, updateBufferCursor, cmViewApiRef],
   );
 
   return { selectionInfo, setSelectionInfo, handleCursorUpdate };

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
@@ -103,7 +104,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	desired := loadDesiredWebUIHostPID()
 
 	// If a specific PID is selected and still alive, enforce it as leader.
-	if desired > 0 && isProcessAlive(desired) {
+	if desired > 0 && pidalive.IsAlive(desired) {
 		if desired != pid {
 			if s.webServer.IsRunning() {
 				if shutdownErr := s.webServer.Shutdown(); shutdownErr != nil {
@@ -277,7 +278,7 @@ func isHostRecordAlive(record webUIHostRecord) bool {
 	if time.Since(record.UpdatedAt) > hostStaleAfter {
 		return false
 	}
-	if !isProcessAlive(record.PID) {
+	if !pidalive.IsAlive(record.PID) {
 		return false
 	}
 	// PID-reuse guard: if StartedAt is recorded, verify the process at this
@@ -287,8 +288,4 @@ func isHostRecordAlive(record webUIHostRecord) bool {
 		return false
 	}
 	return true
-}
-
-func isProcessAlive(pid int) bool {
-	return isPIDAlive(pid)
 }

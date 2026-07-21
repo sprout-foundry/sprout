@@ -140,16 +140,66 @@ Tier 3: Parent agent inheritance (field-by-field)
 
 ## 5. Context Window Limit
 
-### `getModelContextLimit` (`pkg/agent/utils.go`)
+The context window pipeline has two layers (SP-126): a **native** value
+from the model client and an **effective** value that may be capped by
+the user's `Config.MaxContextTokens` setting.
+
+### `getNativeModelContextLimit` (`pkg/agent/utils.go`) — raw value
 
 ```
 1. Client's GetModelContextLimit() → model's reported context window
+2. → 32000 (hardcoded fallback when client is nil or API call fails)
+   ⚠ A warning is logged via the agent logger when this fallback fires.
+```
+
+This is the **uncapped** model window. Returned exactly as the client
+reports it (or the 32K fallback). Used by `ResolveEffectiveContextCap`
+to compute the cap.
+
+### `ResolveEffectiveContextCap` (`pkg/configuration/context_profile.go`) — cap resolver
+
+```
+1. cfg.MaxContextTokens is nil or 0 → return native (no cap)
+2. cfg.MaxContextTokens < EffectiveContextCapMinimum (1024) → error
+   (matches the /max-context and settings_defs validators)
+3. Otherwise → min(native, cfg.MaxContextTokens)
+```
+
+Resolved once at agent creation and stored on `Agent.effectiveContextCap`.
+Every downstream call site (seed_provider.Info, seed_query.OnIteration,
+metrics.GetEffectiveContextCap) reads from this field. Call sites MUST
+NOT re-derive from `Config.MaxContextTokens` or call
+`client.GetModelContextLimit()` directly — those paths bypass the cap.
+
+### `getModelContextLimit` (`pkg/agent/utils.go`) — capped value
+
+```
+1. getNativeModelContextLimit() → model's native window
 2. Capped by user's MaxContextTokens setting (if set and lower)
 3. → 32000 (hardcoded fallback when client is nil or API call fails)
    ⚠ A warning is logged via the agent logger when this fallback fires.
 ```
 
-**Implication:** If the client can't report a context window (nil client, API error, unknown model), the limit falls back to 32K and a warning is emitted. A 1M-token model would run at 3% of capacity with a visible log warning.
+Backward-compatible: existing call sites that want the capped value
+keep working unchanged. New code should prefer
+`Agent.GetEffectiveContextCap()` which goes through the resolved
+Agent field rather than re-reading the config.
+
+### Activation notice
+
+When the user explicitly sets a cap lower than the native window, a
+one-time stderr notice fires at agent creation:
+
+```
+⚡ Context cap active: 300.0K (native: 1.00M)
+  All requests will use at most 300.0K of context.
+  /max-context clear to remove, /max-context <N> to change.
+```
+
+Skip when the cap equals the native window (no-op) and skip when no
+cap was set.
+
+**Implication:** If the client can't report a context window (nil client, API error, unknown model), the limit falls back to 32K and a warning is emitted. A 1M-token model would run at 3% of capacity with a visible log warning. The cap, if set, applies on top of whatever the native-fallback yields (so a user-configured 300K cap beats the 32K fallback).
 
 ---
 

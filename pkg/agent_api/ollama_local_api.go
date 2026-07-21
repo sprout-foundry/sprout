@@ -131,12 +131,64 @@ func (c *OllamaLocalClient) CheckConnection() error {
 	return nil
 }
 
-// GetModelContextLimit returns the context limit for the model
+// GetModelContextLimit returns the context limit for the model.
+//
+// Resolution layers (most-specific to least):
+//  1. Cached list-models entry whose context Ollama reported via /api/show.
+//  2. Fresh /api/show lookup for the current model (2s timeout; log on failure
+//     so a misconfigured Ollama server doesn't silently degrade to the wrong
+//     default context length).
+//  3. Static DefaultContextLimit from config (set at construction).
+//  4. Hardcoded 32000 fallback.
+//
+// Replaces the previous substring match on "qwen3-coder"/"gpt-oss", which
+// missed most models and silently returned 32k for everything else.
 func (c *OllamaLocalClient) GetModelContextLimit() (int, error) {
-	if strings.Contains(c.model, "qwen3-coder") || strings.Contains(c.model, "gpt-oss") {
-		return 128000, nil
+	if contextLength, ok := c.GetCachedModel(c.model); ok {
+		return contextLength, nil
 	}
-	return 32000, nil
+
+	if c.model != "" {
+		if client, err := c.newClient(); err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			showResp, showErr := client.Show(ctx, c.model)
+			cancel()
+			if showErr == nil && showResp != nil && showResp.ModelInfo.ContextLength > 0 {
+				return showResp.ModelInfo.ContextLength, nil
+			}
+			if showErr != nil {
+				fmt.Fprintf(os.Stderr, "[~] Failed to fetch Ollama model context for %s: %v\n", c.model, showErr)
+			}
+		}
+	}
+
+	if c.config.DefaultContextLimit > 0 {
+		return c.config.DefaultContextLimit, nil
+	}
+	return defaultOllamaContextLimit, nil
+}
+
+// GetCachedModel returns a cached context length when the model list is fresh.
+// Matches by ID or Name; callers typically pass the Ollama tag (e.g.
+// "llama3:8b") which ListModels stores in both fields for symmetry with
+// lmStudioListModelsWrapper.
+func (c *OllamaLocalClient) GetCachedModel(name string) (int, bool) {
+	if name == "" {
+		return 0, false
+	}
+
+	c.cacheMu.RLock()
+	defer c.cacheMu.RUnlock()
+	if c.cachedAt.IsZero() || time.Since(c.cachedAt) >= ollamaModelsCacheTTL {
+		return 0, false
+	}
+
+	for _, model := range c.cachedModels {
+		if (model.ID == name || model.Name == name) && model.ContextLength > 0 {
+			return model.ContextLength, true
+		}
+	}
+	return 0, false
 }
 
 // SetModel updates the active model after validating it exists locally
@@ -181,27 +233,58 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 	return agenterrors.NewProviderError(fmt.Sprintf("model %s not found locally and no other models available. Available models: %s", model, availableModels), nil, "ollama", "")
 }
 
-// ListModels returns available local models
+// ListModels returns available local models.
 func (c *OllamaLocalClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	if models, ok := c.getCachedModels(); ok {
+		return models, nil
+	}
+
 	client, err := c.newClient()
 	if err != nil {
 		return nil, agenterrors.NewConfig("could not create ollama client", err)
 	}
 
-	listResp, err := client.List(ctx)
+	listCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	listResp, err := client.List(listCtx)
 	if err != nil {
 		return nil, agenterrors.NewNetwork("failed to list local models", err)
 	}
 
 	models := make([]ModelInfo, 0, len(listResp.Models))
 	for _, m := range listResp.Models {
-		models = append(models, ModelInfo{
+		modelInfo := ModelInfo{
 			ID:       m.Name,
+			Name:     m.Name,
 			Provider: "ollama-local",
-		})
+		}
+
+		showCtx, showCancel := context.WithTimeout(listCtx, 2*time.Second)
+		showResp, showErr := client.Show(showCtx, m.Name)
+		showCancel()
+		if showErr != nil {
+			fmt.Fprintf(os.Stderr, "[~] Failed to fetch Ollama model details for %s: %v\n", m.Name, showErr)
+		} else if showResp != nil {
+			modelInfo.ContextLength = showResp.ModelInfo.ContextLength
+		}
+		models = append(models, modelInfo)
 	}
 
+	c.cacheMu.Lock()
+	c.cachedModels = append([]ModelInfo(nil), models...)
+	c.cachedAt = time.Now()
+	c.cacheMu.Unlock()
+
 	return models, nil
+}
+
+func (c *OllamaLocalClient) getCachedModels() ([]ModelInfo, bool) {
+	c.cacheMu.RLock()
+	defer c.cacheMu.RUnlock()
+	if len(c.cachedModels) == 0 || c.cachedAt.IsZero() || time.Since(c.cachedAt) >= ollamaModelsCacheTTL {
+		return nil, false
+	}
+	return append([]ModelInfo(nil), c.cachedModels...), true
 }
 
 // SupportsVision returns true for OCR-capable models

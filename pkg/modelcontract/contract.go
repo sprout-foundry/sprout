@@ -18,8 +18,9 @@ const SchemaVersion = 2
 
 // Role names a model can be eligible/recommended for.
 const (
-	RolePrimary  = "primary"
-	RoleSubagent = "subagent"
+	RolePrimary    = "primary"
+	RoleSubagent   = "subagent"
+	RoleLowContext = "low_context" // SP-125: 8K–64K band, lite prompt + 8 tools
 )
 
 // CanonicalModel is the normalized, provider-agnostic representation of a model.

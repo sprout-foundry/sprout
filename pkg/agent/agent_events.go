@@ -109,17 +109,24 @@ func (a *Agent) PublishCompactCompleted(source string, beforeCount, afterCount, 
 	a.publishEvent(events.EventTypeCompactCompleted, events.CompactCompletedEvent(source, beforeCount, afterCount, summaryChars, err))
 }
 
-// PublishContextManagementDiagnostic (SP-066 Phase 1) emits the per-iteration
-// context-budget snapshot so the WebUI metrics panel can render the effective
-// trigger threshold and verify substitution is doing the heavy lifting.
-// cachedTokens/promptTokens/cacheWriteTokens expose provider cache
+// PublishContextManagementDiagnostic (SP-066 Phase 1, SP-126) emits the
+// per-iteration context-budget snapshot so the WebUI metrics panel can render
+// the effective trigger threshold and verify substitution is doing the heavy
+// lifting. cachedTokens/promptTokens/cacheWriteTokens expose provider cache
 // effectiveness in the diagnostic payload.
+//
+// SP-126: emits both the effective max (post-cap) and the native max
+// (pre-cap) so subscribers can distinguish "X / 300K of 1M tokens"
+// (effective vs native) rather than collapsing them into a single value.
+// Pre-SP-126 the two were identical (no cap was honored end-to-end).
 func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, iteration, messageCount, cachedTokens, promptTokens, cacheWriteTokens int) {
+	nativeMax := a.getNativeModelContextLimit()
 	a.publishEvent(
 		events.EventTypeContextManagementDiagnostic,
 		events.ContextManagementDiagnosticEvent(
 			currentTokens,
 			maxTokens,
+			nativeMax,
 			a.computeCompactionTriggerFraction(),
 			reservedForResponseFraction,
 			reservedForThinkingFraction,

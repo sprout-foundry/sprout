@@ -65,7 +65,7 @@ Spec bodies preserved in git history; no per-spec archive (83 historical specs).
 | SP-063 | Panic Key — Emergency Stop for Computer-Use Action Loops | (supporting doc — see linked spec) |
 | SP-064 | Automate CLI — Status, Stop, Logs | ✅ Implemented (sprout automate status/stop/logs) |
 | SP-065 | WebUI Automations Panel | ✅ Implemented (live WS event stream; commit 4f0a81c5) |
-| SP-066 | Never-Ending Context — Substitution-First Context Management, Hierarchical Rollups, and Embedded Memory Recall | ✅ Substantially Shipped (Phase 3d deferred) |
+| SP-066 | Never-Ending Context — Substitution-First Context Management, Hierarchical Rollups, and Embedded Memory Recall | ✅ Shipped — Phase 1 (model-aware reservation, `pkg/agent/context_budget.go`), Phase 2 (hierarchical rollup, `pkg/agent/rollup*.go` + `embedded_prompts.go`), Phase 3 (semantic recall, `pkg/agent/semantic_recall.go` + `turn_embedding.go`), and Phase 3d (embedding-clustered rollup boundaries, `rollup_boundary.go`) all landed. `d6094ec5` closed the dormant-wire regression on Phase 3d; 4 integration tests cover the chain. |
 | SP-067 | Automate Workflow Completion Injection | ✅ Implemented (2026-06-06) |
 | SP-068 | Security Check Consolidation — One Risk Scale, One Resolver, One Broker | ✅ Implemented (Phases 1–3 shipped: single resolver, single broker, sprout explain) |
 | SP-069 | Pull Request Creation — Close the "agent did the work, now what?" Gap | ✅ Implemented |
@@ -111,6 +111,7 @@ and the spec body lives in git history.
 | SP-113 | [Multi-Billing-Model Cost Tracking](./SP-113-multi-billing-cost-tracking.md) | 🟢 Implemented (Phases 1–4 shipped `4552363c` 2026-07-02 as SP-080, then renumbered 2026-07-05). `bab487da` post-merge cleanup: subagent double-debit fix, fleet budget isolation, CLI footer "included"/"free" annotations, ProviderTable billing column. Spec kept at root as living reference for future scope (subscription quota tracking, per-billing-type cost alerts, Ollama Cloud credits). |
 | SP-114 | [Unify CLI and Steer Panel Command Execution](./SP-114-unify-command-execution.md) | 🟢 Phase 1 + Phase 2 shipped (`ab6c975e` + this session). Phase 2: `POST /api/command/execute` (dedicated command surface, separate from `/api/query/steer`); WebUI `onSendCommand` handler in `ChatView.tsx` routes safe commands to the new endpoint with notification-based output. Destructive commands (`/commit`, `/clear`, `/exit`, `/init`, etc.) remain CLI-only. Long-output WS streaming deferred. |
 | SP-124 | [LLM-Augmented Security Analysis](./SP-124-llm-security-analysis.md) | 🟢 Phase 1, 2, 3 shipped (2026-07-19) — backend `AnalyzeShellCommand` + cache + broker plumbing; WebUI dialog renders analysis panel with risk-tone badge (`SecurityApprovalDialog.tsx`); CLI picker renders analysis + Elevate option via `pkg/utils.SecurityAnalysisView` shared helper. |
+| SP-124b | [Batch Security Analysis for Chained Commands](./SP-124b-batch-analysis.md) | 🔵 Proposed — chain-aware LLM analysis (one call for `cmd1 && cmd2 \| ...`); cache by normalized chain; raises SP-124 future-item #1 to tracked status. |
 
 ## Future / On Hold
 

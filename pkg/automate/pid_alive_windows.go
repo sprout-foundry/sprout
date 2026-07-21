@@ -2,20 +2,12 @@
 
 package automate
 
-import "os"
+import "github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 
+// IsProcessAlive reports whether the given PID currently names a running
+// process. Thin wrapper around pidalive.IsAlive; preserved as the canonical
+// entry point so existing callers (cmd/automate_*.go, pkg/webui/automations_api.go,
+// etc.) don't need to change their import. SP-112-3.
 func IsProcessAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-
-	// On Windows, FindProcess succeeds for arbitrary PIDs. Signal(0) is not
-	// portable here, so treat successful process resolution as "potentially
-	// alive" for session lifecycle management rather than failing the build.
-	return process != nil
+	return pidalive.IsAlive(pid)
 }

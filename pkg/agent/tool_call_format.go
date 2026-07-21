@@ -97,6 +97,6 @@ func summarizeTodoWriteArgs(args map[string]interface{}) string {
 	// Compact one-line status summary for the tool-call log. Uses
 	// short text keys (not the SP-057 glyph vocabulary) to keep the
 	// format byte-efficient and grep-friendly; the per-item glyph
-	// rendering lives in tool_executor_todo_events.go.
+	// rendering lives in pkg/agent_tools/todo_render.go.
 	return fmt.Sprintf("todos=%d pending=%d progress=%d done=%d cancelled=%d", len(todosRaw), pending, inProgress, completed, cancelled)
 }

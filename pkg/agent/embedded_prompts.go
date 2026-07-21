@@ -4,15 +4,30 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
+// agentsMdLargeTokenThreshold is the token count above which AGENTS.md (and
+// sibling context files) triggers a size warning in Low-Context Mode. The file
+// is still injected regardless — this is advisory only.
+const agentsMdLargeTokenThreshold = 4000
+
 //go:embed prompts/system_prompt.md
 var systemPromptContent string
+
+// SP-125: lite prompt for Low-Context Mode (8K–64K context windows).
+// Selected by ContextProfile.SystemPromptPath at agent creation. Roughly
+// ~1K tokens vs the full prompt's ~6.6K — strips delegation/review/persona
+// sections that reference tools unavailable in LCM.
+//
+//go:embed prompts/system_prompt.lite.md
+var systemPromptLiteContent string
 
 //go:embed prompts/planning_prompt.md
 var planningPromptContent string
@@ -84,37 +99,98 @@ func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
 	return GetEmbeddedSystemPrompt()
 }
 
-// extractSystemPrompt extracts the prompt content from the system_prompt markdown
-func extractSystemPrompt() (string, error) {
-	// The system_prompt.md has the prompt content in a code block
-	// We need to extract from the first ``` marker to the last ``` marker
-	// to include all content including examples with nested code blocks
-
-	const promptStart = "```"
-
-	// Find the first ``` marker
-	startIdx := strings.Index(systemPromptContent, promptStart)
-	if startIdx == -1 {
-		return "", agenterrors.NewPermanentError("critical error: system prompt start marker not found in embedded content", nil)
+// GetEmbeddedSystemPromptForProfile (SP-125) selects the full or lite system
+// prompt based on the resolved ContextProfile, then runs the standard
+// augmentation (context files, memories, timestamp). In LCM the lite prompt
+// (~1K tokens) replaces the full prompt (~6.6K). AGENTS.md is still injected
+// by the context-files step regardless of profile — conventions are mandatory.
+func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int) (string, error) {
+	promptContent, err := extractSystemPromptForProfile(profile)
+	if err != nil {
+		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
 
-	// Skip the opening ``` marker and any following newlines
+	contextFiles, err := LoadContextFiles()
+	if err == nil && contextFiles != "" {
+		// SP-125: AGENTS.md is always injected (project conventions are
+		// mandatory in every mode). In LCM only, warn once if the file is
+		// large so the user understands the context cost and can shrink it.
+		if profile.Mode == configuration.ContextModeLowContext {
+			tokens := EstimateTokens(contextFiles)
+			if tokens > agentsMdLargeTokenThreshold {
+				windowLabel := "the context window"
+				windowK := contextWindow / 1000
+				pct := 0
+				if contextWindow > 0 {
+					pct = tokens * 100 / contextWindow
+					windowLabel = fmt.Sprintf("a %dK window", windowK)
+				}
+				fmt.Fprintf(os.Stderr,
+					"⚠ AGENTS.md is large (~%d tokens, ~%d%% of %s).\n"+
+						"  It will still be injected — project conventions are mandatory.\n"+
+						"  To shrink it: move reference material to linked docs, split into\n"+
+						"  per-package AGENTS.md files, or trim historical notes.\n",
+					tokens, pct, windowLabel)
+			}
+		}
+		promptContent = promptContent + contextFiles
+	}
+
+	memories := LoadMemoriesForPrompt()
+	if memories != "" {
+		promptContent = promptContent + memories
+	}
+
+	currentTime := time.Now()
+	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
+		currentTime.Format("2006-01-02"),
+		currentTime.Format("15:04:05"),
+		currentTime.Location().String())
+	promptContent = promptContent + dateTimeString
+
+	return promptContent, nil
+}
+
+// extractSystemPromptForProfile selects the full or lite prompt content based
+// on the profile's SystemPromptPath. Falls back to the full prompt if the lite
+// marker isn't present or the lite content can't be extracted.
+func extractSystemPromptForProfile(profile configuration.ContextProfile) (string, error) {
+	if strings.HasSuffix(profile.SystemPromptPath, "lite.md") {
+		if content, err := extractFromContent(systemPromptLiteContent); err == nil {
+			return content, nil
+		}
+	}
+	return extractSystemPrompt()
+}
+
+// extractSystemPrompt extracts the prompt content from the system_prompt markdown
+func extractSystemPrompt() (string, error) {
+	return extractFromContent(systemPromptContent)
+}
+
+// extractFromContent extracts prompt text from a markdown source that wraps
+// the prompt body in triple-backtick fences. Finds the first ``` and the last
+// ``` (handles nested code blocks inside the prompt). Shared by the full and
+// lite prompt extractors.
+func extractFromContent(source string) (string, error) {
+	const promptStart = "```"
+
+	startIdx := strings.Index(source, promptStart)
+	if startIdx == -1 {
+		return "", agenterrors.NewPermanentError("system prompt start marker not found in embedded content", nil)
+	}
+
 	contentStart := startIdx + len(promptStart)
-	for contentStart < len(systemPromptContent) && (systemPromptContent[contentStart] == '\n' || systemPromptContent[contentStart] == '\r') {
+	for contentStart < len(source) && (source[contentStart] == '\n' || source[contentStart] == '\r') {
 		contentStart++
 	}
 
-	// Find the LAST ``` marker (this handles nested code blocks)
-	endIdx := strings.LastIndex(systemPromptContent, "```")
+	endIdx := strings.LastIndex(source, "```")
 	if endIdx == -1 || endIdx <= startIdx {
-		// If no closing marker, use everything after the start marker
-		return strings.TrimSpace(systemPromptContent[contentStart:]), nil
+		return strings.TrimSpace(source[contentStart:]), nil
 	}
 
-	// Extract everything between the first ``` and the last ```
-	promptText := strings.TrimSpace(systemPromptContent[contentStart:endIdx])
-
-	return promptText, nil
+	return strings.TrimSpace(source[contentStart:endIdx]), nil
 }
 
 // GetEmbeddedPlanningPrompt returns the embedded planning prompt

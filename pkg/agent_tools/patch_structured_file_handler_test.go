@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // ---------------------------------------------------------------------------
@@ -85,8 +88,8 @@ func TestPatchStructuredFile_PreservesOrder_JSON(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -159,8 +162,8 @@ license: MIT
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": yamlPath,
 		"patch_ops": []interface{}{
@@ -234,8 +237,8 @@ description: Multi-line dockerfile
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": yamlPath,
 		"patch_ops": []interface{}{
@@ -296,8 +299,8 @@ func TestPatchStructuredFile_NestedArrayPatch(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -355,8 +358,8 @@ func TestPatchStructuredFile_AddNewKey_JSON(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -403,8 +406,8 @@ func TestPatchStructuredFile_RemoveKey_JSON(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -487,8 +490,8 @@ func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := context.Background()
-	env := ToolEnv{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -541,5 +544,101 @@ func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
 	// Verify the patched value is correct.
 	if !strings.Contains(string(patchedContent), `"5.1"`) {
 		t.Errorf("Output should contain updated value 5.1:\n%s", string(patchedContent))
+	}
+}
+
+// TestPatchStructuredFile_SingleApprovalForReadAndWrite verifies the
+// TOCTOU + double-prompt fix: a single off-workspace patch consults
+// the gate exactly once, not twice. Before the fix, the read and
+// write phases each independently invoked withFilesystemApproval,
+// so "Approve once" on the read still prompted on the write.
+func TestPatchStructuredFile_SingleApprovalForReadAndWrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix fixtures only")
+	}
+
+	gate := &recordingGate{
+		approveDecision: true,
+		returnedCtx:     filesystem.WithSecurityBypass(context.Background()),
+	}
+
+	// Off-workspace target under $HOME — External tier.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	dir, err := os.MkdirTemp(home, "sprout-patch-single-approval-")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	target := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(target, []byte(`{"version":"1.0.0"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &patchStructuredFileHandler{}
+	// No pre-applied bypass — we want the resolve to FAIL so the gate
+	// is consulted. After approval, the returned ctx carries the bypass
+	// for the actual write.
+	ctx := context.Background()
+	env := ToolEnv{
+		FilesystemGate: gate,
+		WorkspaceRoot:  t.TempDir(), // off-workspace from this dir's perspective
+	}
+
+	result, err := h.Execute(ctx, env, map[string]any{
+		"path": target,
+		"patch_ops": []interface{}{
+			map[string]interface{}{"op": "replace", "path": "/version", "value": "2.0.0"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Execute returned IsError: %s", result.Output)
+	}
+	if gate.calls != 1 {
+		t.Errorf("gate should be consulted exactly once, got %d (double-prompt regression)", gate.calls)
+	}
+}
+
+// TestPatchStructuredFile_PreservesExistingFilePermissions verifies
+// the permission-preservation fix: an off-workspace patch on a file
+// with custom permissions (e.g. 0755) keeps those permissions after
+// the write. Before the fix, the write hardcoded 0644 and silently
+// stripped the execute bit.
+func TestPatchStructuredFile_PreservesExistingFilePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "script.json")
+	if err := os.WriteFile(target, []byte(`{"mode":"script"}`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &patchStructuredFileHandler{}
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
+	env := ToolEnv{WorkspaceRoot: tmpDir}
+	result, err := h.Execute(ctx, env, map[string]any{
+		"path": target,
+		"patch_ops": []interface{}{
+			map[string]interface{}{"op": "replace", "path": "/mode", "value": "updated"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Execute returned IsError: %s", result.Output)
+	}
+
+	fi, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotMode := fi.Mode() & 0777
+	if gotMode != 0o755 {
+		t.Errorf("existing mode not preserved: got %o, want 0755", gotMode)
 	}
 }

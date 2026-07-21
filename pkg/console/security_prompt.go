@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -231,7 +232,10 @@ func writeSecurityFootnote(w io.Writer, note string) {
 // tone-coded recommendation badge) so the CLI experience matches the
 // browser tab. Falls back to plain text in no-color mode.
 //
-// SP-124 Phase 3.
+// SP-124 Phase 3 + SP-124b Phase 2: when ChainLength > 1, renders a
+// per-subcommand chain stepper below the analysis block. The stepper is
+// the CLI equivalent of the WebUI dialog's horizontal pills — same data,
+// same tone-coded dots, same ordering.
 func writeSecurityAnalysisPanel(w io.Writer, a *utils.SecurityAnalysisView) {
 	if a == nil {
 		return
@@ -266,7 +270,7 @@ func writeSecurityAnalysisPanel(w io.Writer, a *utils.SecurityAnalysisView) {
 			fmt.Fprintf(w, "%s  │%s   Affects: %s\n", dim, reset, a.Modifies)
 		}
 		fmt.Fprintf(w, "%s  │%s   Risk: %s   %s%s %s%s\n", dim, reset, a.RiskAssessment, badgeColor, badgeGlyph, badgeLabel, reset)
-		fmt.Fprintf(w, "%s  └──────────────────────────────────────────────────────────%s\n\n", dim, reset)
+		fmt.Fprintf(w, "%s  └──────────────────────────────────────────────────────────%s\n", dim, reset)
 	} else {
 		fmt.Fprintf(w, "  ┌─ LLM analysis ─────────────────────────────────────────────\n")
 		fmt.Fprintf(w, "  │ %s\n", a.Summary)
@@ -274,8 +278,121 @@ func writeSecurityAnalysisPanel(w io.Writer, a *utils.SecurityAnalysisView) {
 			fmt.Fprintf(w, "  │   Affects: %s\n", a.Modifies)
 		}
 		fmt.Fprintf(w, "  │   Risk: %s   %s %s\n", a.RiskAssessment, badgeGlyph, badgeLabel)
-		fmt.Fprintf(w, "  └──────────────────────────────────────────────────────────\n\n")
+		fmt.Fprintf(w, "  └──────────────────────────────────────────────────────────\n")
 	}
+
+	// SP-124b Phase 2: chain stepper for chained-command analyses. Renders
+	// below the existing panel. The stepper is omitted when ChainLength is
+	// 1 or 0 so single-command callers see no extra visual noise (regression
+	// guard).
+	if a.ChainLength > 1 {
+		writeSecurityAnalysisChainStepper(w, a)
+	}
+	fmt.Fprintln(w)
+}
+
+// MaxChainStepperVisible is the maximum number of subcommands rendered
+// inline in the CLI stepper. Chains longer than this collapse to the
+// first MaxChainStepperVisible entries plus a "(+N more)" marker so the
+// terminal panel stays scannable. SP-124b Phase 2.
+const MaxChainStepperVisible = 3
+
+// MaxChainStepperSubcommandWidth is the per-subcommand truncation width
+// in the CLI stepper. Width 80 keeps the panel inside a standard 100-col
+// terminal when accounting for the dot prefix and indentation. SP-124b Phase 2.
+const MaxChainStepperSubcommandWidth = 80
+
+// writeSecurityAnalysisChainStepper renders the per-subcommand chain
+// stepper for CLI users. Each subcommand is on its own line with a
+// tone-coded bullet dot prefix; chains longer than MaxChainStepperVisible
+// entries collapse to the first three plus a "(+N more)" marker. SP-124b Phase 2.
+func writeSecurityAnalysisChainStepper(w io.Writer, a *utils.SecurityAnalysisView) {
+	if a == nil || a.ChainLength <= 1 || len(a.ChainSubcommands) == 0 {
+		return
+	}
+	useColor := envutil.ResolveColorPreference(true)
+	const dim = "\033[2m"
+	const reset = "\033[0m"
+	const green = "\033[32m"
+	const amber = "\033[33m"
+	const red = "\033[31m"
+
+	toneColor := func(tone string) string {
+		if !useColor {
+			return ""
+		}
+		switch strings.ToLower(strings.TrimSpace(tone)) {
+		case "low":
+			return green
+		case "high":
+			return red
+		default:
+			return amber
+		}
+	}
+	toneGlyph := func(tone string) string {
+		switch strings.ToLower(strings.TrimSpace(tone)) {
+		case "low":
+			return "●"
+		case "high":
+			return "●"
+		default:
+			return "●"
+		}
+	}
+
+	// Match index lengths defensively — ChainClassifications may be shorter
+	// than ChainSubcommands if a caller supplied mismatched slices. Unknown
+	// tones default to the amber "moderate" look so the missing entry is
+	// visible without claiming "low" safety.
+	visible := len(a.ChainSubcommands)
+	if visible > MaxChainStepperVisible {
+		visible = MaxChainStepperVisible
+	}
+
+	if useColor {
+		fmt.Fprintf(w, "%s    Chain (%d steps):%s\n", dim, a.ChainLength, reset)
+	} else {
+		fmt.Fprintf(w, "    Chain (%d steps):\n", a.ChainLength)
+	}
+
+	for i := 0; i < visible; i++ {
+		sub := truncateForStepper(a.ChainSubcommands[i], MaxChainStepperSubcommandWidth)
+		tone := ""
+		if i < len(a.ChainClassifications) {
+			tone = a.ChainClassifications[i]
+		}
+		if useColor {
+			fmt.Fprintf(w, "%s    [%s●%s] %s\n", dim, toneColor(tone), reset, sub)
+		} else {
+			fmt.Fprintf(w, "    [%s%s] %s\n", toneGlyph(tone), reset, sub)
+		}
+	}
+
+	hidden := a.ChainLength - visible
+	if hidden > 0 {
+		if useColor {
+			fmt.Fprintf(w, "%s    (+%d more — see full command above)%s\n", dim, hidden, reset)
+		} else {
+			fmt.Fprintf(w, "    (+%d more — see full command above)\n", hidden)
+		}
+	}
+}
+
+// truncateForStepper shortens s to maxWidth runes, appending "…" when
+// truncation happened. UTF-8 safe (counts runes, not bytes). SP-124b Phase 2.
+func truncateForStepper(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= maxWidth {
+		return s
+	}
+	if maxWidth <= 1 {
+		return string(runes[:maxWidth])
+	}
+	return string(runes[:maxWidth-1]) + "…"
 }
 
 func init() {

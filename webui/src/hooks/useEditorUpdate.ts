@@ -13,6 +13,7 @@ import type { ViewUpdate } from '@codemirror/view';
 import { useRef, useCallback } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import type { DiagnosticTrigger } from './useEditorDiagnostics';
+import type { CMViewAPI } from './useCMView';
 
 export interface UseEditorUpdateParams {
   /** Ref to the current buffer — avoids stale closures in the update listener */
@@ -21,8 +22,10 @@ export interface UseEditorUpdateParams {
   localContent: string;
   /** Setter for localContent — used when document changes in the editor */
   setLocalContent: React.Dispatch<React.SetStateAction<string>>;
-  /** Ref from useEditorFileIO — tracks whether an external update is in flight */
-  isExternalUpdateRef: React.MutableRefObject<boolean>;
+  /** CodeMirror view API ref — populated by EditorPane after `useCMView`
+   *  returns. Reading `cmViewApiRef.current?.isExternalUpdate()` is safe at
+   *  any time; before the API is mounted, it returns `false`. */
+  cmViewApiRef: React.MutableRefObject<CMViewAPI | null>;
   /** Ref from useEditorDiagnostics — triggers diagnostics fetch on content change */
   fetchDiagnosticsRef: React.MutableRefObject<(filePath: string, content: string, trigger?: DiagnosticTrigger) => void>;
   /** From useEditorCursor — handles cursor position updates */
@@ -60,7 +63,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
     bufferRef,
     localContent,
     setLocalContent,
-    isExternalUpdateRef,
+    cmViewApiRef,
     fetchDiagnosticsRef,
     handleCursorUpdate,
     handleScrollUpdate,
@@ -77,7 +80,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
       handleCursorUpdate(update);
 
       // Handle document content changes
-      if (update.docChanged && !isExternalUpdateRef.current) {
+      if (update.docChanged && !cmViewApiRef.current?.isExternalUpdate()) {
         const newContent = update.state.doc.toString();
 
         // Only update state when content actually changed (prevents unnecessary re-renders)
@@ -108,7 +111,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
       bufferRef,
       fetchDiagnosticsRef,
       setLocalContent,
-      isExternalUpdateRef,
+      cmViewApiRef,
       handleCursorUpdate,
       handleScrollUpdate,
       updateBufferContent,

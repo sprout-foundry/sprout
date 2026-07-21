@@ -37,9 +37,20 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 	_, _ = os.Stderr.Write([]byte(msg))
 }
 
-// getModelContextLimit returns the maximum context window for a model from the API,
-// capped by the user's MaxContextTokens setting when set.
-func (a *Agent) getModelContextLimit() int {
+// getNativeModelContextLimit returns the model's native context window
+// as reported by the underlying client, WITHOUT applying the user's
+// MaxContextTokens cap. Falls back to 32K when the client is nil or
+// the API call fails, matching getModelContextLimit()'s fallback
+// behavior.
+//
+// This is the raw value — the cap (if any) is applied separately by
+// callers that want the effective cap. New code that wants the
+// effective cap should prefer Agent.GetEffectiveContextCap() (the
+// post-SP-126 entry point) or configuration.ResolveEffectiveContextCap
+// for one-shot lookups; this helper exists for callers that
+// specifically need the native value (e.g. when computing the
+// effective cap in the first place).
+func (a *Agent) getNativeModelContextLimit() int {
 	c := a.getClient()
 	if c == nil {
 		a.Logger().Warn("No client available; using fallback context limit of 32K. Model context window could not be determined.")
@@ -50,12 +61,19 @@ func (a *Agent) getModelContextLimit() int {
 		a.Logger().Warn("Failed to get model context limit: %v; using fallback of 32K. The model may support a larger context window.", err)
 		return 32000
 	}
+	return limit
+}
+
+// getModelContextLimit returns the maximum context window for a model from the API,
+// capped by the user's MaxContextTokens setting when set.
+func (a *Agent) getModelContextLimit() int {
+	native := a.getNativeModelContextLimit()
 	if a.configManager != nil {
-		if cfg := a.configManager.GetConfig(); cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 && limit > *cfg.MaxContextTokens {
-			limit = *cfg.MaxContextTokens
+		if cfg := a.configManager.GetConfig(); cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 && native > *cfg.MaxContextTokens {
+			return *cfg.MaxContextTokens
 		}
 	}
-	return limit
+	return native
 }
 
 // PrintLine prints a line of text to the console content area synchronously.

@@ -7,7 +7,7 @@ package tools
 // environment — the WASM shell cannot spawn Chromium and the host's
 // browser_none.go returns a nopRenderer that always errors. Rather than
 // advertise a tool that can never succeed, browse_url is not registered in
-// WASM builds. (See AUDIT-C1.)
+// WASM builds. (See SP-112 Tier 2.)
 func registerBrowseURLTool() []ToolHandler {
 	return nil
 }

@@ -252,3 +252,219 @@ func sampleAnalysis() *utils.SecurityAnalysisView {
 		Recommendation: "approve",
 	}
 }
+
+// ────────────────────────────────────────────────────────────────────
+// SP-124b Phase 2: chain stepper tests.
+// ────────────────────────────────────────────────────────────────────
+
+// TestWriteSecurityAnalysisPanel_LongChainCollapsed verifies that when
+// the chain has more than 3 subcommands, the CLI stepper renders only
+// the first 3 and shows a "(+N more)" affordance to cap terminal noise.
+// Per spec: terminal-width-safe, truncate at 80 chars per subcommand.
+func TestWriteSecurityAnalysisPanel_LongChainCollapsed(t *testing.T) {
+	subs := []string{"git add -A", "git commit -m wip", "git push", "git tag v1", "git push --tags", "gh release create", "open URL", "rm -rf old"}
+	tone := []string{"low", "low", "moderate", "low", "moderate", "moderate", "low", "high"}
+
+	view := &utils.SecurityAnalysisView{
+		Summary:              "Chain of 8 ops",
+		Modifies:             ".git, URL",
+		RiskAssessment:       "high",
+		Recommendation:       "review",
+		ChainLength:          len(subs),
+		ChainSubcommands:     subs,
+		ChainClassifications: tone,
+	}
+
+	var buf bytes.Buffer
+	writeSecurityAnalysisPanel(&buf, view)
+	out := buf.String()
+
+	// First three subcommands must appear in order.
+	idx1 := strings.Index(out, "git add -A")
+	idx2 := strings.Index(out, "git commit -m wip")
+	idx3 := strings.Index(out, "git push")
+	if idx1 == -1 || idx2 == -1 || idx3 == -1 {
+		t.Fatalf("expected first 3 subcommands to appear, got:\n%s", out)
+	}
+	if !(idx1 < idx2 && idx2 < idx3) {
+		t.Errorf("first 3 subcommands should appear in order:\n%s", out)
+	}
+
+	// The 4th subcommand must NOT appear (collapsed).
+	if strings.Contains(out, "git tag v1") {
+		t.Errorf("4th subcommand should be collapsed, got:\n%s", out)
+	}
+
+	// The "+5 more" affordance must appear (8 total - 3 shown = 5 more).
+	if !strings.Contains(out, "+5 more") {
+		t.Errorf("expected '+5 more' affordance, got:\n%s", out)
+	}
+
+	// Each rendered subcommand line carries a colored risk dot prefix.
+	// We don't assert exact ANSI bytes (colorblind/no-color both produce
+	// glyphs), but we do require the dot glyph (●) before each visible
+	// subcommand. Three visible dots → exactly three ● instances in
+	// the stepper region. (No-color path uses the same unicode glyph.)
+	dotsBeforeFirst := strings.Count(out[:idx3], "\u25cf")
+	if dotsBeforeFirst < 3 {
+		t.Errorf("expected at least 3 risk-dot glyphs before the 3rd subcommand, got %d:\n%s", dotsBeforeFirst, out)
+	}
+}
+
+// TestWriteSecurityAnalysisPanel_ShortChainAllRendered verifies that a
+// 3-subcommand chain (the breakpoint) renders all subcommands — no
+// collapsing — so users see every step when the chain fits.
+func TestWriteSecurityAnalysisPanel_ShortChainAllRendered(t *testing.T) {
+	subs := []string{"echo a", "echo b", "echo c"}
+	tone := []string{"low", "low", "low"}
+
+	view := &utils.SecurityAnalysisView{
+		Summary:              "Chain of 3 ops",
+		RiskAssessment:       "low",
+		Recommendation:       "approve",
+		ChainLength:          3,
+		ChainSubcommands:     subs,
+		ChainClassifications: tone,
+	}
+
+	var buf bytes.Buffer
+	writeSecurityAnalysisPanel(&buf, view)
+	out := buf.String()
+
+	for _, sub := range subs {
+		if !strings.Contains(out, sub) {
+			t.Errorf("expected subcommand %q to appear, got:\n%s", sub, out)
+		}
+	}
+	if strings.Contains(out, "more") {
+		t.Errorf("short chain should not show '+N more' affordance, got:\n%s", out)
+	}
+}
+
+// TestWriteSecurityAnalysisPanel_NoChainForSingle is the regression
+// guard: when ChainLength=0 (single command) or ChainSubcommands is
+// nil/empty, the panel must render identically to the legacy
+// no-stepper output. SP-124 Phase 3 contract.
+func TestWriteSecurityAnalysisPanel_NoChainForSingle(t *testing.T) {
+	cases := []struct {
+		name string
+		view *utils.SecurityAnalysisView
+	}{
+		{
+			name: "chain length zero (single command path)",
+			view: &utils.SecurityAnalysisView{
+				Summary:        "Read-only diagnostic.",
+				RiskAssessment: "low",
+				Recommendation: "approve",
+				ChainLength:    0,
+			},
+		},
+		{
+			name: "chain subcommands nil (legacy path)",
+			view: sampleAnalysis(),
+		},
+		{
+			name: "chain subcommands empty array (defensive)",
+			view: &utils.SecurityAnalysisView{
+				Summary:          "Read-only diagnostic.",
+				RiskAssessment:   "low",
+				Recommendation:   "approve",
+				ChainLength:      0,
+				ChainSubcommands: []string{},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			writeSecurityAnalysisPanel(&buf, tc.view)
+			out := buf.String()
+
+			// Stepper markers must NOT appear.
+			if strings.Contains(out, "Chain (") {
+				t.Errorf("single-command panel should not show stepper header, got:\n%s", out)
+			}
+			if strings.Contains(out, "+N more") || strings.Contains(out, "+0 more") {
+				t.Errorf("single-command panel should not show collapse affordance, got:\n%s", out)
+			}
+
+			// Existing Phase 3 content must still render (regression guard).
+			if !strings.Contains(out, "Read-only diagnostic.") {
+				t.Errorf("expected legacy summary to render, got:\n%s", out)
+			}
+			if !strings.Contains(out, "Looks safe") {
+				t.Errorf("expected legacy recommendation badge to render, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestWriteSecurityAnalysisPanel_TruncatesLongSubcommand verifies that
+// subcommands longer than 80 chars are truncated with an ellipsis so
+// the panel stays readable on narrow terminals. Per spec: "truncate at
+// 80 chars per subcommand". Uses ChainLength>1 so the stepper actually
+// renders.
+func TestWriteSecurityAnalysisPanel_TruncatesLongSubcommand(t *testing.T) {
+	longCmd := strings.Repeat("very-long-token-", 10) // 150 chars
+	view := &utils.SecurityAnalysisView{
+		Summary:              "Chain of 2",
+		RiskAssessment:       "low",
+		Recommendation:       "approve",
+		ChainLength:          2,
+		ChainSubcommands:     []string{longCmd, "echo done"},
+		ChainClassifications: []string{"low", "low"},
+	}
+
+	var buf bytes.Buffer
+	writeSecurityAnalysisPanel(&buf, view)
+	out := buf.String()
+
+	// Full long command must NOT appear verbatim.
+	if strings.Contains(out, longCmd) {
+		t.Errorf("long subcommand should be truncated, got:\n%s", out)
+	}
+	// Truncation marker must appear (we use U+2026 unicode horizontal
+	// ellipsis "…" since dots have to share line space with the
+	// risk-glyph ● and the cell padding).
+	if !strings.Contains(out, "…") && !strings.Contains(out, "...") {
+		t.Errorf("expected truncation marker (… or ...), got:\n%s", out)
+	}
+}
+
+// TestWriteSecurityAnalysisPanel_ChainRendersBeforePicker verifies the
+// positional contract: the stepper must appear ABOVE the picker (so the
+// user sees chain context before deciding). Mirrors Phase 3's panel-
+// before-picker test.
+func TestWriteSecurityAnalysisPanel_ChainRendersBeforePicker(t *testing.T) {
+	view := &utils.SecurityAnalysisView{
+		Summary:              "Chain does X",
+		RiskAssessment:       "moderate",
+		Recommendation:       "review",
+		ChainLength:          2,
+		ChainSubcommands:     []string{"echo a", "echo b"},
+		ChainClassifications: []string{"low", "moderate"},
+	}
+
+	var buf bytes.Buffer
+	prev := SetApprovalPickerForTest(func(w io.Writer, sl *SelectList) (string, bool) {
+		fmt.Fprintln(w, "[picker footer marker]")
+		return "", false
+	})
+	t.Cleanup(func() { SetApprovalPickerForTest(prev) })
+
+	askForSecurityApprovalWriter(&buf, "High-risk operation", "echo a && echo b", view)
+	out := buf.String()
+
+	stepperIdx := strings.Index(out, "echo a")
+	footerIdx := strings.Index(out, "[picker footer marker]")
+	if stepperIdx == -1 {
+		t.Fatalf("expected stepper to appear in output, got:\n%s", out)
+	}
+	if footerIdx == -1 {
+		t.Fatalf("expected picker footer marker to appear, got:\n%s", out)
+	}
+	if stepperIdx > footerIdx {
+		t.Errorf("stepper must appear BEFORE picker footer:\n%s", out)
+	}
+}

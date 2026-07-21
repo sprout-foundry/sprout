@@ -743,9 +743,12 @@ func (c *ScriptedClient) GetProvider() string {
 	return "test"
 }
 
-// GetModelContextLimit returns the context limit
+// GetModelContextLimit returns the context limit. ScriptedClient defaults to
+// 128K (realistic agentic window). Tests that need to exercise Low-Context
+// Mode (SP-125) or the context floor should construct a client with a custom
+// limit rather than relying on this default.
 func (c *ScriptedClient) GetModelContextLimit() (int, error) {
-	return 4096, nil
+	return 128_000, nil
 }
 
 // ListModels returns available models

@@ -160,7 +160,7 @@ native embeddings). This matrix documents what's available on each.
 | Feature | Linux/macOS | Windows | WASM | no-CGO |
 |---------|:-----------:|:-------:|:----:|:------:|
 | **Shell execution** | ✅ Full | ✅ Full | ⚠️ No streaming | ✅ Full |
-| **Background processes** | ✅ Process groups | ⚠️ No group kill | ❌ Not available | ✅ Full |
+| **Background processes** | ✅ Process groups | ✅ Job Objects (cascade kill) | ❌ Not available | ✅ Full |
 | **Process signals** | ✅ SIGINT→TERM→KILL | ⚠️ Kill only | ❌ N/A | ✅ Full |
 | **Vision / image analysis** | ✅ Full | ✅ Full | ❌ Not available | ✅ Full |
 | **PDF processing** | ✅ Full | ✅ Full | ❌ Not available | ✅ Full |
@@ -190,12 +190,14 @@ or run native libraries. Shell commands route through a JS executor
 registered by the WebUI. Vision, codegraph, and background processes return
 informative errors. Terminal is hardcoded to 80×24.
 
-**Windows:** No Unix process groups (`Setpgid`), so background process
-cleanup can't cascade to children. Signal escalation uses
-`CTRL_BREAK_EVENT` → `TerminateProcess` instead of SIGINT → SIGTERM →
-SIGKILL. Terminal raw mode uses `term.MakeRaw` (may cause staircase
-rendering without OPOST preservation). PID-alive checks may return false
-positives.
+**Windows:** Background processes are joined to a Job Object with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so cleanup cascades to descendants
+(unix-style process groups don't exist on Windows; SP-112-1). Signal
+escalation uses `CTRL_BREAK_EVENT` → `TerminateProcess` instead of
+SIGINT → SIGTERM → SIGKILL. Terminal raw mode uses `term.MakeRaw` (may
+cause staircase rendering without OPOST preservation). PID-alive checks
+use `OpenProcess` + `GetExitCodeProcess` (the legacy `os.FindProcess`
+returned false positives for recycled PIDs).
 
 **no-CGO:** ONNX Runtime requires CGO. Without it, embeddings fall back to
 a deterministic hash-based provider (384-dim FNV-1a). Search and recall

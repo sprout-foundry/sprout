@@ -26,6 +26,10 @@ type MockLLMProvider struct {
 	CallCount         int
 	model             string
 	debug             bool
+	// contextLimit overrides the default 128K context window when non-zero.
+	// Used by tests that exercise Low-Context Mode (SP-125) or the context
+	// floor. Zero means "use the 128K default."
+	contextLimit      int
 }
 
 // NewMockLLMProvider creates a new mock LLM provider with sensible defaults.
@@ -34,6 +38,16 @@ func NewMockLLMProvider() *MockLLMProvider {
 		ResponsesByPrompt: make(map[string]string),
 		DefaultResponse:   "", // empty means use the auto-generated default
 	}
+}
+
+// NewMockLLMProviderWithLimit creates a mock provider with a specific context
+// window. Use this in tests that need to exercise Low-Context Mode (SP-125)
+// auto-detection (pass a value < 64_000) or the context floor error (pass a
+// value < 8_000).
+func NewMockLLMProviderWithLimit(limit int) *MockLLMProvider {
+	m := NewMockLLMProvider()
+	m.contextLimit = limit
+	return m
 }
 
 // getLastUserMessage extracts the text content of the last user message
@@ -194,15 +208,25 @@ func (m *MockLLMProvider) GetProvider() string {
 	return "mock"
 }
 
-// GetModelContextLimit returns a fixed context limit.
+// GetModelContextLimit returns a fixed context limit. The default of 128K
+// reflects a realistic agentic-capable model; tests that need to exercise
+// the Low-Context Mode (SP-125) paths or the context floor can construct
+// a provider with a smaller window via NewMockLLMProviderWithLimit.
 func (m *MockLLMProvider) GetModelContextLimit() (int, error) {
-	return 4096, nil
+	if m.contextLimit > 0 {
+		return m.contextLimit, nil
+	}
+	return 128_000, nil
 }
 
 // ListModels returns a single mock model.
 func (m *MockLLMProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	limit := 128_000
+	if m.contextLimit > 0 {
+		limit = m.contextLimit
+	}
 	return []api.ModelInfo{
-		{ID: "mock-model", Name: "mock-model", ContextLength: 4096},
+		{ID: "mock-model", Name: "mock-model", ContextLength: limit},
 	}, nil
 }
 

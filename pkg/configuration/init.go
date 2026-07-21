@@ -139,13 +139,21 @@ func Initialize() (*Config, *APIKeys, error) {
 			fmt.Printf("   Config directory: %s\n\n", configDir)
 		}
 
-		// Set a default provider that works in CI
-		if HasProviderAuth("openrouter") {
-			config.LastUsedProvider = "openrouter"
-			bracketOK(os.Stdout, "Using OpenRouter provider from environment")
-		} else if HasProviderAuth("openai") {
-			config.LastUsedProvider = "openai"
-			bracketOK(os.Stdout, "Using OpenAI provider from environment")
+		// Set a default provider that works in CI. The historical chain
+		// (openrouter → openai → fall through) was alphabetical and ignored
+		// the user's actual usage history; instead, prefer a provider the
+		// user has already used (ProviderModels entry), then any provider
+		// with credentials configured. See orderProvidersByUsage.
+		chosen := ""
+		for _, name := range orderProvidersByUsage(KnownProviderNames(), config) {
+			if HasProviderAuth(name) {
+				chosen = name
+				break
+			}
+		}
+		if chosen != "" {
+			config.LastUsedProvider = chosen
+			bracketOK(os.Stdout, fmt.Sprintf("Using %s provider from environment", GetProviderDisplayName(chosen)))
 		} else {
 			// Don't save test provider as default - it's for testing only
 			// Leave LastUsedProvider empty and let callers handle the test provider
@@ -169,7 +177,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		}
 
 		// First run or setup needed - select initial provider
-		provider, err := selectInitialProvider(apiKeys)
+		provider, err := selectInitialProvider(apiKeys, config)
 		if err != nil {
 			return nil, nil, fmt.Errorf("provider setup failed: %w", err)
 		}
@@ -202,7 +210,7 @@ func Initialize() (*Config, *APIKeys, error) {
 }
 
 // selectInitialProvider guides user through initial provider selection
-func selectInitialProvider(apiKeys *APIKeys) (string, error) {
+func selectInitialProvider(apiKeys *APIKeys, cfg *Config) (string, error) {
 	// Non-interactive environments cannot prompt for provider selection.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
@@ -232,6 +240,14 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			}
 		}
 	}
+	// Reorder envProviders by user history (used-before first, then any
+	// creds, then the rest). The display menu and selection index both
+	// reference this slice, so the order is what the user sees and what
+	// the default pick points at. Without this reordering the first
+	// entry would be whatever KnownProviderNames() happens to return
+	// first alphabetically (often openrouter), regardless of which
+	// provider the user actually runs day-to-day.
+	envProviders = orderProvidersByUsage(envProviders, cfg)
 
 	// If we have providers with environment variables, offer them with skip option
 	if len(envProviders) > 0 {
@@ -277,6 +293,11 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			providersWithKeys = append(providersWithKeys, name)
 		}
 	}
+	// Same tiered reordering as envProviders: prefer providers the user
+	// has actually used before, then any provider with credentials, then
+	// the rest. Without this, the "Ready to use" list defaults to
+	// openrouter-first purely by alphabetical chance.
+	providersWithKeys = orderProvidersByUsage(providersWithKeys, cfg)
 
 	// If we have providers ready to use, show them first
 	if len(providersWithKeys) > 0 {
@@ -463,14 +484,26 @@ func GetAvailableProviders() []string {
 		result = append(result, provider)
 	}
 
-	if cfg, err := Load(); err == nil {
-		for provider := range cfg.CustomProviders {
+	// Add custom providers to the result set before sorting.
+	var cfg *Config
+	if c, err := Load(); err == nil {
+		for provider := range c.CustomProviders {
 			if !providerSet[provider] {
 				result = append(result, provider)
 			}
 		}
+		cfg = c
 	}
 	sort.Strings(result)
+
+	// Reorder by user history: previously-used credentialed providers
+	// first, then credentialed-but-unused, then the rest. The default
+	// alphabetical sort put openrouter first almost every time, which
+	// doesn't reflect what the user actually runs day-to-day. Tier 1
+	// (ProviderModels history) needs cfg; if Load failed above, cfg is
+	// nil and the helper degrades to a 2-tier sort by credentials
+	// alone.
+	result = orderProvidersByUsage(result, cfg)
 
 	return result
 }

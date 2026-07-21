@@ -8,6 +8,11 @@
  * object — this parser decodes that string into the typed camelCase shape
  * the WebUI components consume.
  *
+ * SP-124b Phase 2: the payload may also carry `chain_length`,
+ * `chain_subcommands`, and `chain_classifications` for chained commands.
+ * These flow through unchanged into the parsed shape so the WebUI stepper
+ * can render per-subcommand dots when ChainLength > 1.
+ *
  * Returns undefined when:
  *  - the raw value is missing, empty, or not a string
  *  - JSON.parse fails (malformed payload from the LLM)
@@ -24,7 +29,14 @@ export interface SecurityAnalysisShape {
   modifies: string;
   riskAssessment: string;
   recommendation: string;
+  // SP-124b Phase 2: chain metadata for the stepper. 0 / undefined =
+  // single-command analysis (no stepper).
+  chainLength?: number;
+  chainSubcommands?: string[];
+  chainClassifications?: ('low' | 'moderate' | 'high')[];
 }
+
+const VALID_RISK_TONES = new Set(['low', 'moderate', 'high']);
 
 /**
  * Extract and parse the `security_analysis` field from a WS event payload.
@@ -56,6 +68,20 @@ export function parseSecurityAnalysisString(raw: unknown): SecurityAnalysisShape
     };
     if (!sa.summary && !sa.modifies && !sa.riskAssessment && !sa.recommendation) {
       return undefined;
+    }
+    // SP-124b Phase 2: chain metadata. Only attach when chain_length is a
+    // positive integer — single-command analyses keep the optional fields
+    // undefined so the WebUI stepper is suppressed by the `chainLength > 1`
+    // check in SecurityApprovalDialog.tsx.
+    if (typeof parsed.chain_length === 'number' && Number.isFinite(parsed.chain_length) && parsed.chain_length > 1) {
+      sa.chainLength = parsed.chain_length;
+      if (Array.isArray(parsed.chain_subcommands)) {
+        sa.chainSubcommands = parsed.chain_subcommands.filter((s): s is string => typeof s === 'string');
+      }
+      if (Array.isArray(parsed.chain_classifications)) {
+        sa.chainClassifications = parsed.chain_classifications
+          .filter((s): s is 'low' | 'moderate' | 'high' => typeof s === 'string' && VALID_RISK_TONES.has(s));
+      }
     }
     return sa;
   } catch {

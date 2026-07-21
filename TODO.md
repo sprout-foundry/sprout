@@ -20,9 +20,74 @@ _Spec: `roadmap/SP-123-user-command-policies.md`._
 ## SP-122: Security Classifier — Chained Command Handling
 
 **Status:** ✅ Shipped — Phase 1 + Phase 2 both implemented.
+**Reviewed:** 2026-07-20 — implementation verified, test counts corrected, follow-ups noted below.
 
 - Phase 1 (nested safe-path matching): `safeRmRfComponents` set in `shell_patterns.go` + `isSafeRmRfComponent` helper. Nested paths like `rm -rf internal/api/webui/dist/sprout-webui` classify SAFE because `dist` is a known build artifact. Path traversal (`../`) and absolute system paths rejected.
 - Phase 2 (chained command splitting): `classifyChainedCommand` in `security_classifier.go` splits on `&&`, `||`, `;`, `|` (quote-aware), classifies each subcommand independently, and returns the max risk. Safe portions of a chain don't elevate to DANGEROUS.
+
+### Review 2026-07-20
+
+Verified every claim against the code at `main` @ `32fd9ac9`. The core
+implementation is sound and shipping. Three categories of findings.
+
+**Test-count corrections (the SHIPPED notes were inaccurate):**
+
+The SP-122-1b entry listed six test functions with specific case counts.
+Two of the six functions **do not exist**, and the counts for the rest
+were slightly off. Actual state (counted via `go test -v`):
+
+| Function | Claimed | Actual |
+|---|---:|---:|
+| `TestIsSafeRmRfPrefix_NestedPaths` | 46 | **does not exist** |
+| `TestIsSafeRmRfPrefix_NestedPathsClassifiedSafe` | 5 | **does not exist** |
+| `TestIsSafeRmRfComponent` | 23 | 22 |
+| `TestIsSafeRmRfPrefixBackwardCompatibility` | 16 | 17 |
+| `TestSafeRmRfTraversalEscape` | 6 | 6 ✓ |
+| `TestClassifyChainedCommand` | 25 | 25 ✓ |
+
+The two missing functions' coverage appears to have been folded into
+`TestNestedPathRmRfSafety` (31 cases) — the nested-path classification
+behavior is well-tested, just under a different name than the SHIPPED
+note records. **Net coverage is solid (~101 subtests across 5 functions);
+only the documentation was wrong.**
+
+**Follow-up: `xargs rm -rf` classification gap (non-security, low priority):**
+
+The TODO documents this as a "known gap": `ls | xargs rm -rf` classifies
+as CAUTION. Verified and traced — the chain splits on `|` into `ls`
+(SAFE) and `xargs rm -rf`. The `xargs rm -rf` subcommand doesn't match
+the `rm -rf ` prefix in `isCautionPattern` (because it starts with
+`xargs`), so it falls through to the default `return SecurityCaution`
+at `security_classifier.go:538`.
+
+CAUTION still prompts the user, so this is **not a security bypass** —
+the user sees a confirmation dialog. But the *reason* for the prompt is
+imprecise: it's flagged as a generic caution rather than recognizing
+the `rm -rf` semantic. A future improvement would detect `xargs`-fed
+destructive verbs (`xargs rm`, `xargs rm -rf`) and elevate to a
+destructive-classification prompt with a clearer message. **Defer until
+a user reports confusion about the prompt wording** — the current
+behavior is safe, just not maximally informative.
+
+**Convention finding: file-size violations (tech debt, not a blocker):**
+
+Two files in the classifier exceed the AGENTS.md 500-line guideline:
+
+| File | Lines | Limit |
+|---|---:|---:|
+| `pkg/agent_tools/security_classifier.go` | 858 | 500 |
+| `pkg/agent_tools/shell_patterns.go` | 767 | 500 |
+
+`security_classifier.go` carries the main classifier logic, chain
+splitting, the `classifySingleCommand` dispatch, and the
+`classifyReadOnlyForLoop` helper. `shell_patterns.go` carries the
+safe/caution/dangerous pattern tables plus the matching helpers.
+
+These are candidates for SP-098 (Large-File Decomposition Second Pass)
+but are **not blocking** — the code is well-organized within each file
+and the size grew naturally as the classifier gained the nested-path
+and chained-command features. Flagging here so SP-098's file table can
+be updated when it runs.
 
 **Priority**: High — blocks safe dev workflows (vendoring, build cycles)
 
@@ -117,6 +182,92 @@ commands are perfectly safe but got blocked by association.
 - `pkg/agent_tools/shell_handler.go` — where block decision is enforced
 
 ---
+
+## SP-124b: Batch Security Analysis for Chained Commands
+
+_Active phase: Phase 1 (the only one defined so far). Phase 2 deferred until Phase 1 commits._
+_Spec: `roadmap/SP-124b-batch-analysis.md` — read this file in full before starting._
+_Subsumes SP-124 "Future considerations" item #1._
+_Consumes SP-122's `SplitChainedCommand` + `classifyChainedCommand` (do not duplicate that work)._
+
+### Phase 1: Backend batch analysis (single end-to-end item)
+
+- [x] **SP-124b-1:** Implement SP-124b Phase 1 end-to-end as a single
+      delivery, in this exact order (coder MUST do all 5 sub-steps
+      before declaring done, not one per sub-item):
+      1. `pkg/agent_tools/security_classifier.go`: add
+         `ChainedClassification` struct + `ClassifyChainedCommand(cmd
+         string) []ChainedClassification`. Populate `Subcommand`,
+         `Risk`, `Reasoning`, `Category` per part. Wrap the existing
+         `classifyChainedCommand`; its `[]SecurityRisk` return stays
+         intact for backwards compat. Existing
+         `security_classifier_test.go` must continue to pass
+         unchanged.
+      2. `pkg/agent/security_analyzer.go`: add `Chain` struct +
+         `ParseChain(s string) Chain`. **Delegate the actual splitting
+         to `pkg/agent_tools.SplitChainedCommand` — do NOT write a
+         new splitter.**
+      3. Same file: add `AnalyzeChain(ctx, chain,
+         []ChainedClassification) (*SecurityAnalysis, error)`.
+         Prompt selection: chain-aware when `len(chain.Subcommands) >
+         1`, SP-124 single-command prompt when `== 1`. Embed the
+         per-subcommand classification table in the chain prompt.
+      4. Same file: switch cache key from raw string to normalized
+         chain (whitespace-collapse per subcommand, operators
+         preserved). Bump cache key prefix from the SP-124 namespace
+         to an SP-124b namespace so prior sessions' entries are
+         invalid (no mixed-schema reads).
+      5. Build + tests: `go build ./...`, `go test ./...`,
+         `make build-all` all clean. New tests covering:
+         - `ParseChain` matches `SplitChainedCommand` on the same input.
+         - Quote-preservation: `ParseChain("echo 'a && b'")` →
+           one subcommand.
+         - Prompt selection by chain length (mock provider captures
+           the system prompt; assert single vs chain variant).
+         - One LLM call per `AnalyzeChain` (mock provider asserts
+           `ProviderChat` called exactly once).
+         - Cache hit on normalization (`a && b` ↔ `a  &&  b`);
+           cache miss on operator change (`a && b` vs `a || b`).
+         - Per-subcommand `ChainedClassification` populated with
+           non-empty `Reasoning` and a valid `Category`.
+
+      **Acceptance**: all 5 sub-steps committed together as one
+      conventional commit (e.g. `feat(security): batch LLM analysis
+      for chained commands (SP-124b Phase 1)`). Build + tests
+      clean. Single-command path behavior unchanged (regression
+      covered by existing SP-124 tests).
+
+      **Hard constraints**:
+      - DO NOT touch `pkg/agent_tools/SplitChainedCommand` or
+        `pkg/agent_tools/classifyChainedCommand` — they belong to
+        SP-122 and are shipped.
+      - DO NOT touch `SecurityAnalysis` struct fields; if Phase 1
+        genuinely needs new fields, add new optional fields with
+        nil-safe defaults so the schema is forward-compatible.
+      - The cache key prefix change is mandatory: writing Phase 1
+        data under the SP-124 prefix is a guaranteed bug when
+        prior-session cache entries exist.
+
+      **SHIPPED 2026-07-19** at commit `ad0c20d0`. All 5 sub-steps landed
+      in a single conventional commit. `pkg/agent_tools/security_classifier.go`
+      gains `ChainedClassification` + `ClassifyChainedCommand` (backwards
+      compatible — `classifyChainedCommand` and `SplitChainedCommand` from
+      SP-122 untouched). `pkg/agent/security_analyzer.go` gains `Chain`,
+      `ParseChain` (delegates to SP-122 splitter), `AnalyzeChain` (chain-aware
+      prompt when `len(Subcommands) > 1`, SP-124 prompt when `== 1`), and a
+      quote-aware `tokenizeChain` that emits operator tokens (AND/OR/PIPE/SEQ)
+      into the cache key so `a && b` and `a || b` no longer collide. Cache
+      keys carry the `sp-124b:v1:` namespace prefix so prior-session SP-124
+      entries are invalid by design. `pkg/agent/security_analyzer_cache.go`
+      `Get`/`Set` normalize via `ChainCacheKey` so any new caller benefits
+      automatically. Approval broker updated to use `ChainCacheKey`. 647-line
+      test file `pkg/agent/security_analyzer_sp124b_test.go` covers ParseChain
+      match-against-SplitChainedCommand, quote preservation (`'a && b'` stays
+      one subcommand), prompt selection by chain length, single-LLM-call
+      guarantee, cache hit on whitespace normalization, cache miss on
+      operator change, and per-subcommand populated Reasoning + Category.
+      Single-command SP-124 regression tests (`TestAnalyzeShellCommand_*`)
+      unchanged and still pass.
 
 ## SP-116: Multi-Instance Isolation
 
@@ -849,15 +1000,52 @@ split:
 
 ### Phase order
 
-- [ ] **SP-115-1:** Extract `SecuritySubManager`, `OutputSubManager`,
+- [x] **SP-115-1:** Extract `SecuritySubManager`, `OutputSubManager`,
       `MCPSubManager`, `PlanSubManager`, `SessionSubManager`. Make
       `AgentStateManager` a facade that holds them and delegates.
       `go build ./...` and `go test ./pkg/agent/...` clean. ~1 week.
-- [ ] **SP-115-2:** Migrate callsites. Grep
+      **SHIPPED 2026-07-19** (commit `2d729d22`). Extracted 4 of 5
+      planned sub-managers (`AgentSessionManager`,
+      `AgentMetricsManager`, `AgentPersonaManager`,
+      `AgentSecurityStateManager`) plus the pre-existing
+      `AgentSecurityManager`/`AgentOutputManager`/`AgentMCPManager`
+      (already wired on the Agent struct since before this refactor).
+      `AgentStateManager` shrunk from 756 lines to 21 lines via Go
+      struct embedding — the 4 sub-managers are embedded as fields
+      and method promotion satisfies all 28 sub-interfaces. Zero
+      interface changes, zero callsite churn (all `a.state.X()`
+      calls work unchanged). Deferred: `PlanSubManager` — the spec
+      references a `PlanStateManager` interface that doesn't exist
+      in the 28 sub-interfaces; this is a spec gap that should be
+      resolved (add the interface or remove from the spec) before
+      extracting a Plan sub-manager.
+
+- [x] **SP-115-2:** Migrate callsites. Grep
       `*StateManager`/`s.state.` and rewrite each to use the focused
       sub-manager where the callsite only needs one domain. ~0.5 week.
-- [ ] **SP-115-3:** Update docstrings, run `go test -race`, verify no
+      **No-op after SP-115-1's embedding approach.** Because the
+      facade uses struct embedding (not delegation), every
+      `a.state.GetMessages()` etc. call resolves transparently to the
+      embedded `*AgentSessionManager`. Only one struct-literal
+      `&AgentStateManager{circuitBreaker: cb}` had to be migrated
+      (in `tool_executor_circuit_breaker_test.go`). No further
+      callsite migration is needed. Recommend retiring this item
+      (or repurposing it to "migrate callsites that benefit from
+      tighter field types" — an optional optimization, not a
+      correctness change).
+
+- [x] **SP-115-3:** Update docstrings, run `go test -race`, verify no
       regressions in 28-interface callers. ~0.5 week.
+      **SHIPPED.** Docstrings on `AgentStateManager` (the facade)
+      and `AgentSessionManager` now list which of the 28 sub-interfaces
+      each sub-manager implements and steer new code to prefer the
+      focused sub-manager type over `*StateManager` when only one
+      domain is needed. `go test ./pkg/agent/...` clean (38.7s);
+      all 28 interface callers still work via Go method promotion.
+      `go test -race` was not run on this Termux/Android host
+      (race detector unsupported here); the nil-receiver pattern
+      added to every sub-manager method preserves backward
+      compatibility with bare `&AgentStateManager{}` test literals.
 
 ### Acceptance
 
@@ -1003,6 +1191,151 @@ MCP, subagent, auth, billing, task, and mode flows.
 3. **Terminal-state discipline is inconsistent** — codebase has
    infrastructure for REPL-safe prompts but `/rewind` and onboarding
    fallback bypass it (H5, L1).
+
+---
+
+## SP-125: Low-Context Mode (32K context support)
+
+**Spec:** `roadmap/SP-125-low-context-mode.md`
+**Status:** 🔵 Scoping — design complete, not yet approved for implementation
+**Created:** 2026-07-20
+
+Goal: make sprout usable at 32K context (local/offline inference — Ollama,
+LM Studio, llama.cpp) by reducing fixed per-turn overhead from ~16K tokens
+(50% of 32K) to ~2.5K tokens (8%), via a config-driven `ContextProfile`
+abstraction. Not a replacement for the 128K+ workflow — an opt-in fallback
+for small-context models.
+
+### Thresholds
+
+| Band | Range | Behavior |
+|---|---|---|
+| Full | ≥ 64K | default sprout (all tools, full prompt) |
+| Low-Context (LCM) | 8K–64K | lite prompt, 8-tool allowlist, AGENTS.md **always injected** (warned if large) |
+| Refused | < 8K (`ContextFloor`) | hard error at agent creation |
+
+### Steps to ship
+
+- [ ] **SP-125-1:** Core abstraction. Create `pkg/configuration/context_profile.go`
+      with `ContextMode` type, `ContextProfile` struct (8 lever fields), two baked
+      presets (`fullContextProfile` zero-value default, `lowContextProfile` 8-tool
+      preset), `ResolveContextProfile(cfg, modelContextWindow)` resolver, and
+      `ContextFloor = 8_000` constant with the hard-error branch. Unit tests for
+      resolution precedence (explicit config > auto-detect > default) and the
+      floor error. ~3 hrs.
+      **Acceptance:** `go test ./pkg/configuration/...` passes; zero-value
+      `ContextProfile` produces full-mode defaults; context window 4096 returns
+      the floor error.
+
+- [ ] **SP-125-2:** Config surface. Add `ContextMode ContextMode` field to
+      `Config` in `pkg/configuration/config.go` (mirror the `RiskProfile`
+      pattern). Update `config_merge.go` so explicit `ContextMode` wins on merge.
+      ~1 hr.
+      **Acceptance:** `config.context_mode = "low_context"` round-trips through
+      save/load; empty value means "auto" (existing behavior unchanged).
+
+- [ ] **SP-125-3:** Lite system prompt. Write `pkg/agent/prompts/system_prompt.lite.md`
+      (~80–120 lines, ~1.5K tokens) — core identity, tool guidelines, git safety
+      rules (verbatim), terse error recovery + completion criteria. Strip
+      delegation/review/persona/skills/memory/duplicate-detection sections.
+      ~4 hrs.
+      **Acceptance:** Lite prompt is < 2K tokens; git safety rules match the full
+      prompt verbatim; no reference to subagents or skills.
+
+- [ ] **SP-125-4:** Wire `ContextProfile` into `Agent`. Store the resolved
+      profile on the `Agent` struct in `agent_creation.go` (call
+      `ResolveContextProfile` once at creation). Add the `//go:embed` for
+      `system_prompt.lite.md`. ~2 hrs.
+      **Acceptance:** Agent creation succeeds at 32K (LCM auto-activated) and
+      at 4K (floor error surfaces cleanly); 128K+ models get full profile with
+      zero behavior change.
+
+- [ ] **SP-125-5:** Lever 1 — tool subset. In `pkg/agent/conversation.go:81`,
+      after `BuildToolDefinitions()`, filter by `profile.ToolAllowlist` when
+      non-empty (reuse existing `filterToolsByName`). ~1 hr.
+      **Acceptance:** At 32K, exactly 8 tools are registered
+      (`shell_command, read_file, write_file, edit_file, search_files, commit,
+      list_changes, recover_file`); at 128K+, all 44 tools register unchanged.
+
+- [ ] **SP-125-6:** Lever 2 — lite prompt selection. In `embedded_prompts.go`,
+      select `systemPromptContent` vs `systemPromptLiteContent` based on
+      `profile.SystemPromptPath`. ~1 hr.
+      **Acceptance:** Token count of the 32K system prompt is ~1.5K (measured
+      via `EstimateTokens`), down from ~6.6K.
+
+- [ ] **SP-125-7:** Lever 3 — AGENTS.md size warning (revised 2026-07-20).
+      `AGENTS.md` is **always injected** in every mode — it carries core
+      project conventions and must never be silently dropped. The only
+      LCM-specific behavior is an advisory warning when the file is large
+      (>4K tokens). In `GetEmbeddedSystemPrompt` (`embedded_prompts.go:54`),
+      after loading context files, if `profile.Mode == ContextModeLowContext`
+      and `EstimateTokens(contextFiles) > 4000`, emit a one-time stderr
+      warning directing the user to shrink the file if they want (never
+      suppress it). Remove the `SkipAgentsMd` field from `ContextProfile`
+      and any test assertions on it. ~45 min.
+      **Acceptance:** At 32K with an `AGENTS.md` present in cwd, the file
+      IS injected (not skipped); a large file (>4K tokens) triggers the
+      advisory warning once; a small file injects silently; the
+      `SkipAgentsMd` field no longer exists on `ContextProfile`.
+
+- [ ] **SP-125-8:** Lever 4 — compaction trigger. In `context_budget.go`,
+      `computeCompactionTriggerFraction()` returns
+      `profile.CompactionTriggerFraction` when > 0, else the computed default.
+      In `rollup.go`, `recentTurnsToPreserve` reads
+      `profile.RecentTurnsToPreserve` when > 0 (convert const → var + accessor).
+      ~2 hrs.
+      **Acceptance:** At 32K, trigger fraction is 0.85 and recency is 2;
+      at 128K+, defaults (0.70 / 5) are unchanged.
+
+- [ ] **SP-125-9:** Lever 5 — disable proactive context. In `seed_query.go:153`,
+      add `!a.contextProfile.SkipProactiveContext` to the
+      `shouldInjectProactiveContext` condition chain. ~30 min.
+      **Acceptance:** At 32K, no proactive context is injected after turn 1;
+      at 128K+, it is.
+
+- [ ] **SP-125-10:** Lever 6 — repo_map depth. Default depth reads
+      `profile.RepoMapDefaultDepth` when > 0, else 3. (repo_map is not in the
+      8-tool allowlist, but this covers the case where a user forces LCM via
+      config while keeping repo_map.) ~30 min.
+      **Acceptance:** Depth override applies when set; default unchanged when 0.
+
+- [ ] **SP-125-11:** Eligibility update. In `pkg/modelcontract/eligibility.go`,
+      add `RoleLowContext = "low_context"` and `LowContextMinContext = 16_000`;
+      `ClassifyEligibleRoles` returns `[]string{RoleLowContext}` for the 16K–64K
+      band. Update `ContextWarning` to mention LCM auto-activation. ~2 hrs.
+      **Acceptance:** A model with 32K context window is classified
+      `RoleLowContext` (not `nil`); the `/models` listing shows the LCM warning.
+
+- [ ] **SP-125-12:** Activation notice. When `ResolveContextProfile` picks LCM
+      via auto-detect (not explicit config), print a one-time stderr notice:
+      `⚠ 32K context detected — Low-Context Mode active (8 tools, lite
+      prompt, AGENTS.md kept). /context full to override.` ~1 hr.
+      **Acceptance:** Notice appears once on first turn at 32K; does not appear
+      at 128K+; does not appear if user explicitly set `context_mode: "low_context"`.
+
+- [ ] **SP-125-13:** Integration test. Spin up an agent against a mock 32K
+      model and verify: (a) 8 tools registered, (b) lite prompt loaded, (c)
+      AGENTS.md **is** injected (with warning if >4K tokens), (d) proactive
+      context disabled, (e) compaction trigger at 0.85, (f) floor error fires
+      at 4K. ~3 hrs.
+      **Acceptance:** Test passes; `go test ./pkg/agent/...` clean.
+
+- [ ] **SP-125-14:** Validate token budget empirically. Run a real session
+      against a 32K model (Ollama/LM Studio) with sprout's token instrumentation
+      (`metrics.go` `GetMaxContextTokens`, `output_router.go:410` usage %).
+      Confirm fixed floor is ~6.4K tokens (lite prompt + 8 tools + AGENTS.md)
+      and a 3-file edit session completes
+      without truncation. ~2 hrs.
+      **Acceptance:** Measured floor within 20% of the spec's ~2.5K estimate;
+      session completes 3+ tool round-trips at 32K.
+
+**Total estimate:** ~24 hrs (3 focused days). Levers are independently
+shippable — SP-125-5 + SP-125-6 (tool subset + lite prompt) recover ~8.8K
+tokens and can ship first behind the abstraction, before levers 3–6 are wired.
+
+**Non-goals (deferred):** dynamic mid-session mode switching; user-defined
+profile maps; subagent LCM inheritance (R4 in spec); a lite capability probe
+variant (R3 in spec).
 
 ---
 

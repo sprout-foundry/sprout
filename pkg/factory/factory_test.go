@@ -157,8 +157,8 @@ func TestTestClient_GetModelContextLimit(t *testing.T) {
 		t.Fatalf("GetModelContextLimit failed: %v", err)
 	}
 
-	if limit != 4096 {
-		t.Errorf("Expected context limit 4096, got %d", limit)
+	if limit != 128_000 {
+		t.Errorf("Expected context limit 128000, got %d", limit)
 	}
 }
 
@@ -179,8 +179,8 @@ func TestTestClient_ListModels(t *testing.T) {
 		t.Errorf("Expected model name 'test-model', got '%s'", models[0].Name)
 	}
 
-	if models[0].ContextLength != 4096 {
-		t.Errorf("Expected context length 4096, got %d", models[0].ContextLength)
+	if models[0].ContextLength != 128_000 {
+		t.Errorf("Expected context length 128000, got %d", models[0].ContextLength)
 	}
 }
 

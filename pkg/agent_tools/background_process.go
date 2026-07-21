@@ -42,6 +42,13 @@ type BackgroundProcess struct {
 	exitCode   int
 	mu         sync.Mutex
 	publisher  *OutputChunkPublisher // non-nil for automate sessions with an event bus
+
+	// jobHandle is the Windows Job Object handle that owns this process.
+	// Set by StartWithOptions on Windows; closing it kills all descendants.
+	// Always 0 on non-Windows platforms — guarded by runtime.GOOS checks
+	// at the call sites. Using uintptr to avoid importing golang.org/x/sys/windows
+	// in this cross-platform file (the handle is only used on Windows).
+	jobHandle uintptr
 }
 
 // GetPID returns the process PID under the lock. Returns 0 if the process
@@ -234,6 +241,14 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		return "", fmt.Errorf("start command: %w", err)
 	}
 
+	// SP-112-1: assign the process to a Job Object so descendants are
+	// cleaned up when the Job handle is closed. The handle is registered
+	// in jobRegistry by AttachProcessToJob.
+	jobHandle := attachProcessToJobAndGetHandle(cmd.Process.Pid)
+	if jobHandle == 0 && runtime.GOOS == "windows" {
+		log.Printf("warn: failed to assign background PID %d to Job Object (descendants may leak)", cmd.Process.Pid)
+	}
+
 	// Write the PID file alongside the output file for orphan cleanup
 	pidPath := filepath.Join(m.baseDir, sessionID+".pid")
 	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0600); err != nil {
@@ -253,6 +268,7 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		exitCode:   -1,
 		done:       make(chan struct{}),
 		publisher:  publisher,
+		jobHandle:  jobHandle,
 	}
 
 	m.processes[sessionID] = proc
@@ -262,6 +278,16 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 	go func() {
 		waitErr := cmd.Wait() // reap the zombie
 		exitCode := extractExitCode(waitErr)
+
+		// SP-112-1: close the Job Object handle (kills any remaining
+		// descendants in case the process exited without cleaning up its
+		// children). We do this before nil-ing out proc.Process so we
+		// can still access the jobHandle field.
+		if proc.jobHandle != 0 {
+			closeJobHandleOnProcessExit(proc.jobHandle, cmd.Process.Pid)
+			proc.jobHandle = 0
+		}
+
 		proc.mu.Lock()
 		proc.exitCode = exitCode
 		proc.Cmd = nil

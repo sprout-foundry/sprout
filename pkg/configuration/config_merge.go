@@ -98,6 +98,11 @@ func MergeConfig(base, override *Config) *Config {
 			result.RiskProfiles[k] = v
 		}
 	}
+	// SP-125: ContextMode is a single-value selector, same shape as
+	// RiskProfile — non-empty override wins.
+	if override.ContextMode != "" {
+		result.ContextMode = override.ContextMode
+	}
 	// ApprovedShellCommands: union the two lists (override entries are
 	// additive to base). De-dupe so a workspace config that re-lists a
 	// command already in the global config doesn't grow the file.

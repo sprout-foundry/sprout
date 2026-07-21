@@ -166,6 +166,32 @@ export interface MetricsUpdateData {
   chat_id?: string;
 }
 
+/** Per-iteration context-management diagnostic emitted by the backend agent
+ *  loop (see pkg/events.ContextManagementDiagnosticEvent). The fields mirror
+ *  the Go payload 1:1 — `cached_tokens`, `prompt_tokens`, and
+ *  `cache_write_tokens` are cumulative session counters (not per-iteration),
+ *  and `cache_hit_rate` is the backend-computed `cached/prompt` ratio. The
+ *  frontend treats this as telemetry: the typed payload lets the dedicated
+ *  handler in useWebSocketEventHandler render a compact summary instead of
+ *  letting the event fall through to the generic "unknown event" branch and
+ *  show up as raw JSON in the Logs pane. */
+export interface ContextManagementDiagnosticData {
+  current_tokens?: number;
+  max_tokens?: number;
+  effective_max?: number;
+  trigger_fraction?: number;
+  reserved_response?: number;
+  reserved_thinking?: number;
+  reserved_tool_io?: number;
+  iteration?: number;
+  message_count?: number;
+  cached_tokens?: number;
+  prompt_tokens?: number;
+  cache_write_tokens?: number;
+  cache_hit_rate?: number;
+  chat_id?: string;
+}
+
 export interface WorkspaceChangedData {
   daemon_root?: string;
   workspace_root?: string;
@@ -328,6 +354,7 @@ export type WsEvent =
   | { type: 'file_content_changed'; data?: FileContentChangedData; id?: string; timestamp?: string }
   | { type: 'metrics_update'; data?: MetricsUpdateData; id?: string; timestamp?: string }
   | { type: 'workspace_changed'; data?: WorkspaceChangedData; id?: string; timestamp?: string }
+  | { type: 'context_management_diagnostic'; data?: ContextManagementDiagnosticData; id?: string; timestamp?: string }
   | { type: 'security_approval_request'; data?: SecurityApprovalRequestData; id?: string; timestamp?: string }
   | { type: 'security_prompt_request'; data?: SecurityPromptRequestData; id?: string; timestamp?: string }
   | { type: 'ask_user_request'; data?: AskUserRequestData; id?: string; timestamp?: string }

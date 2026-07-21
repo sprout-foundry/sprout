@@ -73,9 +73,32 @@ type Agent struct {
 	conversationStartTime time.Time
 
 	// Configuration
-	configManager *configuration.Manager
-	workspaceRoot string
-	debug         bool
+	configManager   *configuration.Manager
+	workspaceRoot   string
+	debug           bool
+	// contextProfile (SP-125) is the resolved set of context-engine
+	// levers (tool allowlist, prompt path, compaction trigger, etc.).
+	// Resolved once at agent creation by ResolveContextProfile and read
+	// by every call site that depends on it (conversation.go,
+	// embedded_prompts.go, context_budget.go, seed_query.go, rollup.go).
+	// Zero-value means full-context mode (all defaults).
+	contextProfile  configuration.ContextProfile
+
+	// effectiveContextCap (SP-126) is the resolved maximum number of
+	// context tokens sprout will use for any request in this session.
+	// Always equal to the smaller of (a) the model's native context
+	// window and (b) the user's configured MaxContextTokens cap. Zero
+	// means "no cap" — the native window flows through unconstrained.
+	//
+	// Resolved exactly once at agent creation by
+	// configuration.ResolveEffectiveContextCap and re-read by every
+	// call site that needs the ceiling (seed_provider.Info(),
+	// seed_query.OnIteration). Call sites MUST NEVER re-derive it
+	// from Config.MaxContextTokens and MUST NEVER call
+	// client.GetModelContextLimit() directly — those paths bypass the
+	// cap. Independent of ContextProfile: a 1M model can run in full
+	// mode with a 300K cap; a 32K model can run in LCM with no cap.
+	effectiveContextCap int
 
 	// Shell CWD tracking — updated by cd commands in handleShellCommand.
 	// Tools like commit use this instead of workspaceRoot when available,

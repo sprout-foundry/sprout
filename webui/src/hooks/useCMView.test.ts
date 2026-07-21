@@ -254,6 +254,40 @@ describe('useCMView — bug-class regression', () => {
     }
   });
 
+  it('real CM dispatch preserves view identity and fires onUpdate (keystroke path)', () => {
+    // Stronger version of the cursor-drop test: dispatch real CM transactions
+    // (the path a user keystroke actually takes). Verifies (a) view identity
+    // is stable across dispatches, (b) the registered onUpdateRef listener
+    // observes each dispatch with a real ViewUpdate, and (c) doc length grows
+    // exactly as expected.
+    const updateCalls: number[] = [];
+    const { api, onUpdateRef } = render();
+    onUpdateRef.current = (update) => {
+      updateCalls.push(update.state.doc.length);
+    };
+
+    const viewAtMount = api.view;
+    expect(viewAtMount).not.toBeNull();
+
+    const view = viewAtMount!;
+    let docLength = view.state.doc.length;
+    const expectedLengths: number[] = [];
+
+    for (let i = 0; i < 5; i++) {
+      const ch = 'x';
+      docLength += ch.length;
+      expectedLengths.push(docLength);
+      act(() => {
+        view.dispatch({
+          changes: { from: view.state.doc.length, insert: ch },
+        });
+      });
+      expect(api.view).toBe(viewAtMount);
+    }
+
+    expect(updateCalls).toEqual(expectedLengths);
+  });
+
   it('save() invokes the LATEST handleSaveRef.current (save-doesnt-call-undefined bug)', async () => {
     // The bug: saveRef.current is undefined in race windows.
     // Test: api.save() always reads handleSaveRef.current at call time,

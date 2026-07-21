@@ -197,6 +197,13 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// both --unsafe mode and elevated risk profiles; hard blocks are
 	// still enforced by the handlers' own IsHardBlock early-returns.
 	env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
+	// SP-fix-file-tools: wire the agent's filesystem approval flow into
+	// the handler context so off-workspace writes / reads / edits /
+	// patches / listings prompt instead of hard-erroring. Without this,
+	// the seed dispatch path bypasses the legacy
+	// handleFileSecurityError and the model sees the raw
+	// ErrOutsideWorkingDirectory sentinel.
+	env.FilesystemGate = newFilesystemGateAdapter(agent)
 	return env
 }
 

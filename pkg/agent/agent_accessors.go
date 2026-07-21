@@ -66,6 +66,17 @@ func (a *Agent) GetConfig() *configuration.Config {
 	return a.configManager.GetConfig()
 }
 
+// GetContextProfile (SP-125) returns the resolved context profile active
+// for this agent — the set of context-engine levers (tool allowlist,
+// prompt path, compaction trigger, etc.) chosen once at agent creation.
+// The profile does not change during a session; /context persists a new
+// selection to config for the next session start rather than mutating
+// the live agent (the system prompt and tool set are already baked in).
+// Returns a zero-value ContextProfile (full mode) if unset.
+func (a *Agent) GetContextProfile() configuration.ContextProfile {
+	return a.contextProfile
+}
+
 // SetWorkspaceRoot records the logical workspace root for this agent instance.
 func (a *Agent) SetWorkspaceRoot(workspaceRoot string) {
 	a.workspaceRoot = strings.TrimSpace(workspaceRoot)

@@ -60,6 +60,12 @@ The key principle: **Delegate often, but verify always**. Subagents are your wor
 
 ---
 
+## Current Date and Time
+
+The current date and time is provided at the top of each user message as a `<current-time>` tag. Use that timestamp to reason about timing, deadlines, and "now"-relative requests. Do not assume the wall clock has not advanced since that tag was written — the user may have paused and resumed minutes or hours later, and any follow-up user message will carry a fresh tag.
+
+---
+
 ## Subagent Guidelines (When YOU are a subagent)
 
 **If you are running as a subagent** (delegated task from primary agent):

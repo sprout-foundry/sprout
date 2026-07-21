@@ -55,11 +55,17 @@ func (h *askUserHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	return ToolResult{Output: response}, nil
 }
 
-func (h *askUserHandler) Aliases() []string      { return nil }
-func (h *askUserHandler) Timeout() time.Duration { return 0 }
-func (h *askUserHandler) MaxResultSize() int     { return 0 }
-func (h *askUserHandler) SafeForParallel() bool  { return false }
-func (h *askUserHandler) Interactive() bool      { return true }
+func (h *askUserHandler) Aliases() []string { return nil }
+
+// Timeout must match DefaultAskUserTimeout (the inner manager's deadline) so
+// the seed ToolRegistry's wrapper doesn't cancel the caller's context before
+// the inner manager's own timeout, which would silently drop the user's
+// in-progress answer while the prompt UI stays open.
+func (h *askUserHandler) Timeout() time.Duration { return DefaultAskUserTimeout }
+
+func (h *askUserHandler) MaxResultSize() int    { return 0 }
+func (h *askUserHandler) SafeForParallel() bool { return false }
+func (h *askUserHandler) Interactive() bool     { return true }
 
 // parseAskUserArgs lifts a raw JSON-decoded args map into an AskUserRequest.
 // Tolerant of LLM imperfection: accepts options as either []map or []string.

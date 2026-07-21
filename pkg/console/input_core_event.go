@@ -12,17 +12,21 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 	}
 
 	// When the autocomplete dropdown is visible, intercept navigation
-	// and selection keys before the normal dispatch.
+	// and selection keys before the normal dispatch for an edited buffer.
 	if ir.autocomplete != nil && ir.autocomplete.visible {
 		switch event.Type {
 		case EventUp:
-			ir.autocomplete.moveSelection(-1)
-			ir.Refresh()
-			return
+			if ir.hasEditedLine {
+				ir.autocomplete.moveSelection(-1)
+				ir.Refresh()
+				return
+			}
 		case EventDown:
-			ir.autocomplete.moveSelection(1)
-			ir.Refresh()
-			return
+			if ir.hasEditedLine {
+				ir.autocomplete.moveSelection(1)
+				ir.Refresh()
+				return
+			}
 		case EventTab:
 			text := ir.autocomplete.accept()
 			if text != "" {

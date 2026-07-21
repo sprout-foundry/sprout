@@ -34,6 +34,7 @@ jobs:
           DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CODING_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
@@ -59,6 +60,7 @@ jobs:
           DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CODING_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
@@ -68,7 +70,7 @@ jobs:
         run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=300 --from-embedded-configs=pkg/agent_providers/configs
 
       - name: Generate model index
-        run: bash scripts/generate-model-index.sh models/models
+        run: bash scripts/generate-model-index.sh models
 
       - name: Copy provider configs with metadata
         # Pulls from two sources:
@@ -115,7 +117,7 @@ jobs:
       - name: Assemble registry artifacts
         run: |
           mkdir -p registry-artifacts
-          cp -r models registry-artifacts/models
+          cp -r models/models registry-artifacts/models
           cp -r providers registry-artifacts/providers
 
       - name: Upload registry artifact

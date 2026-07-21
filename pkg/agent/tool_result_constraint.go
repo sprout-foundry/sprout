@@ -1,5 +1,7 @@
 // Tool result constraint: truncation and compaction of tool results
-// before they are sent to the model context window.
+// before they are sent to the model context window. It also owns the shared
+// result-size limits and universal truncation helper moved from the legacy
+// tool executor configuration.
 package agent
 
 import (
@@ -15,6 +17,28 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
+
+const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/token heuristic)
+const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
+const defaultFetchURLArchiveDir = "/tmp/sprout/downloads"
+const defaultAnalyzeImageResultExcerptChars = 4000
+const defaultToolResultMaxChars = 50000 // Universal cap on tool result size (~12K tokens)
+
+// truncateToolResult truncates large tool results to prevent blowing up the LLM context window.
+// Keeps the first 45K chars and last 5K chars with a truncation notice in between.
+func truncateToolResult(result string) string {
+	if len(result) <= defaultToolResultMaxChars {
+		return result
+	}
+
+	headChars := 45000
+	tailChars := 5000
+	omitted := len(result) - headChars - tailChars
+
+	packageLogWarnf("tool result truncated: %d -> %d chars (omitted %d)", len(result), defaultToolResultMaxChars, omitted)
+
+	return result[:headChars] + fmt.Sprintf("\n[... truncated: %d chars omitted. Total was %d chars ...]\n", omitted, len(result)) + result[len(result)-tailChars:]
+}
 
 func constrainToolResultForModel(toolName string, args map[string]interface{}, result string) string {
 	if toolName == "analyze_image_content" {

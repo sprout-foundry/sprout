@@ -394,9 +394,8 @@ func formatTodoListBlockLocked(todosRaw []interface{}) string {
 }
 
 // todoStatusGlyph maps a todo status onto the shared CLI glyph palette.
-// Mirrors the mapping used by pkg/agent/tool_executor_todo_events.go so
-// the inline list and any other todo-status rendering stay visually
-// consistent.
+// Mirrors the mapping in pkg/agent_tools/todo_render.go so the inline
+// list and any other todo-status rendering stay visually consistent.
 func todoStatusGlyph(status string) string {
 	switch status {
 	case "completed":

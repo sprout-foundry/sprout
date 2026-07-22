@@ -80,14 +80,29 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		}
 	}
 
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Allow paths skip the gate entirely and Deny paths
+	// return a typed error immediately.
+	preRes, decision, _ := PrecheckFileAccess(env.FileAccessClassifier, "list_directory", targetPath)
+	if decision == "deny" {
+		return ToolResult{Output: fmt.Sprintf("list_directory blocked: %s is declared read_only in the active workflow's allowed_paths", targetPath), IsError: true},
+			fmt.Errorf("list_directory blocked: %s is declared read_only", targetPath)
+	}
+	if decision == "allow" {
+		// Path is workspace/tmp/allowlisted — preRes is already the
+		// resolved path from SafeResolvePath; use it directly.
+		return h.listDirectoryContents(ctx, env, preRes, showHidden)
+	}
+	// "prompt" → fall through to withFilesystemApproval for the dialog.
+
 	// Resolve path securely through the FilesystemGate so off-workspace
 	// directories prompt for approval (matching the file handlers'
 	// behavior). Without this wrap, list_directory on a sibling
 	// directory would still hard-error with the bare sentinel — the
 	// gate goes into ctx but pkg/filesystem has no awareness of it,
-// so the resolve call needs the explicit hook here. See the
-// FilesystemGate interface in handler.go and withFilesystemApproval
-// in filesystem_gate.go for the contract.
+	// so the resolve call needs the explicit hook here. See the
+	// FilesystemGate interface in handler.go and withFilesystemApproval
+	// in filesystem_gate.go for the contract.
 	resolvedPath, err := withFilesystemApproval(ctx, FilesystemGateFromContext(ctx), "list_directory", targetPath,
 		func(ctx context.Context) (string, error) {
 			return filesystem.SafeResolvePathWithBypass(ctx, targetPath)
@@ -99,6 +114,14 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 			IsError: true,
 		}, fmt.Errorf("resolve directory path: %w", err)
 	}
+
+	return h.listDirectoryContents(ctx, env, resolvedPath, showHidden)
+}
+
+// listDirectoryContents does the actual directory listing given an already-resolved path.
+// Extracted so both the "allow" precheck path (no gate call) and the "prompt" path
+// (gate-approved via withFilesystemApproval) share the same listing logic.
+func (h *listDirHandler) listDirectoryContents(ctx context.Context, env ToolEnv, resolvedPath string, showHidden bool) (ToolResult, error) {
 
 	// Check that it's a directory
 	info, err := os.Stat(resolvedPath)

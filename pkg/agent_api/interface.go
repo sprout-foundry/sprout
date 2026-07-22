@@ -82,6 +82,36 @@ const (
 	ZAICodingClientType  ClientType = "zai-coding"
 )
 
+// BuiltInClientTypes returns the canonical list of all built-in provider
+// ClientType constants defined in this package. Useful for callers that
+// need to enumerate providers (e.g. building reverse display-name maps)
+// without having to hardcode the list in multiple places.
+//
+// Note: this list intentionally excludes aliases like "ollama" — those
+// are resolved by ParseProviderName to a canonical ClientType. Display
+// name → ClientType lookup handles the alias separately (see
+// configuration.MapProviderStringToClientType).
+func BuiltInClientTypes() []ClientType {
+	return []ClientType{
+		OpenAIClientType,
+		OpenRouterClientType,
+		ZAIClientType,
+		DeepInfraClientType,
+		DeepSeekClientType,
+		LMStudioClientType,
+		MistralClientType,
+		MinimaxClientType,
+		ChutesClientType,
+		CerebrasClientType,
+		ZAICodingClientType,
+		OllamaClientType,
+		OllamaLocalClientType,
+		OllamaCloudClientType,
+		TestClientType,
+		EditorClientType,
+	}
+}
+
 // NewUnifiedClient creates a client with default model for the provider
 func NewUnifiedClient(clientType ClientType) (ClientInterface, error) {
 	return NewUnifiedClientWithModel(clientType, "")

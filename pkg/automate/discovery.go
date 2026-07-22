@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -250,6 +251,15 @@ type AllowedPathSummary struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// allowedPathRaw is the raw parsed form of an allowed_path entry before
+// validation. Defined at package level so it can be used by the helper
+// functions parseSummaryAllowedPaths and extractSystemPathWarnings.
+type allowedPathRaw struct {
+	Path   string `json:"path,omitempty"`
+	Mode   string `json:"mode,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // IsApprovalRequired returns true unless the workflow JSON explicitly
 // declared requires_approval: false. Used by the agent tool path to
 // decide whether to surface the intent-confirmation prompt.
@@ -276,6 +286,7 @@ type InitialSummary struct {
 	RiskProfile       string                    `json:"risk_profile,omitempty"`
 	HasPrompt         bool                      `json:"has_prompt"`
 	SubagentOverrides []SubagentOverrideSummary `json:"subagent_overrides,omitempty"`
+	AllowedPaths      []AllowedPathSummary       `json:"allowed_paths,omitempty"`
 }
 
 // SubagentOverrideSummary describes one entry of subagent_overrides for display.
@@ -297,6 +308,7 @@ type StepSummary struct {
 	Model          string `json:"model,omitempty"`
 	When           string `json:"when,omitempty"`
 	CommandPreview string `json:"command_preview,omitempty"`
+	AllowedPaths   []AllowedPathSummary `json:"allowed_paths,omitempty"`
 }
 
 // Summarize parses a workflow file and returns its high-level structure.
@@ -321,18 +333,20 @@ func Summarize(path string) (*Summary, error) {
 		Prompt            string                         `json:"prompt,omitempty"`
 		PromptFile        string                         `json:"prompt_file,omitempty"`
 		SubagentOverrides map[string]subagentOverrideRaw `json:"subagent_overrides,omitempty"`
+		AllowedPaths      []allowedPathRaw               `json:"allowed_paths,omitempty"`
 	}
 
 	type stepRaw struct {
-		Name        string `json:"name,omitempty"`
-		Persona     string `json:"persona,omitempty"`
-		Provider    string `json:"provider,omitempty"`
-		Model       string `json:"model,omitempty"`
-		When        string `json:"when,omitempty"`
-		Prompt      string `json:"prompt,omitempty"`
-		PromptFile  string `json:"prompt_file,omitempty"`
-		Command     string `json:"command,omitempty"`
-		CommandFile string `json:"command_file,omitempty"`
+		Name         string           `json:"name,omitempty"`
+		Persona      string           `json:"persona,omitempty"`
+		Provider     string           `json:"provider,omitempty"`
+		Model        string           `json:"model,omitempty"`
+		When         string           `json:"when,omitempty"`
+		Prompt       string           `json:"prompt,omitempty"`
+		PromptFile   string           `json:"prompt_file,omitempty"`
+		Command      string           `json:"command,omitempty"`
+		CommandFile  string           `json:"command_file,omitempty"`
+		AllowedPaths []allowedPathRaw `json:"allowed_paths,omitempty"`
 	}
 
 	type budgetRaw struct {
@@ -340,33 +354,27 @@ func Summarize(path string) (*Summary, error) {
 		WarnAt []float64 `json:"warn_at,omitempty"`
 	}
 
-	type allowedPathRaw struct {
-		Path   string `json:"path,omitempty"`
-		Mode   string `json:"mode,omitempty"`
-		Reason string `json:"reason,omitempty"`
-	}
-
 	var raw struct {
-		Description            string          `json:"description,omitempty"`
-		ContinueOnError        bool            `json:"continue_on_error,omitempty"`
-		NoWebUI                bool            `json:"no_web_ui,omitempty"`
-		Initial                *initialRaw     `json:"initial,omitempty"`
-		Steps                  []stepRaw       `json:"steps,omitempty"`
-		Budget                 *budgetRaw      `json:"budget,omitempty"`
-		RequiresApproval       *bool           `json:"requires_approval,omitempty"`
+		Description            string           `json:"description,omitempty"`
+		ContinueOnError       bool             `json:"continue_on_error,omitempty"`
+		NoWebUI               bool             `json:"no_web_ui,omitempty"`
+		Initial               *initialRaw      `json:"initial,omitempty"`
+		Steps                 []stepRaw        `json:"steps,omitempty"`
+		Budget                *budgetRaw       `json:"budget,omitempty"`
+		RequiresApproval      *bool            `json:"requires_approval,omitempty"`
 		SubagentTimeoutSeconds *int            `json:"subagent_timeout_seconds,omitempty"`
-		AllowedPaths           []allowedPathRaw `json:"allowed_paths,omitempty"`
+		AllowedPaths          []allowedPathRaw `json:"allowed_paths,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
 	out := &Summary{
-		Description:            raw.Description,
-		ContinueOnError:        raw.ContinueOnError,
-		NoWebUI:                raw.NoWebUI,
-		RequiresApproval:       raw.RequiresApproval,
-		SubagentTimeoutSeconds: raw.SubagentTimeoutSeconds,
+		Description:             raw.Description,
+		ContinueOnError:         raw.ContinueOnError,
+		NoWebUI:                 raw.NoWebUI,
+		RequiresApproval:        raw.RequiresApproval,
+		SubagentTimeoutSeconds:  raw.SubagentTimeoutSeconds,
 	}
 	if raw.Budget != nil && raw.Budget.USD > 0 {
 		out.Budget = &BudgetSummary{
@@ -438,16 +446,29 @@ func Summarize(path string) (*Summary, error) {
 				Model:    ov.Model,
 			})
 		}
+		// Parse initial-level allowed_paths.
+		if len(raw.Initial.AllowedPaths) > 0 {
+			entries, errs := parseSummaryAllowedPaths(raw.Initial.AllowedPaths, "initial")
+			if len(errs) > 0 {
+				return nil, errs[0]
+			}
+			init.AllowedPaths = entries
+			// Append any system-prefix warnings to the summary.
+			for _, w := range extractSystemPathWarnings(raw.Initial.AllowedPaths, "initial") {
+				out.Warnings = append(out.Warnings, w)
+			}
+		}
 		out.Initial = init
 	}
-	for _, s := range raw.Steps {
+	for i, s := range raw.Steps {
+		stepPrefix := "steps[" + strconv.Itoa(i) + "]"
 		kind := "agent"
 		preview := ""
 		if strings.TrimSpace(s.Command) != "" || strings.TrimSpace(s.CommandFile) != "" {
 			kind = "shell"
 			preview = previewCommand(s.Command, s.CommandFile)
 		}
-		out.Steps = append(out.Steps, StepSummary{
+		stepSummary := StepSummary{
 			Name:           s.Name,
 			Kind:           kind,
 			Persona:        s.Persona,
@@ -455,7 +476,20 @@ func Summarize(path string) (*Summary, error) {
 			Model:          s.Model,
 			When:           s.When,
 			CommandPreview: preview,
-		})
+		}
+		// Parse step-level allowed_paths.
+		if len(s.AllowedPaths) > 0 {
+			entries, errs := parseSummaryAllowedPaths(s.AllowedPaths, stepPrefix)
+			if len(errs) > 0 {
+				return nil, errs[0]
+			}
+			stepSummary.AllowedPaths = entries
+			// Append any system-prefix warnings to the summary.
+			for _, w := range extractSystemPathWarnings(s.AllowedPaths, stepPrefix) {
+				out.Warnings = append(out.Warnings, w)
+			}
+		}
+		out.Steps = append(out.Steps, stepSummary)
 	}
 	return out, nil
 }
@@ -514,6 +548,50 @@ func validateSummaryAllowedPath(path, mode string) error {
 		return fmt.Errorf("mode must be \"read_only\" or \"read_write\"; got %q", mode)
 	}
 	return nil
+}
+
+// parseSummaryAllowedPaths validates and converts a raw allowed_paths slice
+// into a sorted []AllowedPathSummary. Returns the first error found (if any).
+// The scopePrefix is used in error messages (e.g., "initial", "steps[0]").
+func parseSummaryAllowedPaths(rawPaths []allowedPathRaw, scopePrefix string) ([]AllowedPathSummary, []error) {
+	if len(rawPaths) == 0 {
+		return nil, nil
+	}
+	entries := make([]AllowedPathSummary, 0, len(rawPaths))
+	var errs []error
+	for i, ap := range rawPaths {
+		path := strings.TrimSpace(ap.Path)
+		mode := strings.TrimSpace(ap.Mode)
+		reason := strings.TrimSpace(ap.Reason)
+		if err := validateSummaryAllowedPath(path, mode); err != nil {
+			errs = append(errs, fmt.Errorf("%s: allowed_paths[%d]: %w", scopePrefix, i, err))
+			continue
+		}
+		entries = append(entries, AllowedPathSummary{
+			Path:   path,
+			Mode:   mode,
+			Reason: reason,
+		})
+	}
+	if len(errs) > 0 {
+		return nil, errs
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	return entries, nil
+}
+
+// extractSystemPathWarnings returns a list of warning messages for any
+// allowed_paths that fall under a system prefix. The scopePrefix is used
+// in the warning message (e.g., "initial", "step").
+func extractSystemPathWarnings(rawPaths []allowedPathRaw, scopePrefix string) []string {
+	var warnings []string
+	for i, ap := range rawPaths {
+		path := strings.TrimSpace(ap.Path)
+		if isSummarySystemPathPrefix(path) {
+			warnings = append(warnings, fmt.Sprintf("%s: allowed_paths[%d] %q falls under a system prefix; the workflow will be able to read/write platform infrastructure", scopePrefix, i, path))
+		}
+	}
+	return warnings
 }
 
 // isSummarySystemPathPrefix mirrors workflow.IsSystemPathPrefix for the

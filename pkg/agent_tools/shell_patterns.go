@@ -22,7 +22,7 @@ func isSafeShellCommand(cmd string) bool {
 		"git shortlog", "git blame", "git reflog",
 		"git switch", "git checkout", "git restore", "git add",
 		"git commit", "git push", "git pull", "git fetch", "git merge",
-		"git rebase", "git cherry-pick", "git revert",
+		"git cherry-pick", "git revert",
 		"git am", "git apply", "git reset",
 		"git stash pop", "git stash drop", "git stash apply",
 		"git stash branch", "git stash clear", "git stash show",

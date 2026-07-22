@@ -17,7 +17,7 @@ import (
 // handleAPIConfig handles API requests for configuration
 func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -50,7 +50,7 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 	case http.MethodPost:
 		ws.handleTerminalHistoryPost(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
@@ -73,14 +73,14 @@ func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *htt
 
 	// Reject hidden sessions — they are not user-accessible.
 	if !terminalManager.HasVisibleSession(sessionID) {
-		http.Error(w, "Session not accessible", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "session_not_accessible", "Session not accessible")
 		return
 	}
 
 	// Get history from terminal manager
 	history, err := terminalManager.GetHistory(sessionID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get history: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "terminal_history_failed", fmt.Sprintf("Failed to get history: %v", err))
 		return
 	}
 
@@ -100,13 +100,13 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	command := strings.TrimSpace(req.Command)
 	if command == "" {
-		http.Error(w, "Command is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "command_required", "Command is required")
 		return
 	}
 
@@ -123,12 +123,12 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 
 	// Reject hidden sessions — they are not user-accessible.
 	if !terminalManager.HasVisibleSession(req.SessionID) {
-		http.Error(w, "Session not accessible", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "session_not_accessible", "Session not accessible")
 		return
 	}
 
 	if err := terminalManager.AddToHistory(req.SessionID, command); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to add history: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "terminal_history_failed", fmt.Sprintf("Failed to add history: %v", err))
 		return
 	}
 
@@ -209,7 +209,7 @@ func tryParseMultipartFile(body []byte, contentType string) ([]byte, bool) {
 // handleUploadImage handles image upload requests
 func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
@@ -218,7 +218,7 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 	r.Body = http.MaxBytesReader(w, r.Body, console.MaxPastedImageSize)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "request_body_read_failed", fmt.Sprintf("Failed to read request body: %v", err))
 		return
 	}
 
@@ -234,14 +234,14 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 	// Validate image format
 	ext, _ := console.DetectImageMagic(data)
 	if ext == "" {
-		http.Error(w, "Not a recognized image format", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_image_format", "Not a recognized image format")
 		return
 	}
 
 	// Save the image
 	savedPath, err := console.SavePastedImage(data, workspaceRoot)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to save image: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "image_save_failed", fmt.Sprintf("Failed to save image: %v", err))
 		return
 	}
 

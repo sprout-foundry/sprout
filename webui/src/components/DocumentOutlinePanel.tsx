@@ -5,6 +5,11 @@ import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import { extractSymbols, findSymbolScopeEnd, KIND_ICONS, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 import { ChevronRight, ChevronDown, Search, ListTree, UnfoldVertical, FoldVertical, FileCode } from 'lucide-react';
 
+/** Debounce delay for content-driven re-extraction (ms). The outline doesn't
+ *  need to update on every keystroke — this coalesces rapid edits into a
+ *  single symbol extraction pass. */
+const SYMBOL_DEBOUNCE_MS = 300;
+
 /**
  * Tree node structure for the outline
  */
@@ -159,16 +164,25 @@ function DocumentOutlinePanel({
   // Derive language ID from file extension
   const languageId = fileExtension?.toLowerCase();
 
-  // Extract all symbols from content
+  // Debounce content so symbol extraction doesn't fire on every keystroke.
+  // The outline tree doesn't need to be real-time — 300ms is imperceptible
+  // to the user but dramatically reduces parsing for large files.
+  const [debouncedContent, setDebouncedContent] = useState(content);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedContent(content), SYMBOL_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [content]);
+
+  // Extract all symbols from debounced content
   const allSymbols = useMemo(() => {
-    if (!content || !isFileOpen) return [];
-    return extractSymbols(content, languageId);
-  }, [content, languageId, isFileOpen]);
+    if (!debouncedContent || !isFileOpen) return [];
+    return extractSymbols(debouncedContent, languageId);
+  }, [debouncedContent, languageId, isFileOpen]);
 
   // Build the symbol tree
   const symbolTree = useMemo(() => {
-    return buildSymbolTree(allSymbols, content, languageId);
-  }, [allSymbols, content, languageId]);
+    return buildSymbolTree(allSymbols, debouncedContent, languageId);
+  }, [allSymbols, debouncedContent, languageId]);
 
   // Filter symbols based on search query
   const filteredSymbols = useMemo(() => {

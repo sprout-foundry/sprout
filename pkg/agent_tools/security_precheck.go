@@ -11,8 +11,6 @@ import (
 // Returns:
 //   - resolvedPath: the symlink-evaluated canonical form (may equal filePath)
 //   - decision: "allow", "prompt", or "deny" from the classifier
-//   - err: any error from SafeResolvePath (non-filesystem errors, or
-//     nil when the path resolved successfully)
 //
 // Behavioral contract:
 //   - "allow"  → caller proceeds directly with resolvedPath; no prompt fires
@@ -20,21 +18,21 @@ import (
 //     interactive dialog
 //   - "deny"  → caller returns a typed error immediately; no prompt fires
 //
-// When classifier is nil (no agent context), returns ("", "prompt", nil)
+// When classifier is nil (no agent context), returns ("", "prompt")
 // so callers fall through to withFilesystemApproval, which also has a nil
 // gate guard and returns the raw filesystem error — preserving the
 // pre-M2 behavior for tests that bypass the agent context.
 //
 // SP-127 M2: this function lives in pkg/agent_tools rather than
 // pkg/agent so handlers can call it without creating an import cycle.
-func PrecheckFileAccess(classifier FileAccessClassifier, toolName, filePath string) (resolvedPath string, decision string, err error) {
+func PrecheckFileAccess(classifier FileAccessClassifier, toolName, filePath string) (resolvedPath string, decision string) {
 	if classifier == nil {
 		// No classifier available — fall through to withFilesystemApproval
 		// which will return the raw filesystem error.
-		return "", "prompt", nil
+		return "", "prompt"
 	}
 
-	mode := AccessModeForTool(toolName)
+	mode := accessModeForTool(toolName)
 	resolved, resolveErr := filesystem.SafeResolvePath(filePath)
 
 	if resolveErr != nil {
@@ -42,18 +40,16 @@ func PrecheckFileAccess(classifier FileAccessClassifier, toolName, filePath stri
 		// to prompt or deny. Use filePath as resolvedPath since the
 		// canonical target couldn't be determined.
 		verdict := classifier.ClassifyFileAccess(filePath, filePath, mode)
-		return filePath, verdict, nil
+		return filePath, verdict
 	}
 
 	// Path resolved successfully — classify it to determine allow/prompt/deny.
 	verdict := classifier.ClassifyFileAccess(filePath, resolved, mode)
-	return resolved, verdict, nil
+	return resolved, verdict
 }
 
-// AccessModeForTool returns "write" for mutation tools and "read" for read tools.
-// Exported so the agent package's staticGateAutoApprove and other callers
-// can use the same logic.
-func AccessModeForTool(toolName string) string {
+// accessModeForTool returns "write" for mutation tools and "read" for read tools.
+func accessModeForTool(toolName string) string {
 	switch toolName {
 	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		return "write"

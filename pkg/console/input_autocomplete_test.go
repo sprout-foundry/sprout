@@ -424,18 +424,24 @@ func TestHandleEvent_HistoryVsAutocompleteRouting(t *testing.T) {
 
 // --- Regression tests for autocomplete fixes ---
 
-// TestAutocomplete_HideResetsRenderedRows verifies that hide() clears
-// renderedRows so a subsequent clear() in refreshLocked doesn't write
-// escape sequences for rows that were already erased.
-func TestAutocomplete_HideResetsRenderedRows(t *testing.T) {
+// TestAutocomplete_HideDoesNotResetRenderedRows verifies that hide()
+// preserves renderedRows so the caller can still call clear() to
+// erase the rows from the terminal. clear() resets renderedRows to 0
+// after erasing.
+func TestAutocomplete_HideDoesNotResetRenderedRows(t *testing.T) {
 	a := &inlineAutocomplete{
 		visible:      true,
 		renderedRows: 4,
 		candidates:   []CompletionCandidate{{Text: "/help"}},
 	}
 	a.hide()
+	if a.renderedRows != 4 {
+		t.Errorf("renderedRows should be preserved after hide() so clear() can erase, got %d", a.renderedRows)
+	}
+	// clear() uses renderedRows and then resets it.
+	a.clear()
 	if a.renderedRows != 0 {
-		t.Errorf("renderedRows should be 0 after hide(), got %d", a.renderedRows)
+		t.Errorf("renderedRows should be 0 after clear(), got %d", a.renderedRows)
 	}
 }
 
@@ -583,5 +589,71 @@ func TestCompletionCycle_ResetsOnTabAcceptFromDropdown(t *testing.T) {
 	if ir.line != "/help" {
 		t.Errorf("second Tab should re-apply /help (fresh cycle), got %q — "+
 			"stale cycle advanced to next candidate", ir.line)
+	}
+}
+
+// TestAutocomplete_UpdateShortCircuitsOnSameLine verifies that update()
+// doesn't re-invoke the completer when the line hasn't changed and the
+// dropdown is already visible — avoids redundant completer calls from
+// background Refresh events.
+func TestAutocomplete_UpdateShortCircuitsOnSameLine(t *testing.T) {
+	calls := 0
+	rich := func(line string, _ int) []CompletionCandidate {
+		calls++
+		return []CompletionCandidate{{Text: "/help", Description: "help"}}
+	}
+	a := newInlineAutocomplete()
+
+	// First update: shows the dropdown, calls completer.
+	a.update("/he", len("/he"), nil, rich)
+	if calls != 1 {
+		t.Fatalf("expected 1 completer call, got %d", calls)
+	}
+	if !a.visible {
+		t.Fatal("dropdown should be visible")
+	}
+
+	// Second update with same line: should short-circuit, no completer call.
+	a.update("/he", len("/he"), nil, rich)
+	if calls != 1 {
+		t.Errorf("expected 1 completer call (short-circuited), got %d", calls)
+	}
+}
+
+// TestAutocomplete_ClearThenHideErasesRows verifies the Enter-accept
+// pattern: clear() emits escape sequences to erase drawn rows, then
+// hide() marks the dropdown invisible. This is the sequence used in
+// the ReadLine Enter handler.
+func TestAutocomplete_ClearThenHideErasesRows(t *testing.T) {
+	a := &inlineAutocomplete{
+		visible:      true,
+		renderedRows: 3,
+		selected:     0,
+		candidates: []CompletionCandidate{
+			{Text: "/help"},
+			{Text: "/heart"},
+			{Text: "/heat"},
+		},
+	}
+
+	output := captureStdout(t, func() {
+		a.clear()
+	})
+
+	// clear() must emit one move-down+CR+clear per rendered row.
+	fixedSeq := "\x1b[1B\r\x1b[2K"
+	if got := strings.Count(output, fixedSeq); got != 3 {
+		t.Errorf("expected 3 clear sequences, got %d\noutput=%q", got, output)
+	}
+
+	// After clear(), renderedRows is reset.
+	if a.renderedRows != 0 {
+		t.Errorf("renderedRows should be 0 after clear(), got %d", a.renderedRows)
+	}
+
+	// hide() now marks it invisible (state-only, no terminal writes).
+	a.hide()
+	if a.visible {
+		t.Error("dropdown should be invisible after hide()")
 	}
 }

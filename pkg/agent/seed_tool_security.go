@@ -208,7 +208,10 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// ToolRegistry.ExecuteTool via staticGateAutoApprove, so clicking
 		// "Elevate (session)" actually suppresses subsequent static-classifier
 		// prompts on the live seed path (not just the filesystem gate).
-		if agent.staticGateAutoApprove(secResult) {
+		// SP-127 M1: path context is also supplied so the path-tier
+		// classifier can allow workspace/session-allowlist/tmp paths.
+		filePath, mode := extractFilePathAndMode(name, args)
+		if agent.staticGateAutoApprove(secResult, filePath, "", mode) {
 			if agent.debug {
 				agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", name, secResult.Risk)
 			}

@@ -122,23 +122,30 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 			}
 			if workflowAutoApproved || alreadyApprovedInSession {
 				// fall through to handler execution below
-			} else if agent != nil && agent.staticGateAutoApprove(secResult) && !secResult.IntentConfirmation {
-				// Unsafe mode or session elevation — skip the prompt for
-				// non-hard-block operations. See staticGateAutoApprove.
-				// IntentConfirmation is never auto-approved — it's about
-				// explicit user intent, not risk bypass.
-				if agent.debug {
-					agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
+			} else if agent != nil {
+				// SP-127 M1: staticGateAutoApprove now decides both bypass
+				// AND path-tier, so file-touching tools benefit from the same
+				// allowlist-aware allow that the filesystem gate adapter uses.
+				filePath, mode := extractFilePathAndMode(toolName, args)
+				if agent.staticGateAutoApprove(secResult, filePath, "", mode) && !secResult.IntentConfirmation {
+					// Unsafe mode, session elevation, or path-tier allow —
+					// skip the prompt for non-hard-block operations.
+					// See staticGateAutoApprove.
+					// IntentConfirmation is never auto-approved — it's about
+					// explicit user intent, not risk bypass.
+					if agent.debug {
+						agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated/path-tier): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
+					}
+				} else if agent.GetUnsafeShellMode() && toolName == "shell_command" && !secResult.IsHardBlock && secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
+					// --unsafe-shell bypasses CAUTION-tier shell prompts across all
+					// modes (CLI and WebUI) so the flag behaves consistently regardless
+					// of UI. DANGEROUS and hard-block operations still require approval.
+					// IntentConfirmation is never auto-approved here either.
+					if agent.debug {
+						agent.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (risk: %s)\n", toolName, secResult.Risk)
+					}
 				}
-			} else if agent != nil && agent.GetUnsafeShellMode() && toolName == "shell_command" && !secResult.IsHardBlock && secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
-				// --unsafe-shell bypasses CAUTION-tier shell prompts across all
-				// modes (CLI and WebUI) so the flag behaves consistently regardless
-				// of UI. DANGEROUS and hard-block operations still require approval.
-				// IntentConfirmation is never auto-approved here either.
-				if agent.debug {
-					agent.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (risk: %s)\n", toolName, secResult.Risk)
-				}
-			} else if agent == nil && (secResult.ShouldBlock || secResult.IntentConfirmation) {
+			} else if secResult.ShouldBlock || secResult.IntentConfirmation {
 				// Defense-in-depth: no agent context available for approval,
 				// so reject operations that require it.
 				return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security: %s — %s (no agent context for approval)", toolName, secResult.Reasoning), nil)
@@ -397,7 +404,139 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 // Both Gate-1 entry points call this — ExecuteTool and the
 // live seed pre-execute hook (newPreExecuteHook) — so the bypass policy
 // lives in exactly one place and the two paths can't drift.
-func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult) bool {
+// fileTouchingTools is the set of tool names that carry a "path" argument.
+// Used by extractFilePathAndMode to determine whether to supply path context
+// to staticGateAutoApprove.
+var fileTouchingTools = map[string]bool{
+	"read_file":             true,
+	"write_file":            true,
+	"edit_file":             true,
+	"write_structured_file": true,
+	"patch_structured_file": true,
+	"list_directory":        true,
+}
+
+// extractFilePathAndMode returns the file path and access mode for a tool call,
+// or ("", "") for non-file tools. Path is the "path" argument value; mode is
+// "write" for write/edit tools, "read" for read tools. Non-file tools and tools
+// that don't supply a "path" arg return the zero values so the classifier skips
+// the path-tier branch.
+//
+// Path resolution convention for callers:
+//   - filePath is the user-supplied path (may be relative or absolute).
+//   - resolvedPath is the symlink-evaluated canonical target (empty if the path
+//     does not exist or the caller did not perform resolution).
+//   - When resolvedPath is non-empty, classifyFileAccess uses it for workspace
+//     containment and sensitive-path checks, falling back to filePath if the
+//     resolved target does not exist.
+//   - When resolvedPath is empty, the function uses filePath directly for the
+//     prefix checks — relative paths that don't exist are evaluated lexically.
+func extractFilePathAndMode(toolName string, args map[string]interface{}) (filePath, mode string) {
+	if !fileTouchingTools[toolName] {
+		return "", ""
+	}
+	path, ok := args["path"].(string)
+	if !ok || path == "" {
+		return "", ""
+	}
+	switch toolName {
+	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+		return path, "write"
+	default:
+		return path, "read"
+	}
+}
+
+// FileAccessDecision describes the resolved verdict for a file-path operation
+// from Gate 1's path-tier classifier.
+type FileAccessDecision int
+
+const (
+	// FileAccessAllow: path is in an allowlisted location (workspace root,
+	// session-allowlisted folder, or /tmp).
+	FileAccessAllow FileAccessDecision = iota
+	// FileAccessPrompt: path is outside the allowlist and not hard-blocked;
+	// user must approve.
+	FileAccessPrompt
+	// FileAccessDeny: path targets a known hard-block location or violates
+	// a declared read_only constraint.
+	FileAccessDeny
+)
+
+// classifyFileAccess inspects the path tier and returns the access verdict.
+// Used by both Gate 1 (staticGateAutoApprove) and the filesystem gate adapter
+// so they always agree on allow/prompt/deny for a given path.
+//
+// Inputs:
+//   - filePath: the user-supplied path (may be relative, may not exist)
+//   - resolvedPath: the symlink-evaluated canonical form (may equal filePath)
+//   - mode: "read" or "write" (controls which allowlists apply)
+//
+// Returns:
+//   - FileAccessAllow when the path lands in workspace root, session-allowlisted
+//     folder, /tmp, or another gate-bypass-visible location.
+//   - FileAccessPrompt when the path is outside the allowlist and not hard-blocked.
+//   - FileAccessDeny when the path targets a known hard-block location or when
+//     a write is attempted against a read_only declared allowlist entry.
+func (a *Agent) classifyFileAccess(filePath, resolvedPath, mode string) FileAccessDecision {
+	if a == nil {
+		return FileAccessPrompt
+	}
+	// Use resolvedPath when available; fall back to filePath for lexical checks.
+	target := resolvedPath
+	if target == "" {
+		target = filePath
+	}
+	// /tmp is universally allowed regardless of mode.
+	if filesystem.IsUnderTmpPath(target) {
+		return FileAccessAllow
+	}
+	// Workspace root and subdirectories are always allowed.
+	if a.IsUnderWorkspaceRoot(target) {
+		return FileAccessAllow
+	}
+	// Session-allowlisted folders (workflow-declared allowed_paths + user
+	// mid-session approvals) are allowed subject to their declared mode.
+	if a.IsFolderSessionAllowed(target) {
+		if mode == "write" && a.IsReadOnlyAllowedFolder(target) {
+			return FileAccessDeny
+		}
+		return FileAccessAllow
+	}
+	// Sensitive system paths always prompt rather than hard-deny.
+	// The user must confirm access explicitly.
+	if filesystem.IsSensitiveSystemPath(target) {
+		return FileAccessPrompt
+	}
+	return FileAccessPrompt
+}
+
+// staticGateAutoApprove reports whether a tool call that the static
+// classifier (Gate 1) flagged as risky should skip the interactive
+// approval prompt because the session is in a bypass state:
+//
+//   - Unsafe mode: every security check is off.
+//   - Session elevation: the active risk profile is permissive or
+//     unrestricted (the user clicked "Elevate (session)" on a prior
+//     dialog or ran /risk-profile permissive), so non-hard-block
+//     operations auto-approve for the rest of the session.
+//   - Path-tier allow: the resolved path lands in workspace root,
+//     /tmp, or a session-allowlisted folder (write attempts against
+//     read_only entries are still denied so the classifier has a way
+//     to surface the violation).
+//
+// Hard blocks (critical system operations such as rm -rf /) are never
+// auto-approved here — they fall through to the caller's block/prompt
+// handling regardless of elevation.
+//
+// filePath, resolvedPath, and mode narrow the check to file-touching
+// tools. Pass "", "", "" for non-file tools; the path-tier branch is
+// skipped in that case.
+//
+// Both Gate-1 entry points call this — ExecuteTool and the
+// live seed pre-execute hook (newPreExecuteHook) — so the bypass policy
+// lives in exactly one place and the two paths can't drift.
+func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult, filePath, resolvedPath, mode string) bool {
 	if a == nil {
 		return false
 	}
@@ -406,6 +545,21 @@ func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult) bool {
 	}
 	if a.IsSessionElevated() && !secResult.IsHardBlock {
 		return true
+	}
+	// SP-127 M1: path-tier allow. When a file path is supplied, consult
+	// the same classifier the filesystem gate adapter uses so Gate 1 and
+	// Gate 2 agree on the verdict. FileAccessAllow skips the prompt;
+	// FileAccessDeny propagates the hard block so the caller rejects the
+	// op; FileAccessPrompt falls through to the existing prompt flow.
+	if filePath != "" {
+		switch a.classifyFileAccess(filePath, resolvedPath, mode) {
+		case FileAccessAllow:
+			return true
+		case FileAccessDeny:
+			return false
+		case FileAccessPrompt:
+			// fall through to default false
+		}
 	}
 	return false
 }
@@ -966,9 +1120,41 @@ func newFilesystemGateAdapter(agent *Agent) tools.FilesystemGate {
 // what they expect — a symlink `workspace/link` pointing to
 // `/etc/passwd` would otherwise be approved without the user
 // noticing the resolved target.
+//
+// SP-127 M1: this method now delegates to the Gate 1 path-tier
+// classifier so the filesystem gate and Gate 1 always agree on the
+// allow/prompt/deny verdict. withFilesystemApproval stays as a
+// fallback wrapper around this same adapter, so the two surfaces
+// cannot diverge.
 func (a *filesystemGateAdapter) RequestPathApproval(ctx context.Context, toolName, filePath, resolvedPath string, err error) (context.Context, bool) {
 	if a == nil || a.agent == nil {
 		return ctx, false
 	}
+
+	// Determine access mode from the error sentinel.
+	// Every write tool surfaces ErrWriteOutsideWorkingDirectory;
+	// read tools surface ErrOutsideWorkingDirectory.
+	mode := "read"
+	if errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
+		mode = "write"
+	}
+
+	// SP-127 M1: Gate 1 and Gate 2 consult the same classifier.
+	// FileAccessAllow skips the prompt entirely.
+	// FileAccessDeny surfaces the read_only violation and rejects.
+	// FileAccessPrompt falls through to the interactive prompt flow.
+	decision := a.agent.classifyFileAccess(filePath, resolvedPath, mode)
+	switch decision {
+	case FileAccessAllow:
+		return filesystem.WithSecurityBypass(ctx), true
+	case FileAccessDeny:
+		// read_only violation: attach a denial reason and return false
+		// so the original error propagates with a workflow-specific message.
+		reason := fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths; the filesystem gate cannot authorize a write under a read_only grant", filePath)
+		return tools.WithFilesystemGateDenialReason(ctx, reason), false
+	case FileAccessPrompt:
+		// fall through to the interactive prompt flow
+	}
+
 	return handleFileSecurityError(ctx, a.agent, toolName, filePath, resolvedPath, err)
 }

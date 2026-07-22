@@ -51,12 +51,24 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/favicon.ico", ws.handleFavicon)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		resp := map[string]interface{}{
 			"status": "ok",
 			"port":   ws.port,
 			"uptime": time.Since(ws.startTime).String(),
-		})
+		}
+		// Report whether an agent backend is available. In daemon mode
+		// (ws.agent == nil) agents are created per-client, so "available"
+		// means the config manager can produce one — approximated here by
+		// checking whether any client context has an agent.
+		if ws.agent != nil {
+			resp["agent_available"] = true
+		} else {
+			resp["agent_available"] = ws.serviceMode
+		}
+		ws.mutex.RLock()
+		resp["active_queries"] = ws.activeQueries
+		ws.mutex.RUnlock()
+		json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("/api/bootstrap", ws.handleAPIBootstrap)
 }

@@ -8,6 +8,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -42,6 +43,36 @@ func registerPastedImagesWithProvider(a *Agent, prov core.Provider, images map[s
 // into the injector goroutine in processQueryWithSeed.
 type injectInputMsg struct {
 	content string
+}
+
+// injectUserMessageTimestamp prepends a <current-time>...</current-time> tag
+// to the user message so the model sees the exact moment of each turn without
+// invalidating the prompt-prefix cache. The system prompt stays static across
+// requests (date/time injection there would defeat provider caching and cost
+// users real money on every turn); the timestamp lives in the user-message
+// tail, which Anthropic and OpenAI do not cache. ISO 8601 with timezone
+// offset is machine-parseable; the Local parenthetical matches what the user
+// sees in their OS clock so the model can reason about time-of-day naturally.
+//
+// Empty or whitespace-only input is returned unchanged so wakeup-only turns
+// (background-task notifications with no user message) don't produce a bare
+// timestamp that the model would have to interpret.
+func injectUserMessageTimestamp(userMessage string) string {
+	if strings.TrimSpace(userMessage) == "" {
+		return userMessage
+	}
+	now := time.Now()
+	// ISO 8601 with offset. Location().String() gives "Local" inside Go's
+	// test runner, so we also include the resolved zone name for human
+	// readability — the model uses both the absolute timestamp and the
+	// local clock to reason about "wait 5 minutes" or "is the user up late".
+	return fmt.Sprintf(
+		"<current-time>%s (Local: %s, %s)</current-time>\n\n%s",
+		now.Format(time.RFC3339),
+		now.Format("2006-01-02 15:04:05"),
+		now.Location().String(),
+		userMessage,
+	)
 }
 
 // queryRunContext holds all shared state between the preparation and execution
@@ -137,6 +168,16 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		return nil, agenterrors.NewAgent("seed-query", "failed to process images in query", err)
 	}
 
+	// Prepend a <current-time> tag to the user message so the model sees
+	// the exact moment of this turn. The timestamp lives in the user-message
+	// tail (not the cached system prompt prefix) so prompt caching stays
+	// effective across requests — a system-prompt timestamp would invalidate
+	// the cache every second. Applied AFTER processImagesInQuery so image
+	// placeholders and tag stripping see clean user text, and BEFORE the
+	// semantic consumers below (proactive context, recall) so the tag is
+	// already part of the query they embed/recall against.
+	processedQuery = injectUserMessageTimestamp(processedQuery)
+
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()
 
@@ -149,7 +190,7 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// distinctive substring so cosmetic edits to the wording don't break
 	// the dedup guard (the prior literal drifted and re-injected context
 	// on every cold restore).
-			alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
+	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
 	shouldInjectProactiveContext := !alreadyInjected &&
 		!a.contextProfile.SkipProactiveContext &&
 		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")

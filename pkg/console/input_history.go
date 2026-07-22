@@ -35,6 +35,7 @@ func (ir *InputReader) NavigateHistory(direction int) {
 	ir.hasEditedLine = false
 	ir.collapsedPastes = ir.collapsedPastes[:0]
 	ir.cursorPos = len(ir.line)
+	ir.resetCompletionCycle()
 	ir.Refresh()
 }
 

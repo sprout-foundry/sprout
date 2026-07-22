@@ -88,12 +88,12 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}
 
 	// Gate 1 precheck — resolves the path and classifies it.
-	_, decision, _ := PrecheckFileAccess(env.FileAccessClassifier, "read_file", path)
+	_, decision := PrecheckFileAccess(env.FileAccessClassifier, "read_file", path)
 	if decision == "deny" {
-		// read_only violation on a read is unlikely (reads are always allowed
-		// under read_only grants), but surface the typed error for consistency.
-		return ToolResult{Output: fmt.Sprintf("read blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
-			fmt.Errorf("read blocked: %s is declared read_only", path)
+		// A deny on read_file is not a read_only violation — reads are
+		// always allowed under read_only grants. Surface a neutral message.
+		return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", path), IsError: true},
+			fmt.Errorf("read blocked: %s is not accessible", path)
 	}
 	// "allow"  → path is workspace/tmp/allowlisted; proceed directly.
 	// "prompt" → fall through to withFilesystemApproval for the dialog.

@@ -1,7 +1,9 @@
 package automate
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -601,6 +603,244 @@ func TestSummary_IsApprovalRequired_NilSafe(t *testing.T) {
 	var s *Summary
 	if !s.IsApprovalRequired() {
 		t.Fatalf("nil Summary should default to require approval")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SP-128 Phase 2b: Summary JSON shape
+//
+// The WebUI `/api/automate/run` approval gate embeds the full Summary
+// under the `summary` key so the frontend can render the same overview
+// as the CLI. These tests pin the JSON contract: snake_case tags,
+// omitempty on optional fields, requires_approval + subagent_timeout_seconds
+// always present (no omitempty on the pointer fields so the frontend can
+// distinguish unset from absent), allowed_paths serializes the full
+// entry including reason when present.
+// ---------------------------------------------------------------------------
+
+func TestSummary_JSON_RequiresApprovalAlwaysPresent(t *testing.T) {
+	// Both states — unset (nil) and explicit false — must serialize the
+	// field so the WebUI can render the gate consistently. The spec calls
+	// this out: "no `omitempty` mishaps that hide `requires_approval`".
+	trues := []bool{true, false}
+	for _, val := range trues {
+		val := val
+		t.Run(fmt.Sprintf("explicit_%v", val), func(t *testing.T) {
+			s := &Summary{RequiresApproval: &val}
+			data, err := json.Marshal(s)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			var decoded map[string]interface{}
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			got, ok := decoded["requires_approval"].(bool)
+			if !ok {
+				t.Fatalf("requires_approval missing or not a bool in %s", data)
+			}
+			if got != val {
+				t.Errorf("requires_approval: got %v, want %v", got, val)
+			}
+		})
+	}
+
+	t.Run("nil serializes as null not absent", func(t *testing.T) {
+		s := &Summary{}
+		data, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		// Field must appear in the JSON output, even as null. The frontend
+		// uses `summary.requires_approval ?? true` to default.
+		if !strings.Contains(string(data), `"requires_approval":null`) {
+			t.Errorf("expected `requires_approval: null` in output, got: %s", data)
+		}
+	})
+}
+
+func TestSummary_JSON_SubagentTimeoutAlwaysPresent(t *testing.T) {
+	// Same nil-safe contract as RequiresApproval.
+	t.Run("nil serializes as null", func(t *testing.T) {
+		s := &Summary{}
+		data, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		if !strings.Contains(string(data), `"subagent_timeout_seconds":null`) {
+			t.Errorf("expected `subagent_timeout_seconds: null` in output, got: %s", data)
+		}
+	})
+
+	t.Run("explicit value serializes correctly", func(t *testing.T) {
+		secs := 2700
+		s := &Summary{SubagentTimeoutSeconds: &secs}
+		data, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		var decoded map[string]interface{}
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		got, ok := decoded["subagent_timeout_seconds"].(float64)
+		if !ok {
+			t.Fatalf("subagent_timeout_seconds missing or not a number in %s", data)
+		}
+		if got != 2700 {
+			t.Errorf("subagent_timeout_seconds: got %v, want 2700", got)
+		}
+	})
+}
+
+func TestSummary_JSON_OptionalFieldsOmitWhenEmpty(t *testing.T) {
+	// A bare Summary with zero values must NOT carry description, steps,
+	// initial, budget, allowed_paths, or warnings keys — those are
+	// omitempty so workflows that don't set them produce clean JSON.
+	s := &Summary{}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, key := range []string{
+		"description", "initial", "steps", "budget",
+		"allowed_paths", "warnings", "continue_on_error", "no_web_ui",
+	} {
+		if strings.Contains(string(data), `"`+key+`":`) {
+			t.Errorf("optional field %q should be omitted when empty; got: %s", key, data)
+		}
+	}
+}
+
+func TestSummary_JSON_AllowedPathsAndWarningsSerialize(t *testing.T) {
+	// Phase 1 already populates AllowedPaths + Warnings; Phase 2 must
+	// serialize them on the wire so the WebUI dialog can render them.
+	s := &Summary{
+		Description: "Run nightly tests",
+		AllowedPaths: []AllowedPathSummary{
+			{Path: "/srv/datasets", Mode: "read_write", Reason: "Read training data"},
+			{Path: "/var/log/sprout", Mode: "read_only"},
+		},
+		Warnings: []string{"allowed_paths[0] \"/srv/datasets\" falls under a system prefix"},
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var decoded struct {
+		Description string `json:"description"`
+		AllowedPaths []struct {
+			Path   string `json:"path"`
+			Mode   string `json:"mode"`
+			Reason string `json:"reason"`
+		} `json:"allowed_paths"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.Description != "Run nightly tests" {
+		t.Errorf("description: got %q", decoded.Description)
+	}
+	if len(decoded.AllowedPaths) != 2 {
+		t.Fatalf("allowed_paths: got %d, want 2", len(decoded.AllowedPaths))
+	}
+	if decoded.AllowedPaths[0].Path != "/srv/datasets" ||
+		decoded.AllowedPaths[0].Mode != "read_write" ||
+		decoded.AllowedPaths[0].Reason != "Read training data" {
+		t.Errorf("allowed_paths[0] wrong: %+v", decoded.AllowedPaths[0])
+	}
+	if decoded.AllowedPaths[1].Reason != "" {
+		t.Errorf("allowed_paths[1] reason should be omitted when empty: %+v", decoded.AllowedPaths[1])
+	}
+	if len(decoded.Warnings) != 1 {
+		t.Fatalf("warnings: got %d, want 1", len(decoded.Warnings))
+	}
+}
+
+func TestSummary_JSON_StepAndInitialShape(t *testing.T) {
+	// Steps and Initial nest other types — confirm their JSON tags too.
+	s := &Summary{
+		Initial: &InitialSummary{
+			Persona:       "main",
+			Provider:      "anthropic",
+			Model:         "claude-opus-4",
+			MaxIterations: 5,
+			HasPrompt:     true,
+		},
+		Steps: []StepSummary{
+			{Name: "build", Kind: "shell", CommandPreview: "$ go build"},
+			{Name: "test", Kind: "agent", Persona: "reviewer"},
+		},
+		Budget: &BudgetSummary{USD: 10.0, WarnAt: []float64{0.5, 0.8}},
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, want := range []string{
+		`"persona":"main"`,
+		`"provider":"anthropic"`,
+		`"model":"claude-opus-4"`,
+		`"max_iterations":5`,
+		`"has_prompt":true`,
+		`"name":"build"`,
+		`"kind":"shell"`,
+		`"command_preview":"$ go build"`,
+		`"warn_at":[0.5,0.8]`,
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("expected %q in JSON output, got: %s", want, data)
+		}
+	}
+}
+
+func TestSummarize_RoundTripsThroughJSONShape(t *testing.T) {
+	// End-to-end: write a workflow file, run Summarize, marshal to JSON,
+	// and confirm the WebUI-relevant fields survive the round-trip with
+	// snake_case keys the frontend expects.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rt.json")
+	mustWriteFile(t, path, `{
+		"description": "Round-trip test",
+		"requires_approval": false,
+		"subagent_timeout_seconds": 1200,
+		"allowed_paths": [
+			{"path": "/srv/datasets", "mode": "read_write", "reason": "Test data"}
+		],
+		"initial": {"persona": "main", "provider": "anthropic", "model": "claude-opus-4", "max_iterations": 3}
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded["description"] != "Round-trip test" {
+		t.Errorf("description: got %v", decoded["description"])
+	}
+	if decoded["requires_approval"] != false {
+		t.Errorf("requires_approval: got %v (want false)", decoded["requires_approval"])
+	}
+	if decoded["subagent_timeout_seconds"].(float64) != 1200 {
+		t.Errorf("subagent_timeout_seconds: got %v (want 1200)", decoded["subagent_timeout_seconds"])
+	}
+	ap, ok := decoded["allowed_paths"].([]interface{})
+	if !ok || len(ap) != 1 {
+		t.Fatalf("allowed_paths: got %v (want 1 entry)", decoded["allowed_paths"])
+	}
+	first := ap[0].(map[string]interface{})
+	if first["path"] != "/srv/datasets" || first["mode"] != "read_write" || first["reason"] != "Test data" {
+		t.Errorf("allowed_paths[0]: got %+v", first)
 	}
 }
 

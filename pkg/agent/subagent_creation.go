@@ -168,6 +168,15 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	for _, f := range r.parentAgent.SnapshotSessionAllowedFolders() {
 		agent.AddSessionAllowedFolder(f)
 	}
+	// Propagate the declared folder modes (SP-128) so a subagent
+	// running inside a workflow honors the workflow's read_only
+	// constraints. AddSessionAllowedFolder is called above in the
+	// same order, so by the time SetSessionAllowedFolderMode runs
+	// the folder is already on the subagent's allowlist (the mode
+	// setter no-ops for unallowlisted folders).
+	for folder, mode := range r.parentAgent.SnapshotSessionAllowedFolderModes() {
+		agent.SetSessionAllowedFolderMode(folder, mode)
+	}
 
 	// SP-051: tag every event this subagent publishes with depth + persona
 	// so the CLI tool-timeline can indent and color-badge by who's running.

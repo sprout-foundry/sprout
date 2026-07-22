@@ -90,7 +90,11 @@ func TestFilesystemGateAdapter_Approve_Deny_SessionAllowlist(t *testing.T) {
 		defer a.Shutdown()
 		adapter := newFilesystemGateAdapter(a)
 
-		ctx, approved := adapter.RequestPathApproval(context.Background(), "read_file", "/tmp/somewhere-else", "", filesystem.ErrOutsideWorkingDirectory)
+		// Use a path outside /tmp — M1's universal /tmp allow would
+		// approve /tmp/... paths before reaching the prompt flow.
+		denyDir := NonTmpTempDir(t)
+		denyFile := filepath.Join(denyDir, "somewhere-else")
+		ctx, approved := adapter.RequestPathApproval(context.Background(), "read_file", denyFile, "", filesystem.ErrOutsideWorkingDirectory)
 		if approved {
 			t.Error("non-interactive agent without an approval channel must deny")
 		}

@@ -83,7 +83,7 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
 	// resolve so Allow paths skip the gate entirely and Deny paths
 	// return a typed error immediately.
-	preRes, decision := PrecheckFileAccess(env.FileAccessClassifier, "list_directory", targetPath)
+	preRes, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "list_directory", targetPath)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("list_directory blocked: %s is declared read_only in the active workflow's allowed_paths", targetPath), IsError: true},
 			fmt.Errorf("list_directory blocked: %s is declared read_only", targetPath)

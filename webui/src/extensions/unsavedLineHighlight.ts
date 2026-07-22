@@ -21,7 +21,7 @@
  *   the existing git diff gutter markers.
  */
 
-import { StateEffect, StateField, type Extension } from '@codemirror/state';
+import { StateEffect, StateField, Annotation, type Extension } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 // ── State effect ────────────────────────────────────────────────────
@@ -32,6 +32,11 @@ import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate
  * `buffer.originalContent` changes.
  */
 export const setOriginalContent = StateEffect.define<string>();
+
+/** Annotation marking the no-op transaction dispatched after a debounced
+ *  decoration rebuild, so the plugin's own dispatch doesn't re-trigger
+ *  another debounce cycle. */
+const unsavedRebuildAnnotation = Annotation.define<boolean>();
 
 // ── State field ─────────────────────────────────────────────────────
 
@@ -192,6 +197,7 @@ const unsavedLineDeco = Decoration.line({ class: 'cm-unsavedLine' });
 const unsavedHighlightPlugin = ViewPlugin.fromClass(
   class UnsavedHighlightPlugin {
     decorations: DecorationSet;
+    private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(view: EditorView) {
       this.decorations = this.buildDecorations(view);
@@ -202,8 +208,25 @@ const unsavedHighlightPlugin = ViewPlugin.fromClass(
       // originalContent is updated via StateEffect.
       const origChanged = update.transactions.some((tr) => tr.effects.some((e) => e.is(setOriginalContent)));
 
-      if (update.viewportChanged || update.docChanged || origChanged) {
+      if (origChanged) {
+        // originalContent changes (file load/save) are not user edits —
+        // rebuild immediately so highlights are correct right away.
+        if (this.debounceTimer) {
+          clearTimeout(this.debounceTimer);
+          this.debounceTimer = null;
+        }
         this.decorations = this.buildDecorations(update.view);
+      } else if (update.docChanged || update.viewportChanged) {
+        // Debounce user edits and viewport scrolling — the diff is O(n)
+        // and doesn't need to update on every keystroke.
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        const view = update.view;
+        this.debounceTimer = setTimeout(() => {
+          this.debounceTimer = null;
+          if (!view.dom.isConnected) return;
+          this.decorations = this.buildDecorations(view);
+          view.dispatch({ annotations: [unsavedRebuildAnnotation.of(true)] });
+        }, 300);
       }
     }
 
@@ -260,6 +283,13 @@ const unsavedHighlightPlugin = ViewPlugin.fromClass(
         pieces.map(({ from, deco }) => deco.range(from)),
         true,
       );
+    }
+
+    destroy() {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
     }
   },
   {

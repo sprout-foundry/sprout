@@ -69,8 +69,29 @@ func (l *AuditLogger) Log(entry AuditEntry) error {
 
 // LogEntry is an alias for Log, named for call-site clarity.
 // Nil-receiver safe via Log's internal nil guard.
-func (l *AuditLogger) LogEntry(entry AuditEntry) error {
-	return l.Log(entry)
+// Accepts any type to allow flexible implementations (e.g., the filesystem
+// package uses filesystem.AuditEntry which has the same JSON structure).
+func (l *AuditLogger) LogEntry(entry any) error {
+	ae, ok := entry.(AuditEntry)
+	if !ok {
+		return fmt.Errorf("unsupported entry type: %T", entry)
+	}
+	return l.Log(ae)
+}
+
+// LogJSON writes a pre-marshaled JSON object as a single line to the
+// audit log. Use this when the caller can't import tools.AuditEntry
+// (e.g., pkg/filesystem, which would create an import cycle).
+func (l *AuditLogger) LogJSON(data []byte) error {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, err := l.file.Write(append(data, '\n')); err != nil {
+		return fmt.Errorf("write audit entry: %w", err)
+	}
+	return nil
 }
 
 // Close closes the underlying log file.

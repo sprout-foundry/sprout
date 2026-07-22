@@ -134,7 +134,12 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *
 	if ctx != nil && activeChatID != "" {
 		if cs := ctx.getChatSession(activeChatID); cs != nil {
 			cs.mu.Lock()
-			cs.Provider = api.GetProviderName(clientAgent.GetProviderType())
+			// Store the provider ID (e.g. "ollama-local"), NOT the display name
+			// (e.g. "Ollama (Local)"). The display name doesn't round-trip
+			// through MapStringToClientType — see SP-034-fix provider/model
+			// mapping round-trip. The frontend renders GetProviderName()
+			// itself from this ID at display time.
+			cs.Provider = string(clientAgent.GetProviderType())
 			cs.Model = clientAgent.GetModel()
 			cs.mu.Unlock()
 		}
@@ -240,7 +245,12 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, data *Mod
 	if ctx := ws.clientContexts[clientID]; ctx != nil && activeChatID != "" {
 		if cs := ctx.getChatSession(activeChatID); cs != nil {
 			cs.mu.Lock()
-			cs.Provider = api.GetProviderName(clientAgent.GetProviderType())
+			// Store the provider ID (e.g. "ollama-local"), NOT the display name
+			// (e.g. "Ollama (Local)"). The display name doesn't round-trip
+			// through MapStringToClientType — see SP-034-fix provider/model
+			// mapping round-trip. The frontend renders GetProviderName()
+			// itself from this ID at display time.
+			cs.Provider = string(clientAgent.GetProviderType())
 			cs.Model = clientAgent.GetModel()
 			cs.mu.Unlock()
 		}

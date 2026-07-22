@@ -541,6 +541,21 @@ if existing := chatAgent.GetPasswordPrompter(); existing != nil {
 			}
 		}
 
+		// SP-127 Phase 2.3: apply Initial.AllowedPaths (if any) to the
+		// session allowlist before anything else. Unlike per-step paths,
+		// initial paths are NOT removed — they persist for the entire
+		// workflow run. This ensures the cd-target gate (Phase 2.1) and
+		// the filesystem gate (Phase 2.2) see these paths as approved
+		// from step 1 onward. On resume, RestoreWorkflowConversationState
+		// (called above) restores the agent state which includes the
+		// session allowlist — the re-apply here is a cheap no-op since
+		// AddSessionAllowedFolder is idempotent.
+		if workflowConfig != nil && workflowConfig.Initial != nil && len(workflowConfig.Initial.AllowedPaths) > 0 {
+			if _, _, _, applyErr := workflow.ApplyWorkflowRuntimeAllowedPaths(chatAgent, workflowConfig.Initial.AllowedPaths); applyErr != nil {
+				return fmt.Errorf("failed to apply initial allowed_paths: %w", applyErr)
+			}
+		}
+
 		shouldRunInitialQuery := strings.TrimSpace(query) != "" && !workflowState.InitialCompleted
 		if shouldRunInitialQuery {
 			if err := workflow.ApplyWorkflowInitialOverrides(chatAgent, workflowConfig, workflowOverrides); err != nil {

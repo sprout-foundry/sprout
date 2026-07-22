@@ -42,6 +42,17 @@ func RunAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			stepName = fmt.Sprintf("step-%d", i+1)
 		}
 
+		// SP-127 Phase 2.3: per-step allowed_paths restore. snapshotPaths
+		// is nil when ApplyWorkflowRuntimeAllowedPaths is not called (shell
+		// steps or early-returns). Snapshot modes are tracked separately so
+		// the mode map can be restored alongside the path list.
+		var snapPaths []string
+		var snapModes map[string]string
+		var addedPaths []string
+		restorePaths := func() {
+			RestoreWorkflowRuntimeAllowedPaths(chatAgent, snapPaths, snapModes, addedPaths)
+		}
+
 		if ShouldYieldBeforeWorkflowStep(cfg, state, step, chatAgent) {
 			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_yielded", map[string]interface{}{
 				"reason":          "provider_handoff",
@@ -119,7 +130,11 @@ func RunAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		}
 
 		if step.IsShellStep() {
+			// Apply allowed_paths before running the shell command.
+			snapPaths, snapModes, addedPaths, _ = ApplyWorkflowRuntimeAllowedPaths(chatAgent, step.AllowedPaths)
+
 			shellErr := runWorkflowShellStep(ctx, step)
+			restorePaths()
 			if shellErr != nil {
 				hasError = true
 				if firstErr == nil {
@@ -185,47 +200,32 @@ func RunAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 
-		stepPrompt, err := ResolveStepPrompt(step)
-		if err != nil {
-			hasError = true
-			if firstErr == nil {
-				firstErr = fmt.Errorf("workflow step %q prompt resolution failed: %w", stepName, err)
+		// runAgentStep executes the agent inference portion of the step.
+		// Snapshot/restore of allowed_paths uses a named return so that
+		// the defer captures values, not loop-variable references.
+		err := func() (stepErr error) {
+			// Apply step-level allowed_paths. Snapshot is taken BEFORE the
+			// add so restore only removes paths this step added. If there are
+			// no paths the defer is a no-op (addedPaths==nil).
+			snapPaths, snapModes, addedPaths, applyErr := ApplyWorkflowRuntimeAllowedPaths(chatAgent, step.AllowedPaths)
+			if applyErr != nil {
+				return fmt.Errorf("failed to apply step allowed_paths: %w", applyErr)
 			}
-			state.NextStepIndex = i + 1
-			state.HasError = hasError
-			if firstErr != nil {
-				state.FirstError = firstErr.Error()
-			}
-			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, utils.WrapError(err, "persist workflow checkpoint")
-			}
-			if !cfg.ContinueOnError {
-				break
-			}
-			continue
-		}
-		if stepPrompt == "" {
-			hasError = true
-			if firstErr == nil {
-				firstErr = fmt.Errorf("workflow step %q resolved an empty prompt", stepName)
-			}
-			state.NextStepIndex = i + 1
-			state.HasError = hasError
-			if firstErr != nil {
-				state.FirstError = firstErr.Error()
-			}
-			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := PersistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
-				return false, utils.WrapError(err, "persist workflow checkpoint")
-			}
-			if !cfg.ContinueOnError {
-				break
-			}
-			continue
-		}
+			defer func() {
+				RestoreWorkflowRuntimeAllowedPaths(chatAgent, snapPaths, snapModes, addedPaths)
+			}()
 
-		err = queryExecutor(ctx, chatAgent, eventBus, stepPrompt)
+			stepPrompt, promptErr := ResolveStepPrompt(step)
+			if promptErr != nil {
+				return fmt.Errorf("workflow step %q prompt resolution failed: %w", stepName, promptErr)
+			}
+			if stepPrompt == "" {
+				return fmt.Errorf("workflow step %q resolved an empty prompt", stepName)
+			}
+
+			return queryExecutor(ctx, chatAgent, eventBus, stepPrompt)
+		}()
+
 		if err != nil {
 			hasError = true
 			if firstErr == nil {

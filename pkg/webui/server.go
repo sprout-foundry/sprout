@@ -67,7 +67,7 @@ type ReactWebServer struct {
 	sshLaunchStatuses               map[string]*sshLaunchStatus
 	sshLaunchStatusMu               sync.RWMutex
 	workspaceExecMu                 sync.Mutex
-	stdoutCaptureMu                 sync.Mutex // serializes os.Stdout capture for slash commands (SC-1)
+
 	lastClientContextCleanupAt      time.Time
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int

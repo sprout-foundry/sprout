@@ -3,6 +3,8 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -11,7 +13,18 @@ import (
 
 // RecallCommand implements the /recall slash command. It searches past
 // sessions for content matching the given query and renders the results.
-type RecallCommand struct{}
+type RecallCommand struct {
+	stdout io.Writer
+}
+
+func (c *RecallCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *RecallCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 // Name returns the slash command name.
 func (c *RecallCommand) Name() string {
@@ -112,12 +125,12 @@ func (c *RecallCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return err
 	}
 	if len(items) == 0 {
-		fmt.Printf("No prior sessions match %q.\n", joinQueryFromArgs(args))
+		fmt.Fprintf(c.out(), "No prior sessions match %q.\n", joinQueryFromArgs(args))
 		return nil
 	}
 	// FormatSemanticRecall provides its own "Recalled From Session History"
 	// header, so we just emit it directly without a redundant prefix.
-	WriteToOutput(agent.FormatSemanticRecall(items, 8000))
+	fmt.Fprint(c.out(), agent.FormatSemanticRecall(items, 8000))
 	return nil
 }
 
@@ -127,7 +140,7 @@ func (c *RecallCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 	if err != nil {
 		return err
 	}
-	return WriteJSONToOutput(items)
+	return WriteJSON(c.out(), items)
 }
 
 // joinQueryFromArgs extracts the query string portion from raw args

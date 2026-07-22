@@ -25,7 +25,7 @@ var (
 // handleAPIStats handles API requests for server statistics
 func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -74,7 +74,7 @@ func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Requ
 	case http.MethodPost:
 		ws.handleAPIWorkspaceSet(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
@@ -125,13 +125,13 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	req.Path = strings.TrimSpace(req.Path)
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 
@@ -170,7 +170,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 
 	workspaceRoot, err := ws.setClientWorkspaceRoot(clientID, req.Path)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to set workspace: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "workspace_update_failed", fmt.Sprintf("Failed to set workspace: %v", err))
 		return
 	}
 
@@ -210,7 +210,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 
 func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -229,17 +229,17 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 
 	canonicalDir, err := canonicalizePath(dir, resolvedDaemonRoot, false)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_directory", fmt.Sprintf("Invalid directory: %v", err))
 		return
 	}
 	if canonicalDir != resolvedDaemonRoot && !isWithinWorkspace(canonicalDir, resolvedDaemonRoot) {
-		http.Error(w, "Directory outside daemon root", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "directory_outside_daemon_root", "Directory outside daemon root")
 		return
 	}
 
 	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "directory_read_failed", fmt.Sprintf("Failed to read directory: %v", err))
 		return
 	}
 
@@ -317,7 +317,7 @@ const projectsCacheTTL = 5 * time.Minute
 
 func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 

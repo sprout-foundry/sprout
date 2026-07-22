@@ -1,13 +1,44 @@
 package agent
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // === normalizeSessionID ===
+
+func TestGetSessionPreviewScopedStripsTimestamp(t *testing.T) {
+	stateDir := t.TempDir()
+	originalGetStateDir := getStateDirFunc
+	getStateDirFunc = func() (string, error) { return stateDir, nil }
+	defer func() { getStateDirFunc = originalGetStateDir }()
+
+	workingDir := t.TempDir()
+	stateFile, err := buildScopedSessionFilePath(stateDir, "timestamped", workingDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(ConversationState{Messages: []api.Message{{
+		Role: "user", Content: "<current-time>2026-07-22T12:37:28Z</current-time>\n\nRefactor persistence cleanly",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stateFile, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetSessionPreviewScoped("timestamped", workingDir); got != "Refactor persistence cleanly" {
+		t.Fatalf("preview = %q", got)
+	}
+}
 
 func TestNormalizeSessionID(t *testing.T) {
 	t.Parallel()

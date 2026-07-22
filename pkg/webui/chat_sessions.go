@@ -778,9 +778,13 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 			rawMsgs := state.Messages
 			enriched := make([]map[string]interface{}, 0, len(rawMsgs))
 			for i, msg := range rawMsgs {
+				content := msg.Content
+				if msg.Role == "user" {
+					content = agent.StripUserMessageTimestamp(content)
+				}
 				m := map[string]interface{}{
 					"role":    msg.Role,
-					"content": msg.Content,
+					"content": content,
 				}
 				if msg.ReasoningContent != "" {
 					m["reasoning_content"] = msg.ReasoningContent

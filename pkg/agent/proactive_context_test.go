@@ -532,6 +532,40 @@ func TestFormatProactiveContext_MultilineSignatureTruncatedInHeader(t *testing.T
 	}
 }
 
+func TestFormatProactiveContext_TruncatesTimestampEnvelopeConsistently(t *testing.T) {
+	now := time.Now().UTC()
+	// Legacy records stored before the timestamp-injection moved to the
+	// provider boundary carry a leading `<current-time>...</current-time>\n\n`
+	// on the Signature. The heading and the User: line must agree on what
+	// they render — otherwise a single record would print two different
+	// versions of the same prompt in adjacent lines.
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:legacy",
+				Signature: "<current-time>2026-07-22T12:34:53-05:00</current-time>\n\nRefactor the persistence.go file",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"actionableSummary": "Refactor persistence",
+				},
+			},
+			Score: 0.85,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), now)
+
+	if strings.Contains(output, "<current-time>") {
+		t.Fatalf("output leaked the legacy timestamp envelope: %s", output)
+	}
+	if !strings.Contains(output, "### Refactor the persistence.go file") {
+		t.Fatalf("heading should be stripped, got: %s", output)
+	}
+	if !strings.Contains(output, `User: "Refactor the persistence.go file"`) {
+		t.Fatalf("User: line should be stripped too, got: %s", output)
+	}
+}
+
 func TestFormatProactiveContext_LongSignatureTruncated(t *testing.T) {
 	now := time.Now().UTC()
 	longSig := strings.Repeat("A", 200)

@@ -17,6 +17,21 @@ func (r *SteerInputReader) SetCompleter(c CompletionProvider) {
 	r.mu.Unlock()
 }
 
+// SetRichCompleter installs a structured completion provider that
+// returns candidates with descriptions. When set, the live dropdown
+// (SP-078 Phase 3) prefers this over the plain completer. Mirrors
+// (*InputReader).SetRichCompleter.
+func (r *SteerInputReader) SetRichCompleter(rc RichCompletionProvider) {
+	r.mu.Lock()
+	r.richCompleter = rc
+	// Hide the dropdown so a stale list doesn't linger after the
+	// provider is replaced or cleared.
+	if r.autocomplete != nil {
+		r.autocomplete.hide()
+	}
+	r.mu.Unlock()
+}
+
 // handleSteerCompletion is the Ctrl-] dispatch. It cycles through
 // candidates from the configured completer (same UX as InputReader's
 // Tab cycle): the first press applies the first candidate; subsequent

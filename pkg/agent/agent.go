@@ -135,18 +135,20 @@ type Agent struct {
 
 	// Conversation timing
 	conversationStartTime time.Time
+	turnTimestamp         time.Time
+	turnTimestampMu       sync.RWMutex
 
 	// Configuration
-	configManager   *configuration.Manager
-	workspaceRoot   string
-	debug           bool
+	configManager *configuration.Manager
+	workspaceRoot string
+	debug         bool
 	// contextProfile (SP-125) is the resolved set of context-engine
 	// levers (tool allowlist, prompt path, compaction trigger, etc.).
 	// Resolved once at agent creation by ResolveContextProfile and read
 	// by every call site that depends on it (conversation.go,
 	// embedded_prompts.go, context_budget.go, seed_query.go, rollup.go).
 	// Zero-value means full-context mode (all defaults).
-	contextProfile  configuration.ContextProfile
+	contextProfile configuration.ContextProfile
 
 	// effectiveContextCap (SP-126) is the resolved maximum number of
 	// context tokens sprout will use for any request in this session.

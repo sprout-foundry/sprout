@@ -177,6 +177,19 @@ func (c *SteerCoordinator) SetCompleter(p console.CompletionProvider) {
 	c.reader.SetCompleter(p)
 }
 
+// SetRichCompleter installs a structured slash-command provider on
+// the steer reader (SP-078 Phase 3). When set, the steer panel
+// renders a live dropdown above the input line while the user types
+// a "/"-prefixed command — same UX as the InputReader's dropdown.
+// Tab accepts the highlighted candidate; Esc dismisses the dropdown;
+// Up/Down navigate candidates while the dropdown is visible.
+func (c *SteerCoordinator) SetRichCompleter(rc console.RichCompletionProvider) {
+	if c == nil || c.reader == nil {
+		return
+	}
+	c.reader.SetRichCompleter(rc)
+}
+
 // handleSteerSubmit forwards the user's typed message to the agent's
 // inputInjectionChan (which the seed-integration bridge then routes
 // into seed's InjectInput). On success an acknowledgement is printed

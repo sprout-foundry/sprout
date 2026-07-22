@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -240,7 +241,7 @@ func TestSystemPromptCacheEligibleAcrossProfiles(t *testing.T) {
 // it's also the only place per-call time appears (system prompt is cached).
 func TestInjectUserMessageTimestamp(t *testing.T) {
 	t.Run("prepends tag with ISO timestamp", func(t *testing.T) {
-		out := injectUserMessageTimestamp("hello")
+		out := InjectUserMessageTimestamp("hello")
 		if !strings.HasPrefix(out, "<current-time>") {
 			t.Errorf("output should start with <current-time> tag, got %q", out[:min(50, len(out))])
 		}
@@ -254,14 +255,14 @@ func TestInjectUserMessageTimestamp(t *testing.T) {
 
 	t.Run("empty input is passed through unchanged", func(t *testing.T) {
 		for _, in := range []string{"", " ", "\t\n"} {
-			if got := injectUserMessageTimestamp(in); got != in {
+			if got := InjectUserMessageTimestamp(in); got != in {
 				t.Errorf("input %q should pass through unchanged, got %q", in, got)
 			}
 		}
 	})
 
 	t.Run("contains RFC3339 timestamp", func(t *testing.T) {
-		out := injectUserMessageTimestamp("test")
+		out := InjectUserMessageTimestamp("test")
 		// RFC3339 looks like 2026-07-21T13:42:01Z or 2026-07-21T13:42:01-07:00.
 		// Match the date+time+T separator and a timezone marker (Z, +, or -).
 		tsRe := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})`)
@@ -272,9 +273,44 @@ func TestInjectUserMessageTimestamp(t *testing.T) {
 	})
 
 	t.Run("contains Local parenthetical", func(t *testing.T) {
-		out := injectUserMessageTimestamp("test")
+		out := InjectUserMessageTimestamp("test")
 		if !strings.Contains(out, "(Local:") {
 			t.Error("output should include '(Local: ...)' parenthetical for human readability")
 		}
 	})
+}
+
+func TestInjectUserMessageTimestampAt(t *testing.T) {
+	at := time.Date(2026, time.July, 22, 12, 37, 28, 987654321, time.FixedZone("CDT", -5*60*60))
+	got := InjectUserMessageTimestampAt("hello", at)
+	wantPrefix := "<current-time>2026-07-22T12:37:28-05:00 (Local: 2026-07-22 12:37:28, CDT)</current-time>\n\n"
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("timestamp prefix = %q, want %q", got, wantPrefix)
+	}
+	for _, input := range []string{"", " ", "\t\n"} {
+		if got := InjectUserMessageTimestampAt(input, at); got != input {
+			t.Errorf("input %q should pass through unchanged, got %q", input, got)
+		}
+	}
+}
+
+func TestStripUserMessageTimestamp(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"leading tag and body", "<current-time>2026-07-22T12:37:28Z</current-time>\n\nhello", "hello"},
+		{"leading tag without body", "<current-time>2026-07-22T12:37:28Z</current-time>", ""},
+		{"CRLF separator", "<current-time>2026-07-22T12:37:28Z</current-time>\r\n\r\nhello", "hello"},
+		{"no tag", "hello", "hello"},
+		{"leading whitespace is conservative", " <current-time>2026-07-22T12:37:28Z</current-time>\n\nhello", " <current-time>2026-07-22T12:37:28Z</current-time>\n\nhello"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StripUserMessageTimestamp(tt.input); got != tt.want {
+				t.Errorf("StripUserMessageTimestamp() = %q, want %q", got, tt.want)
+			}
+		})
+	}
 }

@@ -461,17 +461,17 @@ func TestExecuteGitOperation_multipleTypesWithCancelledApproval2(t *testing.T) {
 	sessionID := "test-session"
 	prompter := &mockGitApprovalPrompter2{approved: false, err: nil}
 
-	operations := []GitOperation{
+	// Most operations: prompter denies → "cancelled by user" error.
+	canceledOps := []GitOperation{
 		{Operation: GitOpPush, Args: "origin main"},
 		{Operation: GitOpReset, Args: "--hard HEAD"},
-		{Operation: GitOpRebase, Args: "main"},
 		{Operation: GitOpMerge, Args: "feature"},
 		{Operation: GitOpCheckout, Args: "-b new-branch"},
 		{Operation: GitOpBranchDelete, Args: "-d old-branch"},
 		{Operation: GitOpTag, Args: "v1.0"},
 	}
 
-	for _, op := range operations {
+	for _, op := range canceledOps {
 		t.Run(string(op.Operation), func(t *testing.T) {
 			result, err := ExecuteGitOperation(ctx, op, sessionID, nil, prompter)
 
@@ -489,6 +489,22 @@ func TestExecuteGitOperation_multipleTypesWithCancelledApproval2(t *testing.T) {
 			}
 		})
 	}
+
+	// Rebase is unconditionally banned per AGENTS.md — the prompter is never
+	// consulted, and the operation errors out before any execution.
+	t.Run("rebase", func(t *testing.T) {
+		op := GitOperation{Operation: GitOpRebase, Args: "main"}
+		result, err := ExecuteGitOperation(ctx, op, sessionID, nil, prompter)
+		if err == nil {
+			t.Fatal("expected rebase to be rejected, got nil error")
+		}
+		if !strings.Contains(err.Error(), "AGENTS.md bans rebase") {
+			t.Errorf("error = %q; want an error mentioning the AGENTS.md rebase ban", err.Error())
+		}
+		if result != "" {
+			t.Errorf("result = %q; want empty string", result)
+		}
+	})
 }
 
 func TestBuildGitCommand2_allOperationTypes2(t *testing.T) {

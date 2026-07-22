@@ -147,7 +147,7 @@ func TestClassifyShellCommandSafe(t *testing.T) {
 		{"git checkout", "git checkout main", SecuritySafe},
 		{"git switch", "git switch -c feature", SecuritySafe},
 		{"git reset", "git reset HEAD~1", SecuritySafe},
-		{"git rebase", "git rebase master", SecuritySafe},
+		{"git rebase", "git rebase master", SecurityCaution}, // AGENTS.md bans rebase — risk is escalated to Critical by the unified resolver; the static classifier labels it as CAUTION (was previously SAFE).
 		{"git cherry-pick", "git cherry-pick abc123", SecuritySafe},
 		{"git clean", "git clean -n -d", SecuritySafe},
 		{"systemctl start", "systemctl start nginx", SecuritySafe},

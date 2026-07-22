@@ -85,6 +85,13 @@ func isGitHistoryRewriteCommand(command string) bool {
 		rest := parts[subIdx+1:]
 		switch subcommand {
 		case "rebase":
+			// `git rebase --abort` is a recovery op, not a history rewrite.
+			// Any other rebase form (including `--abort` with other flags or
+			// arguments, or any other rebase variant) is treated as a rewrite.
+			// The only permitted rebase invocation is pure `--abort`.
+			if len(rest) == 1 && rest[0] == "--abort" {
+				return false
+			}
 			return true
 		case "reset":
 			hard := false
@@ -223,6 +230,67 @@ func isGitWriteCommand(command string) bool {
 		}
 		remaining = remaining[idx+1:]
 	}
+}
+
+// isGitRebaseCommand reports whether `command` contains a `git rebase`
+// invocation that rewrites history (i.e. NOT `git rebase --abort`).
+// AGENTS.md bans rebase unconditionally; the only permitted rebase is
+// `--abort` (recovery from a prior session's interrupted rebase).
+func isGitRebaseCommand(command string) bool {
+	command = stripQuotedContent(command)
+	remaining := command
+	for {
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		gitCmd := remaining[idx:]
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
+			continue
+		}
+		subcommand := ""
+		subIdx := 0
+		for i := 1; i < len(parts); i++ {
+			part := parts[i]
+			if strings.HasPrefix(part, "-") {
+				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+					i++
+				}
+				continue
+			}
+			subcommand = strings.TrimRight(part, ");\"'")
+			subIdx = i
+			break
+		}
+		if subcommand == "rebase" {
+			rest := parts[subIdx+1:]
+			// Pure `git rebase --abort` is the only permitted rebase
+			// invocation (recovery from a prior session's interrupted
+			// rebase). Any additional token — even something as benign
+			// looking as `--no-verify` — makes the abort intent ambiguous
+			// and is treated as a rewrite attempt.
+			if len(rest) == 1 && rest[0] == "--abort" {
+				return false
+			}
+			return true
+		}
+		if subcommand == "pull" {
+			// AGENTS.md also bans `git pull --rebase` (and `-r`).
+			// Use whole-token matching so `--no-rebase` and
+			// `--recurse-submodules -r` don't false-positive.
+			// `--rebase-preserve` is a real git flag (rebases + preserves
+			// locally committed merges) — also a rebase, also banned.
+			for _, a := range parts[subIdx+1:] {
+				if a == "--rebase" || a == "-r" || a == "--rebase-preserve" {
+					return true
+				}
+			}
+		}
+		remaining = remaining[idx+1:]
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------
@@ -383,11 +451,25 @@ func explainSourcesFor(toolName string, res tools.SecurityResult, args map[strin
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if isGitHistoryRewriteCommand(cmd) {
-				sources = append(sources, explainSource{
-					id:      "git-history-rewrite",
-					explain: "git history-rewrite — promptable; auto-approved when allow_git_history_rewrite=true",
-					level:   configuration.RiskLevelHigh,
-				})
+				if isGitRebaseCommand(cmd) {
+					// AGENTS.md: rebase is unconditionally banned — every
+					// form including interactive, --continue, --skip, and
+					// `git pull --rebase`. The only permitted invocation is
+					// pure `git rebase --abort` (recovery from a prior
+					// session's interrupted rebase).
+					sources = append(sources, explainSource{
+						id:      "git-rebase",
+						explain: "AGENTS.md: rebase is unconditionally banned — interactive, --continue, --skip, and `git pull --rebase` are all blocked. The only permitted invocation is `git rebase --abort` for recovery. Use `git merge` to integrate upstream.",
+						level:   configuration.RiskLevelCritical,
+					})
+				} else {
+					// Other history-rewrite ops: branch -D, tag -d, reset --hard <commit-ish>
+					sources = append(sources, explainSource{
+						id:      "git-history-rewrite",
+						explain: "git history-rewrite — promptable; auto-approved when allow_git_history_rewrite=true",
+						level:   configuration.RiskLevelHigh,
+					})
+				}
 			}
 		}
 	}
@@ -447,7 +529,14 @@ func combinedAssessment(toolName string, secResult tools.SecurityResult, args ma
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if isGitHistoryRewriteCommand(cmd) {
-				level = configuration.RiskLevelHigh
+				if isGitRebaseCommand(cmd) {
+					// AGENTS.md: rebase is unconditionally banned — hard-block.
+					level = configuration.RiskLevelCritical
+					hardBlock = true
+				} else {
+					// Other history-rewrite ops: branch -D, tag -d, reset --hard <commit-ish>
+					level = configuration.RiskLevelHigh
+				}
 			}
 		}
 	}

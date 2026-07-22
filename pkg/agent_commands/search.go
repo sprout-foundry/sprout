@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,7 +15,18 @@ import (
 
 // SearchCommand implements the /search slash command for searching across
 // saved sessions by message content.
-type SearchCommand struct{}
+type SearchCommand struct {
+	stdout io.Writer
+}
+
+func (c *SearchCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *SearchCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 func (c *SearchCommand) Name() string {
 	return "search"
@@ -198,7 +210,7 @@ func (c *SearchCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	if len(results) == 0 {
-		fmt.Println("No matching sessions.")
+		fmt.Fprintln(c.out(), "No matching sessions.")
 		return nil
 	}
 
@@ -206,9 +218,9 @@ func (c *SearchCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(results) == 1 {
 		plural = ""
 	}
-	fmt.Printf("%d session%s matched:\n\n", len(results), plural)
-	fmt.Println(search.FormatResults(results))
-	fmt.Println("\nUse '/sessions <#>' to load, or '/search --reindex' to rebuild the index.")
+	fmt.Fprintf(c.out(), "%d session%s matched:\n\n", len(results), plural)
+	fmt.Fprintln(c.out(), search.FormatResults(results))
+	fmt.Fprintln(c.out(), "\nUse '/sessions <#>' to load, or '/search --reindex' to rebuild the index.")
 	return nil
 }
 
@@ -218,5 +230,5 @@ func (c *SearchCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 		return err
 	}
 
-	return WriteJSONToOutput(results)
+	return WriteJSON(c.out(), results)
 }

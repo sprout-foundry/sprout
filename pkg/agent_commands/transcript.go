@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,18 @@ import (
 // All snapshots include per-message source annotations so a reader can
 // see which messages are LLM-generated checkpoint substitutes vs the
 // original turns.
-type TranscriptCommand struct{}
+type TranscriptCommand struct {
+	stdout io.Writer
+}
+
+func (c *TranscriptCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *TranscriptCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 // Name returns the command name
 func (c *TranscriptCommand) Name() string {
@@ -90,7 +102,7 @@ func (c *TranscriptCommand) Execute(args []string, chatAgent *agent.Agent) error
 		workingDir, _ := os.Getwd()
 		paths, err := agent.ListTranscriptSnapshots(sessionID, workingDir)
 		if err != nil {
-			fmt.Printf("[transcript] could not list prior snapshots: %v\n", err)
+			fmt.Fprintf(c.out(), "[transcript] could not list prior snapshots: %v\n", err)
 		} else if len(paths) > 0 {
 			priorPath = paths[len(paths)-1]
 		}
@@ -104,23 +116,23 @@ func (c *TranscriptCommand) Execute(args []string, chatAgent *agent.Agent) error
 	if err != nil {
 		return fmt.Errorf("failed to capture transcript snapshot: %w", err)
 	}
-	fmt.Printf("\n[transcript] snapshot: %s\n", path)
+	fmt.Fprintf(c.out(), "\n[transcript] snapshot: %s\n", path)
 
 	if wantMarkdown {
 		mdPath, mdErr := writeTranscriptMarkdown(path)
 		if mdErr != nil {
-			fmt.Printf("[transcript] markdown render failed: %v\n", mdErr)
+			fmt.Fprintf(c.out(), "[transcript] markdown render failed: %v\n", mdErr)
 		} else {
-			fmt.Printf("[transcript] markdown: %s\n", mdPath)
+			fmt.Fprintf(c.out(), "[transcript] markdown: %s\n", mdPath)
 		}
 	}
 
 	if wantDiff {
 		if priorPath == "" {
-			fmt.Println("[transcript] no prior snapshot for this session to diff against")
+			fmt.Fprintln(c.out(), "[transcript] no prior snapshot for this session to diff against")
 		} else {
-			if err := printTranscriptDiff(priorPath, path); err != nil {
-				fmt.Printf("[transcript] diff failed: %v\n", err)
+			if err := printTranscriptDiff(c.out(), priorPath, path); err != nil {
+				fmt.Fprintf(c.out(), "[transcript] diff failed: %v\n", err)
 			}
 		}
 	}
@@ -216,7 +228,7 @@ func renderSnapshotAsMarkdown(snap *agent.TranscriptSnapshot) string {
 	return b.String()
 }
 
-func printTranscriptDiff(olderPath, newerPath string) error {
+func printTranscriptDiff(w io.Writer, olderPath, newerPath string) error {
 	older, err := agent.LoadTranscriptSnapshot(olderPath)
 	if err != nil {
 		return err
@@ -227,45 +239,45 @@ func printTranscriptDiff(olderPath, newerPath string) error {
 	}
 	diff := agent.DiffTranscriptSnapshots(older, newer)
 	if diff == nil {
-		fmt.Println("[transcript] diff produced no result (one snapshot was empty)")
+		fmt.Fprintln(w, "[transcript] diff produced no result (one snapshot was empty)")
 		return nil
 	}
-	fmt.Println("\n[transcript] diff vs previous snapshot:")
-	fmt.Printf("       Previous: %s (%d msgs, %d checkpoints, %d tokens)\n",
+	fmt.Fprintln(w, "\n[transcript] diff vs previous snapshot:")
+	fmt.Fprintf(w, "       Previous: %s (%d msgs, %d checkpoints, %d tokens)\n",
 		filepath.Base(olderPath), diff.OlderMessageCount, diff.OlderCheckpointCount, diff.OlderTotalTokens)
-	fmt.Printf("       Current:  %s (%d msgs, %d checkpoints, %d tokens)\n",
+	fmt.Fprintf(w, "       Current:  %s (%d msgs, %d checkpoints, %d tokens)\n",
 		filepath.Base(newerPath), diff.NewerMessageCount, diff.NewerCheckpointCount, diff.NewerTotalTokens)
 	if diff.MessagesDroppedAtTail > 0 {
-		fmt.Printf("       Dropped at tail: %d messages\n", diff.MessagesDroppedAtTail)
+		fmt.Fprintf(w, "       Dropped at tail: %d messages\n", diff.MessagesDroppedAtTail)
 	}
 	if len(diff.ChangedIndices) > 0 {
-		fmt.Printf("       Replaced in place: %d messages\n", len(diff.ChangedIndices))
+		fmt.Fprintf(w, "       Replaced in place: %d messages\n", len(diff.ChangedIndices))
 		for _, entry := range diff.ChangedIndices {
-			fmt.Printf("         [%d] %s/%s → %s/%s\n", entry.Index, entry.OlderRole, entry.OlderSource, entry.NewerRole, entry.NewerSource)
+			fmt.Fprintf(w, "         [%d] %s/%s → %s/%s\n", entry.Index, entry.OlderRole, entry.OlderSource, entry.NewerRole, entry.NewerSource)
 		}
 	}
 	if len(diff.NewFileChanges) > 0 {
-		fmt.Printf("       New file changes (%d):\n", len(diff.NewFileChanges))
+		fmt.Fprintf(w, "       New file changes (%d):\n", len(diff.NewFileChanges))
 		for _, c := range diff.NewFileChanges {
 			attr := c.Source
 			if c.ToolCall != "" {
 				attr += ":" + c.ToolCall
 			}
-			fmt.Printf("         %s %s (%s)\n", c.Operation, c.Path, attr)
+			fmt.Fprintf(w, "         %s %s (%s)\n", c.Operation, c.Path, attr)
 		}
 	} else if diff.OlderFileChangeCount != diff.NewerFileChangeCount {
-		fmt.Printf("       File changes: %d → %d (no new entries; existing rolled forward)\n",
+		fmt.Fprintf(w, "       File changes: %d → %d (no new entries; existing rolled forward)\n",
 			diff.OlderFileChangeCount, diff.NewerFileChangeCount)
 	}
 	for _, note := range diff.Notes {
-		fmt.Printf("       Note: %s\n", note)
+		fmt.Fprintf(w, "       Note: %s\n", note)
 	}
 	// Marshal the structured diff alongside the new snapshot for
 	// programmatic access.
 	diffPath := strings.TrimSuffix(newerPath, ".json") + ".diff.json"
 	if data, err := json.MarshalIndent(diff, "", "  "); err == nil {
 		if err := os.WriteFile(diffPath, data, 0600); err == nil {
-			fmt.Printf("       Diff JSON: %s\n", diffPath)
+			fmt.Fprintf(w, "       Diff JSON: %s\n", diffPath)
 		}
 	}
 	return nil

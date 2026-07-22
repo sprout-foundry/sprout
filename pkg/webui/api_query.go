@@ -460,13 +460,13 @@ func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent
 
 // executeSafeSteerCommandStreaming is the streaming variant of
 // executeSafeSteerCommand (SP-114 Phase 2c). When onChunk is non-nil it
-// receives each UTF-8-safe chunk of stdout as the command produces it,
-// in addition to being appended to the aggregated output string. When
-// onChunk is nil the behavior is byte-for-byte identical to the
+// receives each UTF-8-safe chunk from the command's configured output
+// writer, in addition to being appended to the aggregated output string.
+// When onChunk is nil the behavior is byte-for-byte identical to the
 // non-streaming executeSafeSteerCommand — the /api/query/steer call
 // site relies on this and uses the non-streaming entry point.
 //
-// onChunk is invoked from a goroutine that reads the stdout pipe
+// onChunk is invoked from a goroutine that reads the command output pipe
 // concurrently with Execute. It MUST be safe to call concurrently with
 // the rest of the program; in particular it must not block on slow
 // consumers (callers are expected to fan out to the WebSocket
@@ -484,7 +484,6 @@ func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAge
 		return nil, "", nil
 	}
 	cmdName := parts[0]
-	args := parts[1:]
 
 	// Get the registry from the agent
 	registryRaw := chatAgent.SlashCommands()
@@ -507,70 +506,44 @@ func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAge
 		return nil, "", nil
 	}
 
-	// Capture stdout for the response. Use the same mutex as handleAPIQuery
-	// to serialize os.Stdout capture across concurrent chats — os.Stdout is
-	// process-global, so two simultaneous redirects would race (SC-1).
-	ws.stdoutCaptureMu.Lock()
-
-	oldStdout := os.Stdout
-	readEnd, writeEnd, _ := os.Pipe()
-	os.Stdout = writeEnd
+	// Capture command output without redirecting process-global os.Stdout.
+	// The registry wires this invocation-local writer into OutputCommand
+	// implementations, so commands from different clients can run concurrently.
+	readEnd, writeEnd, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		return cmd, "", fmt.Errorf("create command output pipe: %w", pipeErr)
+	}
+	registry.SetOutput(writeEnd)
 
 	var cmdErr error
 
-	// Streaming reads must run concurrently with Execute, otherwise a
-	// command that writes more than the OS pipe buffer (64 KB on Linux)
-	// blocks on Write before the close+read-back pattern completes.
-	// When onChunk is nil we keep the original sequential behavior —
-	// read after close — so the non-streaming callers stay
-	// byte-for-byte identical.
+	// Always drain concurrently: a command can exceed the OS pipe buffer even
+	// when no streaming callback was requested.
 	buf := new(strings.Builder)
-	var readerDone <-chan struct{}
-	if onChunk != nil {
-		done := make(chan struct{})
-		readerDone = done
-		go func() {
-			defer close(done)
-			streamPipeChunks(readEnd, buf, onChunk)
-		}()
-	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		streamPipeChunks(readEnd, buf, onChunk)
+	}()
 
-	// Execute the command. The panic recovery stays in the Execute
-	// goroutine so cmdErr is set even if the command blows up.
+	// Execute through the registry so it wires the output writer using the
+	// same path as normal slash-command dispatch. Panic recovery ensures the
+	// pipe and retained command writer are still cleaned up.
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
 				cmdErr = fmt.Errorf("command panicked: %v", rec)
 			}
 		}()
-		cmdErr = cmd.Execute(args, chatAgent)
+		cmdErr = registry.Execute(input, chatAgent)
 	}()
 
-	// Close the writer so the reader sees EOF. Then restore stdout.
-	writeEnd.Close()
-	os.Stdout = oldStdout
+	registry.SetOutput(nil)
+	_ = writeEnd.Close()
+	<-done
+	_ = readEnd.Close()
 
-	// Drain the pipe. Streaming path waits for the goroutine; the
-	// non-streaming path does the synchronous copy. Both paths close
-	// readEnd after draining.
-	if onChunk == nil {
-		io.Copy(buf, readEnd)
-		readEnd.Close()
-	} else {
-		<-readerDone
-		// Close the read end here in the parent so the close happens
-		// exactly once regardless of which branch (EOF vs read error)
-		// caused the reader goroutine to exit. The reader goroutine
-		// deliberately doesn't touch the FD; centralizing the close
-		// avoids the double-close that would result if both paths did.
-		readEnd.Close()
-	}
-
-	output := buf.String()
-
-	ws.stdoutCaptureMu.Unlock()
-
-	return cmd, output, cmdErr
+	return cmd, buf.String(), cmdErr
 }
 
 // streamPipeChunks drains r into buf while invoking onChunk for each
@@ -602,6 +575,13 @@ func streamPipeChunks(r io.Reader, buf *strings.Builder, onChunk func(string)) {
 			out := make([]byte, 0, len(pending))
 			for i < len(pending) {
 				if !utf8.FullRune(pending[i:]) {
+					// Cap pending at UTFMax to prevent unbounded growth
+					// from broken UTF-8 (e.g. continuation bytes with no
+					// leading byte). Emit replacement character and reset.
+					if len(pending)-i >= utf8.UTFMax {
+						out = append(out, "\uFFFD"...)
+						pending = pending[:0]
+					}
 					break
 				}
 				rn, size := utf8.DecodeRune(pending[i:])
@@ -610,7 +590,7 @@ func streamPipeChunks(r io.Reader, buf *strings.Builder, onChunk func(string)) {
 				out = append(out, rb[:sz]...)
 				i += size
 			}
-			if len(out) > 0 {
+			if len(out) > 0 && onChunk != nil {
 				onChunk(string(out))
 			}
 			if i > 0 {

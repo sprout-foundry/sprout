@@ -3,6 +3,8 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -12,7 +14,18 @@ import (
 
 // ToolsCommand implements /tools for toggling per-tool invocation detail
 // visibility in the UI. Maps to the show_tool_invocations config setting.
-type ToolsCommand struct{}
+type ToolsCommand struct {
+	stdout io.Writer
+}
+
+func (c *ToolsCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *ToolsCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 func (c *ToolsCommand) Name() string { return "tools" }
 
@@ -58,9 +71,9 @@ func (c *ToolsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	if len(args) == 0 {
 		if current {
-			console.GlyphInfo.Printf("Per-tool invocation details: shown (use /tools off or /tools toggle to hide)\n")
+			console.GlyphInfo.Fprintf(c.out(), "Per-tool invocation details: shown (use /tools off or /tools toggle to hide)\n")
 		} else {
-			console.GlyphInfo.Printf("Per-tool invocation details: hidden (use /tools on or /tools toggle to show)\n")
+			console.GlyphInfo.Fprintf(c.out(), "Per-tool invocation details: hidden (use /tools on or /tools toggle to show)\n")
 		}
 		return nil
 	}
@@ -80,7 +93,7 @@ func (c *ToolsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	if newValue == current {
-		console.GlyphInfo.Printf("Per-tool invocation details already %s", boolToShowState(newValue))
+		console.GlyphInfo.Fprintf(c.out(), "Per-tool invocation details already %s", boolToShowState(newValue))
 		return nil
 	}
 
@@ -91,7 +104,7 @@ func (c *ToolsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("updating config: %w", err)
 	}
 
-	console.GlyphSuccess.Printf("Per-tool invocation details: %s (persisted to config)", boolToShowState(newValue))
+	console.GlyphSuccess.Fprintf(c.out(), "Per-tool invocation details: %s (persisted to config)", boolToShowState(newValue))
 	return nil
 }
 

@@ -45,34 +45,69 @@ type injectInputMsg struct {
 	content string
 }
 
-// injectUserMessageTimestamp prepends a <current-time>...</current-time> tag
+// InjectUserMessageTimestamp prepends a <current-time>...</current-time> tag
 // to the user message so the model sees the exact moment of each turn without
 // invalidating the prompt-prefix cache. The system prompt stays static across
 // requests (date/time injection there would defeat provider caching and cost
-// users real money on every turn); the timestamp lives in the user-message
-// tail, which Anthropic and OpenAI do not cache. ISO 8601 with timezone
-// offset is machine-parseable; the Local parenthetical matches what the user
-// sees in their OS clock so the model can reason about time-of-day naturally.
+// users real money on every turn); the timestamp is added only at the provider
+// boundary, where Anthropic and OpenAI do not cache the user-message suffix.
+// ISO 8601 with timezone offset is machine-parseable; the Local parenthetical
+// matches what the user sees in their OS clock so the model can reason about
+// time-of-day naturally.
 //
 // Empty or whitespace-only input is returned unchanged so wakeup-only turns
 // (background-task notifications with no user message) don't produce a bare
 // timestamp that the model would have to interpret.
-func injectUserMessageTimestamp(userMessage string) string {
+func InjectUserMessageTimestamp(userMessage string) string {
+	return InjectUserMessageTimestampAt(userMessage, time.Now())
+}
+
+// InjectUserMessageTimestampAt prepends a timestamp fixed at at. Providers use
+// it to keep one turn's prompt byte-identical across iterations and retries.
+func InjectUserMessageTimestampAt(userMessage string, at time.Time) string {
 	if strings.TrimSpace(userMessage) == "" {
 		return userMessage
 	}
-	now := time.Now()
 	// ISO 8601 with offset. Location().String() gives "Local" inside Go's
 	// test runner, so we also include the resolved zone name for human
 	// readability — the model uses both the absolute timestamp and the
 	// local clock to reason about "wait 5 minutes" or "is the user up late".
 	return fmt.Sprintf(
 		"<current-time>%s (Local: %s, %s)</current-time>\n\n%s",
-		now.Format(time.RFC3339),
-		now.Format("2006-01-02 15:04:05"),
-		now.Location().String(),
+		at.Format(time.RFC3339),
+		at.Format("2006-01-02 15:04:05"),
+		at.Location().String(),
 		userMessage,
 	)
+}
+
+// StripUserMessageTimestamp removes a leading provider timestamp envelope
+// from a user message. It accepts legacy LF and CRLF separators and leaves
+// malformed tags or tags that do not start at offset zero unchanged.
+//
+// The matching uses the first <current-time>...</current-time> envelope in
+// the input. Because the envelope is a small fixed shape and our injector
+// (InjectUserMessageTimestamp) only emits well-formed envelopes whose body
+// (the RFC3339 / formatted time / zone name) never contains "</current-time>"
+// or "\n\n" between the tags, a substring scan is sufficient. A leading
+// tag whose body is empty returns "". Tag detection is anchored at offset 0,
+// so anything with leading whitespace before the tag is left intact.
+func StripUserMessageTimestamp(userMessage string) string {
+	const (
+		openTag  = "<current-time>"
+		closeTag = "</current-time>"
+	)
+	if !strings.HasPrefix(userMessage, openTag) {
+		return userMessage
+	}
+	closeIndex := strings.Index(userMessage[len(openTag):], closeTag)
+	if closeIndex < 0 {
+		return userMessage
+	}
+	body := userMessage[len(openTag)+closeIndex+len(closeTag):]
+	body = strings.TrimPrefix(body, "\r\n\r\n")
+	body = strings.TrimPrefix(body, "\n\n")
+	return body
 }
 
 // queryRunContext holds all shared state between the preparation and execution
@@ -90,6 +125,23 @@ type queryRunContext struct {
 // processQueryWithSeed runs the conversation loop through seed's core.Agent
 // instead of sprout's native ConversationHandler.
 func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
+	// Admit the query before publishing any per-turn state. This makes the
+	// query guard the ownership boundary for turnTimestamp: a rejected caller
+	// cannot overwrite or clear the timestamp belonging to the active turn.
+	if err := a.TryBeginQuery(); err != nil {
+		return "", err
+	}
+	defer func() {
+		a.turnTimestampMu.Lock()
+		a.turnTimestamp = time.Time{}
+		a.turnTimestampMu.Unlock()
+		a.EndQuery()
+	}()
+
+	a.turnTimestampMu.Lock()
+	a.turnTimestamp = time.Now()
+	a.turnTimestampMu.Unlock()
+
 	qc, err := a.prepareQueryRun(userQuery)
 	if err != nil {
 		return "", err
@@ -119,13 +171,8 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	a.initSubManagers()
 
-	// Guard against concurrent queries on the same Agent instance. In
-	// shared-agent mode (CLI + WebUI), the second caller gets
-	// ErrQueryInProgress instead of corrupting the message list.
-	if err := a.TryBeginQuery(); err != nil {
-		return nil, err
-	}
-	defer a.EndQuery()
+	// Query admission and release are owned by processQueryWithSeed so the
+	// guard and per-turn timestamp have exactly the same lifecycle.
 
 	// ---- Pre-loop hooks (moved from old ConversationHandler.ProcessQuery) ----
 
@@ -167,16 +214,6 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		a.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
 		return nil, agenterrors.NewAgent("seed-query", "failed to process images in query", err)
 	}
-
-	// Prepend a <current-time> tag to the user message so the model sees
-	// the exact moment of this turn. The timestamp lives in the user-message
-	// tail (not the cached system prompt prefix) so prompt caching stays
-	// effective across requests — a system-prompt timestamp would invalidate
-	// the cache every second. Applied AFTER processImagesInQuery so image
-	// placeholders and tag stripping see clean user text, and BEFORE the
-	// semantic consumers below (proactive context, recall) so the tag is
-	// already part of the query they embed/recall against.
-	processedQuery = injectUserMessageTimestamp(processedQuery)
 
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()

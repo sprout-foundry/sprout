@@ -349,8 +349,14 @@ func FormatProactiveContext(results []ProactiveContextResult, config ProactiveCo
 	for _, result := range results {
 		record := result.Record
 
-		// Determine header text: first line of the user prompt, capped at 80 chars
-		headerText := record.Signature
+		// Strip the provider-only <current-time> envelope from records stored
+		// before the timestamp-injection was moved to the provider boundary.
+		// Both the heading and the body line stay in sync — using
+		// `record.Signature` raw would render the envelope in the body while
+		// the heading was clean, an inconsistency only visible for legacy
+		// records.
+		userPrompt := StripUserMessageTimestamp(record.Signature)
+		headerText := userPrompt
 		if headerText == "" {
 			headerText = "No prompt available"
 		}
@@ -374,7 +380,7 @@ func FormatProactiveContext(results []ProactiveContextResult, config ProactiveCo
 		}
 
 		fmt.Fprintf(&b, "### %s (%s)\n", headerText, relativeTime)
-		fmt.Fprintf(&b, "User: \"%s\"\n", record.Signature)
+		fmt.Fprintf(&b, "User: \"%s\"\n", userPrompt)
 		fmt.Fprintf(&b, "Summary: %s\n\n", summary)
 
 		// Truncate if over budget (rune-safe to avoid splitting multi-byte chars)

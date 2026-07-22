@@ -421,3 +421,167 @@ func TestHandleEvent_HistoryVsAutocompleteRouting(t *testing.T) {
 		})
 	}
 }
+
+// --- Regression tests for autocomplete fixes ---
+
+// TestAutocomplete_HideResetsRenderedRows verifies that hide() clears
+// renderedRows so a subsequent clear() in refreshLocked doesn't write
+// escape sequences for rows that were already erased.
+func TestAutocomplete_HideResetsRenderedRows(t *testing.T) {
+	a := &inlineAutocomplete{
+		visible:      true,
+		renderedRows: 4,
+		candidates:   []CompletionCandidate{{Text: "/help"}},
+	}
+	a.hide()
+	if a.renderedRows != 0 {
+		t.Errorf("renderedRows should be 0 after hide(), got %d", a.renderedRows)
+	}
+}
+
+// TestAutocomplete_DropdownHiddenForHistoryRecalledLine verifies Fix 1:
+// when a slash-prefixed line is recalled from history (hasEditedLine ==
+// false), the dropdown does NOT appear. Arrow keys should navigate
+// history, not the dropdown.
+func TestAutocomplete_DropdownHiddenForHistoryRecalledLine(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	ir.richCompleter = mockRichCompleter
+	ir.SetHistory([]string{"normal", "/help"})
+
+	// Recall the slash entry from history.
+	ir.HandleEvent(&InputEvent{Type: EventUp})
+
+	if ir.line != "/help" {
+		t.Fatalf("expected /help from history, got %q", ir.line)
+	}
+	if ir.hasEditedLine {
+		t.Error("hasEditedLine should be false after history recall")
+	}
+	// The dropdown should NOT be visible because hasEditedLine is false.
+	// (Before the fix, the dropdown appeared but arrow keys navigated
+	// history instead of the dropdown — confusing UX.)
+}
+
+// TestAutocomplete_DropdownShowsAfterTypingFromHistory verifies that
+// after recalling a slash entry from history, typing a character
+// (setting hasEditedLine = true) makes the dropdown appear.
+func TestAutocomplete_DropdownShowsAfterTypingFromHistory(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	// Broad mock: returns results for any "/h" prefix.
+	ir.richCompleter = func(line string, _ int) []CompletionCandidate {
+		if strings.HasPrefix(line, "/h") {
+			return []CompletionCandidate{{Text: "/help", Description: "help"}}
+		}
+		return nil
+	}
+	ir.SetHistory([]string{"normal", "/he"})
+
+	// Recall "/he" from history.
+	ir.HandleEvent(&InputEvent{Type: EventUp})
+	if ir.line != "/he" {
+		t.Fatalf("expected /he, got %q", ir.line)
+	}
+	// Dropdown should NOT be visible (hasEditedLine == false).
+	if ir.autocomplete.visible {
+		t.Error("dropdown should not be visible for history-recalled line")
+	}
+
+	// Type 'l' to make it "/hel" — this sets hasEditedLine = true.
+	ir.InsertChar("l")
+	if !ir.hasEditedLine {
+		t.Error("hasEditedLine should be true after typing")
+	}
+
+	// Now the dropdown should be visible.
+	if !ir.autocomplete.visible {
+		t.Error("dropdown should be visible after typing on a slash line")
+	}
+}
+
+// TestCompletionCycle_ResetsOnInsertChar verifies Fix 2: InsertChar
+// resets the completion cycle so a stale lastApplied doesn't cause
+// Tab to advance instead of starting fresh.
+func TestCompletionCycle_ResetsOnInsertChar(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	ir.completer = func(line string, _ int) []string {
+		return []string{"/help", "/heart"}
+	}
+
+	// Tab to complete to "/help" and advance the cycle.
+	ir.line = "/he"
+	ir.cursorPos = 3
+	ir.hasEditedLine = true
+	ir.handleTabCompletion()
+	if ir.line != "/help" {
+		t.Fatalf("expected /help after first Tab, got %q", ir.line)
+	}
+
+	// Simulate backspace + retype to get back to exactly "/help".
+	// Without resetCompletionCycle, lastApplied is "/help" and the
+	// next Tab would advance to "/heart" from the stale cycle.
+	// With the fix, InsertChar resets the cycle so Tab starts fresh
+	// and applies the first candidate (/help) again.
+	ir.line = "/hel"
+	ir.cursorPos = 4
+	ir.InsertChar("p") // makes "/help"
+
+	ir.handleTabCompletion()
+	if ir.line != "/help" {
+		t.Errorf("second Tab should start fresh cycle (apply /help), got %q", ir.line)
+	}
+}
+
+// TestCompletionCycle_ResetsOnTabAcceptFromDropdown verifies Fix 4:
+// accepting a candidate via Tab when the dropdown is visible resets
+// the completion cycle so a subsequent Tab starts fresh.
+func TestCompletionCycle_ResetsOnTabAcceptFromDropdown(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	// Broad completer: returns results for any "/he" prefix, including
+	// after accepting /help (so we can detect stale cycle advancement).
+	ir.richCompleter = func(line string, _ int) []CompletionCandidate {
+		if strings.HasPrefix(line, "/he") {
+			return []CompletionCandidate{
+				{Text: "/help", Description: "Show help"},
+				{Text: "/heart", Description: ""},
+				{Text: "/heat", Description: "Temperature"},
+			}
+		}
+		return nil
+	}
+	ir.completer = func(line string, _ int) []string {
+		if strings.HasPrefix(line, "/he") {
+			return []string{"/help", "/heart", "/heat"}
+		}
+		return nil
+	}
+
+	// Type "/he" to show the dropdown.
+	ir.InsertChar("/")
+	ir.InsertChar("h")
+	ir.InsertChar("e")
+
+	if !ir.autocomplete.visible {
+		t.Fatal("dropdown should be visible after typing /he")
+	}
+
+	// Tab accepts the selected candidate (/help).
+	ir.HandleEvent(&InputEvent{Type: EventTab})
+
+	if ir.line != "/help" {
+		t.Fatalf("expected /help after Tab-accept, got %q", ir.line)
+	}
+
+	// Now Tab again — without Fix 4, lastApplied="/help" and the
+	// stale cycle would advance to "/heart". With the fix,
+	// lastApplied is empty so CycleCompletion starts a fresh cycle
+	// and applies the first candidate (/help) again.
+	ir.handleTabCompletion()
+	if ir.line != "/help" {
+		t.Errorf("second Tab should re-apply /help (fresh cycle), got %q — "+
+			"stale cycle advanced to next candidate", ir.line)
+	}
+}

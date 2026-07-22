@@ -27,8 +27,11 @@ func (ir *InputReader) refreshLocked() {
 	}
 	ir.refreshInputLine()
 	// After the input line is drawn, update and render the autocomplete
-	// dropdown if the line starts with "/".
-	if ir.autocomplete != nil {
+	// dropdown if the line starts with "/" and the user has manually
+	// edited the buffer. History-recalled lines (hasEditedLine == false)
+	// don't get a dropdown — arrow keys navigate history instead of the
+	// dropdown, and showing one the user can't interact with is confusing.
+	if ir.autocomplete != nil && ir.hasEditedLine {
 		ir.autocomplete.update(ir.line, ir.cursorPos, ir.completer, ir.richCompleter)
 		ir.autocomplete.render()
 	}

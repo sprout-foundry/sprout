@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 func TestWithToolExecutionMetadata(t *testing.T) {
-	ctx := withToolExecutionMetadata(context.Background(), "call-123", "read_file", "/workspace", "/workspace", nil)
+	ctx := withToolExecutionMetadata(context.Background(), "call-123", "read_file", "/workspace", "/workspace", nil, nil)
 
 	toolCallID, toolName := toolExecutionMetadataFromContext(ctx)
 
@@ -21,7 +22,7 @@ func TestWithToolExecutionMetadata(t *testing.T) {
 }
 
 func TestWithToolExecutionMetadata_ContainsWorkspaceRoot(t *testing.T) {
-	ctx := withToolExecutionMetadata(context.Background(), "call-456", "shell_command", "/home/user/project", "/home/user/project", nil)
+	ctx := withToolExecutionMetadata(context.Background(), "call-456", "shell_command", "/home/user/project", "/home/user/project", nil, nil)
 
 	workspaceRoot := filesystem.WorkspaceRootFromContext(ctx)
 
@@ -31,7 +32,7 @@ func TestWithToolExecutionMetadata_ContainsWorkspaceRoot(t *testing.T) {
 }
 
 func TestToolExecutionMetadataFromContext(t *testing.T) {
-	ctx := withToolExecutionMetadata(context.Background(), "call-789", "write_file", "/workspace", "/workspace", nil)
+	ctx := withToolExecutionMetadata(context.Background(), "call-789", "write_file", "/workspace", "/workspace", nil, nil)
 
 	toolCallID, toolName := toolExecutionMetadataFromContext(ctx)
 
@@ -80,5 +81,32 @@ func TestToolExecutionMetadataFromContext_WrongTypes(t *testing.T) {
 	}
 	if toolName != "" {
 		t.Errorf("expected empty tool_name for wrong type; got %q", toolName)
+	}
+}
+
+func TestWithToolExecutionMetadata_ContainsAuditLogger(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := tmpDir + "/audit.jsonl"
+	logger, err := tools.NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+	defer logger.Close()
+
+	ctx := withToolExecutionMetadata(context.Background(), "call-100", "read_file", "/workspace", "/workspace", nil, logger)
+
+	// Verify the audit logger is stored in context
+	retrievedLogger := filesystem.AuditLoggerFromContext(ctx)
+	if retrievedLogger == nil {
+		t.Fatal("expected non-nil audit logger from context")
+	}
+}
+
+func TestWithToolExecutionMetadata_NilAuditLogger(t *testing.T) {
+	ctx := withToolExecutionMetadata(context.Background(), "call-101", "read_file", "/workspace", "/workspace", nil, nil)
+
+	retrievedLogger := filesystem.AuditLoggerFromContext(ctx)
+	if retrievedLogger != nil {
+		t.Error("expected nil audit logger from context when nil was passed")
 	}
 }

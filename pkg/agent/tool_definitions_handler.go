@@ -66,7 +66,7 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 			workspaceRoot := agent.GetWorkspaceRoot()
 			effectiveCwd := agent.effectiveCwd()
 			sessionFolders := agent.SnapshotSessionAllowedFolders()
-			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders)
+			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders, agent.GetAuditLogger())
 			// Wire TerminalManager (WebUI) or BackgroundProcessManager (CLI)
 			// into the context so shell_command handlers can run background
 			// commands. Mirrors pkg/agent/shell.go's executeShellCommandBackground.
@@ -114,7 +114,7 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 			workspaceRoot := agent.GetWorkspaceRoot()
 			effectiveCwd := agent.effectiveCwd()
 			sessionFolders := agent.SnapshotSessionAllowedFolders()
-			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders)
+			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders, agent.GetAuditLogger())
 			injectShellManagersIntoContext(agent, &ctx)
 		}
 

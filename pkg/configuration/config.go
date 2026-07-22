@@ -114,6 +114,20 @@ type Config struct {
 	// Empty means use the embedded default prompt.
 	SystemPromptText string `json:"system_prompt_text,omitempty"`
 
+	// RefreshSystemPromptOnModelChange (Spec B): when true, re-derive the
+	// agent's system prompt on every provider/model swap instead of
+	// freezing it at agent-creation time. Different models respond very
+	// differently to the same prompt — a Claude-tuned prompt sent to
+	// GPT-4 may be silently ignored. With this on, the agent re-runs
+	// GetEmbeddedSystemPromptForProfile on each SetProvider / SelectProvider
+	// so the prompt stays in sync with the active provider and context
+	// window. Defaults to false so existing sessions are bit-identical.
+	// Flip to true after observability shows the new behavior lands
+	// cleanly. The agent's `SystemPromptText` override still wins — only
+	// the embedded portion is re-derived, the configured override is
+	// re-applied on top.
+	RefreshSystemPromptOnModelChange bool `yaml:"refresh_system_prompt_on_model_change,omitempty" json:"refresh_system_prompt_on_model_change,omitempty"`
+
 	// SkipPrompt - for non-interactive mode
 	SkipPrompt bool `json:"skip_prompt,omitempty"`
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -81,7 +82,11 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	// Extract the query text from the last user message (already trimmed by getLastUserMessage)
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
-		log.Printf("handleAPIProxyChat: steer mode requires a user message")
+		ws.logger.Warn("steer requires a user message",
+			slog.String("handler", "handleAPIProxyChatSteer"),
+			slog.String("chat_id", chatID),
+			slog.String("client_id", clientID),
+		)
 		writeJSONErr(w, http.StatusBadRequest, "user_message_required", "Steer mode requires a user message")
 		return
 	}
@@ -112,9 +117,20 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	}
 
 	if err := clientAgent.InjectInputContext(query); err != nil {
+		ws.logger.Error("steer failed",
+			slog.String("handler", "handleAPIProxyChatSteer"),
+			slog.String("chat_id", chatID),
+			slog.String("client_id", clientID),
+			slog.Any("err", err),
+		)
 		writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 		return
 	}
+	ws.logger.Info("query steered",
+		slog.String("handler", "handleAPIProxyChatSteer"),
+		slog.String("chat_id", chatID),
+		slog.String("client_id", clientID),
+	)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
@@ -148,7 +164,11 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 		return
 	}
 
-	log.Printf("handleAPIProxyChat: processing query: %s", query)
+	ws.logger.Info("processing query",
+		slog.String("handler", "handleAPIProxyChat"),
+		slog.String("chat_id", chatID),
+		slog.String("query", query),
+	)
 
 	ws.runChatQuery(w, r, clientID, chatID, query, chatQueryOptions{
 		Provider:           req.Provider,

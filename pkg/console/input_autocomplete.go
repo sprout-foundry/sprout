@@ -53,6 +53,14 @@ func (a *inlineAutocomplete) update(line string, cursorPos int, completer Comple
 		return
 	}
 
+	// Short-circuit when the line hasn't changed, the dropdown is already
+	// visible, and we have a completer. Assumes the completer is
+	// deterministic for the same input — completers that consult external
+	// state must invalidate this cache themselves.
+	if a.visible && line == a.lastLine && (richCompleter != nil || completer != nil) {
+		return
+	}
+
 	var candidates []CompletionCandidate
 
 	if richCompleter != nil {
@@ -93,12 +101,13 @@ func plainToCandidates(ss []string) []CompletionCandidate {
 }
 
 // hide marks the dropdown as invisible and clears candidate state.
+// Does NOT erase rendered rows from the terminal — the caller must
+// invoke clear() (or Refresh → refreshLocked → clear) to erase them.
 func (a *inlineAutocomplete) hide() {
 	a.visible = false
 	a.candidates = nil
 	a.selected = 0
 	a.lastLine = ""
-	a.renderedRows = 0
 }
 
 // accept returns the currently selected candidate's text, or "" if none.

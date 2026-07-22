@@ -19,10 +19,11 @@ const (
 // The unified risk resolver (UnifiedRiskResolver flag, default ON) runs
 // a single gate, so no bridge plumbing is needed.
 
-func withToolExecutionMetadata(ctx context.Context, toolCallID, toolName, workspaceRoot string) context.Context {
+func withToolExecutionMetadata(ctx context.Context, toolCallID, toolName, workspaceRoot string, effectiveCwd string, sessionFolders []string) context.Context {
 	ctx = context.WithValue(ctx, toolExecutionContextKeyToolCallID, toolCallID)
 	ctx = context.WithValue(ctx, toolExecutionContextKeyToolName, toolName)
 	ctx = filesystem.WithWorkspaceRoot(ctx, workspaceRoot)
+	ctx = filesystem.WithAgentContext(ctx, effectiveCwd, sessionFolders)
 	return ctx
 }
 

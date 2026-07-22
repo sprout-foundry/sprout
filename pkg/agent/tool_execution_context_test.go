@@ -8,7 +8,7 @@ import (
 )
 
 func TestWithToolExecutionMetadata(t *testing.T) {
-	ctx := withToolExecutionMetadata(context.Background(), "call-123", "read_file", "/workspace")
+	ctx := withToolExecutionMetadata(context.Background(), "call-123", "read_file", "/workspace", "/workspace", nil)
 
 	toolCallID, toolName := toolExecutionMetadataFromContext(ctx)
 
@@ -21,7 +21,7 @@ func TestWithToolExecutionMetadata(t *testing.T) {
 }
 
 func TestWithToolExecutionMetadata_ContainsWorkspaceRoot(t *testing.T) {
-	ctx := withToolExecutionMetadata(context.Background(), "call-456", "shell_command", "/home/user/project")
+	ctx := withToolExecutionMetadata(context.Background(), "call-456", "shell_command", "/home/user/project", "/home/user/project", nil)
 
 	workspaceRoot := filesystem.WorkspaceRootFromContext(ctx)
 
@@ -31,7 +31,7 @@ func TestWithToolExecutionMetadata_ContainsWorkspaceRoot(t *testing.T) {
 }
 
 func TestToolExecutionMetadataFromContext(t *testing.T) {
-	ctx := withToolExecutionMetadata(context.Background(), "call-789", "write_file", "/workspace")
+	ctx := withToolExecutionMetadata(context.Background(), "call-789", "write_file", "/workspace", "/workspace", nil)
 
 	toolCallID, toolName := toolExecutionMetadataFromContext(ctx)
 

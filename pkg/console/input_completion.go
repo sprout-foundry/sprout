@@ -26,6 +26,16 @@ func (ir *InputReader) SetRichCompleter(rc RichCompletionProvider) {
 	ir.richCompleter = rc
 }
 
+// resetCompletionCycle clears the active completion cycle so the next
+// Tab press starts fresh from the current buffer. Mirrors the SteerInputReader's
+// resetCompletionCycleLocked. Should be called whenever the buffer is mutated
+// by typing, deleting, history navigation, paste, or at the start of ReadLine.
+func (ir *InputReader) resetCompletionCycle() {
+	if ir.completionCycle != nil {
+		ir.completionCycle.Reset()
+	}
+}
+
 // handleTabCompletion either starts a new completion cycle or advances
 // the existing one. A cycle is "live" as long as the buffer still
 // matches the last completion we applied; any other edit (typing,

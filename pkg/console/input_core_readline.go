@@ -67,6 +67,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.collapsedPastes = ir.collapsedPastes[:0]
 	ir.rawPasteBuffer = nil
 	ir.lastCharTime = time.Now()
+	ir.resetCompletionCycle()
 	// SP-048-4e: reset search state
 	ir.searchMode = false
 	ir.searchQuery = ""
@@ -299,8 +300,15 @@ func (ir *InputReader) ReadLine() (string, error) {
 						if text != "" {
 							ir.line = text
 							ir.cursorPos = len(ir.line)
-							ir.autocomplete.hide()
 						}
+						// hide() marks the dropdown invisible; the next
+						// Refresh() → refreshLocked() → clear() erases
+						// the old rows, then redraws the input line with
+						// the accepted text so the user sees the final
+						// command (e.g. "/help") instead of the partial
+						// text they typed ("/he").
+						ir.autocomplete.hide()
+						ir.Refresh()
 					}
 					// End of input
 					fmt.Println() // Move to next line

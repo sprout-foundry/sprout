@@ -68,6 +68,14 @@ type SecurityManager interface {
 	// map default to read_write (legacy semantics).
 	SnapshotSessionAllowedFolderModes() map[string]string
 
+	// RemoveSessionAllowedFolder removes the given folder from the session
+	// allowlist. Returns nil if the folder was not on the list (idempotent).
+	// Also removes any associated mode entry from the folder-mode map.
+	// Used by the workflow step restore logic to undo per-step path grants
+	// without disturbing paths that were already present before the step
+	// started (SP-127 Phase 2.3).
+	RemoveSessionAllowedFolder(folder string) error
+
 	IsConcernIgnored(filePath, concern string) bool
 	SetConcernIgnored(filePath, concern string)
 	GetOutputRedactor() *security.OutputRedactor
@@ -294,6 +302,30 @@ func (m *AgentSecurityManager) SnapshotSessionAllowedFolderModes() map[string]st
 		out[k] = v
 	}
 	return out
+}
+
+// RemoveSessionAllowedFolder removes folder from the session allowlist.
+// Returns nil (not an error) when the folder was not present — this makes
+// the restore path idempotent regardless of whether the step actually
+// added anything. Also removes any mode entry for the folder from
+// sessionPathModes so a subsequent SetSessionAllowedFolderMode call
+// can't re-establish a mode for a folder that's no longer on the allowlist.
+func (m *AgentSecurityManager) RemoveSessionAllowedFolder(folder string) error {
+	if folder == "" {
+		return nil
+	}
+	normalized := normalizePath(folder)
+	m.securityBypassMu.Lock()
+	defer m.securityBypassMu.Unlock()
+	newList := make([]string, 0, len(m.sessionAllowedFolders))
+	for _, f := range m.sessionAllowedFolders {
+		if f != normalized {
+			newList = append(newList, f)
+		}
+	}
+	m.sessionAllowedFolders = newList
+	delete(m.sessionPathModes, normalized)
+	return nil
 }
 
 func (m *AgentSecurityManager) IsConcernIgnored(filePath, concern string) bool {

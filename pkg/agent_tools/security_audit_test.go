@@ -544,3 +544,116 @@ func TestSetAuditLogger_Integration(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// LogJSON — pre-marshaled JSON logging
+// ---------------------------------------------------------------------------
+
+func TestAuditLogger_LogJSON(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger() returned error: %v", err)
+	}
+	defer logger.Close()
+
+	// Pre-marshal an entry to JSON (simulating what filesystem does).
+	entry := AuditEntry{
+		Timestamp: time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC),
+		Tool:      "filesystem_write",
+		Args:      "/etc/passwd",
+		RiskLevel: "high",
+		Category:  "fs_gate",
+		Action:    "denied",
+		Reasoning: "path outside workspace",
+		Source:    "unified-gate",
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("json.Marshal() returned error: %v", err)
+	}
+
+	// Write via LogJSON.
+	if err := logger.LogJSON(data); err != nil {
+		t.Fatalf("LogJSON() returned error: %v", err)
+	}
+
+	logger.Close()
+
+	// Read back and verify.
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile() returned error: %v", err)
+	}
+
+	var parsed AuditEntry
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("failed to parse log output: %v", err)
+	}
+
+	if parsed.Tool != "filesystem_write" {
+		t.Errorf("Tool = %q, want 'filesystem_write'", parsed.Tool)
+	}
+	if parsed.Action != "denied" {
+		t.Errorf("Action = %q, want 'denied'", parsed.Action)
+	}
+	if parsed.Category != "fs_gate" {
+		t.Errorf("Category = %q, want 'fs_gate'", parsed.Category)
+	}
+}
+
+func TestAuditLogger_LogJSON_MultipleEntries(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger() returned error: %v", err)
+	}
+	defer logger.Close()
+
+	entries := []AuditEntry{
+		{Timestamp: time.Now(), Tool: "fs_read", RiskLevel: "low", Category: "fs_gate", Action: "allowed"},
+		{Timestamp: time.Now(), Tool: "fs_write", RiskLevel: "high", Category: "fs_gate", Action: "denied"},
+		{Timestamp: time.Now(), Tool: "shell_cd", RiskLevel: "high", Category: "cd_gate", Action: "denied"},
+	}
+
+	for _, entry := range entries {
+		data, err := json.Marshal(entry)
+		if err != nil {
+			t.Fatalf("json.Marshal() returned error: %v", err)
+		}
+		if err := logger.LogJSON(data); err != nil {
+			t.Fatalf("LogJSON() returned error: %v", err)
+		}
+	}
+
+	logger.Close()
+
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile() returned error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d", len(lines))
+	}
+}
+
+func TestNilLogger_LogJSON(t *testing.T) {
+	t.Parallel()
+
+	var l *AuditLogger // nil
+
+	err := l.LogJSON([]byte(`{"tool":"test"}`))
+	if err != nil {
+		t.Errorf("nil.LogJSON() returned error: %v (expected nil)", err)
+	}
+}

@@ -27,7 +27,7 @@ type providerDescriptor struct {
 
 func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -312,7 +312,7 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 // Returns the list of available models for the given provider.
 func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -324,7 +324,7 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 
 	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
 	if provider == "" {
-		writeJSONError(w, http.StatusBadRequest, "provider parameter is required")
+		writeJSONErr(w, http.StatusBadRequest, "provider_required", "provider parameter is required")
 		return
 	}
 
@@ -336,25 +336,25 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 	} else {
 		cm, createErr := ws.getLayeredConfigManager(ws.resolveClientID(r))
 		if createErr != nil {
-			writeJSONError(w, http.StatusInternalServerError, "failed to create config manager")
+			writeJSONErr(w, http.StatusInternalServerError, "config_manager_failed", "failed to create config manager")
 			return
 		}
 		configManager = cm
 	}
 
 	if configManager == nil {
-		writeJSONError(w, http.StatusInternalServerError, "config manager not available")
+		writeJSONErr(w, http.StatusInternalServerError, "config_manager_unavailable", "config manager not available")
 		return
 	}
 
 	clientType, err := configManager.MapStringToClientType(provider)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONErr(w, http.StatusBadRequest, "invalid_provider", err.Error())
 		return
 	}
 
 	if clientType == api.TestClientType {
-		writeJSONError(w, http.StatusBadRequest, "test provider models cannot be listed via API")
+		writeJSONErr(w, http.StatusBadRequest, "test_provider_blocked", "test provider models cannot be listed via API")
 		return
 	}
 
@@ -392,7 +392,7 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 				return
 			}
 		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to list models: %v", err))
+		writeJSONErr(w, http.StatusInternalServerError, "model_list_failed", fmt.Sprintf("failed to list models: %v", err))
 		return
 	}
 

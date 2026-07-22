@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -54,7 +53,7 @@ func (ws *ReactWebServer) handleAPIProxyChat(w http.ResponseWriter, r *http.Requ
 	var req proxyChatRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("handleAPIProxyChat: invalid JSON: %v", err)
+		ws.logger.Warn("invalid proxy chat JSON", slog.String("err", err.Error()))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -159,7 +158,7 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 	// Extract the query text from the last user message
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
-		log.Printf("handleAPIProxyChat: no user message found")
+		ws.logger.Warn("no user message in proxy chat request", slog.String("chat_id", chatID))
 		writeJSONErr(w, http.StatusBadRequest, "user_message_required", "Messages with a user role are required")
 		return
 	}

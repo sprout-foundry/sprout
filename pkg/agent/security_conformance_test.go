@@ -18,9 +18,9 @@ import (
 // assert Prompt or Deny for external paths must use a directory outside it.
 //
 // Probes a preference-ordered list of candidates and returns the first
-// one that exists and is writable. Falls back to t.TempDir() only if
-// no candidate is available; in that case tests that depend on the
-// non-/tmp property skip themselves.
+// one that exists and is writable. Calls t.Skipf (which does not return)
+// if no candidate is available, so tests that need the non-/tmp invariant
+// are skipped rather than silently running against /tmp.
 func nonTmpTempDir(t *testing.T) string {
 	t.Helper()
 
@@ -47,10 +47,10 @@ func nonTmpTempDir(t *testing.T) string {
 	}
 
 	// No non-/tmp scratch space available on this platform.
-	// Tests that need the external-path invariant will skip.
-	dir := t.TempDir()
-	t.Logf("WARNING: no non-/tmp temp dir available (last err: %v); external-path fixtures will be under /tmp — related tests skip", lastErr)
-	return dir
+	// Skip rather than silently using /tmp, which would defeat the test invariant.
+	t.Skipf("nonTmpTempDir: no non-/tmp candidate available (tried: %v); this platform lacks /var/folders and /var/tmp", lastErr)
+	// unreachable — t.Skipf calls runtime.Goexit() and never returns
+	return ""
 }
 
 // externalTempDir is a thin wrapper kept for callers that don't care
@@ -260,6 +260,41 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			mode:           "read",
 			wantClassifier: FileAccessAllow,
 			wantAdapterAllow: true,
+		},
+		// --- Test #3: workspace symlink escape ---
+		// Create a symlink in the workspace pointing to /etc/passwd.
+		// When the resolvedPath is /etc/passwd (outside workspace), the
+		// classifier should return FileAccessPrompt, not FileAccessAllow.
+		// This verifies IsUnderWorkspaceRoot correctly resolves symlinks.
+		{
+			name:           "workspace symlink escape to /etc/passwd",
+			filePath:       filepath.Join(workspaceRoot, "evil_link"),
+			resolvedPath:   "/etc/passwd",
+			mode:           "read",
+			setup: func(a *Agent) {
+				// Create symlink: workspace/evil_link → /etc/passwd
+				_ = os.Symlink("/etc/passwd", filepath.Join(workspaceRoot, "evil_link"))
+			},
+			wantClassifier: FileAccessPrompt,
+			wantAdapterAllow: false,
+		},
+		// --- Test #4: list_directory on workspace ---
+		{
+			name:             "list_directory workspace root",
+			filePath:         workspaceRoot,
+			resolvedPath:     workspaceRoot,
+			mode:             "read",
+			wantClassifier:   FileAccessAllow,
+			wantAdapterAllow: true,
+		},
+		// --- Test #4: list_directory on external path ---
+		{
+			name:             "list_directory external /etc",
+			filePath:         "/etc",
+			resolvedPath:     "/etc",
+			mode:             "read",
+			wantClassifier:   FileAccessPrompt,
+			wantAdapterAllow: false,
 		},
 	}
 

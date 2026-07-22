@@ -421,6 +421,16 @@ var fileTouchingTools = map[string]bool{
 // "write" for write/edit tools, "read" for read tools. Non-file tools and tools
 // that don't supply a "path" arg return the zero values so the classifier skips
 // the path-tier branch.
+//
+// Path resolution convention for callers:
+//   - filePath is the user-supplied path (may be relative or absolute).
+//   - resolvedPath is the symlink-evaluated canonical target (empty if the path
+//     does not exist or the caller did not perform resolution).
+//   - When resolvedPath is non-empty, classifyFileAccess uses it for workspace
+//     containment and sensitive-path checks, falling back to filePath if the
+//     resolved target does not exist.
+//   - When resolvedPath is empty, the function uses filePath directly for the
+//     prefix checks — relative paths that don't exist are evaluated lexically.
 func extractFilePathAndMode(toolName string, args map[string]interface{}) (filePath, mode string) {
 	if !fileTouchingTools[toolName] {
 		return "", ""

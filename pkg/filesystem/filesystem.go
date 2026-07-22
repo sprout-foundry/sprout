@@ -438,10 +438,39 @@ var gpgSensitivePaths = []string{
 	".gnupg",
 }
 
+// sshConfigSensitivePaths matches SSH config and known-hosts files under $HOME/.ssh.
+var sshConfigSensitivePaths = []string{
+	".ssh/config",
+	".ssh/known_hosts",
+	".ssh/authorized_keys",
+	".ssh/known_hosts.old",
+}
+
+// kubeSensitivePaths matches Kubernetes config under $HOME/.kube.
+var kubeSensitivePaths = []string{
+	".kube/config",
+	".kube/config.backup",
+}
+
+// dockerSensitivePaths matches Docker config under $HOME/.docker.
+var dockerSensitivePaths = []string{
+	".docker/config.json",
+}
+
+// gcloudSensitivePaths matches Google Cloud config under $HOME/.config/gcloud.
+var gcloudSensitivePaths = []string{
+	".config/gcloud",
+}
+
+// azureSensitivePaths matches Azure config under $HOME/.azure.
+var azureSensitivePaths = []string{
+	".azure",
+}
+
 // IsSensitiveSystemPath reports whether path targets a known sensitive system
 // location that should always prompt the user rather than auto-allowing.
-// Covers: /etc/* passwd/shadow/sudoers, SSH private keys, AWS credentials,
-// and GPG keyrings.
+// Covers: /etc/* passwd/shadow/sudoers, SSH private keys and config, AWS
+// credentials, GPG keyrings, Kubernetes, Docker, GCP, and Azure configs.
 func IsSensitiveSystemPath(path string) bool {
 	cleanPath := filepath.Clean(path)
 
@@ -491,6 +520,36 @@ func IsSensitiveSystemPath(path string) bool {
 			}
 			if strings.HasPrefix(filepath.ToSlash(rel), ".gnupg") {
 				return true
+			}
+			// SSH config, known_hosts, authorized_keys
+			for _, p := range sshConfigSensitivePaths {
+				if strings.HasPrefix(filepath.ToSlash(rel), p) || rel == p {
+					return true
+				}
+			}
+			// Kubernetes config
+			for _, p := range kubeSensitivePaths {
+				if strings.HasPrefix(filepath.ToSlash(rel), p) || rel == p {
+					return true
+				}
+			}
+			// Docker config
+			for _, p := range dockerSensitivePaths {
+				if strings.HasPrefix(filepath.ToSlash(rel), p) || rel == p {
+					return true
+				}
+			}
+			// Google Cloud config
+			for _, p := range gcloudSensitivePaths {
+				if strings.HasPrefix(filepath.ToSlash(rel), p) || rel == p {
+					return true
+				}
+			}
+			// Azure config
+			for _, p := range azureSensitivePaths {
+				if strings.HasPrefix(filepath.ToSlash(rel), p) || rel == p {
+					return true
+				}
 			}
 		}
 	}

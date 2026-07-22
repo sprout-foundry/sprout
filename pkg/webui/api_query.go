@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -391,6 +392,12 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	if !delivered {
 		// No runner or runner couldn't deliver — fall back to primary directly.
 		if err := clientAgent.InjectInputContext(query.Query); err != nil {
+			ws.logger.Error("steer failed",
+				slog.String("handler", "handleAPIQuerySteer"),
+				slog.String("chat_id", chatID),
+				slog.String("client_id", clientID),
+				slog.Any("err", err),
+			)
 			writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 			return
 		}
@@ -408,6 +415,12 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	if subagentID != "" {
 		resp["subagent_id"] = subagentID
 	}
+	ws.logger.Info("query steered",
+		slog.String("handler", "handleAPIQuerySteer"),
+		slog.String("chat_id", chatID),
+		slog.String("client_id", clientID),
+		slog.String("target", target),
+	)
 	json.NewEncoder(w).Encode(resp)
 }
 
@@ -511,6 +524,10 @@ func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAge
 	// implementations, so commands from different clients can run concurrently.
 	readEnd, writeEnd, pipeErr := os.Pipe()
 	if pipeErr != nil {
+		ws.logger.Error("command output pipe creation failed",
+			slog.String("handler", "executeSafeSteerCommandStreaming"),
+			slog.Any("err", pipeErr),
+		)
 		return cmd, "", fmt.Errorf("create command output pipe: %w", pipeErr)
 	}
 	registry.SetOutput(writeEnd)

@@ -96,7 +96,7 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
 	// resolve so Deny paths return a typed error immediately and Allow
 	// paths bypass withFilesystemApproval entirely.
-	_, decision := PrecheckFileAccess(env.FileAccessClassifier, "edit_file", path)
+	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "edit_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("edit blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
 			fmt.Errorf("edit blocked: %s is declared read_only", path)

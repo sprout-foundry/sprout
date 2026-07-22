@@ -292,12 +292,18 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
-	// Enrich context with workspace root so executeGitCommand runs in the
-	// correct directory. The seed execution path passes a bare context
-	// without workspace metadata, so we inject it from the agent's config.
-	if wsRoot := a.effectiveCwd(); wsRoot != "" {
-		ctx = filesystem.WithWorkspaceRoot(ctx, wsRoot)
-	}
+	// Enrich context with workspace root, effective cwd, and session folders so
+	// executeGitCommand runs in the correct directory. The seed execution path
+	// passes a bare context without workspace metadata, so we inject it from
+	// the agent's config.
+	workspaceRoot := a.GetWorkspaceRoot()
+	effectiveCwd := a.effectiveCwd()
+	sessionFolders := a.SnapshotSessionAllowedFolders()
+	ctx = filesystem.WithAgentContext(
+		filesystem.WithWorkspaceRoot(ctx, workspaceRoot),
+		effectiveCwd,
+		sessionFolders,
+	)
 
 	// Basic git ops (add/push/pull/fetch) skip the approval prompt for any
 	// persona with CapabilityGitWrite that has cleared isGitWriteAllowed

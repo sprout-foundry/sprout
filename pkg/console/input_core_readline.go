@@ -300,8 +300,16 @@ func (ir *InputReader) ReadLine() (string, error) {
 						if text != "" {
 							ir.line = text
 							ir.cursorPos = len(ir.line)
-							ir.autocomplete.hide()
 						}
+						// Erase the dropdown rows from the terminal before
+						// advancing to the next line. clear() emits escape
+						// sequences so it must be under the output lock to
+						// prevent interleaving with background footer/PrintExternal
+						// writes.
+						LockOutput()
+						ir.autocomplete.clear()
+						UnlockOutput()
+						ir.autocomplete.hide()
 					}
 					// End of input
 					fmt.Println() // Move to next line

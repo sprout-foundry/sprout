@@ -186,12 +186,12 @@ func (a *Agent) IsReadOnlyAllowedFolder(absPath string) bool {
 	if modes == nil {
 		return false
 	}
-	cleanPath := filepath.Clean(absPath)
+	cleanPath := normalizePath(absPath)
 	for folder, mode := range modes {
 		if mode != "read_only" {
 			continue
 		}
-		if isUnderPrefix(cleanPath, filepath.Clean(folder)) {
+		if isUnderPrefix(cleanPath, normalizePath(folder)) {
 			return true
 		}
 	}

@@ -254,15 +254,26 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	// Apply session-scoped provider/model if set on the session.
 	// This provides per-session provider/model scoping without affecting
 	// other sessions or the global config.
+	//
+	// Provider/model ordering is deliberate: we only apply the session
+	// model AFTER the provider switch succeeds. If SetProvider fails
+	// (provider not available, factory couldn't build a client, etc.)
+	// the agent retains its previous/default provider — and a model
+	// name that belonged to the failed provider would either error out
+	// on SetModel or, worse, silently shadow an unrelated model's name
+	// on a different provider (e.g. "gpt-4o" leaking onto Ollama).
+	providerApplied := sessionProvider == ""
 	if sessionProvider != "" {
 		providerType, err := created.GetConfigManager().MapStringToClientType(sessionProvider)
 		if err != nil {
 			log.Printf("chatSession.getOrCreateAgent: warning: invalid session provider %q: %v", sessionProvider, err)
 		} else if err := created.SetProvider(providerType); err != nil {
 			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session provider %q: %v", sessionProvider, err)
+		} else {
+			providerApplied = true
 		}
 	}
-	if sessionModel != "" {
+	if providerApplied && sessionModel != "" {
 		if err := created.SetModel(sessionModel); err != nil {
 			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session model %q: %v", sessionModel, err)
 		}

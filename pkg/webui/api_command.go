@@ -61,14 +61,14 @@ func (s *commandOutputStreamer) setCommandName(name string) { s.cmdName = name }
 // onChunk is the per-rune callback wired into
 // executeSafeSteerCommandStreaming. Each UTF-8 rune the command emits
 // arrives as a separate onChunk call. The streamer:
-//   1. Increments seq (monotonic per-command, starts at 1 so the
-//      terminal "is_final" marker has a known seq).
-//   2. Appends the chunk to the bounded backpressure ring, dropping
-//      oldest bytes on overflow and counting the dropped bytes.
-//   3. Publishes a command_output event with is_final=false.
-//   4. If the drop counter crossed commandOutputDropThreshold since
-//      the last warning, emits one command_output_dropped event and
-//      resets the counter.
+//  1. Increments seq (monotonic per-command, starts at 1 so the
+//     terminal "is_final" marker has a known seq).
+//  2. Appends the chunk to the bounded backpressure ring, dropping
+//     oldest bytes on overflow and counting the dropped bytes.
+//  3. Publishes a command_output event with is_final=false.
+//  4. If the drop counter crossed commandOutputDropThreshold since
+//     the last warning, emits one command_output_dropped event and
+//     resets the counter.
 //
 // The chunk is always emitted — even when the ring overflowed earlier,
 // THIS chunk still reaches the WS subscribers. The ring is for
@@ -194,7 +194,7 @@ func (s *commandOutputStreamer) appendToRing(p []byte) {
 // /api/query/steer path).
 func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -203,17 +203,17 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 		Command string `json:"command"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	cmdLine := strings.TrimSpace(req.Command)
 	if cmdLine == "" {
-		http.Error(w, "Command is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "command_required", "Command is required")
 		return
 	}
 	if !strings.HasPrefix(cmdLine, "/") {
-		http.Error(w, "Command must start with /", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_command", "Command must start with /")
 		return
 	}
 
@@ -225,7 +225,7 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 			return
 		}
-		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		return
 	}
 

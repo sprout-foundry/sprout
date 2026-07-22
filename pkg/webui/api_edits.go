@@ -60,21 +60,21 @@ func (ws *ReactWebServer) handleAPIEdits(w http.ResponseWriter, r *http.Request)
 // backward compatibility with GET /api/edits/{id} status checks.
 func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	// Extract edit ID from path: /api/edits/{id}/decision
 	editID := extractEditIDFromPath(r.URL.Path)
 	if editID == "" {
-		http.Error(w, "Edit ID is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "edit_id_required", "Edit ID is required")
 		return
 	}
 
 	var req editDecisionPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("handleAPIEditDecision: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -98,7 +98,7 @@ func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.R
 	if regOk {
 		if pe.decisionMade {
 			editRegistry.Unlock()
-			http.Error(w, "Edit already decided", http.StatusConflict)
+			writeJSONErr(w, http.StatusConflict, "edit_already_decided", "Edit already decided")
 			return
 		}
 		pe.decisionMade = true
@@ -111,7 +111,7 @@ func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.R
 
 	if !delivered && !regOk {
 		log.Printf("handleAPIEditDecision: edit %s not found in broker or registry", editID)
-		http.Error(w, "Edit not found or already decided", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "not_found", "Edit not found or already decided")
 		return
 	}
 
@@ -146,13 +146,13 @@ func (ws *ReactWebServer) resolveEditAgent() *agent.Agent {
 // state of a pending edit proposal.
 func (ws *ReactWebServer) handleAPIEditStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	editID := extractEditIDFromPath(r.URL.Path)
 	if editID == "" {
-		http.Error(w, "Edit ID is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "edit_id_required", "Edit ID is required")
 		return
 	}
 
@@ -161,7 +161,7 @@ func (ws *ReactWebServer) handleAPIEditStatus(w http.ResponseWriter, r *http.Req
 
 	pe, ok := editRegistry.pending[editID]
 	if !ok {
-		http.Error(w, "Edit not found", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "not_found", "Edit not found")
 		return
 	}
 

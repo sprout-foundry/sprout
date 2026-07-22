@@ -24,7 +24,7 @@ import (
 // revert_files defaults to true.
 func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -35,12 +35,12 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("handleAPIQueryRewind: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.ToTurn == nil {
-		http.Error(w, "to_turn is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "to_turn_required", "to_turn is required")
 		return
 	}
 
@@ -57,12 +57,12 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil {
 		ws.mutex.RUnlock()
-		http.Error(w, "Client context not found", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "client_context_not_found", "Client context not found")
 		return
 	}
 	if ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.RUnlock()
-		http.Error(w, "Cannot rewind while a query is running", http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "query_in_progress", "Cannot rewind while a query is running")
 		return
 	}
 	ws.mutex.RUnlock()
@@ -72,7 +72,7 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 		if errors.Is(err, ErrNoProviderConfigured) || isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
@@ -83,7 +83,7 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 	})
 	if err != nil {
 		log.Printf("handleAPIQueryRewind: rewind failed chat_id=%s err=%v", chatID, err)
-		http.Error(w, fmt.Sprintf("Rewind failed: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "rewind_failed", fmt.Sprintf("Rewind failed: %v", err))
 		return
 	}
 

@@ -54,6 +54,70 @@ func (a *Agent) initSubManagers() {
 	}
 }
 
+// invalidateVisionCache clears vision capability state so the next vision
+// request re-probes the active provider/model.
+func (a *Agent) invalidateVisionCache() {
+	a.visionProcMu.Lock()
+	a.visionProc = nil
+	a.visionProcMu.Unlock()
+
+	a.visionProbeMu.Lock()
+	a.visionProbeModel = ""
+	a.visionProbeProvider = ""
+	a.visionProbeResult = nil
+	a.visionProbeMu.Unlock()
+}
+
+// refreshSystemPrompt re-derives the agent's system prompt for the
+// active provider and context profile. Used by setClient when the
+// config flag RefreshSystemPromptOnModelChange is true. Falls back
+// to no-op silently when prerequisites (workspaceRoot, configManager,
+// non-nil cfg) are missing — the prompt is already correct from
+// agent creation in that case, so a partial refresh would just
+// introduce noise.
+//
+// Re-resolution matches what initAgentFromResolvedProvider does at
+// agent creation: resolve the context profile against the current
+// model context window (so LCM auto-detection carries over to the
+// new model when its window is also below subagentContextThreshold),
+// then load the embedded prompt for that profile and re-apply any
+// configured SystemPromptText override.
+//
+// Both a.systemPrompt and a.baseSystemPrompt are updated — the base
+// prompt is the "persona cleared" snapshot SetSystemPrompt consults
+// indirectly via SetBaseSystemPrompt; leaving it stale would let a
+// later persona clear reintroduce the old model's prompt.
+func (a *Agent) refreshSystemPrompt() {
+	if a == nil || a.configManager == nil || a.workspaceRoot == "" {
+		return
+	}
+	cfg := a.configManager.GetConfig()
+	if cfg == nil || !cfg.GetRefreshSystemPromptOnModelChange() {
+		return
+	}
+	providerName := api.GetProviderName(a.getClientType())
+	contextWindow := a.getModelContextLimit()
+	// Re-resolve the context profile against the current window so lite
+	// prompts (LCM) carry over when the new model is also sub-ContextFloor.
+	profile, err := configuration.ResolveContextProfile(cfg, contextWindow)
+	if err != nil {
+		if a.debug {
+			a.Logger().Debug("refreshSystemPrompt: failed to resolve profile: %v", err)
+		}
+		return
+	}
+	prompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, a.workspaceRoot)
+	if err != nil {
+		if a.debug {
+			a.Logger().Debug("refreshSystemPrompt: failed to load prompt: %v", err)
+		}
+		return
+	}
+	prompt = resolveConfiguredSystemPrompt(cfg, prompt)
+	a.systemPrompt = prompt
+	a.baseSystemPrompt = prompt
+}
+
 type Agent struct {
 	// Core LLM coordination
 	client     api.ClientInterface

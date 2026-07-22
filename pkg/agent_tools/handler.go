@@ -298,7 +298,9 @@ type FileAccessClassifier interface {
 	// resolvedPath (symlink-evaluated canonical form, may equal filePath),
 	// mode ("read" or "write").
 	// Returns: "allow" (proceed), "prompt" (fall through to gate), "deny" (return error).
-	ClassifyFileAccess(filePath, resolvedPath, mode string) string
+	// ctx carries the audit logger; implementations log the verdict via LogJSON
+	// so every decision (allow/prompt/deny) appears in the audit trail.
+	ClassifyFileAccess(ctx context.Context, filePath, resolvedPath, mode string) string
 }
 
 // ---------------------------------------------------------------------------

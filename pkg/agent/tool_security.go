@@ -3,12 +3,14 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -470,6 +472,20 @@ const (
 	FileAccessDeny
 )
 
+// The security decision tree is:
+//
+//	1. Unsafe mode or elevated session? → auto-approve (hard blocks still blocked)
+//	2. File path supplied? → consult classifyFileAccess:
+//	     - workspace root, /tmp, or session-allowlisted folder → auto-approve
+//	     - read_only allowlist entry + write attempt → deny (FileAccessDeny)
+//	     - sensitive system path (/etc/shadow, ~/.ssh/id_rsa, ~/.aws/credentials) → prompt
+//	     - everything else → prompt
+//	3. Fall through to interactive approval prompt.
+//
+// withFilesystemApproval is now a thin fallback wrapper: it calls
+// filesystemGateAdapter.RequestPathApproval, which itself delegates to
+// classifyFileAccess, so the two surfaces cannot diverge.
+
 // classifyFileAccess inspects the path tier and returns the access verdict.
 // Used by both Gate 1 (staticGateAutoApprove) and the filesystem gate adapter
 // so they always agree on allow/prompt/deny for a given path.
@@ -521,20 +537,49 @@ func (a *Agent) classifyFileAccess(filePath, resolvedPath, mode string) FileAcce
 // ClassifyFileAccess implements tools.FileAccessClassifier so handlers
 // can consult Gate 1's path-tier verdict without importing pkg/agent.
 // Translates the internal FileAccessDecision enum to the interface's
-// string contract: "allow", "prompt", "deny".
-func (a *Agent) ClassifyFileAccess(filePath, resolvedPath, mode string) string {
+// string contract: "allow", "prompt", "deny". Logs the verdict to the
+// audit logger on ctx (SP-127 M3.2 Phase 2.6 follow-on) so every
+// decision appears in the audit trail.
+func (a *Agent) ClassifyFileAccess(ctx context.Context, filePath, resolvedPath, mode string) string {
 	decision := a.classifyFileAccess(filePath, resolvedPath, mode)
 	switch decision {
 	case FileAccessAllow:
+		a.auditPathDecision(ctx, filePath, resolvedPath, mode, "allowed", "low")
 		return "allow"
 	case FileAccessDeny:
+		a.auditPathDecision(ctx, filePath, resolvedPath, mode, "denied", "high")
 		return "deny"
 	default:
+		a.auditPathDecision(ctx, filePath, resolvedPath, mode, "prompted", "medium")
 		return "prompt"
 	}
 }
 
-// staticGateAutoApprove reports whether a tool call that the static
+// auditPathDecision emits a JSONL audit entry for a filesystem gate decision.
+// Nil-safe: skips silently when no audit logger is configured on ctx.
+// Uses filesystem.AuditEntry (identical JSON fields to tools.AuditEntry)
+// to avoid import cycles between pkg/agent and pkg/agent_tools.
+func (a *Agent) auditPathDecision(ctx context.Context, filePath, resolvedPath, mode, action, riskLevel string) {
+	logger := filesystem.AuditLoggerFromContext(ctx)
+	if logger == nil {
+		return
+	}
+	entry := filesystem.AuditEntry{
+		Timestamp: time.Now(),
+		Tool:      "filesystem_classify",
+		Args:      filePath,
+		RiskLevel: riskLevel,
+		Category:  "fs_gate",
+		Action:    action,
+		Reasoning: fmt.Sprintf("path tier check: path=%s resolved=%s mode=%s action=%s", filePath, resolvedPath, mode, action),
+		Source:    "gate1-classifier",
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	_ = logger.LogJSON(data)
+}// staticGateAutoApprove reports whether a tool call that the static
 // classifier (Gate 1) flagged as risky should skip the interactive
 // approval prompt because the session is in a bypass state:
 //

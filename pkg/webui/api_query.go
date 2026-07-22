@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -210,11 +209,23 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 	return buf.Append(events.UIEvent{Type: eventType, Data: data})
 }
 
-// handleAPIQuery handles API queries to the agent
+// handleAPIQuery handles API queries to the agent. It is a thin
+// wrapper over runChatQuery — the body parsing and chat-id resolution
+// stay here so the request schema (query, chat_id, provider, model,
+// workspace_root, system_prompt) is documented in one place. The
+// shared runner handles locking, agent creation, override application,
+// the slash-command-in-chat path, and the async ProcessQueryWithContinuity
+// goroutine with cost recording and state sync.
+//
+// Keeping the slash-command-in-chat path inside the shared runner
+// (gated by opts.AllowSlashCommands=true here) means the legacy
+// /api/query surface still lets users type `/info` in a fresh chat
+// input; the runner rejects destructive commands via SteerCapable.
+// See SP-114 Phase 2 for the gating rationale.
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
 	log.Printf("handleAPIQuery called")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -230,13 +241,13 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
 		log.Printf("handleAPIQuery: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if query.Query == "" {
 		log.Printf("handleAPIQuery: empty query")
-		http.Error(w, "Query is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
 		return
 	}
 
@@ -249,354 +260,21 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		chatID = ws.resolveChatID(r, clientID)
 	}
 
-	// Resolve workspace root with worktree awareness - check if chat has a worktree path
-	workspaceRoot := ws.resolveWorkspaceRootForChat(clientID, chatID)
-	if workspaceRoot == "" {
-		workspaceRoot = ws.getWorkspaceRootForRequest(r)
-	}
-
-	ws.mutex.Lock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil {
-		ws.mutex.Unlock()
-		http.Error(w, "Client context not found", http.StatusBadRequest)
-		return
-	}
-	if ctx.hasActiveQueryForChat(chatID) {
-		ws.mutex.Unlock()
-		http.Error(w, "A query is already running for this chat", http.StatusConflict)
-		return
-	}
-	// Atomically mark the query as active while still holding the lock so
-	// a concurrent request for the same chat cannot also pass the check.
-	// The previous implementation released the lock between the check and
-	// the set, creating a TOCTOU race where two requests could both enter
-	// the query goroutine and corrupt the same agent's state.
-	ws.queryCount++
-	ws.activeQueries++
-	ctx.setChatQueryActive(chatID, true, query.Query)
-	ws.mutex.Unlock()
-
-	// Resolve the agent AFTER the active-query lock is released. Creating
-	// an agent may block (config load, provider init), and holding ws.mutex
-	// during that would serialize all incoming queries across all chats.
-	clientAgent, err := ws.getChatAgent(clientID, chatID)
-	if err != nil {
-		// Roll back the active-query state we set above — the query never runs.
-		ws.mutex.Lock()
-		if ws.activeQueries > 0 {
-			ws.activeQueries--
-		}
-		ctx := ws.clientContexts[clientID]
-		if ctx != nil {
-			ctx.setChatQueryActive(chatID, false, "")
-		}
-		ws.mutex.Unlock()
-
-		if isProviderConfigError(err) {
-			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
-		} else {
-			http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Apply per-query overrides: provider, model.
-	// On failure, return an error to the client instead of silently
-	// proceeding with the wrong provider/model — the user's query would
-	// run against an unexpected model with no indication.
-	if query.Provider != "" {
-		cm := ws.getConfigManager(r, w)
-		if cm != nil {
-			// Enrich custom providers from disk before mapping — the config
-			// manager may not have them loaded if it was created via fallback.
-			cm.EnrichCustomProviders()
-			providerType, mapErr := cm.MapStringToClientType(query.Provider)
-			if mapErr != nil {
-				// Roll back active-query state and return error.
-				ws.mutex.Lock()
-				if ws.activeQueries > 0 {
-					ws.activeQueries--
-				}
-				if ctx := ws.clientContexts[clientID]; ctx != nil {
-					ctx.setChatQueryActive(chatID, false, "")
-				}
-				ws.mutex.Unlock()
-				writeJSONErr(w, http.StatusBadRequest, "invalid_provider",
-					fmt.Sprintf("Invalid provider %q: %v", query.Provider, mapErr))
-				return
-			}
-			if serr := clientAgent.SetProvider(providerType); serr != nil {
-				ws.mutex.Lock()
-				if ws.activeQueries > 0 {
-					ws.activeQueries--
-				}
-				if ctx := ws.clientContexts[clientID]; ctx != nil {
-					ctx.setChatQueryActive(chatID, false, "")
-				}
-				ws.mutex.Unlock()
-				writeJSONErr(w, http.StatusBadRequest, "provider_switch_failed",
-					fmt.Sprintf("Failed to switch to provider %q: %v", query.Provider, serr))
-				return
-			}
-		}
-	}
-	if query.Model != "" {
-		if err := clientAgent.SetModel(query.Model); err != nil {
-			ws.mutex.Lock()
-			if ws.activeQueries > 0 {
-				ws.activeQueries--
-			}
-			if ctx := ws.clientContexts[clientID]; ctx != nil {
-				ctx.setChatQueryActive(chatID, false, "")
-			}
-			ws.mutex.Unlock()
-			writeJSONErr(w, http.StatusBadRequest, "model_switch_failed",
-				fmt.Sprintf("Failed to switch to model %q: %v", query.Model, err))
-			return
-		}
-	}
-
-	// Apply per-query workspace root override
-	if query.WorkspaceRoot != "" {
-		workspaceRoot = query.WorkspaceRoot
-	}
-
-	// Apply per-query system prompt override (session-scoped, resets after query not needed)
-	if query.SystemPrompt != "" {
-		clientAgent.SetSystemPrompt(query.SystemPrompt)
-	}
-
-	// Shared-agent guard: in shared mode the CLI and WebUI share one Agent.
-	// If the CLI is mid-query, reject immediately so the user gets a clear
-	// "busy" message instead of a 500 or silent timeout.
-	if ws.IsSharedMode() && clientAgent.IsQueryInProgress() {
-		ws.mutex.Lock()
-		if ws.activeQueries > 0 {
-			ws.activeQueries--
-		}
-		if ctx := ws.clientContexts[clientID]; ctx != nil {
-			ctx.setChatQueryActive(chatID, false, "")
-		}
-		ws.mutex.Unlock()
-		writeJSONErr(w, http.StatusConflict, "agent_busy",
-			"The terminal is currently processing a query. Try again in a moment.")
-		return
-	}
-
-	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
-	//
-	// Defer-recover: ProcessQueryWithContinuity can panic on malformed LLM
-	// output or upstream provider failures. Without a recover here, a panic
-	// would skip the deferred activeQueries decrement and chatQueryActive
-	// reset, leaving the client permanently stuck in a "running" state and
-	// leaking the activeQueries counter (which gates future requests).
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("handleAPIQuery: panic in query goroutine chat_id=%s: %v", chatID, r)
-			}
-			ws.mutex.Lock()
-			if ws.activeQueries > 0 {
-				ws.activeQueries--
-			}
-			if ctx := ws.clientContexts[clientID]; ctx != nil {
-				ctx.setChatQueryActive(chatID, false, "")
-			}
-			ws.mutex.Unlock()
-		}()
-		startedAt := time.Now()
-		registry := agent_commands.NewCommandRegistry()
-
-		if registry.IsSlashCommand(query.Query) {
-			// SP-114 Phase 2: gate the legacy /api/query slash-command path on
-			// SteerCapable so destructive commands (/commit, /clear, /exit,
-			// /init, etc.) can't be invoked from the WebUI chat input. The
-			// canonical safe-surface is /api/command/execute; this branch is
-			// kept for backwards-compat with the no-active-query case (e.g. a
-			// user types /info in a fresh chat).
-			parts := strings.Fields(strings.TrimSpace(query.Query))
-			var headCmd string
-			if len(parts) > 0 {
-				headCmd = strings.TrimPrefix(parts[0], "/")
-			}
-			canRunFromWebUI := false
-			if headCmd != "" {
-				if cmd, ok := registry.GetCommand(headCmd); ok {
-					if sc, ok := cmd.(agent_commands.SteerCapable); ok && sc.SafeDuringSteer() {
-						canRunFromWebUI = true
-					}
-				}
-			}
-			if !canRunFromWebUI {
-				writeJSONErr(w, http.StatusBadRequest, "command_not_safe",
-					"Command /"+headCmd+" is not safe to run from the WebUI. Use the CLI or the /api/command/execute safe surface.")
-				return
-			}
-
-			log.Printf("handleAPIQuery: executing slash command: %s", query.Query)
-			queryEventData := events.QueryStartedEvent(
-				query.Query,
-				clientAgent.GetProvider(),
-				clientAgent.GetModel(),
-			)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryStarted, queryEventData)
-
-			clientAgent.SetWorkspaceRoot(workspaceRoot)
-
-			// Capture stdout while the command runs: slash commands write to
-			// os.Stdout (fmt.Printf/fmt.Println), but in daemon mode that goes
-			// nowhere the browser can see. Redirect stdout to a pipe so we can
-			// forward the real command output as stream chunks.
-			//
-			// The mutex serializes capture across concurrent chats — os.Stdout
-			// is process-global, so two simultaneous redirects would race.
-			trimmed := strings.TrimSpace(query.Query)
-			ws.stdoutCaptureMu.Lock()
-			oldStdout := os.Stdout
-			pipeR, pipeW, pipeErr := os.Pipe()
-			if pipeErr != nil {
-				log.Printf("handleAPIQuery: stdout pipe creation failed: %v", pipeErr)
-				ws.stdoutCaptureMu.Unlock()
-			} else {
-				os.Stdout = pipeW
-			}
-
-			err := registry.Execute(query.Query, clientAgent)
-
-			// Drain the pipe. Close the write end BEFORE reading so io.Copy
-			// sees EOF and returns — otherwise it blocks forever (classic
-			// pipe deadlock). See SC-2.
-			var capturedOutput string
-			if pipeErr == nil {
-				pipeW.Close()
-				os.Stdout = oldStdout
-				var buf bytes.Buffer
-				if _, copyErr := io.Copy(&buf, pipeR); copyErr != nil {
-					log.Printf("handleAPIQuery: stdout pipe read failed: %v", copyErr)
-				}
-				pipeR.Close()
-				ws.stdoutCaptureMu.Unlock()
-				capturedOutput = buf.String()
-			}
-
-			// Sync state asynchronously so the query goroutine can proceed
-			// to publish events without waiting for the state export.
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("handleAPIQuery: panic in slash-command state sync chat_id=%s: %v", chatID, r)
-					}
-				}()
-				if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-					log.Printf("handleAPIQuery: async state sync failed chat_id=%s: %v", chatID, err)
-				}
-			}() // Send any captured output as a stream chunk before reporting
-			// success or error, so the user sees what the command printed.
-			if capturedOutput != "" {
-				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
-					fmt.Sprintf("\n%s\n\n%s", trimmed, capturedOutput),
-					"assistant_text",
-				))
-			}
-
-			if err != nil {
-				log.Printf("handleAPIQuery: slash command error: %v", err)
-				if capturedOutput == "" {
-					ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
-						fmt.Sprintf("Executed command: `%s`\n", trimmed),
-						"assistant_text",
-					))
-				}
-				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
-				return
-			}
-
-			if capturedOutput == "" {
-				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
-					fmt.Sprintf("Executed command: `%s`\n", trimmed),
-					"assistant_text",
-				))
-			}
-			queryCompletedData := events.QueryCompletedEvent(
-				query.Query,
-				fmt.Sprintf("Executed command: %s", trimmed),
-				0,
-				0,
-				time.Since(startedAt),
-			)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryCompleted, queryCompletedData)
-			return
-		}
-
-		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity chat_id=%s provider=%s model=%s", chatID, clientAgent.GetProvider(), clientAgent.GetModel())
-		queryStart := time.Now()
-		clientAgent.SetWorkspaceRoot(workspaceRoot)
-		_, err := clientAgent.ProcessQueryWithContinuity(query.Query)
-		queryDuration := time.Since(queryStart)
-
-		// Record cost after query completes
-		chargedCost := clientAgent.GetChargedCostTotal()
-		tokenCost := clientAgent.GetTokenCostTotal()
-		if chargedCost > 0 || tokenCost > 0 {
-			providerName := clientAgent.GetProvider()
-			GetCostStore().RecordCostWithBilling(
-				providerName,
-				clientAgent.GetModel(),
-				clientAgent.GetSessionID(),
-				chatID,
-				clientAgent.GetSessionName(),
-				clientAgent.GetWorkspaceRoot(),
-				resolveBillingTypeForProvider(providerName),
-				clientAgent.GetPromptTokens(),
-				clientAgent.GetCompletionTokens(),
-				chargedCost,
-				tokenCost,
-			)
-		}
-
-		// Sync state asynchronously so the query goroutine returns
-		// immediately. ExportState can take seconds for large conversations,
-		// and the deferred active-query cleanup must not wait for it.
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("handleAPIQuery: panic in state sync chat_id=%s: %v", chatID, r)
-				}
-			}()
-			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-				log.Printf("handleAPIQuery: async state sync failed chat_id=%s: %v", chatID, err)
-			}
-		}()
-
-		if err != nil {
-			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", chatID, queryDuration, err)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Query failed", err))
-		} else {
-			// Success-path log: lets operators see that the provider responded
-			// and at what cost. Without this the log goes silent after
-			// "calling ProcessQueryWithContinuity" and the server looks hung.
-			log.Printf("handleAPIQuery: completed chat_id=%s duration=%s prompt_tokens=%d completion_tokens=%d total_cost=%.6f",
-				chatID, queryDuration,
-				clientAgent.GetPromptTokens(), clientAgent.GetCompletionTokens(),
-				clientAgent.GetTotalCost())
-		}
-	}()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"accepted":  true,
-		"query":     query.Query,
-		"chat_id":   chatID,
-		"timestamp": time.Now().Unix(),
+	ws.runChatQuery(w, r, clientID, chatID, query.Query, chatQueryOptions{
+		Provider:           query.Provider,
+		Model:              query.Model,
+		WorkspaceRoot:      query.WorkspaceRoot,
+		SystemPrompt:       query.SystemPrompt,
+		AllowSlashCommands: true,
+		EchoQueryInAccept:  true,
+		LogTag:             "handleAPIQuery",
 	})
 }
 
 // handleAPIQuerySteer injects user input into the currently running query loop.
 func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -606,13 +284,13 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	query.Query = strings.TrimSpace(query.Query)
 	if query.Query == "" {
-		http.Error(w, "Query is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
 		return
 	}
 
@@ -627,7 +305,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		ws.mutex.RUnlock()
 
 		if !hasActiveQuery {
-			http.Error(w, "No active query to steer", http.StatusConflict)
+			writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
 			return
 		}
 
@@ -636,7 +314,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 			if isProviderConfigError(err) {
 				writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 			} else {
-				http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+				writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 			}
 			return
 		}
@@ -664,7 +342,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		}
 
 		// Command not found or not safe to run mid-turn
-		http.Error(w, "Slash commands cannot be steered while a query is running", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "slash_command_not_steerable", "Slash commands cannot be steered while a query is running")
 		return
 	}
 
@@ -675,7 +353,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.RUnlock()
-		http.Error(w, "No active query to steer", http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
 		return
 	}
 	ws.mutex.RUnlock()
@@ -685,7 +363,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
@@ -713,7 +391,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	if !delivered {
 		// No runner or runner couldn't deliver — fall back to primary directly.
 		if err := clientAgent.InjectInputContext(query.Query); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
+			writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 			return
 		}
 	}
@@ -733,83 +411,37 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(resp)
 }
 
-// handleAPIQueryStop interrupts the currently running query loop.
+// handleAPIQueryStop interrupts the currently running query loop. Thin
+// wrapper over the shared stopActiveQuery helper — the body parsing
+// and chat-id resolution stay here so the HTTP method gate runs first,
+// then the shared helper handles active-state lookup, agent
+// resolution, TriggerInterrupt, and subagent cancellation.
 func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
 
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
-		ws.mutex.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":            "ok",
-			"already_completed": true,
-			"timestamp":         time.Now().Unix(),
-		})
-		return
-	}
-	ws.mutex.RUnlock()
-
-	clientAgent, err := ws.getChatAgent(clientID, chatID)
-	if err != nil {
-		if isProviderConfigError(err) {
-			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
-		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	clientAgent.TriggerInterrupt()
-
-	// SP-059 Phase 1a: also cancel any running subagents. Without this,
-	// the primary's TriggerInterrupt unblocks its own loop but the
-	// subagent's ProcessQuery continues until it finishes naturally —
-	// the user sees the Stop button do nothing for tens of seconds.
-	cancelledSubagents := 0
-	if runner := clientAgent.GetSubagentRunner(); runner != nil {
-		for _, sub := range runner.GetActiveSubagents() {
-			if runner.CancelSubagent(sub.ID) {
-				cancelledSubagents++
-			}
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"accepted":            true,
-		"mode":                "stop",
-		"timestamp":           time.Now().Unix(),
-		"cancelled_subagents": cancelledSubagents,
-	})
+	ws.stopActiveQuery(w, r, clientID, chatID)
 }
 
 // handleAPIQueryStatus handles GET /api/query/status?chat_id=xxx
 // Returns whether a query is currently active for the specified chat.
 // This is a polling fallback for when the WebSocket drops and reconnects.
+// Thin wrapper over the shared chatQueryStatus helper.
 func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
 
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	active := ctx != nil && ctx.hasActiveQueryForChat(chatID)
-	ws.mutex.RUnlock()
-
+	active := ws.chatQueryStatus(clientID, chatID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"active":  active,
 		"chat_id": chatID,

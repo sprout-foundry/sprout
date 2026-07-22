@@ -75,15 +75,28 @@ func (h *readFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// ReadFile / ReadFileWithRange / handlePDF all flow through
-	// withFilesystemApproval on the resolve step; the gate reaches
-	// them through FilesystemGateFromContext.
+	// SP-127 M2: Consult Gate 1's path-tier classifier up-front so
+	// Allow paths skip the gate entirely and Deny paths return a
+	// typed error immediately — without waiting for SafeResolvePath
+	// to fail first. withFilesystemApproval stays as the fallback
+	// for the Prompt case.
 	ctx = WithFilesystemGateFromEnv(ctx, env)
 
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
+
+	// Gate 1 precheck — resolves the path and classifies it.
+	_, decision := PrecheckFileAccess(env.FileAccessClassifier, "read_file", path)
+	if decision == "deny" {
+		// A deny on read_file is not a read_only violation — reads are
+		// always allowed under read_only grants. Surface a neutral message.
+		return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", path), IsError: true},
+			fmt.Errorf("read blocked: %s is not accessible", path)
+	}
+	// "allow"  → path is workspace/tmp/allowlisted; proceed directly.
+	// "prompt" → fall through to withFilesystemApproval for the dialog.
 
 	// Parse view_range (defensive — Validate() should have been called,
 	// but we guard against panic if it wasn't or input is malformed)

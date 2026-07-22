@@ -67,6 +67,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.collapsedPastes = ir.collapsedPastes[:0]
 	ir.rawPasteBuffer = nil
 	ir.lastCharTime = time.Now()
+	ir.resetCompletionCycle()
 	// SP-048-4e: reset search state
 	ir.searchMode = false
 	ir.searchQuery = ""

@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,18 @@ import (
 
 // CodegraphCommand implements the /codegraph slash command for managing
 // the code intelligence graph: build, stats, and dead-code detection.
-type CodegraphCommand struct{}
+type CodegraphCommand struct {
+	stdout io.Writer
+}
+
+func (c *CodegraphCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *CodegraphCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 // Name returns the command name
 func (c *CodegraphCommand) Name() string {
@@ -63,11 +75,11 @@ func (c *CodegraphCommand) Execute(args []string, chatAgent *agent.Agent) error 
 	case "stats":
 		return c.runStats()
 	case "", "help":
-		fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+c.Usage())
+		fmt.Fprintln(c.out(), console.GlyphInfo.Prefix()+c.Usage())
 		return nil
 	default:
-		fmt.Fprintf(os.Stdout, "Unknown subcommand %q.\n\n", subcommand)
-		fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+c.Usage())
+		fmt.Fprintf(c.out(), "Unknown subcommand %q.\n\n", subcommand)
+		fmt.Fprintln(c.out(), console.GlyphInfo.Prefix()+c.Usage())
 		return nil
 	}
 }
@@ -97,7 +109,7 @@ func openStore() (*codegraph.SQLiteStore, error) {
 
 // runBuild performs a full re-index of all source files.
 func (c *CodegraphCommand) runBuild() error {
-	fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Building code intelligence graph...")
+	fmt.Fprintln(c.out(), console.GlyphInfo.Prefix()+"Building code intelligence graph...")
 
 	store, err := codegraph.NewStore("")
 	if err != nil {
@@ -113,14 +125,14 @@ func (c *CodegraphCommand) runBuild() error {
 	}
 
 	stats := store.Stats()
-	fmt.Fprintf(os.Stdout, "Code intelligence graph built: %d nodes, %d edges, %d files\n",
+	fmt.Fprintf(c.out(), "Code intelligence graph built: %d nodes, %d edges, %d files\n",
 		stats.NodeCount, stats.EdgeCount, stats.FileCount)
 	return nil
 }
 
 // runUpdate incrementally updates the code intelligence graph.
 func (c *CodegraphCommand) runUpdate() error {
-	fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Updating code intelligence graph...")
+	fmt.Fprintln(c.out(), console.GlyphInfo.Prefix()+"Updating code intelligence graph...")
 
 	store, err := codegraph.NewStore("")
 	if err != nil {
@@ -136,7 +148,7 @@ func (c *CodegraphCommand) runUpdate() error {
 	}
 
 	stats := store.Stats()
-	fmt.Fprintf(os.Stdout, "Code intelligence graph updated: %d nodes, %d edges, %d files\n",
+	fmt.Fprintf(c.out(), "Code intelligence graph updated: %d nodes, %d edges, %d files\n",
 		stats.NodeCount, stats.EdgeCount, stats.FileCount)
 	return nil
 }
@@ -148,19 +160,19 @@ func (c *CodegraphCommand) runStats() error {
 		return fmt.Errorf("failed to open codegraph store: %w", err)
 	}
 	if store == nil {
-		fmt.Fprintln(os.Stdout, "The code intelligence graph has not been indexed yet. Run /codegraph build to index.")
+		fmt.Fprintln(c.out(), "The code intelligence graph has not been indexed yet. Run /codegraph build to index.")
 		return nil
 	}
 	defer store.Close()
 
 	stats := store.Stats()
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, "Code Intelligence Graph")
-	fmt.Fprintln(os.Stdout, "══════════════════════════════")
-	fmt.Fprintf(os.Stdout, "  Nodes: %d\n", stats.NodeCount)
-	fmt.Fprintf(os.Stdout, "  Edges: %d\n", stats.EdgeCount)
-	fmt.Fprintf(os.Stdout, "  Files: %d\n", stats.FileCount)
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(c.out())
+	fmt.Fprintln(c.out(), "Code Intelligence Graph")
+	fmt.Fprintln(c.out(), "══════════════════════════════")
+	fmt.Fprintf(c.out(), "  Nodes: %d\n", stats.NodeCount)
+	fmt.Fprintf(c.out(), "  Edges: %d\n", stats.EdgeCount)
+	fmt.Fprintf(c.out(), "  Files: %d\n", stats.FileCount)
+	fmt.Fprintln(c.out())
 	return nil
 }
 

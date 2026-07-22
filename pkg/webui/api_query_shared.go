@@ -292,16 +292,17 @@ func (ws *ReactWebServer) runChatQuery(
 	// Writing the error from inside the goroutine after the parent has
 	// already returned 202 causes a double-write on the ResponseWriter.
 	var slashCmdSafe bool
+	var slashRegistry *agent_commands.CommandRegistry
 	if opts.AllowSlashCommands {
-		registry := agent_commands.NewCommandRegistry()
-		if registry.IsSlashCommand(query) {
+		slashRegistry = agent_commands.NewCommandRegistry()
+		if slashRegistry.IsSlashCommand(query) {
 			parts := strings.Fields(strings.TrimSpace(query))
 			var headCmd string
 			if len(parts) > 0 {
 				headCmd = strings.TrimPrefix(parts[0], "/")
 			}
 			if headCmd != "" {
-				if cmd, ok := registry.GetCommand(headCmd); ok {
+				if cmd, ok := slashRegistry.GetCommand(headCmd); ok {
 					if sc, ok := cmd.(agent_commands.SteerCapable); ok && sc.SafeDuringSteer() {
 						slashCmdSafe = true
 					}
@@ -346,7 +347,8 @@ func (ws *ReactWebServer) runChatQuery(
 		// Slash-command dispatch (SP-114 Phase 2). The safety gate was
 		// already validated synchronously above (slashCmdSafe). Here we
 		// only enter this branch for commands that passed that check.
-		registry := agent_commands.NewCommandRegistry()
+		// Reuse the same registry instance created during validation.
+		registry := slashRegistry
 		if slashCmdSafe {
 			queryEventData := events.QueryStartedEvent(
 				query,

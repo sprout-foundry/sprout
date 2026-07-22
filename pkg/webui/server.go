@@ -6,6 +6,7 @@ package webui
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -29,6 +30,7 @@ import (
 
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
+	logger                          *slog.Logger
 	agent                           *agent.Agent
 	eventBus                        *events.EventBus
 	daemonRoot                      string
@@ -262,6 +264,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	}
 
 	return &ReactWebServer{
+		logger:            slog.Default().With("component", "webui"),
 		agent:             agent,
 		eventBus:          eventBus,
 		daemonRoot:        daemonRoot,

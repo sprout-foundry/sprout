@@ -9,6 +9,8 @@ import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import type { QueryProgress } from '../types/app';
+import { useCommandOutput } from '../hooks/useCommandOutput';
+import CommandOutputPanel from './CommandOutputPanel';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, Message, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
@@ -63,6 +65,15 @@ function Chat(props: ChatProps): JSX.Element {
   const [isRewinding, setIsRewinding] = useState(false);
   const [indexingError, setIndexingError] = useState<string | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [commandOutputPanelVisible, setCommandOutputPanelVisible] = useState(false);
+  const [commandOutputError, setCommandOutputError] = useState<Error | null>(null);
+
+  // SP-114 Phase 2d: subscribe to streaming command_output events so the
+  // CommandOutputPanel can render chunks as they arrive. The hook filters
+  // by chat_id internally, so a multi-tab user only sees their own chat's
+  // command output here. See useCommandOutput for the wire shape and the
+  // v1 (latest-command-only) simplification.
+  const commandOutputState = useCommandOutput(chatId);
 
   const sessionId = chatId ?? '';
 
@@ -299,26 +310,30 @@ function Chat(props: ChatProps): JSX.Element {
   // `/`-prefix requirement is enforced server-side; we just delegate errors
   // verbatim so the UX is consistent with other command-surface failures.
   //
-  // For now we surface the result via a notification. Long output (> ~500
-  // chars) is truncated with an ellipsis — full streaming via WebSocket is a
-  // Phase 2c follow-up.
+  // SP-114 Phase 2d: also opens the streaming CommandOutputPanel. On HTTP
+  // success with non-empty output (HTTP returns the aggregated transcript
+  // even when WS chunks also arrive), show the panel so users can follow
+  // the live stream. On HTTP failure, surface the error inline on the
+  // panel rather than swallowing it. The notification toast path stays
+  // intact — both run side-by-side.
   const handleSendCommand = useCallback(
     async (command: string) => {
+      setCommandOutputError(null);
+      setCommandOutputPanelVisible(true);
       try {
         const result = await executeCommand(clientFetch, command, chatId);
         const output = result.output || '(no output)';
         const preview = output.length > 500 ? `${output.slice(0, 500)}\n…` : output;
         if (result.error) {
+          setCommandOutputError(new Error(result.error));
           notificationBus.notify('error', `/${result.command}`, result.error);
         } else {
           notificationBus.notify('success', `/${result.command}`, preview);
         }
       } catch (e) {
-        notificationBus.notify(
-          'error',
-          'Command',
-          e instanceof Error ? e.message : String(e),
-        );
+        const err = e instanceof Error ? e : new Error(String(e));
+        setCommandOutputError(err);
+        notificationBus.notify('error', 'Command', err.message);
       }
     },
     [chatId],
@@ -394,6 +409,25 @@ function Chat(props: ChatProps): JSX.Element {
           </div>
         )}
       </div>
+
+      {/* SP-114 Phase 2d: streaming command output panel. Sits between
+          the chat body and the input so it stays visible without
+          blocking either. The Panel handles its own visibility and
+          auto-hide; we feed it `commandOutputPanelVisible` to gate
+          visibility from Chat-side state (e.g. user-initiated toggle)
+          and let the hook's state drive content.
+          Local commandOutputError is merged in: HTTP-level errors
+          (network, 4xx/5xx, command_not_safe) flow through the
+          useCallback error path above, not through the WS stream. */}
+      {commandOutputPanelVisible ? (
+        <CommandOutputPanel
+          state={{
+            ...commandOutputState,
+            error: commandOutputError ?? commandOutputState.error,
+          }}
+          onDismiss={() => setCommandOutputPanelVisible(false)}
+        />
+      ) : null}
 
       <div className="input-container" ref={inputContainerRef}>
         <ToolTimelineBar toolExecutions={filteredToolExecutions} />

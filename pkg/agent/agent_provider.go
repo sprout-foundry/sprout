@@ -99,6 +99,9 @@ func (a *Agent) SelectProvider() error {
 	client.SetDebug(a.debug)
 	a.setClient(client, newProvider)
 
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
+
 	return nil
 }
 

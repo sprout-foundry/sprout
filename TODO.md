@@ -1497,4 +1497,111 @@ Phases 2–4 together are half a day; tests run alongside each phase.
 **Hard constraint**: schema + validation (1a/1b) must land before
 enforcement (1e/1f), which must land before CLI/WebUI display (2a/2b).
 
+## SP-114 Phase 2c: Long-Output WebSocket Streaming for `/api/command/execute`
+
+**Spec:** `roadmap/SP-114-unify-command-execution.md` §2c
+**Status:** 🔵 Scoping — design complete, awaiting approval
+**Created:** 2026-07-21
+
+The `POST /api/command/execute` endpoint (Phase 2 §2a, shipped 2026-07-17)
+blocks the request until the command finishes, then returns the full
+captured stdout as one string in `{output: "..."}`. For commands like
+`/changes` on a large repo or `/codegraph dead` across many symbols,
+this (a) holds the HTTP request open for many seconds with no
+progress feedback, and (b) returns a huge response body that the
+WebUI can only render all-at-once at the end.
+
+**Goal:** Stream stdout chunks to the WebUI in real-time over the chat
+session's existing WebSocket connection, while the HTTP response still
+returns the aggregated output for non-WS callers (backwards-compatible).
+
+### Plumbing
+
+| Layer | File | Change |
+|-------|------|--------|
+| Server | `pkg/webui/api_query.go` | Add streaming variant of `executeSafeSteerCommand`: new parameter `onChunk func([]byte)` (or sibling function). When non-nil, write each stdout chunk to `onChunk` *and* append to the `strings.Builder`. When nil, current buffering behavior unchanged (backwards-compatible — `/api/query/steer` callers unaffected). |
+| Server | `pkg/webui/api_command.go` | `handleAPICommandExecute` resolves the chat session via `ws.sessionForClient(...)`, passes `onChunk` that emits a typed WS event `{type: "command_output", command: "/info", chat_id: "…", chunk: "<utf8>", is_final: false}`. After command completes, emit `is_final: true`. HTTP response body still has `{output: "...", error: ""}` (backwards-compatible). |
+| Server | `pkg/webui/api_command.go` | Optional: add `Accept: text/event-stream` support for SSE-mode callers (deferred — WebSocket is the primary path). |
+| WebUI | `webui/src/components/CommandOutputPanel.tsx` (new) | Live-streaming output panel: subscribes to `command_output` events on the chat's WS connection, appends chunks, shows spinner while `is_final: false`, finalizes on `is_final: true`. Token-aware: applies the design-system tokens (no raw hex), `:focus-visible`, themable. |
+| WebUI | `webui/src/hooks/useCommandOutput.ts` (new) | Custom hook: `useCommandOutput(chatId)` returns `{output: string, isRunning: boolean, error: Error \| null}`; manages the subscription lifecycle and cleans up on unmount. |
+
+### UTF-8 safety
+
+Chunks must not split a multi-byte rune. Buffer at the byte→rune
+boundary: keep an internal `pending []byte`; when a chunk arrives,
+flush all complete runes to the panel, retain the last incomplete
+rune's bytes for the next chunk. Test cases: ASCII chunk (single
+flush), chunk ending mid-rune (buffered, flushed on next chunk),
+chunk containing only a partial rune (held indefinitely until next
+chunk completes it).
+
+### Backpressure
+
+If the WS send blocks (slow client, network stall), the command
+should not hang. Strategy: bounded ring buffer (e.g. 64KB) per
+chat. If the buffer is full when a chunk arrives, drop the oldest
+chunk and emit a single `{type: "command_output_dropped", ...}`
+warning event. The HTTP-layer aggregated output is unaffected
+(it still gets the full stdout).
+
+### Acceptance
+
+- `POST /api/command/execute` with a command that produces 1MB of
+  output completes in <2s wall-clock (the command runs once; the
+  response carries the full output as today, but chunks stream in
+  real-time over WS).
+- Single test using a mock command that writes 100 chunks of 1KB
+  each with `time.Sleep(10ms)` between writes: assert that WS
+  receives all 100 chunks (in order, complete UTF-8), and HTTP
+  response receives the full aggregated output.
+- A command that panics mid-execution: WS receives chunks up to
+  the panic, HTTP response has `error: "command panicked: ..."`.
+- A command that produces zero output: WS receives `is_final: true`
+  immediately with empty `chunk`; HTTP response has `output: ""`.
+- A chunk that splits a multi-byte rune: no `�` replacement char in
+  the rendered output (UTF-8 boundary respected).
+- WS subscriber disconnected mid-command: command still completes
+  normally; chunks are dropped silently (no backpressure to a
+  dead subscriber).
+- Existing `/api/query/steer` call sites unchanged (they don't
+  pass `onChunk`, so the buffering behavior is identical).
+
+### Non-goals (deferred)
+
+- **Cancellation:** commands don't take a context today. If the
+  HTTP client disconnects, the command continues running until
+  completion. Cancellation is a separate, larger change to the
+  `Command` interface.
+- **SSE support:** the `Accept: text/event-stream` route is
+  omitted from v1. WebSocket is the only streaming path.
+- **Command-level progress bars:** commands report freeform text
+  only. Structured progress (e.g. "scanning 50/200 files") is a
+  future `CommandProgress` interface addition.
+- **Per-chat rate limiting:** the ring buffer protects against
+  slow consumers; there's no upper bound on command output size
+  itself (commands can still produce arbitrary output).
+
+### Effort estimate
+
+| Work item | Files | Effort |
+|-----------|-------|--------|
+| Streaming variant of `executeSafeSteerCommand` | `pkg/webui/api_query.go` | ~30 min |
+| Typed WS event + `chat_session` broadcast | `pkg/webui/api_command.go` | ~1 hr |
+| UTF-8 boundary handling | `pkg/webui/api_query.go` | ~30 min |
+| Bounded ring buffer + drop-on-overflow | `pkg/webui/api_command.go` | ~30 min |
+| `useCommandOutput` hook + `CommandOutputPanel` component | `webui/src/hooks/useCommandOutput.ts`, `webui/src/components/CommandOutputPanel.tsx` | ~2 hrs |
+| Tests (UTF-8 boundary, panic mid-exec, zero output, slow consumer) | `pkg/webui/api_command_test.go`, `webui/src/components/CommandOutputPanel.test.tsx` | ~1.5 hrs |
+| `make build-all` + targeted regression on `/api/query/steer` | — | ~30 min |
+| **Total** | | **~6.5 hrs** |
+
+### Phasing
+
+If the full scope is too much for one pass, the natural cut line is
+**server-side streaming first (rows 1-4 of plumbing table, ~3 hrs)** —
+ships the streaming capability but the WebUI still awaits the HTTP
+response and renders all-at-once. The WebUI-side hook + component
+(row 5) is a follow-up that wires the consumer-side.
+
+---
+
 

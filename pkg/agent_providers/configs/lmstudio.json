@@ -10,7 +10,7 @@
   },
   "defaults": {
     "max_tokens": -1,
-    "model": "qwen3-coder:30b",
+    "model": "",
     "temperature": 0.7,
     "top_p": 1
   },
@@ -22,41 +22,8 @@
     "reasoning_content_field": ""
   },
   "models": {
-    "available_models": [],
     "default_context_limit": 32768,
-    "default_model": "qwen3-coder:30b",
-    "model_overrides": {
-      "llama-3-70b-instruct": 8192,
-      "llama-3.1-70b-instruct": 128072,
-      "mistral-7b-instruct": 32768,
-      "qwen2.5-coder-32b-instruct": 32768,
-      "qwen3-coder:30b": 128768,
-      "yi-34b-chat": 4096
-    },
-    "pattern_overrides": [
-      {
-        "context_limit": 128072,
-        "pattern": ".*llama-3\\.1.*"
-      },
-      {
-        "context_limit": 8192,
-        "pattern": ".*llama-3.*"
-      },
-      {
-        "context_limit": 32768,
-        "pattern": ".*qwen2\\.5.*"
-      },
-      {
-        "context_limit": 16384,
-        "pattern": ".*codellama.*"
-      },
-      {
-        "context_limit": 32768,
-        "pattern": ".*mistral.*"
-      }
-    ],
-    "supports_vision": true,
-    "vision_model": "gemma-3-12b-it-qat"
+    "supports_vision": true
   },
   "name": "lmstudio",
   "retry": {

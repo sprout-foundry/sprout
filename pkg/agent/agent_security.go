@@ -138,6 +138,66 @@ func (a *Agent) IsSecurityBypassApproved() bool {
 	return a.security.IsSecurityBypassApproved()
 }
 
+// IsUnderWorkspaceRoot reports whether absPath is at or under the agent's
+// workspace root after symlink resolution. Symlink-evaluated on both sides
+// to prevent a workspace symlink pointing outside from bypassing the gate.
+// Returns false when the agent or workspace root is unset (nil-safe).
+func (a *Agent) IsUnderWorkspaceRoot(absPath string) bool {
+	if a == nil {
+		return false
+	}
+	if absPath == "" {
+		return false
+	}
+	workspaceRoot := a.currentWorkspaceRoot()
+	if workspaceRoot == "" {
+		return false
+	}
+	// Evaluate symlinks on both sides for symlink-escape safety.
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		// Fall back to lexical check when symlink resolution fails
+		// (e.g. dangling symlink). Use cleaned paths to avoid traversal
+		// edge cases.
+		resolvedPath = filepath.Clean(absPath)
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(workspaceRoot)
+	if err != nil {
+		resolvedRoot = filepath.Clean(workspaceRoot)
+	}
+	return isUnderPrefix(resolvedPath, resolvedRoot)
+}
+
+// IsReadOnlyAllowedFolder reports whether absPath sits under a
+// session-allowlisted folder whose declared mode is "read_only".
+// Used by the Gate 1 path-tier classifier to deny write attempts
+// against read_only allowlist entries without consulting a prompt.
+// Returns false when the security submanager is unset or when the
+// matching folder has no declared mode (defaults to read-write).
+func (a *Agent) IsReadOnlyAllowedFolder(absPath string) bool {
+	if a == nil || a.security == nil {
+		return false
+	}
+	if absPath == "" {
+		return false
+	}
+	// Snapshot the modes map so we don't hold the lock.
+	modes := a.SnapshotSessionAllowedFolderModes()
+	if modes == nil {
+		return false
+	}
+	cleanPath := filepath.Clean(absPath)
+	for folder, mode := range modes {
+		if mode != "read_only" {
+			continue
+		}
+		if isUnderPrefix(cleanPath, filepath.Clean(folder)) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsFolderSessionAllowed reports whether absPath sits under a folder
 // the user has allowlisted via "Allow this folder for the rest of the
 // session" on the filesystem approval dialog. Returns false when the

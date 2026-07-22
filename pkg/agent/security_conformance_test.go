@@ -278,6 +278,72 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessPrompt,
 			wantAdapterAllow: false,
 		},
+		// --- M3.4: tool-specific deny cases (conformance pins) ---
+		// Each write tool must return FileAccessDeny when targeting a
+		// read_only declared folder. These cases were tested at the handler
+		// level (precheck_test.go) but are also pinned here so a future
+		// refactor that breaks the classifier won't silently widen access.
+		{
+			name:           "edit_file write denied on read_only folder",
+			filePath:       filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			mode:           "write",
+			setup: func(a *Agent) {
+				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
+				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
+			},
+			wantClassifier: FileAccessDeny,
+			wantAdapterAllow: false,
+		},
+		{
+			name:           "write_structured_file write denied on read_only folder",
+			filePath:       filepath.Join(allowlistReadOnlyDir, "config.json"),
+			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "config.json"),
+			mode:           "write",
+			setup: func(a *Agent) {
+				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
+				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
+			},
+			wantClassifier: FileAccessDeny,
+			wantAdapterAllow: false,
+		},
+		{
+			name:           "patch_structured_file write denied on read_only folder",
+			filePath:       filepath.Join(allowlistReadOnlyDir, "config.json"),
+			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "config.json"),
+			mode:           "write",
+			setup: func(a *Agent) {
+				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
+				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
+			},
+			wantClassifier: FileAccessDeny,
+			wantAdapterAllow: false,
+		},
+		// --- M3.4: each tool on sensitive path prompts ---
+		{
+			name:           "edit_file sensitive /etc/shadow prompts",
+			filePath:       "/etc/shadow",
+			resolvedPath:   "/etc/shadow",
+			mode:           "write",
+			wantClassifier: FileAccessPrompt,
+			wantAdapterAllow: false,
+		},
+		{
+			name:           "write_structured_file sensitive /etc/shadow prompts",
+			filePath:       "/etc/shadow",
+			resolvedPath:   "/etc/shadow",
+			mode:           "write",
+			wantClassifier: FileAccessPrompt,
+			wantAdapterAllow: false,
+		},
+		{
+			name:           "patch_structured_file sensitive /etc/shadow prompts",
+			filePath:       "/etc/shadow",
+			resolvedPath:   "/etc/shadow",
+			mode:           "write",
+			wantClassifier: FileAccessPrompt,
+			wantAdapterAllow: false,
+		},
 		// --- Test #4: list_directory on workspace ---
 		{
 			name:             "list_directory workspace root",

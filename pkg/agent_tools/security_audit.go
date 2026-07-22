@@ -69,8 +69,14 @@ func (l *AuditLogger) Log(entry AuditEntry) error {
 
 // LogEntry is an alias for Log, named for call-site clarity.
 // Nil-receiver safe via Log's internal nil guard.
-func (l *AuditLogger) LogEntry(entry AuditEntry) error {
-	return l.Log(entry)
+// Accepts any type to allow flexible implementations (e.g., the filesystem
+// package uses filesystem.AuditEntry which has the same JSON structure).
+func (l *AuditLogger) LogEntry(entry any) error {
+	ae, ok := entry.(AuditEntry)
+	if !ok {
+		return fmt.Errorf("unsupported entry type: %T", entry)
+	}
+	return l.Log(ae)
 }
 
 // Close closes the underlying log file.

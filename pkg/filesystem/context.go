@@ -8,13 +8,23 @@ import (
 type workspaceRootContextKey string
 type effectiveCwdContextKey string
 type sessionAllowedFoldersContextKey string
+type auditLoggerContextKey string
 
 const (
-	workspaceRootContextKeyValue           workspaceRootContextKey = "workspace_root"
-	securityBypassContextKeyValue          workspaceRootContextKey = "security_bypass"
-	effectiveCwdContextKeyValue           effectiveCwdContextKey = "effective_cwd"
-	sessionAllowedFoldersContextKeyValue  sessionAllowedFoldersContextKey = "session_allowed_folders"
+	workspaceRootContextKeyValue          workspaceRootContextKey = "workspace_root"
+	securityBypassContextKeyValue         workspaceRootContextKey = "security_bypass"
+	effectiveCwdContextKeyValue          effectiveCwdContextKey = "effective_cwd"
+	sessionAllowedFoldersContextKeyValue sessionAllowedFoldersContextKey = "session_allowed_folders"
+	auditLoggerContextKeyValue           auditLoggerContextKey = "audit_logger"
 )
+
+// AuditLogger is an interface for security audit logging.
+// This allows the filesystem package to accept any audit logger implementation
+// (e.g., *tools.AuditLogger from pkg/agent_tools) without importing that package,
+// avoiding import cycles with packages that depend on filesystem.
+type AuditLogger interface {
+	LogEntry(entry any) error
+}
 
 // WithWorkspaceRoot stores an explicit workspace root on the context so file and
 // process operations do not depend on the process-global cwd.
@@ -119,4 +129,23 @@ func WithAgentContext(ctx context.Context, effectiveCwd string, sessionFolders [
 	ctx = WithEffectiveCwd(ctx, effectiveCwd)
 	ctx = WithSessionAllowedFolders(ctx, sessionFolders)
 	return ctx
+}
+
+// WithAuditLogger stores an audit logger on the context for filesystem gate
+// decision logging. This is used by SP-127 Phase 2.6 to emit audit entries
+// for filesystem path resolution decisions.
+func WithAuditLogger(ctx context.Context, logger AuditLogger) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, auditLoggerContextKeyValue, logger)
+}
+
+// AuditLoggerFromContext returns the audit logger carried on ctx, if any.
+func AuditLoggerFromContext(ctx context.Context) AuditLogger {
+	if ctx == nil {
+		return nil
+	}
+	logger, _ := ctx.Value(auditLoggerContextKeyValue).(AuditLogger)
+	return logger
 }

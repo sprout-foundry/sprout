@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -91,6 +92,19 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass withFilesystemApproval entirely.
+	_, decision := PrecheckFileAccess(env.FileAccessClassifier, "write_structured_file", path)
+	if decision == "deny" {
+		return ToolResult{Output: fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
+			fmt.Errorf("write blocked: %s is declared read_only", path)
+	}
+	if decision == "allow" {
+		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.
+		ctx = filesystem.WithSecurityBypass(ctx)
 	}
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))

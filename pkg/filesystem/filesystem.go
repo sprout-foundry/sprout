@@ -274,6 +274,10 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 
 	// If the relative path starts with "..", it's outside the working directory
 	if strings.HasPrefix(relPath, "..") {
+		// Check if path is under effective cwd or session-allowlisted folders
+		if isUnderAgentContext(ctx, resolvedAbs) {
+			return resolvedAbs, nil
+		}
 		if SecurityBypassEnabled(ctx) {
 			// Security bypass enabled - allow access outside working directory
 			return resolvedAbs, nil
@@ -283,6 +287,44 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 	}
 
 	return resolvedAbs, nil
+}
+
+// isUnderAgentContext checks if the resolved path is under the agent's effective cwd
+// or any session-allowlisted folder. It resolves all candidate roots through symlinks
+// to prevent symlink-escape attacks.
+func isUnderAgentContext(ctx context.Context, resolvedPath string) bool {
+	// Get effective cwd from context
+	effectiveCwd := AgentEffectiveCwdFromContext(ctx)
+	if effectiveCwd != "" {
+		resolvedCwd, err := evalSymlinksWithTimeout(ctx, effectiveCwd)
+		if err == nil {
+			if isUnderPrefix(resolvedPath, resolvedCwd) {
+				return true
+			}
+		}
+	}
+
+	// Get session-allowlisted folders from context
+	sessionFolders := SessionAllowedFoldersFromContext(ctx)
+	for _, folder := range sessionFolders {
+		resolvedFolder, err := evalSymlinksWithTimeout(ctx, folder)
+		if err == nil {
+			if isUnderPrefix(resolvedPath, resolvedFolder) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isUnderPrefix reports whether path is equal to prefix or is a proper subdirectory of it.
+// Both paths must already be cleaned and, for symlink safety, resolved.
+func isUnderPrefix(path, prefix string) bool {
+	if path == prefix {
+		return true
+	}
+	return strings.HasPrefix(path, prefix+string(filepath.Separator))
 }
 
 // isInTmpPath checks if a path is within the OS temp directory (os.TempDir()).
@@ -415,14 +457,14 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 		return "", fmt.Errorf("parent directory search exceeded maximum depth for path: %s", cleanPath)
 	}
 
-	// Resolve symlinks in the parent directory path
-	resolvedParent, err := filepath.EvalSymlinks(parentDir)
+	// Resolve symlinks in the parent directory path with timeout guard
+	resolvedParent, err := evalSymlinksWithTimeout(ctx, parentDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve parent directory symlink: %w", err)
 	}
 
 	// Also resolve CWD in case it's a symlink
-	resolvedCwd, err := filepath.EvalSymlinks(cwdAbs)
+	resolvedCwd, err := evalSymlinksWithTimeout(ctx, cwdAbs)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve cwd symlink: %w", err)
 	}
@@ -435,12 +477,50 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 
 	// If the relative path starts with "..", it's outside the working directory
 	if strings.HasPrefix(relPath, "..") {
-		if SecurityBypassEnabled(ctx) {
+		// Check if path is under effective cwd or session-allowlisted folders
+		if isUnderAgentContext(ctx, absPath) {
+			// Path is allowed via effective cwd or session folders
+		} else if SecurityBypassEnabled(ctx) {
 			// Security bypass enabled - allow writing outside working directory
 			return absPath, nil
+		} else {
+			// Return custom error that can be caught for user confirmation
+			return "", fmt.Errorf("%w: attempt to write file outside working directory: %s (parent resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedParent)
 		}
-		// Return custom error that can be caught for user confirmation
-		return "", fmt.Errorf("%w: attempt to write file outside working directory: %s (parent resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedParent)
+	}
+
+	// Phase 2.5: Symlink re-validation for existing files
+	// If the target file exists, re-resolve it through symlinks and verify
+	// the final target is under an allowed root. This catches the case where
+	// a benign-looking file in workspace is actually a symlink to /etc/passwd.
+	if _, statErr := os.Stat(absPath); statErr == nil {
+		// File exists - re-resolve through symlinks to check the final target
+		resolvedTarget, err := evalSymlinksWithTimeout(ctx, absPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve symlink target: %w", err)
+		}
+
+		// If the resolved target is different from absPath, it's a symlink
+		if resolvedTarget != absPath {
+			// Check /tmp special case FIRST - /tmp is always allowed for writes
+			if isInTmpPath(resolvedTarget) {
+				return resolvedTarget, nil
+			}
+
+			// Check if the resolved target is under an allowed root
+			targetRelPath, err := filepath.Rel(resolvedCwd, resolvedTarget)
+			if err != nil {
+				return "", fmt.Errorf("failed to determine symlink target relative path: %w", err)
+			}
+
+			// Also check against effective cwd and session folders
+			if strings.HasPrefix(targetRelPath, "..") && !isUnderAgentContext(ctx, resolvedTarget) {
+				return "", fmt.Errorf("%w: symlink target is outside allowed paths: %s (resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedTarget)
+			}
+
+			// The resolved target is under an allowed root - return it
+			return resolvedTarget, nil
+		}
 	}
 
 	return absPath, nil

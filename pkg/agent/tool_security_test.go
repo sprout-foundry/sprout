@@ -314,7 +314,7 @@ func TestStaticGateAutoApprove_UnsafeShellModeNotTriggered(t *testing.T) {
 		Reasoning:    "Test",
 	}
 
-	if a.staticGateAutoApprove(secResult) {
+	if a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should NOT trigger when only unsafe shell mode is set")
 	}
 }
@@ -332,7 +332,7 @@ func TestStaticGateAutoApprove_UnsafeModeTriggers(t *testing.T) {
 		IsHardBlock:  false,
 	}
 
-	if !a.staticGateAutoApprove(secResult) {
+	if !a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should trigger when unsafe mode is set")
 	}
 }
@@ -352,7 +352,7 @@ func TestStaticGateAutoApprove_HardBlockNeverAutoApproved(t *testing.T) {
 
 	// --unsafe (full) DOES return true from staticGateAutoApprove
 	// regardless of IsHardBlock — it's a full bypass.
-	if !a.staticGateAutoApprove(secResult) {
+	if !a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove with unsafe mode returns true even for hard blocks")
 	}
 
@@ -375,7 +375,7 @@ func TestStaticGateAutoApprove_NilAgent(t *testing.T) {
 		IsHardBlock: false,
 	}
 
-	if a.staticGateAutoApprove(secResult) {
+	if a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove with nil agent should return false")
 	}
 }
@@ -394,13 +394,13 @@ func TestStaticGateAutoApprove_ElevatedSessionNonHardBlock(t *testing.T) {
 		IsHardBlock: false,
 	}
 
-	if !a.staticGateAutoApprove(secResult) {
+	if !a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should return true for elevated session with non-hard-block")
 	}
 
 	// Hard block should still not auto-approve under elevation.
 	secResult.IsHardBlock = true
-	if a.staticGateAutoApprove(secResult) {
+	if a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should NOT auto-approve hard blocks under elevation")
 	}
 }

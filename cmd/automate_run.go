@@ -303,6 +303,7 @@ func printWorkflowOverviewFromSummary(summary *automate.Summary, name string) er
 
 	printPriceCard(summary)
 	printBudgetLine(summary)
+	printAllowedPaths(summary)
 
 	// Surface auto-approval explicitly so a reader of the JSON sees the
 	// security implication of requires_approval: false.
@@ -319,128 +320,17 @@ func printWorkflowOverviewFromSummary(summary *automate.Summary, name string) er
 
 	fmt.Println()
 	console.GlyphWarning.Printf("Heads up: workflows run autonomously in the background and consume tokens until they finish or are stopped.")
+	for _, w := range summary.Warnings {
+		fmt.Println()
+		console.GlyphWarning.Printf("%s", w)
+	}
 	fmt.Println()
 	return nil
 }
 
-// printPriceCard renders the provider/model rates for the initial agent and
-// each subagent persona that will run. It walks pricing for every model
-// named in the workflow so the user sees the actual rate card before
-// approving the run. Unknown rates are shown explicitly as "unknown" — we
-// never fabricate a price. Followed by a footer when any row is incomplete.
-func printPriceCard(summary *automate.Summary) {
-	if summary == nil || summary.Initial == nil {
-		return
-	}
-
-	type row struct {
-		Role        string
-		Persona     string
-		Provider    string
-		Model       string
-		InputUsd    float64
-		OutputUsd   float64
-		HasPricing  bool
-		IsInherited bool
-	}
-
-	rows := []row{}
-	primaryProvider := summary.Initial.Provider
-	primaryModel := summary.Initial.Model
-	if primaryProvider != "" && primaryModel != "" {
-		p := lookupModelPricing(primaryProvider, primaryModel)
-		rows = append(rows, row{
-			Role:       "Initial",
-			Persona:    displayOrDefault(summary.Initial.Persona, "default"),
-			Provider:   primaryProvider,
-			Model:      primaryModel,
-			InputUsd:   p.InputUsdPerM,
-			OutputUsd:  p.OutputUsdPerM,
-			HasPricing: p.HasPricing,
-		})
-	}
-
-	for _, ov := range summary.Initial.SubagentOverrides {
-		provider := ov.Provider
-		model := ov.Model
-		inherited := false
-		if provider == "" {
-			provider = primaryProvider
-			inherited = true
-		}
-		if model == "" {
-			model = primaryModel
-			inherited = true
-		}
-		if provider == "" || model == "" {
-			rows = append(rows, row{
-				Role:        "Subagent",
-				Persona:     ov.Persona,
-				Provider:    displayOrDefault(provider, "(inherit)"),
-				Model:       displayOrDefault(model, "(inherit)"),
-				IsInherited: inherited,
-			})
-			continue
-		}
-		p := lookupModelPricing(provider, model)
-		rows = append(rows, row{
-			Role:        "Subagent",
-			Persona:     ov.Persona,
-			Provider:    provider,
-			Model:       model,
-			InputUsd:    p.InputUsdPerM,
-			OutputUsd:   p.OutputUsdPerM,
-			HasPricing:  p.HasPricing,
-			IsInherited: inherited,
-		})
-	}
-
-	if len(rows) == 0 {
-		return
-	}
-
-	fmt.Println()
-	fmt.Println("Models that will run:")
-	missing := 0
-	for _, r := range rows {
-		priceCol := "      pricing: unknown"
-		if r.HasPricing {
-			priceCol = fmt.Sprintf("$%6.2f / $%6.2f per Mtok", r.InputUsd, r.OutputUsd)
-		} else {
-			missing++
-		}
-		inheritedTag := ""
-		if r.IsInherited {
-			inheritedTag = " (inherited)"
-		}
-		fmt.Printf("  %-9s %-20s %-13s %-30s %s%s\n",
-			r.Role, r.Persona, r.Provider, r.Model, priceCol, inheritedTag,
-		)
-	}
-	if missing > 0 {
-		console.GlyphWarning.Printf("Pricing data incomplete for %d of %d models — actual cost may exceed what's shown.",
-			missing, len(rows))
-	}
-}
-
-// printBudgetLine renders the configured USD budget if set, including warn
-// thresholds expressed in dollars (not just fractions) so the user sees the
-// concrete numbers they'll be billed against.
-func printBudgetLine(summary *automate.Summary) {
-	if summary == nil || summary.Budget == nil || summary.Budget.USD <= 0 {
-		return
-	}
-	parts := []string{fmt.Sprintf("$%.2f USD cap", summary.Budget.USD)}
-	if len(summary.Budget.WarnAt) > 0 {
-		dollars := make([]string, 0, len(summary.Budget.WarnAt))
-		for _, t := range summary.Budget.WarnAt {
-			dollars = append(dollars, fmt.Sprintf("$%.2f", t*summary.Budget.USD))
-		}
-		parts = append(parts, "warn at "+strings.Join(dollars, ", "))
-	}
-	fmt.Println()
-	fmt.Printf("Budget: %s\n", strings.Join(parts, ", "))
-}
+// printPriceCard, printBudgetLine, printAllowedPaths, displayOrDefault, and
+// stepDetail live in automate_run_overview_helpers.go — split out so this
+// file stays under the AGENTS.md 500-line guideline.
 
 // confirmStartAutomation asks the user to explicitly approve starting the run.
 // This is intent validation, not security — long-running, token-eating
@@ -457,37 +347,3 @@ func confirmStartAutomation(name string) bool {
 	return response == "y" || response == "yes"
 }
 
-func displayOrDefault(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
-	}
-	return value
-}
-
-func stepDetail(step automate.StepSummary) string {
-	switch step.Kind {
-	case "shell":
-		if step.CommandPreview != "" {
-			return step.CommandPreview
-		}
-		return "(shell command)"
-	default:
-		details := []string{}
-		if step.Persona != "" {
-			details = append(details, "persona="+step.Persona)
-		}
-		if step.Provider != "" {
-			details = append(details, "provider="+step.Provider)
-		}
-		if step.Model != "" {
-			details = append(details, "model="+step.Model)
-		}
-		if step.When != "" && step.When != "always" {
-			details = append(details, "when="+step.When)
-		}
-		if len(details) == 0 {
-			return "(inference)"
-		}
-		return strings.Join(details, " ")
-	}
-}

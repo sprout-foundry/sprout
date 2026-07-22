@@ -45,74 +45,6 @@ func ContextWithSproutDir(ctx context.Context, dir string) context.Context {
 	return context.WithValue(ctx, automateSproutDirKey{}, dir)
 }
 
-// completionMessageTailLimit is the maximum number of output bytes included
-// in an automate completion injection message when the workflow fails.
-const completionMessageTailLimit = 2048
-
-// buildAutomateCompletionMessage builds the self-contained completion injection
-// message for an automate workflow that has finished. It is extracted from the
-// proc.Done() goroutine in handleRunAutomate so it can be unit-tested without
-// spinning up real background processes.
-func buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status string, exitCode int, outputPath string) string {
-	// On failure, include the output tail for diagnostics.
-	if exitCode != 0 {
-		tail := readOutputTail(outputPath, completionMessageTailLimit)
-		if tail != "" {
-			return fmt.Sprintf(
-				"[automate] Background workflow completed:\n"+
-					"  Workflow: %s\n"+
-					"  Description: %s\n"+
-					"  Session: %s\n"+
-					"  Status: %s (exit code %d)\n"+
-					"  Output (last 2KB):\n%s",
-				wfName, wfDesc, sessionID, status, exitCode, tail,
-			)
-		}
-	}
-	return fmt.Sprintf(
-		"[automate] Background workflow completed:\n"+
-			"  Workflow: %s\n"+
-			"  Description: %s\n"+
-			"  Session: %s\n"+
-			"  Status: %s (exit code %d)",
-		wfName, wfDesc, sessionID, status, exitCode,
-	)
-}
-
-// buildInProcessCompletionMessage builds the completion message for the
-// in-process workflow runner. It includes the item counts from the result
-// and any error information.
-func buildInProcessCompletionMessage(wfName, wfDesc, sessionID, status string, result *WorkflowResult) string {
-	if result == nil {
-		return fmt.Sprintf(
-			"[automate] In-process workflow completed:\n"+
-				"  Workflow: %s\n"+
-				"  Description: %s\n"+
-				"  Session: %s\n"+
-				"  Status: %s",
-			wfName, wfDesc, sessionID, status,
-		)
-	}
-
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf(
-		"[automate] In-process workflow completed:\n"+
-			"  Workflow: %s\n"+
-			"  Description: %s\n"+
-			"  Session: %s\n"+
-			"  Status: %s\n"+
-			"  Items: %d processed, %d skipped, %d failed",
-		wfName, wfDesc, sessionID, status,
-		result.ItemsProcessed, result.ItemsSkipped, result.ItemsFailed,
-	))
-
-	if result.Error != nil {
-		b.WriteString(fmt.Sprintf("\n  Error: %s", result.Error.Error()))
-	}
-
-	return b.String()
-}
-
 // handleRunAutomate runs a workflow from the automate/ directory as a background process.
 // Always requires user approval (enforced by the security classifier).
 // Background execution is enforced — foreground mode is disabled for safety.
@@ -131,8 +63,36 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		return "", err
 	}
 
-	// Read description for user context
-	desc, _ := automate.ExtractDescription(wfPath)
+	// Build the summary once and read both the description and the
+	// allowed_paths from it. Replaces the prior
+	// automate.ExtractDescription(wfPath) call which re-parsed the
+	// JSON just for `description`. Summarize also runs the
+	// allowed_paths schema check (via workflow.AllowedPath.Validate
+	// replicated in pkg/automate), so a malformed entry surfaces
+	// here as a parse error rather than silently dropping the
+	// whole field.
+	summary, sumErr := automate.Summarize(wfPath)
+	desc := ""
+	if sumErr == nil && summary != nil {
+		desc = summary.Description
+	}
+
+	// SP-128-1e: pre-seed the running agent's session allowlist
+	// with every declared allowed_path, tagged with the declared
+	// mode. This must happen BEFORE the in-process / BPM fork so
+	// the launched workflow inherits the grants; the in-process
+	// path inherits via SnapshotSessionAllowedFolders /
+	// SnapshotSessionAllowedFolderModes (run inside the goroutine
+	// — see subagent_creation.go), and the BPM subprocess path
+	// inherits because the parent process is the one carrying the
+	// session allowlist forward. We only act when Summarize
+	// succeeded: a parse failure already aborts the launch below.
+	if sumErr == nil && summary != nil {
+		for _, ap := range summary.AllowedPaths {
+			a.AddSessionAllowedFolder(ap.Path)
+			a.SetSessionAllowedFolderMode(ap.Path, ap.Mode)
+		}
+	}
 
 	// -----------------------------------------------------------------------
 	// In-process path: detect loop workflows and run them as a goroutine

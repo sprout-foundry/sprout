@@ -9,14 +9,77 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
+// isolateHistoryForTest returns a function that, when called, redirects
+// the history package's package-level changesDir/revisionsDir to a
+// fresh temp dir. The function does NOT redirect eagerly — it returns
+// the redirect closure so tests can run it AFTER any agent creation
+// step that internally invokes history.InitializeHistoryPaths (which
+// would otherwise clobber a pre-set redirect back to the repo-root
+// .sprout/changes/).
+//
+// Why this matters: HistoryScope="project" (the default in
+// configuration.Config) resolves changesDir and revisionsDir to the
+// RELATIVE path .sprout/changes under the process CWD — the repo root
+// when running `go test ./pkg/agent/...`. Every test that asserts
+// against exact change counts (e.g. TestChangeTrackingE2E's "len
+// (allChanges) == 1") therefore reads from the shared repo .sprout/
+// changes/ directory, which has accumulated residue from prior test
+// runs and prior sessions across the entire repo history. Without this
+// hook the e2e test fails 2/5 runs because the second run sees the
+// first run's still-active change records.
+//
+// Usage pattern: pair with configuration.NewTestManager for config
+// isolation, then call the returned closure AFTER constructing the
+// agent under test (since NewChangeTracker inside agent construction
+// calls history.InitializeHistoryPaths which overwrites our redirect):
+//
+//	_, cleanupCfg := configuration.NewTestManager(t)
+//	defer cleanupCfg()
+//	setHistory := isolateHistoryForTest(t)
+//	defer setHistory()  // restores previous paths after test
+//
+//	agent, err := NewAgentWithModel(...)  // may overwrite history paths
+//	// ... test setup ...
+//	setHistory()  // redirect NOW, after agent construction
+//
+// The deferred call still restores at test end, undoing both the
+// in-test redirect and any path that NewChangeTracker wrote.
+func isolateHistoryForTest(t *testing.T) func() {
+	t.Helper()
+	tmp := t.TempDir()
+	cDir := filepath.Join(tmp, "changes")
+	rDir := filepath.Join(tmp, "revisions")
+	if err := os.MkdirAll(cDir, 0o755); err != nil {
+		t.Fatalf("isolateHistoryForTest: mkdir changes: %v", err)
+	}
+	if err := os.MkdirAll(rDir, 0o755); err != nil {
+		t.Fatalf("isolateHistoryForTest: mkdir revisions: %v", err)
+	}
+	prevChanges, prevRevisions := history.GetPathsForTesting()
+	set := func() {
+		history.SetPathsForTesting(cDir, rDir)
+	}
+	restore := func() {
+		history.SetPathsForTesting(prevChanges, prevRevisions)
+	}
+	t.Cleanup(restore)
+	return set
+}
+
 // TestChangeTrackingE2E tests the end-to-end change tracking and rollback workflow
 func TestChangeTrackingE2E(t *testing.T) {
-	// Isolate all config + history I/O to a temp dir. Without this,
+	// Isolate config + history I/O to a temp dir. Without this,
 	// history.GetAllChanges() reads from whatever SPROUT_CONFIG points
 	// at in the test runner's env (often the user's real config dir),
 	// so the count assertion sees data accumulated from prior runs.
 	_, configCleanup := configuration.NewTestManager(t)
 	defer configCleanup()
+	// isolateHistoryForTest returns a deferred-redirect closure that
+	// must run AFTER agent construction (NewAgentWithModel →
+	// NewChangeTracker → history.InitializeHistoryPaths) so the redirect
+	// is the LAST write to the package-level paths, not overwritten by
+	// the agent. t.Cleanup restores the pre-test paths at test end.
+	setHistory := isolateHistoryForTest(t)
 
 	// Test constants for test file names and content
 	const (
@@ -63,6 +126,12 @@ func TestChangeTrackingE2E(t *testing.T) {
 		agent.changeTracker = NewChangeTracker(agent, instructions)
 		agent.changeTracker.Enable()
 	}
+
+	// Now that the agent (and its tracker) is fully constructed — and
+	// therefore the last InitializeHistoryPaths call has fired —
+	// redirect history storage to our temp dir so the post-commit
+	// assertions read only what THIS test wrote.
+	setHistory()
 
 	// Verify change tracking is enabled
 	if !agent.IsChangeTrackingEnabled() {
@@ -201,6 +270,7 @@ func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
 	// prior runs or sibling tests.
 	_, configCleanup := configuration.NewTestManager(t)
 	defer configCleanup()
+	setHistory := isolateHistoryForTest(t)
 	testDir := t.TempDir()
 	oldDir, _ := os.Getwd()
 	defer func() {
@@ -213,6 +283,9 @@ func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
 	agent := &Agent{}
 	agent.changeTracker = NewChangeTracker(agent, "Make a series of edits")
 	agent.changeTracker.Enable()
+
+	// Redirect AFTER NewChangeTracker so the redirect survives.
+	setHistory()
 
 	fileA := "file_a.go"
 	fileB := "file_b.go"
@@ -283,6 +356,7 @@ func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
 	// prior runs or sibling tests.
 	_, configCleanup := configuration.NewTestManager(t)
 	defer configCleanup()
+	setHistory := isolateHistoryForTest(t)
 	testDir := t.TempDir()
 	oldDir, _ := os.Getwd()
 	defer func() {
@@ -295,6 +369,9 @@ func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
 	agent := &Agent{}
 	agent.changeTracker = NewChangeTracker(agent, "H1 idempotency test")
 	agent.changeTracker.Enable()
+
+	// Redirect AFTER NewChangeTracker so the redirect survives.
+	setHistory()
 
 	fileA := "dup_a.go"
 	fileB := "dup_b.go"

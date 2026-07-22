@@ -562,6 +562,12 @@ func TestResolveToolRisk_FileWriteWorkspacePath(t *testing.T) {
 	defer agent.Shutdown()
 
 	workspace := t.TempDir()
+	// On macOS, t.TempDir() returns /var/folders/... which is a symlink to
+	// /private/var/folders/...; resolve so SetWorkspaceRoot stores the same
+	// canonical prefix that ClassifyPathAccess will compare against.
+	if resolved, err := filepath.EvalSymlinks(workspace); err == nil {
+		workspace = resolved
+	}
 	agent.SetWorkspaceRoot(workspace)
 	agent.SetShellCwd(workspace)
 

@@ -52,6 +52,28 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass withFilesystemApproval entirely.
+	resolvedPath, decision, _ := PrecheckFileAccess(env.FileAccessClassifier, "patch_structured_file", path)
+	if decision == "deny" {
+		return ToolResult{Output: fmt.Sprintf("patch blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
+			fmt.Errorf("patch blocked: %s is declared read_only", path)
+	}
+	if decision == "allow" {
+		// Path is workspace/tmp/allowlisted — resolve directly and bypass the gate.
+		resolvedPath, err = filesystem.SafeResolvePathForWriteWithBypass(ctx, path)
+		if err != nil {
+			return ToolResult{Output: fmt.Sprintf("Failed to resolve path: %v", err), IsError: true}, nil
+		}
+		// Proceed to the full-document write or patch path below with the
+		// pre-resolved path; set resolvedPath to a sentinel that signals
+		// "use preRes" to the rest of the function. We encode this as a
+		// non-empty string that the gate-aware paths will treat specially.
+		// Actually, simpler: just continue with resolvedPath already set
+		// and let the individual branches handle it.
+	}
+
 	format, _ := extractString(args, "format")
 
 	// Infer format from file extension if not provided
@@ -93,9 +115,20 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		if err != nil {
 			return ToolResult{Output: fmt.Sprintf("Failed to serialize data: %v", err), IsError: true}, nil
 		}
-		writePath, filePerm, err := resolveForWriteWithGate(ctx, path)
-		if err != nil {
-			return ToolResult{Output: fmt.Sprintf("Failed to resolve path: %v", err), IsError: true}, nil
+		var writePath string
+		var filePerm os.FileMode
+		if decision == "allow" {
+			// Already pre-resolved above with bypass context.
+			writePath = resolvedPath
+			filePerm = os.ModePerm
+			if fi, statErr := os.Stat(writePath); statErr == nil {
+				filePerm = fi.Mode() & 0777
+			}
+		} else {
+			writePath, filePerm, err = resolveForWriteWithGate(ctx, path)
+			if err != nil {
+				return ToolResult{Output: fmt.Sprintf("Failed to resolve path: %v", err), IsError: true}, nil
+			}
 		}
 		if err := os.WriteFile(writePath, []byte(content), filePerm); err != nil {
 			return ToolResult{Output: fmt.Sprintf("Failed to write file: %v", err), IsError: true}, nil
@@ -107,9 +140,15 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	// resolved path is reused for the subsequent write to avoid
 	// TOCTOU between read and write (a symlink swap in between
 	// would otherwise make read and write target different files).
-	readPath, err := resolveForReadWithGate(ctx, path)
-	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Failed to resolve path: %v", err), IsError: true}, nil
+	var readPath string
+	if decision == "allow" {
+		// Already pre-resolved above with bypass context.
+		readPath = resolvedPath
+	} else {
+		readPath, err = resolveForReadWithGate(ctx, path)
+		if err != nil {
+			return ToolResult{Output: fmt.Sprintf("Failed to resolve path: %v", err), IsError: true}, nil
+		}
 	}
 	fileBytes, err := os.ReadFile(readPath)
 	if err != nil {

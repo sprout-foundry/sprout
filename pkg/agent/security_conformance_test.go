@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// nonTmpTempDir returns a temp directory under a parent that is NOT /tmp.
+// NonTmpTempDir returns a temp directory under a parent that is NOT /tmp.
 // Use this for fixtures that need to simulate off-allowlist or sensitive
 // paths — /tmp is universally allowed by the classifier, so tests that
 // assert Prompt or Deny for external paths must use a directory outside it.
@@ -21,7 +21,7 @@ import (
 // one that exists and is writable. Calls t.Skipf (which does not return)
 // if no candidate is available, so tests that need the non-/tmp invariant
 // are skipped rather than silently running against /tmp.
-func nonTmpTempDir(t *testing.T) string {
+func NonTmpTempDir(t *testing.T) string {
 	t.Helper()
 
 	// Candidates ordered by platform likelihood.
@@ -48,15 +48,15 @@ func nonTmpTempDir(t *testing.T) string {
 
 	// No non-/tmp scratch space available on this platform.
 	// Skip rather than silently using /tmp, which would defeat the test invariant.
-	t.Skipf("nonTmpTempDir: no non-/tmp candidate available (tried: %v); this platform lacks /var/folders and /var/tmp", lastErr)
+	t.Skipf("NonTmpTempDir: no non-/tmp candidate available (tried: %v); this platform lacks /var/folders and /var/tmp", lastErr)
 	// unreachable — t.Skipf calls runtime.Goexit() and never returns
 	return ""
 }
 
 // externalTempDir is a thin wrapper kept for callers that don't care
-// about the non-/tmp guarantee. Internally it delegates to nonTmpTempDir.
+// about the non-/tmp guarantee. Internally it delegates to NonTmpTempDir.
 func externalTempDir(t *testing.T) string {
-	return nonTmpTempDir(t)
+	return NonTmpTempDir(t)
 }
 
 // TestClassifyFileAccess_Conformance verifies that the Gate 1 path-tier
@@ -86,7 +86,7 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 	// allowlistReadOnlyDir is a session-allowlisted folder with read_only mode.
 	// Must NOT be under /tmp, otherwise the /tmp universal allow short-circuits
 	// the read_only deny check before the classifier can inspect the mode.
-	allowlistReadOnlyDir := nonTmpTempDir(t)
+	allowlistReadOnlyDir := NonTmpTempDir(t)
 
 	// externalDir is a path outside the workspace, outside /tmp, and not
 	// allowlisted. This ensures the classifier treats it as off-allowlist.
@@ -97,7 +97,7 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 	// Must NOT be under /tmp, otherwise paths like
 	// /tmp/.../.ssh/id_rsa or /tmp/.../.aws/credentials are caught by
 	// the /tmp universal allow before IsSensitiveSystemPath can match them.
-	homeDir := nonTmpTempDir(t)
+	homeDir := NonTmpTempDir(t)
 	sshDir := filepath.Join(homeDir, ".ssh")
 	_ = filesystem.EnsureDir(sshDir)
 	awsDir := filepath.Join(homeDir, ".aws")
@@ -414,7 +414,7 @@ func TestStaticGateAutoApprove_PathTier(t *testing.T) {
 	// Off-workspace path should NOT auto-approve (no bypass flags).
 	// Use a path NOT under /tmp so the test exercises the off-workspace
 	// branch rather than the /tmp universal-allow short-circuit.
-	externalDir := nonTmpTempDir(t)
+	externalDir := NonTmpTempDir(t)
 	externalPath := filepath.Join(externalDir, "other.txt")
 	if a.staticGateAutoApprove(secResult, externalPath, "", "read") {
 		t.Error("staticGateAutoApprove should NOT auto-approve off-workspace path without bypass flags")
@@ -455,7 +455,7 @@ func TestStaticGateAutoApprove_PathTierReadOnlyWriteDeny(t *testing.T) {
 
 	// allowlistDir must NOT be under /tmp — otherwise the /tmp short-circuit
 	// fires before the allowlist mode check and we never hit FileAccessDeny.
-	allowlistDir := nonTmpTempDir(t)
+	allowlistDir := NonTmpTempDir(t)
 	a := newIsolatedTestAgent(t)
 	defer a.Shutdown()
 	a.AddSessionAllowedFolder(allowlistDir)

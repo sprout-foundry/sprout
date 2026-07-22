@@ -78,6 +78,7 @@ func (ir *InputReader) finalizePaste() bool {
 				ir.addCollapsedPaste(len(before), ir.cursorPos)
 				ir.hasEditedLine = true
 				ir.historyIndex = -1
+				ir.resetCompletionCycle()
 				ir.Refresh()
 				promptWidth := visibleRuneWidth(ir.prompt)
 				lineWidth := len([]rune(ir.line))
@@ -114,6 +115,7 @@ func (ir *InputReader) finalizePaste() bool {
 			ir.addCollapsedPaste(start, ir.cursorPos)
 			ir.hasEditedLine = true
 			ir.historyIndex = -1
+			ir.resetCompletionCycle()
 			ir.Refresh()
 			promptWidth := visibleRuneWidth(ir.prompt)
 			lineWidth := len([]rune(ir.line))
@@ -130,6 +132,7 @@ func (ir *InputReader) finalizePaste() bool {
 
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
+	ir.resetCompletionCycle()
 
 	// Insert at cursor position instead of always appending.
 	start := ir.cursorPos
@@ -215,6 +218,7 @@ func (ir *InputReader) deleteCollapsedPasteEndingAtCursor() bool {
 			ir.cursorPos = span.start
 			ir.hasEditedLine = true
 			ir.historyIndex = -1
+			ir.resetCompletionCycle()
 			removed := span.end - span.start
 			ir.collapsedPastes = append(ir.collapsedPastes[:i], ir.collapsedPastes[i+1:]...)
 			ir.shiftPasteSpans(span.end, -removed)
@@ -230,6 +234,7 @@ func (ir *InputReader) deleteCollapsedPasteStartingAtCursor() bool {
 			ir.line = ir.line[:span.start] + ir.line[span.end:]
 			ir.hasEditedLine = true
 			ir.historyIndex = -1
+			ir.resetCompletionCycle()
 			removed := span.end - span.start
 			ir.collapsedPastes = append(ir.collapsedPastes[:i], ir.collapsedPastes[i+1:]...)
 			ir.shiftPasteSpans(span.end, -removed)

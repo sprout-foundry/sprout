@@ -15,7 +15,8 @@ import (
 func newTestReader(submitted *[]string, interrupted *int) *SteerInputReader {
 	var mu sync.Mutex
 	return &SteerInputReader{
-		fd: -1, // not a TTY
+		fd:           -1, // not a TTY
+		autocomplete: newInlineAutocomplete(),
 		submitFn: func(s string) {
 			mu.Lock()
 			defer mu.Unlock()

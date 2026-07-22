@@ -95,6 +95,7 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 	ir.cursorPos = len(newLine)
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
+	ir.resetCompletionCycle()
 
 	if mErr != nil {
 		return nil

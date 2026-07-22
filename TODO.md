@@ -1339,4 +1339,162 @@ variant (R3 in spec).
 
 ---
 
+## SP-128: Workflow `allowed_paths` + Automation UX Fixes
+
+_Spec: `roadmap/SP-128-workflow-allowed-paths.md` — read this file in full before starting._
+
+Closes the diagnosis captured in `.scratch/workflow_automation_diagnosis.md`.
+Two intertwined changes needed for the autonomous TODO processor to access
+directories outside the workspace: (1) a new `allowed_paths` workflow field
+that declares external directory dependencies and pre-seeds the session
+allowlist so no per-tool approval dialog fires mid-run; (2) UX fixes that
+only surface under autonomous use (WebUI confirmation missing the workflow
+summary, WebUI side never seeding the in-session approval cache).
+
+### Phase 1: Workflow JSON + validation + enforcement
+
+- [x] **SP-128-1a:** Add `AllowedPath` struct + `AllowedPaths []AllowedPath`
+      field on `AgentWorkflowConfig`. `Path` (absolute, no `..` traversal),
+      `Mode` (`read_only`|`read_write`), `Reason` (advisory).
+      **Files**: `pkg/workflow/types.go`
+      **Acceptance**: Type compiles; round-trips through JSON; `Validate()`
+      rejects relative path, bad mode, `..` after Clean; warns on
+      `/etc /usr /var /bin /sbin /boot /proc /sys /dev /lib /lib64 /opt /root /System /Library /private/etc /private/var /Applications` prefixes.
+
+- [x] **SP-128-1b:** Loader calls `Validate()` for every `allowed_paths`
+      entry; on system-prefix warning, log via the loader's logger so the
+      user sees it at load.
+      **Files**: `pkg/workflow/loader.go`
+      **Acceptance**: A workflow with `/etc/foo` loads but logs the warning;
+      a workflow with `/foo/../etc` fails to load with a clear error.
+
+- [x] **SP-128-1c:** `Summary.AllowedPaths` populates from JSON; new
+      `AllowedPathSummary` mirrors the workflow struct for the CLI/WebUI
+      overview. `Summary.Warning` carries system-prefix advisories.
+      **Files**: `pkg/automate/discovery.go`
+      **Acceptance**: `Summarize("wf.json")` returns summary with
+      `AllowedPaths` populated, `Warning` non-empty for `/etc`-prefixed
+      entries. A malformed entry surfaces as a parse error.
+
+- [x] **SP-128-1d:** Add `sessionPathModes map[string]string` to
+      `AgentSecurityManager`. New interface methods `SetSessionAllowedFolderMode(folder, mode string)`
+      and `IsFolderSessionWriteAllowed(absPath string) bool`. Default mode
+      for entries added without `SetSessionAllowedFolderMode` is
+      `read_write` (preserve legacy semantics).
+      **Files**: `pkg/agent/submanager_security.go`
+      **Acceptance**: After `AddSessionAllowedFolder(path)` + `SetSessionAllowedFolderMode(path, "read_only")`,
+      `IsFolderSessionWriteAllowed(path)` returns false but
+      `IsFolderSessionAllowed(path)` still true; subagent snapshot
+      includes the mode.
+
+- [x] **SP-128-1e:** Wire declared paths into the session allowlist at run
+      start. In `handleRunAutomate`, after workflow resolution, before
+      goroutine / subprocess launch: `AddSessionAllowedFolder` +
+      `SetSessionAllowedFolderMode` for every entry in `Summary.AllowedPaths`.
+      Subagent inheritance via snapshot extension.
+      **Files**: `pkg/agent/tool_handlers_automate.go`,
+      `pkg/agent/subagent_creation.go`
+      **Acceptance**: After a workflow with `allowed_paths` is approved and
+      started, the agent's session allowlist contains every declared path
+      with the declared mode.
+
+- [x] **SP-128-1f:** Filesystem gate write-block. In the
+      `RequestPathApproval` adapter, before raising the dialog for a write
+      tool against a session-allowed folder, check
+      `IsFolderSessionWriteAllowed`. Return a security error referencing the
+      declared mode when the entry is `read_only`.
+      **Files**: `pkg/agent/filesystem_gate_adapter.go` (or new
+      `pkg/agent/path_modes.go`)
+      **Acceptance**: `write_file` against a `read_only` session-allowed
+      folder returns the security error; same call against a
+      `read_write` folder succeeds.
+
+### Phase 2: Confirmation dialog surface changes
+
+- [x] **SP-128-2a:** CLI overview section "External paths this workflow
+      will access:" with `path [mode]`, reason below, and system-prefix
+      warnings appended to the "Heads up" block. Suppress the section when
+      `len(summary.AllowedPaths) == 0` — no new noise for workflows that
+      don't need it.
+      **Files**: `cmd/automate_run.go::printWorkflowOverviewFromSummary`
+      **Acceptance**: `sprout automate run <wf>` with `allowed_paths`
+      prints the section; without it the overview is unchanged.
+
+- [x] **SP-128-2b:** WebUI `/api/automate/run` `requires_approval: true`
+      response includes the full `Summary` payload so the frontend dialog
+      can render the same overview as the CLI. Extend
+      `handleAPIAutomateRun` to call `automate.Summarize` and embed it
+      under the `summary` key.
+      **Files**: `pkg/webui/automations_api.go::handleAPIAutomateRun`
+      **Acceptance**: A WebUI POST that hits the approval gate returns
+      `{requires_approval: true, workflow: "...", summary: {...}}` with
+      `summary.allowed_paths` populated when present.
+
+### Phase 3: Approval cache parity (A1)
+
+- [x] **SP-128-3:** After a successful WebUI run (`handleAPIAutomateRun`),
+      call `agentInst.MarkWorkflowApprovedInSession(req.Workflow)` so the
+      next attempt within the same session auto-approves. The agent-tool
+      path already does this via the security gate.
+      **Files**: `pkg/webui/automations_api.go::handleAPIAutomateRun`
+      **Acceptance**: A WebUI POST that succeeds seeds the cache; the next
+      POST for the same workflow in the same chat session does not return
+      `requires_approval: true`.
+
+### Phase 4: Skill updates (A3)
+
+- [x] **SP-128-4:** New "External Paths" section in
+      `pkg/skills/library/workflow-automation/SKILL.md` after the Fast Path
+      and before the Coordinated Flow. Cover: when to use, JSON shape with
+      worked example, trade-off vs `unsafe: true` and vs per-call allowlist
+      dances, the system-prefix warnings are advisory, subprocess
+      workflows don't inherit parent allowlists (A4), `loop.allowed_paths`
+      is deferred.
+      **Acceptance**: Skill is grep-able for `allowed_paths`; example
+      matches the spec.
+
+### Phase 5: Tests
+
+- [x] **SP-128-5a:** `pkg/workflow/workflow_test.go`:
+      validation rejects relative path / bad mode / `..` traversal;
+      accepts clean absolute paths; system-prefix warns but loads.
+      **Acceptance**: All new tests pass; existing tests unchanged.
+
+- [x] **SP-128-5b:** `pkg/automate/discovery_test.go`: `Summarize`
+      populates `AllowedPaths` and `Warning`; malformed entry surfaces as
+      a parse error.
+      **Acceptance**: Tests pass.
+
+- [x] **SP-128-5c:** `pkg/agent/submanager_security_test.go` (extend
+      existing): `AddSessionAllowedFolder` defaults to `read_write`;
+      `SetSessionAllowedFolderMode(path, "read_only")` blocks writes via
+      `IsFolderSessionWriteAllowed`; snapshot includes modes.
+      **Acceptance**: Tests pass.
+
+- [x] **SP-128-5d:** `pkg/agent/tool_handlers_automate_test.go`: after a
+      workflow with `allowed_paths` is approved, agent's session allowlist
+      contains every declared path with the declared mode.
+      **Acceptance**: Test passes.
+
+- [x] **SP-128-5e:** `pkg/agent/filesystem_gate_adapter_test.go`: write
+      against `read_only` session-allowed folder returns security error
+      referencing the declared mode.
+      **Acceptance**: Test passes.
+
+- [x] **SP-128-5f:** `pkg/webui/automations_api_test.go`:
+      `requires_approval: true` response carries `summary.allowed_paths`;
+      after a successful run, the next approval-required run of the same
+      workflow does not re-prompt (cache parity, A1).
+      **Acceptance**: Tests pass.
+
+- [x] **SP-128-5g:** `cmd/automate_run_test.go` (new):
+      `printWorkflowOverviewFromSummary` prints the External Paths section
+      with the path, mode label, and reason text.
+      **Acceptance**: Test passes.
+
+**Total estimate:** ~2.5 focused days. Phase 1 (~1.5 days) is the bulk;
+Phases 2–4 together are half a day; tests run alongside each phase.
+**Hard constraint**: schema + validation (1a/1b) must land before
+enforcement (1e/1f), which must land before CLI/WebUI display (2a/2b).
+
 

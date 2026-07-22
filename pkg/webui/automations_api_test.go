@@ -942,6 +942,175 @@ func TestHandleAPIAutomateRun_RequiresApproval(t *testing.T) {
 	}
 }
 
+// SP-128 Phase 2b: the approval-required response must include the full
+// workflow Summary under the `summary` key so the WebUI dialog can render
+// the same overview as the CLI (description, steps, subagent overrides,
+// budget, allowed_paths, warnings). The original {requires_approval,
+// workflow} keys remain — this is additive.
+func TestHandleAPIAutomateRun_ApprovalResponseIncludesSummary(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	os.Chdir(daemonRoot)
+
+	// Build a workflow with allowed_paths so we can verify those carry
+	// through to the WebUI payload (this is the headline Phase 2b reason
+	// for the change — a workflow that needs external-directory access
+	// can now show the user what it will touch before approval).
+	automateDir := filepath.Join(daemonRoot, "automate")
+	if err := os.MkdirAll(automateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wfJSON := `{
+		"description": "Nightly training run",
+		"requires_approval": true,
+		"initial": {
+			"persona": "main",
+			"provider": "anthropic",
+			"model": "claude-opus-4",
+			"max_iterations": 3,
+			"subagent_overrides": {
+				"reviewer": {"provider": "anthropic", "model": "claude-haiku-4"}
+			}
+		},
+		"steps": [
+			{"name": "fetch", "command": "aws s3 sync s3://datasets ./data"}
+		],
+		"allowed_paths": [
+			{"path": "/srv/datasets", "mode": "read_write", "reason": "Read training data"},
+			{"path": "/var/log/sprout", "mode": "read_only"}
+		]
+	}`
+	if err := os.WriteFile(filepath.Join(automateDir, "needs-approval.json"), []byte(wfJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/run",
+		strings.NewReader(`{"workflow":"needs-approval"}`))
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateRun(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// Existing keys must be preserved (stable contract).
+	if resp["requires_approval"] != true {
+		t.Errorf("expected requires_approval true, got %v", resp["requires_approval"])
+	}
+	if resp["workflow"] != "needs-approval" {
+		t.Errorf("expected workflow 'needs-approval', got %v", resp["workflow"])
+	}
+
+	// New summary key must be present.
+	summary, ok := resp["summary"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected summary object in response, got: %+v", resp)
+	}
+
+	if summary["description"] != "Nightly training run" {
+		t.Errorf("summary.description: got %v (want 'Nightly training run')", summary["description"])
+	}
+	if summary["requires_approval"] != true {
+		t.Errorf("summary.requires_approval: got %v (want true)", summary["requires_approval"])
+	}
+
+	// Initial summary block.
+	initial, ok := summary["initial"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected summary.initial object, got: %+v", summary)
+	}
+	if initial["persona"] != "main" || initial["provider"] != "anthropic" {
+		t.Errorf("summary.initial: got %+v", initial)
+	}
+	// max_iterations is always emitted (no omitempty on int 0) — must
+	// be 3 from the JSON.
+	if initial["max_iterations"].(float64) != 3 {
+		t.Errorf("summary.initial.max_iterations: got %v (want 3)", initial["max_iterations"])
+	}
+
+	// Subagent overrides nested correctly.
+	overrides, ok := initial["subagent_overrides"].([]interface{})
+	if !ok || len(overrides) != 1 {
+		t.Fatalf("expected 1 subagent_override, got: %+v", initial["subagent_overrides"])
+	}
+
+	// Steps list.
+	steps, ok := summary["steps"].([]interface{})
+	if !ok || len(steps) != 1 {
+		t.Fatalf("expected 1 step, got: %+v", summary["steps"])
+	}
+
+	// Allowed paths — the SP-128 headline field. Must be present and
+	// carry both entries with the right mode + reason.
+	allowedPaths, ok := summary["allowed_paths"].([]interface{})
+	if !ok || len(allowedPaths) != 2 {
+		t.Fatalf("expected 2 allowed_paths, got: %+v", summary["allowed_paths"])
+	}
+	first := allowedPaths[0].(map[string]interface{})
+	if first["path"] != "/srv/datasets" || first["mode"] != "read_write" || first["reason"] != "Read training data" {
+		t.Errorf("allowed_paths[0]: got %+v (want /srv/datasets, read_write, \"Read training data\")", first)
+	}
+	second := allowedPaths[1].(map[string]interface{})
+	if second["path"] != "/var/log/sprout" || second["mode"] != "read_only" {
+		t.Errorf("allowed_paths[1]: got %+v (want /var/log/sprout, read_only)", second)
+	}
+	// Reason omitempty — the second entry has no reason, so the key
+	// must NOT appear in the JSON object.
+	if _, hasReason := second["reason"]; hasReason {
+		t.Errorf("allowed_paths[1] should omit reason when empty, got: %+v", second)
+	}
+}
+
+// SP-128 Phase 2b: a workflow WITHOUT allowed_paths still gets a summary
+// payload (the rest of the workflow metadata), and the allowed_paths key
+// is omitted (omitempty) — the WebUI must not render an empty external
+// paths section.
+func TestHandleAPIAutomateRun_ApprovalResponseSummaryOmitsEmptyPaths(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	os.Chdir(daemonRoot)
+
+	createWorkflowFile(daemonRoot, "no-paths", "Simple workflow", nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/run",
+		strings.NewReader(`{"workflow":"no-paths"}`))
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateRun(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	summary, ok := resp["summary"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected summary object, got: %+v", resp)
+	}
+	if summary["description"] != "Simple workflow" {
+		t.Errorf("summary.description: got %v", summary["description"])
+	}
+	if _, hasAP := summary["allowed_paths"]; hasAP {
+		t.Errorf("summary.allowed_paths should be omitted when empty, got: %+v", summary["allowed_paths"])
+	}
+	if _, hasW := summary["warnings"]; hasW {
+		t.Errorf("summary.warnings should be omitted when empty, got: %+v", summary["warnings"])
+	}
+}
+
 func TestHandleAPIAutomateRun_ExplicitApprovalTrue(t *testing.T) {
 	ws, daemonRoot := newAutomateTestServer(t)
 

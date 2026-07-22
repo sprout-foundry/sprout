@@ -1,6 +1,6 @@
 # SP-127 — Promote Filesystem Gate to Gate-1 (Static Classifier)
 
-**Status:** 🔵 Scoping — not yet approved for implementation. Migration phases M1–M4 + Phase 2 (Workflow `allowed_paths` runtime extensions) below.
+**Status:** Phase 2 (Workflow `allowed_paths` runtime extensions) 🟢 Shipped on `main` (commits `e5dc181e`, `389a9d31`, `1e1e4bb9`, `0a0a93e3`, `3396f0c3`, fix `dc167b03`). M1–M4 migration to Gate 1 remains open.
 **Created:** 2026-07-20
 **Type:** Architecture follow-up (security model unification)
 
@@ -318,7 +318,7 @@ which lands in parallel but ships independently.
 
 ## Phase 2 — Workflow `allowed_paths` runtime extensions
 
-**Status:** 🔵 Scoping — not yet approved for implementation
+**Status:** 🟢 Shipped (Phase 2.1–2.6 + Phase 2.6 LogJSON fix, commits `389a9d31`, `e5dc181e`, `1e1e4bb9`, `0a0a93e3`, `3396f0c3`, `dc167b03`).
 **Depends on:** Phase 1 of the original SP-127 work (the JSON schema,
 validation, session seeding, and `read_only` mode enforcement at
 `handleFileSecurityError` are all already shipped in this branch's
@@ -618,6 +618,22 @@ addresses gap #4.
 | `pkg/agent/agent_shell_test.go` | New tests for `IsCdTargetAllowed` + `updateShellCwd` gating. |
 | `pkg/filesystem/filesystem_test.go` | New tests for symlink re-validation under `WithFilesystemBypassScope`. |
 | `pkg/events/events_test.go` | New test for `EventTypeAllowedPathHit` payload shape. |
+
+### Implementation summary
+
+All Phase 2 sub-phases ship on `main`:
+
+- **2.1 — cd-target validation** (`389a9d31`). `IsCdTargetAllowed(target)` checks workspace root and session-allowlisted folders via `filepath.Clean` + `isUnderPrefix`. `updateShellCwd` rejects non-allowed targets with a shell-output refusal message that lists the currently-allowed cd destinations. `cd -` validates the destination (previous cwd) too.
+- **2.2 — Per-step `allowed_paths` schema** (`e5dc181e`). `AgentWorkflowInitial` and `AgentWorkflowStep` gain `AllowedPaths []AllowedPath`. Loader validates, normalizes, dedupes same-level duplicates (warn), and warns on workflow-vs-step / workflow-vs-initial mode conflicts (step wins). Discovery summary surfaces the entries in JSON.
+- **2.3 — Step-aware apply** (`1e1e4bb9`). `ApplyWorkflowRuntimeAllowedPaths` snapshots the agent's allowlist, adds each path via `AddSessionAllowedFolder` + `SetSessionAllowedFolderMode`, returns the snapshot + added paths. `RestoreWorkflowRuntimeAllowedPaths` removes only paths in the added-set that weren't in the snapshot, restoring exactly the pre-step state. The runner wires apply+restore around both agent steps (defer in a function-scope closure with a named return) and shell steps (explicit apply+restore). `Initial.AllowedPaths` applies once at workflow start and persists for the entire run.
+- **2.4 — Resolver scope** (`0a0a93e3`). `SafeResolvePathWithBypass` and `SafeResolvePathForWriteWithBypass` now also accept paths under the agent's effective cwd or any session-allowlisted folder. New context keys `WithAgentContext` / `WithEffectiveCwd` / `WithSessionAllowedFolders` plumb agent state through the tool-handler layer. The /tmp special case is preserved.
+- **2.5 — Symlink re-validation** (`0a0a93e3`). `SafeResolvePathForWriteWithBypass` re-evaluates symlinks for existing target paths after parent resolution. The resolved target must also fall under an allowed root, or the write is rejected with a "symlink target outside allowlist" error. Multi-hop symlinks are handled via repeated `evalSymlinksWithTimeout`.
+- **2.6 — Audit events** (`3396f0c3` + `dc167b03`). Every filesystem gate decision (allowed / denied / redirected) and every cd-gate denial emits one JSONL entry. Entries include tool, args, risk level, category, action, reasoning, source, session ID, and workspace root. The integration fix in `dc167b03` adds `LogJSON([]byte)` to `*tools.AuditLogger` to sidestep the import-cycle-induced type-identity problem that silently dropped filesystem entries in production.
+
+Decisions resolved (vs. the open-questions list):
+- **cd rejection = hard-block** (shell refuses, tracked cwd unchanged).
+- **Subagent inheritance** = union of workflow + step's allowlist, propagated via `SnapshotSessionAllowedFolders`/`SnapshotSessionAllowedFolderModes` at subagent creation.
+- **`AllowedPathHit` event** = deferred. The audit log carries the same info with simpler wire format. Adding a discriminated event type was more scope than necessary once the JSONL audit log was in place.
 
 ### Open questions
 

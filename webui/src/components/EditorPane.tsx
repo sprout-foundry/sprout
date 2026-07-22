@@ -283,7 +283,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // `gotoDefinition` et al. can find it by filePath. Installs the
   // global `setGlobalDisplayFileCallback` exactly once across the app
   // via the module-level `displayFileCallbackRegistered` flag.
+  // Also populates viewRef so hooks declared above useEditorDiagnostics
+  // (which receive viewRef) can read the actual EditorView.
   const onDidMount = useCallback((view: CMEditorView, filePath: string | undefined) => {
+    viewRef.current = view;
     if (filePath && !filePath.startsWith('__workspace/')) {
       registerEditorView(filePath, view);
     }
@@ -302,10 +305,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   // Per-view destroy hook. Cancels any pending scroll/diagnostic flush
   // and unregisters the view so future LSP requests for the same filePath
-  // don't dispatch into a torn-down EditorView.
+  // don't dispatch into a torn-down EditorView. Only fires on real view
+  // destruction (pane unmount, theme change) — NOT on buffer switch.
   const onWillDestroy = useCallback(
     (_view: CMEditorView) => {
       cancelPendingFlush();
+      viewRef.current = null;
       const buf = bufferRef.current;
       const filePath = buf?.file?.path;
       if (filePath && !filePath.startsWith('__workspace/')) {
@@ -313,6 +318,22 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       }
     },
     [cancelPendingFlush],
+  );
+
+  // Buffer-switch hook. Called when the buffer changes but the view is
+  // reused (no destruction/recreation). Updates the editor view registry
+  // so LSP cross-file navigation targets the correct filePath→view mapping.
+  const onBufferSwitch = useCallback(
+    (view: CMEditorView, oldFilePath: string | undefined, newFilePath: string | undefined) => {
+      viewRef.current = view;
+      if (oldFilePath && !oldFilePath.startsWith('__workspace/')) {
+        unregisterEditorView(oldFilePath);
+      }
+      if (newFilePath && !newFilePath.startsWith('__workspace/')) {
+        registerEditorView(newFilePath, view);
+      }
+    },
+    [],
   );
 
   // Single CM view API instance for this pane. The hook returns a stable
@@ -338,6 +359,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     bootstrapLSP,
     onDidMount,
     onWillDestroy,
+    onBufferSwitch,
   });
   // Make the API available to hooks called earlier in this component via
   // the ref indirection. Writes are safe during render — the ref object

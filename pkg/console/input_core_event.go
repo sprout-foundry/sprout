@@ -34,6 +34,7 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 				ir.cursorPos = len(ir.line)
 				ir.hasEditedLine = true
 				ir.historyIndex = -1
+				ir.resetCompletionCycle()
 				ir.autocomplete.hide()
 				ir.Refresh()
 				return

@@ -98,6 +98,7 @@ func (a *inlineAutocomplete) hide() {
 	a.candidates = nil
 	a.selected = 0
 	a.lastLine = ""
+	a.renderedRows = 0
 }
 
 // accept returns the currently selected candidate's text, or "" if none.

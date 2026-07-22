@@ -41,6 +41,26 @@ func TestBreakpoints_ReturnsUserMessages(t *testing.T) {
 	}
 }
 
+// TestBreakpoints_StripsLegacyTimestamp verifies provider timestamp envelopes
+// persisted by older versions are not shown in breakpoint previews.
+func TestBreakpoints_StripsLegacyTimestamp(t *testing.T) {
+	a := newTestAgent(t)
+	defer a.Shutdown()
+
+	a.state.AddMessage(api.Message{
+		Role:    "user",
+		Content: "<current-time>2026-07-22T14:25:02-05:00 (Local: 2026-07-22 14:25:02, Local)</current-time>\n\nclean question",
+	})
+
+	bps := a.Breakpoints()
+	if len(bps) != 1 {
+		t.Fatalf("expected 1 breakpoint, got %d", len(bps))
+	}
+	if got, want := bps[0].Content, "clean question"; got != want {
+		t.Errorf("breakpoint content = %q, want %q", got, want)
+	}
+}
+
 // TestBreakpoints_EmptyConversation verifies that Breakpoints returns an
 // empty slice when there are no messages.
 func TestBreakpoints_EmptyConversation(t *testing.T) {

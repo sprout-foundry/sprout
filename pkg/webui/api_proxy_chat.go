@@ -45,7 +45,7 @@ func getLastUserMessage(messages []proxyChatMessage) string {
 // handleAPIProxyChat handles POST /api/proxy/chat - Foundry proxy chat endpoint
 func (ws *ReactWebServer) handleAPIProxyChat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -54,7 +54,7 @@ func (ws *ReactWebServer) handleAPIProxyChat(w http.ResponseWriter, r *http.Requ
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("handleAPIProxyChat: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -82,13 +82,13 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
 		log.Printf("handleAPIProxyChat: steer mode requires a user message")
-		http.Error(w, "Steer mode requires a user message", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "user_message_required", "Steer mode requires a user message")
 		return
 	}
 
 	// Check for slash commands in steer mode - not allowed
 	if strings.HasPrefix(query, "/") {
-		http.Error(w, "Slash commands cannot be steered while a query is running", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "slash_command_not_steerable", "Slash commands cannot be steered while a query is running")
 		return
 	}
 
@@ -96,7 +96,7 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.RUnlock()
-		http.Error(w, "No active query to steer", http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
 		return
 	}
 	ws.mutex.RUnlock()
@@ -106,13 +106,13 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
 
 	if err := clientAgent.InjectInputContext(query); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 		return
 	}
 
@@ -144,7 +144,7 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
 		log.Printf("handleAPIProxyChat: no user message found")
-		http.Error(w, "Messages with a user role are required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "user_message_required", "Messages with a user role are required")
 		return
 	}
 
@@ -169,7 +169,7 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 // after the user pressed Stop.
 func (ws *ReactWebServer) handleAPIProxyChatStop(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -180,7 +180,7 @@ func (ws *ReactWebServer) handleAPIProxyChatStop(w http.ResponseWriter, r *http.
 		ChatID string `json:"chat_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -201,7 +201,7 @@ func (ws *ReactWebServer) handleAPIProxyChatStop(w http.ResponseWriter, r *http.
 // /api/query/status stay byte-identical on the wire.
 func (ws *ReactWebServer) handleAPIProxyChatStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 

@@ -17,7 +17,7 @@ func (ws *ReactWebServer) handleAPIEmbeddingIndex(w http.ResponseWriter, r *http
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
-		http.Error(w, "Agent not available", http.StatusServiceUnavailable)
+		writeJSONErr(w, http.StatusServiceUnavailable, "agent_unavailable", "Agent not available")
 		return
 	}
 
@@ -27,7 +27,7 @@ func (ws *ReactWebServer) handleAPIEmbeddingIndex(w http.ResponseWriter, r *http
 	case http.MethodPost:
 		ws.handleSetEmbeddingIndex(w, r, agentInst)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
@@ -60,14 +60,14 @@ func (ws *ReactWebServer) handleSetEmbeddingIndex(w http.ResponseWriter, r *http
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Enabled {
 		if !agentInst.IsEmbeddingIndexEnabled() {
 			if err := agentInst.EnableEmbeddingIndex(); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to enable indexing: %v", err), http.StatusInternalServerError)
+				writeJSONErr(w, http.StatusInternalServerError, "embedding_index_enable_failed", fmt.Sprintf("Failed to enable indexing: %v", err))
 				return
 			}
 		}

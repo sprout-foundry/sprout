@@ -316,6 +316,13 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		// ErrOutsideWorkingDirectory sentinel. See
 		// newFilesystemGateAdapter and handleFileSecurityError.
 		env.FilesystemGate = newFilesystemGateAdapter(agent)
+		// SP-127 M2: Wire Gate 1's path-tier classifier into ToolEnv so
+		// handlers can consult it up-front. The classifier implements
+		// FileAccessClassifier and delegates to the existing
+		// classifyFileAccess method. When nil (no agent context), handlers
+		// fall through to withFilesystemApproval which also calls the
+		// classifier via the filesystem gate adapter.
+		env.FileAccessClassifier = agent
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }
@@ -509,6 +516,22 @@ func (a *Agent) classifyFileAccess(filePath, resolvedPath, mode string) FileAcce
 		return FileAccessPrompt
 	}
 	return FileAccessPrompt
+}
+
+// ClassifyFileAccess implements tools.FileAccessClassifier so handlers
+// can consult Gate 1's path-tier verdict without importing pkg/agent.
+// Translates the internal FileAccessDecision enum to the interface's
+// string contract: "allow", "prompt", "deny".
+func (a *Agent) ClassifyFileAccess(filePath, resolvedPath, mode string) string {
+	decision := a.classifyFileAccess(filePath, resolvedPath, mode)
+	switch decision {
+	case FileAccessAllow:
+		return "allow"
+	case FileAccessDeny:
+		return "deny"
+	default:
+		return "prompt"
+	}
 }
 
 // staticGateAutoApprove reports whether a tool call that the static

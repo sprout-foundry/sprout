@@ -118,6 +118,14 @@ type ToolEnv struct {
 	// handler runs in a context without filesystem gate support
 	// (unit tests, agents constructed without the seed dispatch path).
 	FilesystemGate FilesystemGate
+	// FileAccessClassifier provides Gate 1's path-tier verdict before
+	// a file operation runs. When non-nil, handlers call it up-front
+	// (SP-127 M2) so Deny is caught immediately with a typed error,
+	// Allow skips the gate prompt entirely, and Prompt falls through
+	// to withFilesystemApproval for the interactive approval dialog.
+	// Nil means no classifier is available; handlers fall through
+	// to withFilesystemApproval which also delegates to the classifier.
+	FileAccessClassifier FileAccessClassifier
 	// MaxTokensFunc returns the current token budget limit
 	MaxTokensFunc func() int
 	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
@@ -265,6 +273,32 @@ type FilesystemGate interface {
 	// context. False means deny; surface the original error to the
 	// caller.
 	RequestPathApproval(ctx context.Context, toolName, filePath, resolvedPath string, err error) (context.Context, bool)
+}
+
+// FileAccessClassifier is the interface through which tool handlers
+// consult Gate 1's path-tier decision before running a file operation.
+// It lives in the tool layer (this package) so handlers in
+// pkg/agent_tools can classify a path without importing pkg/agent.
+//
+// Implementations are responsible for the full allow/prompt/deny
+// decision, including workspace containment, /tmp short-circuit,
+// session allowlist checks, sensitive-path checks, and read_only
+// enforcement. A nil classifier means no Gate 1 context is available
+// (e.g., unit tests); handlers must fall through to withFilesystemApproval
+// when nil, preserving the historical behavior.
+//
+// SP-127 M2: handlers call ClassifyFileAccess at the top of Execute
+// so Gate 1 sees the path on the FIRST call, not after
+// SafeResolvePath fails. The result controls whether to proceed
+// directly (Allow), fall through to withFilesystemApproval (Prompt),
+// or return a typed denial (Deny).
+type FileAccessClassifier interface {
+	// ClassifyFileAccess returns the Gate 1 verdict for a file path.
+	// Inputs match classifyFileAccess: filePath (user-supplied),
+	// resolvedPath (symlink-evaluated canonical form, may equal filePath),
+	// mode ("read" or "write").
+	// Returns: "allow" (proceed), "prompt" (fall through to gate), "deny" (return error).
+	ClassifyFileAccess(filePath, resolvedPath, mode string) string
 }
 
 // ---------------------------------------------------------------------------

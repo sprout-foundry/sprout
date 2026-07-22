@@ -70,6 +70,15 @@ type RetentionPolicy struct {
 // touches directly — its presence/absence is the hot/warm marker.
 const fileConversationJSON = "conversation.json"
 
+// orphanGracePeriod is how recent a change's timestamp must be to
+// be protected from orphan-classification when its parent revision
+// is missing from the snapshot. See CompactRevisions for the race
+// this defends against. Set to a few seconds — long enough to span
+// the typical listRevisions → Commit gap (tens of milliseconds),
+// short enough that genuine orphans don't accumulate beyond a
+// single compaction cycle's worth of latency.
+const orphanGracePeriod = 5 * time.Second
+
 // compactionMu serializes compaction so two agents in the same process
 // don't both try to migrate the same revisions dir at once. Cheap
 // because compaction runs at startup only.
@@ -148,6 +157,21 @@ func CompactRevisions(policy RetentionPolicy) (CompactionStats, error) {
 	// Defensive changes/ cleanup: orphan + age + per-revision-cap.
 	// Runs after the revision-tier passes so the valid-revisions set
 	// reflects post-compaction state.
+	//
+	// orphanGracePeriod protects against a TOCTOU race with a
+	// concurrent Commit(): if `CompactRevisions` and `Commit()` run
+	// in parallel (very common — the agent starts a background
+	// compaction in a goroutine right after construction, then the
+	// user's first query hits Commit before the compaction goroutine
+	// has finished its listRevisions() pass), the snapshot here can
+	// be missing revisions that the in-flight Commit is about to
+	// write. Without protection, pruneChangesDir would consider
+	// those fresh changes as orphans and DeleteAll them — data loss
+	// for whatever the user just committed. The grace period
+	// prevents that by skipping orphan-classification for changes
+	// newer than the cutoff; they're either still-being-written or
+	// have a parent revision that landed inside the same window, and
+	// the next compaction pass will reach a correct verdict.
 	if policy.MaxChangesPerRevision > 0 || policy.MaxChangesAge > 0 {
 		valid := make(map[string]bool, len(revs))
 		for _, r := range revs {
@@ -160,7 +184,7 @@ func CompactRevisions(policy RetentionPolicy) (CompactionStats, error) {
 				valid[r.ID] = true
 			}
 		}
-		orphan, overcap, aged, bytes := pruneChangesDir(valid, policy.MaxChangesPerRevision, policy.MaxChangesAge)
+		orphan, overcap, aged, bytes := pruneChangesDir(valid, policy.MaxChangesPerRevision, policy.MaxChangesAge, time.Now().Add(-orphanGracePeriod))
 		stats.OrphanChangesDropped = orphan
 		stats.OverCapChangesDropped = overcap
 		stats.AgedChangesDropped = aged
@@ -173,13 +197,16 @@ func CompactRevisions(policy RetentionPolicy) (CompactionStats, error) {
 // pruneChangesDir does a single pass over the changes/ directory and
 // drops entries that fail any of:
 //
-//  1. Orphan: parent revision no longer exists in `validRevisions`.
+//  1. Orphan: parent revision no longer exists in `validRevisions` AND
+//     the change's timestamp predates `orphanBefore` (changes within
+//     the grace window are protected — see orphanGracePeriod comment
+//     in CompactRevisions for the race this guards).
 //  2. Aged: entry's timestamp is older than maxAge (if > 0).
 //  3. Over-cap: revision has more than maxPerRev entries (if > 0). The
 //     oldest entries are dropped first; newest are preserved.
 //
 // Returns (orphanCount, overCapCount, agedCount, bytesReclaimed).
-func pruneChangesDir(validRevisions map[string]bool, maxPerRev int, maxAge time.Duration) (int, int, int, int64) {
+func pruneChangesDir(validRevisions map[string]bool, maxPerRev int, maxAge time.Duration, orphanBefore time.Time) (int, int, int, int64) {
 	changesDir := GetChangesDir()
 	if changesDir == "" {
 		return 0, 0, 0, 0
@@ -222,8 +249,27 @@ func pruneChangesDir(validRevisions map[string]bool, maxPerRev int, maxAge time.
 
 		size := dirSize(dir)
 
-		// Orphan check: revision no longer in the valid set.
+		// Orphan check: revision no longer in the valid set. The
+		// grace-window skip protects against the TOCTOU race where a
+		// concurrent Commit() writes a fresh change dir before its
+		// parent revision dir lands — the snapshot we're holding
+		// would otherwise misclassify the change as orphan and delete
+		// it. Without this guard a background compaction goroutine
+		// (started at agent construction) can race the user's first
+		// Commit and silently drop their work.
 		if !validRevisions[meta.RequestHash] {
+			if !orphanBefore.IsZero() && meta.Timestamp.After(orphanBefore) {
+				// Recent enough that we can't trust the snapshot —
+				// keep it and let the next pass reach a correct
+				// verdict with an up-to-date snapshot.
+				buckets[meta.RequestHash] = append(buckets[meta.RequestHash], changeEntry{
+					dir:       dir,
+					revID:     meta.RequestHash,
+					timestamp: meta.Timestamp,
+					bytes:     size,
+				})
+				continue
+			}
 			if err := os.RemoveAll(dir); err == nil {
 				orphan++
 				bytes += size

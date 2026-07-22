@@ -119,7 +119,10 @@ func InitializeHistoryPaths(config *configuration.Config) {
 }
 
 // setPathsForTesting sets changesDir and revisionsDir while holding the mutex.
-// This is intended for use only in tests to avoid data races detected by -race.
+// This is intended for use only in tests in this package to avoid data races
+// detected by -race. Tests in OTHER packages that need to isolate the history
+// storage location must call SetPathsForTesting (the exported wrapper below)
+// — using this unexported function would result in a compile error there.
 func setPathsForTesting(cDir, rDir string) {
 	pathMu.Lock()
 	changesDir = cDir
@@ -127,8 +130,48 @@ func setPathsForTesting(cDir, rDir string) {
 	pathMu.Unlock()
 }
 
+// SetPathsForTesting is the cross-package test hook for redirecting
+// the history storage to a temporary directory. Callers (typically
+// tests in pkg/agent and other consumers) should set both SPROUT_CONFIG
+// (via configuration.NewTestManager) AND call this function with a
+// fresh t.TempDir()-derived path — NewTestManager alone is insufficient
+// because HistoryScope="project" (the default) resolves changesDir and
+// revisionsDir to relative paths under the process CWD, not the test's
+// temp config dir. Without this hook, every test asserting exact change
+// counts (e.g. TestChangeTrackingE2E's "len(allChanges) == 1") reads
+// from the shared .sprout/changes/ in the repo root and fails on runs
+// where prior tests or sessions have left residue.
+//
+// Designed for t.Cleanup use:
+//
+//	tmp := t.TempDir()
+//	history.SetPathsForTesting(filepath.Join(tmp, "changes"), filepath.Join(tmp, "revisions"))
+//	t.Cleanup(func() { history.SetPathsForTesting(originalChanges, originalRevisions) })
+//
+// Reads current values via GetPathsForTesting when restoring.
+//
+// Safe to call from multiple goroutines; takes the same package-level
+// pathMu that the production path resolvers use.
+func SetPathsForTesting(cDir, rDir string) {
+	setPathsForTesting(cDir, rDir)
+}
+
+// GetPathsForTesting is the cross-package test hook for reading the
+// current history storage paths. Tests typically pair this with
+// SetPathsForTesting to capture the pre-test values and restore them
+// in t.Cleanup, so a test that redirects storage to a temp dir does
+// not leak that redirect into sibling tests or later runs of the
+// same test in -count=N invocations.
+//
+// Returns (changesDir, revisionsDir). Safe to call from multiple
+// goroutines.
+func GetPathsForTesting() (string, string) {
+	return getPathsForTesting()
+}
+
 // getPathsForTesting reads changesDir and revisionsDir while holding the mutex.
-// This is intended for use only in tests to avoid data races detected by -race.
+// This is intended for use only in tests in this package to avoid data races
+// detected by -race. Tests in OTHER packages must call GetPathsForTesting.
 func getPathsForTesting() (string, string) {
 	pathMu.RLock()
 	defer pathMu.RUnlock()
@@ -199,8 +242,9 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 		return fmt.Errorf("ensure changes dirs: %w", err)
 	}
 
+	cDir := GetChangesDir()
 	fileRevisionHash := utils.GenerateFileRevisionHash(filename, newCode)
-	changeDir := filepath.Join(GetChangesDir(), fileRevisionHash)
+	changeDir := filepath.Join(cDir, fileRevisionHash)
 	if err := filesystem.EnsureDir(changeDir); err != nil {
 		return fmt.Errorf("failed to create change directory: %w", err)
 	}

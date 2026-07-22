@@ -3,9 +3,13 @@
 package webui
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 func TestNewChatSessionWorktree(t *testing.T) {
@@ -141,6 +145,27 @@ func TestChatSessionChatSessionWithMessages(t *testing.T) {
 	}
 	if result["is_default"] != false {
 		t.Error("expected is_default to be false for non-default session")
+	}
+}
+
+func TestChatSessionWithMessagesStripsUserTimestamp(t *testing.T) {
+	cs := newChatSession("test-id", "Test Chat")
+	state := agent.AgentState{Messages: []api.Message{
+		{Role: "user", Content: "<current-time>2026-07-22T12:37:28Z</current-time>\n\nhello"},
+		{Role: "assistant", Content: "response", ReasoningContent: "reasoning"},
+	}}
+	var err error
+	cs.AgentState, err = json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := cs.chatSessionWithMessages()
+	messages := result["messages"].([]map[string]interface{})
+	if got := messages[0]["content"]; got != "hello" {
+		t.Fatalf("user content = %q, want hello", got)
+	}
+	if got := messages[1]["reasoning_content"]; got != "reasoning" {
+		t.Fatalf("reasoning content changed: %q", got)
 	}
 }
 

@@ -169,6 +169,20 @@ type SteerInputReader struct {
 	// edit so the next press starts fresh.
 	completer       CompletionProvider
 	completionCycle *CompletionCycle
+
+	// autocomplete is the live dropdown that mirrors the InputReader's
+	// (slash command) affordance on the steer panel. SP-078 Phase 3.
+	// Initialized in NewSteerInputReader so callers can drive it
+	// without nil checks. The dropdown renders above the input line
+	// as additional rows in the steer panel whenever the buffer
+	// starts with "/" and richCompleter returns candidates.
+	autocomplete *inlineAutocomplete
+
+	// richCompleter is the structured provider (command + description)
+	// the dropdown draws from. Optional — when nil the dropdown is
+	// disabled even with a plain completer installed. Matches
+	// InputReader.SetRichCompleter.
+	richCompleter RichCompletionProvider
 }
 
 // SteerHistoryCap bounds the in-memory steer history to a sensible
@@ -215,7 +229,8 @@ func NewSteerInputReader(footer *StatusFooter, submitFn, queueFn, interruptFn fu
 				interruptFn("")
 			}
 		},
-		fd: int(os.Stdin.Fd()),
+		fd:           int(os.Stdin.Fd()),
+		autocomplete: newInlineAutocomplete(),
 	}
 	r.isTTY = term.IsTerminal(r.fd)
 	return r

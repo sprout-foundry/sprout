@@ -186,10 +186,9 @@ func (s *commandOutputStreamer) appendToRing(p []byte) {
 //   - 503: no AI provider configured
 //
 // The reuse of executeSafeSteerCommandStreaming is intentional: that
-// helper already implements stdout-capture-via-os.Pipe with mutex
-// serialization (so concurrent commands across chats can't race on the
-// process-global os.Stdout) and the SteerCapable safety gate. When the
-// onChunk callback is nil the streaming variant is byte-for-byte
+// helper implements invocation-local output capture via os.Pipe and the
+// SteerCapable safety gate without redirecting process-global os.Stdout.
+// When the onChunk callback is nil the streaming variant is byte-for-byte
 // identical to the original executeSafeSteerCommand (used by the
 // /api/query/steer path).
 func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http.Request) {

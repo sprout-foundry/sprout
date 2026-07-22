@@ -3,6 +3,8 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -16,7 +18,18 @@ import (
 // reported context window. This command persists a new selection to config
 // for the next session start — the live agent's prompt and tool set are
 // already baked in and are not mutated mid-session.
-type ContextCommand struct{}
+type ContextCommand struct {
+	stdout io.Writer
+}
+
+func (c *ContextCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *ContextCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 func (c *ContextCommand) Name() string { return "context" }
 
@@ -79,15 +92,15 @@ func (c *ContextCommand) show(chatAgent *agent.Agent) error {
 	profile := chatAgent.GetContextProfile()
 	cfg := chatAgent.GetConfig()
 
-	console.GlyphInfo.Printf("Effective context mode: %q", string(profile.Mode))
-	fmt.Println(c.describeLevers(profile))
+	console.GlyphInfo.Fprintf(c.out(), "Effective context mode: %q", string(profile.Mode))
+	fmt.Fprintln(c.out(), c.describeLevers(profile))
 
 	if cfg != nil && cfg.ContextMode != "" {
-		fmt.Printf("   config.context_mode: %q\n", string(cfg.ContextMode))
+		fmt.Fprintf(c.out(), "   config.context_mode: %q\n", string(cfg.ContextMode))
 	} else {
-		fmt.Println("   config.context_mode: (unset — auto-detected from model context window)")
+		fmt.Fprintln(c.out(), "   config.context_mode: (unset — auto-detected from model context window)")
 	}
-	fmt.Println("   Changes via /context persist to config and take effect on the next session start.")
+	fmt.Fprintln(c.out(), "   Changes via /context persist to config and take effect on the next session start.")
 	return nil
 }
 
@@ -113,7 +126,7 @@ func (c *ContextCommand) set(chatAgent *agent.Agent, mode configuration.ContextM
 	}); err != nil {
 		return fmt.Errorf("updating config: %w", err)
 	}
-	console.GlyphSuccess.Printf("Context mode set to %q (persists to config; takes effect on next session start)", string(mode))
+	console.GlyphSuccess.Fprintf(c.out(), "Context mode set to %q (persists to config; takes effect on next session start)", string(mode))
 	return nil
 }
 
@@ -128,7 +141,7 @@ func (c *ContextCommand) clear(chatAgent *agent.Agent) error {
 	}); err != nil {
 		return fmt.Errorf("updating config: %w", err)
 	}
-	console.GlyphSuccess.Printf("Context mode cleared — auto-detection will decide on next session start (persists to config)")
+	console.GlyphSuccess.Fprintf(c.out(), "Context mode cleared — auto-detection will decide on next session start (persists to config)")
 	return nil
 }
 

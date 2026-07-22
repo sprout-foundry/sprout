@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -151,13 +152,20 @@ func TestCommandResponseShape(t *testing.T) {
 // uses on success, without the overhead of a full chat-agent stub.
 // ---------------------------------------------------------------------------
 
-type echoCommand struct{}
+type echoCommand struct {
+	stdout io.Writer
+}
 
 func (e *echoCommand) Name() string          { return "echo" }
 func (e *echoCommand) Description() string   { return "test: prints its args" }
 func (e *echoCommand) SafeDuringSteer() bool { return true }
+func (e *echoCommand) SetOutput(w io.Writer) { e.stdout = w }
 func (e *echoCommand) Execute(args []string, _ *agent.Agent) error {
-	fmt.Fprintln(os.Stdout, strings.Join(args, " "))
+	w := e.stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	fmt.Fprintln(w, strings.Join(args, " "))
 	return nil
 }
 
@@ -308,8 +316,8 @@ func TestCommandOutputStreamer_AppendToRingNormal(t *testing.T) {
 
 func TestCommandOutputStreamer_AppendToRingOverflow(t *testing.T) {
 	s := &commandOutputStreamer{ringCap: 8, ring: make([]byte, 0, 8)}
-	s.appendToRing([]byte("12345678"))  // fill ring exactly
-	s.appendToRing([]byte("abcdef"))    // push 6 bytes in, 6 oldest dropped
+	s.appendToRing([]byte("12345678")) // fill ring exactly
+	s.appendToRing([]byte("abcdef"))   // push 6 bytes in, 6 oldest dropped
 	if len(s.ring) != 8 {
 		t.Errorf("ring len = %d, want 8", len(s.ring))
 	}
@@ -352,12 +360,12 @@ func TestCommandOutputStreamer_AppendToRingHugeChunk(t *testing.T) {
 // event bus for the test and returns a channel of decoded events. Tests
 // then drive the HTTP endpoint and assert on the captured stream.
 type commandOutputTestHarness struct {
-	ws       *ReactWebServer
-	chatID   string
-	cmd      agent_commands.Command // caller-supplied mock; wired into a fresh registry
-	events   <-chan events.UIEvent
-	cancel   func()
-	cmdLine  string
+	ws      *ReactWebServer
+	chatID  string
+	cmd     agent_commands.Command // caller-supplied mock; wired into a fresh registry
+	events  <-chan events.UIEvent
+	cancel  func()
+	cmdLine string
 }
 
 func newCommandOutputTestHarness(t *testing.T, cmd agent_commands.Command) *commandOutputTestHarness {
@@ -499,14 +507,20 @@ type streamingCommand struct {
 	name   string
 	chunks []string
 	delay  time.Duration
+	stdout io.Writer
 }
 
 func (s *streamingCommand) Name() string          { return s.name }
 func (s *streamingCommand) Description() string   { return "test streaming command" }
 func (s *streamingCommand) SafeDuringSteer() bool { return true }
+func (s *streamingCommand) SetOutput(w io.Writer) { s.stdout = w }
 func (s *streamingCommand) Execute(_ []string, _ *agent.Agent) error {
+	w := s.stdout
+	if w == nil {
+		w = os.Stdout
+	}
 	for _, c := range s.chunks {
-		os.Stdout.Write([]byte(c))
+		_, _ = w.Write([]byte(c))
 		if s.delay > 0 {
 			time.Sleep(s.delay)
 		}
@@ -521,13 +535,19 @@ type streamingPanicCommand struct {
 	name     string
 	prefix   string
 	panicMsg string
+	stdout   io.Writer
 }
 
 func (s *streamingPanicCommand) Name() string          { return s.name }
 func (s *streamingPanicCommand) Description() string   { return "test panic command" }
 func (s *streamingPanicCommand) SafeDuringSteer() bool { return true }
+func (s *streamingPanicCommand) SetOutput(w io.Writer) { s.stdout = w }
 func (s *streamingPanicCommand) Execute(_ []string, _ *agent.Agent) error {
-	os.Stdout.Write([]byte(s.prefix))
+	w := s.stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	_, _ = w.Write([]byte(s.prefix))
 	panic(s.panicMsg)
 }
 
@@ -661,14 +681,22 @@ func TestHandleAPICommandExecute_UTF8BoundarySafe(t *testing.T) {
 // utf8SplitCommand writes a 2-byte UTF-8 rune as two separate writes so
 // the pipe reads cross a rune boundary. The streamer must buffer the
 // partial first byte until the second read completes the rune.
-type utf8SplitCommand struct{ name string }
+type utf8SplitCommand struct {
+	name   string
+	stdout io.Writer
+}
 
 func (s *utf8SplitCommand) Name() string          { return s.name }
 func (s *utf8SplitCommand) Description() string   { return "test utf8 split" }
 func (s *utf8SplitCommand) SafeDuringSteer() bool { return true }
+func (s *utf8SplitCommand) SetOutput(w io.Writer) { s.stdout = w }
 func (s *utf8SplitCommand) Execute(_ []string, _ *agent.Agent) error {
-	os.Stdout.Write([]byte{0xC3}) // first byte of 'é'
-	os.Stdout.Write([]byte{0xA9}) // second byte of 'é'
+	w := s.stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	_, _ = w.Write([]byte{0xC3}) // first byte of 'é'
+	_, _ = w.Write([]byte{0xA9}) // second byte of 'é'
 	return nil
 }
 

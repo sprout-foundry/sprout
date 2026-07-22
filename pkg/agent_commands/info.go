@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -12,7 +13,18 @@ import (
 // InfoCommand implements the /info slash command — a one-shot overview
 // of the agent's current state: model, provider, context, cost, persona,
 // embedding index, and subagent config.
-type InfoCommand struct{}
+type InfoCommand struct {
+	stdout io.Writer
+}
+
+func (c *InfoCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *InfoCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 // Name returns the command name
 func (c *InfoCommand) Name() string {
@@ -46,7 +58,7 @@ func (c *InfoCommand) Usage() string {
 // Execute renders the agent state overview
 func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		fmt.Println(console.GlyphInfo.Prefix() + "No agent state available.")
+		fmt.Fprintln(c.out(), console.GlyphInfo.Prefix()+"No agent state available.")
 		return nil
 	}
 
@@ -102,15 +114,15 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		subagentModel = cfg.GetSubagentModel()
 	}
 
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintf(os.Stdout, "Agent: %s (%s)\n", model, provider)
-	fmt.Fprintf(os.Stdout, "Context: %d/%d tokens (%.1f%%)\n", used, limit, pct)
-	fmt.Fprintf(os.Stdout, "Cost: $%.6f\n", totalCost)
-	fmt.Fprintf(os.Stdout, "Workspace: %s\n", workspace)
-	fmt.Fprintf(os.Stdout, "Persona: %s\n", persona)
-	fmt.Fprintf(os.Stdout, "Embeddings: %s (%d records)\n", embedStatus, embedCount)
-	fmt.Fprintf(os.Stdout, "Subagent provider: %s model: %s\n", subagentProvider, subagentModel)
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(c.out())
+	fmt.Fprintf(c.out(), "Agent: %s (%s)\n", model, provider)
+	fmt.Fprintf(c.out(), "Context: %d/%d tokens (%.1f%%)\n", used, limit, pct)
+	fmt.Fprintf(c.out(), "Cost: $%.6f\n", totalCost)
+	fmt.Fprintf(c.out(), "Workspace: %s\n", workspace)
+	fmt.Fprintf(c.out(), "Persona: %s\n", persona)
+	fmt.Fprintf(c.out(), "Embeddings: %s (%d records)\n", embedStatus, embedCount)
+	fmt.Fprintf(c.out(), "Subagent provider: %s model: %s\n", subagentProvider, subagentModel)
+	fmt.Fprintln(c.out())
 
 	return nil
 }
@@ -134,7 +146,7 @@ type infoJSONPayload struct {
 // ExecuteWithJSONOutput emits the agent state overview as JSON.
 func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
 	if chatAgent == nil {
-		return WriteJSONToOutput(infoJSONPayload{})
+		return WriteJSON(c.out(), infoJSONPayload{})
 	}
 
 	model := chatAgent.GetModel()
@@ -175,7 +187,7 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 		subagentModel = cfg.GetSubagentModel()
 	}
 
-	return WriteJSONToOutput(infoJSONPayload{
+	return WriteJSON(c.out(), infoJSONPayload{
 		Model:            model,
 		Provider:         provider,
 		ContextUsed:      used,

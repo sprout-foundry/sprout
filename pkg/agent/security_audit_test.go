@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -408,4 +410,67 @@ func TestAuditLogger_CdGateDenied_NilAgent(t *testing.T) {
 
 	// Should not panic - writeCdRejectionMessage is now nil-safe
 	a.writeCdRejectionMessage("/etc", "is not allowed")
+}
+
+// ---------------------------------------------------------------------------
+// Integration: real *tools.AuditLogger with filesystem gate (SP-127 Phase 2.6)
+// ---------------------------------------------------------------------------
+
+// TestAuditLogger_RealLoggerCatchesFilesystemEntry exercises the production
+// code path: a real *tools.AuditLogger (not a mock) is passed to the
+// filesystem gate context, and we verify that a denied write path produces
+// an audit entry with the correct tool and action. This test would have
+// caught the type-assertion bug where LogEntry silently dropped entries
+// from filesystem.
+func TestAuditLogger_RealLoggerCatchesFilesystemEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := tools.NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+	defer logger.Close()
+
+	// Create a test workspace in /var/tmp (not /tmp, so audit is emitted).
+	workspace := filepath.Join("/var/tmp", "fs-real-logger-test-"+t.Name())
+	os.MkdirAll(workspace, 0755)
+	defer os.RemoveAll(workspace)
+
+	// Build a filesystem context with the real logger.
+	ctx := context.Background()
+	ctx = filesystem.WithWorkspaceRoot(ctx, workspace)
+	ctx = filesystem.WithAuditLogger(ctx, logger)
+
+	// Trigger a denied write path resolution.
+	_, err = filesystem.SafeResolvePathForWriteWithBypass(ctx, "/etc/passwd")
+	if err == nil {
+		t.Fatal("expected error for write path outside workspace")
+	}
+
+	logger.Close()
+
+	// Read the audit log and verify at least one entry is present.
+	entries := readAuditEntries(t, logPath)
+	if len(entries) == 0 {
+		t.Fatal("expected at least one audit entry from filesystem gate, got none")
+	}
+
+	// Find the filesystem_write entry.
+	var found bool
+	for _, e := range entries {
+		if e.Tool == "filesystem_write" && e.Action == "denied" {
+			found = true
+			if e.RiskLevel != "high" {
+				t.Errorf("RiskLevel = %q, want 'high'", e.RiskLevel)
+			}
+			if e.Category != "fs_gate" {
+				t.Errorf("Category = %q, want 'fs_gate'", e.Category)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected entry with Tool='filesystem_write' and Action='denied', got: %+v", entries)
+	}
 }

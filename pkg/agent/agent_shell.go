@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -188,7 +189,11 @@ func (a *Agent) writeCdRejectionMessage(target, reason string) {
 			SessionID: sessionID,
 			Workspace: workspace,
 		}
-		_ = logger.LogEntry(entry)
+		data, err := json.Marshal(entry)
+		if err != nil {
+			return
+		}
+		_ = logger.LogJSON(data)
 	}
 }
 

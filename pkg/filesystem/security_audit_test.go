@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -361,5 +362,14 @@ func (l *capturingAuditLogger) LogEntry(entry any) error {
 	if ae, ok := entry.(AuditEntry); ok {
 		*l.entries = append(*l.entries, ae)
 	}
+	return nil
+}
+
+func (l *capturingAuditLogger) LogJSON(data []byte) error {
+	var ae AuditEntry
+	if err := json.Unmarshal(data, &ae); err != nil {
+		return err
+	}
+	*l.entries = append(*l.entries, ae)
 	return nil
 }

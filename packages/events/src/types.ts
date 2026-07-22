@@ -127,6 +127,34 @@ export interface AgentMessageData {
   chat_id?: string;
 }
 
+export interface DelegateClarificationRequestedData {
+  subagent_id: string;
+  request_id: string;
+  question: string;
+  timestamp: string;
+  chat_id?: string;
+}
+
+export interface DelegateClarificationRespondedData {
+  subagent_id: string;
+  request_id: string;
+  response: string;
+  timestamp: string;
+  chat_id?: string;
+}
+
+export interface SessionChangedData {
+  change: string;
+  summary: Record<string, unknown>;
+  chat_id?: string;
+}
+
+export interface ProviderNoCredentialData {
+  provider: string;
+  message: string;
+  chat_id?: string;
+}
+
 export interface TodoUpdateData {
   todos: unknown;
   chat_id?: string;
@@ -154,6 +182,33 @@ export interface FileContentChangedData {
   size?: number;
 }
 
+/** Real-time file content synchronization payload from WorkspacePatchEvent. */
+export interface WorkspacePatchData {
+  file_path: string;
+  content: string;
+  action: string;
+  seq: number;
+  conflict?: boolean;
+  theirs_path?: string;
+  chat_id?: string;
+}
+
+/** Streamed output from a safe slash command. */
+export interface CommandOutputData {
+  command: string;
+  chunk: string;
+  is_final: boolean;
+  seq: number;
+  chat_id?: string;
+}
+
+/** Backpressure warning emitted when streamed command output is discarded. */
+export interface CommandOutputDroppedData {
+  command: string;
+  dropped_bytes: number;
+  chat_id?: string;
+}
+
 export interface MetricsUpdateData {
   total_tokens?: number;
   context_tokens?: number;
@@ -178,6 +233,7 @@ export interface MetricsUpdateData {
 export interface ContextManagementDiagnosticData {
   current_tokens?: number;
   max_tokens?: number;
+  native_max_tokens?: number;
   effective_max?: number;
   trigger_fraction?: number;
   reserved_response?: number;
@@ -189,6 +245,16 @@ export interface ContextManagementDiagnosticData {
   prompt_tokens?: number;
   cache_write_tokens?: number;
   cache_hit_rate?: number;
+  chat_id?: string;
+}
+
+export interface RecallDiagnosticData {
+  embed_duration_ms: number;
+  candidates_considered: number;
+  injected: number;
+  injected_chars: number;
+  top_scores: number[];
+  timestamp: string;
   chat_id?: string;
 }
 
@@ -261,6 +327,23 @@ export interface AskUserRequestData {
   default?: string;
   client_id?: string;
   status?: string;
+}
+
+export interface InputRequiredData {
+  reason: string;
+  request_id?: string;
+  timestamp: string;
+  chat_id?: string;
+}
+
+/** Payload for a password_request event. Password responses are never included. */
+export interface PasswordRequestData {
+  request_id: string;
+  command: string;
+  prompt: string;
+  timestamp: string;
+  status?: string;
+  chat_id?: string;
 }
 
 /** A single line in a diff hunk with its change type. */
@@ -347,18 +430,29 @@ export type WsEvent =
   | { type: 'tool_start'; data?: ToolStartData; id?: string; timestamp?: string }
   | { type: 'tool_end'; data?: ToolEndData; id?: string; timestamp?: string }
   | { type: 'tool_execution'; data?: Record<string, unknown>; id?: string; timestamp?: string }
+  | { type: 'command_output'; data?: CommandOutputData; id?: string; timestamp?: string }
+  | { type: 'command_output_dropped'; data?: CommandOutputDroppedData; id?: string; timestamp?: string }
   | { type: 'subagent_activity'; data?: SubagentActivityData; id?: string; timestamp?: string }
+  | { type: 'delegate_clarification_requested'; data?: DelegateClarificationRequestedData; id?: string; timestamp?: string }
+  | { type: 'delegate_clarification_responded'; data?: DelegateClarificationRespondedData; id?: string; timestamp?: string }
   | { type: 'agent_message'; data?: AgentMessageData; id?: string; timestamp?: string }
+  | { type: 'provider_no_credential'; data?: ProviderNoCredentialData; id?: string; timestamp?: string }
   | { type: 'todo_update'; data?: TodoUpdateData; id?: string; timestamp?: string }
   | { type: 'file_changed'; data?: FileChangedData; id?: string; timestamp?: string }
+  | { type: 'workspace_patch'; data?: WorkspacePatchData; id?: string; timestamp?: string }
   | { type: 'file_content_changed'; data?: FileContentChangedData; id?: string; timestamp?: string }
   | { type: 'metrics_update'; data?: MetricsUpdateData; id?: string; timestamp?: string }
   | { type: 'workspace_changed'; data?: WorkspaceChangedData; id?: string; timestamp?: string }
+  | { type: 'session_changed'; data?: SessionChangedData; id?: string; timestamp?: string }
   | { type: 'context_management_diagnostic'; data?: ContextManagementDiagnosticData; id?: string; timestamp?: string }
+  | { type: 'recall_diagnostic'; data?: RecallDiagnosticData; id?: string; timestamp?: string }
   | { type: 'security_approval_request'; data?: SecurityApprovalRequestData; id?: string; timestamp?: string }
   | { type: 'security_prompt_request'; data?: SecurityPromptRequestData; id?: string; timestamp?: string }
   | { type: 'ask_user_request'; data?: AskUserRequestData; id?: string; timestamp?: string }
+  | { type: 'input_required'; data?: InputRequiredData; id?: string; timestamp?: string }
   | { type: 'edit_approval_request'; data?: EditApprovalRequestData; id?: string; timestamp?: string }
+  | { type: 'shell_approval_request'; data?: ShellApprovalRequestData; id?: string; timestamp?: string }
+  | { type: 'password_request'; data?: PasswordRequestData; id?: string; timestamp?: string }
   | { type: 'validation'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'terminal_output'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'session_terminated'; data?: Record<string, unknown>; id?: string; timestamp?: string }
@@ -368,10 +462,9 @@ export type WsEvent =
   | { type: 'error_output'; data?: TerminalOutputData; id?: string; timestamp?: string }
   | { type: 'pty_exit'; data?: TerminalPtyExitData; id?: string; timestamp?: string }
   | { type: 'drift_detected'; data?: DriftDetectedData; id?: string; timestamp?: string }
-  // Catch-all: must be last. Provides SproutEvent compatibility and handles
-  // dev-server noise (liveReload, hot, ping, etc.). Note: this prevents
-  // automatic narrowing in switch/case — use typed casts in handlers instead.
-  | { type: string; data?: unknown; id?: string; timestamp?: string; [key: string]: unknown };
+  // Fallback for transport/dev-server events not represented above. Keep the
+  // shape closed so excess-property checking still catches misspelled fields.
+  | { type: string; data?: unknown; id?: string; timestamp?: string };
 
 /**
  * EventsProvider — abstraction over the real-time event transport.

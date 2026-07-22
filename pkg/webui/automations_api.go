@@ -379,11 +379,25 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 	// Check approval requirement using the workspace-aware directory.
 	// If approval is required, return a JSON response (not an error) so the
 	// frontend can show a confirmation prompt.
+	//
+	// SP-128 Phase 2b: include the full workflow Summary under the `summary`
+	// key so the WebUI confirmation dialog renders the same overview as the
+	// CLI (description, steps, subagent overrides, budget, allowed_paths,
+	// warnings). When Summarize fails — e.g. a malformed allowed_paths
+	// entry — we fall back to the bare response so the existing
+	// contract is preserved; the loader-side Validate will reject the
+	// workflow on the next attempt anyway.
 	if agent.WorkflowRequiresApprovalIn(dir, req.Workflow) {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		response := map[string]interface{}{
 			"requires_approval": true,
 			"workflow":          req.Workflow,
-		})
+		}
+		if wfPath, pathErr := automate.ResolvePath(dir, req.Workflow); pathErr == nil {
+			if summary, sumErr := automate.Summarize(wfPath); sumErr == nil {
+				response["summary"] = summary
+			}
+		}
+		writeJSON(w, http.StatusOK, response)
 		return
 	}
 
@@ -402,6 +416,18 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// SP-128 Phase 3 (A1 fix): seed the in-session approval cache after
+	// a successful WebUI launch so the next attempt within the same chat
+	// session auto-approves. The agent-tool path already does this via
+	// the security gate; the WebUI path is the gap. Without this call,
+	// the WebUI re-prompts on every run even after a confirmed launch,
+	// which is jarring in an autonomous flow that wants to fire several
+	// workflows back-to-back. No-op when the agent is nil (defensive —
+	// the same nil-check ran two lines up).
+	if agentInst != nil {
+		agentInst.MarkWorkflowApprovedInSession(req.Workflow)
 	}
 
 	// Parse the JSON result from the tool layer and return it.

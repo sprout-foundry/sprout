@@ -1,6 +1,6 @@
 # SP-127 — Promote Filesystem Gate to Gate-1 (Static Classifier)
 
-**Status:** 🔵 Scoping — not yet approved for implementation
+**Status:** Phase 2 (Workflow `allowed_paths` runtime extensions) 🟢 Shipped on `main` (commits `e5dc181e`, `389a9d31`, `1e1e4bb9`, `0a0a93e3`, `3396f0c3`, fix `dc167b03`). M1–M4 migration to Gate 1 remains open.
 **Created:** 2026-07-20
 **Type:** Architecture follow-up (security model unification)
 
@@ -281,20 +281,25 @@ no `withFilesystemApproval` wrapper to forget.
 - [ ] `docs/SECURITY.md` updated to describe the single-flow
   architecture.
 
-## Migration plan
+## Migration plan (M1–M4)
 
-1. **Phase 1 — bring path-tier into Gate 1.** Extend
+The four migration phases below remain on the path to a single-gate
+architecture. They are now labeled **M1–M4** to leave room for the
+adjacent **Phase 2 (Workflow `allowed_paths` runtime extensions)**
+which lands in parallel but ships independently.
+
+1. **M1 — bring path-tier into Gate 1.** Extend
    `staticGateAutoApprove` to classify file paths. Keep
    `withFilesystemApproval` as a fallback for handlers that haven't
    been migrated yet. Both paths must agree on the decision; cross-
    check via a conformance test.
-2. **Phase 2 — migrate handlers.** One commit per handler. After each
+2. **M2 — migrate handlers.** One commit per handler. After each
    commit, run the full test suite + the Gate-1 conformance test.
-3. **Phase 3 — remove the old machinery.** Once all handlers
+3. **M3 — remove the old machinery.** Once all handlers
    migrated, delete `FilesystemGate`, `withFilesystemApproval`,
    `filesystemGateAdapter`, and the corresponding tests. Update
    `docs/SECURITY.md`.
-4. **Phase 4 — performance hardening.** Add the resolved-verdict
+4. **M4 — performance hardening.** Add the resolved-verdict
    cache if the benchmark regresses. Document the cache in
    `pkg/filesystem/context.go`.
 
@@ -311,11 +316,351 @@ no `withFilesystemApproval` wrapper to forget.
 - Should Gate 1 cache resolved paths within a single turn to avoid
   duplicate symlink evals? The benchmark will tell us.
 
+## Phase 2 — Workflow `allowed_paths` runtime extensions
+
+**Status:** 🟢 Shipped (Phase 2.1–2.6 + Phase 2.6 LogJSON fix, commits `389a9d31`, `e5dc181e`, `1e1e4bb9`, `0a0a93e3`, `3396f0c3`, `dc167b03`).
+**Depends on:** Phase 1 of the original SP-127 work (the JSON schema,
+validation, session seeding, and `read_only` mode enforcement at
+`handleFileSecurityError` are all already shipped in this branch's
+parent commit set).
+**Parallel to:** M1–M4 above (this work ships independently of the
+gate-consolidation migration).
+
+### Why this phase exists
+
+A workflow author can declare extra folders in `allowed_paths` and the
+runtime correctly **pre-seeds the agent's session allowlist** at launch
+(`pkg/agent/tool_handlers_automate.go:91–94` iterates `summary.AllowedPaths`
+and calls `AddSessionAllowedFolder` + `SetSessionAllowedFolderMode`).
+File tools that take an **absolute path** work end-to-end: the gate
+recognizes the entry, honors the mode (`read_only` blocks writes with
+a workflow-specific denial reason), and skips the per-call approval
+prompt.
+
+The agent, however, cannot **operate across multiple folders the way
+the workflow author intended**. Three concrete gaps:
+
+1. **No `cd`-target validation.** `pkg/agent/agent_shell.go::updateShellCwd`
+   tracks every `cd <path>` shell command and stores the result as the
+   agent's "logical cwd." Subsequent shell commands and the
+   `pkg/filesystem` resolver both consult `effectiveCwd()`, so a
+   successful `cd /etc && cat passwd` reads `/etc/passwd` as if it
+   were an in-workspace file. The workflow may legitimately declare
+   `/tmp/workspace` as `read_write`, but the agent can still pivot to
+   any other directory with `cd <that-dir>` and operate there. There
+   is no validation that the cd target is the workspace root or a
+   declared `allowed_paths` entry.
+
+2. **Absolute paths required.** Because the resolver's off-workspace
+   check is keyed to the original workspace root, the only way to
+   reach an allowed_path today is to spell out its absolute path on
+   every file tool call. A workflow that wants the agent to "refactor
+   `lib/foo.go` and its twin under `/home/user/projects/sibling`" has
+   no way to declare that second folder as the agent's *working
+   context* for the relevant steps — the model has to remember to use
+   the prefix on every call.
+
+3. **No per-step scoping.** The schema only declares `allowed_paths`
+   at the **workflow level**. A workflow whose initial step needs
+   `/opt/marketing-data` but whose later steps should not have access
+   cannot narrow the scope without re-launching under a different
+   workflow file.
+
+4. **No audit surface.** When a file tool call lands in an allowed_path
+   entry, the event bus sees a normal tool dispatch with no marker
+   distinguishing "user approved this access right now" from
+   "workflow pre-declared this folder." The WebUI's automation panel
+   can't show the user "this workflow's allowed_paths: 3 declared,
+   2 used in this run."
+
+5. **Symlink escape not re-validated.** The gate resolves symlinks
+   for the dialog display, but once an allowed folder is granted, a
+   symlink inside it pointing at `/etc` would still be writable. The
+   mode check happens on the *original* path, not the resolved target.
+
+### What Phase 2 changes
+
+#### 2.1 — `cd`-target validation against the allowlist
+
+`updateShellCwd` (in `pkg/agent/agent_shell.go`) becomes a gated
+operation. The gate consults a new method on the agent,
+`IsCdTargetAllowed(target string) bool`, which returns true only when
+`target` is:
+
+- the workspace root, OR
+- a subdirectory of the workspace root, OR
+- a declared `allowed_paths` entry (or subdirectory thereof) for the
+  currently-running workflow, OR
+- a session-allowlisted folder from a previous approval.
+
+`cd` to any other path is **rejected** — the shell output reports
+"cd refused: target is not in the workspace or the workflow's
+declared allowed_paths" and the agent's tracked cwd is unchanged.
+This closes gap #1.
+
+The check uses `filepath.Clean` + `filepath.IsAbs` + prefix-match
+against the workspace root and each allowlisted folder. Symlinks are
+NOT resolved at this stage — the check is purely lexical, matching
+the existing `IsFolderSessionAllowed` semantics. Symlink escape
+re-validation is gap #5 (see 2.5 below).
+
+#### 2.2 — Per-step `allowed_paths` override
+
+Schema additions in `pkg/workflow/types.go`:
+
+- `AgentWorkflowInitial` gains a new `AllowedPaths []AllowedPath`
+  field (parallel to the existing `AgentWorkflowConfig.AllowedPaths`).
+- `AgentWorkflowStep` gains the same `AllowedPaths []AllowedPath`
+  field.
+- `AgentWorkflowConfig.AllowedPaths` stays as the **workflow-wide**
+  base set.
+
+Why a field rather than embedding: `AgentWorkflowStep` is a flat
+struct (all fields flat in the same namespace) and embedding
+`AllowedPaths` would flatten its `Path` / `Mode` / `Reason` fields
+into the step's own, producing confusing JSON like
+`{"name": "...", "path": "..."}`. A named field is also clearer at
+the call site (`step.AllowedPaths[i].Mode` vs `step.Mode`).
+
+Semantics: the effective allowlist at step N is the **union** of the
+workflow-level set and the step-level set. Step additions are
+**additive** — they cannot narrow the workflow-level scope. (Narrowing
+is a future Phase 3 capability; for now, restricting access means
+splitting the workflow into two workflow files.) The workflow-level
+set is the **base** so a step author can reason "what's already
+allowed" without re-declaring the workspace.
+
+Loader validation: each step-level entry runs the existing
+`AllowedPath.Validate()` rules (absolute, cleaned, mode enum,
+no `..`). Duplicates between workflow-level and step-level are
+allowed and produce a single entry on the merged list (the step-level
+mode wins on conflict — last write wins, with a loader warning if
+the modes differ).
+
+#### 2.3 — Step-aware allowlist application
+
+When the workflow runner enters a step (initial or numbered), it
+applies the step-level `allowed_paths` on top of the workflow-level
+set. Specifically, `pkg/agent/tool_handlers_automate.go:91–94` becomes
+the workflow-level seed; a new function
+`applyStepAllowedPaths(a, step)` runs before each step executes to
+add the step-level entries to the agent's session allowlist and call
+`SetSessionAllowedFolderMode` for each.
+
+Removing on step end is **not required** for v1 — workflow steps
+are linear and the next step's apply call is idempotent. If a future
+phase introduces parallel branches or retry loops, a
+`ClearStepAddedAllowedPaths` helper will land alongside.
+
+#### 2.4 — `effectiveCwd`-aware resolver scope
+
+Once `cd` is gated (2.1), the resolver can be tightened so the
+off-workspace check is bound to the **smaller** of (workspace root,
+the allowlist covering `effectiveCwd()`). Concretely:
+
+- If `effectiveCwd()` is under an `allowed_paths` entry, that entry's
+  folder becomes the resolution scope for the duration of the
+  session — `SafeResolvePathWithBypass` accepts paths under that
+  folder without an approval prompt, just like the workspace root.
+- If `effectiveCwd()` is back at the workspace root, scope reverts.
+- If `effectiveCwd()` points at a non-allowed folder (which can't
+  happen post-2.1, but defensive against bypass), the resolver
+  falls back to the original "off-workspace → error" path.
+
+This addresses gap #2 directly. After landing, a workflow with
+`allowed_paths: [{path: /home/user/projects/sibling, mode: read_write}]`
+lets the agent `cd /home/user/projects/sibling && cat README.md` and
+`write_file notes/todo.md` both proceed without per-call prompts, as
+long as the resolved path stays under that folder.
+
+#### 2.5 — Symlink re-validation under allowed folders
+
+`SafeResolvePathWithBypass` (in `pkg/filesystem`) gains a new mode:
+when called with a ctx that has `WithFilesystemBypassScope(folder)
+set, the resolver also calls `filepath.EvalSymlinks` on the input and
+checks the resolved target against the same scope. If the resolved
+target escapes the scope (e.g., a symlink inside an allowed folder
+points at `/etc`), the resolver returns the off-workspace sentinel
+even when the lexical path is in-scope.
+
+This closes gap #5. The mechanism reuses `resolveCanonicalTimeout` (3s)
+to bound network-mount hangs on slow filesystems. On timeout, the
+resolver falls back to the lexical path (no symlink eval available);
+this is logged at WARN so an audit trail exists for the
+non-strict-mode run.
+
+#### 2.6 — Audit events for `allowed_path` hits
+
+When a file tool call lands inside a declared `allowed_paths` entry
+(not via per-call approval, but via pre-declaration), the agent
+publishes a new event on the event bus:
+
+```
+EventTypeAllowedPathHit
+  workflow        string  // workflow file basename (or "" for non-workflow runs)
+  tool            string  // tool name: write_file, read_file, edit_file, etc.
+  path            string  // the user-supplied path
+  resolved_path   string  // canonical target after symlink eval (may equal path)
+  mode            string  // "read_only" | "read_write"
+  matched_entry   string  // the declared allowed_path entry that matched
+  source          string  // "workflow" | "step" | "session_approval"
+```
+
+The WebUI Automations panel can show a per-run counter
+"allowed_paths used: N (of M declared)." The event also feeds the
+agent's own debug log when `agent.debug` is true.
+
+The event is published **after** the gate decision (so a denied
+access doesn't fire the event — only successful accesses do). This
+addresses gap #4.
+
+### Non-goals
+
+- **Not narrowing.** Phase 2 is additive only; a step cannot REMOVE
+  an entry from the workflow-level allowlist. Narrowing requires a
+  separate "step-level deny" capability, which is more error-prone
+  and out of scope for this phase.
+- **Not changing the mode enum.** Still `read_only` / `read_write`.
+  No "list_only" or "follow_only" tier in Phase 2.
+- **Not changing the dialog UX.** The workflow-launch confirmation
+  dialog already shows the declared `allowed_paths`. The per-step
+  additions show up in the dialog too, appended after the workflow-
+  level set with a "step X" label. No new dialog option.
+- **Not removing or refactoring the existing migration plan (M1–M4).**
+  This phase is orthogonal; it ships on top of the already-shipped
+  schema/validation/seeding work and can land in any order relative
+  to the gate-consolidation migration.
+
+### Risks
+
+1. **cd validation ergonomics.** A workflow author who declared
+   `/home/user/projects/sibling` may not have realized the agent
+   would `cd` there directly. Rejecting `cd /etc` is the safe
+   default, but rejecting `cd` to a path that's a *sibling* of the
+   declared folder (and thus a misconfiguration, not an attack) is
+   harder to differentiate. Mitigation: the rejection message lists
+   the currently-allowed cd targets so the user can see the gap.
+
+2. **Step-level union semantics.** A step that adds
+   `{path: /opt/marketing, mode: read_only}` does not narrow away
+   `read_write` access to that path if the workflow-level set
+   already declared it as `read_write`. Last-write-wins on mode
+   conflicts, with a loader warning, is the v1 contract. A future
+   phase can introduce an explicit "mode_pin" field.
+
+3. ~~Resolver scope change.~~ Tightening the resolver to scope on
+   `effectiveCwd()` is a standard cross-cutting change. All
+   `SafeResolvePathWithBypass` callers already read from
+   `agent.effectiveCwd()`, so no caller updates are needed; only
+   the resolver's internal scope check changes. Move to
+   implementation notes; not a tracked risk.
+
+4. **Symlink eval perf.** Two `filepath.EvalSymlinks` calls per
+   file op (one in the dialog display, one in the strict resolver)
+   doubles the symlink cost. Mitigation: cache the resolved target
+   in the new `WithFilesystemBypassScope` ctx so a second call in
+   the same turn is a hashmap lookup. Also see M4 — the cache
+   lands there.
+
+5. **Audit volume.** Workflows with hundreds of file ops fire
+   `AllowedPathHit` events at the same cadence. The event bus
+   already handles high-volume `tool_*` events, but a per-event
+   rate-limit prevents floods from making the WebUI lag. The
+   rate-limit policy is **deferred** to the implementation phase;
+   see Open questions below.
+
+### Acceptance criteria
+
+- [ ] `updateShellCwd` rejects any target not under the workspace
+  root or a declared `allowed_paths` entry. Test asserts each
+  rejection path (non-allowed absolute, non-allowed relative,
+  under-but-allowed, allowed-but-non-existent).
+- [ ] `AgentWorkflowStep` and `AgentWorkflowInitial` accept
+  `allowed_paths` in JSON. Loader validates each entry with the
+  existing `AllowedPath.Validate()` rules.
+- [ ] Workflow runner applies step-level `allowed_paths` before
+  each step executes; the agent's session allowlist reflects the
+  union at step entry.
+- [ ] When `effectiveCwd()` is under a declared `allowed_paths`
+  entry, file tool calls (relative or absolute) resolve to that
+  scope without per-call approval prompts.
+- [ ] Symlinks inside an allowed folder are resolved and re-checked
+  against the scope; an escape symlink returns the off-workspace
+  sentinel.
+- [ ] `EventTypeAllowedPathHit` is published after a successful
+  access that lands in an allowed_path entry. The event payload
+  matches the schema above.
+- [ ] All existing tests (`filesystem_gate_test.go`,
+  `filesystem_gate_adapter_test.go`, `path_tier_*_test.go`,
+  `approval_allowlist_test.go`, `tool_handlers_automate_test.go`)
+  pass without modification, except tests for symbols removed
+  per AC #2 (which are removed alongside them per the M3
+  removal step).
+- [ ] New tests cover each acceptance criterion, including the
+  symlink-escape re-validation and the audit-event publication.
+
+### File change list (estimate)
+
+| File | Change |
+|---|---|
+| `pkg/workflow/types.go` | Add `AllowedPaths []AllowedPath` field on `AgentWorkflowInitial` and `AgentWorkflowStep` (parallel to the existing `AgentWorkflowConfig.AllowedPaths`). Update Validate. |
+| `pkg/workflow/loader.go` | Validate step-level entries; emit "mode conflict" warning when the same path is declared at both levels with different modes. |
+| `pkg/automate/discovery.go` | Add `AllowedPaths` to `InitialSummary` and `StepSummary`. Surface step-level paths in the summary. |
+| `pkg/agent/agent_shell.go` | Add `IsCdTargetAllowed(target)`. Gate `updateShellCwd`. |
+| `pkg/agent/agent_change_methods.go` | New `applyStepAllowedPaths(a, step)`. New `AddStepAllowedPaths` set for de-dup. |
+| `pkg/agent/tool_handlers_automate.go` | Call `applyStepAllowedPaths` before each step executes; pass step-level paths through to the runner. |
+| `pkg/agent/submanager_security.go` | New `WithFilesystemBypassScope(folder)` ctx setter; helper to scope a resolver call. |
+| `pkg/filesystem/context.go` | Document the new scope semantics. |
+| `pkg/filesystem/filesystem.go` | `SafeResolvePathWithBypass` reads `WithFilesystemBypassScope` and applies the symlink re-validation when set. |
+| `pkg/events/events.go` | New `EventTypeAllowedPathHit` constant + `AllowedPathHitEvent` struct. |
+| `pkg/agent/tool_security.go` | Publish `AllowedPathHit` after a successful file op that lands in an allowed entry. |
+| `pkg/agent/tool_handlers_automate_test.go` | New tests for step-level `allowed_paths` apply. |
+| `pkg/agent/agent_shell_test.go` | New tests for `IsCdTargetAllowed` + `updateShellCwd` gating. |
+| `pkg/filesystem/filesystem_test.go` | New tests for symlink re-validation under `WithFilesystemBypassScope`. |
+| `pkg/events/events_test.go` | New test for `EventTypeAllowedPathHit` payload shape. |
+
+### Implementation summary
+
+All Phase 2 sub-phases ship on `main`:
+
+- **2.1 — cd-target validation** (`389a9d31`). `IsCdTargetAllowed(target)` checks workspace root and session-allowlisted folders via `filepath.Clean` + `isUnderPrefix`. `updateShellCwd` rejects non-allowed targets with a shell-output refusal message that lists the currently-allowed cd destinations. `cd -` validates the destination (previous cwd) too.
+- **2.2 — Per-step `allowed_paths` schema** (`e5dc181e`). `AgentWorkflowInitial` and `AgentWorkflowStep` gain `AllowedPaths []AllowedPath`. Loader validates, normalizes, dedupes same-level duplicates (warn), and warns on workflow-vs-step / workflow-vs-initial mode conflicts (step wins). Discovery summary surfaces the entries in JSON.
+- **2.3 — Step-aware apply** (`1e1e4bb9`). `ApplyWorkflowRuntimeAllowedPaths` snapshots the agent's allowlist, adds each path via `AddSessionAllowedFolder` + `SetSessionAllowedFolderMode`, returns the snapshot + added paths. `RestoreWorkflowRuntimeAllowedPaths` removes only paths in the added-set that weren't in the snapshot, restoring exactly the pre-step state. The runner wires apply+restore around both agent steps (defer in a function-scope closure with a named return) and shell steps (explicit apply+restore). `Initial.AllowedPaths` applies once at workflow start and persists for the entire run.
+- **2.4 — Resolver scope** (`0a0a93e3`). `SafeResolvePathWithBypass` and `SafeResolvePathForWriteWithBypass` now also accept paths under the agent's effective cwd or any session-allowlisted folder. New context keys `WithAgentContext` / `WithEffectiveCwd` / `WithSessionAllowedFolders` plumb agent state through the tool-handler layer. The /tmp special case is preserved.
+- **2.5 — Symlink re-validation** (`0a0a93e3`). `SafeResolvePathForWriteWithBypass` re-evaluates symlinks for existing target paths after parent resolution. The resolved target must also fall under an allowed root, or the write is rejected with a "symlink target outside allowlist" error. Multi-hop symlinks are handled via repeated `evalSymlinksWithTimeout`.
+- **2.6 — Audit events** (`3396f0c3` + `dc167b03`). Every filesystem gate decision (allowed / denied / redirected) and every cd-gate denial emits one JSONL entry. Entries include tool, args, risk level, category, action, reasoning, source, session ID, and workspace root. The integration fix in `dc167b03` adds `LogJSON([]byte)` to `*tools.AuditLogger` to sidestep the import-cycle-induced type-identity problem that silently dropped filesystem entries in production.
+
+Decisions resolved (vs. the open-questions list):
+- **cd rejection = hard-block** (shell refuses, tracked cwd unchanged).
+- **Subagent inheritance** = union of workflow + step's allowlist, propagated via `SnapshotSessionAllowedFolders`/`SnapshotSessionAllowedFolderModes` at subagent creation.
+- **`AllowedPathHit` event** = deferred. The audit log carries the same info with simpler wire format. Adding a discriminated event type was more scope than necessary once the JSONL audit log was in place.
+
+### Open questions
+
+- Should the cd rejection be a hard-block (return error to the
+  agent) or a soft-block (run the cd in a subshell that exits
+  immediately)? My read: hard-block — the agent's tracked cwd
+  doesn't change, the shell output reports the refusal, and the
+  agent can reason about it. Soft-block via subshell would also
+  work but complicates the semantic for `cd <allowed> && cat <off>`
+  chains.
+- Should step-level `allowed_paths` be inherited by subagents
+  spawned during that step, or only the workflow-level set? My
+  read: inherit the union (workflow + step) so the subagent has
+  the same scope as its parent for that step.
+- Should the `AllowedPathHit` event include the resolved mode
+  (`read_only` / `read_write`) of the matched entry, or just the
+  declared mode of the entry? My read: both — `mode` is the
+  resolved mode, plus a `mode_match` field that is `"direct"` if
+  the access matched the declared mode and `"upgraded"` if a
+  `session_approval` previously widened a `read_only` entry to
+  `read_write`. This gives the audit trail a paper trail for
+  widening decisions.
+
 ## Related work
 
 - This branch (`fix/file-tools-filesystem-gate`) — establishes the
   handler-side gate that this spec proposes to fold into Gate 1.
 - SP-004 (Security, Validation & MCP) — the umbrella spec; this
   lands as a sub-section of its Gate architecture chapter.
-- `pkg/agent/tool_security.go:235` (`newPreExecuteHook`) — where the
-  consolidation will land.
+- `pkg/agent/seed_tool_security.go:149` (`newPreExecuteHook`) and `seed_tool_security.go:208` (its `staticGateAutoApprove` call) — where the consolidation will land.- `roadmap/SP-128-compaction-drops-user-query.md` — unrelated to filesystem policy; fixes a rollup bug that drops the original user query and breaks strict-chat-template models (Qwen3.5).

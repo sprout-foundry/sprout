@@ -46,22 +46,19 @@ func (c *AgentWorkflowConfig) Validate() error {
 	// (string ops + filepath.IsAbs) but the schema rules here are the
 	// ones most likely to ship broken from a workflow author trying
 	// a typo.
+	//
+	// We also build a lookup map of workflow-level paths here so we can
+	// detect conflicts with step-level paths later (step-level mode wins).
+	workflowLevelPaths := make(map[string]string) // path -> mode
 	if len(c.AllowedPaths) > 0 {
-		cleaned := make([]AllowedPath, 0, len(c.AllowedPaths))
-		for i, ap := range c.AllowedPaths {
-			if err := ap.Validate(); err != nil {
-				return fmt.Errorf("allowed_paths[%d]: %w", i, err)
-			}
-			if IsSystemPathPrefix(strings.TrimSpace(ap.Path)) {
-				log.Printf("[workflow] WARNING: allowed_paths[%d] path %q falls under a system prefix; the workflow can declare this but the user should know it touches platform infrastructure", i, strings.TrimSpace(ap.Path))
-			}
-			cleaned = append(cleaned, AllowedPath{
-				Path:   strings.TrimSpace(ap.Path),
-				Mode:   strings.TrimSpace(ap.Mode),
-				Reason: strings.TrimSpace(ap.Reason),
-			})
+		cleaned, err := validateAndNormalizeAllowedPaths(c.AllowedPaths, "workflow level")
+		if err != nil {
+			return err
 		}
 		c.AllowedPaths = cleaned
+		for _, ap := range c.AllowedPaths {
+			workflowLevelPaths[ap.Path] = ap.Mode
+		}
 	}
 	if c.Orchestration != nil {
 		c.Orchestration.StateFile = strings.TrimSpace(c.Orchestration.StateFile)
@@ -131,6 +128,20 @@ func (c *AgentWorkflowConfig) Validate() error {
 		if c.Initial.Prompt != "" && c.Initial.PromptFile != "" {
 			return errors.New("initial.prompt and initial.prompt_file are mutually exclusive")
 		}
+		// Validate initial-level allowed_paths.
+		if len(c.Initial.AllowedPaths) > 0 {
+			cleaned, err := validateAndNormalizeAllowedPaths(c.Initial.AllowedPaths, "initial")
+			if err != nil {
+				return err
+			}
+			c.Initial.AllowedPaths = cleaned
+			// Check for conflicts with workflow-level paths.
+			for _, ap := range c.Initial.AllowedPaths {
+				if wfMode, exists := workflowLevelPaths[ap.Path]; exists && wfMode != ap.Mode {
+					log.Printf("[workflow] WARNING: allowed_paths path %q declared at workflow level with mode %q and at initial with mode %q; step-level mode wins", ap.Path, wfMode, ap.Mode)
+				}
+			}
+		}
 	}
 
 	if len(c.Steps) == 0 {
@@ -195,6 +206,20 @@ func (c *AgentWorkflowConfig) Validate() error {
 		prefix := fmt.Sprintf("steps[%d]", i)
 		if err := step.AgentWorkflowRuntime.Validate(prefix); err != nil {
 			return fmt.Errorf("validating step %s: %w", prefix, err)
+		}
+		// Validate step-level allowed_paths.
+		if len(step.AllowedPaths) > 0 {
+			cleaned, err := validateAndNormalizeAllowedPaths(step.AllowedPaths, fmt.Sprintf("steps[%d]", i))
+			if err != nil {
+				return err
+			}
+			step.AllowedPaths = cleaned
+			// Check for conflicts with workflow-level paths.
+			for _, ap := range step.AllowedPaths {
+				if wfMode, exists := workflowLevelPaths[ap.Path]; exists && wfMode != ap.Mode {
+					log.Printf("[workflow] WARNING: allowed_paths path %q declared at workflow level with mode %q and at %s with mode %q; step-level mode wins", ap.Path, wfMode, prefix, ap.Mode)
+				}
+			}
 		}
 	}
 
@@ -301,6 +326,42 @@ func (r *AgentWorkflowRuntime) Validate(prefix string) error {
 	}
 
 	return nil
+}
+
+// validateAndNormalizeAllowedPaths validates a slice of AllowedPath entries,
+// normalizes their values (trimming whitespace), and returns the normalized
+// slice. It checks each entry using AllowedPath.Validate() and emits a warning
+// for entries that fall under a system prefix.
+//
+// The parentScope parameter is used in warning/error messages to identify
+// which scope (e.g., "workflow level", "initial", "steps[0]") the entries
+// belong to.
+func validateAndNormalizeAllowedPaths(paths []AllowedPath, parentScope string) ([]AllowedPath, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	cleaned := make([]AllowedPath, 0, len(paths))
+	seen := make(map[string]struct{})
+	for i, ap := range paths {
+		if err := ap.Validate(); err != nil {
+			return nil, fmt.Errorf("%s: allowed_paths[%d]: %w", parentScope, i, err)
+		}
+		trimmedPath := strings.TrimSpace(ap.Path)
+		if IsSystemPathPrefix(trimmedPath) {
+			log.Printf("[workflow] WARNING: allowed_paths[%d] path %q falls under a system prefix; the workflow can declare this but the user should know it touches platform infrastructure", i, trimmedPath)
+		}
+		if _, duplicate := seen[trimmedPath]; duplicate {
+			log.Printf("[workflow] WARNING: allowed_paths entry %q duplicated within the same %q scope; only the first occurrence is used", trimmedPath, parentScope)
+		} else {
+			seen[trimmedPath] = struct{}{}
+			cleaned = append(cleaned, AllowedPath{
+				Path:   trimmedPath,
+				Mode:   strings.TrimSpace(ap.Mode),
+				Reason: strings.TrimSpace(ap.Reason),
+			})
+		}
+	}
+	return cleaned, nil
 }
 
 func (c *AgentWorkflowConfig) ShouldPersistRuntimeOverrides() bool {

@@ -11,8 +11,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // proxyChatRequest represents the Foundry proxy chat request format.
@@ -47,7 +45,7 @@ func getLastUserMessage(messages []proxyChatMessage) string {
 // handleAPIProxyChat handles POST /api/proxy/chat - Foundry proxy chat endpoint
 func (ws *ReactWebServer) handleAPIProxyChat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -56,7 +54,7 @@ func (ws *ReactWebServer) handleAPIProxyChat(w http.ResponseWriter, r *http.Requ
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("handleAPIProxyChat: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -84,13 +82,13 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
 		log.Printf("handleAPIProxyChat: steer mode requires a user message")
-		http.Error(w, "Steer mode requires a user message", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "user_message_required", "Steer mode requires a user message")
 		return
 	}
 
 	// Check for slash commands in steer mode - not allowed
 	if strings.HasPrefix(query, "/") {
-		http.Error(w, "Slash commands cannot be steered while a query is running", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "slash_command_not_steerable", "Slash commands cannot be steered while a query is running")
 		return
 	}
 
@@ -98,7 +96,7 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.RUnlock()
-		http.Error(w, "No active query to steer", http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
 		return
 	}
 	ws.mutex.RUnlock()
@@ -108,13 +106,13 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
 
 	if err := clientAgent.InjectInputContext(query); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 		return
 	}
 
@@ -128,170 +126,50 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	})
 }
 
-// handleAPIProxyChatQuery handles normal query requests within the proxy chat endpoint
+// handleAPIProxyChatQuery handles normal query requests within the proxy
+// chat endpoint. Thin wrapper over the shared runChatQuery runner: the
+// proxy-specific parsing (extracting the last user message from the
+// messages[] array) stays here, the rest delegates. AllowSlashCommands
+// is false because /api/proxy/chat is the LLM-only surface; the
+// safe-surface for slash commands is /api/command/execute.
+//
+// After the consolidation, this endpoint now also gets:
+//   - provider/model switch errors returned as 400 instead of silently
+//     proceeding (the per-query override branches previously only
+//     log.Printf'd and continued with the wrong model)
+//   - chat_id stamped on the QueryFailed error event (was previously
+//     only the client_id)
 func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http.Request, clientID, chatID string, req *proxyChatRequest) {
 	// Extract the query text from the last user message
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
 		log.Printf("handleAPIProxyChat: no user message found")
-		http.Error(w, "Messages with a user role are required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "user_message_required", "Messages with a user role are required")
 		return
 	}
 
 	log.Printf("handleAPIProxyChat: processing query: %s", query)
 
-	// Resolve workspace root with worktree awareness
-	workspaceRoot := ws.resolveWorkspaceRootForChat(clientID, chatID)
-	if workspaceRoot == "" {
-		workspaceRoot = ws.getWorkspaceRootForRequest(r)
-	}
-
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil {
-		ws.mutex.RUnlock()
-		http.Error(w, "Client context not found", http.StatusBadRequest)
-		return
-	}
-	if ctx.hasActiveQueryForChat(chatID) {
-		ws.mutex.RUnlock()
-		http.Error(w, "A query is already running for this chat", http.StatusConflict)
-		return
-	}
-	ws.mutex.RUnlock()
-
-	clientAgent, err := ws.getChatAgent(clientID, chatID)
-	if err != nil {
-		if isProviderConfigError(err) {
-			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
-		} else {
-			http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Apply per-query overrides: provider, model
-	if req.Provider != "" {
-		cm := ws.getConfigManager(r, w)
-		if cm != nil {
-			cm.EnrichCustomProviders()
-			if providerType, err := cm.MapStringToClientType(req.Provider); err == nil {
-				if serr := clientAgent.SetProvider(providerType); serr != nil {
-					log.Printf("handleAPIProxyChat: failed to set provider %q: %v", req.Provider, serr)
-				}
-			} else {
-				log.Printf("handleAPIProxyChat: invalid provider %q: %v", req.Provider, err)
-			}
-		}
-	}
-	if req.Model != "" {
-		if err := clientAgent.SetModel(req.Model); err != nil {
-			log.Printf("handleAPIProxyChat: failed to set model %q: %v", req.Model, err)
-		}
-	}
-
-	// Apply per-query workspace root override
-	if req.WorkspaceRoot != "" {
-		workspaceRoot = req.WorkspaceRoot
-	}
-
-	// Apply per-query system prompt override
-	if req.SystemPrompt != "" {
-		clientAgent.SetSystemPrompt(req.SystemPrompt)
-	}
-
-	// Store CurrentQuery atomically with ActiveQuery
-	ws.mutex.Lock()
-	ws.queryCount++
-	ws.activeQueries++
-	if ctx := ws.clientContexts[clientID]; ctx != nil {
-		ctx.setChatQueryActive(chatID, true, query)
-	}
-	ws.mutex.Unlock()
-
-	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
-	//
-	// Defer-recover: ProcessQueryWithContinuity can panic on malformed LLM
-	// output. Without a recover, a panic would skip the activeQueries
-	// decrement + chatQueryActive reset, leaving the client permanently
-	// stuck in "running" and leaking the gate counter.
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("handleAPIProxyChat: panic in query goroutine chat_id=%s: %v", chatID, r)
-			}
-			ws.mutex.Lock()
-			if ws.activeQueries > 0 {
-				ws.activeQueries--
-			}
-			if ctx := ws.clientContexts[clientID]; ctx != nil {
-				ctx.setChatQueryActive(chatID, false, "")
-			}
-			ws.mutex.Unlock()
-		}()
-
-		log.Printf("handleAPIProxyChat: calling ProcessQueryWithContinuity chat_id=%s provider=%s model=%s", chatID, clientAgent.GetProvider(), clientAgent.GetModel())
-		queryStart := time.Now()
-		clientAgent.SetWorkspaceRoot(workspaceRoot)
-		_, err := clientAgent.ProcessQueryWithContinuity(query)
-		queryDuration := time.Since(queryStart)
-
-		// Record cost after query completes
-		chargedCost := clientAgent.GetChargedCostTotal()
-		tokenCost := clientAgent.GetTokenCostTotal()
-		if chargedCost > 0 || tokenCost > 0 {
-			providerName := clientAgent.GetProvider()
-			GetCostStore().RecordCostWithBilling(
-				providerName,
-				clientAgent.GetModel(),
-				clientAgent.GetSessionID(),
-				chatID,
-				clientAgent.GetSessionName(),
-				clientAgent.GetWorkspaceRoot(),
-				resolveBillingTypeForProvider(providerName),
-				clientAgent.GetPromptTokens(),
-				clientAgent.GetCompletionTokens(),
-				chargedCost,
-				tokenCost,
-			)
-		}
-
-		// Sync state asynchronously so the query goroutine returns
-		// immediately. ExportState can take seconds for large conversations.
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("handleAPIProxyChat: panic in state sync chat_id=%s: %v", chatID, r)
-				}
-			}()
-			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-				log.Printf("handleAPIProxyChat: async state sync failed chat_id=%s: %v", chatID, err)
-			}
-		}()
-		if err != nil {
-			log.Printf("handleAPIProxyChat: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", chatID, queryDuration, err)
-			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))
-		} else {
-			log.Printf("handleAPIProxyChat: completed chat_id=%s duration=%s prompt_tokens=%d completion_tokens=%d total_cost=%.6f",
-				chatID, queryDuration,
-				clientAgent.GetPromptTokens(), clientAgent.GetCompletionTokens(),
-				clientAgent.GetTotalCost())
-		}
-	}()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"accepted":  true,
-		"chat_id":   chatID,
-		"timestamp": time.Now().Unix(),
+	ws.runChatQuery(w, r, clientID, chatID, query, chatQueryOptions{
+		Provider:           req.Provider,
+		Model:              req.Model,
+		WorkspaceRoot:      req.WorkspaceRoot,
+		SystemPrompt:       req.SystemPrompt,
+		AllowSlashCommands: false,
+		EchoQueryInAccept:  false,
+		LogTag:             "handleAPIProxyChat",
 	})
 }
 
-// handleAPIProxyChatStop handles POST /api/proxy/chat/stop - Foundry proxy chat stop endpoint
+// handleAPIProxyChatStop handles POST /api/proxy/chat/stop - Foundry
+// proxy chat stop endpoint. Thin wrapper over the shared stopActiveQuery
+// helper. After the consolidation this endpoint now cancels running
+// subagents via GetSubagentRunner; before, it only TriggerInterrupted
+// the primary agent, leaving subagents to drain for tens of seconds
+// after the user pressed Stop.
 func (ws *ReactWebServer) handleAPIProxyChatStop(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -302,7 +180,7 @@ func (ws *ReactWebServer) handleAPIProxyChatStop(w http.ResponseWriter, r *http.
 		ChatID string `json:"chat_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -314,58 +192,23 @@ func (ws *ReactWebServer) handleAPIProxyChatStop(w http.ResponseWriter, r *http.
 		chatID = req.ChatID
 	}
 
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
-		ws.mutex.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":            "ok",
-			"already_completed": true,
-			"timestamp":         time.Now().Unix(),
-		})
-		return
-	}
-	ws.mutex.RUnlock()
-
-	clientAgent, err := ws.getChatAgent(clientID, chatID)
-	if err != nil {
-		if isProviderConfigError(err) {
-			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
-		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	clientAgent.TriggerInterrupt()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"accepted":  true,
-		"mode":      "stop",
-		"chat_id":   chatID,
-		"timestamp": time.Now().Unix(),
-	})
+	ws.stopActiveQuery(w, r, clientID, chatID)
 }
 
-// handleAPIProxyChatStatus handles GET /api/proxy/chat/status - Foundry proxy chat status endpoint
+// handleAPIProxyChatStatus handles GET /api/proxy/chat/status - Foundry
+// proxy chat status endpoint. Thin wrapper over the shared
+// chatQueryStatus helper so /api/proxy/chat/status and
+// /api/query/status stay byte-identical on the wire.
 func (ws *ReactWebServer) handleAPIProxyChatStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
 
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	active := ctx != nil && ctx.hasActiveQueryForChat(chatID)
-	ws.mutex.RUnlock()
-
+	active := ws.chatQueryStatus(clientID, chatID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"active":  active,
 		"chat_id": chatID,

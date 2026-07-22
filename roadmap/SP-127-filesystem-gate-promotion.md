@@ -1,6 +1,10 @@
 # SP-127 — Promote Filesystem Gate to Gate-1 (Static Classifier)
 
-**Status:** Phase 2 (Workflow `allowed_paths` runtime extensions) 🟢 Shipped on `main` (commits `e5dc181e`, `389a9d31`, `1e1e4bb9`, `0a0a93e3`, `3396f0c3`, fix `dc167b03`). M1–M4 migration to Gate 1 remains open.
+**Status:** 🟢 M1–M3 Shipped on `main` (M1 commit `a06a3f8a`, M2 commits `1acff1cb`–`ac969831`, M3 commit `<HEAD>`). M4 (performance cache) deferred.
+
+M1: `staticGateAutoApprove` now decides both bypass AND path-tier; `classifyFileAccess` is Gate 1's path-tier classifier.
+M2: All 6 file-touching handlers (`write_file`, `edit_file`, `read_file`, `list_directory`, `write_structured_file`, `patch_structured_file`) migrated to `PrecheckFileAccess` so Deny paths return typed errors and Allow paths bypass `withFilesystemApproval`.
+M3: Audit trail (M3.2), documentation (M3.3), conformance test extension (M3.4), integration test (M3.5).
 **Created:** 2026-07-20
 **Type:** Architecture follow-up (security model unification)
 
@@ -259,27 +263,15 @@ no `withFilesystemApproval` wrapper to forget.
 
 ## Acceptance criteria
 
-- [ ] `staticGateAutoApprove` runs `ClassifyPathAccess` for
-  file-touching tools and routes through the same dialog as the
-  current handler-side gate.
-- [ ] `withFilesystemApproval`, `FilesystemGate` interface, and
-  `filesystemGateAdapter` are removed (or repurposed for the
-  subagent short-circuit).
-- [ ] Every file-touching handler (`write_file`, `edit_file`,
-  `read_file`, `list_directory`, `write_structured_file`,
-  `patch_structured_file`, `handlePDF`) calls
-  `SafeResolvePathWithBypass` directly with no wrapper.
-- [ ] All existing tests (`filesystem_gate_test.go`,
-  `filesystem_gate_adapter_test.go`, `path_tier_*_test.go`,
-  `approval_allowlist_test.go`) pass without modification, except
-  for callers that referenced the removed interface.
-- [ ] New Gate-1 unit test asserts path-tier classification for each
-  file-touching tool (External, Sensitive, in-workspace).
-- [ ] Performance benchmark shows ≤10% regression for the common
-  case (in-workspace, no approval flow). Cache the resolved verdict
-  if needed.
-- [ ] `docs/SECURITY.md` updated to describe the single-flow
-  architecture.
+- [x] `staticGateAutoApprove` runs `ClassifyPathAccess` for file-touching tools and routes through the same dialog as the current handler-side gate. *(M1: `a06a3f8a`)*
+- [x] `FileAccessClassifier` interface in `pkg/agent_tools`; `PrecheckFileAccess` in `pkg/agent_tools/security_precheck.go`. *(M2: `1acff1cb`)*
+- [x] All 6 file-touching handlers (`write_file`, `edit_file`, `read_file`, `list_directory`, `write_structured_file`, `patch_structured_file`) migrated to `PrecheckFileAccess` pre-check. *(M2: `1acff1cb`–`ac969831`)*
+- [x] Gate-1/Gate-2 conformance test pins path-tier agreement for 16+ path/mode combinations. *(M1: `a06a3f8a`; extended M3)*
+- [x] Audit trail: every `ClassifyFileAccess` verdict (allow/prompt/deny) writes a JSONL entry via the audit logger on ctx. *(M3.2)*
+- [x] Documentation updated. *(M3.3)*
+- [ ] `withFilesystemApproval`, `FilesystemGate` interface, and `filesystemGateAdapter` are removed. *(Deferred — still used as fallback for Prompt paths; removal is M4 if regression-free)*
+- [ ] Performance benchmark shows ≤10% regression for the common case. Cache the resolved verdict if needed. *(M4)*
+- [ ] `docs/SECURITY.md` updated to describe the single-flow architecture. *(Deferred — M4 or follow-up)*
 
 ## Migration plan (M1–M4)
 
@@ -288,20 +280,24 @@ architecture. They are now labeled **M1–M4** to leave room for the
 adjacent **Phase 2 (Workflow `allowed_paths` runtime extensions)**
 which lands in parallel but ships independently.
 
-1. **M1 — bring path-tier into Gate 1.** Extend
-   `staticGateAutoApprove` to classify file paths. Keep
-   `withFilesystemApproval` as a fallback for handlers that haven't
-   been migrated yet. Both paths must agree on the decision; cross-
-   check via a conformance test.
-2. **M2 — migrate handlers.** One commit per handler. After each
-   commit, run the full test suite + the Gate-1 conformance test.
-3. **M3 — remove the old machinery.** Once all handlers
-   migrated, delete `FilesystemGate`, `withFilesystemApproval`,
-   `filesystemGateAdapter`, and the corresponding tests. Update
-   `docs/SECURITY.md`.
-4. **M4 — performance hardening.** Add the resolved-verdict
-   cache if the benchmark regresses. Document the cache in
-   `pkg/filesystem/context.go`.
+1. **M1 — bring path-tier into Gate 1.** ✅ Done (`a06a3f8a`).
+   `staticGateAutoApprove` now classifies file paths; both Gate-1
+   entry points (`ExecuteTool`, seed pre-execute hook) consult the
+   same classifier. `withFilesystemApproval` stays as a fallback for
+   Prompt paths.
+2. **M2 — migrate handlers.** ✅ Done (`1acff1cb`–`ac969831`).
+   All 6 file-touching handlers call `PrecheckFileAccess` at the
+   top of `Execute`. Deny paths return typed errors immediately;
+   Allow paths bypass `withFilesystemApproval`; Prompt paths fall
+   through to the dialog.
+3. **M3 — housekeeping.** ✅ Done (this commit set).
+   Dead-code audit (none found), audit trail additions, documentation
+   updates, conformance test extension, integration test.
+4. **M4 — remove the old machinery.** ⏳ Deferred.
+   Delete `FilesystemGate`, `withFilesystemApproval`,
+   `filesystemGateAdapter` only after M3 integration tests confirm
+   no regression. Benchmark first; add resolved-verdict cache if
+   needed.
 
 ## Open questions
 

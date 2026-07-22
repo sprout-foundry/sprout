@@ -88,7 +88,7 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}
 
 	// Gate 1 precheck — resolves the path and classifies it.
-	_, decision := PrecheckFileAccess(env.FileAccessClassifier, "read_file", path)
+	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "read_file", path)
 	if decision == "deny" {
 		// A deny on read_file is not a read_only violation — reads are
 		// always allowed under read_only grants. Surface a neutral message.

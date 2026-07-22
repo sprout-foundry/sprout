@@ -41,6 +41,28 @@ func (c *AgentWorkflowConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
+	// Validate allowed_paths FIRST so a malformed entry fails fast,
+	// before any of the rest of Validate runs. The check is cheap
+	// (string ops + filepath.IsAbs) but the schema rules here are the
+	// ones most likely to ship broken from a workflow author trying
+	// a typo.
+	if len(c.AllowedPaths) > 0 {
+		cleaned := make([]AllowedPath, 0, len(c.AllowedPaths))
+		for i, ap := range c.AllowedPaths {
+			if err := ap.Validate(); err != nil {
+				return fmt.Errorf("allowed_paths[%d]: %w", i, err)
+			}
+			if IsSystemPathPrefix(strings.TrimSpace(ap.Path)) {
+				log.Printf("[workflow] WARNING: allowed_paths[%d] path %q falls under a system prefix; the workflow can declare this but the user should know it touches platform infrastructure", i, strings.TrimSpace(ap.Path))
+			}
+			cleaned = append(cleaned, AllowedPath{
+				Path:   strings.TrimSpace(ap.Path),
+				Mode:   strings.TrimSpace(ap.Mode),
+				Reason: strings.TrimSpace(ap.Reason),
+			})
+		}
+		c.AllowedPaths = cleaned
+	}
 	if c.Orchestration != nil {
 		c.Orchestration.StateFile = strings.TrimSpace(c.Orchestration.StateFile)
 		c.Orchestration.EventsFile = strings.TrimSpace(c.Orchestration.EventsFile)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -458,5 +459,66 @@ func TestListDirectoryHandler_NoGateIsNoop(t *testing.T) {
 	}
 	if !errors.Is(err, filesystem.ErrOutsideWorkingDirectory) {
 		t.Errorf("err = %v, want ErrOutsideWorkingDirectory", err)
+	}
+}
+
+// TestWithFilesystemApproval_DenialReasonSurfacesAsError verifies the
+// SP-128-1f contract: when the gate returns (ctx with denial reason,
+// false), withFilesystemApproval returns the denial reason AS the
+// user-visible message but still wraps the original filesystem
+// sentinel via %w. That double gives us:
+//   - a workflow-specific message in err.Error() ("declared
+//     read_only in allowed_paths") so the model doesn't puzzle
+//     over a generic "outside working directory"
+//   - errors.Is(err, ErrWriteOutsideWorkingDirectory) still
+//     matches so the subagent stderr parser (which scans for the
+//     sentinel substring) and any errors.Is-based downstream
+//     code keep working
+func TestWithFilesystemApproval_DenialReasonSurfacesAsError(t *testing.T) {
+	gate := &recordingGate{approveDecision: false}
+	// Pre-populate the gate's returned ctx with a denial reason.
+	// The WithFilesystemGateDenialReason setter lives in this
+	// package, so the test can wire it directly.
+	reason := "write blocked: /tmp/x is declared read_only in the active workflow's allowed_paths; the filesystem gate cannot authorize a write under a read_only grant"
+	gate.returnedCtx = WithFilesystemGateDenialReason(context.Background(), reason)
+
+	_, err := withFilesystemApproval[string](
+		context.Background(), gate, "write_file", "/tmp/x",
+		func(ctx context.Context) (string, error) {
+			return "", filesystem.ErrWriteOutsideWorkingDirectory
+		},
+	)
+	if err == nil {
+		t.Fatal("expected denial reason as error, got nil")
+	}
+	if !strings.Contains(err.Error(), reason) {
+		t.Errorf("err = %q, want substring %q", err.Error(), reason)
+	}
+	// The original sentinel must still be wrappable via
+	// errors.Is — see CRITICAL-1 in the SP-128 review; the
+	// subagent stderr parser depends on this.
+	if !errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
+		t.Error("denial reason should wrap the generic sentinel via %w, not discard it")
+	}
+}
+
+// TestWithFilesystemApproval_DenyWithoutReasonPreservesOriginal
+// guards the other branch: when the gate denies without setting a
+// reason (the historical path), the original filesystem error
+// propagates verbatim. Without this branch, the consumer-side
+// helper would break every existing gate that didn't add the
+// reason.
+func TestWithFilesystemApproval_DenyWithoutReasonPreservesOriginal(t *testing.T) {
+	gate := &recordingGate{approveDecision: false}
+	// No reason set; returnedCtx is nil so the helper sees the
+	// raw ctx it passed in.
+	_, err := withFilesystemApproval[string](
+		context.Background(), gate, "write_file", "/tmp/x",
+		func(ctx context.Context) (string, error) {
+			return "", filesystem.ErrWriteOutsideWorkingDirectory
+		},
+	)
+	if !errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
+		t.Errorf("err = %v, want ErrWriteOutsideWorkingDirectory (reason not set)", err)
 	}
 }

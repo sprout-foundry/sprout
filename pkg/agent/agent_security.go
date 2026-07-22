@@ -66,6 +66,17 @@ func (a *Agent) IsFolderSessionAllowed(absPath string) bool {
 	return a.security.IsFolderSessionAllowed(absPath)
 }
 
+// IsFolderSessionWriteAllowed reports whether absPath sits under an
+// allowlisted folder whose declared mode permits writes. Returns false
+// when the security submanager is unset, mirroring the
+// IsFolderSessionAllowed contract.
+func (a *Agent) IsFolderSessionWriteAllowed(absPath string) bool {
+	if a == nil || a.security == nil {
+		return false
+	}
+	return a.security.IsFolderSessionWriteAllowed(absPath)
+}
+
 // AddSessionAllowedFolder records the folder picked by the user from
 // the filesystem approval dialog so future accesses under it are
 // auto-approved for the rest of this session. No-op when the security
@@ -75,6 +86,19 @@ func (a *Agent) AddSessionAllowedFolder(folder string) {
 		return
 	}
 	a.security.AddSessionAllowedFolder(folder)
+}
+
+// SetSessionAllowedFolderMode records the declared mode for an
+// already-allowlisted folder. The folder must already be on the
+// session allowlist (call AddSessionAllowedFolder first); passing a
+// mode for an unallowlisted folder is a no-op so the mode cannot
+// widen access the user never approved. No-op when the security
+// submanager is unset.
+func (a *Agent) SetSessionAllowedFolderMode(folder, mode string) {
+	if a == nil || a.security == nil {
+		return
+	}
+	a.security.SetSessionAllowedFolderMode(folder, mode)
 }
 
 // SnapshotSessionAllowedFolders returns a copy of the session
@@ -87,6 +111,18 @@ func (a *Agent) SnapshotSessionAllowedFolders() []string {
 		return nil
 	}
 	return a.security.SnapshotSessionAllowedFolders()
+}
+
+// SnapshotSessionAllowedFolderModes returns a copy of the
+// folder-mode map. Used alongside SnapshotSessionAllowedFolders to
+// seed a subagent's declared modes so workflow read_only
+// constraints survive delegation. Returns nil when the security
+// submanager is unset.
+func (a *Agent) SnapshotSessionAllowedFolderModes() map[string]string {
+	if a == nil || a.security == nil {
+		return nil
+	}
+	return a.security.SnapshotSessionAllowedFolderModes()
 }
 
 // CheckFileContentSecurity runs security concern detection on file content after a write.

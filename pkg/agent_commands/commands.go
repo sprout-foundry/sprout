@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -74,6 +75,13 @@ type SteerCapable interface {
 	SafeDuringSteer() bool
 }
 
+// OutputCommand is implemented by commands that accept an output writer.
+// When set, the command writes to this writer instead of os.Stdout.
+// The registry calls SetOutput before Execute when the caller provides one.
+type OutputCommand interface {
+	SetOutput(io.Writer)
+}
+
 var (
 	defaultRegistry     *CommandRegistry
 	defaultRegistryOnce sync.Once
@@ -93,6 +101,8 @@ func DefaultRegistry() *CommandRegistry {
 type CommandRegistry struct {
 	commands map[string]Command
 	aliases  map[string]string // short → canonical command name
+
+	outputWriter io.Writer // when non-nil, passed to OutputCommand implementations
 
 	// candidatesCache memoizes CompletionCandidates() since the registry
 	// is immutable after NewCommandRegistry. Built once on first access.
@@ -275,6 +285,22 @@ func (r *CommandRegistry) Register(cmd Command) {
 	r.commands[cmd.Name()] = cmd
 }
 
+// SetOutput sets the output writer for subsequent command executions.
+// Only commands implementing OutputCommand will use it. When nil,
+// commands default to os.Stdout (their normal behavior).
+func (r *CommandRegistry) SetOutput(w io.Writer) {
+	r.outputWriter = w
+	if w == nil {
+		// Clear any writer retained by a previously executed command so a
+		// reused registry falls back to normal CLI output.
+		for _, cmd := range r.commands {
+			if oc, ok := cmd.(OutputCommand); ok {
+				oc.SetOutput(nil)
+			}
+		}
+	}
+}
+
 // Execute processes a slash command input
 // Supports both / and ! prefixes (e.g. /exec ls or !exec ls)
 func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
@@ -323,6 +349,20 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("unknown command: %s", commandName)
 	}
 
+	// SP-073: Wire the agent's interrupt context into commands that support
+	// SetContext, so Stop/Ctrl+C can abort long-running LLM calls (shell
+	// script generation, commit review, etc.).
+	if contextSetter, ok := cmd.(interface{ SetContext(context.Context) }); ok && chatAgent != nil {
+		contextSetter.SetContext(chatAgent.InterruptCtx())
+	}
+
+	// Wire the output writer if the command supports it.
+	if r.outputWriter != nil {
+		if oc, ok := cmd.(OutputCommand); ok {
+			oc.SetOutput(r.outputWriter)
+		}
+	}
+
 	// Check if command supports JSON output (--json flag is in args)
 	if jsonCmd, ok := cmd.(JSONCommand); ok && contains(args, "--json") {
 		ctx := &CommandContext{
@@ -331,13 +371,6 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		// Filter out --json flag for the command
 		filteredArgs := filterArgs(args, "--json")
 		return jsonCmd.ExecuteWithJSONOutput(filteredArgs, chatAgent, ctx)
-	}
-
-	// SP-073: Wire the agent's interrupt context into commands that support
-	// SetContext, so Stop/Ctrl+C can abort long-running LLM calls (shell
-	// script generation, commit review, etc.).
-	if contextSetter, ok := cmd.(interface{ SetContext(context.Context) }); ok && chatAgent != nil {
-		contextSetter.SetContext(chatAgent.InterruptCtx())
 	}
 
 	// Default execution for commands without context support
@@ -440,9 +473,14 @@ func WriteToOutput(output string) {
 	os.Stdout.WriteString(output)
 }
 
-// WriteJSONToOutput writes a JSON representation of value to stdout
-func WriteJSONToOutput(value interface{}) error {
-	encoder := json.NewEncoder(os.Stdout)
+// WriteJSON writes an indented JSON representation of value to w.
+func WriteJSON(w io.Writer, value interface{}) error {
+	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(value)
+}
+
+// WriteJSONToOutput writes a JSON representation of value to stdout
+func WriteJSONToOutput(value interface{}) error {
+	return WriteJSON(os.Stdout, value)
 }

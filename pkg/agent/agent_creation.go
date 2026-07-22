@@ -304,6 +304,83 @@ func NewAgent() (*Agent, error) {
 	return NewAgentWithModel("")
 }
 
+// resolveProfileAndSystemPrompt resolves the Low-Context Mode profile
+// (SP-125) and the system prompt matched to that profile, using the
+// model context window reported by the provider client. It is the
+// shared seam between NewAgentWithClient (SDK/WASM path) and
+// newAgentWithConfigManagerInner (CLI path) — both call sites MUST
+// route through here so the profile is computed from the same inputs
+// (config + window) and the system prompt always matches the resolved
+// profile. Previously the CLI path loaded the prompt via
+// GetEmbeddedSystemPromptWithProvider, which returned the full prompt
+// unconditionally — silently disabling LCM even when the profile
+// resolved to low_context. That regression is what this helper fixes.
+//
+// Contract:
+//  1. The context window is read from client.GetModelContextLimit().
+//     An error is treated as "unknown" (window=0) — the profile
+//     resolver tolerates this and falls back to the default profile.
+//  2. The profile is resolved via configuration.ResolveContextProfile.
+//     The floor error it returns when the window is below ContextFloor
+//     MUST propagate — callers turn it into a permanent error that
+//     surfaces to the user. We do not suppress it.
+//  3. The system prompt is loaded via GetEmbeddedSystemPromptForProfile
+//     using the resolved profile's SystemPromptPath (lite.md for LCM,
+//     the default otherwise). Paths are derived from the profile, not
+//     hardcoded.
+//  4. The configured SystemPromptText override (if any) is applied via
+//     resolveConfiguredSystemPrompt. Resolution semantics are unchanged.
+//
+// The profile is re-resolved inside initAgentFromResolvedProvider once
+// the agent's state manager has been initialized (so the cap-aware
+// resolver can be used); both calls share the same inputs (cfg +
+// GetModelContextLimit) and therefore agree. We accept the second
+// resolution rather than thread the profile through, because the state
+// manager owns MaxContextTokens and the re-resolution reflects the
+// finalized cap.
+func resolveProfileAndSystemPrompt(
+	configManager *configuration.Manager,
+	client api.ClientInterface,
+	clientType api.ClientType,
+	workspaceRoot string,
+) (configuration.ContextProfile, string, error) {
+	providerName := api.GetProviderName(clientType)
+
+	// (1) Read the model context window. Errors are non-fatal — the
+	// profile resolver treats window=0 as "unknown" and falls back to
+	// the default profile. This matches the SDK path's prior behavior.
+	contextWindow := 0
+	if client != nil {
+		if limit, err := client.GetModelContextLimit(); err == nil {
+			contextWindow = limit
+		}
+	}
+
+	// (2) Resolve the profile. The floor error propagates — see
+	// isRunningUnderTest's caller suppression test for the floor case.
+	var cfg *configuration.Config
+	if configManager != nil {
+		cfg = configManager.GetConfig()
+	}
+	profile, err := configuration.ResolveContextProfile(cfg, contextWindow)
+	if err != nil {
+		return profile, "", agenterrors.NewPermanentError("context profile resolution failed", err)
+	}
+
+	// (3) Load the prompt matched to the resolved profile. The path is
+	// derived from profile.SystemPromptPath — the helper never hardcodes
+	// "prompts/system_prompt.md" or "prompts/system_prompt.lite.md".
+	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, workspaceRoot)
+	if err != nil {
+		return profile, "", agenterrors.NewPermanentError("failed to load system prompt", err)
+	}
+
+	// (4) Apply the configured SystemPromptText override if any.
+	systemPrompt = resolveConfiguredSystemPrompt(cfg, systemPrompt)
+
+	return profile, systemPrompt, nil
+}
+
 // NewAgentWithClient builds an agent around a pre-constructed provider
 // client. The interactive provider-resolution path in newAgentWithConfigManager
 // (API-key prompts, connection checks, recovery loops) is skipped — useful
@@ -331,29 +408,16 @@ func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, c
 		workspaceRoot = absWorkspaceRoot
 	}
 
-	providerName := api.GetProviderName(clientType)
-
-	// SP-125: resolve the context profile before loading the system prompt
-	// so the lite prompt is selected when LCM is active. The profile is also
-	// re-resolved inside initAgentFromResolvedProvider (after the agent's
-	// state manager is initialized and MaxContextTokens is set); the two
-	// resolutions agree because they use the same inputs (config + window).
-	contextWindow := 0
-	if limit, err := client.GetModelContextLimit(); err == nil {
-		contextWindow = limit
-	}
-	profile, profileErr := configuration.ResolveContextProfile(
-		configManager.GetConfig(), contextWindow,
-	)
-	if profileErr != nil {
-		return nil, agenterrors.NewPermanentError("context profile resolution failed", profileErr)
-	}
-
-	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, workspaceRoot)
+	// SP-125: resolve the context profile and load the matching
+	// system prompt via the shared helper. The profile is also
+	// re-resolved inside initAgentFromResolvedProvider (after the
+	// agent's state manager is initialized and MaxContextTokens is
+	// set); the two resolutions agree because they use the same inputs
+	// (config + window).
+	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, workspaceRoot)
 	if err != nil {
-		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
+		return nil, err
 	}
-	systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
 	interruptCtx, interruptCancel := context.WithCancel(context.Background())
 
@@ -660,13 +724,19 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 	// Check if debug mode is enabled
 	debug := isDebugEnvEnabled()
 
-	// Use embedded system prompt with provider-specific enhancements
-	providerName := api.GetProviderName(clientType)
-	systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
+	// SP-125: resolve the context profile and load the matching system
+	// prompt via the shared helper. Previously this path used
+	// GetEmbeddedSystemPromptWithProvider, which always returned the
+	// full prompt — so a 32K model that successfully auto-activated
+	// LCM still received the 6.6K full prompt on the wire. Routing
+	// through resolveProfileAndSystemPrompt makes the CLI path match
+	// the SDK path's behavior. The floor error propagates here so
+	// users with sub-8K models get a clear directive rather than a
+	// broken session.
+	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, workspaceRoot)
 	if err != nil {
-		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
+		return nil, err
 	}
-	systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
 	// Create interrupt context for the agent
 	interruptCtx, interruptCancel := context.WithCancel(context.Background())

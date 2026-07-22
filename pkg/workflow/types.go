@@ -177,8 +177,9 @@ type AgentWorkflowRuntime struct {
 
 // AgentWorkflowInitial is the first run definition (can replace CLI prompt).
 type AgentWorkflowInitial struct {
-	Prompt     string `json:"prompt,omitempty"`
-	PromptFile string `json:"prompt_file,omitempty"`
+	Prompt       string       `json:"prompt,omitempty"`
+	PromptFile   string       `json:"prompt_file,omitempty"`
+	AllowedPaths []AllowedPath `json:"allowed_paths,omitempty"`
 	AgentWorkflowRuntime
 }
 
@@ -194,14 +195,15 @@ type AgentWorkflowInitial struct {
 // `make build`, `git status`, or invoking a custom script that prepares
 // state for the next agent step.
 type AgentWorkflowStep struct {
-	Name          string   `json:"name,omitempty"`
-	Prompt        string   `json:"prompt,omitempty"`
-	PromptFile    string   `json:"prompt_file,omitempty"`
-	Command       string   `json:"command,omitempty"`
-	CommandFile   string   `json:"command_file,omitempty"`
-	When          string   `json:"when,omitempty"`
-	FileExists    []string `json:"file_exists,omitempty"`
-	FileNotExists []string `json:"file_not_exists,omitempty"`
+	Name          string         `json:"name,omitempty"`
+	Prompt        string         `json:"prompt,omitempty"`
+	PromptFile    string         `json:"prompt_file,omitempty"`
+	Command       string         `json:"command,omitempty"`
+	CommandFile   string         `json:"command_file,omitempty"`
+	When          string         `json:"when,omitempty"`
+	FileExists    []string       `json:"file_exists,omitempty"`
+	FileNotExists []string       `json:"file_not_exists,omitempty"`
+	AllowedPaths []AllowedPath  `json:"allowed_paths,omitempty"`
 	AgentWorkflowRuntime
 }
 

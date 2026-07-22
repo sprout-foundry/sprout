@@ -662,6 +662,34 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	// Per-folder session allowlist short-circuit. If this path sits
 	// under a folder the user previously approved, skip the prompt.
 	if agent.IsFolderSessionAllowed(filePath) {
+		// SP-128-1f: read_only declared paths still satisfy
+		// IsFolderSessionAllowed (so reads continue to work), but
+		// a write tool must NOT be allowed under a read_only grant.
+		// We detect "write" via the error sentinel — every write
+		// tool surfaces ErrWriteOutsideWorkingDirectory; read tools
+		// surface ErrOutsideWorkingDirectory. This is the same
+		// signal the rest of the function uses (see the first
+		// errors.Is check at the top of this function), so the
+		// classification stays consistent. When the path is on the
+		// allowlist but the mode says read_only, return
+		// (ctx, false) AND attach a denial-reason on the context
+		// so the caller (withFilesystemApproval) returns the
+		// workflow-specific message instead of the generic
+		// off-workspace sentinel. The wording matches the spec:
+		// "write blocked: <path> is declared read_only in the
+		// active workflow's allowed_paths; the filesystem gate
+		// cannot authorize a write under a read_only grant".
+		if errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) && !agent.IsFolderSessionWriteAllowed(filePath) {
+			agent.debugLog("[APPROVAL] write blocked: %s is declared read_only in the active workflow's allowed_paths; filesystem gate refuses to authorize write\n", filePath)
+			// The gate ctx carries the workflow-specific reason; the
+			// original filesystem sentinel still wraps via %w inside
+			// withFilesystemApproval (see filesystem_gate.go around
+			// the denial-reason branch) so errors.Is and the
+			// subagent stderr parser (which scans for "outside
+			// working directory") keep working.
+			reason := fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths; the filesystem gate cannot authorize a write under a read_only grant", filePath)
+			return tools.WithFilesystemGateDenialReason(ctx, reason), false
+		}
 		agent.debugLog("[UNLOCK] Folder is on session allowlist: %s\n", filePath)
 		return filesystem.WithSecurityBypass(ctx), true
 	}

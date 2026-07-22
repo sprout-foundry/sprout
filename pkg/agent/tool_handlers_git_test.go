@@ -156,8 +156,10 @@ func TestIsGitHistoryRewriteCommand(t *testing.T) {
 		rewrite bool
 	}{
 		// rebase — any form rewrites commit history.
+		// Exception: `--abort` is a recovery op, not a history rewrite.
 		{"git rebase main", true},
-		{"git rebase --abort", true},
+		{"git rebase --abort", false},
+		{"git rebase --abort --no-verify", true}, // --abort with other flags is still a rewrite
 		{"git rebase -i HEAD~5", true},
 		{"git -C /repo rebase main", true},
 
@@ -212,6 +214,64 @@ func TestIsGitHistoryRewriteCommand(t *testing.T) {
 			got := isGitHistoryRewriteCommand(tc.command)
 			if got != tc.rewrite {
 				t.Errorf("isGitHistoryRewriteCommand(%q) = %v, want %v", tc.command, got, tc.rewrite)
+			}
+		})
+	}
+}
+
+func TestIsGitRebaseCommand(t *testing.T) {
+	// isGitRebaseCommand separates the AGENTS.md "never rebase" rule from
+	// the looser "git history-rewrite" gate. The ONLY rebase invocation
+	// that returns false is pure `git rebase --abort` (recovery from a
+	// prior session's interrupted rebase). Every other form returns true,
+	// including `git pull --rebase`/`-r` and `--abort` mixed with other
+	// arguments.
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		// Standard rebase forms — all banned.
+		{"bare rebase", "git rebase", true},
+		{"rebase main", "git rebase main", true},
+		{"interactive", "git rebase -i HEAD~5", true},
+		{"rebase --onto", "git rebase --onto base head", true},
+		{"rebase with -C", "git -C /repo rebase main", true},
+		{"rebase --continue", "git rebase --continue", true},
+		{"rebase --skip", "git rebase --skip", true},
+
+		// --abort cases. Only the PURE form is permitted.
+		{"pure --abort", "git rebase --abort", false},
+		{"--abort with positional", "git rebase main --abort", true},  // positional means real rebase target, abort-with-target is invalid git anyway
+		{"--abort with HEAD positional", "git rebase HEAD --abort", true}, // HEAD + --abort is nonsensical; treat as banned
+		{"--abort with extra flag", "git rebase --abort --no-verify", true}, // mixing --abort with another flag = rewrite attempt
+
+		// git pull --rebase — subcommand is pull, but AGENTS.md bans this too.
+		{"pull --rebase", "git pull --rebase origin main", true},
+		{"pull -r short form", "git pull -r origin main", true},
+		{"pull --rebase-preserve", "git pull --rebase-preserve", true},
+		{"plain git pull (allowed)", "git pull origin main", false},
+		{"pull without --rebase flag (allowed)", "git pull --no-rebase origin main", false},
+
+		// Quoted content should not trigger false positive.
+		{"quoted mention of rebase", `echo "git rebase main"`, false},
+		{"quoted mention of pull --rebase", `echo "git pull --rebase"`, false},
+
+		// Compound commands.
+		{"rebase in chain", "cd /repo && git rebase main && echo done", true},
+		{"pull --rebase in chain", "cd /repo && git pull --rebase", true},
+
+		// Non-rebase commands.
+		{"plain git pull (not a rebase)", "git pull origin main", false},
+		{"git status", "git status", false},
+		{"git commit", "git commit -m 'x'", false},
+		{"git merge (not a rebase)", "git merge feature", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGitRebaseCommand(tc.command); got != tc.want {
+				t.Errorf("isGitRebaseCommand(%q) = %v, want %v", tc.command, got, tc.want)
 			}
 		})
 	}

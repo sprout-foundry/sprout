@@ -43,6 +43,104 @@ Then generate the workflow JSON using the **Full Autonomous Workflow template** 
 
 ---
 
+## External Paths — Accessing Directories Outside the Workspace
+
+By default every agent is sandboxed to the workspace directory. If a workflow needs to read or write files elsewhere on disk (logs, datasets, caches, deployment targets), declare those paths up front with `allowed_paths`. Without this, the first external file access inside a non-interactive run blocks on a prompt that nobody is there to answer — the workflow hangs.
+
+### When to use it
+
+Use `allowed_paths` whenever a workflow step touches *any* absolute path that isn't a child of the workspace. Common cases:
+
+- Reading training data or model artifacts from `/srv/datasets`, `/opt/models`, etc.
+- Tailing logs from `/var/log/...` for monitoring or debugging
+- Deploying build output to a staging tree like `/srv/staging` or a container mount
+- Fetching cached dependencies from `/var/cache/sprout`
+
+If the path lives under the workspace, you don't need to declare it — the workspace IS the default allowlist.
+
+### JSON shape
+
+Top-level field on the workflow JSON. Each entry has three fields:
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `path` | string | yes | Absolute filesystem path. Must be `filepath.Clean`'d with no `..` and no `~`. |
+| `mode` | string | yes | Exactly `"read_only"` or `"read_write"` (lowercase, case-sensitive). |
+| `reason` | string | no | Free-text justification shown in the launch confirmation UI. Optional but recommended — users approving the run want to know *why* a path is on the list. |
+
+Worked example — a "build + test + deploy to staging" workflow that pulls training data and tails the deployment logs:
+
+```json
+{
+  "description": "Builds the model, runs tests, and deploys results to staging.",
+  "allowed_paths": [
+    {
+      "path": "/srv/datasets",
+      "mode": "read_write",
+      "reason": "Read training data and write evaluation outputs."
+    },
+    {
+      "path": "/var/log/sprout",
+      "mode": "read_only",
+      "reason": "Tail logs from the staging deploy for the run summary."
+    }
+  ],
+  "initial": {
+    "persona": "coordinator",
+    "model": "...",
+    "provider": "...",
+    "skip_prompt": true,
+    "risk_profile": "permissive"
+  },
+  "steps": [ "..." ]
+}
+```
+
+### Validation rules
+
+The loader enforces these at workflow start — a malformed entry fails fast before any agent runs:
+
+- **`path` must be absolute.** `filepath.IsAbs(path)` must return true. Relative paths and `~`-prefixed paths are rejected. (We refuse to expand `~` — the user must give an explicit absolute path so there's no ambiguity about which home directory.)
+- **`path` must not contain `..` after `filepath.Clean`.** Even after cleaning, if any segment was `..`, the entry is rejected. This prevents escape tricks like `/srv/datasets/../../etc`.
+- **`mode` must be exactly `read_only` or `read_write`.** Lowercase, case-sensitive. `"READ_ONLY"`, `"ReadOnly"`, `"ro"`, etc. are all rejected.
+- **`reason` is optional.** The loader does not require it.
+- **System-prefix paths warn but don't error.** `/etc`, `/usr`, `/var`, `/bin`, `/sbin`, `/boot`, `/proc`, `/sys`, `/dev`, `/lib`, `/lib64`, `/opt`, `/root`, `/System`, `/Library`, `/private/etc`, `/private/var`, `/Applications` are flagged. The loader logs `[workflow] allowed_paths: system prefix "/etc" — proceed with caution` to stderr. The user sees these warnings in the launch confirmation UI and decides whether to approve.
+
+### Trade-off vs alternatives
+
+Before `allowed_paths` existed, workflow authors had two options, each with a fatal problem:
+
+| Approach | Problem |
+|---|---|
+| `unsafe: true` | Disables *every* security gate — file writes, shell commands, network calls, the lot. Way too broad for "I just need to read a dataset." |
+| `risk_profile: permissive` + rely on the per-call allowlist at runtime | The first external access still hits the standard approval dialog. In non-interactive autonomous mode (the common case), there is nobody to click "approve." The workflow deadlocks on the first read. |
+| `allowed_paths` (this field) | Workflow declares its external needs once; user approves the whole list in the launch dialog (CLI `sprout automate run` or WebUI `/api/automate/run`); the seeded allowlist covers every later access automatically. |
+
+Reach for `allowed_paths` whenever the workflow needs directory-level external access in non-interactive mode. Use `unsafe: true` only when you genuinely need to bypass *all* gates (e.g., a system-administration workflow that runs arbitrary shell).
+
+### Subprocess allowlist inheritance — the real reason this field exists
+
+A workflow launched via `sprout automate run <wf>.json` starts a fresh `sprout agent --workflow-config automate/<wf>.json` subprocess. That subprocess does **not** inherit the parent interactive session's allowlist — it has no parent session. This is the core problem `allowed_paths` solves: by declaring the paths in the workflow JSON, the subprocess gets them seeded into its own session allowlist at start, without needing any state from the calling shell.
+
+In-process subagents (spawned via `run_subagent` from inside the workflow) DO inherit the parent's allowlist *including modes* via `SnapshotSessionAllowedFolders` / `SnapshotSessionAllowedFolderModes`. So a read_only grant on a workflow path propagates correctly to orchestrators and leaf workers — they will be blocked from writing, even if they try.
+
+### Read-only enforcement
+
+The filesystem gate honors the declared mode. If a step tries to `write_file` (or `edit_file`, or anything that mutates) a path that was declared `read_only`, the gate blocks the call with:
+
+```
+write blocked: <path> is declared read_only in the active workflow's allowed_paths;
+the filesystem gate cannot authorize a write under a read_only grant
+```
+
+This is enforced at the gate, not just at validation time — even if a tool handler is buggy or a prompt injection tries to skip the check, the mode travels with the allowlist entry and the gate refuses. The workflow author can rely on it.
+
+### Loop workflows — out of scope (for now)
+
+`loop.allowed_paths` is **not** supported. Loop workflows can't declare external paths via this mechanism; they're stuck on the per-call allowlist pattern, which can't work in non-interactive mode. If you need external access in a loop workflow, restructure it as static `steps` instead — steps compose, loops don't. (`allowed_globs` — e.g., `/var/log/*.log` — is also not implemented yet.)
+
+---
+
 ## The Coordinated Flow — How a Workflow Actually Runs
 
 When you run a full autonomous TODO workflow, the work flows through **three layers of personas**, each delegating to the next. Understanding this chain is the single most important thing for debugging why a workflow didn't do what you expected.

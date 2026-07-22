@@ -24,21 +24,21 @@ type stubClassifier struct {
 	decision string
 }
 
-func (s stubClassifier) ClassifyFileAccess(_, _, _ string) string {
+func (s stubClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string {
 	return s.decision
 }
 
 // denyClassifier always returns "deny" for any access.
 type denyClassifier struct{}
 
-func (denyClassifier) ClassifyFileAccess(_, _, _ string) string {
+func (denyClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string {
 	return "deny"
 }
 
 // allowClassifier always returns "allow" for any access.
 type allowClassifier struct{}
 
-func (allowClassifier) ClassifyFileAccess(_, _, _ string) string {
+func (allowClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string {
 	return "allow"
 }
 
@@ -60,7 +60,7 @@ func newTestEnvWithClassifier(t *testing.T, classifier FileAccessClassifier) Too
 
 func TestPrecheckFileAccess_NilClassifier_ReturnsPrompt(t *testing.T) {
 	t.Parallel()
-	gotPath, gotDecision := PrecheckFileAccess(nil, "write_file", "/etc/passwd")
+	gotPath, gotDecision := PrecheckFileAccess(context.Background(), nil, "write_file", "/etc/passwd")
 	if gotPath != "" {
 		t.Errorf("resolvedPath = %q, want %q", gotPath, "")
 	}
@@ -72,7 +72,7 @@ func TestPrecheckFileAccess_NilClassifier_ReturnsPrompt(t *testing.T) {
 func TestPrecheckFileAccess_Allow_ReturnsAllow(t *testing.T) {
 	t.Parallel()
 	classifier := &allowClassifier{}
-	gotPath, gotDecision := PrecheckFileAccess(classifier, "write_file", "/etc/passwd")
+	gotPath, gotDecision := PrecheckFileAccess(context.Background(), classifier, "write_file", "/etc/passwd")
 	if gotPath == "" {
 		t.Error("resolvedPath should not be empty")
 	}
@@ -84,7 +84,7 @@ func TestPrecheckFileAccess_Allow_ReturnsAllow(t *testing.T) {
 func TestPrecheckFileAccess_Deny_ReturnsDeny(t *testing.T) {
 	t.Parallel()
 	classifier := &denyClassifier{}
-	gotPath, gotDecision := PrecheckFileAccess(classifier, "write_file", "/etc/passwd")
+	gotPath, gotDecision := PrecheckFileAccess(context.Background(), classifier, "write_file", "/etc/passwd")
 	if gotPath == "" {
 		t.Error("resolvedPath should not be empty")
 	}
@@ -97,25 +97,25 @@ func TestPrecheckFileAccess_WriteTools_UsesWriteMode(t *testing.T) {
 	t.Parallel()
 	// captureClassifier records the mode argument passed to ClassifyFileAccess.
 	captureClassifier := &captureModeClassifier{}
-	PrecheckFileAccess(captureClassifier, "write_file", "/etc/passwd")
+	PrecheckFileAccess(context.Background(), captureClassifier, "write_file", "/etc/passwd")
 	if captureClassifier.gotMode != "write" {
 		t.Errorf("mode = %q, want %q", captureClassifier.gotMode, "write")
 	}
 
 	captureClassifier = &captureModeClassifier{}
-	PrecheckFileAccess(captureClassifier, "edit_file", "/etc/passwd")
+	PrecheckFileAccess(context.Background(), captureClassifier, "edit_file", "/etc/passwd")
 	if captureClassifier.gotMode != "write" {
 		t.Errorf("mode = %q, want %q", captureClassifier.gotMode, "write")
 	}
 
 	captureClassifier = &captureModeClassifier{}
-	PrecheckFileAccess(captureClassifier, "write_structured_file", "/etc/passwd")
+	PrecheckFileAccess(context.Background(), captureClassifier, "write_structured_file", "/etc/passwd")
 	if captureClassifier.gotMode != "write" {
 		t.Errorf("mode = %q, want %q", captureClassifier.gotMode, "write")
 	}
 
 	captureClassifier = &captureModeClassifier{}
-	PrecheckFileAccess(captureClassifier, "patch_structured_file", "/etc/passwd")
+	PrecheckFileAccess(context.Background(), captureClassifier, "patch_structured_file", "/etc/passwd")
 	if captureClassifier.gotMode != "write" {
 		t.Errorf("mode = %q, want %q", captureClassifier.gotMode, "write")
 	}
@@ -124,13 +124,13 @@ func TestPrecheckFileAccess_WriteTools_UsesWriteMode(t *testing.T) {
 func TestPrecheckFileAccess_ReadTools_UsesReadMode(t *testing.T) {
 	t.Parallel()
 	captureClassifier := &captureModeClassifier{}
-	PrecheckFileAccess(captureClassifier, "read_file", "/etc/passwd")
+	PrecheckFileAccess(context.Background(), captureClassifier, "read_file", "/etc/passwd")
 	if captureClassifier.gotMode != "read" {
 		t.Errorf("mode = %q, want %q", captureClassifier.gotMode, "read")
 	}
 
 	captureClassifier = &captureModeClassifier{}
-	PrecheckFileAccess(captureClassifier, "list_directory", "/tmp")
+	PrecheckFileAccess(context.Background(), captureClassifier, "list_directory", "/tmp")
 	if captureClassifier.gotMode != "read" {
 		t.Errorf("mode = %q, want %q", captureClassifier.gotMode, "read")
 	}
@@ -140,7 +140,7 @@ type captureModeClassifier struct {
 	gotMode string
 }
 
-func (c *captureModeClassifier) ClassifyFileAccess(_, _, mode string) string {
+func (c *captureModeClassifier) ClassifyFileAccess(_ context.Context, _, _, mode string) string {
 	c.gotMode = mode
 	return "prompt"
 }

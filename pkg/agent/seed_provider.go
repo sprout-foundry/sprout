@@ -281,8 +281,9 @@ func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens
 
 // doChatNonStream performs a non-streaming chat request.
 func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	// Attach pasted images to the first user message
+	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
+	messages = sp.stampTurnTimestamp(messages)
 
 	sproutReq := seedRequestToSprout(req)
 	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
@@ -294,8 +295,9 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 
 // doChatStream performs a streaming chat request.
 func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	// Attach pasted images to the first user message
+	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
+	messages = sp.stampTurnTimestamp(messages)
 
 	sproutReq := seedRequestToSprout(req)
 
@@ -351,6 +353,37 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	}
 
 	return sproutResponseToSeed(resp), nil
+}
+
+// stampTurnTimestamp adds the current turn's fixed timestamp to the latest user
+// message without mutating the caller's slice. A zero timestamp or an already
+// stamped latest user message is returned unchanged so retries remain
+// byte-identical.
+func (sp *sproutProvider) stampTurnTimestamp(messages []core.Message) []core.Message {
+	if sp.agent == nil {
+		return messages
+	}
+	sp.agent.turnTimestampMu.RLock()
+	turnTimestamp := sp.agent.turnTimestamp
+	sp.agent.turnTimestampMu.RUnlock()
+	if turnTimestamp.IsZero() {
+		return messages
+	}
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		message := messages[i]
+		if message.Role != "user" {
+			continue
+		}
+		if strings.HasPrefix(message.Content, "<current-time>") {
+			return messages
+		}
+		out := make([]core.Message, len(messages))
+		copy(out, messages)
+		out[i].Content = InjectUserMessageTimestampAt(message.Content, turnTimestamp)
+		return out
+	}
+	return messages
 }
 
 // attachPastedImages attaches previously registered image data to the first
@@ -426,8 +459,9 @@ func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*cor
 func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest, handler core.StreamHandler) error {
 	sproutReq := seedRequestToSprout(req)
 
-	// Attach pasted images to the first user message
+	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
+	messages = sp.stampTurnTimestamp(messages)
 
 	// Route through OutputRouter.RouteStreamChunk (same as doChatStream)
 	// and forward to the seed handler so both the EventBus/WebUI and the

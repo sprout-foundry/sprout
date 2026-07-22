@@ -163,7 +163,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 	var userPrompt string
 	for _, msg := range turnMessages {
 		if msg.Role == "user" && msg.Content != "" {
-			userPrompt = msg.Content
+			userPrompt = StripUserMessageTimestamp(msg.Content)
 			break
 		}
 	}

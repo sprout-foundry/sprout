@@ -14,6 +14,7 @@ func (ir *InputReader) InsertChar(char string) {
 	// Mark line as edited and disconnect from history
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
+	ir.resetCompletionCycle()
 
 	insertAt := ir.cursorPos
 	before := ir.line[:ir.cursorPos]
@@ -60,6 +61,7 @@ func (ir *InputReader) Backspace() {
 		// Mark line as edited and disconnect from history
 		ir.hasEditedLine = true
 		ir.historyIndex = -1
+		ir.resetCompletionCycle()
 
 		deletePos := ir.cursorPos - 1
 		before := ir.line[:deletePos]
@@ -83,6 +85,7 @@ func (ir *InputReader) Delete() {
 		// Mark line as edited and disconnect from history
 		ir.hasEditedLine = true
 		ir.historyIndex = -1
+		ir.resetCompletionCycle()
 
 		before := ir.line[:ir.cursorPos]
 		after := ir.line[ir.cursorPos+1:]
@@ -127,6 +130,7 @@ func (ir *InputReader) deleteRange(start, end int) {
 	ir.expandPasteAtCursor()
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
+	ir.resetCompletionCycle()
 	removed := end - start
 	ir.line = ir.line[:start] + ir.line[end:]
 	if ir.cursorPos > start {

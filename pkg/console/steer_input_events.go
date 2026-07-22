@@ -5,6 +5,28 @@ package console
 // the former hand-rolled escape-sequence / UTF-8 / CSI parsing that
 // lived in this file.
 func (r *SteerInputReader) handleEvent(event *InputEvent) {
+	// SP-078 Phase 3: when the slash-command dropdown is visible, the
+	// user expects Up/Down to navigate candidates and Tab to accept
+	// the selection — not recall history or toggle submit mode. We
+	// gate on both `autocomplete != nil` and `autocomplete.visible`
+	// so a stale "visible" flag doesn't shadow normal navigation
+	// when the buffer no longer starts with "/".
+	if r.autocomplete != nil && r.autocomplete.visible {
+		switch event.Type {
+		case EventUp:
+			r.navigateDropdown(-1)
+			return
+		case EventDown:
+			r.navigateDropdown(1)
+			return
+		case EventTab:
+			r.acceptDropdown()
+			return
+		case EventEscape:
+			r.hideDropdown()
+			return
+		}
+	}
 	switch event.Type {
 	case EventChar:
 		r.insertAtCursor([]byte(event.Data))
@@ -45,6 +67,62 @@ func (r *SteerInputReader) handleEvent(event *InputEvent) {
 	case EventMouse:
 		// Mouse events are not supported in steer mode — swallow.
 	}
+}
+
+// navigateDropdown moves the dropdown selection by delta (-1 for up,
+// +1 for down), wrapping around at the boundaries. Re-renders so
+// the new selection's reverse-video highlight appears immediately.
+// Caller must NOT hold r.mu.
+func (r *SteerInputReader) navigateDropdown(delta int) {
+	r.mu.Lock()
+	if r.autocomplete != nil && r.autocomplete.visible {
+		r.autocomplete.moveSelection(delta)
+	}
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// acceptDropdown replaces the steer buffer with the currently selected
+// dropdown candidate (mirrors the InputReader's Tab-accept behavior
+// at input_core_event.go:EventTab). Dismisses the dropdown for the
+// current line so it doesn't immediately reappear on the next render.
+// No-op when the dropdown has no visible selection.
+//
+// Caller must NOT hold r.mu.
+func (r *SteerInputReader) acceptDropdown() {
+	r.mu.Lock()
+	if r.autocomplete == nil || !r.autocomplete.visible {
+		r.mu.Unlock()
+		return
+	}
+	text := r.autocomplete.accept()
+	if text == "" {
+		r.mu.Unlock()
+		return
+	}
+	r.buffer = []byte(text)
+	r.cursorPos = len(r.buffer)
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.resetCompletionCycleLocked()
+	// Dismiss for the ACCEPTED text so the dropdown doesn't reappear
+	// for the same slash command the user just selected.
+	r.autocomplete.dismiss(string(r.buffer))
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// hideDropdown dismisses the dropdown without changing the buffer.
+// The dropdown stays suppressed for the current line until the user
+// edits the buffer.
+// Caller must NOT hold r.mu.
+func (r *SteerInputReader) hideDropdown() {
+	r.mu.Lock()
+	if r.autocomplete != nil {
+		r.autocomplete.dismiss(string(r.buffer))
+	}
+	r.mu.Unlock()
+	r.renderLine()
 }
 
 // clearBuffer clears the steer buffer (plain ESC key).

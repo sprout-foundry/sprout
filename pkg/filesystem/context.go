@@ -24,6 +24,7 @@ const (
 // avoiding import cycles with packages that depend on filesystem.
 type AuditLogger interface {
 	LogEntry(entry any) error
+	LogJSON(data []byte) error
 }
 
 // WithWorkspaceRoot stores an explicit workspace root on the context so file and

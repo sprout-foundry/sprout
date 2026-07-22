@@ -206,7 +206,11 @@ func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, as
 		SessionID: sessionID,
 		Workspace: workspace,
 	}
-	_ = logger.LogEntry(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	_ = logger.LogJSON(data)
 }
 
 // sanitizeForAudit redacts likely-secret substrings from a reasoning string

@@ -105,12 +105,28 @@ func TestExplain_git_reset_hard_backward(t *testing.T) {
 }
 
 func TestExplain_git_rebase_interactive(t *testing.T) {
+	// AGENTS.md: rebase is unconditionally banned — hard-block.
 	out := captureExplainOutput(t, "git rebase -i HEAD~10")
-	if !strings.Contains(out, "HIGH") {
-		t.Errorf("expected HIGH level, got:\n%s", out)
+	if !strings.Contains(out, "CRITICAL") {
+		t.Errorf("expected CRITICAL level, got:\n%s", out)
 	}
-	if !strings.Contains(out, "git-history-rewrite") {
-		t.Errorf("expected git-history-rewrite source, got:\n%s", out)
+	if !strings.Contains(out, "hard-block") {
+		t.Errorf("expected hard-block indicator, got:\n%s", out)
+	}
+	if !strings.Contains(out, "git-rebase") {
+		t.Errorf("expected git-rebase source, got:\n%s", out)
+	}
+}
+
+func TestExplain_git_rebase_abort(t *testing.T) {
+	// `git rebase --abort` is the recovery op — not a history rewrite,
+	// so it should NOT hard-block (though it may still prompt for other reasons).
+	out := captureExplainOutput(t, "git rebase --abort")
+	if strings.Contains(out, "CRITICAL") {
+		t.Errorf("expected non-CRITICAL level for rebase --abort, got:\n%s", out)
+	}
+	if strings.Contains(out, "hard-block") {
+		t.Errorf("expected no hard-block indicator for rebase --abort, got:\n%s", out)
 	}
 }
 
@@ -289,6 +305,8 @@ func TestIsGitHistoryRewriteCommand_rebase(t *testing.T) {
 		{"git rebase -i HEAD~10", true},
 		{"git rebase --onto base head", true},
 		{"git rebase main", true},
+		{"git rebase --abort", false}, // recovery op, not a history rewrite
+		{"git rebase --abort --no-verify", true}, // --abort with other flags is still a rewrite
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {

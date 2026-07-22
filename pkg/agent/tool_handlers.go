@@ -291,6 +291,13 @@ func isGitHistoryRewriteCommand(command string) bool {
 
 		switch subcommand {
 		case "rebase":
+			// `git rebase --abort` is a recovery op (reverts the in-progress
+			// rebase state), not a history rewrite. Any other rebase form
+			// (including `--abort` with other flags or arguments) is a rewrite.
+			// The only permitted rebase invocation is pure `--abort`.
+			if len(rest) == 1 && rest[0] == "--abort" {
+				return false
+			}
 			return true
 		case "reset":
 			// `reset --hard` followed by an explicit commit-ish other than

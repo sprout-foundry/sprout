@@ -194,16 +194,12 @@ func applyRiskAndSafetySettings(cfg *configuration.Config, patch map[string]inte
 			cfg.SecurityPolicy = &sp
 		}
 	}
-	// self_review_gate_mode is a known risk/safety control that the settings
-	// panel surfaces alongside risk_profile / approved_shell_commands, but
-	// the runtime gate logic is not yet wired to cfg.SelfReviewGateMode
-	// (a configuration field doesn't exist either). For now we accept-
-	// and-ignore the value so that GET→PUT round-trips of the full settings
-	// payload don't fail. Once cfg.SelfReviewGateMode is added to
-	// pkg/configuration, replace this handler with a real read/write.
+	// self_review_gate_mode is accepted-and-ignored: the settings panel
+	// can round-trip the field without error, but no runtime gate logic
+	// consumes it. The config struct has no corresponding field. If a
+	// future feature needs this, add a Config field and replace this no-op.
 	if _, ok := patch["self_review_gate_mode"]; ok {
 		knownKeys["self_review_gate_mode"] = true
-		// Intentionally no-op: the gate is currently policy-driven, not config-driven.
 	}
 	return nil
 }

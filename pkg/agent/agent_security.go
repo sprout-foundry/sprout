@@ -2,10 +2,93 @@
 package agent
 
 import (
+	"path/filepath"
+	"sort"
+
 	"github.com/sprout-foundry/sprout/pkg/prompts"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
+
+// IsCdTargetAllowed reports whether `target` (an absolute path that has
+// already been resolved against the agent's effective cwd by the caller)
+// is a legal cd destination for this agent.
+//
+// A target is legal when it equals OR sits under any of:
+//   - the agent's workspace root (a.currentWorkspaceRoot())
+//   - any session-allowlisted folder (workflow-declared allowed_paths
+//     AND folders the user approved via "Allow folder this session")
+//
+// Symlinks are NOT evaluated at this stage — the check is purely
+// lexical. Symlink-escape re-validation is a Phase 2.5 concern and
+// applies to file tools, not to cd-target gating.
+//
+// Returns false when the agent or its security submanager is nil
+// (typical for partially-constructed agents in tests) so bare-agent
+// tests don't panic. Callers should still pass cleaned absolute paths.
+func (a *Agent) IsCdTargetAllowed(target string) bool {
+	if a == nil {
+		return false
+	}
+	if target == "" {
+		return false
+	}
+	if !filepath.IsAbs(target) {
+		return false
+	}
+
+	// Clean the target path.
+	cleaned := normalizePath(target)
+
+	// Check against the workspace root.
+	workspaceRoot := a.currentWorkspaceRoot()
+	if workspaceRoot != "" {
+		if isUnderPrefix(cleaned, normalizePath(workspaceRoot)) {
+			return true
+		}
+	}
+
+	// Check against session-allowlisted folders.
+	folders := a.SnapshotSessionAllowedFolders()
+	for _, folder := range folders {
+		if isUnderPrefix(cleaned, normalizePath(folder)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ListAllowedCdTargets returns the set of folders the agent considers
+// legal cd destinations, formatted as a sorted, deduplicated list
+// suitable for inclusion in a shell-output rejection message. Includes
+// the workspace root and every session-allowlisted folder.
+func (a *Agent) ListAllowedCdTargets() []string {
+	var result []string
+	var others []string
+
+	// Add the workspace root first.
+	workspaceRoot := a.currentWorkspaceRoot()
+	if workspaceRoot != "" {
+		result = append(result, normalizePath(workspaceRoot))
+	}
+
+	// Add session-allowlisted folders to the others list.
+	folders := a.SnapshotSessionAllowedFolders()
+	seen := make(map[string]bool)
+	for _, f := range folders {
+		cleaned := normalizePath(f)
+		if !seen[cleaned] {
+			seen[cleaned] = true
+			others = append(others, cleaned)
+		}
+	}
+
+	// Sort the others alphabetically and append.
+	sort.Strings(others)
+	result = append(result, others...)
+	return result
+}
 
 // GetUnsafeMode returns whether unsafe mode is enabled.
 // Returns false when the security submanager is unset (typical for
@@ -123,6 +206,18 @@ func (a *Agent) SnapshotSessionAllowedFolderModes() map[string]string {
 		return nil
 	}
 	return a.security.SnapshotSessionAllowedFolderModes()
+}
+
+// RemoveSessionAllowedFolder removes folder from the session allowlist.
+// Idempotent: nil is returned (not an error) when the folder was not on
+// the list. Also clears any associated mode entry so the folder reverts
+// to the default read_write semantics. No-op when the security submanager
+// is unset.
+func (a *Agent) RemoveSessionAllowedFolder(folder string) error {
+	if a == nil || a.security == nil {
+		return nil
+	}
+	return a.security.RemoveSessionAllowedFolder(folder)
 }
 
 // CheckFileContentSecurity runs security concern detection on file content after a write.

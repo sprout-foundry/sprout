@@ -208,6 +208,18 @@ func (a *Agent) SnapshotSessionAllowedFolderModes() map[string]string {
 	return a.security.SnapshotSessionAllowedFolderModes()
 }
 
+// RemoveSessionAllowedFolder removes folder from the session allowlist.
+// Idempotent: nil is returned (not an error) when the folder was not on
+// the list. Also clears any associated mode entry so the folder reverts
+// to the default read_write semantics. No-op when the security submanager
+// is unset.
+func (a *Agent) RemoveSessionAllowedFolder(folder string) error {
+	if a == nil || a.security == nil {
+		return nil
+	}
+	return a.security.RemoveSessionAllowedFolder(folder)
+}
+
 // CheckFileContentSecurity runs security concern detection on file content after a write.
 // In WebUI mode, it uses the event-bus-based ApprovalManager to show a dialog.
 // In CLI mode, it falls back to the interactive logger prompt.

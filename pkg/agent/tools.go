@@ -67,7 +67,16 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	}
 
 	// Execute the tool
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), a.GetWorkspaceRoot())
+	// Wire workspace root, effective cwd, and session folders into context for
+	// filesystem path resolution (SafeResolvePathWithBypass).
+	workspaceRoot := a.GetWorkspaceRoot()
+	effectiveCwd := a.effectiveCwd()
+	sessionFolders := a.SnapshotSessionAllowedFolders()
+	ctx := filesystem.WithAgentContext(
+		filesystem.WithWorkspaceRoot(context.Background(), workspaceRoot),
+		effectiveCwd,
+		sessionFolders,
+	)
 	_, result, err := ExecuteTool(ctx, toolName, args, a, toolCall.Function.Arguments)
 
 	// Track tool call count

@@ -8,8 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
+
+// logCaptureMu serializes log.SetOutput calls across parallel tests to prevent
+// race conditions on the global log.Writer().
+var logCaptureMu sync.Mutex
 
 // TestAllowedPath_Validate exercises every rule enforced by
 // AllowedPath.Validate() (SP-128-1a). The test mirrors the spec's
@@ -203,17 +208,6 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_AbsoluteAccepted(t *testing.T
 // text — the wording is advisory and may evolve.
 func TestAgentWorkflowConfig_Validate_AllowedPaths_SystemPrefixWarn(t *testing.T) {
 	t.Parallel()
-	// Capture log output without racing other tests.
-	var buf bytes.Buffer
-	prevWriter := log.Writer()
-	prevFlags := log.Flags()
-	log.SetOutput(&buf)
-	log.SetFlags(0)
-	t.Cleanup(func() {
-		log.SetOutput(prevWriter)
-		log.SetFlags(prevFlags)
-	})
-
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wf.json")
 	content := `{
@@ -226,6 +220,19 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_SystemPrefixWarn(t *testing.T
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// Hold the lock for the entire test body so the buffer snapshot is stable.
+	logCaptureMu.Lock()
+	defer logCaptureMu.Unlock()
+	var buf bytes.Buffer
+	prevWriter := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prevWriter)
+		log.SetFlags(prevFlags)
+	})
+
 	cfg, err := LoadAgentWorkflowConfig(path)
 	if err != nil {
 		t.Fatalf("expected system-prefix entries to load with a warning, got error: %v", err)
@@ -296,5 +303,401 @@ func TestIsSystemPathPrefix(t *testing.T) {
 		if got != c.want {
 			t.Errorf("IsSystemPathPrefix(%q) = %v, want %v", c.path, got, c.want)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SP-127 Phase 2: Step-level allowed_paths validation
+// ---------------------------------------------------------------------------
+
+// TestValidate_StepAllowedPaths_ValidEntry verifies that a valid step-level
+// allowed_path passes validation.
+func TestValidate_StepAllowedPaths_ValidEntry(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "/srv/datasets", "mode": "read_only", "reason": "Read training data"},
+					{"path": "/tmp/output", "mode": "read_write"}
+				]
+			}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadAgentWorkflowConfig(path)
+	if err != nil {
+		t.Fatalf("expected load success; got: %v", err)
+	}
+	if len(cfg.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(cfg.Steps))
+	}
+	if len(cfg.Steps[0].AllowedPaths) != 2 {
+		t.Fatalf("expected 2 allowed_paths entries on step, got %d", len(cfg.Steps[0].AllowedPaths))
+	}
+	if cfg.Steps[0].AllowedPaths[0].Path != "/srv/datasets" || cfg.Steps[0].AllowedPaths[0].Mode != "read_only" {
+		t.Errorf("step allowed_paths[0] wrong: %+v", cfg.Steps[0].AllowedPaths[0])
+	}
+	if cfg.Steps[0].AllowedPaths[1].Path != "/tmp/output" || cfg.Steps[0].AllowedPaths[1].Mode != "read_write" {
+		t.Errorf("step allowed_paths[1] wrong: %+v", cfg.Steps[0].AllowedPaths[1])
+	}
+}
+
+// TestValidate_StepAllowedPaths_InvalidRelativePath verifies that an invalid
+// step-level allowed_path (relative path) returns an error.
+func TestValidate_StepAllowedPaths_InvalidRelativePath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "relative/path", "mode": "read_write"}
+				]
+			}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadAgentWorkflowConfig(path)
+	if err == nil {
+		t.Fatal("expected load error for relative path in step-level allowed_paths; got nil")
+	}
+	if !strings.Contains(err.Error(), "steps[0]") {
+		t.Fatalf("error should identify steps[0] scope, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "allowed_paths[0]") {
+		t.Fatalf("error should identify allowed_paths[0] index, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("error should mention 'absolute', got: %v", err)
+	}
+}
+
+// TestValidate_StepAllowedPaths_InvalidMode verifies that an invalid mode
+// on a step-level allowed_path returns an error.
+func TestValidate_StepAllowedPaths_InvalidMode(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "/srv/datasets", "mode": "rw"}
+				]
+			}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadAgentWorkflowConfig(path)
+	if err == nil {
+		t.Fatal("expected load error for invalid mode in step-level allowed_paths; got nil")
+	}
+	if !strings.Contains(err.Error(), "steps[0]") {
+		t.Fatalf("error should identify steps[0] scope, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "allowed_paths[0]") {
+		t.Fatalf("error should identify allowed_paths[0] index, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "mode must be") {
+		t.Fatalf("error should mention 'mode must be', got: %v", err)
+	}
+}
+
+// TestValidate_StepAllowedPaths_WorkflowStepConflictDifferentModes verifies that
+// when the same path is declared at both workflow-level and step-level with
+// different modes, the workflow loads successfully (step-level mode wins) and
+// a warning is logged.
+func TestValidate_StepAllowedPaths_WorkflowStepConflictDifferentModes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {"prompt": "do the thing"},
+		"allowed_paths": [
+			{"path": "/srv/datasets", "mode": "read_only"}
+		],
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "/srv/datasets", "mode": "read_write"}
+				]
+			}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Hold the lock for the entire test body so the buffer snapshot is stable.
+	logCaptureMu.Lock()
+	defer logCaptureMu.Unlock()
+	var buf bytes.Buffer
+	prevWriter := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prevWriter)
+		log.SetFlags(prevFlags)
+	})
+
+	cfg, err := LoadAgentWorkflowConfig(path)
+	if err != nil {
+		t.Fatalf("expected load success with conflicting modes; got: %v", err)
+	}
+	// Workflow-level path is preserved as-is.
+	if len(cfg.AllowedPaths) != 1 {
+		t.Fatalf("expected 1 workflow-level allowed_path, got %d", len(cfg.AllowedPaths))
+	}
+	// Step-level path is also preserved.
+	if len(cfg.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(cfg.Steps))
+	}
+	if len(cfg.Steps[0].AllowedPaths) != 1 {
+		t.Fatalf("expected 1 step-level allowed_path, got %d", len(cfg.Steps[0].AllowedPaths))
+	}
+	// Check warning was logged.
+	logs := buf.String()
+	if !strings.Contains(logs, "WARNING") {
+		t.Fatalf("expected a WARNING log line for the mode conflict, got logs: %q", logs)
+	}
+	if !strings.Contains(logs, "/srv/datasets") {
+		t.Fatalf("warning should mention the conflicting path, got logs: %q", logs)
+	}
+	if !strings.Contains(logs, "workflow level") {
+		t.Fatalf("warning should mention 'workflow level', got logs: %q", logs)
+	}
+	if !strings.Contains(logs, "steps[0]") {
+		t.Fatalf("warning should mention 'steps[0]', got logs: %q", logs)
+	}
+}
+
+// TestValidate_InitialAllowedPaths_ValidEntry verifies that a valid initial-level
+// allowed_path passes validation.
+func TestValidate_InitialAllowedPaths_ValidEntry(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "/tmp/work", "mode": "read_write", "reason": "Temp workspace"}
+			]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadAgentWorkflowConfig(path)
+	if err != nil {
+		t.Fatalf("expected load success; got: %v", err)
+	}
+	if cfg.Initial == nil {
+		t.Fatal("expected Initial to be non-nil")
+	}
+	if len(cfg.Initial.AllowedPaths) != 1 {
+		t.Fatalf("expected 1 initial-level allowed_path, got %d", len(cfg.Initial.AllowedPaths))
+	}
+	if cfg.Initial.AllowedPaths[0].Path != "/tmp/work" || cfg.Initial.AllowedPaths[0].Mode != "read_write" {
+		t.Errorf("initial allowed_paths[0] wrong: %+v", cfg.Initial.AllowedPaths[0])
+	}
+}
+
+// TestValidate_InitialAllowedPaths_InvalidEntry verifies that an invalid
+// initial-level allowed_path returns an error.
+func TestValidate_InitialAllowedPaths_InvalidEntry(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "relative/path", "mode": "read_write"}
+			]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadAgentWorkflowConfig(path)
+	if err == nil {
+		t.Fatal("expected load error for relative path in initial-level allowed_paths; got nil")
+	}
+	if !strings.Contains(err.Error(), "initial") {
+		t.Fatalf("error should identify 'initial' scope, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "allowed_paths[0]") {
+		t.Fatalf("error should identify allowed_paths[0] index, got: %v", err)
+	}
+}
+
+// TestValidate_InitialAllowedPaths_SystemPrefixWarn verifies that an initial-level
+// allowed_path under a system prefix is allowed to load with a warning.
+func TestValidate_InitialAllowedPaths_SystemPrefixWarn(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "/etc/sprout-stuff", "mode": "read_only"}
+			]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Hold the lock for the entire test body so the buffer snapshot is stable.
+	logCaptureMu.Lock()
+	defer logCaptureMu.Unlock()
+	var buf bytes.Buffer
+	prevWriter := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prevWriter)
+		log.SetFlags(prevFlags)
+	})
+
+	cfg, err := LoadAgentWorkflowConfig(path)
+	if err != nil {
+		t.Fatalf("expected system-prefix entry to load with a warning, got error: %v", err)
+	}
+	if cfg.Initial == nil || len(cfg.Initial.AllowedPaths) != 1 {
+		t.Fatalf("expected 1 initial-level allowed_path, got %v", cfg.Initial)
+	}
+	logs := buf.String()
+	if !strings.Contains(logs, "WARNING") {
+		t.Fatalf("expected a WARNING log line for the system prefix, got logs: %q", logs)
+	}
+	if !strings.Contains(logs, "/etc/sprout-stuff") {
+		t.Fatalf("warning should mention the offending path, got logs: %q", logs)
+	}
+}
+
+// TestValidate_InitialAllowedPaths_WorkflowInitialConflictDifferentModes verifies that
+// when the same path is declared at both workflow-level and initial-level with
+// different modes, the workflow loads successfully (initial-level mode is used)
+// and a warning is logged.
+func TestValidate_InitialAllowedPaths_WorkflowInitialConflictDifferentModes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "/srv/datasets", "mode": "read_write"}
+			]
+		},
+		"allowed_paths": [
+			{"path": "/srv/datasets", "mode": "read_only"}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Hold the lock for the entire test body so the buffer snapshot is stable.
+	logCaptureMu.Lock()
+	defer logCaptureMu.Unlock()
+	var buf bytes.Buffer
+	prevWriter := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prevWriter)
+		log.SetFlags(prevFlags)
+	})
+
+	cfg, err := LoadAgentWorkflowConfig(path)
+	if err != nil {
+		t.Fatalf("expected load success with conflicting modes; got: %v", err)
+	}
+	// Workflow-level path is preserved.
+	if len(cfg.AllowedPaths) != 1 {
+		t.Fatalf("expected 1 workflow-level allowed_path, got %d", len(cfg.AllowedPaths))
+	}
+	// Initial-level path is also preserved.
+	if cfg.Initial == nil {
+		t.Fatal("expected Initial to be non-nil")
+	}
+	if len(cfg.Initial.AllowedPaths) != 1 {
+		t.Fatalf("expected 1 initial-level allowed_path, got %d", len(cfg.Initial.AllowedPaths))
+	}
+	// Check warning was logged.
+	logs := buf.String()
+	if !strings.Contains(logs, "WARNING") {
+		t.Fatalf("expected a WARNING log line for the mode conflict, got logs: %q", logs)
+	}
+	if !strings.Contains(logs, "/srv/datasets") {
+		t.Fatalf("warning should mention the conflicting path, got logs: %q", logs)
+	}
+	if !strings.Contains(logs, "initial") {
+		t.Fatalf("warning should mention 'initial', got logs: %q", logs)
+	}
+	if !strings.Contains(logs, "workflow level") {
+		t.Fatalf("warning should mention 'workflow level', got logs: %q", logs)
+	}
+}
+
+// TestValidate_StepAllowedPaths_MultipleSteps verifies that each step can have
+// its own allowed_paths entries and validation is applied to all of them.
+func TestValidate_StepAllowedPaths_MultipleSteps(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	content := `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "step 1",
+				"allowed_paths": [
+					{"path": "/tmp/step1", "mode": "read_write"}
+				]
+			},
+			{
+				"prompt": "step 2",
+				"allowed_paths": [
+					{"path": "/tmp/step2", "mode": "read_only"}
+				]
+			}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadAgentWorkflowConfig(path)
+	if err != nil {
+		t.Fatalf("expected load success; got: %v", err)
+	}
+	if len(cfg.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(cfg.Steps))
+	}
+	if len(cfg.Steps[0].AllowedPaths) != 1 || cfg.Steps[0].AllowedPaths[0].Path != "/tmp/step1" {
+		t.Errorf("step 0 allowed_paths wrong: %+v", cfg.Steps[0].AllowedPaths)
+	}
+	if len(cfg.Steps[1].AllowedPaths) != 1 || cfg.Steps[1].AllowedPaths[0].Path != "/tmp/step2" {
+		t.Errorf("step 1 allowed_paths wrong: %+v", cfg.Steps[1].AllowedPaths)
 	}
 }

@@ -39,6 +39,24 @@ func (a *Agent) setClient(client api.ClientInterface, clientType api.ClientType)
 	a.client = client
 	a.clientType = clientType
 	a.clientMu.Unlock()
+
+	// Both calls below must run AFTER setClient releases its write lock:
+	//
+	// invalidateVisionCache takes visionProcMu and visionProbeMu. GetVisionProcessor
+	// (line 228) acquires visionProcMu then calls getClientType() which takes
+	// clientMu.RLock() — the reverse order. Calling invalidateVisionCache inside
+	// clientMu.Lock() would deadlock (AB-BA: clientMu→visionProcMu vs
+	// visionProcMu→clientMu). Running it outside the lock matches
+	// refreshSystemPrompt's pattern and the staleness argument below.
+	//
+	// refreshSystemPrompt calls getClientType() and getModelContextLimit(), both of
+	// which take clientMu.RLock() — must run after the write lock is released.
+	// A slow refresh doesn't delay the next setClient, and prompt/vision reads
+	// tolerate brief staleness between the swap and the refresh landing. This
+	// matches the legacy SetSystemPrompt call sites, which also write without
+	// coordinating against the client lock.
+	a.invalidateVisionCache()
+	a.refreshSystemPrompt()
 }
 
 // withClient runs fn while holding the client read lock, passing a stable

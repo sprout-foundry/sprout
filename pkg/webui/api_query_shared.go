@@ -152,7 +152,7 @@ func (ws *ReactWebServer) rollbackActiveQuery(clientID, chatID string) {
 //     fix that the proxy chat path was missing.
 //  5. Shared-agent guard for daemon / CLI shared mode.
 //  6. Slash-command dispatch (when AllowSlashCommands is true and the
-//     input starts with /) with stdout capture.
+//     input starts with /) with invocation-local output capture.
 //  7. Async ProcessQueryWithContinuity goroutine with panic recovery,
 //     cost recording, async state sync, and error/success log lines.
 //
@@ -344,41 +344,38 @@ func (ws *ReactWebServer) runChatQuery(
 
 			clientAgent.SetWorkspaceRoot(workspaceRoot)
 
-			// Capture stdout while the command runs: slash commands write to
-			// os.Stdout (fmt.Printf/fmt.Println), but in daemon mode that goes
-			// nowhere the browser can see. Redirect stdout to a pipe so we can
-			// forward the real command output as stream chunks.
-			//
-			// The mutex serializes capture across concurrent chats — os.Stdout
-			// is process-global, so two simultaneous redirects would race.
+			// Route command output through an invocation-local pipe. This avoids
+			// mutating process-global os.Stdout and allows slash commands from
+			// different clients to execute concurrently.
 			trimmed := strings.TrimSpace(query)
-			ws.stdoutCaptureMu.Lock()
-			oldStdout := os.Stdout
 			pipeR, pipeW, pipeErr := os.Pipe()
-			if pipeErr != nil {
-				log.Printf("%s: stdout pipe creation failed: %v", logTag, pipeErr)
-				ws.stdoutCaptureMu.Unlock()
+			var captured bytes.Buffer
+			var readerDone chan struct{}
+			if pipeErr == nil {
+				registry.SetOutput(pipeW)
+				readerDone = make(chan struct{})
+				go func() {
+					defer close(readerDone)
+					if _, copyErr := io.Copy(&captured, pipeR); copyErr != nil {
+						log.Printf("%s: command output pipe read failed: %v", logTag, copyErr)
+					}
+				}()
 			} else {
-				os.Stdout = pipeW
+				// Pipe creation failed (rare: FD exhaustion). Fall back to
+				// io.Discard so commands implementing OutputCommand don't
+				// block on a nil writer. Output is lost but the command runs.
+				log.Printf("%s: command output pipe creation failed, output will be lost: %v", logTag, pipeErr)
+				registry.SetOutput(io.Discard)
 			}
 
 			err := registry.Execute(query, clientAgent)
-
-			// Drain the pipe. Close the write end BEFORE reading so io.Copy
-			// sees EOF and returns — otherwise it blocks forever (classic
-			// pipe deadlock). See SC-2.
-			var capturedOutput string
+			registry.SetOutput(nil)
 			if pipeErr == nil {
-				pipeW.Close()
-				os.Stdout = oldStdout
-				var buf bytes.Buffer
-				if _, copyErr := io.Copy(&buf, pipeR); copyErr != nil {
-					log.Printf("%s: stdout pipe read failed: %v", logTag, copyErr)
-				}
-				pipeR.Close()
-				ws.stdoutCaptureMu.Unlock()
-				capturedOutput = buf.String()
+				_ = pipeW.Close()
+				<-readerDone
+				_ = pipeR.Close()
 			}
+			capturedOutput := captured.String()
 
 			// Sync state asynchronously so the query goroutine can proceed
 			// to publish events without waiting for the state export.

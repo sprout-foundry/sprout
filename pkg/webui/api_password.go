@@ -29,21 +29,21 @@ type passwordRespondRequest struct {
 // CRITICAL: The password value must NEVER appear in any log output.
 func (ws *ReactWebServer) handleAPIPasswordRespond(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	// Extract password request ID from path: /api/password/{id}/respond
 	requestID := extractPasswordIDFromPath(r.URL.Path)
 	if requestID == "" {
-		http.Error(w, "Password request ID is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "password_request_id_required", "Password request ID is required")
 		return
 	}
 
 	var req passwordRespondRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("handleAPIPasswordRespond: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -57,7 +57,7 @@ func (ws *ReactWebServer) handleAPIPasswordRespond(w http.ResponseWriter, r *htt
 
 	if !delivered {
 		log.Printf("handleAPIPasswordRespond: password request %s not found or already responded", requestID)
-		http.Error(w, "Password request not found or already responded", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "not_found", "Password request not found or already responded")
 		return
 	}
 

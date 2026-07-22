@@ -42,7 +42,7 @@ type diagnosticsResponse struct {
 // It validates Go source content and returns diagnostics for the frontend.
 func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -50,13 +50,13 @@ func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Re
 
 	var req diagnosticsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	req.Path = strings.TrimSpace(req.Path)
 	if req.Path == "" {
-		http.Error(w, "File path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "file_path_required", "File path is required")
 		return
 	}
 
@@ -64,11 +64,11 @@ func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Re
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	canonical, err := canonicalizePath(req.Path, workspaceRoot, true)
 	if err != nil {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
 	if !isWithinWorkspace(canonical, workspaceRoot) {
-		http.Error(w, "Path is outside workspace", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside workspace")
 		return
 	}
 	filePath := canonical

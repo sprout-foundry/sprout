@@ -85,7 +85,7 @@ func (ws *ReactWebServer) stopActiveQuery(w http.ResponseWriter, r *http.Request
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 			return true // response written; caller should not write again
 		}
-		http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		return true
 	}
 
@@ -190,12 +190,12 @@ func (ws *ReactWebServer) runChatQuery(
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil {
 		ws.mutex.Unlock()
-		http.Error(w, "Client context not found", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "client_context_not_found", "Client context not found")
 		return
 	}
 	if ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.Unlock()
-		http.Error(w, "A query is already running for this chat", http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "query_in_progress", "A query is already running for this chat")
 		return
 	}
 	// Atomically mark the query as active while still holding the lock so
@@ -218,7 +218,7 @@ func (ws *ReactWebServer) runChatQuery(
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_initialization_failed", fmt.Sprintf("failed to initialize chat agent: %v", err))
 		}
 		return
 	}

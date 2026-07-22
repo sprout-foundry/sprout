@@ -225,7 +225,7 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
 	log.Printf("handleAPIQuery called")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -241,13 +241,13 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
 		log.Printf("handleAPIQuery: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if query.Query == "" {
 		log.Printf("handleAPIQuery: empty query")
-		http.Error(w, "Query is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
 		return
 	}
 
@@ -274,7 +274,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 // handleAPIQuerySteer injects user input into the currently running query loop.
 func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -284,13 +284,13 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	query.Query = strings.TrimSpace(query.Query)
 	if query.Query == "" {
-		http.Error(w, "Query is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
 		return
 	}
 
@@ -305,7 +305,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		ws.mutex.RUnlock()
 
 		if !hasActiveQuery {
-			http.Error(w, "No active query to steer", http.StatusConflict)
+			writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
 			return
 		}
 
@@ -314,7 +314,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 			if isProviderConfigError(err) {
 				writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 			} else {
-				http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+				writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 			}
 			return
 		}
@@ -342,7 +342,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		}
 
 		// Command not found or not safe to run mid-turn
-		http.Error(w, "Slash commands cannot be steered while a query is running", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "slash_command_not_steerable", "Slash commands cannot be steered while a query is running")
 		return
 	}
 
@@ -353,7 +353,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.RUnlock()
-		http.Error(w, "No active query to steer", http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
 		return
 	}
 	ws.mutex.RUnlock()
@@ -363,7 +363,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
@@ -391,7 +391,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	if !delivered {
 		// No runner or runner couldn't deliver — fall back to primary directly.
 		if err := clientAgent.InjectInputContext(query.Query); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
+			writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 			return
 		}
 	}
@@ -418,7 +418,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 // resolution, TriggerInterrupt, and subagent cancellation.
 func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -434,7 +434,7 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 // Thin wrapper over the shared chatQueryStatus helper.
 func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 

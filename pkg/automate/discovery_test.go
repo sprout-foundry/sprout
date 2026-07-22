@@ -892,3 +892,270 @@ func mustWriteFile(t *testing.T, path, content string) {
 		t.Fatalf("failed to write %s: %v", path, err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SP-127 Phase 2: Step-level and initial-level allowed_paths in Summarize
+// ---------------------------------------------------------------------------
+
+// TestSummarize_StepAllowedPaths_SurfacesPaths verifies that Summarize
+// correctly surfaces step-level allowed_paths in the StepSummary output.
+func TestSummarize_StepAllowedPaths_SurfacesPaths(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"description": "Test workflow with step-level allowed_paths",
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"name": "process",
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "/srv/datasets", "mode": "read_only", "reason": "Training data"},
+					{"path": "/tmp/output", "mode": "read_write"}
+				]
+			}
+		]
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(s.Steps))
+	}
+	step := s.Steps[0]
+	if step.Name != "process" {
+		t.Errorf("step name: got %q, want %q", step.Name, "process")
+	}
+	if len(step.AllowedPaths) != 2 {
+		t.Fatalf("expected 2 allowed_paths on step, got %d", len(step.AllowedPaths))
+	}
+	// Entries should be sorted by path.
+	if step.AllowedPaths[0].Path != "/srv/datasets" {
+		t.Errorf("step allowed_paths[0]: got %q, want /srv/datasets", step.AllowedPaths[0].Path)
+	}
+	if step.AllowedPaths[0].Mode != "read_only" {
+		t.Errorf("step allowed_paths[0].Mode: got %q, want read_only", step.AllowedPaths[0].Mode)
+	}
+	if step.AllowedPaths[0].Reason != "Training data" {
+		t.Errorf("step allowed_paths[0].Reason: got %q, want 'Training data'", step.AllowedPaths[0].Reason)
+	}
+	if step.AllowedPaths[1].Path != "/tmp/output" {
+		t.Errorf("step allowed_paths[1]: got %q, want /tmp/output", step.AllowedPaths[1].Path)
+	}
+}
+
+// TestSummarize_InitialAllowedPaths_SurfacesPaths verifies that Summarize
+// correctly surfaces initial-level allowed_paths in the InitialSummary output.
+func TestSummarize_InitialAllowedPaths_SurfacesPaths(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"description": "Test workflow with initial-level allowed_paths",
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "/tmp/work", "mode": "read_write", "reason": "Temp workspace"}
+			]
+		}
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if s.Initial == nil {
+		t.Fatal("expected Initial to be non-nil")
+	}
+	if len(s.Initial.AllowedPaths) != 1 {
+		t.Fatalf("expected 1 allowed_path on initial, got %d", len(s.Initial.AllowedPaths))
+	}
+	if s.Initial.AllowedPaths[0].Path != "/tmp/work" {
+		t.Errorf("initial allowed_paths[0].Path: got %q, want /tmp/work", s.Initial.AllowedPaths[0].Path)
+	}
+	if s.Initial.AllowedPaths[0].Mode != "read_write" {
+		t.Errorf("initial allowed_paths[0].Mode: got %q, want read_write", s.Initial.AllowedPaths[0].Mode)
+	}
+	if s.Initial.AllowedPaths[0].Reason != "Temp workspace" {
+		t.Errorf("initial allowed_paths[0].Reason: got %q, want 'Temp workspace'", s.Initial.AllowedPaths[0].Reason)
+	}
+}
+
+// TestSummarize_StepAllowedPaths_MalformedEntryError verifies that a malformed
+// step-level allowed_path entry returns a parse error (mirrors workflow-level behavior).
+func TestSummarize_StepAllowedPaths_MalformedEntryError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "relative/path", "mode": "read_write"}
+				]
+			}
+		]
+	}`)
+
+	_, err := Summarize(path)
+	if err == nil {
+		t.Fatal("expected parse error for malformed step-level allowed_path; got nil")
+	}
+	// Error should identify the scope and index.
+	if !strings.Contains(err.Error(), "step") {
+		t.Fatalf("error should mention 'step' scope, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "allowed_paths[0]") {
+		t.Fatalf("error should identify allowed_paths[0] index, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("error should mention 'absolute', got: %v", err)
+	}
+}
+
+// TestSummarize_InitialAllowedPaths_MalformedEntryError verifies that a malformed
+// initial-level allowed_path entry returns a parse error.
+func TestSummarize_InitialAllowedPaths_MalformedEntryError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "relative/path", "mode": "read_write"}
+			]
+		}
+	}`)
+
+	_, err := Summarize(path)
+	if err == nil {
+		t.Fatal("expected parse error for malformed initial-level allowed_path; got nil")
+	}
+	// Error should identify the scope and index.
+	if !strings.Contains(err.Error(), "initial") {
+		t.Fatalf("error should mention 'initial' scope, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "allowed_paths[0]") {
+		t.Fatalf("error should identify allowed_paths[0] index, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("error should mention 'absolute', got: %v", err)
+	}
+}
+
+// TestSummarize_StepAllowedPaths_SystemPrefixWarning verifies that a step-level
+// allowed_path under a system prefix generates a warning in the summary.
+func TestSummarize_StepAllowedPaths_SystemPrefixWarning(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "/etc/sprout-stuff", "mode": "read_only"}
+				]
+			}
+		]
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Warnings) == 0 {
+		t.Fatal("expected at least one warning for system prefix path")
+	}
+	found := false
+	for _, w := range s.Warnings {
+		if strings.Contains(w, "step") && strings.Contains(w, "/etc/sprout-stuff") && strings.Contains(w, "system prefix") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected warning about step-level system prefix path, got: %v", s.Warnings)
+	}
+}
+
+// TestSummarize_InitialAllowedPaths_SystemPrefixWarning verifies that an initial-level
+// allowed_path under a system prefix generates a warning in the summary.
+func TestSummarize_InitialAllowedPaths_SystemPrefixWarning(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "/etc/sprout-stuff", "mode": "read_only"}
+			]
+		}
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Warnings) == 0 {
+		t.Fatal("expected at least one warning for system prefix path")
+	}
+	found := false
+	for _, w := range s.Warnings {
+		if strings.Contains(w, "initial") && strings.Contains(w, "/etc/sprout-stuff") && strings.Contains(w, "system prefix") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected warning about initial-level system prefix path, got: %v", s.Warnings)
+	}
+}
+
+// TestSummarize_StepAllowedPaths_MultipleSteps verifies that Summarize correctly
+// handles multiple steps with their own allowed_paths.
+func TestSummarize_StepAllowedPaths_MultipleSteps(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"name": "step1",
+				"prompt": "first step",
+				"allowed_paths": [
+					{"path": "/tmp/step1", "mode": "read_write"}
+				]
+			},
+			{
+				"name": "step2",
+				"prompt": "second step",
+				"allowed_paths": [
+					{"path": "/tmp/step2", "mode": "read_only"}
+				]
+			}
+		]
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(s.Steps))
+	}
+	if len(s.Steps[0].AllowedPaths) != 1 {
+		t.Errorf("step 0 expected 1 allowed_path, got %d", len(s.Steps[0].AllowedPaths))
+	}
+	if s.Steps[0].AllowedPaths[0].Path != "/tmp/step1" {
+		t.Errorf("step 0 allowed_path: got %q, want /tmp/step1", s.Steps[0].AllowedPaths[0].Path)
+	}
+	if len(s.Steps[1].AllowedPaths) != 1 {
+		t.Errorf("step 1 expected 1 allowed_path, got %d", len(s.Steps[1].AllowedPaths))
+	}
+	if s.Steps[1].AllowedPaths[0].Path != "/tmp/step2" {
+		t.Errorf("step 1 allowed_path: got %q, want /tmp/step2", s.Steps[1].AllowedPaths[0].Path)
+	}
+}

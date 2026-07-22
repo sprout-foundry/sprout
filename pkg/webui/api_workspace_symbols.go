@@ -20,13 +20,13 @@ const (
 // It returns a JSON response with all symbols or filtered symbols.
 func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if workspaceRoot == "" {
-		http.Error(w, "Workspace not found", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "workspace_not_found", "Workspace not found")
 		return
 	}
 
@@ -39,7 +39,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 	if idx == nil || len(idx.Files) == 0 {
 		idx, err = index.BuildSymbols(workspaceRoot)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to build symbol index: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "symbol_index_build_failed", fmt.Sprintf("Failed to build symbol index: %v", err))
 			return
 		}
 	}

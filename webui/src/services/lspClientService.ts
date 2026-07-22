@@ -8,7 +8,7 @@
 import type { Transport, LSPClientConfig, LSPClient } from '@codemirror/lsp-client';
 import { LSPClient as LSPClientClass, languageServerExtensions } from '@codemirror/lsp-client';
 import type { EditorView } from '@codemirror/view';
-import { warn } from '../utils/log';
+import { debugLog } from '../utils/log';
 import { ApiService } from './api';
 import { clientFetch } from './clientSession';
 
@@ -457,7 +457,7 @@ class LSPClientService {
         }
       }
 
-      console.warn('[LSPClientService] Loaded LSP status for', this.statusCache.size, 'languages');
+      debugLog('[LSPClientService] Loaded LSP status for', this.statusCache.size, 'languages');
     } catch (err) {
       console.error('[LSPClientService] Failed to fetch LSP status:', err);
       // Leave cache empty on error - assume no LSP available
@@ -531,7 +531,7 @@ class LSPClientService {
 
     // Check if available
     if (!this.isSupported(languageId)) {
-      console.warn('[LSPClientService] LSP not available for:', languageId);
+      debugLog('[LSPClientService] LSP not available for:', languageId);
       return null;
     }
 
@@ -562,10 +562,10 @@ class LSPClientService {
     try {
       // Create WebSocket transport with onClose callback
       const wsUrl = this.getWebSocketURL(languageId);
-      console.warn('[LSPClientService] Connecting to:', wsUrl);
+      debugLog('[LSPClientService] Connecting to:', wsUrl);
 
       const transport = await createTransport(wsUrl, () => {
-        console.warn('[LSPClientService] Transport closed for:', languageId);
+        debugLog('[LSPClientService] Transport closed for:', languageId);
         // Mark as disconnected (to work around connected getter bug)
         this.disconnectedLanguages.add(languageId);
         const client = this.clients.get(languageId);
@@ -624,7 +624,7 @@ class LSPClientService {
       // Update state to connected
       this.setClientState(languageId, 'connected');
 
-      console.warn('[LSPClientService] Connected LSP client for:', languageId);
+      debugLog('[LSPClientService] Connected LSP client for:', languageId);
       // Surface the negotiated server capabilities — invaluable when a feature
       // (hover, completion, rename…) silently no-ops because the server didn't
       // advertise support.  Falls back gracefully when older transports don't
@@ -695,7 +695,7 @@ class LSPClientService {
    * Disconnect and clean up all LSP clients.
    */
   cleanup(): void {
-    console.warn('[LSPClientService] Cleaning up clients');
+    debugLog('[LSPClientService] Cleaning up clients');
 
     // Close all WebSocket connections first
     this.transportCloseFns.forEach((close) => {
@@ -773,7 +773,7 @@ class LSPClientService {
     this.reconnectAttempts.set(languageId, attempts);
 
     if (attempts > MAX_RECONNECT_ATTEMPTS) {
-      console.warn(
+      debugLog(
         `[LSPClientService] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${languageId}, giving up`,
       );
       this.setClientState(languageId, 'disconnected');
@@ -782,7 +782,7 @@ class LSPClientService {
 
     const backoff = Math.min(1000 * Math.pow(2, attempts - 1), MAX_RECONNECT_BACKOFF_MS);
 
-    console.warn(`[LSPClientService] Scheduling reconnect for ${languageId} in ${backoff}ms (attempt ${attempts})`);
+    debugLog(`[LSPClientService] Scheduling reconnect for ${languageId} in ${backoff}ms (attempt ${attempts})`);
     this.setClientState(languageId, 'reconnecting');
 
     const timer = setTimeout(() => {
@@ -790,7 +790,7 @@ class LSPClientService {
       if (this.disconnectedLanguages.has(languageId)) {
         this.disconnectedLanguages.delete(languageId);
         this.getClientForLanguage(languageId).catch((err) => {
-          warn('LSP reconnect failed: ' + (err instanceof Error ? err.message : String(err)));
+          debugLog('LSP reconnect failed: ' + (err instanceof Error ? err.message : String(err)));
         });
       }
     }, backoff);

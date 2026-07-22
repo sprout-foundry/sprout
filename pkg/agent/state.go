@@ -369,7 +369,7 @@ func (a *Agent) Breakpoints() []Breakpoint {
 	userIdx := 1
 	for _, msg := range messages {
 		if msg.Role == "user" {
-			content := msg.Content
+			content := StripUserMessageTimestamp(msg.Content)
 			if len(content) > 80 {
 				content = content[:80] + "..."
 			}
@@ -449,8 +449,12 @@ func (a *Agent) generateSessionName() string {
 	}
 	// Otherwise derive from first user message
 	for _, msg := range messages {
-		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
-			name := strings.TrimSpace(msg.Content)
+		if msg.Role == "user" {
+			content := StripUserMessageTimestamp(msg.Content)
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
+			name := strings.TrimSpace(content)
 			name = strings.Join(strings.Fields(name), " ")
 			if len(name) > 60 {
 				name = name[:60] + "..."

@@ -534,11 +534,17 @@ func GetSessionPreviewScoped(sessionID, workingDir string) string {
 
 	// Find the first user message
 	for _, msg := range state.Messages {
-		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
-			// Get first 50 characters, clean up whitespace
-			content := strings.TrimSpace(msg.Content)
-			if len(content) > 50 {
-				content = content[:50] + "..."
+		if msg.Role == "user" {
+			content := strings.TrimSpace(StripUserMessageTimestamp(msg.Content))
+			if content == "" {
+				continue
+			}
+			// Get first 50 characters, clean up whitespace. Truncate at a
+			// rune boundary so multi-byte UTF-8 prompts aren't split
+			// mid-codepoint.
+			runes := []rune(content)
+			if len(runes) > 50 {
+				content = string(runes[:50]) + "..."
 			}
 			// Replace newlines with spaces to keep it on one line
 			content = strings.ReplaceAll(content, "\n", " ")

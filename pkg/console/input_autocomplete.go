@@ -37,6 +37,12 @@ type inlineAutocomplete struct {
 	// lastLine tracks the input line from the previous update call.
 	// When the line changes, selection resets to the top candidate.
 	lastLine string
+	// dismissedLine, when non-empty, suppresses the dropdown for the
+	// given line. Set by Escape/Tab-accept so the dropdown doesn't
+	// immediately reappear on the next render (which would re-invoke
+	// the completer and show the same candidates). Cleared when the
+	// line changes via any edit.
+	dismissedLine string
 }
 
 // newInlineAutocomplete returns a zero-value manager (hidden).
@@ -49,6 +55,14 @@ func newInlineAutocomplete() *inlineAutocomplete {
 // provider when set, falling back to the plain completer.
 func (a *inlineAutocomplete) update(line string, cursorPos int, completer CompletionProvider, richCompleter RichCompletionProvider) {
 	if (!strings.HasPrefix(line, "/")) || cursorPos != len(line) {
+		a.hide()
+		return
+	}
+
+	// Suppress the dropdown if the user explicitly dismissed it
+	// (Escape or Tab-accept) for this exact line. Any edit changes
+	// the line, clearing the suppression.
+	if a.dismissedLine == line {
 		a.hide()
 		return
 	}
@@ -108,6 +122,15 @@ func (a *inlineAutocomplete) hide() {
 	a.candidates = nil
 	a.selected = 0
 	a.lastLine = ""
+}
+
+// dismiss hides the dropdown AND suppresses it from reappearing for
+// the given line. Used by Escape and Tab-accept so the dropdown doesn't
+// immediately show again on the next render cycle. Any edit that
+// changes the line clears the suppression.
+func (a *inlineAutocomplete) dismiss(line string) {
+	a.hide()
+	a.dismissedLine = line
 }
 
 // accept returns the currently selected candidate's text, or "" if none.

@@ -301,15 +301,14 @@ func (ir *InputReader) ReadLine() (string, error) {
 							ir.line = text
 							ir.cursorPos = len(ir.line)
 						}
-						// Erase the dropdown rows from the terminal before
-						// advancing to the next line. clear() emits escape
-						// sequences so it must be under the output lock to
-						// prevent interleaving with background footer/PrintExternal
-						// writes.
-						LockOutput()
-						ir.autocomplete.clear()
-						UnlockOutput()
+						// hide() marks the dropdown invisible; the next
+						// Refresh() → refreshLocked() → clear() erases
+						// the old rows, then redraws the input line with
+						// the accepted text so the user sees the final
+						// command (e.g. "/help") instead of the partial
+						// text they typed ("/he").
 						ir.autocomplete.hide()
+						ir.Refresh()
 					}
 					// End of input
 					fmt.Println() // Move to next line

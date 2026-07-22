@@ -288,3 +288,124 @@ func TestHandleToolError_LogsSecurityBlock(t *testing.T) {
 		t.Errorf("Tool = %q, want 'shell_command'", entries[0].Tool)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// CD Gate audit logging (SP-127 Phase 2.6)
+// ---------------------------------------------------------------------------
+
+func TestAuditLogger_CdGateDenied(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := tools.NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+	defer logger.Close()
+
+	a := &Agent{
+		state:         NewAgentStateManager(false),
+		workspaceRoot: "/workspace",
+		output:        NewAgentOutputManager(),
+		security:      NewAgentSecurityManager(),
+		shellCwd:     &shellCwdTracker{},
+	}
+	a.SetAuditLogger(logger)
+	defer tools.SetAuditLogger(nil)
+
+	// Initialize shell cwd to workspace
+	a.ensureShellCwd().Set("/workspace")
+
+	// Attempt cd to /etc (should be rejected)
+	a.updateShellCwd("cd /etc")
+
+	logger.Close()
+	entries := readAuditEntries(t, logPath)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 audit entry for denied cd, got %d: %v", len(entries), entries)
+	}
+	e := entries[0]
+	if e.Tool != "shell_cd" {
+		t.Errorf("Tool = %q, want 'shell_cd'", e.Tool)
+	}
+	if e.Action != "denied" {
+		t.Errorf("Action = %q, want 'denied'", e.Action)
+	}
+	if e.Args != "/etc" {
+		t.Errorf("Args = %q, want '/etc'", e.Args)
+	}
+	if e.RiskLevel != "high" {
+		t.Errorf("RiskLevel = %q, want 'high'", e.RiskLevel)
+	}
+	if e.Category != "cd_gate" {
+		t.Errorf("Category = %q, want 'cd_gate'", e.Category)
+	}
+	if e.Source != "unified-gate" {
+		t.Errorf("Source = %q, want 'unified-gate'", e.Source)
+	}
+}
+
+func TestAuditLogger_CdGateAllowed(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := tools.NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+	defer logger.Close()
+
+	a := &Agent{
+		state:         NewAgentStateManager(false),
+		workspaceRoot: "/workspace",
+		output:        NewAgentOutputManager(),
+		security:      NewAgentSecurityManager(),
+		shellCwd:     &shellCwdTracker{},
+	}
+	a.SetAuditLogger(logger)
+	defer tools.SetAuditLogger(nil)
+
+	// Initialize shell cwd to workspace
+	a.ensureShellCwd().Set("/workspace")
+
+	// Attempt cd to /workspace/subdir (should be allowed)
+	os.MkdirAll("/workspace/subdir", 0755)
+	a.updateShellCwd("cd /workspace/subdir")
+
+	// Give a moment for any async writes
+	logger.Close()
+	entries := readAuditEntries(t, logPath)
+	if len(entries) != 0 {
+		t.Fatalf("expected 0 audit entries for allowed cd, got %d: %v", len(entries), entries)
+	}
+}
+
+func TestAuditLogger_CdGateDenied_NilLogger(t *testing.T) {
+	t.Parallel()
+
+	a := &Agent{
+		state:         NewAgentStateManager(false),
+		workspaceRoot: "/workspace",
+		output:        NewAgentOutputManager(),
+		security:      NewAgentSecurityManager(),
+		shellCwd:     &shellCwdTracker{},
+	}
+	// No audit logger set - should not panic
+
+	// Initialize shell cwd to workspace
+	a.ensureShellCwd().Set("/workspace")
+
+	// Attempt cd to /etc (should be rejected silently)
+	a.updateShellCwd("cd /etc")
+
+	// No panic means test passes
+}
+
+func TestAuditLogger_CdGateDenied_NilAgent(t *testing.T) {
+	t.Parallel()
+
+	var a *Agent // nil agent
+
+	// Should not panic - writeCdRejectionMessage is now nil-safe
+	a.writeCdRejectionMessage("/etc", "is not allowed")
+}

@@ -103,13 +103,18 @@ export interface UseCMViewOptions {
    *  Implementations should be idempotent and handle their own cancellation. */
   bootstrapLSP?: (langId: string, filePath: string, view: EditorView) => Promise<Extension[]>;
   /** Cleanup hook called BEFORE view.destroy(). Use for unregistering
-   *  listeners, canceling pending work, etc. */
+   *  listeners, canceling pending work, etc. Only fires when the view is
+   *  destroyed for real (pane unmount or theme change), NOT on buffer switch. */
   onWillDestroy?: (view: EditorView) => void;
   /** Called AFTER view is created. Use for global view registration (e.g.
-   *  registerEditorView for LSP lookup). */
+   *  registerEditorView for LSP lookup). Only fires once per view lifetime. */
   onDidMount?: (view: EditorView, filePath: string | undefined) => void;
   /** Called when the view has been destroyed by this hook. */
   onDidDestroy?: () => void;
+  /** Called when the buffer changes but the view is reused (buffer switch
+   *  without view recreation). Use for updating filePath→view registries,
+   *  reconfiguring LSP, etc. Receives the old and new filePaths. */
+  onBufferSwitch?: (view: EditorView, oldFilePath: string | undefined, newFilePath: string | undefined) => void;
 }
 
 export interface CMViewAPI {
@@ -185,6 +190,7 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
     onWillDestroy,
     onDidMount,
     onDidDestroy,
+    onBufferSwitch,
   } = opts;
 
   // Caller-provided ref to the update listener. The caller assigns to
@@ -227,6 +233,12 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
   });
 
   useEffect(() => {
+    // Guard: skip if the view was already created (buffer switch, not first
+    // mount). This allows buffer?.id to stay in the dep array so the effect
+    // fires when a buffer first becomes available (e.g., WelcomeTab → file),
+    // without recreating the view on every subsequent buffer switch.
+    if (apiRef.current.view) return undefined;
+
     const parent = editorRef.current;
     if (!parent) return undefined;
 
@@ -355,11 +367,65 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
         }
       }
     };
-    // These are the lifecycle identity inputs by design. All callback and
-    // mutable configuration refs are read through their current value above;
-    // adding them here would recreate the EditorView during ordinary renders.
+    // The view persists for the lifetime of the pane. Only paneId, editorRef,
+    // and theme-related inputs recreate the view — NOT buffer?.id. Buffer
+    // switches are handled by the separate effect below, which reconfigures
+    // the existing view in place (language, content, LSP) without destroying
+    // and recreating the 30+ extensions. This is the critical performance
+    // optimization: each file open previously destroyed and rebuilt the
+    // entire CodeMirror instance, causing progressive GC degradation.
+    // buffer?.id remains in the dep array so the view is created when a
+    // buffer first becomes available (e.g., transitioning from WelcomeTab
+    // to a real file), but the apiRef.current.view guard ensures it is
+    // created only once — subsequent buffer switches are handled by the
+    // separate buffer-switch effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paneId, buffer?.id, buffer?.file?.ext, buffer?.file?.name, themePack, customHighlightStyle, editorRef]);
+  }, [paneId, buffer?.id, themePack, customHighlightStyle, editorRef]);
+
+  // ── Buffer-switch effect ────────────────────────────────────────────
+  // When buffer?.id changes (user opens a different file in the same pane),
+  // notify the caller so it can update the editor view registry.
+  //
+  // Language reconfiguration, LSP bootstrap, content swap, history reset,
+  // and all other view-level updates are handled by existing hooks:
+  //   - useEditorReconfigure: language + LSP compartment reconfiguration
+  //   - useEditorFileIO: content swap, history reset, disk loading
+  //
+  // This effect ONLY handles the editor view registry update (filePath→view
+  // mapping for LSP cross-file navigation).
+  //
+  // prevFilePathRef tracks the filePath from the PREVIOUS buffer — we can't
+  // read it from bufferRef.current because that ref is already updated to
+  // the new buffer by the time this effect runs (refs are written during
+  // render, effects fire after commit).
+  const hasBufferSwitchedRef = useRef(false);
+  const prevFilePathRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const view = apiRef.current.view;
+    if (!view) return;
+
+    const bufferId = buffer?.id ?? null;
+
+    // Skip the very first run — onDidMount already registered the view.
+    if (!hasBufferSwitchedRef.current) {
+      hasBufferSwitchedRef.current = true;
+      prevFilePathRef.current = buffer?.file?.path;
+      return;
+    }
+
+    const newFilePath = buffer?.file?.path;
+    const oldFilePath = prevFilePathRef.current;
+    prevFilePathRef.current = newFilePath;
+
+    // Update editor view registry for LSP cross-file navigation.
+    try {
+      onBufferSwitch?.(view, oldFilePath, newFilePath);
+    } catch (error) {
+      reportError('onBufferSwitch failed', error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buffer?.id]);
 
   return apiRef.current;
 }

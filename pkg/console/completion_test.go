@@ -122,11 +122,12 @@ func TestCompletionCycle_EditResetsCycle(t *testing.T) {
 
 func newTestReaderWithCompleter(c CompletionProvider) *SteerInputReader {
 	return &SteerInputReader{
-		fd:          -1,
-		submitFn:    func(string) {},
-		queueFn:     func(string) {},
-		interruptFn: func() {},
-		completer:   c,
+		fd:           -1,
+		autocomplete: newInlineAutocomplete(),
+		submitFn:     func(string) {},
+		queueFn:      func(string) {},
+		interruptFn:  func() {},
+		completer:    c,
 	}
 }
 

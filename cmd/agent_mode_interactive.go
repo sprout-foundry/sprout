@@ -127,6 +127,13 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// STEER ↔ QUEUE mode toggle on the steer panel).
 	steerCoord.SetCompleter(completer)
 
+	// SP-078 Phase 3: structured completer on the steer panel renders
+	// a live dropdown above the input line while the user types a
+	// "/" command (matches the InputReader's affordance). Tab accepts
+	// the highlighted candidate; Up/Down navigate while the dropdown
+	// is visible; Esc dismisses.
+	steerCoord.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent))
+
 	// Capture a ground-truth termios snapshot of stdin in its default
 	// cooked state (the terminal is fully cooked at this point — no
 	// raw or steer mode active). Both InputReader and SteerInputReader

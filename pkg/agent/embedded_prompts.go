@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -78,20 +77,20 @@ func GetEmbeddedSystemPrompt() (string, error) {
 		promptContent = promptContent + memories
 	}
 
-	// Add the current working directory LAST among semi-static content (and
-	// just before the volatile timestamp). Volatile per-call content (cwd +
-	// date/time) is grouped at the tail to preserve prompt-prefix cache
-	// eligibility for the large static prefix. Providers like Anthropic cache
-	// prompt prefixes; placing cwd at the start would force a full re-process
-	// of every subsequent request.
+	// Add the current working directory LAST among semi-static content.
+	// Volatile per-call content (cwd) is grouped at the tail to preserve
+	// prompt-prefix cache eligibility for the large static prefix. Providers
+	// like Anthropic cache prompt prefixes; placing cwd at the start would
+	// force a full re-process of every subsequent request.
+	//
+	// Note: date/time is NOT injected here. It lives in the user message
+	// (see injectUserMessageTimestamp in seed_query.go) because second-
+	// resolution timestamps invalidate the cached prefix on every request.
+	// The system prompt remains byte-identical across calls — that is the
+	// cache-eligibility invariant this section preserves.
 	cwdString := buildCurrentWorkingDirectorySection("")
 
-	currentTime := time.Now()
-	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
-		currentTime.Format("2006-01-02"),
-		currentTime.Format("15:04:05"),
-		currentTime.Location().String())
-	promptContent = promptContent + cwdString + dateTimeString
+	promptContent = promptContent + cwdString
 
 	return promptContent, nil
 }
@@ -143,17 +142,18 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 		promptContent = promptContent + memories
 	}
 
-	// Add the current working directory LAST among semi-static content (and
-	// just before the volatile timestamp). Grouped with date/time at the tail
-	// to preserve prompt-prefix cache eligibility for the static prefix.
+	// Add the current working directory LAST among semi-static content.
+	// Grouped at the tail to preserve prompt-prefix cache eligibility for
+	// the static prefix.
+	//
+	// Note: date/time is NOT injected here. It lives in the user message
+	// (see injectUserMessageTimestamp in seed_query.go) because second-
+	// resolution timestamps invalidate the cached prefix on every request.
+	// The system prompt remains byte-identical across calls — that is the
+	// cache-eligibility invariant this section preserves.
 	cwdString := buildCurrentWorkingDirectorySection(workspaceRoot)
 
-	currentTime := time.Now()
-	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
-		currentTime.Format("2006-01-02"),
-		currentTime.Format("15:04:05"),
-		currentTime.Location().String())
-	promptContent = promptContent + cwdString + dateTimeString
+	promptContent = promptContent + cwdString
 
 	return promptContent, nil
 }
@@ -226,12 +226,14 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 		return "", agenterrors.NewPermanentError("failed to extract planning prompt", err)
 	}
 
-	// Add current date and time for temporal context
-	currentTime := time.Now()
-	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
-		currentTime.Format("2006-01-02"),
-		currentTime.Format("15:04:05"),
-		currentTime.Location().String())
+	// NOTE: date/time used to be appended here. It was removed because the
+	// planning prompt is sent as the system prompt for one-shot planning
+	// calls, and the time-dependent block would invalidate the prefix cache
+	// on every invocation. The current timestamp now arrives as a
+	// `<current-time>` tag in the user message (see
+	// injectUserMessageTimestamp in seed_query.go) when this prompt is used
+	// in agent-style flows; for the WASM/CLI `sprout plan` one-shot path,
+	// callers can prepend a `<current-time>` tag themselves if needed.
 
 	// Add todo integration or not based on flag
 	todoIntegration := `
@@ -249,7 +251,7 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 `
 	}
 
-	return promptContent + todoIntegration + dateTimeString, nil
+	return promptContent + todoIntegration, nil
 }
 
 // extractPlanningPrompt extracts the prompt content from the planning_prompt markdown

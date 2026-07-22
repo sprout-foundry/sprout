@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -90,6 +90,10 @@ func (ws *ReactWebServer) stopActiveQuery(w http.ResponseWriter, r *http.Request
 	}
 
 	clientAgent.TriggerInterrupt()
+	ws.logger.Info("query interrupt triggered",
+		slog.String("chat_id", chatID),
+		slog.String("client_id", clientID),
+	)
 
 	// SP-059 Phase 1a: cancel running subagents too. Without this the
 	// primary's TriggerInterrupt unblocks its own loop but the
@@ -103,6 +107,11 @@ func (ws *ReactWebServer) stopActiveQuery(w http.ResponseWriter, r *http.Request
 			}
 		}
 	}
+	ws.logger.Info("active query stopped",
+		slog.String("chat_id", chatID),
+		slog.String("client_id", clientID),
+		slog.Int("cancelled_subagents", cancelledSubagents),
+	)
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"accepted":            true,
@@ -316,8 +325,12 @@ func (ws *ReactWebServer) runChatQuery(
 	// leaking the activeQueries counter (which gates future requests).
 	go func() {
 		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("%s: panic in query goroutine chat_id=%s: %v", logTag, chatID, r)
+			if recovered := recover(); recovered != nil {
+				ws.logger.Error("panic in query goroutine",
+					slog.String("handler", logTag),
+					slog.String("chat_id", chatID),
+					slog.Any("panic", recovered),
+				)
 			}
 			ws.mutex.Lock()
 			if ws.activeQueries > 0 {
@@ -357,14 +370,20 @@ func (ws *ReactWebServer) runChatQuery(
 				go func() {
 					defer close(readerDone)
 					if _, copyErr := io.Copy(&captured, pipeR); copyErr != nil {
-						log.Printf("%s: command output pipe read failed: %v", logTag, copyErr)
+						ws.logger.Error("command output pipe read failed",
+							slog.String("handler", logTag),
+							slog.Any("err", copyErr),
+						)
 					}
 				}()
 			} else {
 				// Pipe creation failed (rare: FD exhaustion). Fall back to
 				// io.Discard so commands implementing OutputCommand don't
 				// block on a nil writer. Output is lost but the command runs.
-				log.Printf("%s: command output pipe creation failed, output will be lost: %v", logTag, pipeErr)
+				ws.logger.Warn("command output pipe creation failed; output will be lost",
+					slog.String("handler", logTag),
+					slog.Any("err", pipeErr),
+				)
 				registry.SetOutput(io.Discard)
 			}
 
@@ -381,12 +400,20 @@ func (ws *ReactWebServer) runChatQuery(
 			// to publish events without waiting for the state export.
 			go func() {
 				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("%s: panic in slash-command state sync chat_id=%s: %v", logTag, chatID, r)
+					if recovered := recover(); recovered != nil {
+						ws.logger.Error("panic in slash-command state sync",
+							slog.String("handler", logTag),
+							slog.String("chat_id", chatID),
+							slog.Any("panic", recovered),
+						)
 					}
 				}()
 				if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-					log.Printf("%s: async state sync failed chat_id=%s: %v", logTag, chatID, err)
+					ws.logger.Error("async state sync failed",
+						slog.String("handler", logTag),
+						slog.String("chat_id", chatID),
+						slog.Any("err", err),
+					)
 				}
 			}() // Send any captured output as a stream chunk before reporting
 			// success or error, so the user sees what the command printed.
@@ -398,7 +425,11 @@ func (ws *ReactWebServer) runChatQuery(
 			}
 
 			if err != nil {
-				log.Printf("%s: slash command error: %v", logTag, err)
+				ws.logger.Error("slash command failed",
+					slog.String("handler", logTag),
+					slog.String("chat_id", chatID),
+					slog.Any("err", err),
+				)
 				if capturedOutput == "" {
 					ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
 						fmt.Sprintf("Executed command: `%s`\n", trimmed),
@@ -426,7 +457,12 @@ func (ws *ReactWebServer) runChatQuery(
 			return
 		}
 
-		log.Printf("%s: calling ProcessQueryWithContinuity chat_id=%s provider=%s model=%s", logTag, chatID, clientAgent.GetProvider(), clientAgent.GetModel())
+		ws.logger.Info("query started",
+			slog.String("handler", logTag),
+			slog.String("chat_id", chatID),
+			slog.String("provider", clientAgent.GetProvider()),
+			slog.String("model", clientAgent.GetModel()),
+		)
 		queryStart := time.Now()
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
 		_, err := clientAgent.ProcessQueryWithContinuity(query)
@@ -457,26 +493,43 @@ func (ws *ReactWebServer) runChatQuery(
 		// and the deferred active-query cleanup must not wait for it.
 		go func() {
 			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("%s: panic in state sync chat_id=%s: %v", logTag, chatID, r)
+				if recovered := recover(); recovered != nil {
+					ws.logger.Error("panic in state sync",
+						slog.String("handler", logTag),
+						slog.String("chat_id", chatID),
+						slog.Any("panic", recovered),
+					)
 				}
 			}()
 			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-				log.Printf("%s: async state sync failed chat_id=%s: %v", logTag, chatID, err)
+				ws.logger.Error("async state sync failed",
+					slog.String("handler", logTag),
+					slog.String("chat_id", chatID),
+					slog.Any("err", err),
+				)
 			}
 		}()
 
 		if err != nil {
-			log.Printf("%s: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", logTag, chatID, queryDuration, err)
+			ws.logger.Error("query failed",
+				slog.String("handler", logTag),
+				slog.String("chat_id", chatID),
+				slog.Duration("duration", queryDuration),
+				slog.Any("err", err),
+			)
 			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Query failed", err))
 		} else {
 			// Success-path log: lets operators see that the provider responded
 			// and at what cost. Without this the log goes silent after the
-			// "calling ProcessQueryWithContinuity" line and the server looks hung.
-			log.Printf("%s: completed chat_id=%s duration=%s prompt_tokens=%d completion_tokens=%d total_cost=%.6f",
-				logTag, chatID, queryDuration,
-				clientAgent.GetPromptTokens(), clientAgent.GetCompletionTokens(),
-				clientAgent.GetTotalCost())
+			// "query started" line and the server looks hung.
+			ws.logger.Info("query completed",
+				slog.String("handler", logTag),
+				slog.String("chat_id", chatID),
+				slog.Duration("duration", queryDuration),
+				slog.Int("prompt_tokens", clientAgent.GetPromptTokens()),
+				slog.Int("completion_tokens", clientAgent.GetCompletionTokens()),
+				slog.Any("total_cost", clientAgent.GetTotalCost()),
+			)
 		}
 	}()
 

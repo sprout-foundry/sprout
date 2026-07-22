@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,10 @@ func (a *Agent) effectiveCwd() string {
 // shell working directory when the command is a cd directive.
 // It handles: cd <path>, cd, cd -, cd ~, cd .., cd <path> &&/;/|| <more>.
 // It does NOT update for subshell cd (e.g., "(cd /path && ...)").
+//
+// cd targets are validated against the agent's workspace root and
+// session-allowlisted folders. Rejected targets leave the tracked
+// cwd unchanged and emit a user-visible rejection message.
 func (a *Agent) updateShellCwd(cmd string) {
 	trimmed := strings.TrimSpace(cmd)
 
@@ -45,42 +50,111 @@ func (a *Agent) updateShellCwd(cmd string) {
 
 	// Must be "cd" alone or "cd " followed by arguments.
 	if len(trimmed) == 2 {
-		// Bare "cd" — goes to $HOME.
-	} else if len(trimmed) == 3 && trimmed[2] == ' ' {
-		trimmed = trimmed[:2] + strings.TrimSpace(trimmed[3:])
+		// Bare "cd" — arg will be set to empty below.
+	} else if len(trimmed) >= 3 && trimmed[2] == ' ' {
+		// Has "cd " prefix with a path — strip the "cd " prefix for extraction.
+		trimmed = strings.TrimSpace(trimmed[3:])
 	} else {
 		return // e.g., "cddir" — not a cd command.
 	}
 
 	// Extract the argument from a compound command (stop at && || ; |).
+	// After stripping "cd " prefix, trimmed contains just the path (or "" for bare cd).
 	var arg string
+	extracted := false // tracks whether we extracted arg from a compound command
 	for _, sep := range []string{" && ", " || ", ";", " |"} {
 		if idx := strings.Index(trimmed, sep); idx >= 0 {
-			arg = strings.TrimSpace(trimmed[:idx])
-			trimmed = arg
+			extractedArg := strings.TrimSpace(trimmed[:idx])
+			// Strip leading "cd " if present (for compound commands like "cd /path && ...").
+			if strings.HasPrefix(extractedArg, "cd ") {
+				arg = strings.TrimSpace(extractedArg[3:])
+			} else if extractedArg == "cd" {
+				arg = "" // bare "cd" in compound
+			} else {
+				arg = extractedArg
+			}
+			extracted = true
 			break
 		}
 	}
-	if arg == "" {
-		arg = strings.TrimSpace(trimmed)
+	// If no compound separator, use the full trimmed (the path).
+	// For bare "cd", trimmed is just "cd" and arg should be empty.
+	if !extracted {
+		if trimmed != "cd" {
+			arg = trimmed
+		} else {
+			arg = ""
+		}
 	}
 
-	// Read current cwd atomically; fall back to workspace root if unset.
-	current, _ := a.ensureShellCwd().GetBoth()
+	// Read current and previous cwd atomically; fall back to workspace root if unset.
+	current, prev := a.ensureShellCwd().GetBoth()
 	if current == "" {
 		current = a.currentWorkspaceRoot()
 	}
 
-	resolved := resolveShellCdArg(arg, current)
-
 	tracker := a.ensureShellCwd()
+
 	if arg == "-" {
 		// cd - swaps current and previous.
+		// Validate the destination (previous) is allowed before swapping.
+		if prev == "" {
+			// No previous directory to switch to.
+			return
+		}
+		// Validate the destination (previous) is allowed before swapping.
+		if !a.IsCdTargetAllowed(prev) {
+			a.writeCdRejectionMessage(prev, "previous directory is not allowed")
+			return
+		}
 		tracker.SwapPrevious()
 		return
 	}
 
+	resolved := resolveShellCdArg(arg, current)
+
+	// Gate: validate the resolved target against the allowlist.
+	if !a.IsCdTargetAllowed(resolved) {
+		a.writeCdRejectionMessage(resolved, "is not in the workspace or the workflow's declared allowed_paths")
+		return
+	}
+
 	tracker.SetWithPrev(resolved, current)
+}
+
+// writeCdRejectionMessage writes a user-visible rejection message when a
+// cd target is not allowed. The message includes the rejected target and
+// lists currently allowed cd targets for reference.
+func (a *Agent) writeCdRejectionMessage(target, reason string) {
+	allowed := a.ListAllowedCdTargets()
+
+	// Format the allowed targets for the message.
+	var allowedList string
+	if len(allowed) == 0 {
+		allowedList = "(no allowed paths defined)"
+	} else {
+		for i, path := range allowed {
+			if i > 0 {
+				allowedList += ", "
+			}
+			allowedList += path
+		}
+	}
+
+	message := "cd refused: " + target + " " + reason + ". Currently allowed: " + allowedList + ".\n"
+
+	// Write to debug log.
+	a.debugLog("CD_REFUSED: %s", message)
+
+	// Write to stderr for CLI visibility.
+	fmt.Fprintf(os.Stderr, "%s", message)
+
+	// Write to terminal writer if available (WebUI mode).
+	if a.output != nil {
+		if tw := a.output.GetTerminalWriter(); tw != nil {
+			tw(message)
+		}
+	}
 }
 
 // resolveShellCdArg resolves a cd argument to an absolute path.

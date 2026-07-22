@@ -1,8 +1,79 @@
 package providers
 
 import (
+	"encoding/json"
 	"testing"
 )
+
+func TestLMStudioEmbeddedConfigUsesRuntimeModelMetadata(t *testing.T) {
+	data, err := embeddedConfigs.ReadFile("configs/lmstudio.json")
+	if err != nil {
+		t.Fatalf("failed to read embedded LM Studio config: %v", err)
+	}
+
+	// LM Studio users control both the loaded model and its runtime context
+	// window. The live /api/v0/models response is authoritative, so the embedded
+	// config must not claim model-specific limits that can contradict it.
+	var raw struct {
+		Defaults map[string]json.RawMessage `json:"defaults"`
+		Models   map[string]json.RawMessage `json:"models"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to parse embedded LM Studio config: %v", err)
+	}
+
+	for _, key := range []string{"available_models", "default_model", "model_info", "model_overrides", "pattern_overrides", "vision_model"} {
+		if _, exists := raw.Models[key]; exists {
+			t.Errorf("models.%s must be omitted from the LM Studio config", key)
+		}
+	}
+	defaultModelJSON, exists := raw.Defaults["model"]
+	if !exists {
+		t.Fatal("defaults.model must be present and empty so runtime discovery is used")
+	}
+	var defaultModel string
+	if err := json.Unmarshal(defaultModelJSON, &defaultModel); err != nil {
+		t.Fatalf("failed to decode defaults.model: %v", err)
+	}
+	if defaultModel != "" {
+		t.Errorf("expected defaults.model to be empty, got %q", defaultModel)
+	}
+
+	var config ProviderConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatalf("failed to decode embedded LM Studio config: %v", err)
+	}
+	if err := config.Validate(); err != nil {
+		t.Fatalf("embedded LM Studio config is invalid: %v", err)
+	}
+	if config.Defaults.Model != "" {
+		t.Errorf("expected no seeded LM Studio model, got %q", config.Defaults.Model)
+	}
+	provider, err := NewGenericProvider(&config)
+	if err != nil {
+		t.Fatalf("failed to create provider from embedded LM Studio config: %v", err)
+	}
+	if got := provider.GetModel(); got != "" {
+		t.Errorf("expected provider to start without a seeded model, got %q", got)
+	}
+	if !config.Models.SupportsVision {
+		t.Error("expected LM Studio vision support to remain enabled")
+	}
+
+	for _, model := range []string{
+		"anything-else",
+		"llama-3-70b-instruct",
+		"llama-3.1-70b-instruct",
+		"mistral-7b-instruct",
+		"qwen2.5-coder-32b-instruct",
+		"qwen3-coder:30b",
+		"yi-34b-chat",
+	} {
+		if got := config.GetContextLimit(model); got != 32768 {
+			t.Errorf("GetContextLimit(%q) = %d, want fallback 32768", model, got)
+		}
+	}
+}
 
 func TestConfigurationBasedContextLimits(t *testing.T) {
 	config := &ProviderConfig{

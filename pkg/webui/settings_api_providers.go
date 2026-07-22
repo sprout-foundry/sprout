@@ -53,6 +53,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersGet(w http.ResponseWriter, r
 		return
 	}
 
+	cm.EnrichCustomProviders()
 	cfg := cm.GetConfig()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"custom_providers": sanitizedCustomProviders(cfg.CustomProviders),
@@ -63,11 +64,18 @@ func (ws *ReactWebServer) handleAPISettingsProvidersGet(w http.ResponseWriter, r
 // POST /api/settings/providers
 // ---------------------------------------------------------------------------
 
+// handleAPISettingsProvidersPost creates a new custom provider. The order of
+// operations is transactional: the provider file is written first so a
+// failure leaves the in-memory map untouched, then the map is mutated. If
+// the in-memory commit fails after the file is on disk, the file is
+// rolled back best-effort.
 func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, r *http.Request) {
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
+
+	cm.EnrichCustomProviders()
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
 
@@ -90,26 +98,50 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, 
 		return
 	}
 
-	key := provider.Name
-	err := cm.UpdateConfig(func(cfg *configuration.Config) error {
-		if cfg.CustomProviders == nil {
-			cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+	duplicate := false
+	checkErr := cm.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if _, exists := cfg.CustomProviders[provider.Name]; exists {
+			duplicate = true
 		}
-		if _, exists := cfg.CustomProviders[key]; exists {
-			return fmt.Errorf("custom provider %q already exists (use PUT to update)", key)
-		}
-		cfg.CustomProviders[key] = provider
 		return nil
 	})
-	if err != nil {
-		writeJSONError(w, http.StatusConflict, err.Error())
+	if checkErr != nil {
+		writeJSONError(w, http.StatusInternalServerError, checkErr.Error())
+		return
+	}
+	if duplicate {
+		writeJSONError(w, http.StatusConflict, fmt.Sprintf("custom provider %q already exists (use PUT to update)", provider.Name))
 		return
 	}
 
-	// Persist the custom provider to its own file (~/.config/sprout/providers/{name}.json)
-	// so it survives config.json saves (which strip CustomProviders).
+	// Write the provider file first; a failure here leaves the in-memory
+	// map untouched so the UI can retry without waiting for a reload.
 	if saveErr := configuration.SaveCustomProvider(provider); saveErr != nil {
-		log.Printf("webui: warning: failed to persist custom provider %q to file: %v", key, saveErr)
+		log.Printf("webui: failed to persist provider %q: %v", provider.Name, saveErr)
+		writeJSONError(w, http.StatusInternalServerError, "failed to persist provider")
+		return
+	}
+
+	// Commit the in-memory mutation. If this fails (e.g. a concurrent
+	// POST raced past the duplicate check), roll back the file we just
+	// wrote so the next reload doesn't surface a phantom provider.
+	commitErr := cm.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.CustomProviders == nil {
+			cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+		}
+		if _, exists := cfg.CustomProviders[provider.Name]; exists {
+			return fmt.Errorf("custom provider %q already exists", provider.Name)
+		}
+		cfg.CustomProviders[provider.Name] = provider
+		return nil
+	})
+	if commitErr != nil {
+		if delErr := configuration.DeleteCustomProvider(provider.Name); delErr != nil {
+			log.Printf("webui: failed to roll back provider %q after commit error: %v", provider.Name, delErr)
+		}
+		log.Printf("webui: failed to commit in-memory create for provider %q: %v", provider.Name, commitErr)
+		writeJSONError(w, http.StatusInternalServerError, "failed to create provider")
+		return
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
@@ -122,6 +154,10 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, 
 // PUT /api/settings/providers/{name}
 // ---------------------------------------------------------------------------
 
+// handleAPISettingsProvidersPut updates an existing custom provider.
+// Transactional: the new file is written first, then the in-memory map is
+// mutated. If the in-memory commit fails after the file is on disk, the
+// previous version is restored from the captured snapshot.
 func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r *http.Request) {
 	name := extractPathSegment(r.URL.Path, "/api/settings/providers/")
 	if name == "" {
@@ -133,6 +169,8 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 	if cm == nil {
 		return
 	}
+
+	cm.EnrichCustomProviders()
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxSettingsBodyBytes)
 
@@ -153,24 +191,50 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 		return
 	}
 
-	err := cm.UpdateConfig(func(cfg *configuration.Config) error {
+	// Capture the existing provider under lock so we can roll back on
+	// in-memory commit failure.
+	var oldProvider configuration.CustomProviderConfig
+	captureErr := cm.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		existing, ok := cfg.CustomProviders[name]
+		if !ok {
+			return fmt.Errorf("custom provider %q not found (use POST to create)", name)
+		}
+		oldProvider = existing
+		return nil
+	})
+	if captureErr != nil {
+		writeJSONError(w, http.StatusNotFound, captureErr.Error())
+		return
+	}
+
+	// Persist the new provider file first; a failure here leaves the
+	// in-memory map (and therefore any concurrent read) untouched.
+	if saveErr := configuration.SaveCustomProvider(provider); saveErr != nil {
+		log.Printf("webui: failed to persist provider %q: %v", name, saveErr)
+		writeJSONError(w, http.StatusInternalServerError, "failed to persist provider")
+		return
+	}
+
+	// Commit the in-memory mutation. If this fails (e.g. a concurrent
+	// DELETE removed the entry between capture and commit), restore the
+	// previous file so the provider's last-known-good value survives.
+	commitErr := cm.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		if cfg.CustomProviders == nil {
 			cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
 		}
 		if _, exists := cfg.CustomProviders[name]; !exists {
-			return fmt.Errorf("custom provider %q not found (use POST to create)", name)
+			return fmt.Errorf("custom provider %q not found during commit", name)
 		}
 		cfg.CustomProviders[name] = provider
 		return nil
 	})
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+	if commitErr != nil {
+		if rollbackErr := configuration.SaveCustomProvider(oldProvider); rollbackErr != nil {
+			log.Printf("webui: failed to roll back provider %q after commit error: %v", name, rollbackErr)
+		}
+		log.Printf("webui: failed to commit in-memory update for provider %q: %v", name, commitErr)
+		writeJSONError(w, http.StatusInternalServerError, "failed to update provider state")
 		return
-	}
-
-	// Persist the updated custom provider to its own file
-	if saveErr := configuration.SaveCustomProvider(provider); saveErr != nil {
-		log.Printf("webui: warning: failed to persist custom provider %q to file: %v", name, saveErr)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -183,6 +247,10 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 // DELETE /api/settings/providers/{name}
 // ---------------------------------------------------------------------------
 
+// handleAPISettingsProvidersDelete removes a custom provider. Transactional:
+// the provider file is deleted first, then the in-memory map entry. If the
+// in-memory commit fails after the file is gone, the previous version is
+// restored from the captured snapshot.
 func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter, r *http.Request) {
 	name := extractPathSegment(r.URL.Path, "/api/settings/providers/")
 	if name == "" {
@@ -195,24 +263,48 @@ func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter
 		return
 	}
 
-	err := cm.UpdateConfig(func(cfg *configuration.Config) error {
-		if cfg.CustomProviders == nil {
+	cm.EnrichCustomProviders()
+
+	// Capture the existing provider so we can restore its file if the
+	// in-memory commit fails after disk deletion.
+	var oldProvider configuration.CustomProviderConfig
+	captureErr := cm.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		existing, ok := cfg.CustomProviders[name]
+		if !ok {
 			return fmt.Errorf("custom provider %q not found", name)
 		}
-		if _, exists := cfg.CustomProviders[name]; !exists {
-			return fmt.Errorf("custom provider %q not found", name)
+		oldProvider = existing
+		return nil
+	})
+	if captureErr != nil {
+		writeJSONError(w, http.StatusNotFound, captureErr.Error())
+		return
+	}
+
+	// Remove the provider file first; a failure leaves the in-memory
+	// map (and the manager's view of the provider) intact.
+	if delErr := configuration.DeleteCustomProvider(name); delErr != nil {
+		log.Printf("webui: failed to delete provider %q file: %v", name, delErr)
+		writeJSONError(w, http.StatusInternalServerError, "failed to delete provider")
+		return
+	}
+
+	// Commit the in-memory removal. If this fails (e.g. a concurrent
+	// PUT re-created the entry), restore the file we just deleted.
+	commitErr := cm.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.CustomProviders == nil {
+			return fmt.Errorf("custom provider %q not found during commit", name)
 		}
 		delete(cfg.CustomProviders, name)
 		return nil
 	})
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+	if commitErr != nil {
+		if restoreErr := configuration.SaveCustomProvider(oldProvider); restoreErr != nil {
+			log.Printf("webui: failed to restore provider %q file after commit error: %v", name, restoreErr)
+		}
+		log.Printf("webui: failed to commit in-memory delete for provider %q: %v", name, commitErr)
+		writeJSONError(w, http.StatusInternalServerError, "failed to delete provider state")
 		return
-	}
-
-	// Remove the provider's individual file
-	if delErr := configuration.DeleteCustomProvider(name); delErr != nil {
-		log.Printf("webui: warning: failed to delete custom provider file %q: %v", name, delErr)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

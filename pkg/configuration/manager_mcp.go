@@ -21,6 +21,9 @@ func (m *Manager) GetMCPConfig() mcp.MCPConfig {
 // directory into the config. This is needed before provider name lookups
 // because config.json never stores custom providers directly.
 func (m *Manager) EnrichCustomProviders() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.config.CustomProviders == nil {
 		m.config.CustomProviders = make(map[string]CustomProviderConfig)
 	}

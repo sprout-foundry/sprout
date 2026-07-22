@@ -9,13 +9,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"golang.org/x/term"
 )
@@ -134,46 +132,6 @@ func enhanceCommandForColors(cmd string) string {
 	}
 
 	return cmd
-}
-
-// GetCompletions provides tab completion for commands and files
-func GetCompletions(input string, chatAgent *agent.Agent) []string {
-	var completions []string
-
-	// Get current word for completion
-	words := strings.Fields(input)
-	if len(words) == 0 {
-		return completions
-	}
-
-	currentWord := words[len(words)-1]
-
-	// If it starts with '/', complete slash commands
-	if strings.HasPrefix(currentWord, "/") {
-		registry := agent_commands.NewCommandRegistry()
-		commands := registry.ListCommands()
-		for _, cmd := range commands {
-			if strings.HasPrefix(cmd.Name(), currentWord[1:]) {
-				completions = append(completions, "/"+cmd.Name())
-			}
-		}
-	} else {
-		// File path completion
-		if strings.Contains(currentWord, "/") || len(words) == 1 {
-			// Simple file completion
-			matches, _ := filepath.Glob(currentWord + "*")
-			for _, match := range matches {
-				if info, err := os.Stat(match); err == nil {
-					if info.IsDir() {
-						match += "/"
-					}
-					completions = append(completions, match)
-				}
-			}
-		}
-	}
-
-	return completions
 }
 
 // IsCI checks if running in CI environment

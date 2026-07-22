@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -637,6 +638,622 @@ func TestIsHomeDir(t *testing.T) {
 	t.Run("empty path", func(t *testing.T) {
 		if IsHomeDir("") {
 			t.Errorf("IsHomeDir(\"\") = true, want false")
+		}
+	})
+}
+
+// =============================================================================
+// Tests for SP-127 Phase 2.4 (Resolver Scope) and Phase 2.5 (Symlink Re-validation)
+// =============================================================================
+
+func TestSafeResolvePath_ResolverScope(t *testing.T) {
+	// Save current working directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	// Create a test directory in the user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+
+	// Create workspace root directory (not /tmp)
+	workspaceRoot := filepath.Join(homeDir, ".sprout-test-resolver-workspace")
+	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+		t.Fatalf("Failed to create workspace root: %v", err)
+	}
+	defer os.RemoveAll(workspaceRoot)
+
+	// Create effective cwd directory (different from workspace root)
+	effectiveCwd := filepath.Join(homeDir, ".sprout-test-resolver-cwd")
+	if err := os.MkdirAll(effectiveCwd, 0755); err != nil {
+		t.Fatalf("Failed to create effective cwd: %v", err)
+	}
+	defer os.RemoveAll(effectiveCwd)
+
+	// Create session-allowed folder (different from both)
+	sessionFolder := filepath.Join(homeDir, ".sprout-test-resolver-session")
+	if err := os.MkdirAll(sessionFolder, 0755); err != nil {
+		t.Fatalf("Failed to create session folder: %v", err)
+	}
+	defer os.RemoveAll(sessionFolder)
+
+	// Create a file under workspace root
+	workspaceFile := filepath.Join(workspaceRoot, "file.txt")
+	if err := os.WriteFile(workspaceFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create workspace file: %v", err)
+	}
+
+	// Create a file under effective cwd
+	cwdFile := filepath.Join(effectiveCwd, "file.txt")
+	if err := os.WriteFile(cwdFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create cwd file: %v", err)
+	}
+
+	// Create a file under session folder
+	sessionFile := filepath.Join(sessionFolder, "file.txt")
+	if err := os.WriteFile(sessionFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create session file: %v", err)
+	}
+
+	// Create a file outside all allowed directories
+	outsideFile := filepath.Join(homeDir, ".sprout-test-outside", "file.txt")
+	outsideDir := filepath.Join(homeDir, ".sprout-test-outside")
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatalf("Failed to create outside dir: %v", err)
+	}
+	defer os.RemoveAll(outsideDir)
+	if err := os.WriteFile(outsideFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create outside file: %v", err)
+	}
+
+	tests := []struct {
+		name          string
+		path          string
+		ctx           context.Context
+		wantErr       bool
+		wantErrSubstr string // substring that should appear in error
+	}{
+		{
+			name:    "path under workspaceRoot is allowed",
+			path:    workspaceFile,
+			ctx:     WithWorkspaceRoot(context.Background(), workspaceRoot),
+			wantErr: false,
+		},
+		{
+			name:    "path under effectiveCwd but NOT workspaceRoot is allowed",
+			path:    cwdFile,
+			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, nil),
+			wantErr: false,
+		},
+		{
+			name:    "path under session-allowed folder is allowed",
+			path:    sessionFile,
+			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			wantErr: false,
+		},
+		{
+			name:          "path outside all allowlists is rejected",
+			path:          outsideFile,
+			ctx:           WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			wantErr:       true,
+			wantErrSubstr: "outside working directory",
+		},
+		{
+			name:    "empty agent context still allows workspaceRoot paths",
+			path:    workspaceFile,
+			ctx:     WithWorkspaceRoot(context.Background(), workspaceRoot),
+			wantErr: false,
+		},
+		{
+			name:    "nil context uses process cwd (should succeed since we're in workspace)",
+			path:    workspaceFile,
+			ctx:     context.Background(),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Change to workspace root so relative paths work
+			if err := os.Chdir(workspaceRoot); err != nil {
+				t.Fatalf("Failed to chdir to workspace: %v", err)
+			}
+
+			got, err := SafeResolvePathWithBypass(tt.ctx, tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SafeResolvePathWithBypass() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.wantErrSubstr != "" {
+				if !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Errorf("SafeResolvePathWithBypass() error = %v, want error containing %q", err, tt.wantErrSubstr)
+				}
+			}
+			if !tt.wantErr && got == "" {
+				t.Errorf("SafeResolvePathWithBypass() returned empty path, expected valid path")
+			}
+		})
+	}
+}
+
+func TestSafeResolvePath_SymlinkInWorkspace(t *testing.T) {
+	// Save current working directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+
+	// Create workspace root
+	workspaceRoot := filepath.Join(homeDir, ".sprout-test-symlink-workspace")
+	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+		t.Fatalf("Failed to create workspace root: %v", err)
+	}
+	defer os.RemoveAll(workspaceRoot)
+
+	if err := os.Chdir(workspaceRoot); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	// Create a target file inside workspace
+	targetFile := filepath.Join(workspaceRoot, "target.txt")
+	if err := os.WriteFile(targetFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create target file: %v", err)
+	}
+
+	// Create a symlink in workspace pointing to target inside workspace
+	symlinkInWorkspace := filepath.Join(workspaceRoot, "link.txt")
+	if err := os.Symlink(targetFile, symlinkInWorkspace); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(symlinkInWorkspace)
+
+	// Create a symlink in workspace pointing to outside
+	outsideDir := filepath.Join(homeDir, ".sprout-test-symlink-outside")
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatalf("Failed to create outside dir: %v", err)
+	}
+	defer os.RemoveAll(outsideDir)
+
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0644); err != nil {
+		t.Fatalf("Failed to create outside file: %v", err)
+	}
+
+	symlinkOutside := filepath.Join(workspaceRoot, "badlink.txt")
+	if err := os.Symlink(outsideFile, symlinkOutside); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(symlinkOutside)
+
+	ctx := WithWorkspaceRoot(context.Background(), workspaceRoot)
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{
+			name:    "symlink to file inside workspace is allowed",
+			path:    symlinkInWorkspace,
+			wantErr: false,
+		},
+		{
+			name:    "symlink to file outside workspace is rejected",
+			path:    symlinkOutside,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := SafeResolvePathWithBypass(ctx, tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SafeResolvePathWithBypass() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSafeResolvePathForWrite_ResolverScope(t *testing.T) {
+	// Save current working directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+
+	// Create directories
+	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-scope-ws")
+	effectiveCwd := filepath.Join(homeDir, ".sprout-test-write-scope-cwd")
+	sessionFolder := filepath.Join(homeDir, ".sprout-test-write-scope-sess")
+	outsideDir := filepath.Join(homeDir, ".sprout-test-write-scope-outside")
+
+	for _, dir := range []string{workspaceRoot, effectiveCwd, sessionFolder, outsideDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("Failed to create dir %s: %v", dir, err)
+		}
+	}
+	defer func() {
+		for _, dir := range []string{workspaceRoot, effectiveCwd, sessionFolder, outsideDir} {
+			os.RemoveAll(dir)
+		}
+	}()
+
+	if err := os.Chdir(workspaceRoot); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	tests := []struct {
+		name          string
+		path          string
+		ctx           context.Context
+		wantErr       bool
+		wantErrSubstr string
+	}{
+		{
+			name:    "write under workspaceRoot",
+			path:    filepath.Join(workspaceRoot, "new.txt"),
+			ctx:     WithWorkspaceRoot(context.Background(), workspaceRoot),
+			wantErr: false,
+		},
+		{
+			name:    "write under effectiveCwd",
+			path:    filepath.Join(effectiveCwd, "new.txt"),
+			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, nil),
+			wantErr: false,
+		},
+		{
+			name:    "write under session folder",
+			path:    filepath.Join(sessionFolder, "new.txt"),
+			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			wantErr: false,
+		},
+		{
+			name:          "write outside all allowlists",
+			path:          filepath.Join(outsideDir, "new.txt"),
+			ctx:           WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			wantErr:       true,
+			wantErrSubstr: "outside working directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := SafeResolvePathForWriteWithBypass(tt.ctx, tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SafeResolvePathForWriteWithBypass() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.wantErrSubstr != "" {
+				if !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Errorf("SafeResolvePathForWriteWithBypass() error = %v, want error containing %q", err, tt.wantErrSubstr)
+				}
+			}
+		})
+	}
+}
+
+func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
+	// This tests Phase 2.5: symlink re-validation for existing files at write time.
+	// If a file is a symlink pointing outside the allowlist, writes should be rejected.
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+
+	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-symlink-ws")
+	sessionFolder := filepath.Join(homeDir, ".sprout-test-write-symlink-sess")
+
+	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+		t.Fatalf("Failed to create workspace: %v", err)
+	}
+	if err := os.MkdirAll(sessionFolder, 0755); err != nil {
+		t.Fatalf("Failed to create session folder: %v", err)
+	}
+	defer func() {
+		os.RemoveAll(workspaceRoot)
+		os.RemoveAll(sessionFolder)
+	}()
+
+	if err := os.Chdir(workspaceRoot); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	// Create a target file in /tmp (allowed for writes)
+	tmpFile := "/tmp/sprout-test-write-symlink-tmp.txt"
+	if err := os.WriteFile(tmpFile, []byte("tmp"), 0644); err != nil {
+		t.Skipf("cannot write to /tmp: %v", err)
+	}
+	defer os.Remove(tmpFile)
+
+	// Create a symlink in workspace pointing to /tmp
+	linkToTmp := filepath.Join(workspaceRoot, "link-to-tmp.txt")
+	if err := os.Symlink(tmpFile, linkToTmp); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(linkToTmp)
+
+	// Create a target file in session folder
+	sessionFile := filepath.Join(sessionFolder, "allowed.txt")
+	if err := os.WriteFile(sessionFile, []byte("allowed"), 0644); err != nil {
+		t.Fatalf("Failed to create session file: %v", err)
+	}
+
+	// Create a symlink in workspace pointing to session folder file
+	linkToSession := filepath.Join(workspaceRoot, "link-to-session.txt")
+	if err := os.Symlink(sessionFile, linkToSession); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(linkToSession)
+
+	// Create a target file outside
+	outsideFile := filepath.Join(homeDir, ".sprout-test-write-symlink-outside", "secret.txt")
+	outsideDir := filepath.Join(homeDir, ".sprout-test-write-symlink-outside")
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatalf("Failed to create outside dir: %v", err)
+	}
+	defer os.RemoveAll(outsideDir)
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0644); err != nil {
+		t.Fatalf("Failed to create outside file: %v", err)
+	}
+
+	// Create a symlink in workspace pointing to outside
+	linkToOutside := filepath.Join(workspaceRoot, "link-to-outside.txt")
+	if err := os.Symlink(outsideFile, linkToOutside); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(linkToOutside)
+
+	ctx := WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), workspaceRoot, []string{sessionFolder})
+
+	tests := []struct {
+		name          string
+		path          string
+		ctx           context.Context
+		wantErr       bool
+		wantErrSubstr string
+	}{
+		{
+			name:    "symlink in workspace pointing to /tmp is allowed (tmp special case)",
+			path:    linkToTmp,
+			ctx:     ctx,
+			wantErr: false,
+		},
+		{
+			name:    "symlink in workspace pointing to session folder is allowed",
+			path:    linkToSession,
+			ctx:     ctx,
+			wantErr: false,
+		},
+		{
+			name:          "symlink in workspace pointing to outside is rejected",
+			path:          linkToOutside,
+			ctx:           ctx,
+			wantErr:       true,
+			wantErrSubstr: "symlink target is outside allowed paths",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := SafeResolvePathForWriteWithBypass(tt.ctx, tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SafeResolvePathForWriteWithBypass() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.wantErrSubstr != "" {
+				if !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Errorf("SafeResolvePathForWriteWithBypass() error = %v, want error containing %q", err, tt.wantErrSubstr)
+				}
+			}
+		})
+	}
+}
+
+func TestSafeResolvePathForWrite_SymlinkToEffectiveCwdFolder(t *testing.T) {
+	// Test that a symlink under workspace pointing to a file in effectiveCwd-allowed folder is allowed
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+
+	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-symlink2-ws")
+	effectiveCwd := filepath.Join(homeDir, ".sprout-test-write-symlink2-cwd")
+
+	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+		t.Fatalf("Failed to create workspace: %v", err)
+	}
+	if err := os.MkdirAll(effectiveCwd, 0755); err != nil {
+		t.Fatalf("Failed to create effective cwd: %v", err)
+	}
+	defer func() {
+		os.RemoveAll(workspaceRoot)
+		os.RemoveAll(effectiveCwd)
+	}()
+
+	if err := os.Chdir(workspaceRoot); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	// Create a target file in effectiveCwd
+	targetFile := filepath.Join(effectiveCwd, "target.txt")
+	if err := os.WriteFile(targetFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create target file: %v", err)
+	}
+
+	// Create a symlink in workspace pointing to target in effectiveCwd
+	link := filepath.Join(workspaceRoot, "link.txt")
+	if err := os.Symlink(targetFile, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(link)
+
+	ctx := WithAgentContext(
+		WithWorkspaceRoot(context.Background(), workspaceRoot),
+		effectiveCwd,
+		nil,
+	)
+
+	// This should succeed because the symlink target is under effectiveCwd
+	_, err = SafeResolvePathForWriteWithBypass(ctx, link)
+	if err != nil {
+		t.Errorf("Expected success, got error: %v", err)
+	}
+}
+
+func TestSafeResolvePath_MultipleSymlinkHops(t *testing.T) {
+	// Test that multiple symlink hops are properly validated
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+
+	workspaceRoot := filepath.Join(homeDir, ".sprout-test-multihop-ws")
+	outsideDir := filepath.Join(homeDir, ".sprout-test-multihop-outside")
+
+	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+		t.Fatalf("Failed to create workspace: %v", err)
+	}
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatalf("Failed to create outside dir: %v", err)
+	}
+	defer func() {
+		os.RemoveAll(workspaceRoot)
+		os.RemoveAll(outsideDir)
+	}()
+
+	if err := os.Chdir(workspaceRoot); err != nil {
+		t.Fatalf("Failed to chdir: %v", err)
+	}
+
+	// Create a chain: link1 -> link2 -> outsideFile
+	link1 := filepath.Join(workspaceRoot, "link1.txt")
+	link2 := filepath.Join(workspaceRoot, "link2.txt")
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0644); err != nil {
+		t.Fatalf("Failed to create outside file: %v", err)
+	}
+
+	// Create link2 first (pointing to outside)
+	if err := os.Symlink(outsideFile, link2); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(link2)
+
+	// Create link1 pointing to link2
+	if err := os.Symlink(link2, link1); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	defer os.Remove(link1)
+
+	ctx := WithWorkspaceRoot(context.Background(), workspaceRoot)
+
+	// link1 resolves to outside, should be rejected
+	_, err = SafeResolvePathWithBypass(ctx, link1)
+	if err == nil {
+		t.Errorf("Expected rejection for multi-hop symlink to outside, got success")
+	}
+}
+
+func TestAgentContext_Getters(t *testing.T) {
+	// Test that the context getters work correctly
+	t.Run("WithEffectiveCwd and AgentEffectiveCwdFromContext", func(t *testing.T) {
+		ctx := context.Background()
+		if got := AgentEffectiveCwdFromContext(ctx); got != "" {
+			t.Errorf("Empty context should return empty string, got %q", got)
+		}
+
+		ctx = WithEffectiveCwd(context.Background(), "/some/path")
+		if got := AgentEffectiveCwdFromContext(ctx); got != "/some/path" {
+			t.Errorf("Expected /some/path, got %q", got)
+		}
+
+		// Empty string should not set a value
+		ctx = WithEffectiveCwd(context.Background(), "")
+		if got := AgentEffectiveCwdFromContext(ctx); got != "" {
+			t.Errorf("Empty string should not set value, got %q", got)
+		}
+	})
+
+	t.Run("WithSessionAllowedFolders and SessionAllowedFoldersFromContext", func(t *testing.T) {
+		ctx := context.Background()
+		if got := SessionAllowedFoldersFromContext(ctx); got != nil {
+			t.Errorf("Empty context should return nil, got %v", got)
+		}
+
+		folders := []string{"/folder1", "/folder2"}
+		ctx = WithSessionAllowedFolders(context.Background(), folders)
+		got := SessionAllowedFoldersFromContext(ctx)
+		if len(got) != 2 {
+			t.Errorf("Expected 2 folders, got %d", len(got))
+		}
+		if got[0] != "/folder1" || got[1] != "/folder2" {
+			t.Errorf("Unexpected folders: %v", got)
+		}
+
+		// Verify it's a copy, not the original
+		folders[0] = "/modified"
+		got2 := SessionAllowedFoldersFromContext(ctx)
+		if got2[0] == "/modified" {
+			t.Errorf("SessionAllowedFoldersFromContext should return a copy")
+		}
+
+		// Empty slice should not set a value
+		ctx = WithSessionAllowedFolders(context.Background(), []string{})
+		if got := SessionAllowedFoldersFromContext(ctx); got != nil {
+			t.Errorf("Empty slice should not set value, got %v", got)
+		}
+	})
+
+	t.Run("WithAgentContext convenience helper", func(t *testing.T) {
+		folders := []string{"/allowed"}
+		ctx := WithAgentContext(context.Background(), "/cwd", folders)
+
+		if got := AgentEffectiveCwdFromContext(ctx); got != "/cwd" {
+			t.Errorf("Expected /cwd, got %q", got)
+		}
+
+		got := SessionAllowedFoldersFromContext(ctx)
+		if len(got) != 1 || got[0] != "/allowed" {
+			t.Errorf("Unexpected folders: %v", got)
+		}
+
+		// Nil context should work
+		ctx = WithAgentContext(nil, "/cwd", folders)
+		if got := AgentEffectiveCwdFromContext(ctx); got != "/cwd" {
+			t.Errorf("Expected /cwd from nil context, got %q", got)
+		}
+	})
+
+	t.Run("nil context handling", func(t *testing.T) {
+		// All functions should handle nil context gracefully
+		if got := WorkspaceRootFromContext(nil); got != "" {
+			t.Errorf("WorkspaceRootFromContext(nil) should return empty string")
+		}
+		if got := AgentEffectiveCwdFromContext(nil); got != "" {
+			t.Errorf("AgentEffectiveCwdFromContext(nil) should return empty string")
+		}
+		if got := SessionAllowedFoldersFromContext(nil); got != nil {
+			t.Errorf("SessionAllowedFoldersFromContext(nil) should return nil")
+		}
+		if SecurityBypassEnabled(nil) {
+			t.Errorf("SecurityBypassEnabled(nil) should return false")
 		}
 	})
 }

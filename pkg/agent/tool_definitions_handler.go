@@ -58,11 +58,15 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 	seed.Handler = func(ctx context.Context, args map[string]interface{}) (string, error) {
 		logToolExecution(agent, name)
 
-		// Inject workspace root into context so filesystem path resolution
-		// (SafeResolvePathWithBypass) resolves relative paths against the
-		// agent's workspace root instead of the process-global cwd.
+		// Inject workspace root, effective cwd, and session folders into context so
+		// filesystem path resolution (SafeResolvePathWithBypass) resolves relative
+		// paths against the agent's workspace root, effective cwd, and session-
+		// allowlisted folders instead of the process-global cwd.
 		if agent != nil {
-			ctx = withToolExecutionMetadata(ctx, "", name, agent.effectiveCwd())
+			workspaceRoot := agent.GetWorkspaceRoot()
+			effectiveCwd := agent.effectiveCwd()
+			sessionFolders := agent.SnapshotSessionAllowedFolders()
+			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders)
 			// Wire TerminalManager (WebUI) or BackgroundProcessManager (CLI)
 			// into the context so shell_command handlers can run background
 			// commands. Mirrors pkg/agent/shell.go's executeShellCommandBackground.
@@ -105,9 +109,12 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 	seed.HandlerWithImages = func(ctx context.Context, args map[string]interface{}) ([]core.ImageData, string, error) {
 		logToolExecution(agent, name)
 
-		// Inject workspace root into context (same as Handler above).
+		// Inject workspace root, effective cwd, and session folders into context.
 		if agent != nil {
-			ctx = withToolExecutionMetadata(ctx, "", name, agent.effectiveCwd())
+			workspaceRoot := agent.GetWorkspaceRoot()
+			effectiveCwd := agent.effectiveCwd()
+			sessionFolders := agent.SnapshotSessionAllowedFolders()
+			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders)
 			injectShellManagersIntoContext(agent, &ctx)
 		}
 

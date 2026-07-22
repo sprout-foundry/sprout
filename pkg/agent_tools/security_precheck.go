@@ -1,12 +1,17 @@
 package tools
 
 import (
+	"context"
+
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // PrecheckFileAccess resolves a file path and consults Gate 1's
 // path-tier classifier before a file operation runs. This is the M2
 // entry point for file-touching handlers.
+//
+// SP-127 M3.2: ctx carries the audit logger; PrecheckFileAccess passes
+// it to the classifier so every decision (allow/prompt/deny) is logged.
 //
 // Returns:
 //   - resolvedPath: the symlink-evaluated canonical form (may equal filePath)
@@ -25,7 +30,7 @@ import (
 //
 // SP-127 M2: this function lives in pkg/agent_tools rather than
 // pkg/agent so handlers can call it without creating an import cycle.
-func PrecheckFileAccess(classifier FileAccessClassifier, toolName, filePath string) (resolvedPath string, decision string) {
+func PrecheckFileAccess(ctx context.Context, classifier FileAccessClassifier, toolName, filePath string) (resolvedPath string, decision string) {
 	if classifier == nil {
 		// No classifier available — fall through to withFilesystemApproval
 		// which will return the raw filesystem error.
@@ -39,12 +44,12 @@ func PrecheckFileAccess(classifier FileAccessClassifier, toolName, filePath stri
 		// Path is outside workspace — classify it to determine whether
 		// to prompt or deny. Use filePath as resolvedPath since the
 		// canonical target couldn't be determined.
-		verdict := classifier.ClassifyFileAccess(filePath, filePath, mode)
+		verdict := classifier.ClassifyFileAccess(ctx, filePath, filePath, mode)
 		return filePath, verdict
 	}
 
 	// Path resolved successfully — classify it to determine allow/prompt/deny.
-	verdict := classifier.ClassifyFileAccess(filePath, resolved, mode)
+	verdict := classifier.ClassifyFileAccess(ctx, filePath, resolved, mode)
 	return resolved, verdict
 }
 

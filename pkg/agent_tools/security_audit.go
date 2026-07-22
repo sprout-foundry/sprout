@@ -79,6 +79,21 @@ func (l *AuditLogger) LogEntry(entry any) error {
 	return l.Log(ae)
 }
 
+// LogJSON writes a pre-marshaled JSON object as a single line to the
+// audit log. Use this when the caller can't import tools.AuditEntry
+// (e.g., pkg/filesystem, which would create an import cycle).
+func (l *AuditLogger) LogJSON(data []byte) error {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, err := l.file.Write(append(data, '\n')); err != nil {
+		return fmt.Errorf("write audit entry: %w", err)
+	}
+	return nil
+}
+
 // Close closes the underlying log file.
 func (l *AuditLogger) Close() error {
 	if l == nil {

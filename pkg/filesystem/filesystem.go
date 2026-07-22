@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -328,12 +329,16 @@ func logFsGateDecision(ctx context.Context, tool, path, action, riskLevel, reaso
 		Reasoning: reasoning,
 		Source:    "unified-gate",
 	}
-	// Log through the interface. The concrete implementation (e.g., *tools.AuditLogger)
-	// will handle JSON marshaling. Passing filesystem.AuditEntry works because:
-	// 1. tools.AuditLogger.LogEntry has a value receiver taking tools.AuditEntry
-	// 2. The interface method signature is effectively LogEntry(entry any)
-	// 3. json.Marshal serializes based on struct tags, not type identity
-	_ = logger.LogEntry(entry)
+	// Marshal the entry to JSON and write via LogJSON to avoid type-identity
+	// issues. The concrete implementation (*tools.AuditLogger) expects
+	// tools.AuditEntry in LogEntry, but filesystem defines its own
+	// filesystem.AuditEntry — they have identical JSON structure but different
+	// Go types, causing the type assertion to fail.
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	_ = logger.LogJSON(data)
 }
 
 // isUnderAgentContext checks if the resolved path is under the agent's effective cwd

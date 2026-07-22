@@ -17,6 +17,22 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
+// AuditEntry represents a single filesystem gate audit log entry.
+// This is a local definition to avoid import cycles - the fields must match
+// pkg/agent_tools.AuditEntry for compatibility.
+type AuditEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Tool      string    `json:"tool"`
+	Args      string    `json:"args,omitempty"`
+	RiskLevel string    `json:"risk_level"`
+	Category  string    `json:"category"`
+	Action    string    `json:"action"`
+	Reasoning string    `json:"reasoning,omitempty"`
+	Source    string    `json:"source,omitempty"`
+	SessionID string    `json:"session_id,omitempty"`
+	Workspace string    `json:"workspace,omitempty"`
+}
+
 // ErrOutsideWorkingDirectory is returned when a path is outside the working directory
 // This should be caught by tool handlers to prompt the user for confirmation
 var ErrOutsideWorkingDirectory = errors.New("file access outside working directory")
@@ -261,7 +277,7 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 		return "", fmt.Errorf("failed to resolve cwd symlink: %w", err)
 	}
 
-	// Allow all /tmp/* operations without security checks
+	// Allow all /tmp/* operations without security checks (SP-127 Phase 2.6: no audit for /tmp - not a gate decision)
 	if isInTmpPath(resolvedAbs) {
 		return resolvedAbs, nil
 	}
@@ -276,17 +292,48 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 	if strings.HasPrefix(relPath, "..") {
 		// Check if path is under effective cwd or session-allowlisted folders
 		if isUnderAgentContext(ctx, resolvedAbs) {
+			// Allowed via effective cwd or session folders (SP-127 Phase 2.6: audit)
+			logFsGateDecision(ctx, "filesystem_read", cleanPath, "allowed", "low", "path is under effective cwd or session allowlist")
 			return resolvedAbs, nil
 		}
 		if SecurityBypassEnabled(ctx) {
-			// Security bypass enabled - allow access outside working directory
+			// Security bypass enabled - allow access outside working directory (SP-127 Phase 2.6: audit)
+			logFsGateDecision(ctx, "filesystem_read", cleanPath, "allowed", "low", "security bypass is enabled")
 			return resolvedAbs, nil
 		}
-		// Return custom error that can be caught for user confirmation
+		// Return custom error that can be caught for user confirmation (SP-127 Phase 2.6: audit denied)
+		logFsGateDecision(ctx, "filesystem_read", cleanPath, "denied", "high", "path outside workspace root and not in session allowlist")
 		return "", fmt.Errorf("%w: attempt to access file outside working directory: %s (resolves to: %s)", ErrOutsideWorkingDirectory, cleanPath, resolvedAbs)
 	}
 
+	// Allowed: path is within workspace (SP-127 Phase 2.6: audit)
+	logFsGateDecision(ctx, "filesystem_read", cleanPath, "allowed", "low", "path is within workspace")
 	return resolvedAbs, nil
+}
+
+// logFsGateDecision emits an audit entry for a filesystem gate decision.
+// Nil-safe: skips silently when no logger is configured.
+func logFsGateDecision(ctx context.Context, tool, path, action, riskLevel, reasoning string) {
+	logger := AuditLoggerFromContext(ctx)
+	if logger == nil {
+		return
+	}
+	entry := AuditEntry{
+		Timestamp: time.Now(),
+		Tool:      tool,
+		Args:      path,
+		RiskLevel: riskLevel,
+		Category:  "fs_gate",
+		Action:    action,
+		Reasoning: reasoning,
+		Source:    "unified-gate",
+	}
+	// Log through the interface. The concrete implementation (e.g., *tools.AuditLogger)
+	// will handle JSON marshaling. Passing filesystem.AuditEntry works because:
+	// 1. tools.AuditLogger.LogEntry has a value receiver taking tools.AuditEntry
+	// 2. The interface method signature is effectively LogEntry(entry any)
+	// 3. json.Marshal serializes based on struct tags, not type identity
+	_ = logger.LogEntry(entry)
 }
 
 // isUnderAgentContext checks if the resolved path is under the agent's effective cwd
@@ -479,12 +526,15 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 	if strings.HasPrefix(relPath, "..") {
 		// Check if path is under effective cwd or session-allowlisted folders
 		if isUnderAgentContext(ctx, absPath) {
-			// Path is allowed via effective cwd or session folders
+			// Path is allowed via effective cwd or session folders (SP-127 Phase 2.6: audit)
+			logFsGateDecision(ctx, "filesystem_write", cleanPath, "allowed", "low", "write path is under effective cwd or session allowlist")
 		} else if SecurityBypassEnabled(ctx) {
-			// Security bypass enabled - allow writing outside working directory
+			// Security bypass enabled - allow writing outside working directory (SP-127 Phase 2.6: audit)
+			logFsGateDecision(ctx, "filesystem_write", cleanPath, "allowed", "low", "security bypass is enabled for write")
 			return absPath, nil
 		} else {
-			// Return custom error that can be caught for user confirmation
+			// Return custom error that can be caught for user confirmation (SP-127 Phase 2.6: audit denied)
+			logFsGateDecision(ctx, "filesystem_write", cleanPath, "denied", "high", "write path outside workspace root and not in session allowlist")
 			return "", fmt.Errorf("%w: attempt to write file outside working directory: %s (parent resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedParent)
 		}
 	}
@@ -515,13 +565,18 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 
 			// Also check against effective cwd and session folders
 			if strings.HasPrefix(targetRelPath, "..") && !isUnderAgentContext(ctx, resolvedTarget) {
+				// Symlink target is outside allowed paths (SP-127 Phase 2.6: audit denied)
+				logFsGateDecision(ctx, "filesystem_write", cleanPath, "denied", "high", "symlink target is outside allowed paths")
 				return "", fmt.Errorf("%w: symlink target is outside allowed paths: %s (resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedTarget)
 			}
 
-			// The resolved target is under an allowed root - return it
+			// The resolved target is under an allowed root - this is a symlink redirect (SP-127 Phase 2.6: audit redirected)
+			logFsGateDecision(ctx, "filesystem_write", cleanPath, "redirected", "medium", "symlink redirect: "+cleanPath+" resolves to "+resolvedTarget)
 			return resolvedTarget, nil
 		}
 	}
 
+	// Allowed: write path is within workspace (SP-127 Phase 2.6: audit)
+	logFsGateDecision(ctx, "filesystem_write", cleanPath, "allowed", "low", "write path is within workspace")
 	return absPath, nil
 }

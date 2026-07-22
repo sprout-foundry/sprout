@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // GetShellCwd returns the current logical shell working directory.
@@ -126,6 +129,11 @@ func (a *Agent) updateShellCwd(cmd string) {
 // cd target is not allowed. The message includes the rejected target and
 // lists currently allowed cd targets for reference.
 func (a *Agent) writeCdRejectionMessage(target, reason string) {
+	// Nil-safe: skip all output if agent is nil
+	if a == nil {
+		return
+	}
+
 	allowed := a.ListAllowedCdTargets()
 
 	// Format the allowed targets for the message.
@@ -154,6 +162,33 @@ func (a *Agent) writeCdRejectionMessage(target, reason string) {
 		if tw := a.output.GetTerminalWriter(); tw != nil {
 			tw(message)
 		}
+	}
+
+	// Emit audit entry for the CD gate denial (SP-127 Phase 2.6).
+	// Only denied cd targets are audited — allowed ones are too noisy.
+	logger := a.GetAuditLogger()
+	if logger != nil {
+		sessionID := ""
+		workspace := ""
+		if a.state != nil {
+			sessionID = a.state.GetSessionID()
+		}
+		if ws := strings.TrimSpace(a.GetWorkspaceRoot()); ws != "" {
+			workspace = ws
+		}
+		entry := tools.AuditEntry{
+			Timestamp: time.Now(),
+			Tool:      "shell_cd",
+			Args:      target,
+			RiskLevel: "high",
+			Category:  "cd_gate",
+			Action:    "denied",
+			Reasoning: "cd target " + target + " " + reason,
+			Source:    "unified-gate",
+			SessionID: sessionID,
+			Workspace: workspace,
+		}
+		_ = logger.LogEntry(entry)
 	}
 }
 

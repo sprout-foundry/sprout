@@ -3,8 +3,19 @@
 package workflow
 
 import (
+	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
 )
+
+// PathModeReadOnly declares the declared external folder is read-only —
+// writes against any path under it must be refused by the filesystem gate.
+const PathModeReadOnly = "read_only"
+
+// PathModeReadWrite declares the declared external folder is fully
+// readable and writable for the duration of the workflow run.
+const PathModeReadWrite = "read_write"
 
 const (
 	WorkflowWhenAlways    = "always"
@@ -53,6 +64,14 @@ type AgentWorkflowConfig struct {
 	// each unchecked item independently with a fresh agent context.
 	// When Loop is set, Steps are ignored — the loop IS the execution plan.
 	Loop *AgentWorkflowLoopConfig `json:"loop,omitempty"`
+
+	// AllowedPaths declares the external directories the workflow needs
+	// to read or write outside the workspace. Each entry is validated by
+	// AllowedPath.Validate and pre-seeded into the running agent's
+	// session allowlist (with mode) at run start so the workflow
+	// doesn't re-prompt for every external access. See
+	// `roadmap/SP-128-workflow-allowed-paths.md` for the full design.
+	AllowedPaths []AllowedPath `json:"allowed_paths,omitempty"`
 }
 
 // IsApprovalRequired reports whether the run_automate tool path should
@@ -209,4 +228,141 @@ type AgentWorkflowLoopConfig struct {
 // instead of triggering model inference.
 func (s AgentWorkflowStep) IsShellStep() bool {
 	return strings.TrimSpace(s.Command) != "" || strings.TrimSpace(s.CommandFile) != ""
+}
+
+// AllowedPath is a single directory the workflow needs access to outside
+// the workspace. Declared at the workflow level so the user can review
+// every external path in one place at launch time, and the runtime can
+// pre-seed the session allowlist so no per-tool approval dialogs fire
+// mid-run.
+//
+// Rules enforced by Validate:
+//   - Path must be absolute (filepath.IsAbs).
+//   - Path must not contain `..` segments after filepath.Clean.
+//   - Path must not start with `~` (we refuse to expand — the workflow
+//     author must supply a canonical absolute path).
+//   - Mode must be one of {read_only, read_write} (case-sensitive).
+//   - Reason is optional; loader does not require it.
+//
+// Paths that fall under a known system prefix (see isSystemPathPrefix)
+// trigger a warning via log.Printf — the loader surfaces that warning
+// so the user is aware the workflow touches platform infrastructure,
+// but the path itself is allowed. Sensitive-path blocking is enforced
+// elsewhere (filesystem tier classification / path_tier.go).
+type AllowedPath struct {
+	// Path is the absolute path to the directory. Must be absolute,
+	// free of `..` traversal after Clean(), and must not start with
+	// `~` (refuse to expand; user must provide the canonical absolute
+	// path).
+	Path string `json:"path"`
+
+	// Mode is one of {read_only, read_write}. The filesystem layer
+	// enforces this: a write tool called against a read_only entry
+	// gets a security error explaining the declared mode blocked it.
+	Mode string `json:"mode"`
+
+	// Reason is surfaced verbatim in the launch confirmation dialog
+	// so the user understands why the workflow needs this path.
+	// Strongly recommended; loader does not require it.
+	Reason string `json:"reason,omitempty"`
+}
+
+// Validate enforces the schema rules documented on AllowedPath. Returns
+// nil for a valid entry; a descriptive error otherwise. The error
+// message identifies the offending field so the loader can attribute
+// the failure to the right entry index.
+func (a *AllowedPath) Validate() error {
+	if a == nil {
+		return nil
+	}
+	path := strings.TrimSpace(a.Path)
+	if path == "" {
+		return errors.New("path is required")
+	}
+	if strings.HasPrefix(path, "~") {
+		return errors.New("path must not start with `~`; provide an absolute path")
+	}
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("path must be absolute; got %q", path)
+	}
+	cleaned := filepath.Clean(path)
+	if cleaned != path {
+		// filepath.Clean strips trailing slashes and collapses `./` and
+		// `foo/../bar`. We reject any input that needs cleaning because
+		// the user almost certainly meant to write a different path —
+		// silent canonicalization would let `/foo/../etc` slip past as
+		// a sibling of `/etc`.
+		return fmt.Errorf("path must already be cleaned (no `./`, `..`, or trailing separators); got %q", path)
+	}
+	if strings.Contains(cleaned, "..") {
+		// Defense in depth: filepath.Clean can leave `..` intact in
+		// some edge cases (a leading `..` for example); refuse those
+		// outright.
+		return fmt.Errorf("path must not contain `..` segments; got %q", path)
+	}
+	mode := strings.TrimSpace(a.Mode)
+	switch mode {
+	case PathModeReadOnly, PathModeReadWrite:
+		// ok
+	default:
+		return fmt.Errorf("mode must be %q or %q; got %q", PathModeReadOnly, PathModeReadWrite, a.Mode)
+	}
+	return nil
+}
+
+// IsSystemPathPrefix reports whether the (already-cleaned, absolute) path
+// falls under one of the OS system directories. Used by the loader to
+// emit a warning when a workflow declares an allowed_path inside a
+// system prefix — the user is touching platform infrastructure and
+// deserves the louder heads-up, even though the workflow is allowed to
+// proceed.
+//
+// The list mirrors pkg/agent/path_tier.go::systemPathPrefixes; both
+// should grow together if a new OS system directory is added. We keep
+// the list local to the workflow package rather than importing the
+// agent package (workflow is a leaf dependency — agent imports
+// workflow, not the other way around).
+//
+// Exported (capitalized) so pkg/automate/discovery.go::Summarize can
+// reuse the same prefix list when rendering the WebUI/CLI summary.
+func IsSystemPathPrefix(p string) bool {
+	if p == "" {
+		return false
+	}
+	for _, prefix := range systemPathPrefixList() {
+		if p == prefix {
+			return true
+		}
+		if strings.HasPrefix(p, prefix+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// systemPathPrefixList returns the list of system-directory prefixes
+// matched by isSystemPathPrefix. Kept in a function (not a package
+// var) so tests can override it and so the match logic in
+// isSystemPathPrefix stays next to its data.
+func systemPathPrefixList() []string {
+	return []string{
+		"/etc",
+		"/usr",
+		"/var",
+		"/bin",
+		"/sbin",
+		"/boot",
+		"/proc",
+		"/sys",
+		"/dev",
+		"/lib",
+		"/lib64",
+		"/opt",
+		"/root",
+		"/System",
+		"/Library",
+		"/private/etc",
+		"/private/var",
+		"/Applications",
+	}
 }

@@ -76,7 +76,7 @@ func (c *CompletionCycle) Advance(applied string) {
 }
 
 // Reset clears cycle state. Call this whenever the user edits the
-// buffer (typing, arrow keys, paste, history recall) so the next
+// buffer (typing, deleting, paste, history recall) so the next
 // completion press starts fresh from the new buffer content.
 func (c *CompletionCycle) Reset() {
 	if c == nil {

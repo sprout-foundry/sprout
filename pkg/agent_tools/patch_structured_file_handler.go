@@ -55,7 +55,7 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
 	// resolve so Deny paths return a typed error immediately and Allow
 	// paths bypass withFilesystemApproval entirely.
-	resolvedPath, decision := PrecheckFileAccess(env.FileAccessClassifier, "patch_structured_file", path)
+	resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "patch_structured_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("patch blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
 			fmt.Errorf("patch blocked: %s is declared read_only", path)

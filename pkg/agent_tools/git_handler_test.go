@@ -248,44 +248,33 @@ func TestGitHandler_ResetPlain_WithAM(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// rebase -i / --onto — DANGEROUS tier
+// rebase — AGENTS.md bans rebase unconditionally
 // ---------------------------------------------------------------------------
 
 func TestGitHandler_RebaseInteractive_WithAM(t *testing.T) {
 	ctx, ws := t.Context(), t.TempDir()
 	initGitRepo(t, ws)
 	am := &capturingApprovalManager{approved: true}
-	result, err := runGit(t, ctx, ws, am, "rebase", "-i HEAD~3")
-	if err != nil {
-		t.Fatalf("Execute error: %v", err)
+	result, _ := runGit(t, ctx, ws, am, "rebase", "-i HEAD~3")
+	// rebase is unconditionally banned by AGENTS.md — error is returned.
+	if !result.IsError {
+		t.Fatal("expected IsError for banned rebase operation")
 	}
-	if result.IsError {
-		t.Fatalf("should not be error when approved: %s", result.Output)
-	}
-	if len(am.calls) != 1 {
-		t.Fatalf("expected 1 call, got %d", len(am.calls))
-	}
-	c := am.calls[0]
-	// rebase -i is now CAUTION (downgraded from DANGEROUS) — goes through
-	// dangerousOps fallback with "high" risk level
-	if c.riskLevel != "high" {
-		t.Errorf("riskLevel = %q, want 'high'", c.riskLevel)
-	}
-	if !strings.Contains(c.prompt, "dangerous git operation") {
-		t.Errorf("prompt missing 'dangerous git operation': %s", c.prompt)
+	if !strings.Contains(result.Output, "AGENTS.md bans rebase unconditionally") {
+		t.Errorf("error should mention AGENTS.md ban: %s", result.Output)
 	}
 }
 
 func TestGitHandler_RebaseInteractive_WithoutAM(t *testing.T) {
 	ctx, ws := t.Context(), t.TempDir()
 	initGitRepo(t, ws)
-	result, err := runGit(t, ctx, ws, nil, "rebase", "-i HEAD~3")
-	if err != nil {
-		t.Fatalf("Execute error: %v", err)
+	result, _ := runGit(t, ctx, ws, nil, "rebase", "-i HEAD~3")
+	// rebase is unconditionally banned by AGENTS.md — error is returned.
+	if !result.IsError {
+		t.Fatal("expected IsError for banned rebase operation")
 	}
-	// rebase -i is now CAUTION — without AM it warns but proceeds
-	if result.IsError {
-		t.Fatalf("CAUTION operation should proceed without AM: %s", result.Output)
+	if !strings.Contains(result.Output, "AGENTS.md bans rebase unconditionally") {
+		t.Errorf("error should mention AGENTS.md ban: %s", result.Output)
 	}
 }
 
@@ -293,33 +282,63 @@ func TestGitHandler_RebaseOnto_WithAM(t *testing.T) {
 	ctx, ws := t.Context(), t.TempDir()
 	initGitRepo(t, ws)
 	am := &capturingApprovalManager{approved: true}
-	_, err := runGit(t, ctx, ws, am, "rebase", "--onto main")
-	if err != nil {
-		t.Fatalf("Execute error: %v", err)
+	result, _ := runGit(t, ctx, ws, am, "rebase", "--onto main")
+	// rebase is unconditionally banned by AGENTS.md — error is returned.
+	if !result.IsError {
+		t.Fatal("expected IsError for banned rebase operation")
 	}
-	// rebase --onto is now CAUTION — goes through dangerousOps fallback with "high" risk
-	if len(am.calls) != 1 || am.calls[0].riskLevel != "high" {
-		t.Errorf("expected 1 high call, got %d calls (risk=%q)", len(am.calls), am.calls[0].riskLevel)
+	if !strings.Contains(result.Output, "AGENTS.md bans rebase unconditionally") {
+		t.Errorf("error should mention AGENTS.md ban: %s", result.Output)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// plain rebase — CAUTION + dangerousOps fallback
+// plain rebase — AGENTS.md bans rebase unconditionally
 // ---------------------------------------------------------------------------
 
 func TestGitHandler_RebasePlain_WithAM(t *testing.T) {
 	ctx, ws := t.Context(), t.TempDir()
 	initGitRepo(t, ws)
 	am := &capturingApprovalManager{approved: true}
-	_, err := runGit(t, ctx, ws, am, "rebase", "main")
+	result, _ := runGit(t, ctx, ws, am, "rebase", "main")
+	// rebase is unconditionally banned by AGENTS.md — error is returned.
+	if !result.IsError {
+		t.Fatal("expected IsError for banned rebase operation")
+	}
+	if !strings.Contains(result.Output, "AGENTS.md bans rebase unconditionally") {
+		t.Errorf("error should mention AGENTS.md ban: %s", result.Output)
+	}
+}
+
+func TestGitHandler_RebasePlain_WithoutAM(t *testing.T) {
+	ctx, ws := t.Context(), t.TempDir()
+	initGitRepo(t, ws)
+	result, _ := runGit(t, ctx, ws, nil, "rebase", "main")
+	// rebase is unconditionally banned by AGENTS.md — error is returned.
+	if !result.IsError {
+		t.Fatal("expected IsError for banned rebase operation")
+	}
+	if !strings.Contains(result.Output, "AGENTS.md bans rebase unconditionally") {
+		t.Errorf("error should mention AGENTS.md ban: %s", result.Output)
+	}
+}
+
+func TestGitHandler_RebaseAbort(t *testing.T) {
+	// `git rebase --abort` is the only permitted rebase invocation per AGENTS.md.
+	// Test that it is allowed (does not error).
+	ctx, ws := t.Context(), t.TempDir()
+	initGitRepo(t, ws)
+	// No AM — rebase --abort should be allowed
+	result, err := runGit(t, ctx, ws, nil, "rebase", "--abort")
+	// rebase --abort should succeed without an error (it's a recovery op)
 	if err != nil {
-		t.Fatalf("Execute error: %v", err)
+		t.Fatalf("unexpected error for `git rebase --abort`: %v", err)
 	}
-	if len(am.calls) != 1 {
-		t.Fatalf("expected 1 call, got %d", len(am.calls))
-	}
-	if am.calls[0].riskLevel != "high" {
-		t.Errorf("riskLevel = %q, want 'high'", am.calls[0].riskLevel)
+	// Note: The result might be an error from git itself if there's no rebase
+	// in progress (e.g., "fatal: no rebase in progress"), but that's a git
+	// error, not a ban on the operation. We just verify no AGENTS.md ban error.
+	if result.IsError && strings.Contains(result.Output, "AGENTS.md bans rebase unconditionally") {
+		t.Errorf("git rebase --abort should not be banned: %s", result.Output)
 	}
 }
 

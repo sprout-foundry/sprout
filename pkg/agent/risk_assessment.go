@@ -40,6 +40,8 @@ const (
 	RiskSourceCriticalOp RiskSource = "critical-op"
 	// RiskSourceGitHistoryRewrite — git commands that can lose commit history
 	RiskSourceGitHistoryRewrite RiskSource = "git-history-rewrite"
+	// RiskSourceGitRebase — git rebase (AGENTS.md: unconditionally banned)
+	RiskSourceGitRebase RiskSource = "git-rebase"
 	// RiskSourceGitWrite — git write operations not allowed by persona
 	RiskSourceGitWrite RiskSource = "git-write"
 	// RiskSourceFSTier — filesystem path-tier classification (Sensitive/External)
@@ -125,16 +127,35 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 			// These operations are recoverable via reflog, so they prompt the
 			// user rather than being hard-blocked. AllowGitHistoryRewrite=true
 			// skips the prompt entirely (config-level opt-in).
+			// Exception: rebase is unconditionally banned by AGENTS.md, regardless
+			// of AllowGitHistoryRewrite. The only permitted invocation is --abort.
 			if isGitHistoryRewriteCommand(cmd) {
-				cfg := a.GetConfig()
-				if cfg == nil || !cfg.AllowGitHistoryRewrite {
+				if isGitRebaseCommand(cmd) {
+					// AGENTS.md: rebase is unconditionally banned — every
+					// form including interactive, --continue, --skip, and
+					// `git pull --rebase`. The only permitted invocation is
+					// pure `git rebase --abort` (recovery from a prior
+					// session's interrupted rebase).
 					assessment = assessment.combine(
 						RiskAssessment{
-							Level:   configuration.RiskLevelHigh,
-							Sources: []RiskSource{RiskSourceGitHistoryRewrite},
-							Reason:  "git history-rewrite operation requires approval",
+							Level:       configuration.RiskLevelCritical,
+							IsHardBlock: true,
+							Sources:     []RiskSource{RiskSourceGitRebase},
+							Reason:      "git rebase is banned by AGENTS.md (all forms: interactive, --continue, --skip, `git pull --rebase`); use `git merge` to integrate upstream. The only permitted invocation is `git rebase --abort` for recovery.",
 						},
 					)
+				} else {
+					// Other history-rewrite ops: branch -D, tag -d, reset --hard <commit-ish>
+					cfg := a.GetConfig()
+					if cfg == nil || !cfg.AllowGitHistoryRewrite {
+						assessment = assessment.combine(
+							RiskAssessment{
+								Level:   configuration.RiskLevelHigh,
+								Sources: []RiskSource{RiskSourceGitHistoryRewrite},
+								Reason:  "git history-rewrite operation requires approval",
+							},
+						)
+					}
 				}
 			}
 
@@ -369,4 +390,65 @@ func resolveUnifiedDecision(ra RiskAssessment) string {
 		return "prompt"
 	}
 	return "allow"
+}
+
+// isGitRebaseCommand reports whether `command` contains a `git rebase`
+// invocation that rewrites history (i.e. NOT `git rebase --abort`).
+// AGENTS.md bans rebase unconditionally; the only permitted rebase is
+// `--abort` (recovery from a prior session's interrupted rebase).
+func isGitRebaseCommand(command string) bool {
+	command = stripQuotedContent(command)
+	remaining := command
+	for {
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		gitCmd := remaining[idx:]
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
+			continue
+		}
+		subcommand := ""
+		subIdx := 0
+		for i := 1; i < len(parts); i++ {
+			part := parts[i]
+			if strings.HasPrefix(part, "-") {
+				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+					i++
+				}
+				continue
+			}
+			subcommand = strings.TrimRight(part, ");\"'")
+			subIdx = i
+			break
+		}
+		if subcommand == "rebase" {
+			rest := parts[subIdx+1:]
+			// Pure `git rebase --abort` is the only permitted rebase
+			// invocation (recovery from a prior session's interrupted
+			// rebase). Any additional token — even something as benign
+			// looking as `--no-verify` — makes the abort intent ambiguous
+			// and is treated as a rewrite attempt.
+			if len(rest) == 1 && rest[0] == "--abort" {
+				return false
+			}
+			return true
+		}
+		if subcommand == "pull" {
+			// AGENTS.md also bans `git pull --rebase` (and `-r`).
+			// Use whole-token matching so `--no-rebase` and
+			// `--recurse-submodules -r` don't false-positive.
+			// `--rebase-preserve` is a real git flag (rebases + preserves
+			// locally committed merges) — also a rebase, also banned.
+			for _, a := range parts[subIdx+1:] {
+				if a == "--rebase" || a == "-r" || a == "--rebase-preserve" {
+					return true
+				}
+			}
+		}
+		remaining = remaining[idx+1:]
+	}
+	return false
 }

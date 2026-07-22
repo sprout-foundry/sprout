@@ -233,6 +233,8 @@ func TestResolveToolRisk_NilAgent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveToolRisk_GitHistoryRewritePromptable(t *testing.T) {
+	// AGENTS.md: rebase is unconditionally banned. Use a non-rebase history-rewrite
+	// op (branch -D) to test the "promptable" behavior.
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
@@ -241,7 +243,7 @@ func TestResolveToolRisk_GitHistoryRewritePromptable(t *testing.T) {
 
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
-	args := map[string]interface{}{"command": "git rebase -i HEAD~5"}
+	args := map[string]interface{}{"command": "git branch -D feature"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
 
 	found := false
@@ -252,18 +254,20 @@ func TestResolveToolRisk_GitHistoryRewritePromptable(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("Sources %v should contain git-history-rewrite for git rebase", assessment.Sources)
+		t.Errorf("Sources %v should contain git-history-rewrite for branch -D", assessment.Sources)
 	}
 
 	if assessment.Level != configuration.RiskLevelHigh {
-		t.Errorf("Level = %q, want High for git rebase when AllowGitHistoryRewrite is false (promptable, not hard-blocked)", assessment.Level)
+		t.Errorf("Level = %q, want High for branch -D when AllowGitHistoryRewrite is false", assessment.Level)
 	}
 	if assessment.IsHardBlock {
-		t.Error("IsHardBlock should be false for git rebase — recoverable via reflog, so promptable not hard-blocked")
+		t.Error("IsHardBlock should be false for branch -D (promptable, not hard-blocked)")
 	}
 }
 
 func TestResolveToolRisk_GitHistoryRewriteAllowed(t *testing.T) {
+	// AGENTS.md: rebase is unconditionally banned. Use a non-rebase history-rewrite
+	// op (tag -d) to test the AllowGitHistoryRewrite flag behavior.
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
@@ -280,7 +284,7 @@ func TestResolveToolRisk_GitHistoryRewriteAllowed(t *testing.T) {
 
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
-	args := map[string]interface{}{"command": "git rebase -i HEAD~5"}
+	args := map[string]interface{}{"command": "git tag -d v1.0"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
 
 	found := false
@@ -562,6 +566,12 @@ func TestResolveToolRisk_FileWriteWorkspacePath(t *testing.T) {
 	defer agent.Shutdown()
 
 	workspace := t.TempDir()
+	// On macOS, t.TempDir() returns /var/folders/... which is a symlink to
+	// /private/var/folders/...; resolve so SetWorkspaceRoot stores the same
+	// canonical prefix that ClassifyPathAccess will compare against.
+	if resolved, err := filepath.EvalSymlinks(workspace); err == nil {
+		workspace = resolved
+	}
 	agent.SetWorkspaceRoot(workspace)
 	agent.SetShellCwd(workspace)
 
@@ -1182,5 +1192,111 @@ func TestResolveToolRisk_GitTagDelete(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("git tag -d should have git-history-rewrite source: %v", assessment.Sources)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ResolveToolRisk — git rebase (AGENTS.md: unconditionally banned)
+// ---------------------------------------------------------------------------
+
+func TestResolveToolRisk_GitRebaseAlwaysHardBlocks(t *testing.T) {
+	// AGENTS.md: rebase is unconditionally banned — even with
+	// AllowGitHistoryRewrite=true, rebase hard-blocks.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.AllowGitHistoryRewrite = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona(personas.IDOrchestrator)
+
+	args := map[string]interface{}{"command": "git rebase -i HEAD~5"}
+	assessment := agent.ResolveToolRisk("shell_command", args)
+
+	found := false
+	for _, src := range assessment.Sources {
+		if src == RiskSourceGitRebase {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Sources should contain git-rebase: %v", assessment.Sources)
+	}
+
+	if !assessment.IsHardBlock {
+		t.Error("IsHardBlock should be true for rebase even when AllowGitHistoryRewrite=true")
+	}
+	if assessment.Level != configuration.RiskLevelCritical {
+		t.Errorf("Level = %q, want Critical for rebase", assessment.Level)
+	}
+}
+
+func TestResolveToolRisk_GitRebaseAbortDoesNotHardBlock(t *testing.T) {
+	// `git rebase --abort` is the recovery op — not a history rewrite,
+	// so it should NOT hard-block.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+
+	agent.state.SetActivePersona(personas.IDOrchestrator)
+
+	args := map[string]interface{}{"command": "git rebase --abort"}
+	assessment := agent.ResolveToolRisk("shell_command", args)
+
+	// --abort is NOT a git-rebase (it's a recovery op)
+	found := false
+	for _, src := range assessment.Sources {
+		if src == RiskSourceGitRebase {
+			found = true
+			break
+		}
+	}
+	if found {
+		t.Errorf("Sources should NOT contain git-rebase for rebase --abort: %v", assessment.Sources)
+	}
+
+	if assessment.IsHardBlock {
+		t.Error("IsHardBlock should be false for `git rebase --abort` (recovery op)")
+	}
+}
+
+func TestResolveToolRisk_GitRebaseAbortWithOtherFlagsHardBlocks(t *testing.T) {
+	// `git rebase --abort --no-verify` still performs rebase work (--abort is
+	// recovery, but --no-verify is a rewrite flag), so it should hard-block.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+
+	agent.state.SetActivePersona(personas.IDOrchestrator)
+
+	args := map[string]interface{}{"command": "git rebase --abort --no-verify"}
+	assessment := agent.ResolveToolRisk("shell_command", args)
+
+	found := false
+	for _, src := range assessment.Sources {
+		if src == RiskSourceGitRebase {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Sources should contain git-rebase for rebase --abort with other flags: %v", assessment.Sources)
+	}
+
+	if !assessment.IsHardBlock {
+		t.Error("IsHardBlock should be true for `git rebase --abort --no-verify` (has non-recovery flags)")
 	}
 }

@@ -10,7 +10,6 @@ import (
 func TestGetConfigDir_CustomEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 
 	got, err := GetConfigDir()
 	if err != nil {
@@ -26,7 +25,6 @@ func TestGetConfigDir_XDGEnv(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	// Ensure SPROUT_CONFIG is not set
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("SPROUT_CONFIG", "")
 
 	got, err := GetConfigDir()
 	if err != nil {
@@ -40,7 +38,6 @@ func TestGetConfigDir_XDGEnv(t *testing.T) {
 
 func TestGetConfigDir_Default(t *testing.T) {
 	// Ensure neither SPROUT_CONFIG nor XDG_CONFIG_HOME are set
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -59,7 +56,6 @@ func TestGetConfigDir_Default(t *testing.T) {
 func TestGetAPIKeysPath(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 
 	got, err := GetAPIKeysPath()
 	if err != nil {
@@ -73,7 +69,6 @@ func TestGetAPIKeysPath(t *testing.T) {
 
 func TestLoad_FileNotFound(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Don't create the file
 
@@ -91,7 +86,6 @@ func TestLoad_FileNotFound(t *testing.T) {
 
 func TestLoad_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")
@@ -112,7 +106,6 @@ func TestLoad_InvalidJSON(t *testing.T) {
 
 func TestLoad_NilStoreJSON(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")
@@ -135,7 +128,6 @@ func TestLoad_NilStoreJSON(t *testing.T) {
 func TestSave_NilStore(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 
 	if err := Save(nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -153,7 +145,6 @@ func TestSave_NilStore(t *testing.T) {
 
 func TestSave_ValidStore(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{"openai": "sk-test123", "anthropic": "sk-abc"}
@@ -184,7 +175,6 @@ func TestSave_ValidStore(t *testing.T) {
 func TestSave_LoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 
 	original := Store{"provider-a": "key-a", "provider-b": "key-b"}
 	if err := Save(original); err != nil {
@@ -209,7 +199,6 @@ func TestSave_LoadRoundTrip(t *testing.T) {
 func TestResolve_NoEnvVarAndNoStored(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 	// Don't set any env var or store anything
 
 	resolved, err := resolve("missing-provider", "")
@@ -229,7 +218,6 @@ func TestResolve_NoEnvVarAndNoStored(t *testing.T) {
 
 func TestResolve_WhitespaceTrimmedEnvVar(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Store an env var with surrounding whitespace
 	t.Setenv("TRIM_ME_KEY", "  trim-value  ")
@@ -251,7 +239,6 @@ func TestResolve_WhitespaceTrimmedEnvVar(t *testing.T) {
 
 func TestResolvePrefersEnvironmentOverStoredKey(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("TEST_PROVIDER_API_KEY", "env-key")
 
@@ -278,7 +265,6 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
@@ -307,7 +293,6 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 func TestGetConfigDir_WhitespaceConfig(t *testing.T) {
 	// SPROUT_CONFIG is set to whitespace-only — should be treated as empty
 	t.Setenv("SPROUT_CONFIG", "   \t  ")
-	t.Setenv("SPROUT_CONFIG", "   \t  ")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	got, err := GetConfigDir()
@@ -323,7 +308,6 @@ func TestGetConfigDir_WhitespaceConfig(t *testing.T) {
 }
 
 func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "   \t  ")
 
@@ -354,7 +338,6 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 	}
 	// Set SPROUT_CONFIG to a sub-directory of the read-only dir that doesn't exist
 	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "subdir", "nested"))
-	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "subdir", "nested"))
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	_, err := GetAPIKeysPath()
@@ -369,7 +352,6 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 
 func TestLoad_ReadError(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")
@@ -404,7 +386,6 @@ func TestSave_WriteError(t *testing.T) {
 
 	// Point SPROUT_CONFIG to the read-only directory itself (already exists)
 	t.Setenv("SPROUT_CONFIG", readOnlyDir)
-	t.Setenv("SPROUT_CONFIG", readOnlyDir)
 
 	store := Store{"test": "value"}
 	err := Save(store)
@@ -422,7 +403,6 @@ func TestResolve_EnvVarSetButEmpty(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
@@ -446,7 +426,6 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("WS_KEY", "   \t  ")
@@ -466,7 +445,6 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 
 func TestResolve_StoredValueWithWhitespace(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")

@@ -341,10 +341,8 @@ func TestGetVisionParallelWorkers_Defaults(t *testing.T) {
 	// SPROUT_<suffix>. Use t.Setenv to set both forms.
 	setEnv := func(key, val string) {
 		t.Setenv("SPROUT_"+key, val)
-		t.Setenv("SPROUT_"+key, val)
 	}
 	unsetEnv := func(key string) {
-		t.Setenv("SPROUT_"+key, "")
 		t.Setenv("SPROUT_"+key, "")
 	}
 
@@ -394,7 +392,6 @@ func TestProcessOCRImages_Parallelism(t *testing.T) {
 		distinctImageBytes(0), distinctImageBytes(1), distinctImageBytes(2),
 		distinctImageBytes(3), distinctImageBytes(4), distinctImageBytes(5),
 	}
-	t.Setenv("SPROUT_VISION_PARALLEL_WORKERS", "4")
 	t.Setenv("SPROUT_VISION_PARALLEL_WORKERS", "4")
 	_, err := processOCRImagesParallel(context.Background(), images, mock, "Par", nil)
 	requireParallelNoError(t, err)

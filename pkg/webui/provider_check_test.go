@@ -23,7 +23,6 @@ func TestIsProviderAvailable(t *testing.T) {
 
 		// Point configuration to our temp dir
 		t.Setenv("SPROUT_CONFIG", dir)
-		t.Setenv("SPROUT_CONFIG", dir)
 
 		result := isProviderAvailable()
 		if result {
@@ -42,7 +41,6 @@ func TestIsProviderAvailable(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		t.Setenv("SPROUT_CONFIG", dir)
 		t.Setenv("SPROUT_CONFIG", dir)
 
 		result := isProviderAvailable()

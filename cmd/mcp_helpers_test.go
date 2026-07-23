@@ -24,7 +24,6 @@ func setupMCPTestEnv(t *testing.T) (string, func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	// Clear github token to prevent auto-discovery adding servers
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 	// Disable auto-discovery to ensure empty server list in tests

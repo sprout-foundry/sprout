@@ -365,7 +365,7 @@ function Chat(props: ChatProps): JSX.Element {
       data-testid="chat-shell"
     >
       <div className="chat-main" data-testid="chat-main">
-        {isCloud && getBootstrapConfig().user?.tier === 'auto' && (
+        {isCloud && !['pro', 'team', 'runner'].includes(getBootstrapConfig().user?.tier ?? '') && (
           <div
             style={{
               padding: '6px 12px',

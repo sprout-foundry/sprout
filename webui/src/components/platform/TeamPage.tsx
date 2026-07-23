@@ -45,7 +45,7 @@ const TeamPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await adapter.fetch('/api/foundry/team');
+      const response = await adapter.fetch('/team/members');
       if (!response.ok) {
         throw new Error(`Failed to fetch team: ${response.status} ${response.statusText}`);
       }

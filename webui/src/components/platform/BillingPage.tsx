@@ -50,7 +50,7 @@ const BillingPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await adapter.fetch('/api/foundry/billing');
+      const response = await adapter.fetch('/checkout/plans');
       if (!response.ok) {
         throw new Error(`Failed to fetch billing: ${response.status} ${response.statusText}`);
       }
@@ -140,7 +140,7 @@ const BillingPage: React.FC = () => {
     const adapter = getAdapter();
     if (adapter) {
       try {
-        const response = await adapter.fetch('/api/foundry/billing/portal', { method: 'POST' });
+        const response = await adapter.fetch('/checkout/portal', { method: 'POST' });
         if (response.ok) {
           const data = await response.json();
           if (data?.url) {

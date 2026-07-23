@@ -247,6 +247,11 @@ func (p *GenericProvider) GetProvider() string {
 	return p.config.Name
 }
 
+// GetEndpoint returns the API endpoint from the provider config.
+func (p *GenericProvider) GetEndpoint() string {
+	return p.config.Endpoint
+}
+
 // GetHTTPClient returns the current HTTP client used for non-streaming requests.
 // Useful for WASM environments that need to verify client injection.
 func (p *GenericProvider) GetHTTPClient() *http.Client {

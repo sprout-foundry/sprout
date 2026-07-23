@@ -148,7 +148,7 @@ const DashboardPage: React.FC = () => {
                 <div className="dashboard-meter-fill" style={{ width: `${taskPct}%` }} />
               </div>
             </div>
-            {usage.tier === 'auto' && usage.daily_llm ? (
+            {!['pro', 'team', 'runner'].includes(usage.tier) && usage.daily_llm ? (
               <>
                 <div className="dashboard-meter">
                   <div className="dashboard-meter-label">

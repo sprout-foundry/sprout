@@ -177,21 +177,20 @@ function StatusBar({
           <span className="statusbar-text">{workspaceName}</span>
         </div>
       )}
-      {isCloud &&
-        (() => {
-          const cfg = getBootstrapConfig();
-          if (cfg.user?.tier !== 'auto') return null;
-          return (
-            <div
-              className="statusbar-item statusbar-item-auto-tier"
-              title="Auto mode — shared compute. Limited daily requests."
-              data-testid="status-bar-auto-tier"
-            >
-              <Zap size={12} />
-              <span className="statusbar-text">Auto</span>
-            </div>
-          );
-        })()}
+      {isCloud && (() => {
+        const cfg = getBootstrapConfig();
+        if (['pro', 'team', 'runner'].includes(cfg.user?.tier ?? '')) return null;
+        return (
+          <div
+            className="statusbar-item statusbar-item-auto-tier"
+            title="Auto mode — shared compute. Limited daily requests."
+            data-testid="status-bar-auto-tier"
+          >
+            <Zap size={12} />
+            <span className="statusbar-text">Auto</span>
+          </div>
+        );
+      })()}
       <SproutStatusBar
         branch={supportsGit ? branch : 'Browser IDE'}
         cursorPosition={buffer?.cursorPosition}

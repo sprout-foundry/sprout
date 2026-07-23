@@ -79,8 +79,9 @@ export function parseSecurityAnalysisString(raw: unknown): SecurityAnalysisShape
         sa.chainSubcommands = parsed.chain_subcommands.filter((s): s is string => typeof s === 'string');
       }
       if (Array.isArray(parsed.chain_classifications)) {
-        sa.chainClassifications = parsed.chain_classifications
-          .filter((s): s is 'low' | 'moderate' | 'high' => typeof s === 'string' && VALID_RISK_TONES.has(s));
+        sa.chainClassifications = parsed.chain_classifications.filter(
+          (s): s is 'low' | 'moderate' | 'high' => typeof s === 'string' && VALID_RISK_TONES.has(s),
+        );
       }
     }
     return sa;

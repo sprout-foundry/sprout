@@ -281,6 +281,17 @@ export function useSettingsState(
     };
   }, [activeSubTab, api]);
 
+  // Bug B fix: when the Providers tab is opened while the catalog is empty
+  // (e.g. user opened Settings during a brief disconnect), nudge the catalog
+  // to load so the UI doesn't appear broken. This is a no-op when data is
+  // already present, a fetch is in-flight, or the connection is down.
+  useEffect(() => {
+    if (activeSubTab !== 'providers') return;
+    if (catalog.providers.length === 0 && !catalog.isLoading) {
+      catalog.ensureLoaded();
+    }
+  }, [activeSubTab, catalog]);
+
   // ProviderSettingsTab calls this after adding a custom provider so the
   // new entry appears in dropdowns immediately. Routing through the shared
   // catalog refreshes every consumer (status bar, Sidebar, all Settings
@@ -291,11 +302,34 @@ export function useSettingsState(
   // when refreshCurrentProviderInfo() is called externally (e.g. after
   // the inline primary-provider dropdown writes to global config).
   const [currentProviderRefreshTick, setCurrentProviderRefreshTick] = useState(0);
+  // Cache for the onboarding status response. Stores the last successful
+  // fetch so repeated tab activations within 5s skip the network round-trip.
+  // Cleared on tick > 0 (explicit invalidation from a settings write).
+  const lastStatusAtRef = useRef<number>(0);
+  const lastStatusValueRef = useRef<{
+    provider: string;
+    model: string;
+    hasCredential: boolean;
+  } | null>(null);
   const refreshCurrentProviderInfo = useCallback(() => {
     setCurrentProviderRefreshTick((n) => n + 1);
   }, []);
   useEffect(() => {
     if (activeSubTab !== 'providers') return;
+
+    // Fast path: use cached data if available and still fresh (within 5s)
+    // and no explicit invalidation (tick === 0). This eliminates the
+    // per-tab-switch network round-trip for repeated Settings → Providers.
+    if (
+      currentProviderRefreshTick === 0 &&
+      lastStatusValueRef.current !== null &&
+      Date.now() - lastStatusAtRef.current < 5000
+    ) {
+      setCurrentProviderInfo(lastStatusValueRef.current);
+      setLoadingProviderInfo(false);
+      return;
+    }
+
     let cancelled = false;
     setLoadingProviderInfo(true);
     (async () => {
@@ -303,11 +337,15 @@ export function useSettingsState(
         const status = await api.getOnboardingStatus();
         if (cancelled) return;
         const providerEntry = (status.providers || []).find((p) => p.id === status.current_provider);
-        setCurrentProviderInfo({
+        const info = {
           provider: status.current_provider,
           model: status.current_model,
           hasCredential: providerEntry?.has_credential || false,
-        });
+        };
+        // Populate cache for future tab activations
+        lastStatusAtRef.current = Date.now();
+        lastStatusValueRef.current = info;
+        setCurrentProviderInfo(info);
       } catch (err) {
         debugLog('[SettingsPanel] failed to load provider info:', err);
       } finally {

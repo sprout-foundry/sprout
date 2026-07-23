@@ -44,11 +44,25 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'x', description: 'Alias for /exit', isAlias: true, aliasOf: 'exit' },
 ];
 
+/**
+ * Bounded cache for getMatchingSlashCommands results.
+ * Key = prefix.toLowerCase().trim(), value = sorted SlashCommand[].
+ * Safe to keep indefinitely because SLASH_COMMANDS is a static constant
+ * (never mutates at runtime). The cache grows at most to the number of
+ * distinct non-empty prefixes the user types, which is trivially small
+ * (< 100 in practice, far below any memory concern).
+ */
+const _matchCache = new Map<string, SlashCommand[]>();
+
 export function getMatchingSlashCommands(prefix: string): SlashCommand[] {
   const normalized = prefix.toLowerCase().trim();
-  return SLASH_COMMANDS.filter(cmd => cmd.name.toLowerCase().startsWith(normalized)).sort((a, b) => {
+  const cached = _matchCache.get(normalized);
+  if (cached !== undefined) return cached;
+  const result = SLASH_COMMANDS.filter(cmd => cmd.name.toLowerCase().startsWith(normalized)).sort((a, b) => {
     // Aliases sort after real commands
     if (a.isAlias !== b.isAlias) return a.isAlias ? 1 : -1;
     return a.name.localeCompare(b.name);
   });
+  _matchCache.set(normalized, result);
+  return result;
 }

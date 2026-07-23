@@ -70,7 +70,7 @@ jobs:
         run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=300 --from-embedded-configs=pkg/agent_providers/configs
 
       - name: Generate model index
-        run: bash scripts/generate-model-index.sh models
+        run: bash scripts/generate-model-index.sh models/models
 
       - name: Copy provider configs with metadata
         # Pulls from two sources:

@@ -864,22 +864,26 @@ type testContextLimitClient struct {
 	limit int
 }
 
-func (c *testContextLimitClient) GetModel()                                    string { return "test:model" }
-func (c *testContextLimitClient) GetProvider()                                  string { return "test" }
-func (c *testContextLimitClient) GetModelContextLimit() (int, error)          { return c.limit, nil }
-func (c *testContextLimitClient) GetLastTPS()                                  float64 { return 0 }
-func (c *testContextLimitClient) GetAverageTPS()                                float64 { return 0 }
-func (c *testContextLimitClient) GetTPSStats()                                 map[string]float64 { return nil }
-func (c *testContextLimitClient) ResetTPSStats()                             {}
-func (c *testContextLimitClient) SupportsVision()                               bool { return false }
-func (c *testContextLimitClient) SupportsConversationalVision()               bool { return false }
-func (c *testContextLimitClient) VisionCapabilities()                        api.VisionCapabilities { return api.VisionCapabilities{} }
-func (c *testContextLimitClient) GetVisionModel()                              string { return "" }
-func (c *testContextLimitClient) GetClientType()                               api.ClientType { return api.TestClientType }
-func (c *testContextLimitClient) SetDebug(bool)                               {}
-func (c *testContextLimitClient) CheckConnection()                             error { return nil }
-func (c *testContextLimitClient) SetModel(string)                             error { return nil }
-func (c *testContextLimitClient) ListModels(context.Context)                  ([]api.ModelInfo, error) { return nil, nil }
+func (c *testContextLimitClient) GetModel() string                   { return "test:model" }
+func (c *testContextLimitClient) GetProvider() string                { return "test" }
+func (c *testContextLimitClient) GetModelContextLimit() (int, error) { return c.limit, nil }
+func (c *testContextLimitClient) GetLastTPS() float64                { return 0 }
+func (c *testContextLimitClient) GetAverageTPS() float64             { return 0 }
+func (c *testContextLimitClient) GetTPSStats() map[string]float64    { return nil }
+func (c *testContextLimitClient) ResetTPSStats()                     {}
+func (c *testContextLimitClient) SupportsVision() bool               { return false }
+func (c *testContextLimitClient) SupportsConversationalVision() bool { return false }
+func (c *testContextLimitClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilities{}
+}
+func (c *testContextLimitClient) GetVisionModel() string        { return "" }
+func (c *testContextLimitClient) GetClientType() api.ClientType { return api.TestClientType }
+func (c *testContextLimitClient) SetDebug(bool)                 {}
+func (c *testContextLimitClient) CheckConnection() error        { return nil }
+func (c *testContextLimitClient) SetModel(string) error         { return nil }
+func (c *testContextLimitClient) ListModels(context.Context) ([]api.ModelInfo, error) {
+	return nil, nil
+}
 func (c *testContextLimitClient) SendChatRequest(context.Context, []api.Message, []api.Tool, string, bool) (*api.ChatResponse, error) {
 	return nil, nil
 }

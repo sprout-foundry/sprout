@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // readAuditEntries reads a JSONL audit log file and returns parsed entries.
@@ -310,7 +310,7 @@ func TestAuditLogger_CdGateDenied(t *testing.T) {
 		workspaceRoot: "/workspace",
 		output:        NewAgentOutputManager(),
 		security:      NewAgentSecurityManager(),
-		shellCwd:     &shellCwdTracker{},
+		shellCwd:      &shellCwdTracker{},
 	}
 	a.SetAuditLogger(logger)
 	defer tools.SetAuditLogger(nil)
@@ -362,7 +362,7 @@ func TestAuditLogger_CdGateAllowed(t *testing.T) {
 		workspaceRoot: "/workspace",
 		output:        NewAgentOutputManager(),
 		security:      NewAgentSecurityManager(),
-		shellCwd:     &shellCwdTracker{},
+		shellCwd:      &shellCwdTracker{},
 	}
 	a.SetAuditLogger(logger)
 	defer tools.SetAuditLogger(nil)
@@ -390,7 +390,7 @@ func TestAuditLogger_CdGateDenied_NilLogger(t *testing.T) {
 		workspaceRoot: "/workspace",
 		output:        NewAgentOutputManager(),
 		security:      NewAgentSecurityManager(),
-		shellCwd:     &shellCwdTracker{},
+		shellCwd:      &shellCwdTracker{},
 	}
 	// No audit logger set - should not panic
 

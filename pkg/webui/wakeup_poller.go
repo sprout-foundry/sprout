@@ -2,7 +2,7 @@ package webui
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -40,7 +40,7 @@ func (ws *ReactWebServer) checkAndResume() {
 		return
 	}
 	if !a.IncrementWakeupResume(cfg.Wakeup) {
-		log.Printf("[wakeup] Budget exhausted — skipping auto-resume")
+		ws.log().Warn("wakeup token budget exhausted; skipping automatic resume")
 		return
 	}
 	notifications := a.DrainNotifications()
@@ -48,24 +48,24 @@ func (ws *ReactWebServer) checkAndResume() {
 		return
 	}
 	msg := agent.FormatWakeupBatch(notifications)
-	log.Printf("[wakeup] Auto-resuming with %d notification(s)", len(notifications))
+	ws.log().Info("automatically resuming wakeup notifications", slog.Int("notification_count", len(notifications)))
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[wakeup] panic in auto-resume goroutine: %v", r)
+				ws.log().Error("automatic resume goroutine panicked", slog.Any("panic", r))
 			}
 		}()
 		tokensBefore := a.GetTotalTokens()
 		result, err := a.ProcessQueryWithContinuity(msg)
 		if err != nil {
-			log.Printf("[wakeup] Auto-resume failed: %v", err)
+			ws.log().Error("automatic resume failed", slog.Any("err", err))
 			return
 		}
 		tokensAfter := a.GetTotalTokens()
 		delta := tokensAfter - tokensBefore
 		if delta > 0 {
 			a.RecordWakeupTokens(delta, cfg.Wakeup)
-			log.Printf("[wakeup] Auto-resume consumed %d tokens (session total: %d)", delta, tokensAfter)
+			ws.log().Info("automatic resume consumed tokens", slog.Int("tokens_consumed", delta), slog.Int("session_tokens", tokensAfter))
 		}
 		_ = result
 	}()

@@ -6,7 +6,7 @@ package webui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 )
 
@@ -24,7 +24,7 @@ func stopRemoteSSHBackend(hostAlias string, remotePID int) error {
 	// false positive (killing an innocent system process) is worse than the
 	// risk of leaving a stale daemon running.
 	if !verifyRemoteSproutPID(hostAlias, remotePID) {
-		log.Printf("[ssh] refusing to kill remote PID %d on %s: process does not appear to be a sprout daemon (PID may have been recycled)", remotePID, hostAlias)
+		webuiLogger.Warn("refusing to stop remote process because it is not a sprout daemon", slog.Int("remote_pid", remotePID), slog.String("host_alias", hostAlias), slog.String("reason", "PID may have been recycled"))
 		return nil
 	}
 

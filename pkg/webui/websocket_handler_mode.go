@@ -8,7 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -50,7 +50,7 @@ import (
 func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.Request) {
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade error (daemon): %v", err)
+		ws.log().Error("WebSocket upgrade failed", slog.String("mode", "daemon"), slog.Any("err", err))
 		return
 	}
 
@@ -59,7 +59,7 @@ func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.
 
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		log.Printf("[SP-118-Mode2] Failed to generate session ID: %v", err)
+		ws.log().Error("WebSocket session ID generation failed", slog.String("mode", "daemon"), slog.Any("err", err))
 		conn.Close()
 		return
 	}
@@ -74,7 +74,7 @@ func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.
 	// Mode 1 defer shape exactly.
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[SP-118-Mode2] WebSocket handler panic: %v", r)
+			ws.log().Error("WebSocket handler panicked", slog.String("mode", "daemon"), slog.String("session_id", sessionID), slog.Any("panic", r))
 			safeConn.WritePanicError(sessionID, "websocket handler", r)
 			ws.cleanupAfterPanicSession(clientID, userID, chatID, sessionID)
 		}
@@ -111,8 +111,7 @@ func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.
 	// Mode 2 has no terminal-displacement notification. The function is
 	// a no-op here by design — calling it would only matter if a
 	// takeover happened, which Mode 2 explicitly does not do.
-	log.Printf("[SP-118-Mode2] Daemon connection accepted for user %s session %s (count=%d)",
-		trackingKey, sessionID, ws.userConnections.Count(trackingKey))
+	ws.log().Info("WebSocket connection accepted", slog.String("mode", "daemon"), slog.String("tracking_key", trackingKey), slog.String("session_id", sessionID), slog.Int("connection_count", ws.userConnections.Count(trackingKey)))
 
 	ws.runConnectionLiveLoop(conn, safeConn, sessionID, clientID, userID, chatID, reattachChatID, afterSeq, true)
 }
@@ -127,7 +126,7 @@ func (ws *ReactWebServer) handleWebSocket_Daemon(w http.ResponseWriter, r *http.
 func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.Request) {
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+		ws.log().Error("WebSocket upgrade failed", slog.String("mode", "agent"), slog.Any("err", err))
 		return
 	}
 
@@ -138,7 +137,7 @@ func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.R
 	// Generate unique session ID for this connection using cryptographically secure random
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		log.Printf("Failed to generate session ID: %v", err)
+		ws.log().Error("WebSocket session ID generation failed", slog.String("mode", "agent"), slog.Any("err", err))
 		conn.Close()
 		return
 	}
@@ -148,7 +147,7 @@ func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.R
 	// Panic recovery for the main handler - moved here so safeConn and sessionID are available
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("WebSocket handler panic: %v", r)
+			ws.log().Error("WebSocket handler panicked", slog.String("mode", "agent"), slog.String("session_id", sessionID), slog.Any("panic", r))
 			safeConn.WritePanicError(sessionID, "websocket handler", r)
 			ws.cleanupAfterPanicAgent(clientID, sessionID)
 		}
@@ -197,8 +196,7 @@ func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.R
 
 		// Conflict! Notify the NEW connection that an existing session
 		// is active and wait for the client to confirm takeover.
-		log.Printf("[SP-118-Mode1] Session conflict for user %s: new session %s vs existing %s",
-			trackingKey, sessionID, existingActive.sessionID)
+		ws.log().Warn("WebSocket session conflict", slog.String("tracking_key", trackingKey), slog.String("new_session_id", sessionID), slog.String("existing_session_id", existingActive.sessionID))
 
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "session_conflict",
@@ -210,8 +208,7 @@ func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.R
 
 		// Block here until the client either confirms takeover or disconnects.
 		if !ws.waitForTakeover(conn, sessionID) {
-			log.Printf("[SP-118-Mode1] New session %s disconnected without confirming takeover for user %s",
-				sessionID, trackingKey)
+			ws.log().Info("WebSocket disconnected without confirming takeover", slog.String("session_id", sessionID), slog.String("tracking_key", trackingKey))
 			return
 		}
 
@@ -227,7 +224,7 @@ func (ws *ReactWebServer) handleWebSocket_Agent(w http.ResponseWriter, r *http.R
 				},
 			})
 			existingActive.safeConn.Close()
-			log.Printf("[SP-118-Mode1] Session %s evicted for user %s", existingActive.sessionID, trackingKey)
+			ws.log().Info("WebSocket session evicted", slog.String("session_id", existingActive.sessionID), slog.String("tracking_key", trackingKey))
 
 			// Also notify terminal WebSocket connections for the same tracking
 			// key so they can show a displacement banner. Terminal sessions
@@ -327,9 +324,9 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 		}
 	}()
 
-	log.Printf("WebSocket client connected: %s", sessionID)
+	ws.log().Info("WebSocket connected", slog.String("session_id", sessionID))
 	if userID != "" {
-		log.Printf("[web] WebSocket user: %s (session %s)", userID, sessionID)
+		ws.log().Info("WebSocket user identified", slog.String("user_id", userID), slog.String("session_id", sessionID))
 	}
 
 	// Send initial connection status
@@ -391,7 +388,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 				continue
 			}
 			if err := safeConn.WriteJSON(ev); err != nil {
-				log.Printf("WebSocket %s write error flushing captured events: %v", sessionID, err)
+				ws.log().Error("WebSocket captured event flush failed", slog.String("session_id", sessionID), slog.Any("err", err))
 				return
 			}
 		}
@@ -399,7 +396,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 
 	// Set up close handler to send disconnect status
 	conn.SetCloseHandler(func(code int, text string) error {
-		log.Printf("WebSocket %s closing with code %d: %s", sessionID, code, text)
+		ws.log().Info("WebSocket closing", slog.String("session_id", sessionID), slog.Int("code", code), slog.String("reason", text))
 		return nil
 	})
 
@@ -417,7 +414,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 		defer close(readDone)
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("WebSocket read goroutine panic recovered: %v", r)
+				ws.log().Error("WebSocket read goroutine panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
 				safeConn.WritePanicError(sessionID, "read goroutine", r)
 				// Mode-specific cleanup. Mode 1 (sprout agent) nukes the
 				// whole clientID; Mode 2 (daemon) only clears this
@@ -445,7 +442,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 				if err != nil {
 					if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
 						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-						log.Printf("WebSocket %s closed: %v", sessionID, err)
+						ws.log().Info("WebSocket closed", slog.String("session_id", sessionID), slog.Any("err", err))
 					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 						// If no message received in 180 seconds (3 minutes), connection is dead.
 						// Chrome pauses background tabs aggressively, freezing timers and
@@ -453,7 +450,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 						// watchdog on the client side to detect the issue and proactively
 						// reconnect before the server kills the connection.
 						if time.Since(lastMessage) > 180*time.Second {
-							log.Printf("WebSocket %s no activity for 180s, closing", sessionID)
+							ws.log().Warn("WebSocket inactive; closing", slog.String("session_id", sessionID), slog.Duration("inactivity", 180*time.Second))
 							return
 						}
 						// Heartbeat timeout, send ping
@@ -461,12 +458,12 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 							"type": "ping",
 							"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 						}); err != nil {
-							log.Printf("WebSocket %s ping failed: %v", sessionID, err)
+							ws.log().Error("WebSocket ping failed", slog.String("session_id", sessionID), slog.Any("err", err))
 							return
 						}
 						continue
 					} else {
-						log.Printf("WebSocket %s read error: %v", sessionID, err)
+						ws.log().Error("WebSocket read failed", slog.String("session_id", sessionID), slog.Any("err", err))
 					}
 					return
 				}
@@ -474,7 +471,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 				// Validate the incoming message
 				msg, err := parseAndValidateMessage(rawMsg)
 				if err != nil {
-					log.Printf("WebSocket %s message validation failed: %v", sessionID, err)
+					ws.log().Warn("WebSocket message validation failed", slog.String("session_id", sessionID), slog.Any("err", err))
 					safeConn.WriteJSON(map[string]interface{}{
 						"type": "error",
 						"data": map[string]string{"message": err.Error()},
@@ -500,19 +497,19 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("WebSocket %s context cancelled", sessionID)
+			ws.log().Debug("WebSocket context cancelled", slog.String("session_id", sessionID))
 			return
 
 		case event := <-eventCh:
 			// Get connection info for this connection
 			connInfoVal, ok := ws.connections.Load(conn)
 			if !ok {
-				log.Printf("WebSocket %s connection info not found, skipping event", sessionID)
+				ws.log().Warn("WebSocket connection info not found; skipping event", slog.String("session_id", sessionID))
 				continue
 			}
 			connInfo, ok := connInfoVal.(*ConnectionInfo)
 			if !ok {
-				log.Printf("WebSocket %s connection info type mismatch, skipping event", sessionID)
+				ws.log().Error("WebSocket connection info type mismatch; skipping event", slog.String("session_id", sessionID))
 				continue
 			}
 
@@ -539,18 +536,16 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 				}
 				if ev.Type == events.EventTypeSecurityApprovalRequest {
 					if data, ok := ev.Data.(map[string]interface{}); ok {
-						log.Printf("[SECURITY] Forwarding security_approval_request to client %s: request_id=%v tool=%s risk=%s",
-							connInfo.ClientID, data["request_id"], data["tool_name"], data["risk_level"])
+						ws.log().Debug("forwarding security approval request", slog.String("client_id", connInfo.ClientID), slog.Any("request_id", data["request_id"]), slog.Any("tool_name", data["tool_name"]), slog.Any("risk_level", data["risk_level"]))
 					}
 				}
 				if ev.Type == events.EventTypeAskUserRequest {
 					if data, ok := ev.Data.(map[string]interface{}); ok {
-						log.Printf("[ASK_USER] Forwarding ask_user_request to client %s: request_id=%v question=%q",
-							connInfo.ClientID, data["request_id"], data["question"])
+						ws.log().Debug("forwarding ask user request", slog.String("client_id", connInfo.ClientID), slog.Any("request_id", data["request_id"]), slog.Any("question", data["question"]))
 					}
 				}
 				if err := safeConn.WriteJSON(ev); err != nil {
-					log.Printf("WebSocket %s write error: %v", sessionID, err)
+					ws.log().Error("WebSocket write failed", slog.String("session_id", sessionID), slog.Any("err", err))
 					return
 				}
 			}

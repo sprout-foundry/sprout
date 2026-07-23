@@ -3,7 +3,7 @@
 package webui
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -105,7 +105,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	// SP-114 Phase 2c: live streaming of /api/command/execute stdout
 	// over the chat session's WebSocket. Chunks arrive in order with
 	// monotonic seq; the final chunk has is_final=true.
-	events.EventTypeCommandOutput:       {},
+	events.EventTypeCommandOutput:        {},
 	events.EventTypeCommandOutputDropped: {},
 }
 
@@ -140,7 +140,7 @@ func isDevBuild() bool {
 func validateOutboundMessageType(msgType string) bool {
 	if msgType == "" {
 		// Empty type is always invalid — should never happen in practice.
-		log.Printf("webui: outbound message with empty type (dropping)")
+		webuiLogger.Warn("dropping outbound message with empty type")
 		return false
 	}
 	if _, ok := allowedOutboundMessageTypes[msgType]; ok {
@@ -150,7 +150,7 @@ func validateOutboundMessageType(msgType string) bool {
 		panic("webui: unknown outbound WebSocket message type: " + msgType +
 			" — add it to allowedOutboundMessageTypes in websocket_outbound_registry.go")
 	}
-	log.Printf("webui: dropping outbound message with unrecognized type %q (add to allowedOutboundMessageTypes if intentional)", msgType)
+	webuiLogger.Warn("dropping outbound message with unrecognized type", slog.String("message_type", msgType), slog.String("remediation", "add to allowedOutboundMessageTypes if intentional"))
 	return false
 }
 

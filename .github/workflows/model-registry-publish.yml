@@ -54,7 +54,6 @@ jobs:
         # providers whose API key is not available in CI).
         env:
           SPROUT_MODEL_REGISTRY_URL: "disabled"
-          SPROUT_MODEL_REGISTRY_URL: "disabled"
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

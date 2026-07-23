@@ -292,34 +292,6 @@ func TestSetupGitMCPServer_EOFStdin(t *testing.T) {
 }
 
 // =============================================================================
-// Test 8: setupGitHubMCPServer with EOF stdin
-// =============================================================================
-
-func TestSetupGitHubMCPServer_EOFStdin(t *testing.T) {
-	_, cleanup := setupMCPTestEnv(t)
-	defer cleanup()
-
-	shouldSkipIfRealMCPConfigExists(t)
-
-	restoreStdin := replaceStdinWithClosedPipe(t)
-	defer restoreStdin()
-
-	mcpCfg := mcp.MCPConfig{
-		Servers: make(map[string]mcp.MCPServerConfig),
-		Enabled: true,
-	}
-
-	err := setupGitHubMCPServer(&mcpCfg, bufio.NewReader(os.Stdin))
-	if err == nil {
-		t.Fatal("expected error from setupGitHubMCPServer with EOF stdin, got nil")
-	}
-	errMsg := strings.ToLower(err.Error())
-	if !strings.Contains(errMsg, "read") && !strings.Contains(errMsg, "eof") {
-		t.Errorf("expected read/eof error, got: %v", err)
-	}
-}
-
-// =============================================================================
 // Test 9: setupCustomMCPServer with EOF stdin
 // =============================================================================
 
@@ -349,94 +321,13 @@ func TestSetupCustomMCPServer_EOFStdin(t *testing.T) {
 }
 
 // =============================================================================
-// Test 10: promptForGitHubToken with EOF stdin
-// =============================================================================
-
-func TestPromptForGitHubToken_EOFStdin(t *testing.T) {
-	// Clear the env var so promptForGitHubToken tries to read from stdin
-	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
-
-	restoreStdin := replaceStdinWithClosedPipe(t)
-	defer restoreStdin()
-
-	token, err := promptForGitHubToken(bufio.NewReader(os.Stdin))
-
-	if err == nil {
-		t.Fatalf("expected error from promptForGitHubToken with EOF stdin, got nil (token=%q)", token)
-	}
-	errMsg := strings.ToLower(err.Error())
-	if !strings.Contains(errMsg, "read") && !strings.Contains(errMsg, "required") {
-		t.Errorf("expected read or required error, got: %v", err)
-	}
-}
-
-// =============================================================================
-// Test 11: promptForGitHubToken with env var set
-// =============================================================================
-
-func TestPromptForGitHubToken_EmptyTokenInput(t *testing.T) {
-	// When GITHUB_PERSONAL_ACCESS_TOKEN is set, promptForGitHubToken returns it
-	// without reading stdin. Test that behavior when env var is set.
-	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "test-token-12345")
-
-	token, err := promptForGitHubToken(bufio.NewReader(os.Stdin))
-	if err != nil {
-		t.Fatalf("expected no error when env var is set, got: %v", err)
-	}
-	if token != "test-token-12345" {
-		t.Errorf("expected token from env var, got %q", token)
-	}
-}
-
-// =============================================================================
-// Test 12: promptForGitHubToken actually writes to shell profile
-// =============================================================================
-
-func TestPromptForGitHubToken_WritesToShellProfile(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-	t.Setenv("SHELL", "/bin/zsh")
-	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
-
-	// Pre-create an empty .zshrc so detectShellProfilePath returns it.
-	profilePath := filepath.Join(tmp, ".zshrc")
-	if err := os.WriteFile(profilePath, []byte(""), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Provide stdin: token line + "y" confirmation line.
-	stdin := strings.NewReader("ghp_test_token\ny\n")
-
-	token, err := promptForGitHubToken(bufio.NewReader(stdin))
-	if err != nil {
-		t.Fatalf("promptForGitHubToken() returned error: %v", err)
-	}
-	if token != "ghp_test_token" {
-		t.Errorf("expected token 'ghp_test_token', got %q", token)
-	}
-
-	content, err := os.ReadFile(profilePath)
-	if err != nil {
-		t.Fatalf("failed to read profile after write: %v", err)
-	}
-	body := string(content)
-
-	if !strings.Contains(body, `export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_test_token"`) {
-		t.Errorf("expected export line in profile, got:\n%s", body)
-	}
-	if !strings.Contains(body, "# sprout-managed: GITHUB_PERSONAL_ACCESS_TOKEN") {
-		t.Errorf("expected sprout-managed marker in profile, got:\n%s", body)
-	}
-}
-
-// =============================================================================
 // guidedSetupFor dispatch tests
 //
-// These verify that the four rich guided setup functions (Git, GitHub,
-// Playwright, Chrome DevTools) are reachable from the `mcp add` flow —
-// the picker shows these template IDs and runMCPAdd dispatches via
-// guidedSetupFor. Each template ID that the registry exposes for these
-// servers must map to the corresponding guided flow.
+// These verify that the three rich guided setup functions (Git, Playwright,
+// Chrome DevTools) are reachable from the `mcp add` flow — the picker shows
+// these template IDs and runMCPAdd dispatches via guidedSetupFor. Each
+// template ID that the registry exposes for these servers must map to the
+// corresponding guided flow.
 // =============================================================================
 
 func TestGuidedSetupFor_AllTemplateIDsDispatched(t *testing.T) {
@@ -448,9 +339,6 @@ func TestGuidedSetupFor_AllTemplateIDsDispatched(t *testing.T) {
 	}{
 		{"git"},
 		{"git-uvx"},
-		{"github"},
-		{"github-remote"},
-		{"github-docker"},
 		{"playwright"},
 		{"chrome-devtools"},
 	}
@@ -478,20 +366,20 @@ func TestGuidedSetupFor_GenericTemplateIDsHaveNoGuidedFlow(t *testing.T) {
 }
 
 func TestGuidedSetupFor_EveryGuidedSetupFunctionIsReachable(t *testing.T) {
-	// All four guided setup functions must be reachable AND mapped to the
+	// All three guided setup functions must be reachable AND mapped to the
 	// correct function. Build a set of the functions reached across all known
-	// guided template IDs and confirm each of the four setup functions appears
-	// at least once. We identify the function by a distinctive install-method
-	// option string (printed via promptInstallMethod -> fmt, which is reliably
-	// captured) rather than the banner, since the banner is printed via
-	// differing mechanisms (console.GlyphInfo vs fmt.Println) across flows.
+	// guided template IDs and confirm each of the three setup functions
+	// appears at least once. We identify the function by a distinctive
+	// install-method option string (printed via promptInstallMethod -> fmt,
+	// which is reliably captured) rather than the banner, since the banner
+	// is printed via differing mechanisms (console.GlyphInfo vs fmt.Println)
+	// across flows.
 	cases := []struct {
 		templateID string
 		wantOption string // distinctive substring in the captured install picker
 		wantName   string // logical name for the seen-set
 	}{
 		{"git", "uvx (recommended)", "git"},
-		{"github", "GitHub Remote MCP (OAuth)", "github"},
 		{"playwright", "Official Playwright MCP Server", "playwright"},
 		{"chrome-devtools", "Default settings (recommended)", "chrome-devtools"},
 	}
@@ -513,7 +401,7 @@ func TestGuidedSetupFor_EveryGuidedSetupFunctionIsReachable(t *testing.T) {
 		}
 		seen[tc.wantName] = true
 	}
-	for _, name := range []string{"git", "github", "playwright", "chrome-devtools"} {
+	for _, name := range []string{"git", "playwright", "chrome-devtools"} {
 		if !seen[name] {
 			t.Errorf("guided setup function %q was never reached by any template ID", name)
 		}
@@ -522,7 +410,7 @@ func TestGuidedSetupFor_EveryGuidedSetupFunctionIsReachable(t *testing.T) {
 
 // =============================================================================
 // Direct coverage: setupPlaywrightMCPServer & setupChromeDevToolsMCPServer
-// with EOF stdin (mirrors the existing setupGit/setupGitHub EOF tests).
+// with EOF stdin (mirrors the existing setupGit EOF test).
 // =============================================================================
 
 func TestSetupPlaywrightMCPServer_EOFStdin(t *testing.T) {

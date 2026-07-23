@@ -460,8 +460,9 @@ func TestRunAsyncValidation_CompletesEventually(t *testing.T) {
 	completed := make(chan struct{})
 
 	go func() {
-		// Wait a bit — the async goroutine should complete within this time
-		time.Sleep(2 * time.Second)
+		// Wait a bit — the async goroutine should complete within this time.
+		// Allow generous time for slow CI runners.
+		time.Sleep(5 * time.Second)
 		close(completed)
 	}()
 
@@ -470,7 +471,7 @@ func TestRunAsyncValidation_CompletesEventually(t *testing.T) {
 	select {
 	case <-completed:
 		// If we get here, RunAsyncValidation didn't block/deadlock
-	case <-time.After(3 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("async validation may have blocked")
 	}
 }

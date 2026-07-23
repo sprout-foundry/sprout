@@ -96,6 +96,7 @@ jobs:
 
     - name: Display coverage summary
       if: always()
+      continue-on-error: true
       run: |
         if [ -f /tmp/sprout-coverage.out ]; then
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
@@ -118,6 +119,7 @@ jobs:
 
     - name: Generate coverage function details
       if: always()
+      continue-on-error: true
       run: |
         if [ -f /tmp/sprout-coverage.out ]; then
           go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt

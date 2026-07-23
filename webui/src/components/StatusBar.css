@@ -185,3 +185,9 @@
     transition: none;
   }
 }
+
+.statusbar-item-auto-tier {
+  color: var(--accent-primary, #61afef);
+  gap: 4px;
+}
+

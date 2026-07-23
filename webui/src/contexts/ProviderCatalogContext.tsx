@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { supportsSettings } from '../config/mode';
 import { ApiService, type ProviderOption } from '../services/api';
 import { debugLog } from '../utils/log';
@@ -16,6 +16,12 @@ interface ProviderCatalogContextValue {
    *  is empty or the id is unknown — keeps the call site safe for the
    *  pre-fetch and offline-disconnected states. */
   getProviderName: (id: string | undefined | null) => string;
+  /** Force a catalog load when the caller knows it may be stale (e.g. modal
+   *  opened during a disconnect, or tab activated after a cold start).
+   *  No-op when data is already present, loading is in-flight, or the
+   *  connection is down. Callers should invoke from useEffect mount or
+   *  user-action handlers such as modal-open and tab-activate. */
+  ensureLoaded: () => void;
 }
 
 const EMPTY_PROVIDERS: ProviderOption[] = [];
@@ -25,10 +31,17 @@ const FALLBACK_VALUE: ProviderCatalogContextValue = {
   isLoading: false,
   currentProvider: '',
   currentModel: '',
+  /* eslint-disable @typescript-eslint/no-empty-function --
+     Fallthrough no-ops used only when the provider isn't mounted. They
+     satisfy the context shape so consumers (e.g. useProviderCatalog()
+     during the brief disconnected render) never crash on `undefined()`.
+     The real fetch logic lives in ProviderCatalogProvider below. */
   refresh: () => {},
   // Without a catalog, return the raw id — consumers (e.g. status bar)
   // already treat that as a safe baseline rather than crashing.
   getProviderName: (id) => id ?? '',
+  ensureLoaded: () => {},
+  /* eslint-enable @typescript-eslint/no-empty-function */
 };
 
 const ProviderCatalogContext = createContext<ProviderCatalogContextValue>(FALLBACK_VALUE);
@@ -62,15 +75,50 @@ export function ProviderCatalogProvider({ isConnected, children }: ProviderCatal
   const [currentModel, setCurrentModel] = useState('');
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Grace timer for Bug A: prevents catalog blanking on brief WS disconnects.
+  // If the connection drops for < 1500 ms we keep the stale data; only a
+  // persistent disconnect clears it.
+  const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const refresh = useCallback(() => setRefreshTick((n) => n + 1), []);
 
+  // Bump the tick only when connected, the catalog is empty, and no fetch is
+  // already in-flight. This is the primary "I think the catalog is stale"
+  // signal — call from modal-open, tab-activate, or explicit user refresh.
+  // `refreshTick` is intentionally read so this callback closes over the
+  // current tick value (which the bump itself just incremented).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ensureLoaded = useCallback(() => {
+    if (providers.length === 0 && !isLoading && isConnected) {
+      setRefreshTick((n) => n + 1);
+    }
+  }, [providers.length, isLoading, isConnected]);
+
   useEffect(() => {
+    // We clear the catalog on disconnect so a stale server-side provider
+    // list doesn't leak past a reconnect. Without this, a backend restart
+    // between WS flips could leave the UI showing providers that no longer
+    // resolve. The grace timer bounds the flapping window.
     if (!isConnected || !supportsSettings) {
-      setProviders(EMPTY_PROVIDERS);
-      setCurrentProvider('');
-      setCurrentModel('');
+      // Cancel any pending reconnect timer and schedule the actual clear.
+      if (disconnectTimerRef.current !== null) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+      disconnectTimerRef.current = setTimeout(() => {
+        setProviders(EMPTY_PROVIDERS);
+        setCurrentProvider('');
+        setCurrentModel('');
+      }, 1500);
       return;
     }
+
+    // Connected: cancel any pending clear and kick off the fetch.
+    if (disconnectTimerRef.current !== null) {
+      clearTimeout(disconnectTimerRef.current);
+      disconnectTimerRef.current = null;
+    }
+
     let cancelled = false;
     setIsLoading(true);
     ApiService.getInstance()
@@ -90,6 +138,11 @@ export function ProviderCatalogProvider({ isConnected, children }: ProviderCatal
       });
     return () => {
       cancelled = true;
+      // Clean up any pending disconnect timer if the effect unmounts.
+      if (disconnectTimerRef.current !== null) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
     };
   }, [isConnected, refreshTick]);
 
@@ -110,8 +163,9 @@ export function ProviderCatalogProvider({ isConnected, children }: ProviderCatal
       currentModel,
       refresh,
       getProviderName,
+      ensureLoaded,
     }),
-    [providers, isLoading, currentProvider, currentModel, refresh, getProviderName],
+    [providers, isLoading, currentProvider, currentModel, refresh, getProviderName, ensureLoaded],
   );
 
   return <ProviderCatalogContext.Provider value={value}>{children}</ProviderCatalogContext.Provider>;

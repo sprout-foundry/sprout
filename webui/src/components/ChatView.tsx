@@ -3,6 +3,8 @@ import { ChevronDown, Download } from 'lucide-react';
 import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { isCloud } from '../config/mode';
+import { getBootstrapConfig } from '../bootstrapAdapter';
 import { supportsExport, supportsSSH } from '../config/mode';
 import { rewindQuery, executeCommand } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
@@ -363,6 +365,20 @@ function Chat(props: ChatProps): JSX.Element {
       data-testid="chat-shell"
     >
       <div className="chat-main" data-testid="chat-main">
+        {isCloud && getBootstrapConfig().user?.tier === 'auto' && (
+          <div
+            style={{
+              padding: '6px 12px',
+              background: 'var(--bg-tertiary)',
+              borderBottom: '1px solid var(--border-color)',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              textAlign: 'center',
+            }}
+          >
+            Auto mode — powered by shared compute. Quality may vary. Upgrade or add an API key for guaranteed performance.
+          </div>
+        )}
         {/* Export button — shown when a session is active AND export is
             supported (export requires a local filesystem; in cloud mode it
             404s, so gate it on supportsExport). */}

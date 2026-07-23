@@ -643,7 +643,15 @@ func TestResolveAbsPath_FallsBackToCwd(t *testing.T) {
 	os.Chdir(tmp)
 
 	resolved := ct.resolveAbsPath("file.go")
-	expected := filepath.Join(tmp, "file.go")
+	// On macOS, t.TempDir() returns /var/folders/... (symlink to /private/var/...)
+	// but os.Getwd() (used by resolveAbsPath) returns the resolved /private/var/...
+	// form. Resolve the expected path to match.
+	expected, err := filepath.EvalSymlinks(filepath.Join(tmp, "file.go"))
+	if err != nil {
+		// File doesn't exist; resolve just the directory.
+		resolvedDir, _ := filepath.EvalSymlinks(tmp)
+		expected = filepath.Join(resolvedDir, "file.go")
+	}
 	if resolved != expected {
 		t.Errorf("expected CWD-based resolution %q, got %q", expected, resolved)
 	}

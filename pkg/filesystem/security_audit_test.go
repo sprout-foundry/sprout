@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -300,6 +301,14 @@ func TestSafeResolvePathForWriteWithBypass_NilLoggerNoPanic(t *testing.T) {
 }
 
 func TestSafeResolvePath_TmpPathNoAudit(t *testing.T) {
+	// On macOS, os.TempDir() returns /var/folders/... which is a symlink
+	// to /private/var/folders/... and /var is in systemPathPrefixes. This
+	// test is only valid on platforms where os.TempDir() is NOT under a
+	// sensitive path prefix.
+	if dir := os.TempDir(); strings.HasPrefix(filepath.Clean(dir), "/var") {
+		t.Skip("os.TempDir() is under /var on macOS — classified as Sensitive")
+	}
+
 	// Create a simple audit logger wrapper that captures entries
 	var entries []AuditEntry
 	logger := &capturingAuditLogger{entries: &entries}

@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -198,7 +198,7 @@ func (ws *ReactWebServer) validateAndSetCredential(cm *configuration.Manager, pr
 
 	// Sync the Manager's in-memory cache with the backend
 	if err := cm.RefreshAPIKeys(); err != nil {
-		log.Printf("[config] Warning: failed to refresh API keys cache: %v", err)
+		ws.log().Warn("failed to refresh API key cache", slog.Any("err", err))
 		// Continue anyway - the key is saved in backend, just cache is stale
 	}
 
@@ -531,7 +531,7 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsDelete(w http.ResponseWrit
 
 	// Sync the Manager's in-memory cache with the backend after deletion
 	if err := cm.RefreshAPIKeys(); err != nil {
-		log.Printf("[config] Warning: failed to refresh API keys after deletion: %v", err)
+		ws.log().Warn("failed to refresh API keys after deletion", slog.Any("err", err))
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -585,7 +585,7 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPoolGet(w http.ResponseWri
 	// Load the key pool
 	result, err := credentials.LoadKeyPool(provider)
 	if err != nil {
-		log.Printf("[credentials] Warning: failed to load key pool for %q: %v", provider, err)
+		ws.log().Warn("failed to load credential key pool", slog.String("provider", provider), slog.Any("err", err))
 		result = &credentials.KeyPoolResult{Pool: &credentials.KeyPool{Keys: []string{}}}
 	}
 
@@ -669,13 +669,13 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPoolPost(w http.ResponseWr
 
 	// Sync the Manager's in-memory cache with the backend after pool modification
 	if err := cm.RefreshAPIKeys(); err != nil {
-		log.Printf("[credentials] Warning: failed to refresh API keys after pool addition: %v", err)
+		ws.log().Warn("failed to refresh API keys after pool addition", slog.Any("err", err))
 	}
 
 	// Get the updated pool size
 	poolSize, err := credentials.GetPoolSize(provider)
 	if err != nil {
-		log.Printf("[credentials] Warning: failed to get pool size for %q: %v", provider, err)
+		ws.log().Warn("failed to get credential pool size", slog.String("provider", provider), slog.Any("err", err))
 		poolSize = -1
 	}
 
@@ -756,13 +756,13 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPoolDelete(w http.Response
 
 	// Sync the Manager's in-memory cache with the backend after pool modification
 	if err := cm.RefreshAPIKeys(); err != nil {
-		log.Printf("[credentials] Warning: failed to refresh API keys after pool removal: %v", err)
+		ws.log().Warn("failed to refresh API keys after pool removal", slog.Any("err", err))
 	}
 
 	// Get the updated pool size
 	poolSize, err := credentials.GetPoolSize(provider)
 	if err != nil {
-		log.Printf("[credentials] Warning: failed to get pool size for %q: %v", provider, err)
+		ws.log().Warn("failed to get credential pool size", slog.String("provider", provider), slog.Any("err", err))
 		poolSize = -1
 	}
 

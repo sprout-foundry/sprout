@@ -6,7 +6,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -144,7 +144,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	cs := ctx.getChatSession(chatID)
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionWorktreeSet: set worktree %q for chat session %s", req.WorktreePath, chatID)
+	ws.log().Info("set chat session worktree", slog.String("worktree_path", req.WorktreePath), slog.String("chat_id", chatID))
 
 	// Notify frontend if the workspace root was reset to daemon root.
 	if didResetWorkspace {
@@ -262,7 +262,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 		"source":                  "worktree_switch",
 	})
 
-	log.Printf("handleAPIChatSessionWorktreeSwitch: switched chat session %s to worktree %s", chatID, absPath)
+	ws.log().Info("switched chat session worktree", slog.String("chat_id", chatID), slog.String("worktree_path", absPath))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -444,7 +444,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		ws.mutex.Unlock()
 		// Clean up the orphan worktree that was created before the conflict
 		if removeErr := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
-			log.Printf("handleAPIChatSessionCreateInWorktree: warning: failed to clean up orphan worktree %q: %v", worktreePath, removeErr)
+			ws.log().Warn("failed to clean up orphan worktree", slog.String("worktree_path", worktreePath), slog.Any("err", removeErr))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
@@ -490,8 +490,11 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		})
 	}
 
-	log.Printf("handleAPIChatSessionCreateInWorktree: created chat session %s (%s) with worktree %s for client %s",
-		chatID, name, worktreePath, clientID)
+	ws.log().Info("created chat session with worktree",
+		slog.String("chat_id", chatID),
+		slog.String("name", name),
+		slog.String("worktree_path", worktreePath),
+		slog.String("client_id", clientID))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

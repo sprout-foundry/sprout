@@ -54,10 +54,20 @@ func TestSteerCommand_SafeCommandExecuted(t *testing.T) {
 	// for safe commands doesn't call rejectCommandIntent.
 }
 
-// TestSteerCommand_UnsafeCommandRejected verifies that unsafe commands like
-// /commit and /clear are rejected when submitted via steer.
+// TestSteerCommand_UnsafeCommandRejected verifies that genuinely-destructive
+// commands like /commit are rejected when submitted via steer.
+//
+// Note: /clear is intentionally NOT in this list. ClearCommand calls
+// RotateSession(), which persists the prior session via SaveStateScoped
+// before clearing in-memory state — the prior conversation is restorable
+// via /sessions. Treating /clear as "destructive" was an over-broad
+// classification that broke the WebUI's "New Session" button (the
+// canonical "start a new conversation" action for any chat UI). It now
+// implements SteerCapable and SafeDuringSteer() == true so the WebUI
+// dedicated command surface (/api/command/execute) and the CLI steer
+// panel both accept it.
 func TestSteerCommand_UnsafeCommandRejected(t *testing.T) {
-	unsafeCommands := []string{"/commit", "/clear"}
+	unsafeCommands := []string{"/commit"}
 
 	for _, cmd := range unsafeCommands {
 		t.Run(strings.TrimPrefix(cmd, "/"), func(t *testing.T) {

@@ -2,81 +2,85 @@
   "name": "deepinfra",
   "endpoint": "https://api.deepinfra.com/v1/openai/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "DEEPINFRA_API_KEY"
-  },
+  "type": "bearer",
+  "env_var": "DEEPINFRA_API_KEY"
+},
   "headers": {},
   "defaults": {
-    "model": "meta-llama/Llama-3.3-70B-Instruct",
-    "temperature": 0.7,
-    "max_tokens": -1,
-    "top_p": 1.0
-  },
+  "model": "meta-llama/Llama-3.3-70B-Instruct",
+  "temperature": 0.7,
+  "max_tokens": -1,
+  "top_p": 1.0
+},
   "message_conversion": {
-    "include_tool_call_id": true,
-    "convert_tool_role_to_user": false,
-    "reasoning_content_field": ""
-  },
+  "include_tool_call_id": true,
+  "convert_tool_role_to_user": false,
+  "reasoning_content_field": ""
+},
   "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 320000,
-    "done_marker": "[DONE]"
-  },
+  "format": "sse",
+  "chunk_timeout_ms": 320000,
+  "done_marker": "[DONE]"
+},
   "models": {
-    "default_context_limit": 131072,
-    "model_overrides": {
-      "meta-llama/Llama-3.3-70B-Instruct": 131072,
-      "meta-llama/Llama-3.1-405B-Instruct": 131072,
-      "meta-llama/Llama-3.1-70B-Instruct": 131072,
-      "meta-llama/Llama-3.1-8B-Instruct": 131072,
-      "meta-llama/Llama-3-70B-Instruct": 8192,
-      "mistralai/Mistral-Small-24B-Instruct-2501": 32768,
-      "mistralai/Mistral-7B-Instruct-v0.3": 32768,
-      "Qwen/Qwen2.5-72B-Instruct": 32768,
-      "microsoft/WizardLM-2-8x22B": 65536
-    },
-    "pattern_overrides": [
-      {
-        "pattern": "meta-llama/Llama-3\\.3.*",
-        "context_limit": 131072
-      },
-      {
-        "pattern": "meta-llama/Llama-3\\.1.*",
-        "context_limit": 131072
-      },
-      {
-        "pattern": "meta-llama/Llama-3.*",
-        "context_limit": 8192
-      },
-      {
-        "pattern": "mistralai/.*",
-        "context_limit": 32768
-      },
-      {
-        "pattern": "Qwen/.*",
-        "context_limit": 32768
-      }
-    ],
-    "supports_vision": true,
-    "vision_model": "google/gemma-3-27b-it",
-    "default_model": "meta-llama/Llama-3.3-70B-Instruct",
-    "available_models": []
-  },
+  "default_context_limit": 131072,
+  "model_overrides": {
+  "meta-llama/Llama-3.3-70B-Instruct": 131072,
+  "meta-llama/Llama-3.1-405B-Instruct": 131072,
+  "meta-llama/Llama-3.1-70B-Instruct": 131072,
+  "meta-llama/Llama-3.1-8B-Instruct": 131072,
+  "meta-llama/Llama-3-70B-Instruct": 8192,
+  "mistralai/Mistral-Small-24B-Instruct-2501": 32768,
+  "mistralai/Mistral-7B-Instruct-v0.3": 32768,
+  "Qwen/Qwen2.5-72B-Instruct": 32768,
+  "microsoft/WizardLM-2-8x22B": 65536
+},
+  "pattern_overrides": [
+  {
+  "pattern": "meta-llama/Llama-3\\.3.*",
+  "context_limit": 131072
+},
+  {
+  "pattern": "meta-llama/Llama-3\\.1.*",
+  "context_limit": 131072
+},
+  {
+  "pattern": "meta-llama/Llama-3.*",
+  "context_limit": 8192
+},
+  {
+  "pattern": "mistralai/.*",
+  "context_limit": 32768
+},
+  {
+  "pattern": "Qwen/.*",
+  "context_limit": 32768
+}
+],
+  "supports_vision": true,
+  "vision_model": "google/gemma-3-27b-it",
+  "default_model": "meta-llama/Llama-3.3-70B-Instruct",
+  "available_models": [],
+  "default_model_patterns": [
+  "deepseek*instruct",
+  "deepseek"
+]
+},
   "retry": {
-    "max_attempts": 3,
-    "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
-    "max_delay_ms": 30000,
-    "retryable_errors": [
-      "rate_limit_exceeded",
-      "temporary_error",
-      "timeout"
-    ]
-  },
+  "max_attempts": 3,
+  "base_delay_ms": 1000,
+  "backoff_multiplier": 2.0,
+  "max_delay_ms": 30000,
+  "retryable_errors": [
+  "rate_limit_exceeded",
+  "temporary_error",
+  "timeout"
+]
+},
   "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
-    "currency": "USD"
-  },
+  "input_token_cost": 0.0,
+  "output_token_cost": 0.0,
+  "currency": "USD"
+},
   "display_name": "DeepInfra"
 }

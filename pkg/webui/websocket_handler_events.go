@@ -5,7 +5,7 @@ package webui
 // Package webui: WebSocket event forwarding and message dispatch (split from websocket_handler.go)
 
 import (
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -55,8 +55,7 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 		// browser session, not broadcasting state.
 		if strings.TrimSpace(targetClientID) != strings.TrimSpace(connInfo.ClientID) {
 			if isSecurityScopedEvent(event.Type) {
-				log.Printf("[SECURITY] Dropping %s event: payload client_id=%q does not match connection client_id=%q (request_id=%v)",
-					event.Type, strings.TrimSpace(targetClientID), connInfo.ClientID, data["request_id"])
+				ws.log().Warn("dropping event with mismatched client", slog.String("event_type", string(event.Type)), slog.String("payload_client_id", strings.TrimSpace(targetClientID)), slog.String("connection_client_id", connInfo.ClientID), slog.Any("request_id", data["request_id"]))
 				return false
 			}
 			// Allow on multi-tab match: either this connection's primary
@@ -152,7 +151,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 	case AllowedMessageTypePause:
 		// Tab backgrounded — keep any in-flight query running in the background
 		// instead of letting the heartbeat monitor cancel it on staleness.
-		log.Printf("[lifecycle] client %s paused (backgrounded) — keeping any active query alive", clientID)
+		ws.log().Info("client paused; keeping active query alive", slog.String("client_id", clientID))
 		ws.setClientPaused(clientID, true)
 
 	case AllowedMessageTypeResume:
@@ -172,14 +171,14 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			return d.Validate()
 		})
 		if err != nil {
-			log.Printf("WebSocket %s invalid subscribe data: %v", sessionID, err)
+			ws.log().Warn("invalid WebSocket subscribe data", slog.String("session_id", sessionID), slog.Any("err", err))
 			safeConn.WriteJSON(map[string]interface{}{
 				"type": "error",
 				"data": map[string]string{"message": err.Error()},
 			})
 			return
 		}
-		log.Printf("WebSocket client subscribed to events: %v chat_ids: %v channel: %s", data.Events, data.ChatIDs, data.Channel)
+		ws.log().Info("WebSocket client subscribed", slog.Any("events", data.Events), slog.Any("chat_ids", data.ChatIDs), slog.String("channel", data.Channel))
 
 		// Register chat subscriptions so events for these chats fan out
 		// to this connection even when the originating clientID differs
@@ -335,6 +334,6 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		// SP-046: session_takeover is expected only during the conflict
 		// wait loop. If it arrives during normal message dispatch, log
 		// and ignore — there is nothing to do.
-		log.Printf("[SP-118-Mode1] session_takeover received for session %s outside of conflict state, ignoring", sessionID)
+		ws.log().Warn("session takeover received outside conflict state; ignoring", slog.String("session_id", sessionID))
 	}
 }

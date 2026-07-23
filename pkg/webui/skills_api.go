@@ -5,7 +5,7 @@ package webui
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -125,7 +125,7 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 		results, err = skills.InstallFromRegistry(ctx, req.Source, opts)
 	}
 	if err != nil {
-		log.Printf("handleAPIInstallSkill: %v", err)
+		ws.log().Error("failed to install skill", slog.Any("err", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -133,7 +133,7 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 	// without requiring a sprout restart.
 	if ws.agent != nil {
 		if refreshErr := ws.agent.RefreshSkills(); refreshErr != nil {
-			log.Printf("[skills] installed but config reload failed: %v", refreshErr)
+			ws.log().Warn("skill installed but reload failed", slog.Any("err", refreshErr))
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -162,14 +162,14 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 	defer cancel()
 	results, err := skills.Update(ctx, req.ID, skills.InstallOptions{Force: true})
 	if err != nil {
-		log.Printf("handleAPIUpdateSkill: %v", err)
+		ws.log().Error("failed to update skill", slog.Any("err", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// Hot-reload: pick up any frontmatter changes from the updated skill.
 	if ws.agent != nil {
 		if refreshErr := ws.agent.RefreshSkills(); refreshErr != nil {
-			log.Printf("[skills] updated but config reload failed: %v", refreshErr)
+			ws.log().Warn("skill updated but reload failed", slog.Any("err", refreshErr))
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -195,7 +195,7 @@ func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if err := skills.Uninstall(req.ID); err != nil {
-		log.Printf("handleAPIRemoveSkill: %v", err)
+		ws.log().Error("failed to remove skill", slog.Any("err", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -203,7 +203,7 @@ func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Re
 	// no longer appears in list_skills without a restart.
 	if ws.agent != nil {
 		if refreshErr := ws.agent.RefreshSkills(); refreshErr != nil {
-			log.Printf("[skills] removed but config reload failed: %v", refreshErr)
+			ws.log().Warn("skill removed but reload failed", slog.Any("err", refreshErr))
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

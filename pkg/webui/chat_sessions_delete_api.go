@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -151,7 +151,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	}
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionsDelete: deleted chat session %s for client %s", chatID, clientID)
+	ws.log().Info("deleted chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
 
 	// Safety check: verify no other chat session uses this worktree path
 	if req.RemoveWorktree && worktreePath != "" {
@@ -186,16 +186,18 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 				removeCmd := ws.gitCommandForWorkspace(absWorkspace, "worktree", "remove", absWorktree)
 				removeOutput, removeErr := removeCmd.CombinedOutput()
 				if removeErr != nil {
-					log.Printf("handleAPIChatSessionsDelete: failed to remove worktree %s: %v\nOutput: %s",
-						absWorktree, removeErr, string(removeOutput))
+					ws.log().Error("failed to remove chat session worktree",
+						slog.String("worktree_path", absWorktree),
+						slog.Any("err", removeErr),
+						slog.String("output", string(removeOutput)))
 					resp["worktree_removed"] = false
 					resp["worktree_error"] = string(removeOutput)
 				} else {
-					log.Printf("handleAPIChatSessionsDelete: removed worktree %s for chat session %s", absWorktree, chatID)
+					ws.log().Info("removed chat session worktree", slog.String("worktree_path", absWorktree), slog.String("chat_id", chatID))
 					resp["worktree_removed"] = true
 				}
 			} else {
-				log.Printf("handleAPIChatSessionsDelete: skipping worktree removal, %s is the current workspace", absWorktree)
+				ws.log().Warn("skipping removal of current workspace", slog.String("worktree_path", absWorktree))
 				resp["worktree_error"] = "Cannot remove the current workspace"
 			}
 		}
@@ -279,7 +281,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionsDeleteAll: deleted %d chat sessions for client %s, switched to default %s", deletedCount, clientID, defaultChatID)
+	ws.log().Info("deleted chat sessions and switched to default", slog.Int("deleted_count", deletedCount), slog.String("client_id", clientID), slog.String("default_chat_id", defaultChatID))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

@@ -5,7 +5,7 @@ package webui
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -71,7 +71,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 	ctx.ChatSessions[chatID] = cs
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionsCreate: created chat session %s (%s) for client %s", chatID, name, clientID)
+	ws.log().Info("created chat session", slog.String("chat_id", chatID), slog.String("name", name), slog.String("client_id", clientID))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

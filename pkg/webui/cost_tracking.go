@@ -5,7 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -56,7 +56,7 @@ func GetCostStore() *CostStore {
 	costStoreOnce.Do(func() {
 		configDir, err := configuration.GetConfigDir()
 		if err != nil {
-			log.Printf("coststore: failed to get config dir: %v", err)
+			webuiLogger.Error("cost store config directory lookup failed", slog.Any("err", err))
 			// Fallback to home directory
 			homeDir, _ := os.UserHomeDir()
 			configDir = filepath.Join(homeDir, ".sprout")
@@ -65,7 +65,7 @@ func GetCostStore() *CostStore {
 			filePath: filepath.Join(configDir, "cost_history.json"),
 		}
 		if err := costStore.load(); err != nil {
-			log.Printf("coststore: failed to load existing records: %v", err)
+			webuiLogger.Error("cost store existing record load failed", slog.Any("err", err))
 		}
 	})
 	return costStore

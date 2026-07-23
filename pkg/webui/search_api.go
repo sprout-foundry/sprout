@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -161,7 +161,7 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 			http.Error(w, "Search timed out", http.StatusRequestTimeout)
 			return
 		}
-		log.Printf("handleAPIQuerySearch: search error: %v", err)
+		ws.log().Error("search failed", slog.Any("err", err))
 		http.Error(w, fmt.Sprintf("Search failed: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -215,8 +215,10 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 		// Check context deadline (hard timeout enforcement)
 		select {
 		case <-ctx.Done():
-			log.Printf("performSearch: context done after walking %d files (found %d matches): %v",
-				filesWalked, totalMatches, ctx.Err())
+			ws.log().Debug("search context ended",
+				slog.Int("files_walked", filesWalked),
+				slog.Int("matches", totalMatches),
+				slog.Any("err", ctx.Err()))
 			return ctx.Err()
 		default:
 		}
@@ -231,7 +233,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 		// Enforce max file count to prevent runaway CPU on massive repos
 		if !d.IsDir() && filesWalked >= searchMaxFileCount {
 			truncated = true
-			log.Printf("performSearch: file count limit reached (%d files), stopping search", searchMaxFileCount)
+			ws.log().Warn("search file count limit reached", slog.Int("file_limit", searchMaxFileCount))
 			return filepath.SkipAll
 		}
 
@@ -282,7 +284,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 		// Search in this file
 		fileResults, matchCount, err := ws.searchFile(path, pattern, contextLines)
 		if err != nil {
-			log.Printf("Error searching file %s: %v", path, err)
+			ws.log().Warn("failed to search file", slog.String("path", path), slog.Any("err", err))
 			return nil
 		}
 
@@ -441,7 +443,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	// Perform replace
 	changes, err := ws.performReplace(ws.resolveClientID(r), workspaceRoot, req, pattern)
 	if err != nil {
-		log.Printf("handleAPIQuerySearchReplace: replace error: %v", err)
+		ws.log().Error("search replacement failed", slog.Any("err", err))
 		http.Error(w, fmt.Sprintf("Replace failed: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -469,12 +471,12 @@ func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req Rep
 
 		// Open file, skipping files that exceed the read size limit
 		if info, statErr := os.Stat(absFilePath); statErr == nil && info.Size() > maxFileReadSize {
-			log.Printf("Skipping file %s: size %d exceeds max read size %d", absFilePath, info.Size(), maxFileReadSize)
+			ws.log().Debug("skipping oversized file during replacement", slog.String("path", absFilePath), slog.Int64("size", info.Size()), slog.Int64("max_size", maxFileReadSize))
 			continue
 		}
 		content, err := os.ReadFile(absFilePath)
 		if err != nil {
-			log.Printf("Error reading file %s: %v", absFilePath, err)
+			ws.log().Warn("failed to read file during replacement", slog.String("path", absFilePath), slog.Any("err", err))
 			continue
 		}
 
@@ -522,7 +524,7 @@ func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req Rep
 				// Write changes to file
 				newContent := strings.Join(newLines, "\n")
 				if err := os.WriteFile(absFilePath, []byte(newContent), 0644); err != nil {
-					log.Printf("Error writing file %s: %v", absFilePath, err)
+					ws.log().Error("failed to write replacement file", slog.String("path", absFilePath), slog.Any("err", err))
 					continue
 				}
 

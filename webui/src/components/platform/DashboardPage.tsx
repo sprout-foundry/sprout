@@ -165,7 +165,8 @@ const DashboardPage: React.FC = () => {
                 </div>
                 <div className="dashboard-meter">
                   <div className="dashboard-meter-label">
-                    {(usage.daily_llm.tokens_used / 1000).toFixed(1)}K / {(usage.daily_llm.tokens_limit / 1000).toFixed(0)}K tokens today
+                    {(usage.daily_llm.tokens_used / 1000).toFixed(1)}K /{' '}
+                    {(usage.daily_llm.tokens_limit / 1000).toFixed(0)}K tokens today
                   </div>
                   <div className="dashboard-meter-bar">
                     <div
@@ -181,8 +182,8 @@ const DashboardPage: React.FC = () => {
               usage.llm_spend && (
                 <div className="dashboard-meter">
                   <div className="dashboard-meter-label">
-                    ${(usage.llm_spend.spend_cents / 100).toFixed(2)} / ${(usage.llm_spend.budget_cents / 100).toFixed(2)}{' '}
-                    LLM
+                    ${(usage.llm_spend.spend_cents / 100).toFixed(2)} / $
+                    {(usage.llm_spend.budget_cents / 100).toFixed(2)} LLM
                   </div>
                   <div className="dashboard-meter-bar">
                     <div

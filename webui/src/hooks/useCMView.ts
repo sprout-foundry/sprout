@@ -209,7 +209,7 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
     dispatch: (tr: TransactionSpec) => {
       apiRef.current.view?.dispatch(tr);
     },
-    withExternalUpdate: <T,>(fn: () => T): T => {
+    withExternalUpdate: <T>(fn: () => T): T => {
       const previous = gate.current;
       gate.current = true;
       try {

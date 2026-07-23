@@ -23,13 +23,7 @@ import { useAttachableSessions } from './useAttachableSessions';
 
 type CapturedState = ReturnType<typeof useAttachableSessions>;
 
-function Harness({
-  isExpanded,
-  onState,
-}: {
-  isExpanded: boolean;
-  onState: (state: CapturedState) => void;
-}): null {
+function Harness({ isExpanded, onState }: { isExpanded: boolean; onState: (state: CapturedState) => void }): null {
   const result = useAttachableSessions(isExpanded);
   onState(result);
   return null;

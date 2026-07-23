@@ -216,8 +216,11 @@ function ShellApprovalPanel({ request, onSubmit, onCancel }: ShellApprovalPanelP
                 <span
                   className="shell-approval-analysis-recommendation"
                   style={{
-                    color: RECOMMENDATION_COLOR[security_analysis.recommendation as RecommendationKey] ?? 'var(--text-muted)',
-                    background: RECOMMENDATION_BG[security_analysis.recommendation as RecommendationKey] ?? 'var(--bg-tertiary)',
+                    color:
+                      RECOMMENDATION_COLOR[security_analysis.recommendation as RecommendationKey] ??
+                      'var(--text-muted)',
+                    background:
+                      RECOMMENDATION_BG[security_analysis.recommendation as RecommendationKey] ?? 'var(--bg-tertiary)',
                   }}
                 >
                   {security_analysis.recommendation}
@@ -227,7 +230,9 @@ function ShellApprovalPanel({ request, onSubmit, onCancel }: ShellApprovalPanelP
                 <span
                   className="shell-approval-analysis-risk"
                   style={{
-                    color: RISK_ASSESSMENT_COLOR[security_analysis.risk_assessment as RiskAssessmentKey] ?? 'var(--text-muted)',
+                    color:
+                      RISK_ASSESSMENT_COLOR[security_analysis.risk_assessment as RiskAssessmentKey] ??
+                      'var(--text-muted)',
                   }}
                 >
                   {security_analysis.risk_assessment}

@@ -145,8 +145,8 @@ export function CommandOutputPanel({ state, onDismiss }: CommandOutputPanelProps
         <div className="command-output-panel-warning" role="alert">
           <AlertCircle size={14} aria-hidden="true" />
           <span>
-            Some output was dropped by the server ({state.droppedBytes.toLocaleString()} bytes).
-            The HTTP response contains the complete transcript.
+            Some output was dropped by the server ({state.droppedBytes.toLocaleString()} bytes). The HTTP response
+            contains the complete transcript.
           </span>
         </div>
       ) : null}

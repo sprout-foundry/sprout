@@ -39,14 +39,7 @@ describe('PasswordPromptDialog', () => {
 
   it('disables Submit while the input is empty', () => {
     const onRespond = vi.fn();
-    render(
-      <PasswordPromptDialog
-        requestId="req-2"
-        command="sudo true"
-        prompt="Password:"
-        onRespond={onRespond}
-      />,
-    );
+    render(<PasswordPromptDialog requestId="req-2" command="sudo true" prompt="Password:" onRespond={onRespond} />);
 
     const submitBtn = screen.getByRole('button', { name: /submit/i }) as HTMLButtonElement;
     expect(submitBtn.disabled).toBe(true);
@@ -54,14 +47,7 @@ describe('PasswordPromptDialog', () => {
 
   it('cancels with an empty password when Cancel is clicked', () => {
     const onRespond = vi.fn();
-    render(
-      <PasswordPromptDialog
-        requestId="req-3"
-        command="sudo true"
-        prompt="Password:"
-        onRespond={onRespond}
-      />,
-    );
+    render(<PasswordPromptDialog requestId="req-3" command="sudo true" prompt="Password:" onRespond={onRespond} />);
 
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
@@ -70,14 +56,7 @@ describe('PasswordPromptDialog', () => {
 
   it('cancels via Escape key', async () => {
     const onRespond = vi.fn();
-    render(
-      <PasswordPromptDialog
-        requestId="req-4"
-        command="sudo true"
-        prompt="Password:"
-        onRespond={onRespond}
-      />,
-    );
+    render(<PasswordPromptDialog requestId="req-4" command="sudo true" prompt="Password:" onRespond={onRespond} />);
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
@@ -89,12 +68,7 @@ describe('PasswordPromptDialog', () => {
   it('never logs or renders the password as plain text', () => {
     const onRespond = vi.fn();
     const { container } = render(
-      <PasswordPromptDialog
-        requestId="req-5"
-        command="sudo true"
-        prompt="Password:"
-        onRespond={onRespond}
-      />,
+      <PasswordPromptDialog requestId="req-5" command="sudo true" prompt="Password:" onRespond={onRespond} />,
     );
 
     // Sanity: the prompt text and command render as plain text but the

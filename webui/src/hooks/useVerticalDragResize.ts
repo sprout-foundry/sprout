@@ -30,8 +30,7 @@ export function useVerticalDragResize(args: UseVerticalDragResizeArgs): (e: Reac
     (ev: MouseEvent, startY: number, startHeight: number) => {
       const delta = startY - ev.clientY;
       const next = startHeight + delta;
-      const windowedMax =
-        typeof window === 'undefined' ? Infinity : window.innerHeight - maxFactor;
+      const windowedMax = typeof window === 'undefined' ? Infinity : window.innerHeight - maxFactor;
       const clamped = Math.max(0, Math.min(windowedMax, next));
       latestRef.current = clamped;
       onResize(clamped);

@@ -185,8 +185,11 @@ If the server shows as stopped or error, check:
 
 **User: "Add a GitHub MCP server"**
 ```
-→ Ask for their GitHub PAT (or check if GITHUB_PERSONAL_ACCESS_TOKEN is set)
-→ POST to /api/settings/mcp/servers with the stdio GitHub recipe
+→ Use the GitHub (PAT-based, local subprocess) recipe from §2 as a config payload,
+  or have the user pick "github" via /mcp add → Custom MCP Server.
+→ If the user already has GITHUB_PERSONAL_ACCESS_TOKEN in their env, no PAT prompt
+  is needed; reference the credential store instead of asking interactively.
+→ POST to /api/settings/mcp/servers (or run /mcp add) with the recipe.
 → Confirm it's running: /mcp list
 → Show available tools: /mcp tools
 ```

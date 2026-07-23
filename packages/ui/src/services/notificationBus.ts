@@ -1,6 +1,6 @@
-import type { NotificationType } from '../types/notification';
+import type { NotificationAction, NotificationType } from '../types/notification';
 
-export type { NotificationType };
+export type { NotificationType, NotificationAction };
 
 export interface NotificationEvent {
   type: NotificationType;
@@ -8,6 +8,7 @@ export interface NotificationEvent {
   message: string;
   duration?: number;
   id: string;
+  action?: NotificationAction;
 }
 
 /**
@@ -29,9 +30,15 @@ class NotificationBus {
   private history: NotificationEvent[] = [];
   private nextId = 0;
 
-  notify(type: NotificationType, title: string, message: string, duration?: number): string {
+  notify(
+    type: NotificationType,
+    title: string,
+    message: string,
+    duration?: number,
+    action?: NotificationAction,
+  ): string {
     const id = `notify_${this.nextId++}_${Date.now()}`;
-    const event: NotificationEvent = { type, title, message, duration, id };
+    const event: NotificationEvent = { type, title, message, duration, id, action };
 
     // Log to console based on type
     switch (type) {

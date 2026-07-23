@@ -342,6 +342,83 @@ describe('NotificationStack contract', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: Action propagation
+// ---------------------------------------------------------------------------
+describe('NotificationCenter action threading', () => {
+  it('forwards the bus action onto NotificationData', () => {
+    renderCenter();
+    const onClick = vi.fn();
+    act(() => {
+      notificationBus.notify('warning', 'Configure', 'Provider missing', undefined, {
+        label: 'Open settings',
+        onClick,
+      });
+    });
+
+    expect(lastReceivedNotifications.length).toBe(1);
+    expect(lastReceivedNotifications[0].action).toBeDefined();
+    expect(lastReceivedNotifications[0].action.label).toBe('Open settings');
+    expect(lastReceivedNotifications[0].action.onClick).toBe(onClick);
+  });
+
+  it('leaves action undefined when the bus did not provide one (backwards compat)', () => {
+    renderCenter();
+    act(() => {
+      notificationBus.notify('info', 'Plain', 'No action');
+    });
+
+    expect(lastReceivedNotifications.length).toBe(1);
+    expect(lastReceivedNotifications[0].action).toBeUndefined();
+  });
+
+  it('does not install its own auto-dismiss timer when keepOpen is true', () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      act(() => {
+        notificationBus.notify('info', 'Sticky', 'Stays around', undefined, {
+          label: 'Acknowledge',
+          onClick: vi.fn(),
+          keepOpen: true,
+        });
+      });
+      expect(toastCount(container)).toBe(1);
+
+      // Advance past the 5 s default that the parent would normally install.
+      // The toast must still be there because keepOpen suppresses it.
+      act(() => {
+        vi.advanceTimersByTime(6000);
+      });
+      expect(toastCount(container)).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still installs the 5 s default timer when no keepOpen is set', () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      act(() => {
+        notificationBus.notify('info', 'Normal', 'Auto dismisses', undefined, {
+          label: 'X',
+          onClick: vi.fn(),
+          // no keepOpen → default behavior
+        });
+      });
+      expect(toastCount(container)).toBe(1);
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(toastCount(container)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: Mark-all-read affordance
 // ---------------------------------------------------------------------------
 

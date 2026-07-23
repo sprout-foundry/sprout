@@ -287,11 +287,9 @@ func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configurati
 	// GetEnvSimple checks SPROUT_ and SPROUT_ prefixes, so we set both
 	// to be safe.
 	t.Setenv("SPROUT_ALLOW_REAL_PROVIDER", "1")
-	t.Setenv("SPROUT_ALLOW_REAL_PROVIDER", "1")
 	// Skip the production connection-check request so the variable
 	// under test is profile resolution, not the network round-trip.
 	// See package-level comment's "What this test does NOT cover".
-	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
 	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
 	// Disable the model registry fetch so GenericProvider.GetModelContextLimit
 	// resolves through the config (default_context_limit) rather than
@@ -299,8 +297,6 @@ func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configurati
 	// returns Empty models when the registry 404s; both behaviors are
 	// noisy and avoidable in tests.
 	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
-	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
-	t.Setenv("SPROUT_MODEL_REGISTRY_TIMEOUT", "200ms")
 	t.Setenv("SPROUT_MODEL_REGISTRY_TIMEOUT", "200ms")
 	// Skip the connection probe. Under `go test` stdin is a pipe,
 	// isNonInteractive() returns true, and any failed CheckConnection
@@ -308,7 +304,6 @@ func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configurati
 	// doesn't depend on connectivity — it depends only on
 	// GetModelContextLimit, which reads from the provider config we
 	// just upserted. Skipping the probe keeps the test focused.
-	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
 	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
 
 	// Step 3: write the provider config to a temp dir so the user

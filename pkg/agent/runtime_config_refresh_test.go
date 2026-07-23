@@ -214,7 +214,6 @@ func writeConfig(t *testing.T, servers map[string]mcp.MCPServerConfig) *configur
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 
 	mgr, err := configuration.NewManagerWithDir(dir)
 	if err != nil {
@@ -398,7 +397,6 @@ func TestRefreshRuntimeConfig_ReloadsConfigAndReconciles(t *testing.T) {
 	// Step 1: write config with NO servers, seed mock with empty state.
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 	mgr, err := configuration.NewManagerWithDir(dir)
 	if err != nil {
 		t.Fatalf("NewManagerWithDir: %v", err)
@@ -438,7 +436,6 @@ func TestRefreshRuntimeConfig_NilMCPSubStillReloadsConfig(t *testing.T) {
 	// The config reload step should still run even if MCP is nil,
 	// because it picks up skill changes independently.
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	mgr, err := configuration.NewManagerWithDir(dir)
 	if err != nil {

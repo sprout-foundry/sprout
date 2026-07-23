@@ -410,7 +410,6 @@ func TestAgentCreation_WithUseMockLLM(t *testing.T) {
 	// Use isolated config directory (matches agent_creation_test.go style)
 	configDir := t.TempDir() + "/.sprout"
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	ag, err := NewAgentWithModel("")
 	if err != nil {

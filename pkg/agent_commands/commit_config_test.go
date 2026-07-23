@@ -17,7 +17,6 @@ func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -60,7 +59,6 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -91,7 +89,6 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 func TestCommitCommandPersistsToDisk(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
@@ -130,7 +127,6 @@ func TestCommitCommandPersistsToDisk(t *testing.T) {
 func TestCommitConfigSaveLoadRoundTrip(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config with commit settings

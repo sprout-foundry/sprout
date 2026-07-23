@@ -47,7 +47,6 @@ func TestNewConfigDefaults(t *testing.T) {
 func TestConfigSaveLoadRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	original := NewConfig()
 	original.LastUsedProvider = "deepinfra"
@@ -149,7 +148,6 @@ func TestLoadReturnsDefaultWhenNoConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Point to an empty temp dir — no config.json exists yet
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -160,7 +158,6 @@ func TestLoadReturnsDefaultWhenNoConfigFile(t *testing.T) {
 
 func TestSaveProducesValidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := NewConfig()
@@ -190,7 +187,6 @@ func TestSaveProducesValidJSON(t *testing.T) {
 func TestLoadDefaultsAppliedForOmittedZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a config that has NO zsh-related keys.
 	configPath := filepath.Join(tmpDir, ConfigFileName)
@@ -216,7 +212,6 @@ func TestLoadDefaultsAppliedForOmittedZshFields(t *testing.T) {
 // explicit false values for the zsh fields is respected after Load().
 func TestLoadRespectsExplicitFalseZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a config that explicitly disables zsh detection.
@@ -244,7 +239,6 @@ func TestLoadRespectsExplicitFalseZshFields(t *testing.T) {
 func TestSavePersistsExplicitFalseZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := NewConfig()
 	cfg.EnableZshCommandDetection = false
@@ -270,7 +264,6 @@ func TestSavePersistsExplicitFalseZshFields(t *testing.T) {
 // set false, save, reload, and confirm the loaded value is still false.
 func TestSaveLoadRoundTripExplicitFalseZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	original := NewConfig()

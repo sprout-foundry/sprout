@@ -31,7 +31,6 @@ func TestShellConfig_LoadWithShellSection(t *testing.T) {
 
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmp)
-	t.Setenv("SPROUT_CONFIG", tmp)
 
 	configPath := filepath.Join(tmp, ConfigFileName)
 	if err := os.WriteFile(configPath, []byte(cfgJSON), 0o644); err != nil {
@@ -84,7 +83,6 @@ func TestShellConfig_LoadWithoutShellSection(t *testing.T) {
 	}`
 
 	tmp := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmp)
 	t.Setenv("SPROUT_CONFIG", tmp)
 
 	configPath := filepath.Join(tmp, ConfigFileName)

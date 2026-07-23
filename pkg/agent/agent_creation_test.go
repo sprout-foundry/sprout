@@ -60,7 +60,6 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 	// Persist SPROUT_CONFIG for the test lifetime so any code path that reads
 	// the env var directly (bypassing configManager) stays isolated.
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	agent, err := NewAgentWithModel("test:test")
 	if err != nil {
@@ -88,7 +87,6 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 // agent without prompting for API keys or running connection checks.
 func TestNewAgentWithClient(t *testing.T) {
 	configDir := t.TempDir() + "/.sprout"
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	mgr, err := configuration.NewManagerWithDir(configDir)
@@ -297,7 +295,6 @@ func TestContextCapActivationNotice(t *testing.T) {
 	// Create a temp config directory with a config that has MaxContextTokens set
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Test: When cap is set lower than native, the agent should have effectiveContextCap set
 	t.Run("agent has effectiveContextCap when cap is below native", func(t *testing.T) {
@@ -307,7 +304,6 @@ func TestContextCapActivationNotice(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewManagerWithDir failed: %v", err)
 		}
-		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("SPROUT_CONFIG", configDir)
 
 		// Set a cap of 64K (lower than test client's 128K context)
@@ -350,7 +346,6 @@ func TestContextCapActivationNotice(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewManagerWithDir failed: %v", err)
 		}
-		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("SPROUT_CONFIG", configDir)
 
 		// Create agent without setting MaxContextTokens

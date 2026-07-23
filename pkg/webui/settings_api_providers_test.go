@@ -62,7 +62,6 @@ func TestSettingsProvidersPutPersistenceFailureReturns500(t *testing.T) {
 	t.Setenv("HOME", homeDir)
 	scopedDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", scopedDir)
-	t.Setenv("SPROUT_CONFIG", scopedDir)
 
 	// Write provider JSON under the SPROUT_CONFIG providers dir — the
 	// manager's Enrich path will find it.
@@ -130,7 +129,6 @@ func TestSettingsProvidersGetLoadsProvidersFromDisk(t *testing.T) {
 func TestManagerEnrichCustomProvidersLoadsFromDisk(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// NewManagerWithConfig skips the layered load entirely: the
 	// returned manager's CustomProviders starts nil, so any data the
@@ -165,7 +163,6 @@ func TestManagerEnrichCustomProvidersLoadsFromDisk(t *testing.T) {
 // (for example) replace the merge-with-loop with a wholesale reset.
 func TestManagerEnrichCustomProvidersIsIdempotent(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	mgr := configuration.NewManagerWithConfig(&configuration.Config{}, nil)
@@ -224,7 +221,6 @@ func setupProviderHandlerEnv(t *testing.T) string {
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		t.Fatalf("create global config directory: %v", err)
 	}
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	return configDir
 }

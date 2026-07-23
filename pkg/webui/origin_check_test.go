@@ -186,7 +186,6 @@ func TestCheckOrigin_AllowedOrigins(t *testing.T) {
 func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 	// Ensure no allowed origins env var is set
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
-	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
 
 	// Test with localhost binding
 	eventBus := events.NewEventBus()
@@ -503,7 +502,6 @@ func TestCheckOrigin_CaseInsensitive(t *testing.T) {
 // TestCheckOrigin_IPv6Localhost verifies that IPv6 localhost (::1) is
 // accepted as a local connection, just like 127.0.0.1.
 func TestCheckOrigin_IPv6Localhost(t *testing.T) {
-	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
 
 	eventBus := events.NewEventBus()

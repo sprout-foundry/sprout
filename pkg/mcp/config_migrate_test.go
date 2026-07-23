@@ -24,7 +24,6 @@ func setupConfigTestEnv(t *testing.T) string {
 	configDir := filepath.Join(homeDir, ".sprout")
 	t.Setenv("HOME", homeDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	// Prevent env var overrides from interfering with LoadMCPConfig
 	t.Setenv("SPROUT_MCP_ENABLED", "")

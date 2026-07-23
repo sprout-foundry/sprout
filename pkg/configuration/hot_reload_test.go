@@ -24,7 +24,6 @@ func TestDiscoverSkillsCombined(t *testing.T) {
 
 	// Point SPROUT_CONFIG at tmp so GetConfigDir resolves our temp dir.
 	t.Setenv("SPROUT_CONFIG", tmp)
-	t.Setenv("SPROUT_CONFIG", tmp)
 
 	cfg := &Config{}
 	discovered := cfg.discoverSkills()
@@ -54,7 +53,6 @@ func TestLoadConfigWithLayersDiscoversSkills(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(userSkill, "SKILL.md"), []byte(skillBody), 0o644))
 
 	t.Setenv("SPROUT_CONFIG", tmp)
-	t.Setenv("SPROUT_CONFIG", tmp)
 
 	cfg, err := LoadConfigWithLayers(configPath, "", "", tmp)
 	require.NoError(t, err)
@@ -77,7 +75,6 @@ func TestReloadPicksUpNewSkills(t *testing.T) {
 	configPath := filepath.Join(tmp, "config.json")
 	require.NoError(t, os.WriteFile(configPath, []byte(`{"version": "2.0"}`), 0o644))
 
-	t.Setenv("SPROUT_CONFIG", tmp)
 	t.Setenv("SPROUT_CONFIG", tmp)
 
 	mgr, err := NewManagerWithDir(tmp)

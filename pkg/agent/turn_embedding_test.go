@@ -96,7 +96,6 @@ func newTestEmbeddingMgr(t *testing.T) *embedding.EmbeddingManager {
 
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	cfg := &configuration.EmbeddingIndexConfig{
 		IndexDir: tempDir,

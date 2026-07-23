@@ -1053,7 +1053,6 @@ func TestSaveGitHubMCPServer_NewConfig(t *testing.T) {
 	// Use a temporary config directory to avoid affecting user's actual config
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	config := &MCPServerConfig{
 		Name:      "github",
@@ -1085,7 +1084,6 @@ func TestSaveGitHubMCPServer_NewConfig(t *testing.T) {
 
 func TestSaveGitHubMCPServer_ReplaceExistingConfig(t *testing.T) {
 	tempDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	// First, save an initial config
@@ -1131,7 +1129,6 @@ func TestSaveGitHubMCPServer_ReplaceExistingConfig(t *testing.T) {
 func TestSaveGitHubMCPServer_SetsEnabledToTrue(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	config := &MCPServerConfig{
 		Name:      "github",
@@ -1151,7 +1148,6 @@ func TestSaveGitHubMCPServer_SetsEnabledToTrue(t *testing.T) {
 
 func TestSaveGitHubMCPServer_PreservesOtherServers(t *testing.T) {
 	tempDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	// First, create a config with an existing server
@@ -1193,7 +1189,6 @@ func TestSaveGitHubMCPServer_PreservesOtherServers(t *testing.T) {
 func TestSaveGitHubMCPServer_DockerConfigWithEnv(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	config := &MCPServerConfig{
 		Name:        "github",
@@ -1225,7 +1220,6 @@ func TestSaveGitHubMCPServer_DockerConfigWithEnv(t *testing.T) {
 
 func TestSaveGitHubMCPServer_NPXConfigWithEnv(t *testing.T) {
 	tempDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	config := &MCPServerConfig{

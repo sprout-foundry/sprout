@@ -56,7 +56,6 @@ func TestSetProviderFallsBackWhenConfiguredCustomModelIsInvalid(t *testing.T) {
 
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
 

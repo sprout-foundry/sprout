@@ -5,7 +5,7 @@ package webui
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -228,16 +228,16 @@ func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[embedding] panic in background build: %v", r)
+				ws.log().Error("panic in background embedding build", slog.Any("panic", r))
 			}
 		}()
 		ctx := context.Background()
 		stats, err := em.BuildIndex(ctx)
 		if err != nil {
-			log.Printf("[embedding] background build failed: %v", err)
+			ws.log().Error("background embedding build failed", slog.Any("err", err))
 			return
 		}
-		log.Printf("[embedding] background build complete: %d units indexed", stats.UnitsExtracted)
+		ws.log().Info("background embedding build completed", slog.Int("units_indexed", stats.UnitsExtracted))
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "build started"})

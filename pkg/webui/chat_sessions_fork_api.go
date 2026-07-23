@@ -6,7 +6,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -55,8 +55,11 @@ func (ws *ReactWebServer) handleAPIChatSessionFork(w http.ResponseWriter, r *htt
 
 	newSessionID, forkErr := agentInst.ForkAtBreakpoint(req.BreakpointIndex)
 	if forkErr != nil {
-		log.Printf("handleAPIChatSessionFork: fork failed for chat %s client %s breakpoint %d: %v",
-			chatID, clientID, req.BreakpointIndex, forkErr)
+		ws.log().Error("failed to fork chat session",
+			slog.String("chat_id", chatID),
+			slog.String("client_id", clientID),
+			slog.Int("breakpoint_index", req.BreakpointIndex),
+			slog.Any("err", forkErr))
 		writeJSONErr(w, http.StatusBadRequest, "fork_failed", forkErr.Error())
 		return
 	}
@@ -78,8 +81,11 @@ func (ws *ReactWebServer) handleAPIChatSessionFork(w http.ResponseWriter, r *htt
 	}
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionFork: forked chat %s at breakpoint %d → new session %s for client %s",
-		chatID, req.BreakpointIndex, newSessionID, clientID)
+	ws.log().Info("forked chat session",
+		slog.String("chat_id", chatID),
+		slog.Int("breakpoint_index", req.BreakpointIndex),
+		slog.String("new_session_id", newSessionID),
+		slog.String("client_id", clientID))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":    true,

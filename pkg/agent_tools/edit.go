@@ -51,31 +51,10 @@ func EditFile(ctx context.Context, filePath, oldString, newString string) (strin
 	return fmt.Sprintf("Edited %s: replaced %d characters with %d characters", cleanPath, len(oldString), len(newString)), nil
 }
 
-// resolveAndValidateFileWithGate is the gate-aware wrapper around the
-// historical resolveAndValidateFile. It runs the resolve + stat
-// sequence under withFilesystemApproval so an off-workspace edit
-// prompt fires exactly once, on the resolve error path. Inner steps
-// (read/replace/write) execute without a retry because the
-// SafeResolvePath* check is the only one that can produce
-// ErrOutsideWorkingDirectory.
+// resolveAndValidateFileWithGate resolves and validates the file. PrecheckFileAccess
+// should have already set up the bypass context for "allow" paths.
 func resolveAndValidateFileWithGate(ctx context.Context, filePath string) (string, os.FileMode, error) {
-	type result struct {
-		path string
-		mode os.FileMode
-	}
-	res, err := withFilesystemApproval(ctx, FilesystemGateFromContext(ctx), "edit_file", filePath,
-		func(ctx context.Context) (result, error) {
-			cleanPath, mode, err := resolveAndValidateFile(ctx, filePath)
-			if err != nil {
-				return result{}, err
-			}
-			return result{path: cleanPath, mode: mode}, nil
-		},
-	)
-	if err != nil {
-		return "", 0, err
-	}
-	return res.path, res.mode, nil
+	return resolveAndValidateFile(ctx, filePath)
 }
 
 // validateEditInputs validates filePath, oldString, newString and checks for suspicious patterns

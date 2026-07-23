@@ -19,32 +19,35 @@ import (
 // ---------------------------------------------------------------------------
 
 // stubClassifier is a test double for FileAccessClassifier that returns
-// a configurable decision string.
+// a configurable decision string and session-allowlist flag.
 type stubClassifier struct {
-	decision string
+	decision         string
+	isSessionAllowed bool
 }
 
 func (s stubClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string {
 	return s.decision
 }
 
+func (s stubClassifier) IsFolderSessionAllowed(_ string) bool {
+	return s.isSessionAllowed
+}
+
 // denyClassifier always returns "deny" for any access.
 type denyClassifier struct{}
 
-func (denyClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string {
-	return "deny"
-}
+func (denyClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string { return "deny" }
+func (denyClassifier) IsFolderSessionAllowed(_ string) bool                       { return false }
 
 // allowClassifier always returns "allow" for any access.
 type allowClassifier struct{}
 
-func (allowClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string {
-	return "allow"
-}
+func (allowClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string { return "allow" }
+func (allowClassifier) IsFolderSessionAllowed(_ string) bool                        { return false }
 
 // newTestEnvWithClassifier builds a ToolEnv backed by a temp workspace and
 // optionally injects a FileAccessClassifier. Nil classifier means no
-// classifier is available (handlers fall through to withFilesystemApproval).
+// classifier is available (handlers fall through and return the raw filesystem error).
 func newTestEnvWithClassifier(t *testing.T, classifier FileAccessClassifier) ToolEnv {
 	t.Helper()
 	return ToolEnv{
@@ -144,6 +147,7 @@ func (c *captureModeClassifier) ClassifyFileAccess(_ context.Context, _, _, mode
 	c.gotMode = mode
 	return "prompt"
 }
+func (captureModeClassifier) IsFolderSessionAllowed(_ string) bool { return false }
 
 // ---------------------------------------------------------------------------
 // Handler-level deny tests
@@ -288,7 +292,7 @@ func TestPrecheckListDirectory_Allow_ProceedsSuccessfully(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Verify nil classifier falls through to withFilesystemApproval (no error)
+// Verify nil classifier falls through (returns raw filesystem error)
 // ---------------------------------------------------------------------------
 
 func TestPrecheckWriteFile_NilClassifier_NoError(t *testing.T) {

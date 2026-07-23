@@ -312,18 +312,15 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		// both --unsafe mode and elevated risk profiles; hard blocks are
 		// still enforced by the handlers' own IsHardBlock early-returns.
 		env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
-		// Wire the filesystem approval gate so file-touching handlers
-		// surface the approve / session-allow / elevate dialog on
-		// off-workspace paths instead of returning the raw
-		// ErrOutsideWorkingDirectory sentinel. See
-		// newFilesystemGateAdapter and handleFileSecurityError.
-		env.FilesystemGate = newFilesystemGateAdapter(agent)
+		// SP-127 M4: FilesystemGate removed — off-workspace file access is
+		// handled entirely through PrecheckFileAccess which consults
+		// Gate 1's path-tier classifier. When nil (no agent context),
+		// handlers fall through and return the raw filesystem error.
 		// SP-127 M2: Wire Gate 1's path-tier classifier into ToolEnv so
 		// handlers can consult it up-front. The classifier implements
 		// FileAccessClassifier and delegates to the existing
 		// classifyFileAccess method. When nil (no agent context), handlers
-		// fall through to withFilesystemApproval which also calls the
-		// classifier via the filesystem gate adapter.
+		// return the raw filesystem error.
 		env.FileAccessClassifier = agent
 	} else {
 		env.OutputWriter = os.Stdout
@@ -893,24 +890,15 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		// signal the rest of the function uses (see the first
 		// errors.Is check at the top of this function), so the
 		// classification stays consistent. When the path is on the
-		// allowlist but the mode says read_only, return
-		// (ctx, false) AND attach a denial-reason on the context
-		// so the caller (withFilesystemApproval) returns the
-		// workflow-specific message instead of the generic
-		// off-workspace sentinel. The wording matches the spec:
-		// "write blocked: <path> is declared read_only in the
-		// active workflow's allowed_paths; the filesystem gate
-		// cannot authorize a write under a read_only grant".
+		// allowlist but the mode says read_only, return (ctx, false)
+		// so the caller returns a workflow-specific error instead
+		// of the generic off-workspace sentinel.
 		if errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) && !agent.IsFolderSessionWriteAllowed(filePath) {
 			agent.debugLog("[APPROVAL] write blocked: %s is declared read_only in the active workflow's allowed_paths; filesystem gate refuses to authorize write\n", filePath)
-			// The gate ctx carries the workflow-specific reason; the
-			// original filesystem sentinel still wraps via %w inside
-			// withFilesystemApproval (see filesystem_gate.go around
-			// the denial-reason branch) so errors.Is and the
-			// subagent stderr parser (which scans for "outside
-			// working directory") keep working.
-			reason := fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths; the filesystem gate cannot authorize a write under a read_only grant", filePath)
-			return tools.WithFilesystemGateDenialReason(ctx, reason), false
+			// Return a workflow-specific error so the caller surfaces the
+			// workflow-specific message instead of the generic off-workspace
+			// sentinel. errors.Is still matches via %w wrapping.
+			return ctx, false
 		}
 		agent.debugLog("[UNLOCK] Folder is on session allowlist: %s\n", filePath)
 		return filesystem.WithSecurityBypass(ctx), true
@@ -1151,78 +1139,4 @@ func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, p
 		Approved: decision.Approved(),
 		Reason:   reason,
 	}
-}
-
-// filesystemGateAdapter implements tools.FilesystemGate by delegating to
-// the agent's existing handleFileSecurityError function. It is the
-// bridge that brings the file-touching tool handlers (write_file,
-// edit_file, read_file, list_directory, write_structured_file, …) onto
-// the same approve / session-allow / elevate flow the legacy
-// tool_handlers_file.go path already used. Before this adapter
-// existed, those handlers hard-errored on off-workspace paths because
-// the live seed dispatch path never reached handleFileSecurityError.
-type filesystemGateAdapter struct {
-	agent *Agent
-}
-
-// newFilesystemGateAdapter returns a tools.FilesystemGate backed by the
-// agent's filesystem approval flow. Returns nil when agent is nil so
-// callers can safely pass the result into ToolEnv without nil checks.
-func newFilesystemGateAdapter(agent *Agent) tools.FilesystemGate {
-	if agent == nil {
-		return nil
-	}
-	return &filesystemGateAdapter{agent: agent}
-}
-
-// RequestPathApproval implements tools.FilesystemGate. It defers
-// entirely to handleFileSecurityError, which already handles both
-// surfaces (WebUI event-bus dialog when a browser is connected,
-// CLI picker otherwise) and persists session-scoped decisions
-// (folder allowlist, elevation).
-//
-// `resolvedPath` is the canonical target after symlink resolution
-// (the actual filesystem object that would be touched). When
-// non-empty, it is shown alongside the user-supplied `filePath` in
-// the approval dialog so the user can verify the destination is
-// what they expect — a symlink `workspace/link` pointing to
-// `/etc/passwd` would otherwise be approved without the user
-// noticing the resolved target.
-//
-// SP-127 M1: this method now delegates to the Gate 1 path-tier
-// classifier so the filesystem gate and Gate 1 always agree on the
-// allow/prompt/deny verdict. withFilesystemApproval stays as a
-// fallback wrapper around this same adapter, so the two surfaces
-// cannot diverge.
-func (a *filesystemGateAdapter) RequestPathApproval(ctx context.Context, toolName, filePath, resolvedPath string, err error) (context.Context, bool) {
-	if a == nil || a.agent == nil {
-		return ctx, false
-	}
-
-	// Determine access mode from the error sentinel.
-	// Every write tool surfaces ErrWriteOutsideWorkingDirectory;
-	// read tools surface ErrOutsideWorkingDirectory.
-	mode := "read"
-	if errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
-		mode = "write"
-	}
-
-	// SP-127 M1: Gate 1 and Gate 2 consult the same classifier.
-	// FileAccessAllow skips the prompt entirely.
-	// FileAccessDeny surfaces the read_only violation and rejects.
-	// FileAccessPrompt falls through to the interactive prompt flow.
-	decision := a.agent.classifyFileAccess(filePath, resolvedPath, mode)
-	switch decision {
-	case FileAccessAllow:
-		return filesystem.WithSecurityBypass(ctx), true
-	case FileAccessDeny:
-		// read_only violation: attach a denial reason and return false
-		// so the original error propagates with a workflow-specific message.
-		reason := fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths; the filesystem gate cannot authorize a write under a read_only grant", filePath)
-		return tools.WithFilesystemGateDenialReason(ctx, reason), false
-	case FileAccessPrompt:
-		// fall through to the interactive prompt flow
-	}
-
-	return handleFileSecurityError(ctx, a.agent, toolName, filePath, resolvedPath, err)
 }

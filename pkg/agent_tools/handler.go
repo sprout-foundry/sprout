@@ -111,20 +111,12 @@ type ToolEnv struct {
 	OutputWriter io.Writer
 	// ApprovalManager for security approvals; nil if approvals are not supported
 	ApprovalManager ApprovalManager
-	// FilesystemGate bridges file-touching handlers to the agent's
-	// off-workspace approval flow. When non-nil, handlers call it on
-	// SafeResolve* errors so the user can approve, session-allowlist,
-	// or elevate instead of receiving a hard error. Nil means the
-	// handler runs in a context without filesystem gate support
-	// (unit tests, agents constructed without the seed dispatch path).
-	FilesystemGate FilesystemGate
 	// FileAccessClassifier provides Gate 1's path-tier verdict before
 	// a file operation runs. When non-nil, handlers call it up-front
 	// (SP-127 M2) so Deny is caught immediately with a typed error,
 	// Allow skips the gate prompt entirely, and Prompt falls through
-	// to withFilesystemApproval for the interactive approval dialog.
-	// Nil means no classifier is available; handlers fall through
-	// to withFilesystemApproval which also delegates to the classifier.
+	// to the interactive dialog. Nil means no classifier is available;
+	// handlers return the raw filesystem error.
 	FileAccessClassifier FileAccessClassifier
 	// MaxTokensFunc returns the current token budget limit
 	MaxTokensFunc func() int
@@ -220,61 +212,6 @@ type ApprovalManager interface {
 	RequestApproval(requestID, toolName, riskLevel, prompt string, extras map[string]string) ApprovalResult
 }
 
-// FilesystemGate is the bridge between file-touching tool handlers and
-// the agent's filesystem security policy. The tool layer (this package)
-// must not import pkg/agent directly — that would create a cycle — so
-// handlers receive the gate through ToolEnv and call it when
-// SafeResolvePath[ForWrite]WithBypass returns ErrOutsideWorkingDirectory
-// or ErrWriteOutsideWorkingDirectory.
-//
-// A nil FilesystemGate is the test/non-agent default: handlers should
-// fall through and return the error to the caller (preserving the
-// historical behavior for tests that bypass the agent context).
-//
-// When non-nil, RequestPathApproval classifies the path (Sensitive vs
-// External), presents the appropriate dialog through the active
-// surface (CLI picker or WebUI event bus), and returns a context with
-// the security bypass token set if the user approved. The caller
-// retries the original operation with the returned context; if the
-// retry still fails, the operation aborts.
-//
-// Approval choices:
-//
-//   - Deny               → returns the original ctx, approved=false.
-//   - Approve (once)     → returns wrapped ctx, approved=true. No
-//                          persistence; the next access re-prompts.
-//   - Allow folder
-//     (this session)     → External tier only: persists the folder to
-//                          the agent's session allowlist so subsequent
-//                          writes under the same folder skip the
-//                          prompt for the rest of the session.
-//   - Elevate (session)  → marks the agent's risk profile permissive
-//                          so the static classifier + this gate + the
-//                          shell cascade all skip prompts until the
-//                          session ends.
-//
-// Sensitive-tier paths never enter the allowlist — they're always
-// one-shot, even when the client requests a session allow. The
-// implementation is responsible for that invariant (the existing
-// applyFilesystemDecision does this).
-//
-// `filePath` is the user-supplied path the LLM passed to the tool.
-// `resolvedPath` is the canonical target after symlink resolution
-// (i.e. the actual filesystem object that would be touched). The
-// adapter displays both so the user can verify the destination is
-// what they expect — a symlink `workspace/link` pointing to
-// `/etc/passwd` would otherwise be approved without the user
-// noticing the resolved target. Pass "" for `resolvedPath` when
-// the caller cannot compute it (it will be omitted from display).
-type FilesystemGate interface {
-	// RequestPathApproval asks the user to approve an off-workspace
-	// file access. Returns a possibly-wrapped context and a bool —
-	// true means the caller may retry the operation with the returned
-	// context. False means deny; surface the original error to the
-	// caller.
-	RequestPathApproval(ctx context.Context, toolName, filePath, resolvedPath string, err error) (context.Context, bool)
-}
-
 // FileAccessClassifier is the interface through which tool handlers
 // consult Gate 1's path-tier decision before running a file operation.
 // It lives in the tool layer (this package) so handlers in
@@ -284,13 +221,12 @@ type FilesystemGate interface {
 // decision, including workspace containment, /tmp short-circuit,
 // session allowlist checks, sensitive-path checks, and read_only
 // enforcement. A nil classifier means no Gate 1 context is available
-// (e.g., unit tests); handlers must fall through to withFilesystemApproval
-// when nil, preserving the historical behavior.
+// (e.g., unit tests); handlers return the raw filesystem error.
 //
 // SP-127 M2: handlers call ClassifyFileAccess at the top of Execute
 // so Gate 1 sees the path on the FIRST call, not after
 // SafeResolvePath fails. The result controls whether to proceed
-// directly (Allow), fall through to withFilesystemApproval (Prompt),
+// directly (Allow), fall through to the interactive dialog (Prompt),
 // or return a typed denial (Deny).
 type FileAccessClassifier interface {
 	// ClassifyFileAccess returns the Gate 1 verdict for a file path.
@@ -301,6 +237,14 @@ type FileAccessClassifier interface {
 	// ctx carries the audit logger; implementations log the verdict via LogJSON
 	// so every decision (allow/prompt/deny) appears in the audit trail.
 	ClassifyFileAccess(ctx context.Context, filePath, resolvedPath, mode string) string
+
+	// IsFolderSessionAllowed reports whether absPath sits under a folder
+	// the user has allowlisted via "Allow this folder for the rest of the
+	// session" (workflow-declared allowed_paths OR manual folder approval).
+	// Used by PrecheckFileAccess to emit the discriminated "allowed_path_hit"
+	// audit event (SP-127 Phase 2.7) — distinct from base "allowed" — so
+	// the WebUI automations panel can count per-run session-allowlist grants.
+	IsFolderSessionAllowed(absPath string) bool
 }
 
 // ---------------------------------------------------------------------------

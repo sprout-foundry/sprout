@@ -79,9 +79,6 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 
 	// --- Handler-level precheck via PrecheckFileAccess ---
 	ctx := context.Background()
-	ctx = tools.WithFilesystemGateFromEnv(ctx, tools.ToolEnv{
-		FileAccessClassifier: a,
-	})
 
 	// Workspace path: precheck returns allow
 	_, decision := tools.PrecheckFileAccess(ctx, a, "write_file", wsFile)
@@ -167,10 +164,7 @@ func TestSecurityGateIntegration_AuditTrail(t *testing.T) {
 	wsFile := filepath.Join(workspaceRoot, "main.go")
 
 	// Attach audit logger to context
-	ctx := tools.WithFilesystemGateFromEnv(context.Background(), tools.ToolEnv{
-		FileAccessClassifier: a,
-	})
-	ctx = filesystem.WithAuditLogger(ctx, logger)
+	ctx := filesystem.WithAuditLogger(context.Background(), logger)
 
 	// Precheck triggers audit log
 	tools.PrecheckFileAccess(ctx, a, "write_file", wsFile)

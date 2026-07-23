@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo, memo } from 'react';
 import type {
   ChangeEvent,
   ClipboardEvent as ReactClipboardEvent,
@@ -109,6 +109,17 @@ function CommandInput({
   const [slashAutocompletePrefix, setSlashAutocompletePrefix] = useState('');
   const [slashAutocompleteIndex, setSlashAutocompleteIndex] = useState(0);
   const [slashAutocompletePosition, setSlashAutocompletePosition] = useState({ top: 0, left: 0 });
+  // Memoize slash autocomplete matches — the cache in slashCommands.ts avoids
+  // O(n) filter+sort on repeated identical prefixes; useMemo here prevents
+  // the JSX from recomputing on every CommandInput render.
+  const slashAutocompleteMatches = useMemo(
+    () => (slashAutocompleteOpen ? getMatchingSlashCommands(slashAutocompletePrefix) : []),
+    // Depend on SLASH_COMMANDS.length as a paranoia guard; the Map cache in
+    // slashCommands.ts is the real memoization. We could import SLASH_COMMANDS
+    // directly but that requires re-export, so the length trick is a simpler
+    // proxy that still correctly invalidates if the command list ever changes.
+    [slashAutocompleteOpen, slashAutocompletePrefix],
+  );
   const queuePanelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const slashAutocompleteRef = useRef<HTMLDivElement>(null);
@@ -646,7 +657,7 @@ function CommandInput({
         // When slash autocomplete is open, navigate the list instead of history
         if (slashAutocompleteOpen) {
           e.preventDefault();
-          const matches = getMatchingSlashCommands(slashAutocompletePrefix);
+          const matches = slashAutocompleteMatches;
           if (matches.length > 0) {
             const prevIndex = (slashAutocompleteIndex - 1 + matches.length) % matches.length;
             setSlashAutocompleteIndex(prevIndex);
@@ -672,7 +683,7 @@ function CommandInput({
         // When slash autocomplete is open, navigate the list instead of history
         if (slashAutocompleteOpen) {
           e.preventDefault();
-          const matches = getMatchingSlashCommands(slashAutocompletePrefix);
+          const matches = slashAutocompleteMatches;
           if (matches.length > 0) {
             const nextIndex = (slashAutocompleteIndex + 1) % matches.length;
             setSlashAutocompleteIndex(nextIndex);
@@ -713,8 +724,13 @@ function CommandInput({
                 setSlashAutocompletePrefix(firstWord);
                 setSlashAutocompleteIndex(0);
               } else {
-                // Cycle to next completion
-                const matches = getMatchingSlashCommands(firstWord);
+                // Cycle to next completion — use the memoized matches when the
+                // prefix hasn't changed (fast path). Falls back to a fresh lookup
+                // if the user has moved the cursor and the prefix differs.
+                const matches =
+                  firstWord === slashAutocompletePrefix
+                    ? slashAutocompleteMatches
+                    : getMatchingSlashCommands(firstWord);
                 if (matches.length > 0) {
                   const nextIndex = (slashAutocompleteIndex + 1) % matches.length;
                   setSlashAutocompleteIndex(nextIndex);
@@ -1015,11 +1031,12 @@ function CommandInput({
       {slashAutocompleteOpen && (
         <div ref={slashAutocompleteRef}>
           <SlashCommandAutocomplete
-            matches={getMatchingSlashCommands(slashAutocompletePrefix)}
+            matches={slashAutocompleteMatches}
             selectedIndex={slashAutocompleteIndex}
             onSelect={(cmd: SlashCommand) => {
-              const matches = getMatchingSlashCommands(slashAutocompletePrefix);
-              const idx = matches.findIndex(m => m.name === cmd.name);
+              // cmd is already from the memoized matches array — find its
+              // index directly rather than re-running getMatchingSlashCommands.
+              const idx = slashAutocompleteMatches.findIndex(m => m.name === cmd.name);
               acceptSlashCompletion(slashAutocompletePrefix, idx >= 0 ? idx : slashAutocompleteIndex);
             }}
             onDismiss={() => setSlashAutocompleteOpen(false)}

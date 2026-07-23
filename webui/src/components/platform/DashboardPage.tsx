@@ -30,6 +30,13 @@ interface UsageSummary {
   tier: string;
   task_credits: { used: number; included: number; remaining: number };
   llm_spend?: { spend_cents: number; budget_cents: number; remaining: number };
+  daily_llm?: {
+    requests_used: number;
+    requests_limit: number;
+    tokens_used: number;
+    tokens_limit: number;
+    max_output_tokens: number;
+  };
 }
 
 const DashboardPage: React.FC = () => {
@@ -141,21 +148,52 @@ const DashboardPage: React.FC = () => {
                 <div className="dashboard-meter-fill" style={{ width: `${taskPct}%` }} />
               </div>
             </div>
-            {usage.llm_spend && (
-              <div className="dashboard-meter">
-                <div className="dashboard-meter-label">
-                  ${(usage.llm_spend.spend_cents / 100).toFixed(2)} / ${(usage.llm_spend.budget_cents / 100).toFixed(2)}{' '}
-                  LLM
+            {usage.tier === 'auto' && usage.daily_llm ? (
+              <>
+                <div className="dashboard-meter">
+                  <div className="dashboard-meter-label">
+                    {usage.daily_llm.requests_used} / {usage.daily_llm.requests_limit} requests today
+                  </div>
+                  <div className="dashboard-meter-bar">
+                    <div
+                      className="dashboard-meter-fill"
+                      style={{
+                        width: `${Math.min(100, (usage.daily_llm.requests_used / Math.max(1, usage.daily_llm.requests_limit)) * 100)}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="dashboard-meter-bar">
-                  <div
-                    className="dashboard-meter-fill"
-                    style={{
-                      width: `${Math.min(100, (usage.llm_spend.spend_cents / Math.max(1, usage.llm_spend.budget_cents)) * 100)}%`,
-                    }}
-                  />
+                <div className="dashboard-meter">
+                  <div className="dashboard-meter-label">
+                    {(usage.daily_llm.tokens_used / 1000).toFixed(1)}K / {(usage.daily_llm.tokens_limit / 1000).toFixed(0)}K tokens today
+                  </div>
+                  <div className="dashboard-meter-bar">
+                    <div
+                      className="dashboard-meter-fill"
+                      style={{
+                        width: `${Math.min(100, (usage.daily_llm.tokens_used / Math.max(1, usage.daily_llm.tokens_limit)) * 100)}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
+              </>
+            ) : (
+              usage.llm_spend && (
+                <div className="dashboard-meter">
+                  <div className="dashboard-meter-label">
+                    ${(usage.llm_spend.spend_cents / 100).toFixed(2)} / ${(usage.llm_spend.budget_cents / 100).toFixed(2)}{' '}
+                    LLM
+                  </div>
+                  <div className="dashboard-meter-bar">
+                    <div
+                      className="dashboard-meter-fill"
+                      style={{
+                        width: `${Math.min(100, (usage.llm_spend.spend_cents / Math.max(1, usage.llm_spend.budget_cents)) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )
             )}
           </div>
         </div>

@@ -97,6 +97,9 @@ func TestNew_ToolAvailable_ReturnsPlatformNotifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDarwinNotifier_ConstructsCorrectCommand(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin notifier test only runs on darwin")
+	}
 	var captured *exec.Cmd
 	orig := runCommand
 	runCommand = func(cmd *exec.Cmd) ([]byte, error) {
@@ -258,6 +261,9 @@ func TestLinuxNotifier_PropagatesCommandError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestWindowsNotifier_ConstructsCorrectCommand(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows notifier test only runs on windows")
+	}
 	var captured *exec.Cmd
 	orig := runCommand
 	runCommand = func(cmd *exec.Cmd) ([]byte, error) {

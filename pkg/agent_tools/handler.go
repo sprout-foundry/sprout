@@ -237,6 +237,14 @@ type FileAccessClassifier interface {
 	// ctx carries the audit logger; implementations log the verdict via LogJSON
 	// so every decision (allow/prompt/deny) appears in the audit trail.
 	ClassifyFileAccess(ctx context.Context, filePath, resolvedPath, mode string) string
+
+	// IsFolderSessionAllowed reports whether absPath sits under a folder
+	// the user has allowlisted via "Allow this folder for the rest of the
+	// session" (workflow-declared allowed_paths OR manual folder approval).
+	// Used by PrecheckFileAccess to emit the discriminated "allowed_path_hit"
+	// audit event (SP-127 Phase 2.7) — distinct from base "allowed" — so
+	// the WebUI automations panel can count per-run session-allowlist grants.
+	IsFolderSessionAllowed(absPath string) bool
 }
 
 // ---------------------------------------------------------------------------

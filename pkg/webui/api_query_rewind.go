@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -34,7 +34,7 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("handleAPIQueryRewind: invalid JSON: %v", err)
+		ws.log().Warn("invalid rewind request JSON", slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -82,14 +82,14 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 		RevertFiles: revertFiles,
 	})
 	if err != nil {
-		log.Printf("handleAPIQueryRewind: rewind failed chat_id=%s err=%v", chatID, err)
+		ws.log().Error("rewind failed", slog.String("chat_id", chatID), slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "rewind_failed", fmt.Sprintf("Rewind failed: %v", err))
 		return
 	}
 
 	// Sync agent state so the UI reflects the truncated history.
 	if syncErr := ws.syncAgentStateForClientWithChat(clientID, chatID); syncErr != nil {
-		log.Printf("handleAPIQueryRewind: state sync warning chat_id=%s err=%v", chatID, syncErr)
+		ws.log().Warn("failed to sync state after rewind", slog.String("chat_id", chatID), slog.Any("err", syncErr))
 	}
 
 	// Notify the UI that the session changed via rewind.
@@ -99,9 +99,12 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 		"checkpoints_dropped": result.CheckpointsDropped,
 	})
 
-	log.Printf("handleAPIQueryRewind: completed chat_id=%s turns=%d messages=%d files_reverted=%d files_skipped=%d",
-		chatID, result.TurnsDiscarded, result.MessagesRemoved,
-		len(result.FilesReverted), len(result.FilesSkipped))
+	ws.log().Info("rewind completed",
+		slog.String("chat_id", chatID),
+		slog.Int("turns_discarded", result.TurnsDiscarded),
+		slog.Int("messages_removed", result.MessagesRemoved),
+		slog.Int("files_reverted", len(result.FilesReverted)),
+		slog.Int("files_skipped", len(result.FilesSkipped)))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"turns_discarded":     result.TurnsDiscarded,

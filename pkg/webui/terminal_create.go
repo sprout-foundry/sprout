@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"regexp"
@@ -176,7 +176,7 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 		// Primary PTY creation failed — this can happen on Alpine Linux,
 		// minimal containers, or systems without /dev/pts mounted.
 		// Fall back to a basic exec.Cmd-based approach with stdin/stdout pipes.
-		log.Printf("PTY creation failed for session %s (%v), falling back to pipe-based session", sessionID, err)
+		webuiLogger.Warn("PTY creation failed; falling back to pipe-based session", slog.String("session_id", sessionID), slog.Any("err", err))
 		cancel() // cancel the original context; createFallbackUnixSession creates its own.
 		return tm.createFallbackUnixSession(sessionID, shellOverride)
 	}
@@ -204,7 +204,7 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("PTY reader panic for session %s: %v", session.ID, r)
+			webuiLogger.Error("PTY reader panicked", slog.String("session_id", session.ID), slog.Any("panic", r))
 			// Mark inactive and close subscribers so callers don't hang forever
 			// waiting for output that will never arrive.
 			session.mutex.Lock()
@@ -243,7 +243,7 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 			}
 		}
 		if err != nil {
-			log.Printf("Terminal session %s PTY closed: %v", session.ID, err)
+			webuiLogger.Info("terminal session PTY closed", slog.String("session_id", session.ID), slog.Any("err", err))
 			session.mutex.Lock()
 			session.Active = false
 			session.mutex.Unlock()
@@ -342,7 +342,7 @@ func (tm *TerminalManager) createFallbackUnixSession(sessionID, shellOverride st
 				session.broadcast(chunk)
 			}
 			if readErr != nil {
-				log.Printf("Fallback session %s stdout closed: %v", session.ID, readErr)
+				webuiLogger.Info("fallback terminal stdout closed", slog.String("session_id", session.ID), slog.Any("err", readErr))
 				session.mutex.Lock()
 				session.Active = false
 				session.mutex.Unlock()
@@ -438,7 +438,7 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Windows terminal reader panic for session %s: %v", sessionID, r)
+				webuiLogger.Error("Windows terminal reader panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
 				session.mutex.Lock()
 				session.Active = false
 				session.mutex.Unlock()
@@ -538,7 +538,7 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 	// to prevent a session leak.
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("CreateHiddenSession panic for %s: %v", id, r)
+			webuiLogger.Error("hidden terminal session creation panicked", slog.String("session_id", id), slog.Any("panic", r))
 			if session != nil {
 				session.mutex.Lock()
 				if session.Pty != nil {

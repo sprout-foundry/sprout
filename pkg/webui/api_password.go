@@ -4,7 +4,7 @@ package webui
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -42,7 +42,7 @@ func (ws *ReactWebServer) handleAPIPasswordRespond(w http.ResponseWriter, r *htt
 
 	var req passwordRespondRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("handleAPIPasswordRespond: invalid JSON: %v", err)
+		ws.log().Warn("invalid password response JSON", slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -56,12 +56,12 @@ func (ws *ReactWebServer) handleAPIPasswordRespond(w http.ResponseWriter, r *htt
 	}
 
 	if !delivered {
-		log.Printf("handleAPIPasswordRespond: password request %s not found or already responded", requestID)
+		ws.log().Warn("password request not found or already responded", slog.String("request_id", requestID))
 		writeJSONErr(w, http.StatusNotFound, "not_found", "Password request not found or already responded")
 		return
 	}
 
-	log.Printf("handleAPIPasswordRespond: delivered response for request %s", requestID)
+	ws.log().Info("delivered password response", slog.String("request_id", requestID))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"request_id": requestID,

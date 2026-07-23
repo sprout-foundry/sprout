@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 
 	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -76,7 +76,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 
 	var req syncRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		log.Printf("[workspace-sync] bad request: %v", err)
+		ws.log().Warn("invalid workspace sync request", slog.Any("err", err))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -94,7 +94,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 	// Apply the browser operation to the sync state.
 	metadata, err := workspaceSyncState.ApplyBrowserOp(req.Path, req.Content)
 	if err != nil {
-		log.Printf("[workspace-sync] conflict on %s: %v", req.Path, err)
+		ws.log().Warn("workspace sync conflict", slog.String("path", req.Path), slog.Any("err", err))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		// On conflict, suggest a .theirs path for the browser to surface.
@@ -143,7 +143,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *h
 
 	var req takeoverRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		log.Printf("[workspace-takeover] bad request: %v", err)
+		ws.log().Warn("invalid workspace takeover request", slog.Any("err", err))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}

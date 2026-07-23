@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -593,7 +593,7 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		}
 	}
 	if saveErr := cm.SaveConfig(); saveErr != nil {
-		log.Printf("webui: failed to save onboarding config: %v", saveErr)
+		ws.log().Warn("failed to save onboarding config", slog.Any("err", saveErr))
 	}
 
 	// Clear any cached agent so it is re-created with the updated config
@@ -619,7 +619,7 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		// Re-persist the actual model (may differ from requested due to resolution)
 		if actualModel := clientAgent.GetModel(); actualModel != "" {
 			if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
-				log.Printf("webui: failed to re-persist resolved model %q: %v", actualModel, persistErr)
+				ws.log().Warn("failed to re-persist resolved model", slog.String("model", actualModel), slog.Any("err", persistErr))
 			}
 			_ = cm.SaveConfig()
 		}

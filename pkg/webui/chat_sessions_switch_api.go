@@ -6,7 +6,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -95,7 +95,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	ctx.CurrentSessionID = currentSessionID
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionsSwitch: switched to chat session %s for client %s", chatID, clientID)
+	ws.log().Info("switched chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
 
 	ws.publishSessionChanged(clientID, chatID, "switch", cs.chatSessionSummary(false))
 
@@ -214,7 +214,7 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 	if agentInst, err := ws.getChatAgent(clientID, chatID); err == nil && agentInst != nil {
 		rotatedID, rotateErr := agentInst.RotateSession()
 		if rotateErr != nil {
-			log.Printf("handleAPIChatSessionClearHistory: rotate failed for chat %s client %s: %v", chatID, clientID, rotateErr)
+			ws.log().Error("failed to rotate chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID), slog.Any("err", rotateErr))
 			writeJSONErr(w, http.StatusInternalServerError, "rotate_failed", "failed to rotate session")
 			return
 		}

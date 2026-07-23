@@ -5,7 +5,7 @@ package webui
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -59,7 +59,7 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	// cleanup worker — they only contend on tm.mutex, which we released above.
 	if cmd != nil && cmd.Process != nil {
 		if _, err := cmd.Process.Wait(); err != nil {
-			log.Printf("Terminal %s: process wait: %v", sessionID, err)
+			webuiLogger.Error("terminal process wait failed", slog.String("session_id", sessionID), slog.Any("err", err))
 		}
 	}
 	return nil
@@ -112,7 +112,7 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 	session.mutex.Unlock()
 
 	scrollback := string(session.ring.snapshot())
-	log.Printf("TerminalManager: reattached to session %s (scrollback: %d bytes)", sessionID, len(scrollback))
+	webuiLogger.Info("terminal session reattached", slog.String("session_id", sessionID), slog.Int("scrollback_bytes", len(scrollback)))
 	return scrollback, nil
 }
 
@@ -145,9 +145,9 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration, backgr
 	tm.mutex.RUnlock()
 
 	for _, sessionID := range toClose {
-		log.Printf("Cleaning up inactive terminal session: %s", sessionID)
+		webuiLogger.Info("cleaning up inactive terminal session", slog.String("session_id", sessionID))
 		if err := tm.CloseSession(sessionID); err != nil {
-			log.Printf("CleanupInactiveSessions: failed to close %s: %v", sessionID, err)
+			webuiLogger.Error("inactive terminal session cleanup failed", slog.String("session_id", sessionID), slog.Any("err", err))
 		}
 	}
 }

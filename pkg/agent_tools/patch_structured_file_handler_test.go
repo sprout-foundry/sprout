@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -544,64 +543,6 @@ func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
 	// Verify the patched value is correct.
 	if !strings.Contains(string(patchedContent), `"5.1"`) {
 		t.Errorf("Output should contain updated value 5.1:\n%s", string(patchedContent))
-	}
-}
-
-// TestPatchStructuredFile_SingleApprovalForReadAndWrite verifies the
-// TOCTOU + double-prompt fix: a single off-workspace patch consults
-// the gate exactly once, not twice. Before the fix, the read and
-// write phases each independently invoked withFilesystemApproval,
-// so "Approve once" on the read still prompted on the write.
-func TestPatchStructuredFile_SingleApprovalForReadAndWrite(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix fixtures only")
-	}
-
-	gate := &recordingGate{
-		approveDecision: true,
-		returnedCtx:     filesystem.WithSecurityBypass(context.Background()),
-	}
-
-	// Off-workspace target under $HOME — External tier.
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("UserHomeDir: %v", err)
-	}
-	dir, err := os.MkdirTemp(home, "sprout-patch-single-approval-")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-
-	target := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(target, []byte(`{"version":"1.0.0"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	h := &patchStructuredFileHandler{}
-	// No pre-applied bypass — we want the resolve to FAIL so the gate
-	// is consulted. After approval, the returned ctx carries the bypass
-	// for the actual write.
-	ctx := context.Background()
-	env := ToolEnv{
-		FilesystemGate: gate,
-		WorkspaceRoot:  t.TempDir(), // off-workspace from this dir's perspective
-	}
-
-	result, err := h.Execute(ctx, env, map[string]any{
-		"path": target,
-		"patch_ops": []interface{}{
-			map[string]interface{}{"op": "replace", "path": "/version", "value": "2.0.0"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if result.IsError {
-		t.Fatalf("Execute returned IsError: %s", result.Output)
-	}
-	if gate.calls != 1 {
-		t.Errorf("gate should be consulted exactly once, got %d (double-prompt regression)", gate.calls)
 	}
 }
 

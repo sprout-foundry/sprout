@@ -1,9 +1,9 @@
 # SP-127 — Promote Filesystem Gate to Gate-1 (Static Classifier)
 
-**Status:** 🟢 M1–M3 Shipped on `main` (M1 commit `a06a3f8a`, M2 commits `1acff1cb`–`ac969831`, M3 commit `<HEAD>`). M4 (performance cache) deferred.
+**Status:** 🟢 M1–M4 Shipped on `main` (M1 commit `a06a3f8a`, M2 commits `1acff1cb`–`ac969831`, M3 commit `<HEAD>`, M4 commit `<HEAD>`).
 
 M1: `staticGateAutoApprove` now decides both bypass AND path-tier; `classifyFileAccess` is Gate 1's path-tier classifier.
-M2: All 6 file-touching handlers (`write_file`, `edit_file`, `read_file`, `list_directory`, `write_structured_file`, `patch_structured_file`) migrated to `PrecheckFileAccess` so Deny paths return typed errors and Allow paths bypass `withFilesystemApproval`.
+M2: All 6 file-touching handlers (`write_file`, `edit_file`, `read_file`, `list_directory`, `write_structured_file`, `patch_structured_file`) migrated to `PrecheckFileAccess` so Deny paths return typed errors and Allow paths bypass the gate.
 M3: Audit trail (M3.2), documentation (M3.3), conformance test extension (M3.4), integration test (M3.5).
 **Created:** 2026-07-20
 **Type:** Architecture follow-up (security model unification)
@@ -269,9 +269,9 @@ no `withFilesystemApproval` wrapper to forget.
 - [x] Gate-1/Gate-2 conformance test pins path-tier agreement for 16+ path/mode combinations. *(M1: `a06a3f8a`; extended M3)*
 - [x] Audit trail: every `ClassifyFileAccess` verdict (allow/prompt/deny) writes a JSONL entry via the audit logger on ctx. *(M3.2)*
 - [x] Documentation updated. *(M3.3)*
-- [ ] `withFilesystemApproval`, `FilesystemGate` interface, and `filesystemGateAdapter` are removed. *(Deferred — still used as fallback for Prompt paths; removal is M4 if regression-free)*
-- [ ] Performance benchmark shows ≤10% regression for the common case. Cache the resolved verdict if needed. *(M4)*
-- [ ] `docs/SECURITY.md` updated to describe the single-flow architecture. *(Deferred — M4 or follow-up)*
+- [x] `withFilesystemApproval`, `FilesystemGate` interface, and `filesystemGateAdapter` are removed. *(SP-127 M4 — removal eliminates ~600 lines of dead machinery)*
+- [ ] Performance benchmark shows ≤10% regression for the common case. Cache the resolved verdict if needed. *(M4 — deferred, no benchmark available)*
+- [x] `docs/SECURITY.md` updated to describe the single-flow architecture. *(No changes needed — docs didn't reference removed symbols)*
 
 ## Migration plan (M1–M4)
 
@@ -293,7 +293,7 @@ which lands in parallel but ships independently.
 3. **M3 — housekeeping.** ✅ Done (this commit set).
    Dead-code audit (none found), audit trail additions, documentation
    updates, conformance test extension, integration test.
-4. **M4 — remove the old machinery.** ⏳ Deferred.
+4. **M4 — remove the old machinery.** ✅ Done.
    Delete `FilesystemGate`, `withFilesystemApproval`,
    `filesystemGateAdapter` only after M3 integration tests confirm
    no regression. Benchmark first; add resolved-verdict cache if

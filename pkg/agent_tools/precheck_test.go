@@ -44,7 +44,7 @@ func (allowClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) str
 
 // newTestEnvWithClassifier builds a ToolEnv backed by a temp workspace and
 // optionally injects a FileAccessClassifier. Nil classifier means no
-// classifier is available (handlers fall through to withFilesystemApproval).
+// classifier is available (handlers fall through and return the raw filesystem error).
 func newTestEnvWithClassifier(t *testing.T, classifier FileAccessClassifier) ToolEnv {
 	t.Helper()
 	return ToolEnv{
@@ -288,7 +288,7 @@ func TestPrecheckListDirectory_Allow_ProceedsSuccessfully(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Verify nil classifier falls through to withFilesystemApproval (no error)
+// Verify nil classifier falls through (returns raw filesystem error)
 // ---------------------------------------------------------------------------
 
 func TestPrecheckWriteFile_NilClassifier_NoError(t *testing.T) {

@@ -40,27 +40,18 @@ func ReadFile(ctx context.Context, filePath string) (string, error) {
 	return ReadFileWithRange(ctx, filePath, 0, 0)
 }
 
-// resolveReadPathWithGate wraps the SafeResolvePathWithBypass call in
-// withFilesystemApproval so off-workspace reads get the same
-// approve / session-allow / elevate dialog that writes do. Returns
-// the resolved absolute path on success; on denial the original
-// error from SafeResolvePathWithBypass is propagated verbatim.
-func resolveReadPathWithGate(ctx context.Context, filePath string) (string, error) {
-	return withFilesystemApproval(ctx, FilesystemGateFromContext(ctx), "read_file", filePath,
-		func(ctx context.Context) (string, error) {
-			return filesystem.SafeResolvePathWithBypass(ctx, filePath)
-		},
-	)
+// resolveReadPath resolves the path for reading. PrecheckFileAccess should
+// have already set up the bypass context for "allow" paths.
+func resolveReadPath(ctx context.Context, filePath string) (string, error) {
+	return filesystem.SafeResolvePathWithBypass(ctx, filePath)
 }
 
 func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine int) (string, error) {
 	// SECURITY: Validate path is within working directory (handles symlinks properly).
-	// The resolve step is wrapped in withFilesystemApproval so off-workspace
-	// reads on the live seed dispatch path surface the same approve / allow
-	// folder this session / elevate dialog that writes do — historically
-	// read_file on a sibling directory hard-errored with the bare
-	// "file access outside working directory" sentinel.
-	cleanPath, err := resolveReadPathWithGate(ctx, filePath)
+	// PrecheckFileAccess should have already set up the bypass context for
+	// "allow" paths. For "prompt" paths, this will fail with a filesystem
+	// error since the interactive gate is gone (SP-127 M4).
+	cleanPath, err := resolveReadPath(ctx, filePath)
 	if err != nil {
 		return "", fmt.Errorf("resolve file path: %w", err)
 	}

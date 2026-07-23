@@ -325,7 +325,7 @@ func TestHandlePutGlobalSettings(t *testing.T) {
 	isolatedHome := t.TempDir()
 	t.Setenv("HOME", isolatedHome)
 	os.Unsetenv("XDG_CONFIG_HOME") // Ensure no leftover from other tests
-	os.Unsetenv("LEDIT_CONFIG")
+	os.Unsetenv("SPROUT_CONFIG")
 	t.Setenv("USERPROFILE", isolatedHome)
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -493,7 +493,7 @@ func TestHandlePutGlobalSettings_ProviderModel(t *testing.T) {
 	isolatedHome := t.TempDir()
 	t.Setenv("HOME", isolatedHome)
 	os.Unsetenv("XDG_CONFIG_HOME")
-	os.Unsetenv("LEDIT_CONFIG")
+	os.Unsetenv("SPROUT_CONFIG")
 	t.Setenv("USERPROFILE", isolatedHome)
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")

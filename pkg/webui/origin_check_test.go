@@ -186,7 +186,7 @@ func TestCheckOrigin_AllowedOrigins(t *testing.T) {
 func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 	// Ensure no allowed origins env var is set
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
-	t.Setenv("LEDIT_ALLOWED_ORIGINS", "")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
 
 	// Test with localhost binding
 	eventBus := events.NewEventBus()
@@ -504,7 +504,7 @@ func TestCheckOrigin_CaseInsensitive(t *testing.T) {
 // accepted as a local connection, just like 127.0.0.1.
 func TestCheckOrigin_IPv6Localhost(t *testing.T) {
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
-	t.Setenv("LEDIT_ALLOWED_ORIGINS", "")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
 
 	eventBus := events.NewEventBus()
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")

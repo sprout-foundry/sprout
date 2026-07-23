@@ -785,7 +785,7 @@ func TestOfflineGracefulDegradation(t *testing.T) {
 func TestCreateCustomProvider_NoCredentialsRequired(t *testing.T) {
 	// Set up isolated config directory
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Mock server that returns valid responses
@@ -873,7 +873,7 @@ func TestCreateCustomProvider_NoCredentialsRequired(t *testing.T) {
 func TestCreateCustomProvider_CredentialsRequired(t *testing.T) {
 	// Set up isolated config directory
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Save custom provider with RequiresAPIKey=true.
@@ -917,7 +917,7 @@ func TestCreateCustomProvider_CredentialsRequired(t *testing.T) {
 func TestCreateCustomProvider_CredentialsRequiredWithEnvVar(t *testing.T) {
 	// Set up isolated config directory
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Ensure the env var is NOT set

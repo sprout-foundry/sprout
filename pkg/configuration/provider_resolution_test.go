@@ -8,8 +8,8 @@ import (
 )
 
 func TestResolveProviderModel_ExplicitProviderAndModel(t *testing.T) {
-	t.Setenv("LEDIT_PROVIDER", "")
-	t.Setenv("LEDIT_MODEL", "")
+	t.Setenv("SPROUT_PROVIDER", "")
+	t.Setenv("SPROUT_MODEL", "")
 	cfg := NewConfig()
 	clientType, model, err := ResolveProviderModel(cfg, "minimax", "MiniMax-M2.5")
 	if err != nil {
@@ -24,8 +24,8 @@ func TestResolveProviderModel_ExplicitProviderAndModel(t *testing.T) {
 }
 
 func TestResolveProviderModel_ModelSpecifierUsesProviderPrefix(t *testing.T) {
-	t.Setenv("LEDIT_PROVIDER", "")
-	t.Setenv("LEDIT_MODEL", "")
+	t.Setenv("SPROUT_PROVIDER", "")
+	t.Setenv("SPROUT_MODEL", "")
 	cfg := NewConfig()
 	clientType, model, err := ResolveProviderModel(cfg, "", "openrouter:qwen/qwen3.5-flash")
 	if err != nil {
@@ -40,8 +40,8 @@ func TestResolveProviderModel_ModelSpecifierUsesProviderPrefix(t *testing.T) {
 }
 
 func TestResolveProviderModel_ModelWithColonNotProviderKeepsModel(t *testing.T) {
-	t.Setenv("LEDIT_PROVIDER", "")
-	t.Setenv("LEDIT_MODEL", "")
+	t.Setenv("SPROUT_PROVIDER", "")
+	t.Setenv("SPROUT_MODEL", "")
 	cfg := NewConfig()
 	cfg.LastUsedProvider = "ollama-local"
 
@@ -68,8 +68,8 @@ func TestResolveProviderModel_ModelWithColonNotProviderKeepsModel(t *testing.T) 
 // (via api.GetProviderName), which lowercased to "ollama (local)" and
 // didn't match any known provider, breaking per-session provider scoping.
 func TestMapProviderStringToClientType_RoundTripFromProviderID(t *testing.T) {
-	t.Setenv("LEDIT_PROVIDER", "")
-	t.Setenv("LEDIT_MODEL", "")
+	t.Setenv("SPROUT_PROVIDER", "")
+	t.Setenv("SPROUT_MODEL", "")
 	cfg := NewConfig()
 
 	// Exercise every built-in ClientType to ensure the round-trip is universal.
@@ -103,8 +103,8 @@ func TestMapProviderStringToClientType_RoundTripFromProviderID(t *testing.T) {
 // Note: this is a deliberate fallback. New code paths should always
 // pass the provider ID, but old session data may still carry display names.
 func TestMapProviderStringToClientType_AcceptsDisplayNames(t *testing.T) {
-	t.Setenv("LEDIT_PROVIDER", "")
-	t.Setenv("LEDIT_MODEL", "")
+	t.Setenv("SPROUT_PROVIDER", "")
+	t.Setenv("SPROUT_MODEL", "")
 	cfg := NewConfig()
 
 	// Spot-check the most common display-name collisions from the Bug 1
@@ -141,8 +141,8 @@ func TestMapProviderStringToClientType_AcceptsDisplayNames(t *testing.T) {
 // that arbitrary casing of display names still resolves — real-world
 // inputs may have been lowercased, uppercased, or mixed.
 func TestMapProviderStringToClientType_DisplayNameCaseInsensitive(t *testing.T) {
-	t.Setenv("LEDIT_PROVIDER", "")
-	t.Setenv("LEDIT_MODEL", "")
+	t.Setenv("SPROUT_PROVIDER", "")
+	t.Setenv("SPROUT_MODEL", "")
 	cfg := NewConfig()
 
 	cases := []struct {
@@ -171,8 +171,8 @@ func TestMapProviderStringToClientType_DisplayNameCaseInsensitive(t *testing.T) 
 // TestMapProviderStringToClientType_UnknownDisplayNameReturnsError
 // ensures the fallback doesn't accidentally accept arbitrary strings.
 func TestMapProviderStringToClientType_UnknownDisplayNameReturnsError(t *testing.T) {
-	t.Setenv("LEDIT_PROVIDER", "")
-	t.Setenv("LEDIT_MODEL", "")
+	t.Setenv("SPROUT_PROVIDER", "")
+	t.Setenv("SPROUT_MODEL", "")
 	cfg := NewConfig()
 
 	cases := []string{

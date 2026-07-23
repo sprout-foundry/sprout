@@ -26,16 +26,16 @@ import (
 
 func setEnvSuffix(t *testing.T, suffix, value string) {
 	t.Helper()
-	// configuration.GetEnvSimple looks up SPROUT_<suffix> then LEDIT_<suffix>.
+	// configuration.GetEnvSimple looks up SPROUT_<suffix> then SPROUT_<suffix>.
 	// Set both forms so the helper sees a value.
 	oldSPROUT, _ := os.LookupEnv("SPROUT_" + suffix)
-	oldLEDIT, _ := os.LookupEnv("LEDIT_" + suffix)
+	oldVal, _ := os.LookupEnv("SPROUT_" + suffix)
 	if value == "" {
 		os.Unsetenv("SPROUT_" + suffix)
-		os.Unsetenv("LEDIT_" + suffix)
+		os.Unsetenv("SPROUT_" + suffix)
 	} else {
 		os.Setenv("SPROUT_"+suffix, value)
-		os.Setenv("LEDIT_"+suffix, value)
+		os.Setenv("SPROUT_"+suffix, value)
 	}
 	t.Cleanup(func() {
 		if oldSPROUT == "" {
@@ -43,10 +43,10 @@ func setEnvSuffix(t *testing.T, suffix, value string) {
 		} else {
 			os.Setenv("SPROUT_"+suffix, oldSPROUT)
 		}
-		if oldLEDIT == "" {
-			os.Unsetenv("LEDIT_" + suffix)
+		if oldVal == "" {
+			os.Unsetenv("SPROUT_" + suffix)
 		} else {
-			os.Setenv("LEDIT_"+suffix, oldLEDIT)
+			os.Setenv("SPROUT_"+suffix, oldVal)
 		}
 	})
 }

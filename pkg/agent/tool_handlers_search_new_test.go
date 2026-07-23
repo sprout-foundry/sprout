@@ -303,14 +303,12 @@ func TestGetSearchMaxBytes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// GetEnvSimple("SEARCH_MAX_BYTES") checks SPROUT_SEARCH_MAX_BYTES then LEDIT_SEARCH_MAX_BYTES
+			// GetEnvSimple("SEARCH_MAX_BYTES") checks SPROUT_SEARCH_MAX_BYTES
 			sproutKey := "SPROUT_SEARCH_MAX_BYTES"
-			leditKey := "LEDIT_SEARCH_MAX_BYTES"
 
 			t.Setenv(sproutKey, "")
-			t.Setenv(leditKey, "")
 			if tt.envValue != "" {
-				t.Setenv(leditKey, tt.envValue)
+				t.Setenv(sproutKey, tt.envValue)
 			}
 
 			if got := getSearchMaxBytes(); got != tt.want {

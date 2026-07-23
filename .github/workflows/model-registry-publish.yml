@@ -28,7 +28,7 @@ jobs:
 
       - name: Generate per-provider model files
         env:
-          LEDIT_MODEL_REGISTRY_URL: "disabled" # Disable registry so CLI hits provider APIs directly for fresh data
+          SPROUT_MODEL_REGISTRY_URL: "disabled" # Disable registry so CLI hits provider APIs directly for fresh data
           SPROUT_MODEL_REGISTRY_URL: "disabled"
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
@@ -54,7 +54,7 @@ jobs:
         # for providers without a canonical models/<id>.json file (e.g.,
         # providers whose API key is not available in CI).
         env:
-          LEDIT_MODEL_REGISTRY_URL: "disabled"
+          SPROUT_MODEL_REGISTRY_URL: "disabled"
           SPROUT_MODEL_REGISTRY_URL: "disabled"
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}

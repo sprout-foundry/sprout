@@ -49,14 +49,14 @@ type ONNXRuntime struct {
 func onnxRequiresModelFiles() bool { return true }
 
 // DefaultModelDir returns the default model directory path.
-// Priority: SPROUT_MODELS_DIR env > SPROUT_CONFIG/LEDIT_CONFIG env > ~/.config/sprout
+// Priority: SPROUT_MODELS_DIR env > SPROUT_CONFIG/SPROUT_CONFIG env > ~/.config/sprout
 func DefaultModelDir() string {
 	if dir := os.Getenv("SPROUT_MODELS_DIR"); dir != "" {
 		return dir
 	}
 	configDir := os.Getenv("SPROUT_CONFIG")
 	if configDir == "" {
-		configDir = os.Getenv("LEDIT_CONFIG")
+		configDir = os.Getenv("SPROUT_CONFIG")
 	}
 	if configDir == "" {
 		home, _ := os.UserHomeDir()

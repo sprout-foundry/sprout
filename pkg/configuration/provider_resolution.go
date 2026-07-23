@@ -148,14 +148,14 @@ func MapProviderStringToClientType(cfg *Config, raw string) (api.ClientType, err
 // ResolveProviderModel resolves provider and model using one canonical precedence path:
 // 1) Explicit provider flag/arg
 // 2) Explicit model in provider:model format (only when prefix is a valid provider)
-// 3) SPROUT_PROVIDER env (with LEDIT_PROVIDER backward-compat)
-// 4) SPROUT_MODEL env (provider:model format only when prefix is a valid provider, LEDIT_MODEL backward-compat)
+// 3) SPROUT_PROVIDER env (with SPROUT_PROVIDER backward-compat)
+// 4) SPROUT_MODEL env (provider:model format only when prefix is a valid provider, SPROUT_MODEL backward-compat)
 // 5) Config last_used_provider
 // 6) Auto-detected provider via DetermineProvider
 //
 // Model precedence:
 // 1) Explicit model (trimmed to model segment when provider:model format is recognized)
-// 2) SPROUT_MODEL env (same parsing rule, LEDIT_MODEL backward-compat)
+// 2) SPROUT_MODEL env (same parsing rule, SPROUT_MODEL backward-compat)
 // 3) Config provider model default
 func ResolveProviderModel(cfg *Config, explicitProvider, explicitModel string) (api.ClientType, string, error) {
 	providerName := strings.TrimSpace(explicitProvider)

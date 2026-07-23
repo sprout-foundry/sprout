@@ -55,7 +55,7 @@ var envVarsToStripFromUserShell = []string{"NO_COLOR", "FORCE_COLOR"}
 // interactive shell in the webui embedded terminal. It starts from a sanitized
 // copy of os.Environ() with sprout-internal color vars stripped (see
 // envVarsToStripFromUserShell), then layers in the terminal-specific vars
-// (TERM, COLORTERM, SHELL, the SPROUT/LEDIT marker vars, and COLUMNS/LINES).
+// (TERM, COLORTERM, SHELL, the SPROUT marker vars, and COLUMNS/LINES).
 //
 // This is the single source of truth for the terminal env block, shared by
 // createUnixSession, createFallbackUnixSession, and createWindowsSession.
@@ -66,7 +66,7 @@ func buildTerminalEnv(shell string, size *pty.Winsize) []string {
 	// with a duplicate (e.g. two SHELL entries) and behavior would depend on
 	// whether exec(2) prefers the first or last. Stripping them forces a
 	// single, well-defined final value.
-	envOverrides := []string{"TERM", "COLORTERM", "SHELL", "SPROUT_WEB_TERMINAL", "LEDIT_WEB_TERMINAL", "COLUMNS", "LINES"}
+	envOverrides := []string{"TERM", "COLORTERM", "SHELL", "SPROUT_WEB_TERMINAL", "SPROUT_WEB_TERMINAL", "COLUMNS", "LINES"}
 	filtered := os.Environ()
 	filtered = stripEnvVars(filtered, envVarsToStripFromUserShell)
 	filtered = stripEnvVars(filtered, envOverrides)
@@ -75,7 +75,7 @@ func buildTerminalEnv(shell string, size *pty.Winsize) []string {
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"SHELL="+shell,
-		"SPROUT_WEB_TERMINAL=1", "LEDIT_WEB_TERMINAL=1",
+		"SPROUT_WEB_TERMINAL=1", "SPROUT_WEB_TERMINAL=1",
 		fmt.Sprintf("COLUMNS=%d", size.Cols),
 		fmt.Sprintf("LINES=%d", size.Rows),
 	)

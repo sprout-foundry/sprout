@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 )
 
 func TestProviderFactory(t *testing.T) {
@@ -172,6 +173,13 @@ func TestProviderFactoryValidation(t *testing.T) {
 }
 
 func TestProviderModelContextLimits(t *testing.T) {
+	// Disable the live model registry so this test exercises the static
+	// config fallback path (model_overrides → pattern_overrides), not the
+	// network-fetched registry data (which may differ from config values).
+	// loadConfig() runs in init(), so SetBaseURL is needed at test time.
+	modelregistry.SetBaseURL("")
+	defer modelregistry.SetBaseURL("https://sprout-foundry.github.io/sprout")
+
 	factory := NewProviderFactory()
 
 	// Load test configs

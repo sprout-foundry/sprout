@@ -604,7 +604,7 @@ func cwdStr() string {
 
 // --- displayVerboseLog ---
 
-func TestDisplayVerboseLog_NoLeditDir(t *testing.T) {
+func TestDisplayVerboseLog_NoSproutDir(t *testing.T) {
 	dir := t.TempDir()
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)

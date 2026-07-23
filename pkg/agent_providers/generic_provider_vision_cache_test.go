@@ -14,7 +14,7 @@ import (
 // Covers:
 //   - Default ON: image blocks carry cache_control: {type: "ephemeral"}
 //   - Disabled via SPROUT_VISION_CACHE_IMAGES=false: no cache_control
-//   - LEDIT_VISION_CACHE_IMAGES=false (legacy) honored as fallback
+//   - SPROUT_VISION_CACHE_IMAGES=false (legacy) honored as fallback
 //   - cache_control sits inside the image_url block, not at top level
 //   - Text-only content returns plain string (no parts)
 //   - Mixed text + image: cache_control on image only, not on text
@@ -23,10 +23,10 @@ import (
 func setCacheImagesEnv(t *testing.T, value string) {
 	t.Helper()
 	oldSPROUT, _ := os.LookupEnv("SPROUT_VISION_CACHE_IMAGES")
-	oldLEDIT, _ := os.LookupEnv("LEDIT_VISION_CACHE_IMAGES")
+	oldVal, _ := os.LookupEnv("SPROUT_VISION_CACHE_IMAGES")
 	if value == "" {
 		os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
-		os.Unsetenv("LEDIT_VISION_CACHE_IMAGES")
+		os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
 	} else {
 		os.Setenv("SPROUT_VISION_CACHE_IMAGES", value)
 	}
@@ -36,10 +36,10 @@ func setCacheImagesEnv(t *testing.T, value string) {
 		} else {
 			os.Setenv("SPROUT_VISION_CACHE_IMAGES", oldSPROUT)
 		}
-		if oldLEDIT == "" {
-			os.Unsetenv("LEDIT_VISION_CACHE_IMAGES")
+		if oldVal == "" {
+			os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
 		} else {
-			os.Setenv("LEDIT_VISION_CACHE_IMAGES", oldLEDIT)
+			os.Setenv("SPROUT_VISION_CACHE_IMAGES", oldVal)
 		}
 	})
 }
@@ -70,15 +70,15 @@ func TestVisionCacheImagesEnabled_Enabled(t *testing.T) {
 }
 
 func TestVisionCacheImagesEnabled_LegacyFallback(t *testing.T) {
-	// When SPROUT_ is empty and LEDIT_ has a value, the helper should
-	// read the LEDIT_ value.
+	// When SPROUT_ is empty and SPROUT_ has a value, the helper should
+	// read the SPROUT_ value.
 	os.Setenv("SPROUT_VISION_CACHE_IMAGES", "")
 	defer os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
-	os.Setenv("LEDIT_VISION_CACHE_IMAGES", "false")
-	defer os.Unsetenv("LEDIT_VISION_CACHE_IMAGES")
+	os.Setenv("SPROUT_VISION_CACHE_IMAGES", "false")
+	defer os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
 
 	if visionCacheImagesEnabled() {
-		t.Error("expected LEDIT_VISION_CACHE_IMAGES=false to disable cache_control")
+		t.Error("expected SPROUT_VISION_CACHE_IMAGES=false to disable cache_control")
 	}
 }
 

@@ -35,7 +35,7 @@ func shouldFallbackToOCR(err error) bool {
 }
 
 // isFallbackEnabled checks whether the OCR fallback feature is enabled.
-// It reads VISION_FALLBACK_TO_OCR env var (SPROUT_ / LEDIT_ prefixes),
+// It reads VISION_FALLBACK_TO_OCR env var (SPROUT_ / SPROUT_ prefixes),
 // defaulting to true.
 func isFallbackEnabled() bool {
 	// Check env var first (runtime override)

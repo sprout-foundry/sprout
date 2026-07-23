@@ -5,7 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -117,7 +117,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, 
 	// Write the provider file first; a failure here leaves the in-memory
 	// map untouched so the UI can retry without waiting for a reload.
 	if saveErr := configuration.SaveCustomProvider(provider); saveErr != nil {
-		log.Printf("webui: failed to persist provider %q: %v", provider.Name, saveErr)
+		ws.log().Error("failed to persist provider", slog.String("provider", provider.Name), slog.Any("err", saveErr))
 		writeJSONError(w, http.StatusInternalServerError, "failed to persist provider")
 		return
 	}
@@ -137,9 +137,9 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, 
 	})
 	if commitErr != nil {
 		if delErr := configuration.DeleteCustomProvider(provider.Name); delErr != nil {
-			log.Printf("webui: failed to roll back provider %q after commit error: %v", provider.Name, delErr)
+			ws.log().Error("failed to roll back provider after commit error", slog.String("provider", provider.Name), slog.Any("err", delErr))
 		}
-		log.Printf("webui: failed to commit in-memory create for provider %q: %v", provider.Name, commitErr)
+		ws.log().Error("failed to commit in-memory provider creation", slog.String("provider", provider.Name), slog.Any("err", commitErr))
 		writeJSONError(w, http.StatusInternalServerError, "failed to create provider")
 		return
 	}
@@ -210,7 +210,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 	// Persist the new provider file first; a failure here leaves the
 	// in-memory map (and therefore any concurrent read) untouched.
 	if saveErr := configuration.SaveCustomProvider(provider); saveErr != nil {
-		log.Printf("webui: failed to persist provider %q: %v", name, saveErr)
+		ws.log().Error("failed to persist provider", slog.String("provider", name), slog.Any("err", saveErr))
 		writeJSONError(w, http.StatusInternalServerError, "failed to persist provider")
 		return
 	}
@@ -230,9 +230,9 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 	})
 	if commitErr != nil {
 		if rollbackErr := configuration.SaveCustomProvider(oldProvider); rollbackErr != nil {
-			log.Printf("webui: failed to roll back provider %q after commit error: %v", name, rollbackErr)
+			ws.log().Error("failed to roll back provider after commit error", slog.String("provider", name), slog.Any("err", rollbackErr))
 		}
-		log.Printf("webui: failed to commit in-memory update for provider %q: %v", name, commitErr)
+		ws.log().Error("failed to commit in-memory provider update", slog.String("provider", name), slog.Any("err", commitErr))
 		writeJSONError(w, http.StatusInternalServerError, "failed to update provider state")
 		return
 	}
@@ -284,7 +284,7 @@ func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter
 	// Remove the provider file first; a failure leaves the in-memory
 	// map (and the manager's view of the provider) intact.
 	if delErr := configuration.DeleteCustomProvider(name); delErr != nil {
-		log.Printf("webui: failed to delete provider %q file: %v", name, delErr)
+		ws.log().Error("failed to delete provider file", slog.String("provider", name), slog.Any("err", delErr))
 		writeJSONError(w, http.StatusInternalServerError, "failed to delete provider")
 		return
 	}
@@ -300,9 +300,9 @@ func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter
 	})
 	if commitErr != nil {
 		if restoreErr := configuration.SaveCustomProvider(oldProvider); restoreErr != nil {
-			log.Printf("webui: failed to restore provider %q file after commit error: %v", name, restoreErr)
+			ws.log().Error("failed to restore provider file after commit error", slog.String("provider", name), slog.Any("err", restoreErr))
 		}
-		log.Printf("webui: failed to commit in-memory delete for provider %q: %v", name, commitErr)
+		ws.log().Error("failed to commit in-memory provider deletion", slog.String("provider", name), slog.Any("err", commitErr))
 		writeJSONError(w, http.StatusInternalServerError, "failed to delete provider state")
 		return
 	}

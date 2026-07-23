@@ -53,7 +53,7 @@ func (ws *ReactWebServer) handleAPIProxyChat(w http.ResponseWriter, r *http.Requ
 	var req proxyChatRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		ws.logger.Warn("invalid proxy chat JSON", slog.String("err", err.Error()))
+		ws.log().Warn("invalid proxy chat JSON", slog.String("err", err.Error()))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -81,7 +81,7 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	// Extract the query text from the last user message (already trimmed by getLastUserMessage)
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
-		ws.logger.Warn("steer requires a user message",
+		ws.log().Warn("steer requires a user message",
 			slog.String("handler", "handleAPIProxyChatSteer"),
 			slog.String("chat_id", chatID),
 			slog.String("client_id", clientID),
@@ -116,7 +116,7 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	}
 
 	if err := clientAgent.InjectInputContext(query); err != nil {
-		ws.logger.Error("steer failed",
+		ws.log().Error("steer failed",
 			slog.String("handler", "handleAPIProxyChatSteer"),
 			slog.String("chat_id", chatID),
 			slog.String("client_id", clientID),
@@ -125,7 +125,7 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 		writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 		return
 	}
-	ws.logger.Info("query steered",
+	ws.log().Info("query steered",
 		slog.String("handler", "handleAPIProxyChatSteer"),
 		slog.String("chat_id", chatID),
 		slog.String("client_id", clientID),
@@ -151,19 +151,19 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 // After the consolidation, this endpoint now also gets:
 //   - provider/model switch errors returned as 400 instead of silently
 //     proceeding (the per-query override branches previously only
-//     log.Printf'd and continued with the wrong model)
+//     logged the error and continued with the wrong model)
 //   - chat_id stamped on the QueryFailed error event (was previously
 //     only the client_id)
 func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http.Request, clientID, chatID string, req *proxyChatRequest) {
 	// Extract the query text from the last user message
 	query := getLastUserMessage(req.Messages)
 	if query == "" {
-		ws.logger.Warn("no user message in proxy chat request", slog.String("chat_id", chatID))
+		ws.log().Warn("no user message in proxy chat request", slog.String("chat_id", chatID))
 		writeJSONErr(w, http.StatusBadRequest, "user_message_required", "Messages with a user role are required")
 		return
 	}
 
-	ws.logger.Info("processing query",
+	ws.log().Info("processing query",
 		slog.String("handler", "handleAPIProxyChat"),
 		slog.String("chat_id", chatID),
 		slog.String("query", query),

@@ -90,7 +90,7 @@ func (ws *ReactWebServer) stopActiveQuery(w http.ResponseWriter, r *http.Request
 	}
 
 	clientAgent.TriggerInterrupt()
-	ws.logger.Info("query interrupt triggered",
+	ws.log().Info("query interrupt triggered",
 		slog.String("chat_id", chatID),
 		slog.String("client_id", clientID),
 	)
@@ -107,7 +107,7 @@ func (ws *ReactWebServer) stopActiveQuery(w http.ResponseWriter, r *http.Request
 			}
 		}
 	}
-	ws.logger.Info("active query stopped",
+	ws.log().Info("active query stopped",
 		slog.String("chat_id", chatID),
 		slog.String("client_id", clientID),
 		slog.Int("cancelled_subagents", cancelledSubagents),
@@ -327,7 +327,7 @@ func (ws *ReactWebServer) runChatQuery(
 	go func() {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				ws.logger.Error("panic in query goroutine",
+				ws.log().Error("panic in query goroutine",
 					slog.String("handler", logTag),
 					slog.String("chat_id", chatID),
 					slog.Any("panic", recovered),
@@ -372,7 +372,7 @@ func (ws *ReactWebServer) runChatQuery(
 				go func() {
 					defer close(readerDone)
 					if _, copyErr := io.Copy(&captured, pipeR); copyErr != nil {
-						ws.logger.Error("command output pipe read failed",
+						ws.log().Error("command output pipe read failed",
 							slog.String("handler", logTag),
 							slog.Any("err", copyErr),
 						)
@@ -382,7 +382,7 @@ func (ws *ReactWebServer) runChatQuery(
 				// Pipe creation failed (rare: FD exhaustion). Fall back to
 				// io.Discard so commands implementing OutputCommand don't
 				// block on a nil writer. Output is lost but the command runs.
-				ws.logger.Warn("command output pipe creation failed; output will be lost",
+				ws.log().Warn("command output pipe creation failed; output will be lost",
 					slog.String("handler", logTag),
 					slog.Any("err", pipeErr),
 				)
@@ -403,7 +403,7 @@ func (ws *ReactWebServer) runChatQuery(
 			go func() {
 				defer func() {
 					if recovered := recover(); recovered != nil {
-						ws.logger.Error("panic in slash-command state sync",
+						ws.log().Error("panic in slash-command state sync",
 							slog.String("handler", logTag),
 							slog.String("chat_id", chatID),
 							slog.Any("panic", recovered),
@@ -411,7 +411,7 @@ func (ws *ReactWebServer) runChatQuery(
 					}
 				}()
 				if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-					ws.logger.Error("async state sync failed",
+					ws.log().Error("async state sync failed",
 						slog.String("handler", logTag),
 						slog.String("chat_id", chatID),
 						slog.Any("err", err),
@@ -427,7 +427,7 @@ func (ws *ReactWebServer) runChatQuery(
 			}
 
 			if err != nil {
-				ws.logger.Error("slash command failed",
+				ws.log().Error("slash command failed",
 					slog.String("handler", logTag),
 					slog.String("chat_id", chatID),
 					slog.Any("err", err),
@@ -459,7 +459,7 @@ func (ws *ReactWebServer) runChatQuery(
 			return
 		}
 
-		ws.logger.Info("query started",
+		ws.log().Info("query started",
 			slog.String("handler", logTag),
 			slog.String("chat_id", chatID),
 			slog.String("provider", clientAgent.GetProvider()),
@@ -496,7 +496,7 @@ func (ws *ReactWebServer) runChatQuery(
 		go func() {
 			defer func() {
 				if recovered := recover(); recovered != nil {
-					ws.logger.Error("panic in state sync",
+					ws.log().Error("panic in state sync",
 						slog.String("handler", logTag),
 						slog.String("chat_id", chatID),
 						slog.Any("panic", recovered),
@@ -504,7 +504,7 @@ func (ws *ReactWebServer) runChatQuery(
 				}
 			}()
 			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-				ws.logger.Error("async state sync failed",
+				ws.log().Error("async state sync failed",
 					slog.String("handler", logTag),
 					slog.String("chat_id", chatID),
 					slog.Any("err", err),
@@ -513,7 +513,7 @@ func (ws *ReactWebServer) runChatQuery(
 		}()
 
 		if err != nil {
-			ws.logger.Error("query failed",
+			ws.log().Error("query failed",
 				slog.String("handler", logTag),
 				slog.String("chat_id", chatID),
 				slog.Duration("duration", queryDuration),
@@ -524,7 +524,7 @@ func (ws *ReactWebServer) runChatQuery(
 			// Success-path log: lets operators see that the provider responded
 			// and at what cost. Without this the log goes silent after the
 			// "query started" line and the server looks hung.
-			ws.logger.Info("query completed",
+			ws.log().Info("query completed",
 				slog.String("handler", logTag),
 				slog.String("chat_id", chatID),
 				slog.Duration("duration", queryDuration),

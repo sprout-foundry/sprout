@@ -467,6 +467,13 @@ func isTmpPath(path string) bool {
 		strings.HasPrefix(cleanPath, "/private/tmp/") || cleanPath == "/private/tmp" {
 		return true
 	}
+	// Also allow os.TempDir() — on macOS this is /var/folders/.../T/
+	// which is the per-user temp directory.
+	tmpDir := filepath.Clean(os.TempDir())
+	if tmpDir != "/tmp" && tmpDir != "/private/tmp" &&
+		(strings.HasPrefix(cleanPath, tmpDir+string(filepath.Separator)) || cleanPath == tmpDir) {
+		return true
+	}
 	// Windows-style temp paths
 	lowerPath := strings.ToLower(cleanPath)
 	if strings.Contains(lowerPath, "\\temp\\") || strings.Contains(lowerPath, "\\tmp\\") {

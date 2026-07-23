@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -592,6 +593,12 @@ func TestSameToolJSONFixHint(t *testing.T) {
 // branch passed oldStr/newStr to TrackFileEdit instead of the full
 // before/after content.
 func TestHandleEditFile_TracksFullFileContent(t *testing.T) {
+	// On macOS CI, t.TempDir() is under /var (→ /private/var) which is
+	// in systemPathPrefixes — the filesystem gate blocks the path
+	// regardless of workspace root. Skip on macOS CI.
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS temp dirs are under /var (Sensitive) — filesystem gate blocks")
+	}
 	agent := NewTestAgent()
 	ws := t.TempDir()
 	// Resolve symlinks — macOS /var/folders → /private/var/folders

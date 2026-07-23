@@ -7,7 +7,7 @@ package webui
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -122,12 +122,12 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Start server in goroutine
 	go func() {
 		if ws.socketPath != "" {
-			log.Printf("[web] Web UI starting on unix socket %s", ws.socketPath)
+			ws.log().Info("web UI starting on Unix socket", slog.String("socket_path", ws.socketPath))
 		} else {
-			log.Printf("[web] Web UI starting at http://%s:%d", DisplayAddr(ws.bindAddr), ws.port)
+			ws.log().Info("web UI starting", slog.String("address", DisplayAddr(ws.bindAddr)), slog.Int("port", ws.port))
 		}
 		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
-			log.Printf("Web server error: %v", err)
+			ws.log().Error("web server failed", slog.Any("err", err))
 		}
 	}()
 
@@ -204,9 +204,9 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	// Close all terminal sessions to clean up PTY processes.
 	if err := ws.terminalManager.CloseAllSessions(); err != nil {
-		log.Printf("[web] Warning: error closing terminal sessions: %v", err)
+		ws.log().Warn("terminal session shutdown failed", slog.Any("err", err))
 	}
-	log.Printf("[web] Closed all terminal sessions")
+	ws.log().Info("all terminal sessions closed")
 
 	if listener != nil {
 		_ = listener.Close()

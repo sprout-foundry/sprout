@@ -5,7 +5,7 @@ package webui
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -87,7 +87,7 @@ func (ws *ReactWebServer) HandleContainerRecoveryWithSeqs(ctx context.Context, c
 		Plan:     makePlanFromResults(plan),
 	}
 
-	log.Printf("[SP-046] Container recovery for client %s: %d files in plan", clientID, len(plan))
+	ws.log().Info("container recovery plan created", slog.String("client_id", clientID), slog.Int("file_count", len(plan)))
 	return result, nil
 }
 

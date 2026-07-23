@@ -4,7 +4,7 @@ package webui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -38,7 +38,7 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, dat
 		return
 	}
 
-	log.Printf("Security approval response received: request_id=%s decision=%s", data.RequestID, decision.String())
+	ws.log().Info("security approval response received", slog.String("request_id", data.RequestID), slog.String("decision", decision.String()))
 }
 
 // resolveApprovalDecision picks the typed ApprovalDecision based on the
@@ -74,7 +74,7 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, data 
 			"request_id": data.RequestID,
 			"response":   data.Response,
 		})
-		log.Printf("Security prompt response received: request_id=%s response=%v", data.RequestID, data.Response)
+		ws.log().Info("security prompt response received", slog.String("request_id", data.RequestID), slog.Bool("response", data.Response))
 	} else {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -96,7 +96,7 @@ func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, data *AskUse
 	}
 
 	if ws.askUserMgr.RespondToAskUser(data.RequestID, data.Response) {
-		log.Printf("Ask user response received: request_id=%s response_length=%d", data.RequestID, len(data.Response))
+		ws.log().Info("ask user response received", slog.String("request_id", data.RequestID), slog.Int("response_length", len(data.Response)))
 	} else {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -122,7 +122,7 @@ func (ws *ReactWebServer) handlePasswordResponse(safeConn *SafeConn, data *Passw
 
 	delivered := ag.RespondToPasswordRequest(data.RequestID, data.Password)
 	if !delivered {
-		log.Printf("Password response: request_id=%s not found or already responded", data.RequestID)
+		ws.log().Warn("password response request not found or already answered", slog.String("request_id", data.RequestID))
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": fmt.Sprintf("Password request %s not found or already responded", data.RequestID)},
@@ -130,9 +130,9 @@ func (ws *ReactWebServer) handlePasswordResponse(safeConn *SafeConn, data *Passw
 		return
 	}
 
-	log.Printf("Password response received: request_id=%s", data.RequestID)
+	ws.log().Info("password response received", slog.String("request_id", data.RequestID))
 	_ = safeConn.WriteJSON(map[string]interface{}{
-		"type":        "password_responded",
+		"type": "password_responded",
 		"data": map[string]interface{}{
 			"request_id": data.RequestID,
 			"responded":  true,

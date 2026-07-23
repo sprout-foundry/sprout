@@ -1,46 +1,49 @@
 {
   "auth": {
-    "env_var": "",
-    "type": "none"
-  },
+  "env_var": "",
+  "type": "none"
+},
   "cost": {
-    "currency": "USD",
-    "input_token_cost": 0,
-    "output_token_cost": 0
-  },
+  "currency": "USD",
+  "input_token_cost": 0,
+  "output_token_cost": 0
+},
   "defaults": {
-    "max_tokens": -1,
-    "model": "",
-    "temperature": 0.7,
-    "top_p": 1
-  },
+  "max_tokens": -1,
+  "model": "",
+  "temperature": 0.7,
+  "top_p": 1
+},
   "endpoint": "http://127.0.0.1:1234/v1/chat/completions",
   "headers": {},
   "message_conversion": {
-    "convert_tool_role_to_user": false,
-    "include_tool_call_id": true,
-    "reasoning_content_field": ""
-  },
+  "convert_tool_role_to_user": false,
+  "include_tool_call_id": true,
+  "reasoning_content_field": ""
+},
   "models": {
-    "default_context_limit": 32768,
-    "supports_vision": true
-  },
+  "default_context_limit": 32768,
+  "supports_vision": true,
+  "default_model_patterns": [
+  ""
+]
+},
   "name": "lmstudio",
   "retry": {
-    "backoff_multiplier": 2,
-    "base_delay_ms": 1000,
-    "max_attempts": 3,
-    "max_delay_ms": 30000,
-    "retryable_errors": [
-      "rate_limit_exceeded",
-      "temporary_error",
-      "timeout"
-    ]
-  },
+  "backoff_multiplier": 2,
+  "base_delay_ms": 1000,
+  "max_attempts": 3,
+  "max_delay_ms": 30000,
+  "retryable_errors": [
+  "rate_limit_exceeded",
+  "temporary_error",
+  "timeout"
+]
+},
   "streaming": {
-    "chunk_timeout_ms": 300000,
-    "done_marker": "[DONE]",
-    "format": "sse"
-  },
+  "chunk_timeout_ms": 300000,
+  "done_marker": "[DONE]",
+  "format": "sse"
+},
   "display_name": "LM Studio"
 }

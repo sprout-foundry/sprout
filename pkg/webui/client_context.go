@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -524,7 +524,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 			configPath := filepath.Join(workspaceDir, "config.json")
 			if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
 				if err := configuration.BootstrapIsolatedConfig(workspaceDir); err != nil {
-					log.Printf("[debug] daemon workspace: failed to bootstrap isolated config for %s: %v", workspaceRoot, err)
+					ws.log().Warn("isolated daemon workspace configuration bootstrap failed", slog.String("workspace_root", workspaceRoot), slog.Any("err", err))
 				}
 			}
 		}

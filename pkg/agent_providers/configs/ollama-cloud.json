@@ -1,47 +1,50 @@
 {
   "auth": {
-    "env_var": "OLLAMA_API_KEY",
-    "type": "bearer"
-  },
+  "env_var": "OLLAMA_API_KEY",
+  "type": "bearer"
+},
   "cost": {
-    "currency": "USD",
-    "input_token_cost": 0,
-    "output_token_cost": 0
-  },
+  "currency": "USD",
+  "input_token_cost": 0,
+  "output_token_cost": 0
+},
   "defaults": {
-    "max_tokens": -1,
-    "model": "deepseek-v3.1:671b",
-    "temperature": 0.7,
-    "top_p": 1
-  },
+  "max_tokens": -1,
+  "model": "deepseek-v3.1:671b",
+  "temperature": 0.7,
+  "top_p": 1
+},
   "endpoint": "https://ollama.com/v1/chat/completions",
   "headers": {},
   "message_conversion": {
-    "convert_tool_role_to_user": false,
-    "include_tool_call_id": true,
-    "reasoning_content_field": "reasoning_content"
-  },
+  "convert_tool_role_to_user": false,
+  "include_tool_call_id": true,
+  "reasoning_content_field": "reasoning_content"
+},
   "models": {
-    "available_models": [],
-    "default_context_limit": 131072,
-    "default_model": "deepseek-v3.1:671b"
-  },
+  "available_models": [],
+  "default_context_limit": 131072,
+  "default_model": "deepseek-v3.1:671b",
+  "default_model_patterns": [
+  "gpt-oss:20b"
+]
+},
   "name": "ollama-cloud",
   "retry": {
-    "backoff_multiplier": 2,
-    "base_delay_ms": 1000,
-    "max_attempts": 3,
-    "max_delay_ms": 30000,
-    "retryable_errors": [
-      "rate_limit_exceeded",
-      "temporary_error",
-      "timeout"
-    ]
-  },
+  "backoff_multiplier": 2,
+  "base_delay_ms": 1000,
+  "max_attempts": 3,
+  "max_delay_ms": 30000,
+  "retryable_errors": [
+  "rate_limit_exceeded",
+  "temporary_error",
+  "timeout"
+]
+},
   "streaming": {
-    "chunk_timeout_ms": 300000,
-    "done_marker": "[DONE]",
-    "format": "sse"
-  },
+  "chunk_timeout_ms": 300000,
+  "done_marker": "[DONE]",
+  "format": "sse"
+},
   "display_name": "Ollama (Cloud)"
 }

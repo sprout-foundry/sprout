@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -305,7 +305,7 @@ func sshProxyWebSocket(w http.ResponseWriter, r *http.Request, tunnelPort int, t
 	pipeMessages := func(name string, src, dst *websocket.Conn) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[ssh-proxy] %s pipe panic recovered: %v", name, r)
+				webuiLogger.Error("SSH proxy pipe panicked", slog.String("pipe", name), slog.Any("panic", r))
 				errCh <- fmt.Errorf("%s pipe panic: %v", name, r)
 			}
 		}()

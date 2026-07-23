@@ -5,7 +5,7 @@
 package webui
 
 import (
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -110,7 +110,7 @@ func resolveAllowedOrigin(origin string, bindAddr string, allowedOrigins []strin
 			}
 		}
 		// An explicit allowlist is configured and this origin is not on it — deny.
-		log.Printf("[cors] denied origin %q (not in allowed list)", origin)
+		webuiLogger.Warn("CORS origin denied", slog.String("origin", origin))
 		return ""
 	}
 

@@ -281,6 +281,17 @@ export function useSettingsState(
     };
   }, [activeSubTab, api]);
 
+  // Bug B fix: when the Providers tab is opened while the catalog is empty
+  // (e.g. user opened Settings during a brief disconnect), nudge the catalog
+  // to load so the UI doesn't appear broken. This is a no-op when data is
+  // already present, a fetch is in-flight, or the connection is down.
+  useEffect(() => {
+    if (activeSubTab !== 'providers') return;
+    if (catalog.providers.length === 0 && !catalog.isLoading) {
+      catalog.ensureLoaded();
+    }
+  }, [activeSubTab, catalog]);
+
   // ProviderSettingsTab calls this after adding a custom provider so the
   // new entry appears in dropdowns immediately. Routing through the shared
   // catalog refreshes every consumer (status bar, Sidebar, all Settings

@@ -25,12 +25,7 @@ export interface PasswordPromptDialogProps {
   onRespond: (requestId: string, password: string) => void;
 }
 
-function PasswordPromptDialog({
-  requestId,
-  command,
-  prompt,
-  onRespond,
-}: PasswordPromptDialogProps): JSX.Element {
+function PasswordPromptDialog({ requestId, command, prompt, onRespond }: PasswordPromptDialogProps): JSX.Element {
   const [password, setPassword] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -95,9 +90,7 @@ function PasswordPromptDialog({
         </div>
 
         <div className="password-prompt-body">
-          <p className="password-prompt-description">
-            {prompt || 'The agent needs a password to continue.'}
-          </p>
+          <p className="password-prompt-description">{prompt || 'The agent needs a password to continue.'}</p>
           <code className="password-prompt-command">{command}</code>
 
           <label htmlFor="password-prompt-input" className="password-prompt-label">
@@ -115,17 +108,11 @@ function PasswordPromptDialog({
             placeholder="Enter password"
           />
 
-          <p className="password-prompt-hint">
-            The password is sent only to this shell process and is not stored.
-          </p>
+          <p className="password-prompt-hint">The password is sent only to this shell process and is not stored.</p>
         </div>
 
         <div className="password-prompt-actions">
-          <button
-            type="button"
-            className="password-prompt-btn password-prompt-btn--cancel"
-            onClick={handleCancel}
-          >
+          <button type="button" className="password-prompt-btn password-prompt-btn--cancel" onClick={handleCancel}>
             <X size={14} />
             <span>Cancel</span>
           </button>

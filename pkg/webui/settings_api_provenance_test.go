@@ -106,7 +106,6 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 	// Ensure SPROUT_CONFIG/SPROUT_CONFIG don't override XDG_CONFIG_HOME
 	// (they take priority in GetConfigDir resolution).
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("SPROUT_CONFIG", "")
 
 	// Write global config if provided
 	if globalCfg != nil {

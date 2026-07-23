@@ -13,7 +13,6 @@ import (
 func TestOrderProvidersByUsage_EmptyAndNoCreds(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Make sure no env vars are leaking from the host.
 	for _, p := range KnownProviderNames() {
@@ -39,7 +38,6 @@ func TestOrderProvidersByUsage_EmptyAndNoCreds(t *testing.T) {
 // first.
 func TestOrderProvidersByUsage_OneProviderWithCreds(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	// Wipe every known env var so only OPENAI_API_KEY lights up below.
 	for _, p := range KnownProviderNames() {
@@ -68,7 +66,6 @@ func TestOrderProvidersByUsage_OneProviderWithCreds(t *testing.T) {
 // rule — previously-used is a stronger signal than "configured".
 func TestOrderProvidersByUsage_Tier1BeatsTier2(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	for _, p := range KnownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(p)
@@ -100,7 +97,6 @@ func TestOrderProvidersByUsage_Tier1BeatsTier2(t *testing.T) {
 func TestOrderProvidersByUsage_NoDuplicates(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	cfg := NewConfig()
 	cfg.ProviderModels = map[string]string{}
 
@@ -124,7 +120,6 @@ func TestOrderProvidersByUsage_NoDuplicates(t *testing.T) {
 func TestOrderProvidersByUsage_StableWithinTier(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	cfg := NewConfig()
 	cfg.ProviderModels = map[string]string{}
 
@@ -140,7 +135,6 @@ func TestOrderProvidersByUsage_StableWithinTier(t *testing.T) {
 // case, but it must not panic.
 func TestOrderProvidersByUsage_NilCfgSafe(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	for _, p := range KnownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(p)
@@ -161,7 +155,6 @@ func TestOrderProvidersByUsage_NilCfgSafe(t *testing.T) {
 func TestOrderProvidersByUsage_AllKnownProvidersReturned(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	cfg := NewConfig()
 	cfg.ProviderModels = map[string]string{}
 
@@ -177,7 +170,6 @@ func TestOrderProvidersByUsage_AllKnownProvidersReturned(t *testing.T) {
 // regardless of what was actually used.
 func TestInitialize_CIPrefersPreviouslyUsedProvider(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("CI", "1")
 	t.Setenv("GITHUB_ACTIONS", "")
@@ -212,7 +204,6 @@ func TestInitialize_CIPrefersPreviouslyUsedProvider(t *testing.T) {
 func TestInitialize_CIPicksFirstCredsWhenNoHistory(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("CI", "1")
 	t.Setenv("GITHUB_ACTIONS", "")
 	for _, p := range KnownProviderNames() {
@@ -246,7 +237,6 @@ func TestInitialize_CIPicksFirstCredsWhenNoHistory(t *testing.T) {
 // usage, deepinfra should appear before openrouter in the result.
 func TestGetAvailableProviders_ReordersByTier(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	for _, p := range KnownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(p)

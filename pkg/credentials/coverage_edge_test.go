@@ -18,7 +18,6 @@ func TestGetConfigDir_HomeError(t *testing.T) {
 
 	// Also clear SPROUT_CONFIG and XDG_CONFIG_HOME to force the home dir path
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Verify that os.UserHomeDir actually fails on this platform.
@@ -38,7 +37,6 @@ func TestGetConfigDir_HomeError(t *testing.T) {
 func TestLoad_GetAPIKeysPathError(t *testing.T) {
 	t.Setenv("HOME", "")
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	if _, err := os.UserHomeDir(); err == nil {
@@ -56,7 +54,6 @@ func TestLoad_GetAPIKeysPathError(t *testing.T) {
 func TestSave_GetAPIKeysPathError(t *testing.T) {
 	t.Setenv("HOME", "")
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := Save(Store{"test": "val"})
@@ -71,7 +68,6 @@ func TestResolve_LoadError(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	t.Setenv("HOME", "")
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -92,7 +88,6 @@ func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	t.Setenv("HOME", "")
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	// Explicitly unset the named env var so os.Getenv returns empty
@@ -126,7 +121,6 @@ func TestSave_WriteFileError(t *testing.T) {
 	// but the configDir itself may be writable by owner. To force WriteFile failure,
 	// remove write permission after the directory is created.
 	t.Setenv("SPROUT_CONFIG", readOnlyDir)
-	t.Setenv("SPROUT_CONFIG", readOnlyDir)
 	// Pre-create the directory so GetConfigDir's MkdirAll succeeds
 	// then make it read-only for files
 	configDir, err := GetConfigDir()
@@ -148,7 +142,6 @@ func TestSave_WriteFileError(t *testing.T) {
 // TestSaveAndLoad_LargeStore verifies Save and Load work with hundreds of keys.
 func TestSaveAndLoad_LargeStore(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := make(Store, 500)
@@ -180,7 +173,6 @@ func TestSaveAndLoad_LargeStore(t *testing.T) {
 func TestResolve_SpecialCharProviderNames(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{
 		"provider/with/slashes":     "key-slashes",
@@ -211,7 +203,6 @@ func TestResolve_SpecialCharProviderNames(t *testing.T) {
 // TestResolve_EnvVarSpecialChars verifies env var values with special characters.
 func TestResolve_EnvVarSpecialChars(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	cases := []struct {
@@ -254,7 +245,6 @@ func TestResolve_EnvVarSpecialChars(t *testing.T) {
 // no panics or deadlocks occur.
 func TestConcurrentSaveLoad(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	// Pre-populate the store
@@ -300,7 +290,6 @@ func TestConcurrentSaveLoad(t *testing.T) {
 func TestResolve_NilLikeEmptyProvider(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("SPROUT_CONFIG", dir)
 
 	resolved, err := resolve("", "")
 	if err != nil {
@@ -330,7 +319,6 @@ func TestLoad_GetAPIKeysPathErrorViaReadOnlyParent(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "sub", "deep"))
-	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "sub", "deep"))
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	_, err := Load()
@@ -343,7 +331,6 @@ func TestLoad_GetAPIKeysPathErrorViaReadOnlyParent(t *testing.T) {
 // an env var name is given but os.Getenv returns empty, falling through to Load.
 func TestResolve_EnvVarSetButProvidedNameNotInEnv(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{"fallback-provider": "stored-value"}

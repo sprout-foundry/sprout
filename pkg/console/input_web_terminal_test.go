@@ -61,7 +61,6 @@ func TestWriteModifyOtherKeys_DisabledInWebTerminal(t *testing.T) {
 			// inherited value first so the empty-string test case
 			// exercises the true "unset" path.
 			t.Setenv("SPROUT_WEB_TERMINAL", "")
-			t.Setenv("SPROUT_WEB_TERMINAL", "")
 			for k, v := range tt.envVars {
 				t.Setenv(k, v)
 			}

@@ -21,7 +21,6 @@ func withShellSkipDirsFile(t *testing.T) string {
 	// pre-populated file in tmpDir is bypassed and saveAutoSkipDirsFor
 	// writes to the test-runner's real config dir instead.
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	return tmpDir

@@ -97,8 +97,9 @@ func TestNew_ToolAvailable_ReturnsPlatformNotifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDarwinNotifier_ConstructsCorrectCommand(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("darwin notifier test only runs on darwin")
+	// macOS CI runners are headless — osascript is not available.
+	if os.Getenv("CI") != "" {
+		t.Skip("osascript not available on headless CI runners")
 	}
 	var captured *exec.Cmd
 	orig := runCommand

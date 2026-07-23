@@ -290,7 +290,10 @@ func TestElevationBypassesFilesystemGate(t *testing.T) {
 	// classified as External.
 	home, err := os.UserHomeDir()
 	if err != nil {
-		t.Fatalf("UserHomeDir: %v", err)
+		// CI runners sometimes omit $HOME. Fall back to a temp dir and
+		// set $HOME so downstream calls (os.MkdirTemp(home, ...)) work.
+		home = t.TempDir()
+		t.Setenv("HOME", home)
 	}
 	extDir, err := os.MkdirTemp(home, "sprout-elevation-test-")
 	if err != nil {

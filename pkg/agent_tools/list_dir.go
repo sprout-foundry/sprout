@@ -59,12 +59,6 @@ func (h *listDirHandler) Validate(args map[string]any) error {
 }
 
 func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// Wire the agent's filesystem gate into ctx before the resolve
-	// step so off-workspace directories prompt for approval (matching
-	// the file handlers' behavior). Without this, list_directory on a
-	// sibling directory would hard-error with the bare sentinel.
-	ctx = WithFilesystemGateFromEnv(ctx, env)
-
 	// Extract parameters
 	targetPath := "."
 	if p, exists := args["path"]; exists && p != nil {
@@ -93,21 +87,11 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		// resolved path from SafeResolvePath; use it directly.
 		return h.listDirectoryContents(ctx, env, preRes, showHidden)
 	}
-	// "prompt" → fall through to withFilesystemApproval for the dialog.
+	// "prompt" → fall through; will fail with raw filesystem error.
 
-	// Resolve path securely through the FilesystemGate so off-workspace
-	// directories prompt for approval (matching the file handlers'
-	// behavior). Without this wrap, list_directory on a sibling
-	// directory would still hard-error with the bare sentinel — the
-	// gate goes into ctx but pkg/filesystem has no awareness of it,
-	// so the resolve call needs the explicit hook here. See the
-	// FilesystemGate interface in handler.go and withFilesystemApproval
-	// in filesystem_gate.go for the contract.
-	resolvedPath, err := withFilesystemApproval(ctx, FilesystemGateFromContext(ctx), "list_directory", targetPath,
-		func(ctx context.Context) (string, error) {
-			return filesystem.SafeResolvePathWithBypass(ctx, targetPath)
-		},
-	)
+	// Resolve path securely. Off-workspace directories will fail with
+	// the raw filesystem error since the interactive gate is gone.
+	resolvedPath, err := filesystem.SafeResolvePathWithBypass(ctx, targetPath)
 	if err != nil {
 		return ToolResult{
 			Output:  "",
@@ -119,8 +103,6 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 }
 
 // listDirectoryContents does the actual directory listing given an already-resolved path.
-// Extracted so both the "allow" precheck path (no gate call) and the "prompt" path
-// (gate-approved via withFilesystemApproval) share the same listing logic.
 func (h *listDirHandler) listDirectoryContents(ctx context.Context, env ToolEnv, resolvedPath string, showHidden bool) (ToolResult, error) {
 
 	// Check that it's a directory

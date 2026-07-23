@@ -1,9 +1,8 @@
 import { useCallback, useEffect } from 'react';
+import type { ViewType } from '../types/app';
 
 export interface UseFileHandlerParams {
-  onViewChange: (
-    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
-  ) => void;
+  onViewChange: (view: ViewType) => void;
   openFile: (file: { path: string; name: string; isDir: boolean; size: number; modified: number; ext: string }) => void;
 }
 

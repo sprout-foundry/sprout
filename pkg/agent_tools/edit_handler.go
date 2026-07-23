@@ -73,10 +73,10 @@ func (h *editFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// See writeFileHandler for context — EditFile calls EditFile helper,
-	// which in turn calls resolveAndValidateFileWithGate. The gate
-	// reaches the resolve step through FilesystemGateFromContext.
-	ctx = WithFilesystemGateFromEnv(ctx, env)
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass the gate entirely. Prompt paths fall through and will
+	// fail with the raw filesystem error.
 
 	path, err := extractString(args, "path")
 	if err != nil {
@@ -95,7 +95,7 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 
 	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
 	// resolve so Deny paths return a typed error immediately and Allow
-	// paths bypass withFilesystemApproval entirely.
+	// paths bypass the gate entirely.
 	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "edit_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("edit blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},

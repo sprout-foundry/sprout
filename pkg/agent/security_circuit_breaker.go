@@ -180,6 +180,14 @@ func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, as
 		category = string(assessment.Sources[0])
 	}
 
+	// SP-068 SP-127 synergy: include path-tier and file-mode in audit log
+	// so consumers can distinguish "elevated due to sensitive path" from
+	// "elevated due to destructive command" without parsing reasoning.
+	pathTier := ""
+	if assessment.PathTier != PathTierUnknown {
+		pathTier = assessment.PathTier.String()
+	}
+
 	sessionID := ""
 	workspace := ""
 	if a.state != nil {
@@ -205,6 +213,8 @@ func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, as
 		Source:    "unified-gate",
 		SessionID: sessionID,
 		Workspace: workspace,
+		PathTier:  pathTier,
+		FileMode:  assessment.FileMode,
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {

@@ -199,6 +199,14 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 				return nil, fmt.Errorf("init agent: %w", err)
 			}
 
+			// Enable streaming so doChatOnce takes the streaming path
+			// (doChatStream), which publishes stream_chunk events through
+			// the EventBus. Without this, the agent uses doChatNonStream
+			// which buffers the entire response and only publishes it at
+			// query_completed — the browser sees nothing until the full
+			// response is ready.
+			ag.SetStreamingEnabled(true)
+
 			persistentAgentMu.Lock()
 			persistentAgent = ag
 			persistentAgentPv = provider
@@ -293,6 +301,9 @@ func runPlanFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("init agent: %w", err)
 		}
+
+		// Enable streaming so tokens appear in real-time (same as runAgentFunc).
+		ag.SetStreamingEnabled(true)
 
 		planningPrompt, err := agent.GetEmbeddedPlanningPrompt(true)
 		if err != nil {

@@ -78,9 +78,8 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	// SP-127 M2: Consult Gate 1's path-tier classifier up-front so
 	// Allow paths skip the gate entirely and Deny paths return a
 	// typed error immediately — without waiting for SafeResolvePath
-	// to fail first. withFilesystemApproval stays as the fallback
-	// for the Prompt case.
-	ctx = WithFilesystemGateFromEnv(ctx, env)
+	// to fail first. Prompt paths fall through to the interactive
+	// dialog.
 
 	path, err := extractString(args, "path")
 	if err != nil {
@@ -96,7 +95,7 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 			fmt.Errorf("read blocked: %s is not accessible", path)
 	}
 	// "allow"  → path is workspace/tmp/allowlisted; proceed directly.
-	// "prompt" → fall through to withFilesystemApproval for the dialog.
+	// "prompt" → fall through; will fail with raw filesystem error.
 
 	// Parse view_range (defensive — Validate() should have been called,
 	// but we guard against panic if it wasn't or input is malformed)
@@ -124,10 +123,8 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return h.handlePDF(ctx, env, path)
 	}
 
-	// Use existing read logic. ReadFile / ReadFileWithRange route
-	// off-workspace errors through the agent's FilesystemGate so
-	// the user can approve once, session-allowlist the folder, or
-	// elevate — same dialog as writes use.
+	// Use existing read logic. Off-workspace paths will fail
+	// with the raw filesystem error since the interactive gate is gone.
 	var content string
 	if startLine > 0 || endLine > 0 {
 		content, err = ReadFileWithRange(ctx, path, startLine, endLine)
@@ -161,16 +158,9 @@ func (h *readFileHandler) Interactive() bool      { return false }
 
 // handlePDF processes a PDF file and returns it as base64 data URI for vision-capable models.
 func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {
-	// Resolve path securely. The Execute caller already wired
-	// env.FilesystemGate into ctx, so this resolve consults the gate
-	// on off-workspace PDFs and surfaces the approve dialog instead
-	// of hard-erroring. Mirrors ReadFileWithRange's behavior for
-	// non-PDF paths.
-	cleanPath, err := withFilesystemApproval(ctx, FilesystemGateFromContext(ctx), "read_file", path,
-		func(ctx context.Context) (string, error) {
-			return filesystem.SafeResolvePathWithBypass(ctx, path)
-		},
-	)
+	// Resolve path securely. Off-workspace paths will fail with the raw
+	// filesystem error since the interactive gate is gone.
+	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
 	if err != nil {
 		return ToolResult{
 			Output:  "",

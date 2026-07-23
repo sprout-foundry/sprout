@@ -14,7 +14,7 @@ package webui
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -68,7 +68,7 @@ func (fw *fileWatcher) start(ctx context.Context) {
 
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Printf("[filewatcher] WARNING: cannot create fsnotify watcher, real-time change notifications disabled: %v", err)
+		webuiLogger.Warn("file watcher unavailable; real-time change notifications disabled", slog.Any("err", err))
 		return
 	}
 	fw.fsWatcher = w
@@ -83,7 +83,7 @@ func (fw *fileWatcher) start(ctx context.Context) {
 	// Drain the fsnotify error channel so it doesn't block.
 	go func() {
 		for err := range errorsCh {
-			log.Printf("[filewatcher] fsnotify error: %v", err)
+			webuiLogger.Error("file watcher reported an error", slog.Any("err", err))
 		}
 	}()
 
@@ -110,7 +110,7 @@ func (fw *fileWatcher) watch(canonicalPath, displayPath string) {
 
 	if !alreadyWatched {
 		if err := fw.fsWatcher.Add(canonicalPath); err != nil {
-			log.Printf("[filewatcher] failed to add watch for %s: %v", canonicalPath, err)
+			webuiLogger.Error("file watch registration failed", slog.String("path", canonicalPath), slog.Any("err", err))
 		}
 	}
 }
@@ -239,7 +239,7 @@ func (fw *fileWatcher) cleanup() {
 	for path, entry := range fw.watches {
 		if now.Sub(entry.lastSeen) > fileWatcherStaleThreshold {
 			if err := fw.fsWatcher.Remove(path); err != nil {
-				log.Printf("[filewatcher] failed to remove watch for %s: %v", path, err)
+				webuiLogger.Error("file watch removal failed", slog.String("path", path), slog.Any("err", err))
 			}
 			delete(fw.watches, path)
 			delete(fw.debounces, path)

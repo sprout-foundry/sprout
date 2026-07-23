@@ -40,6 +40,14 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         'info',
         'Open a repo first',
         'Import a repository into the browser workspace, then start a full workspace.',
+        undefined,
+        {
+          label: 'Show how',
+          onClick: () => {
+            // Nothing else to wire — user is already in the workspace
+            // picker flow; the toast itself surfaces the next step.
+          },
+        },
       );
       return;
     }
@@ -61,9 +69,27 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             'warning',
             'Workspaces coming soon',
             'Full workspaces are not yet configured. Explore in the browser for now.',
+            undefined,
+            {
+              label: 'Open browser workspace',
+              onClick: () => {
+                // User opted into the browser-only flow — keep them on
+                // the current page rather than navigating away.
+              },
+            },
           );
         } else {
-          notificationBus.notify('error', 'Failed to start workspace', msg);
+          notificationBus.notify('error', 'Failed to start workspace', msg, undefined, {
+            label: 'Retry',
+            onClick: () => {
+              // Defer to a microtask so the dismiss animation can
+              // finish before the next fetch kicks off; otherwise the
+              // busy state would flicker as the second request races.
+              queueMicrotask(() => {
+                void handleStartBuilding();
+              });
+            },
+          });
         }
         return;
       }
@@ -79,7 +105,20 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         notificationBus.notify('info', 'Workspace status', data.status || 'Unknown');
       }
     } catch (e) {
-      notificationBus.notify('error', 'Error starting workspace', e instanceof Error ? e.message : String(e));
+      notificationBus.notify(
+        'error',
+        'Error starting workspace',
+        e instanceof Error ? e.message : String(e),
+        undefined,
+        {
+          label: 'Retry',
+          onClick: () => {
+            queueMicrotask(() => {
+              void handleStartBuilding();
+            });
+          },
+        },
+      );
     } finally {
       setBusy(false);
     }

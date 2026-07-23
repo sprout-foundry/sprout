@@ -5,7 +5,7 @@ package webui
 // Package webui: WebSocket panic recovery and cleanup handlers (split from websocket_handler.go)
 
 import (
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -92,7 +92,7 @@ func (ws *ReactWebServer) safeHandleGoroutine(safeConn *SafeConn, sessionID, cli
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("WebSocket handler panic in session %s: %v", sessionID, r)
+				ws.log().Error("WebSocket handler panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
 				safeConn.WritePanicError(sessionID, "message handler", r)
 				if daemon {
 					ws.cleanupAfterPanicSession(clientID, userID, chatID, sessionID)

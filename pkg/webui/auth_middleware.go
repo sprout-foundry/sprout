@@ -6,7 +6,7 @@ package webui
 import (
 	"crypto/subtle"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -61,14 +61,14 @@ func authTokenMiddleware(authToken string) func(http.Handler) http.Handler {
 
 			// Use constant-time comparison to prevent timing attacks
 			if subtle.ConstantTimeCompare([]byte(authHeader), []byte(expectedBearer)) != 1 {
-				log.Printf("[auth] UNAUTHORIZED %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+				webuiLogger.Warn("unauthorized request", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("remote_addr", r.RemoteAddr))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				if err := json.NewEncoder(w).Encode(map[string]string{
 					"error":   "unauthorized",
 					"message": "valid auth token required",
 				}); err != nil {
-					log.Printf("[auth] failed to write auth error response: %v", err)
+					webuiLogger.Error("authentication error response write failed", slog.Any("err", err))
 				}
 				return
 			}

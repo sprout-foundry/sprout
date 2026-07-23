@@ -5,7 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -123,12 +123,12 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 			if newProvider != "" {
 				providerType, _ := cm.MapStringToClientType(newProvider)
 				if err := agentInst.SetProvider(providerType); err != nil {
-					log.Printf("webui: failed to set provider on live agent: %v", err)
+					ws.log().Warn("failed to set provider on live agent", slog.Any("err", err))
 				}
 			}
 			if newModel != "" {
 				if err := agentInst.SetModel(newModel); err != nil {
-					log.Printf("webui: failed to set model on live agent: %v", err)
+					ws.log().Warn("failed to set model on live agent", slog.Any("err", err))
 				}
 			}
 			// Sync overrides to the agent so they're persisted with session state
@@ -181,7 +181,7 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 	// Sync agent state after provider/model change
 	if newProvider != "" || newModel != "" {
 		if err := ws.syncAgentStateForClient(clientID); err != nil {
-			log.Printf("webui: failed to sync agent state after provider/model change: %v", err)
+			ws.log().Warn("failed to sync agent state after provider or model change", slog.Any("err", err))
 		}
 		// Publish provider state so the WebUI status bar reflects the new
 		// model/cost/ctx immediately. Without this the bar lags until the
@@ -510,14 +510,14 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 					if cm := ws.getConfigManager(r, w); cm != nil {
 						if pt, err := cm.MapStringToClientType(newProvider); err == nil {
 							if err := agentInst.SetProvider(pt); err != nil {
-								log.Printf("webui: failed to set provider on live agent after persisted PUT: %v", err)
+								ws.log().Warn("failed to set provider on live agent after persisted settings update", slog.Any("err", err))
 							}
 						}
 					}
 				}
 				if newModel != "" {
 					if err := agentInst.SetModel(newModel); err != nil {
-						log.Printf("webui: failed to set model on live agent after persisted PUT: %v", err)
+						ws.log().Warn("failed to set model on live agent after persisted settings update", slog.Any("err", err))
 					}
 				}
 			}

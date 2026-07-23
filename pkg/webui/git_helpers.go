@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -348,7 +348,7 @@ func generateCryptoID(prefix string) string {
 	if _, err := rand.Read(b); err != nil {
 		// crypto/rand failure is extremely rare but if it happens,
 		// fall back to a time-based ID rather than returning all zeros.
-		log.Printf("[WARN] crypto/rand.Read failed: %v, falling back to time-based ID", err)
+		slog.Default().Warn("failed to generate cryptographic ID; using time-based fallback", slog.Any("err", err))
 		return fmt.Sprintf("%s-%024x", prefix, time.Now().UnixNano())
 	}
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))

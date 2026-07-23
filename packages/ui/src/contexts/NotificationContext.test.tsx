@@ -419,6 +419,56 @@ describe('notificationBus subscription', () => {
     });
     expect(capturedDuration).toBe(60000);
   });
+
+  it('propagates an action from a bus notification into the provider state', async () => {
+    let capturedAction: { label: string; onClick: () => void; keepOpen?: boolean } | undefined;
+    const TestBusActionConsumer = () => {
+      const { notifications } = useNotifications();
+      if (notifications.length > 0) {
+        capturedAction = notifications[notifications.length - 1].action;
+      }
+      return createElement('div', { 'data-testid': 'bus-action-test', 'data-count': String(notifications.length) });
+    };
+    act(() => {
+      root.render(createElement(NotificationProvider, {
+        children: createElement(TestBusActionConsumer),
+      }));
+    });
+
+    const onClick = vi.fn();
+    await act(async () => {
+      notificationBus.notify('warning', 'Configure', 'Provider missing', undefined, {
+        label: 'Open settings',
+        onClick,
+      });
+    });
+
+    expect(capturedAction).toBeDefined();
+    expect(capturedAction?.label).toBe('Open settings');
+    expect(capturedAction?.onClick).toBe(onClick);
+  });
+
+  it('leaves action undefined when the bus does not provide one (backwards compat)', async () => {
+    let capturedAction: { label: string } | undefined;
+    const TestBusNoActionConsumer = () => {
+      const { notifications } = useNotifications();
+      if (notifications.length > 0) {
+        capturedAction = notifications[notifications.length - 1].action;
+      }
+      return createElement('div', { 'data-testid': 'bus-no-action-test' });
+    };
+    act(() => {
+      root.render(createElement(NotificationProvider, {
+        children: createElement(TestBusNoActionConsumer),
+      }));
+    });
+
+    await act(async () => {
+      notificationBus.notify('info', 'Plain', 'No action');
+    });
+
+    expect(capturedAction).toBeUndefined();
+  });
 });
 
 describe('notification fields', () => {

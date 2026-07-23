@@ -60,12 +60,17 @@ function NotificationCenter(_props: NotificationCenterLegacyProps = {}): JSX.Ele
         duration: event.duration,
         createdAt: Date.now(),
         read: false,
+        action: event.action,
       };
 
       setNotifications((prev) => [...prev, notification]);
 
       // Auto-dismiss after 5 s only when the bus did NOT provide an explicit duration.
-      if (!event.duration || event.duration === 0) {
+      // Toasts carrying an action with keepOpen=true stay until the user acts or
+      // clicks the dismiss button — the auto-dismiss timer is intentionally
+      // suppressed for those.
+      const suppressAutoDismiss = !!event.action?.keepOpen;
+      if (!suppressAutoDismiss && (!event.duration || event.duration === 0)) {
         const timer = setTimeout(() => {
           setNotifications((prev) => prev.filter((n) => n.id !== event.id));
           timersRef.current.delete(event.id);

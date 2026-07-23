@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -247,7 +247,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: failed to import state: %v", err)
+			slog.Default().Warn("failed to import chat session state", slog.Any("err", err))
 		}
 	}
 
@@ -266,16 +266,16 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	if sessionProvider != "" {
 		providerType, err := created.GetConfigManager().MapStringToClientType(sessionProvider)
 		if err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: invalid session provider %q: %v", sessionProvider, err)
+			slog.Default().Warn("invalid chat session provider", slog.String("provider", sessionProvider), slog.Any("err", err))
 		} else if err := created.SetProvider(providerType); err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session provider %q: %v", sessionProvider, err)
+			slog.Default().Warn("failed to set chat session provider", slog.String("provider", sessionProvider), slog.Any("err", err))
 		} else {
 			providerApplied = true
 		}
 	}
 	if providerApplied && sessionModel != "" {
 		if err := created.SetModel(sessionModel); err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session model %q: %v", sessionModel, err)
+			slog.Default().Warn("failed to set chat session model", slog.String("model", sessionModel), slog.Any("err", err))
 		}
 	}
 
@@ -293,7 +293,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 				_, err := applyPartialSettings(cfg, sessionOverrides)
 				return err
 			}); err != nil {
-				log.Printf("chatSession.getOrCreateAgent: warning: failed to apply session config overrides: %v", err)
+				slog.Default().Warn("failed to apply chat session config overrides", slog.Any("err", err))
 			}
 		}
 	}

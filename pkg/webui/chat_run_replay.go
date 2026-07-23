@@ -3,7 +3,7 @@
 package webui
 
 import (
-	"log"
+	"log/slog"
 	"strconv"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -92,7 +92,7 @@ func (ws *ReactWebServer) buildChatRunReplayMessages(clientID, chatID string, af
 func (ws *ReactWebServer) deliverChatRunReplay(safeConn *SafeConn, clientID, chatID string, afterSeq int64) {
 	for _, msg := range ws.buildChatRunReplayMessages(clientID, chatID, afterSeq) {
 		if err := safeConn.WriteJSON(msg); err != nil {
-			log.Printf("WebSocket failed to send chat-run replay frame for chat %s: %v", chatID, err)
+			ws.log().Error("chat run replay frame send failed", slog.String("chat_id", chatID), slog.Any("err", err))
 			return
 		}
 	}

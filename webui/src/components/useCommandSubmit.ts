@@ -62,21 +62,25 @@ export function useCommandSubmit({
     }, 100);
   }, [updateValue, inputRef]);
 
-  // Helper to call onSend/onSendCommand with a command string
+  // Helper to call onSend/onSendCommand with a command string.
+  // Prefers onSendCommand (the dedicated /api/command/execute surface)
+  // over onSend (/api/query) so that SteerCapable slash commands like
+  // /clear (invoked from handleNewSession) bypass the WebUI safety gate.
+  // Only falls back to onSend when no dedicated handler is wired up.
   const commandRef = useCallback(
     async (command: string) => {
       resetHistoryNavigation();
 
-      if (onSend) {
-        onSend(command);
-      } else if (onSendCommand) {
+      if (onSendCommand) {
         onSendCommand(command);
+      } else if (onSend) {
+        onSend(command);
       }
 
       // Clear textarea and focus back to input
       resetAndFocus();
     },
-    [onSend, onSendCommand, resetHistoryNavigation, resetAndFocus],
+    [onSendCommand, onSend, resetHistoryNavigation, resetAndFocus],
   );
 
   const handleSend = async () => {

@@ -246,12 +246,12 @@ func assertLowContextProfile(t *testing.T, profile ContextProfile) {
 // TestResolveEffectiveContextCap tests the SP-126 context cap resolver.
 func TestResolveEffectiveContextCap(t *testing.T) {
 	tests := []struct {
-		name           string
-		cfg            *Config
-		nativeWindow   int
-		expected       int
-		expectedErr    bool
-		description    string
+		name         string
+		cfg          *Config
+		nativeWindow int
+		expected     int
+		expectedErr  bool
+		description  string
 	}{
 		{
 			name:         "no cap - native flows through",

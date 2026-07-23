@@ -5,10 +5,10 @@ import "fmt"
 // Agentic-coding context thresholds for sprout. The thresholds carve the
 // context-window spectrum into bands, each with different sprout behavior:
 //
-//   ≥ PrimaryMinContext (128K): full mode — all tools, full prompt, no warning
-//   ≥ SubagentMinContext (64K): subagent-eligible, carries a context warning
-//   ≥ LowContextMinContext (16K): Low-Context Mode eligible (SP-125)
-//   < LowContextMinContext: no eligible roles (hard block)
+//	≥ PrimaryMinContext (128K): full mode — all tools, full prompt, no warning
+//	≥ SubagentMinContext (64K): subagent-eligible, carries a context warning
+//	≥ LowContextMinContext (16K): Low-Context Mode eligible (SP-125)
+//	< LowContextMinContext: no eligible roles (hard block)
 //
 // Below ContextFloor (8K, defined in pkg/configuration) sprout refuses to
 // start at all — that's enforced by ResolveContextProfile, not here. This

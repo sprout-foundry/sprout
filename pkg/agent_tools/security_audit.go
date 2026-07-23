@@ -17,10 +17,10 @@ import (
 // all allow events; the new value lets the WebUI automations panel filter
 // specifically for session-allowlist grants.
 const (
-	AuditActionAllowed          = "allowed"
-	AuditActionPrompted         = "prompted"
-	AuditActionDenied           = "denied"
-	AuditActionAllowedPathHit   = "allowed_path_hit" // SP-127 Phase 2.7
+	AuditActionAllowed        = "allowed"
+	AuditActionPrompted       = "prompted"
+	AuditActionDenied         = "denied"
+	AuditActionAllowedPathHit = "allowed_path_hit" // SP-127 Phase 2.7
 )
 
 // AuditEntry represents a single security audit log entry.

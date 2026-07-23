@@ -305,7 +305,7 @@ func TestIsGitHistoryRewriteCommand_rebase(t *testing.T) {
 		{"git rebase -i HEAD~10", true},
 		{"git rebase --onto base head", true},
 		{"git rebase main", true},
-		{"git rebase --abort", false}, // recovery op, not a history rewrite
+		{"git rebase --abort", false},            // recovery op, not a history rewrite
 		{"git rebase --abort --no-verify", true}, // --abort with other flags is still a rewrite
 	}
 	for _, tt := range tests {

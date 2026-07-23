@@ -377,7 +377,7 @@ describe('useCMView — bug-class regression', () => {
 
   it('buffer.id change recreates the view and fires lifecycle hooks', () => {
     const order: string[] = [];
-    let renderCount = 0;
+    const renderCount = 0;
     const onDidMount = vi.fn(() => order.push('mount'));
     const onWillDestroy = vi.fn(() => order.push('destroy'));
 

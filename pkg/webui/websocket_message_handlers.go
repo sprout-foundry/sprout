@@ -5,7 +5,7 @@ package webui
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -58,7 +58,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *
 				return
 			}
 			if saveErr := cm.SaveConfig(); saveErr != nil {
-				log.Printf("webui: failed to save provider change config: %v", saveErr)
+				ws.log().Error("provider change config save failed", slog.Any("err", saveErr))
 				if envelope, ok := configConflictEnvelope(saveErr, cm); ok {
 					_ = safeConn.WriteJSON(envelope)
 					return
@@ -121,9 +121,9 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *
 	// since the session-scoped provider/model is already set in the chat session.
 	// Skip the test provider — it's not a real API provider.
 	if providerType == api.TestClientType {
-		log.Printf("webui: skipping persistence for test provider")
+		ws.log().Debug("skipping persistence for test provider")
 	} else if err := persistProviderModelToConfig(clientAgent, providerType); err != nil {
-		log.Printf("webui: failed to persist provider/model to config: %v", err)
+		ws.log().Error("provider and model config persistence failed", slog.Any("err", err))
 		if envelope, ok := configConflictEnvelope(err, clientAgent.GetConfigManager()); ok {
 			_ = safeConn.WriteJSON(envelope)
 		}
@@ -211,10 +211,10 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, data *Mod
 	if err := clientAgent.SetModel(data.Model); err != nil {
 		if providerChanged && previousProvider != "" {
 			if rollbackErr := clientAgent.SetProvider(previousProvider); rollbackErr != nil {
-				log.Printf("webui: failed to rollback provider change after model switch failure: provider=%s model=%s rollback_err=%v", previousProvider, previousModel, rollbackErr)
+				ws.log().Error("provider rollback after model switch failure failed", slog.String("provider", string(previousProvider)), slog.String("model", previousModel), slog.Any("err", rollbackErr))
 			} else if strings.TrimSpace(previousModel) != "" {
 				if rollbackModelErr := clientAgent.SetModel(previousModel); rollbackModelErr != nil {
-					log.Printf("webui: provider rollback succeeded but failed to restore model %q: %v", previousModel, rollbackModelErr)
+					ws.log().Error("model restoration after provider rollback failed", slog.String("model", previousModel), slog.Any("err", rollbackModelErr))
 				}
 			}
 		}
@@ -232,9 +232,9 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, data *Mod
 	// Skip persistence for the test/mock provider — it's not a real API endpoint
 	// and should never survive an app restart.
 	if clientAgent.GetProviderType() == api.TestClientType {
-		log.Printf("webui: skipping persistence for test provider")
+		ws.log().Debug("skipping persistence for test provider")
 	} else if err := persistProviderModelToConfig(clientAgent, clientAgent.GetProviderType()); err != nil {
-		log.Printf("webui: failed to persist provider/model to config: %v", err)
+		ws.log().Error("provider and model config persistence failed", slog.Any("err", err))
 		if envelope, ok := configConflictEnvelope(err, clientAgent.GetConfigManager()); ok {
 			_ = safeConn.WriteJSON(envelope)
 		}

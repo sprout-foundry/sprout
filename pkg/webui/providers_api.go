@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -183,10 +184,11 @@ func modelsForProviderFromAPICtx(ctx context.Context, providerType api.ClientTyp
 				// rate-limited to avoid log spam — e.g. a misconfigured
 				// ollama-local pointing at an unreachable host that the
 				// WebUI polls periodically.
-				logRateLimitedf(
+				logRateLimitedWarn(
 					"model_discovery_catalog_fallback:"+string(providerType),
-					"webui: using provider catalog fallback for %s after model discovery failure: %v",
-					providerType, err,
+					"using provider catalog fallback after model discovery failure",
+					slog.String("provider", string(providerType)),
+					slog.Any("err", err),
 				)
 			}
 			return modelIDs
@@ -230,10 +232,12 @@ func (ws *ReactWebServer) modelsForProviderCtx(ctx context.Context, providerType
 		// (e.g. ollama-local pointed at an unreachable host) logs once,
 		// stays quiet through routine polling, and re-surfaces every
 		// logRateMinInterval if the failure is still happening.
-		logRateLimitedf(
+		logRateLimitedWarn(
 			"model_discovery_fail_fallback:"+string(providerType),
-			"webui: model discovery failed for provider %s, using configured fallback model %q: %v",
-			providerType, fallback, err,
+			"model discovery failed; using configured fallback model",
+			slog.String("provider", string(providerType)),
+			slog.String("fallback_model", fallback),
+			slog.Any("err", err),
 		)
 	}
 	return []string{fallback}
@@ -254,10 +258,11 @@ func (ws *ReactWebServer) modelsForProviderNoAgentCtx(ctx context.Context, provi
 	}
 
 	if _, err := api.GetModelsForProvider(providerType); err != nil {
-		logRateLimitedf(
+		logRateLimitedWarn(
 			"model_discovery_fail:"+string(providerType),
-			"webui: model discovery failed for provider %s: %v",
-			providerType, err,
+			"model discovery failed",
+			slog.String("provider", string(providerType)),
+			slog.Any("err", err),
 		)
 	}
 	return []string{}
@@ -380,10 +385,12 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 				})
 			}
 			if len(result) > 0 {
-				logRateLimitedf(
+				logRateLimitedWarn(
 					"model_discovery_catalog_fallback_get:"+string(clientType),
-					"webui: using provider catalog fallback for %s in handleGetModels after model discovery failure: %v",
-					clientType, err,
+					"using provider catalog fallback after model discovery failure",
+					slog.String("provider", string(clientType)),
+					slog.String("operation", "get_models"),
+					slog.Any("err", err),
 				)
 				writeJSON(w, http.StatusOK, map[string]interface{}{
 					"models": result,

@@ -103,8 +103,12 @@ type ModelInfo struct {
 
 // ModelConfig defines model-related configuration
 type ModelConfig struct {
-	DefaultContextLimit        int               `json:"default_context_limit"`
-	DefaultMaxCompletionTokens int               `json:"default_max_completion_tokens,omitempty"`
+	DefaultContextLimit        int `json:"default_context_limit"`
+	DefaultMaxCompletionTokens int `json:"default_max_completion_tokens,omitempty"`
+	// DefaultModelPatterns defines preference patterns for auto-selecting a default model.
+	// Patterns are tried in order; the first model whose ID contains all substrings in a pattern wins.
+	// Example: []string{"deepseek.*instruct", "deepseek", "llama"}
+	DefaultModelPatterns       []string          `json:"default_model_patterns,omitempty"`
 	ModelOverrides             map[string]int    `json:"model_overrides"`
 	MaxCompletionOverrides     map[string]int    `json:"max_completion_overrides,omitempty"`
 	PatternOverrides           []PatternOverride `json:"pattern_overrides"`

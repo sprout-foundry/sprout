@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"log"
 	"strings"
 )
 
@@ -64,6 +63,6 @@ func (ws *ReactWebServer) startRunBufferSubscriber() {
 			// concurrently reading it for JSON serialization.
 			ws.appendChatEventToRunBuffer(clientID, chatID, ev.Type, data)
 		}
-		log.Printf("[run-buffer-subscriber] subscriber channel closed")
+		ws.log().Warn("run buffer subscriber channel closed")
 	}()
 }

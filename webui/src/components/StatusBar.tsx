@@ -1,8 +1,9 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Zap } from 'lucide-react';
 import { useMemo, useRef, useState, useCallback } from 'react';
-import { supportsGit } from '../config/mode';
+import { supportsGit, isCloud } from '../config/mode';
+import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import { ChatStatusBarItems } from './chat/ChatStatusBarItems';
@@ -176,6 +177,20 @@ function StatusBar({
           <span className="statusbar-text">{workspaceName}</span>
         </div>
       )}
+      {isCloud && (() => {
+        const cfg = getBootstrapConfig();
+        if (cfg.user?.tier !== 'auto') return null;
+        return (
+          <div
+            className="statusbar-item statusbar-item-auto-tier"
+            title="Auto mode — shared compute. Limited daily requests."
+            data-testid="status-bar-auto-tier"
+          >
+            <Zap size={12} />
+            <span className="statusbar-text">Auto</span>
+          </div>
+        );
+      })()}
       <SproutStatusBar
         branch={supportsGit ? branch : 'Browser IDE'}
         cursorPosition={buffer?.cursorPosition}

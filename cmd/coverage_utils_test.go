@@ -309,7 +309,6 @@ func TestExtractDescription(t *testing.T) {
 func TestGetConfigDir_SPROUT_CONFIG(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	got := getConfigDir()
 	if got != tmpDir {
@@ -318,7 +317,6 @@ func TestGetConfigDir_SPROUT_CONFIG(t *testing.T) {
 }
 
 func TestGetConfigDir_XDG_CONFIG_HOME(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	tmpXDG := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpXDG)
@@ -332,7 +330,6 @@ func TestGetConfigDir_XDG_CONFIG_HOME(t *testing.T) {
 
 func TestGetConfigDir_HOME(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
@@ -345,7 +342,6 @@ func TestGetConfigDir_HOME(t *testing.T) {
 }
 
 func TestGetConfigDir_Fallback(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("HOME", "")
@@ -366,7 +362,6 @@ func TestGetConfigDir_Fallback(t *testing.T) {
 func TestLoadInstances_FileNotExist(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	instances, err := loadInstances()
 	if err != nil {
@@ -379,7 +374,6 @@ func TestLoadInstances_FileNotExist(t *testing.T) {
 
 func TestLoadInstances_ValidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	validJSON := `{
@@ -422,7 +416,6 @@ func TestLoadInstances_ValidJSON(t *testing.T) {
 func TestLoadInstances_EmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "instances.json"), []byte(""), 0644); err != nil {
 		t.Fatal(err)
@@ -439,7 +432,6 @@ func TestLoadInstances_EmptyFile(t *testing.T) {
 
 func TestLoadInstances_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "instances.json"), []byte("not valid json{{{"), 0644); err != nil {
@@ -458,7 +450,6 @@ func TestLoadInstances_InvalidJSON(t *testing.T) {
 
 func TestSaveInstances(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	instances := map[string]InstanceInfo{
@@ -514,7 +505,6 @@ func TestSaveInstances(t *testing.T) {
 func TestSaveInstances_EmptyMap(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	err := saveInstances(map[string]InstanceInfo{})
 	if err != nil {
@@ -533,7 +523,6 @@ func TestSaveInstances_EmptyMap(t *testing.T) {
 func TestSaveInstances_CreatesDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	nestedDir := filepath.Join(tmpDir, "sub", "nested")
-	t.Setenv("SPROUT_CONFIG", nestedDir)
 	t.Setenv("SPROUT_CONFIG", nestedDir)
 
 	instances := map[string]InstanceInfo{
@@ -651,7 +640,6 @@ func TestCleanStaleInstances_EmptyMap(t *testing.T) {
 func TestCleanStaleInstances_IntegrationWithSaveAndLoad(t *testing.T) {
 	now := time.Now()
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	instances := map[string]InstanceInfo{

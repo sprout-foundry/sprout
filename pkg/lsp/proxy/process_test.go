@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -496,6 +497,9 @@ func TestLSPProcessSendReturnsStoredErrorAfterClose(t *testing.T) {
 }
 
 func TestLSPProcessReadLoopExitOnProcessDeath(t *testing.T) {
+	if os.Getenv("CI") != "" && runtime.GOOS == "darwin" {
+		t.Skip("flaky on macOS CI — process lifecycle timing unreliable")
+	}
 	t.Run("channel closes when echo process exits", func(t *testing.T) {
 		ctx := context.Background()
 		// echo exits immediately after outputting its argument

@@ -208,6 +208,9 @@ func createAndReadySession(t *testing.T, tm *TerminalManager, id string) *Termin
 }
 
 func TestExecuteCommandAndWait_Success(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("PTY echo behavior differs on macOS (zsh default shell)")
+	}
 	dir := t.TempDir()
 	tm := NewTerminalManager(dir)
 

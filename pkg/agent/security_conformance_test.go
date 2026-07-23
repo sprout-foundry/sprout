@@ -22,33 +22,23 @@ import (
 func NonTmpTempDir(t *testing.T) string {
 	t.Helper()
 
-	// Candidates ordered by platform likelihood.
-	candidates := []string{
-		"/var/folders",     // macOS per-user temp (not under /tmp)
-		"/var/tmp",         // Linux persistent temp (not under /tmp)
-		"/private/var/tmp", // macOS resolved form
+	// We need a directory that is:
+	// 1. NOT under /tmp (which gets a universal allow)
+	// 2. NOT under a systemPathPrefixes entry (/var, /etc, /usr, ...)
+	//
+	// On macOS, os.TempDir() → /var/folders/... and /var is sensitive.
+	// On Linux, os.TempDir() → /tmp which is universally allowed.
+	// Use $HOME instead — it's never in systemPathPrefixes.
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skipf("NonTmpTempDir: cannot resolve $HOME: %v", err)
 	}
-
-	var lastErr error
-	for _, base := range candidates {
-		if _, err := os.Stat(base); err != nil {
-			lastErr = err
-			continue
-		}
-		d, err := os.MkdirTemp(base, "sprout-m1-")
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		t.Cleanup(func() { os.RemoveAll(d) })
-		return d
+	d, err := os.MkdirTemp(home, "sprout-test-")
+	if err != nil {
+		t.Skipf("NonTmpTempDir: cannot create dir in $HOME: %v", err)
 	}
-
-	// No non-/tmp scratch space available on this platform.
-	// Skip rather than silently using /tmp, which would defeat the test invariant.
-	t.Skipf("NonTmpTempDir: no non-/tmp candidate available (tried: %v); this platform lacks /var/folders and /var/tmp", lastErr)
-	// unreachable — t.Skipf calls runtime.Goexit() and never returns
-	return ""
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }
 
 // externalTempDir is a thin wrapper kept for callers that don't care

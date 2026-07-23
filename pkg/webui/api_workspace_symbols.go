@@ -5,7 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -33,7 +33,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 	// Try loading cached symbols first
 	idx, err := index.LoadSymbols(workspaceRoot)
 	if err != nil {
-		log.Printf("[debug] LoadSymbols error: %v", err)
+		ws.log().Debug("failed to load symbol index", slog.Any("err", err))
 	}
 	// If cache doesn't exist or has no files, build fresh
 	if idx == nil || len(idx.Files) == 0 {
@@ -118,6 +118,6 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		// Logging error but can't do much at this point
-		log.Printf("Failed to encode symbol response: %v", err)
+		ws.log().Error("failed to encode symbol response", slog.Any("err", err))
 	}
 }

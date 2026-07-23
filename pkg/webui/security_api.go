@@ -4,7 +4,7 @@ package webui
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -28,13 +28,13 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Printf("handleAPIConfirm: invalid JSON: %v", err)
+		ws.log().Warn("invalid security confirmation JSON", slog.Any("err", err))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	if payload.RequestID == "" {
-		log.Printf("handleAPIConfirm: request_id is required")
+		ws.log().Warn("security confirmation request ID is required")
 		http.Error(w, "request_id is required", http.StatusBadRequest)
 		return
 	}
@@ -79,6 +79,6 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	log.Printf("handleAPIConfirm: unknown or already handled request_id: %s", payload.RequestID)
+	ws.log().Warn("security confirmation request not found or already handled", slog.String("request_id", payload.RequestID))
 	http.Error(w, "Request ID not found", http.StatusNotFound)
 }

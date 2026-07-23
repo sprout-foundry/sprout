@@ -9,7 +9,7 @@ package webui
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -80,7 +80,7 @@ func (ws *ReactWebServer) handleAPIShellApprovalDecision(w http.ResponseWriter, 
 	}
 	var req events.ShellApprovalResponsePayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("handleAPIShellApprovalDecision: invalid JSON: %v", err)
+		ws.log().Warn("invalid shell approval decision JSON", slog.Any("err", err))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}

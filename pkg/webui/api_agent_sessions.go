@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -189,7 +189,7 @@ func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *htt
 			http.Error(w, "Session not found", http.StatusNotFound)
 			return
 		}
-		log.Printf("Failed to get background output for session %s: %v", sessionID, err)
+		ws.log().Error("failed to get background session output", slog.String("session_id", sessionID), slog.Any("err", err))
 		http.Error(w, "Failed to get output", http.StatusInternalServerError)
 		return
 	}
@@ -295,7 +295,7 @@ func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.
 
 	// Close the session (terminates the PTY process)
 	if err := terminalManager.CloseSession(sessionID); err != nil {
-		log.Printf("Failed to kill background session %s: %v", sessionID, err)
+		ws.log().Error("failed to kill background session", slog.String("session_id", sessionID), slog.Any("err", err))
 		http.Error(w, "Failed to kill session", http.StatusInternalServerError)
 		return
 	}

@@ -15,7 +15,7 @@ import (
 func TestNewMCPServerRegistry_HasBuiltinTemplates(t *testing.T) {
 	r := NewMCPServerRegistry()
 	templates := r.ListTemplates()
-	assert.GreaterOrEqual(t, len(templates), 6, "should have at least 6 builtin templates")
+	assert.GreaterOrEqual(t, len(templates), 5, "should have at least 5 builtin templates")
 }
 
 // ---------------------------------------------------------------------------
@@ -26,8 +26,8 @@ func TestGetTemplate_Exists(t *testing.T) {
 	r := NewMCPServerRegistry()
 
 	expectedIDs := []string{
-		"github-remote", "github-docker", "git-uvx",
-		"chrome-devtools", "http-generic", "stdio-generic",
+		"git-uvx",
+		"playwright", "chrome-devtools", "http-generic", "stdio-generic",
 	}
 
 	for _, id := range expectedIDs {
@@ -52,7 +52,7 @@ func TestListTemplates_Count(t *testing.T) {
 	r := NewMCPServerRegistry()
 	templates := r.ListTemplates()
 	count := len(templates)
-	assert.GreaterOrEqual(t, count, 6)
+	assert.GreaterOrEqual(t, count, 5)
 
 	// Adding a custom template should increase count
 	r.AddTemplate(MCPServerTemplate{
@@ -118,16 +118,16 @@ func TestSearchTemplates_ByExactName(t *testing.T) {
 
 func TestSearchTemplates_CaseInsensitive(t *testing.T) {
 	r := NewMCPServerRegistry()
-	results := r.SearchTemplates("GitHub MCP Server (Remote)")
+	results := r.SearchTemplates("Chrome DevTools")
 	assert.NotEmpty(t, results)
 	found := false
 	for _, tmpl := range results {
-		if tmpl.ID == "github-remote" {
+		if tmpl.ID == "chrome-devtools" {
 			found = true
 			break
 		}
 	}
-	assert.True(t, found, "should find github-remote template by partial name")
+	assert.True(t, found, "should find chrome-devtools template by partial name")
 }
 
 func TestSearchTemplates_ByDescription(t *testing.T) {

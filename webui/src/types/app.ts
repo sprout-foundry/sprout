@@ -74,6 +74,22 @@ export interface PerChatState {
   queryCount: number;
 }
 
+/** All navigable views in the editor (chat, editor, platform pages, detail pages). */
+export type ViewType =
+  | 'chat'
+  | 'editor'
+  | 'git'
+  | 'tasks'
+  | 'taskdetail'
+  | 'billing'
+  | 'team'
+  | 'costs'
+  | 'runners'
+  | 'dashboard'
+  | 'repodetail'
+  | 'admin'
+  | 'workspaces';
+
 export interface AppState {
   isConnected: boolean;
   provider: string;
@@ -84,17 +100,11 @@ export interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView:
-    | 'chat'
-    | 'editor'
-    | 'git'
-    | 'tasks'
-    | 'billing'
-    | 'team'
-    | 'costs'
-    | 'runners'
-    | 'dashboard'
-    | 'workspaces';
+  currentView: ViewType;
+  /** ID of the selected task for TaskDetailPage. */
+  selectedTaskId?: string | null;
+  /** Selected repo in "owner/name" format for RepoDetailPage. */
+  selectedRepo?: { owner: string; name: string } | null;
   toolExecutions: ToolExecution[];
   queryProgress: QueryProgress | null;
   stats: Record<string, unknown>; // Enhanced stats from API

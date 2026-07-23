@@ -552,7 +552,7 @@ func TestValidate_InitialAllowedPaths_InvalidEntry(t *testing.T) {
 // TestValidate_InitialAllowedPaths_SystemPrefixWarn verifies that an initial-level
 // allowed_path under a system prefix is allowed to load with a warning.
 func TestValidate_InitialAllowedPaths_SystemPrefixWarn(t *testing.T) {
-	t.Parallel()
+	// Cannot use t.Parallel() — uses global log.SetOutput.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wf.json")
 	content := `{

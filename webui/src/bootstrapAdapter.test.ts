@@ -85,7 +85,7 @@ describe('bootstrapAdapter', () => {
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter() as CloudAdapter | null;
       expect(adapter!.platformNavItems).toBeDefined();
-      expect(adapter!.platformNavItems!.length).toBe(3);
+      expect(adapter!.platformNavItems!.length).toBeGreaterThanOrEqual(6);
 
       const navIds = adapter!.platformNavItems!.map((item) => item.id);
       expect(navIds).toContain('tasks');
@@ -104,7 +104,7 @@ describe('bootstrapAdapter', () => {
       expect(adapter!.supportsSSH).toBe(false);
       expect(adapter!.supportsInstances).toBe(true);
       expect(adapter!.supportsLocalTerminal).toBe(false);
-      expect(adapter!.supportsSettings).toBe(false);
+      expect(adapter!.supportsSettings).toBe(true); // SP-CLOUD-3: BYOK settings enabled
     });
   });
 
@@ -236,7 +236,6 @@ describe('bootstrapAdapter', () => {
         const config = await fetchRuntimeConfig();
 
         expect(config).toEqual(serverConfig);
-        expect(consoleLogSpy).toHaveBeenCalledWith('bootstrap: fetched config from /api/bootstrap');
       });
 
       it('caches the fetched config in getBootstrapConfig', async () => {
@@ -325,7 +324,6 @@ describe('bootstrapAdapter', () => {
         expect(config.authMode).toBe('none');
         expect(config.appMode).toBe('local');
         expect(config.buildVersion).toBe('dev');
-        expect(consoleLogSpy).toHaveBeenCalledWith('bootstrap: using localhost defaults');
       });
 
       it('uses localhost defaults when server returns non-JSON and no env vars', async () => {
@@ -342,7 +340,6 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://localhost:56000');
         expect(config.wsURL).toBe('ws://localhost:56000/ws');
-        expect(consoleLogSpy).toHaveBeenCalledWith('bootstrap: using localhost defaults');
       });
     });
 

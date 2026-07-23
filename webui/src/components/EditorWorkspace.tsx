@@ -2,7 +2,7 @@ import { SkeletonText } from '@sprout/ui';
 import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
 import React, { Suspense, lazy, useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
-import type { PerChatState } from '../types/app';
+import type { PerChatState, ViewType } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
 import ErrorBoundary from './ErrorBoundary';
@@ -18,6 +18,9 @@ const BillingPage = lazy(() => import('./platform').then((m) => ({ default: m.Bi
 const RunnersPage = lazy(() => import('./platform').then((m) => ({ default: m.RunnersPage })));
 const DashboardPage = lazy(() => import('./platform').then((m) => ({ default: m.DashboardPage })));
 const WorkspacesPage = lazy(() => import('./platform').then((m) => ({ default: m.WorkspacesPage })));
+const TaskDetailPage = lazy(() => import('./platform').then((m) => ({ default: m.TaskDetailPage })));
+const RepoDetailPage = lazy(() => import('./platform').then((m) => ({ default: m.RepoDetailPage })));
+const AdminBillingPage = lazy(() => import('./platform').then((m) => ({ default: m.AdminBillingPage })));
 const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
@@ -27,17 +30,7 @@ const RouteFallback: React.FC = () => (
 );
 
 export interface EditorWorkspaceProps {
-  currentView:
-    | 'chat'
-    | 'editor'
-    | 'git'
-    | 'tasks'
-    | 'billing'
-    | 'team'
-    | 'costs'
-    | 'runners'
-    | 'dashboard'
-    | 'workspaces';
+  currentView: ViewType;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   onCreateChat?: () => Promise<string | null>;
@@ -48,9 +41,11 @@ export interface EditorWorkspaceProps {
   /** Called when a cost session row is clicked to restore that session */
   onSessionRestore?: (sessionId: string) => void;
   /** Called when the user clicks Back from a non-chat view (e.g. costs). */
-  onViewChange?: (
-    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
-  ) => void;
+  onViewChange?: (view: ViewType) => void;
+  /** ID of the selected task for TaskDetailPage. */
+  selectedTaskId?: string | null;
+  /** Selected repo in owner/name format for RepoDetailPage. */
+  selectedRepo?: { owner: string; name: string } | null;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -135,6 +130,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   handleOutlineNavigateToSymbol,
   onSessionRestore,
   onViewChange,
+  selectedTaskId,
+  selectedRepo,
 }) => {
   const {
     panes,
@@ -610,6 +607,34 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return (
       <Suspense fallback={<RouteFallback />}>
         <WorkspacesPage />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'taskdetail' && selectedTaskId) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <TaskDetailPage taskId={selectedTaskId} onBack={() => onViewChange?.('tasks')} />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'repodetail' && selectedRepo) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <RepoDetailPage
+          repoOwner={selectedRepo.owner}
+          repoName={selectedRepo.name}
+          onBack={() => onViewChange?.('dashboard')}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'admin') {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <AdminBillingPage />
       </Suspense>
     );
   }

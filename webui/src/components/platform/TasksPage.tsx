@@ -2,6 +2,7 @@ import { ListChecks, Plus, X } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
 import { getEditorSync } from '../../services/crossTabSync';
+import { useAppStoreSetState } from '../../contexts/AppStore';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
 
@@ -18,6 +19,7 @@ interface FoundryTask {
 
 const TasksPage: React.FC = () => {
   const log = useLog();
+  const setState = useAppStoreSetState();
 
   const [tasks, setTasks] = useState<FoundryTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,6 +147,13 @@ const TasksPage: React.FC = () => {
   const formatTaskId = (id: string) => {
     return id.length > 12 ? id.slice(0, 8) + '…' + id.slice(-4) : id;
   };
+
+  const handleTaskClick = useCallback(
+    (taskId: string) => {
+      setState(() => ({ currentView: 'taskdetail', selectedTaskId: taskId }));
+    },
+    [setState],
+  );
 
   return (
     <div className="platform-page">
@@ -401,7 +410,19 @@ const TasksPage: React.FC = () => {
       {!loading && !error && tasks.length > 0 && (
         <div className="platform-list">
           {tasks.map((task) => (
-            <div key={task.task_id} className="platform-list-item">
+            <div
+              key={task.task_id}
+              className="platform-list-item platform-list-item--clickable"
+              onClick={() => handleTaskClick(task.task_id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleTaskClick(task.task_id);
+                }
+              }}
+            >
               <div className="platform-list-item-icon">
                 <ListChecks size={20} />
               </div>

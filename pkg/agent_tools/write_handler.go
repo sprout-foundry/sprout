@@ -59,11 +59,11 @@ func (h *writeFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// Wire the agent's filesystem gate into ctx so WriteFile's resolve
-	// step surfaces the approve / session-allow / elevate dialog on
-	// off-workspace paths. See FilesystemGate in handler.go and
-	// withFilesystemApproval in filesystem_gate.go.
-	ctx = WithFilesystemGateFromEnv(ctx, env)
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths resolve directly with bypass (the path is already
+	// workspace/tmp/allowlisted). Prompt paths fall through and will
+	// fail with the raw filesystem error.
 
 	path, err := extractString(args, "path")
 	if err != nil {
@@ -77,7 +77,7 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 
 	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
 	// resolve so Deny paths return a typed error immediately and Allow
-	// paths bypass withFilesystemApproval entirely (the path is already
+	// paths bypass the gate entirely (the path is already
 	// workspace/tmp/allowlisted).
 	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_file", path)
 	if decision == "deny" {

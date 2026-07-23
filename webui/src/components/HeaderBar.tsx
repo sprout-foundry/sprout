@@ -131,7 +131,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
           ← Dashboard
         </a>
       )}
-      <MenuBar />
+      {!isCloud && <MenuBar />}
       <div className="header-bar-actions">
         {isCloud && (
           <button

@@ -389,6 +389,16 @@ export function useEditorFileIO(
         }),
       );
 
+      // Cross-tab sync: notify the platform dashboard (if open in another
+      // tab) that a file was saved. The dashboard can refresh its file list
+      // or show a "files changed" indicator.
+      try {
+        const { getEditorSync } = await import('../services/crossTabSync');
+        getEditorSync().publish('file_change', { path: buf.file.path });
+      } catch {
+        // crossTabSync is optional — fail silently
+      }
+
       try {
         const saveResult = await saveBuffer(buf.id);
         const serverMtime = saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;

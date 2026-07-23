@@ -20,7 +20,7 @@ import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
 import { forkChatSession } from '../services/chatSessions';
-import type { AppState, PerChatState } from '../types/app';
+import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
@@ -61,9 +61,7 @@ interface AppContentProps {
   onSidebarToggle: () => void;
   onToggleSidebar: () => void;
   onCloseSidebar: () => void;
-  onViewChange: (
-    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
-  ) => void;
+  onViewChange: (view: ViewType) => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
@@ -243,24 +241,19 @@ const AppContent: React.FC<AppContentProps> = ({
   });
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
-  const handlePrimaryViewChange = useCallback(
-    (
-      view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
-    ) => {
-      if (view === 'chat') {
-        openWorkspaceBuffer({
-          kind: 'chat',
-          path: '__workspace/chat',
-          title: 'Chat',
-          ext: '.chat',
-          isPinned: true,
-          isClosable: false,
-        });
-      }
-      onViewChange(view);
-    },
-    [onViewChange, openWorkspaceBuffer],
-  );
+  const handlePrimaryViewChange = useCallback((view: ViewType) => {
+    if (view === 'chat') {
+      openWorkspaceBuffer({
+        kind: 'chat',
+        path: '__workspace/chat',
+        title: 'Chat',
+        ext: '.chat',
+        isPinned: true,
+        isClosable: false,
+      });
+    }
+    onViewChange(view);
+  }, [onViewChange, openWorkspaceBuffer]);
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
 
@@ -799,6 +792,8 @@ const AppContent: React.FC<AppContentProps> = ({
                 handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
                 onSessionRestore={handleSessionSearchRestore}
                 onViewChange={onViewChange}
+                selectedTaskId={state.selectedTaskId}
+                selectedRepo={state.selectedRepo}
               />
             </ErrorBoundary>
           </div>

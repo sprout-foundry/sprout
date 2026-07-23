@@ -1,7 +1,7 @@
 import type { ToolExecution, LogEntry, SubagentActivity, TodoItem, FileEdit } from '@sprout/ui';
 import React, { useEffect } from 'react';
 import { ApiService } from '../services/api';
-import type { QueryProgress } from '../types/app';
+import type { QueryProgress, ViewType } from '../types/app';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ErrorBoundary from './ErrorBoundary';
 
@@ -13,17 +13,7 @@ export interface ContextSidebarProps {
   isTablet: boolean;
   showContextSidebar: boolean;
   contextPanelRef: React.RefObject<ContextPanelHandle>;
-  currentView:
-    | 'chat'
-    | 'editor'
-    | 'git'
-    | 'tasks'
-    | 'billing'
-    | 'team'
-    | 'costs'
-    | 'runners'
-    | 'dashboard'
-    | 'workspaces';
+  currentView: ViewType;
   toolExecutions: ToolExecution[];
   fileEdits: FileEdit[];
   logs: LogEntry[];

@@ -7,6 +7,7 @@ import DriftNotification from './components/DriftNotification';
 import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
+import InstallPromptBanner from './components/InstallPromptBanner';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
@@ -416,6 +417,7 @@ function AppInner() {
                     />
                     <UpdateNotification />
                     <EscalationListener />
+                    <InstallPromptBanner />
                     <DisconnectedOverlay isConnected={state.isConnected} />
                     {state.securityApprovalRequest && (
                       <SecurityApprovalDialog

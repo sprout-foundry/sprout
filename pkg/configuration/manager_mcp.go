@@ -194,37 +194,7 @@ func applyMapDiff(base, current, target map[string]interface{}) {
 
 // mapClientTypeToString converts ClientType to string
 func mapClientTypeToString(ct api.ClientType) string {
-	switch ct {
-	case api.ChutesClientType:
-		return "chutes"
-	case api.OpenAIClientType:
-		return "openai"
-	case api.ZAIClientType:
-		return "zai"
-	case api.DeepInfraClientType:
-		return "deepinfra"
-	case api.DeepSeekClientType:
-		return "deepseek"
-	case api.OpenRouterClientType:
-		return "openrouter"
-	case api.OllamaClientType:
-		return "ollama"
-	case api.OllamaLocalClientType:
-		return "ollama-local"
-	case api.OllamaCloudClientType:
-		return "ollama-cloud"
-	case api.LMStudioClientType:
-		return "lmstudio"
-	case api.MistralClientType:
-		return "mistral"
-	case api.MinimaxClientType:
-		return "minimax"
-	case api.TestClientType:
-		return "test"
-	default:
-		// For providers not yet in ClientType constants
-		return string(ct)
-	}
+	return string(ct)
 }
 
 // mapStringToClientType converts string to ClientType

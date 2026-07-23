@@ -5,7 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -107,7 +107,7 @@ func (ws *ReactWebServer) handleAPISessionsSearch(w http.ResponseWriter, r *http
 
 	idx, err := search.LoadIndex(indexPath)
 	if err != nil {
-		log.Printf("corrupt search index, rebuilding: %v", err)
+		ws.log().Warn("search index is corrupt; rebuilding", slog.Any("err", err))
 		idx = nil
 	}
 
@@ -124,7 +124,7 @@ func (ws *ReactWebServer) handleAPISessionsSearch(w http.ResponseWriter, r *http
 			return
 		}
 		if err := search.SaveIndex(indexPath, idx); err != nil {
-			log.Printf("warning: failed to save search index: %v", err)
+			ws.log().Warn("failed to save search index", slog.Any("err", err))
 			// Continue with in-memory index — search still works
 		}
 	}

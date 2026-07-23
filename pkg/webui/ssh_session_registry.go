@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -254,7 +254,7 @@ func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSessi
 	}
 	_ = cmd.Wait()
 
-	log.Printf("[ssh] tunnel for session %s disconnected, attempting reconnect", key)
+	ws.log().Warn("SSH tunnel disconnected; attempting reconnect", slog.String("session_key", key))
 	ws.publishSSHTunnelStatus(key, "reconnecting", "SSH tunnel disconnected, reconnecting…")
 
 	// Attempt to reconnect the tunnel before giving up.
@@ -299,7 +299,7 @@ func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSessi
 			session.URL = fmt.Sprintf("http://127.0.0.1:%d", newLocalPort)
 			ws.sshSessionsMu.Unlock()
 			_ = killProcess(oldTunnel)
-			log.Printf("[ssh] tunnel for session %s reconnected on port %d (attempt %d/%d)", key, newLocalPort, attempt, maxRetries)
+			ws.log().Info("SSH tunnel reconnected", slog.String("session_key", key), slog.Int("local_port", newLocalPort), slog.Int("attempt", attempt), slog.Int("max_attempts", maxRetries))
 			ws.publishSSHTunnelStatus(key, "reconnected", "SSH tunnel reconnected")
 			go ws.watchSSHSession(key, session, newTunnel)
 			return
@@ -310,7 +310,7 @@ func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSessi
 	}
 
 	// All reconnection attempts failed; clean up.
-	log.Printf("[ssh] tunnel for session %s failed to reconnect after %d attempts", key, maxRetries)
+	ws.log().Error("SSH tunnel reconnection failed", slog.String("session_key", key), slog.Int("attempt_count", maxRetries))
 	ws.publishSSHTunnelStatus(key, "disconnected", "SSH tunnel disconnected and could not be reconnected")
 	ws.sshSessionsMu.Lock()
 	defer ws.sshSessionsMu.Unlock()

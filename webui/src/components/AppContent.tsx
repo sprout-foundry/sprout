@@ -241,19 +241,22 @@ const AppContent: React.FC<AppContentProps> = ({
   });
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
-  const handlePrimaryViewChange = useCallback((view: ViewType) => {
-    if (view === 'chat') {
-      openWorkspaceBuffer({
-        kind: 'chat',
-        path: '__workspace/chat',
-        title: 'Chat',
-        ext: '.chat',
-        isPinned: true,
-        isClosable: false,
-      });
-    }
-    onViewChange(view);
-  }, [onViewChange, openWorkspaceBuffer]);
+  const handlePrimaryViewChange = useCallback(
+    (view: ViewType) => {
+      if (view === 'chat') {
+        openWorkspaceBuffer({
+          kind: 'chat',
+          path: '__workspace/chat',
+          title: 'Chat',
+          ext: '.chat',
+          isPinned: true,
+          isClosable: false,
+        });
+      }
+      onViewChange(view);
+    },
+    [onViewChange, openWorkspaceBuffer],
+  );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
 

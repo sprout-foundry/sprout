@@ -9,8 +9,8 @@ func TestSecurityAnalysisCache_SetGet(t *testing.T) {
 	cache := NewSecurityAnalysisCache()
 
 	sa := &SecurityAnalysis{
-		Summary:       "Recursively deletes files",
-		Modifies:      "./build/",
+		Summary:        "Recursively deletes files",
+		Modifies:       "./build/",
 		RiskAssessment: "moderate",
 		Recommendation: "review",
 	}
@@ -49,8 +49,8 @@ func TestSecurityAnalysisCache_Clear(t *testing.T) {
 	cache := NewSecurityAnalysisCache()
 
 	sa := &SecurityAnalysis{
-		Summary:       "Test command",
-		Modifies:     "/tmp",
+		Summary:        "Test command",
+		Modifies:       "/tmp",
 		RiskAssessment: "low",
 		Recommendation: "approve",
 	}
@@ -101,8 +101,8 @@ func TestSecurityAnalysisCache_Concurrent(t *testing.T) {
 			defer wg.Done()
 			cmd := "command"
 			sa := &SecurityAnalysis{
-				Summary:       "Command",
-				Modifies:      "/tmp",
+				Summary:        "Command",
+				Modifies:       "/tmp",
 				RiskAssessment: "low",
 				Recommendation: "approve",
 			}
@@ -128,15 +128,15 @@ func TestSecurityAnalysisCache_Overwrite(t *testing.T) {
 	cache := NewSecurityAnalysisCache()
 
 	sa1 := &SecurityAnalysis{
-		Summary:       "First analysis",
-		Modifies:      "/tmp",
+		Summary:        "First analysis",
+		Modifies:       "/tmp",
 		RiskAssessment: "low",
 		Recommendation: "approve",
 	}
 
 	sa2 := &SecurityAnalysis{
-		Summary:       "Second analysis",
-		Modifies:      "/home",
+		Summary:        "Second analysis",
+		Modifies:       "/home",
 		RiskAssessment: "high",
 		Recommendation: "reject",
 	}
@@ -167,8 +167,8 @@ func TestSecurityAnalysisCache_MultipleEntries(t *testing.T) {
 
 	for _, cmd := range commands {
 		sa := &SecurityAnalysis{
-			Summary:       cmd,
-			Modifies:      "varies",
+			Summary:        cmd,
+			Modifies:       "varies",
 			RiskAssessment: "varies",
 			Recommendation: "review",
 		}

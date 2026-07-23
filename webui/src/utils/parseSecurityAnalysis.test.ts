@@ -8,10 +8,7 @@
  * "analyzer is non-blocking" contract.
  */
 import { describe, it, expect } from 'vitest';
-import {
-  parseSecurityAnalysis,
-  parseSecurityAnalysisString,
-} from './parseSecurityAnalysis';
+import { parseSecurityAnalysis, parseSecurityAnalysisString } from './parseSecurityAnalysis';
 
 describe('parseSecurityAnalysisString', () => {
   it('parses valid JSON with all four fields', () => {
@@ -53,7 +50,11 @@ describe('parseSecurityAnalysisString', () => {
 
   it('returns undefined when all four fields are empty/missing', () => {
     expect(parseSecurityAnalysisString(JSON.stringify({}))).toBeUndefined();
-    expect(parseSecurityAnalysisString(JSON.stringify({ summary: '', modifies: '', risk_assessment: '', recommendation: '' }))).toBeUndefined();
+    expect(
+      parseSecurityAnalysisString(
+        JSON.stringify({ summary: '', modifies: '', risk_assessment: '', recommendation: '' }),
+      ),
+    ).toBeUndefined();
   });
 
   it('parses JSON with extra unknown fields (ignores them, returns typed shape)', () => {
@@ -80,7 +81,9 @@ describe('parseSecurityAnalysisString', () => {
     // EVERY field is empty/missing. With one valid field present, the
     // parsed object is returned with empty-string fall-throughs for the
     // rest — so callers can still rely on summary, even partial.
-    const sa = parseSecurityAnalysisString(JSON.stringify({ summary: 'partial', modifies: null, risk_assessment: 42, recommendation: undefined }));
+    const sa = parseSecurityAnalysisString(
+      JSON.stringify({ summary: 'partial', modifies: null, risk_assessment: 42, recommendation: undefined }),
+    );
     expect(sa).toEqual({
       summary: 'partial',
       modifies: '',

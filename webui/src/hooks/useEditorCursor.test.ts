@@ -837,7 +837,13 @@ function renderCursorIntegrationHarness(opts: {
 
   let cursorHookReturn: any = null;
 
-  function Harness({ settingsToggle, openWorkspaceBuffer }: { settingsToggle: number; openWorkspaceBuffer: OpenWorkspaceBufferFn }) {
+  function Harness({
+    settingsToggle,
+    openWorkspaceBuffer,
+  }: {
+    settingsToggle: number;
+    openWorkspaceBuffer: OpenWorkspaceBufferFn;
+  }) {
     // The bug being guarded against: the parent's settings-callback identity
     // changes on every render. EditorPane mirrors this through a ref so the
     // CodeMirror mount never sees the unstable identity. We do the same here.

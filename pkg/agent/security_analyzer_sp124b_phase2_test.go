@@ -308,23 +308,27 @@ func (m *mockPhase2CountingClient) SendChatRequest(ctx context.Context, messages
 func (m *mockPhase2CountingClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockPhase2CountingClient) CheckConnection() error                              { return nil }
-func (m *mockPhase2CountingClient) SetDebug(debug bool)                                {}
-func (m *mockPhase2CountingClient) SetModel(model string) error                       { return nil }
-func (m *mockPhase2CountingClient) GetModel() string                                   { return "test" }
-func (m *mockPhase2CountingClient) GetProvider() string                               { return "test" }
-func (m *mockPhase2CountingClient) GetModelContextLimit() (int, error)                { return 4096, nil }
-func (m *mockPhase2CountingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
-func (m *mockPhase2CountingClient) SupportsVision() bool                               { return false }
+func (m *mockPhase2CountingClient) CheckConnection() error             { return nil }
+func (m *mockPhase2CountingClient) SetDebug(debug bool)                {}
+func (m *mockPhase2CountingClient) SetModel(model string) error        { return nil }
+func (m *mockPhase2CountingClient) GetModel() string                   { return "test" }
+func (m *mockPhase2CountingClient) GetProvider() string                { return "test" }
+func (m *mockPhase2CountingClient) GetModelContextLimit() (int, error) { return 4096, nil }
+func (m *mockPhase2CountingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	return nil, nil
+}
+func (m *mockPhase2CountingClient) SupportsVision() bool { return false }
 func (m *mockPhase2CountingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockPhase2CountingClient) GetLastTPS() float64                          { return 100.0 }
-func (m *mockPhase2CountingClient) GetAverageTPS() float64                        { return 100.0 }
-func (m *mockPhase2CountingClient) GetTPSStats() map[string]float64               { return nil }
-func (m *mockPhase2CountingClient) ResetTPSStats()                                {}
-func (m *mockPhase2CountingClient) SupportsConversationalVision() bool            { return false }
-func (m *mockPhase2CountingClient) VisionCapabilities() api.VisionCapabilities     { return api.VisionCapabilities{} }
-func (m *mockPhase2CountingClient) GetVisionModel() string                        { return "" }
+func (m *mockPhase2CountingClient) GetLastTPS() float64                { return 100.0 }
+func (m *mockPhase2CountingClient) GetAverageTPS() float64             { return 100.0 }
+func (m *mockPhase2CountingClient) GetTPSStats() map[string]float64    { return nil }
+func (m *mockPhase2CountingClient) ResetTPSStats()                     {}
+func (m *mockPhase2CountingClient) SupportsConversationalVision() bool { return false }
+func (m *mockPhase2CountingClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilities{}
+}
+func (m *mockPhase2CountingClient) GetVisionModel() string { return "" }
 
 var _ api.ClientInterface = (*mockPhase2CountingClient)(nil)

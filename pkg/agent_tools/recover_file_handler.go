@@ -50,14 +50,17 @@ func (h *recoverFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *recoverFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	if RecoverFileFunc == nil {
+	ToolFuncMu.RLock()
+	fn := RecoverFileFunc
+	ToolFuncMu.RUnlock()
+	if fn == nil {
 		return ToolResult{
 			Output:  "recover_file is not available: agent integration not initialized (RecoverFileFunc is nil)",
 			IsError: true,
 		}, nil
 	}
 
-	result, err := RecoverFileFunc(ctx, args)
+	result, err := fn(ctx, args)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}

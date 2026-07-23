@@ -516,4 +516,3 @@ func (ct *ChangeTracker) Reset(instructions string) {
 // Helper functions
 
 // Helper functions
-

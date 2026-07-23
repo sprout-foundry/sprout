@@ -406,8 +406,8 @@ func (m *mockSecurityAnalyzerClient) GetAverageTPS() float64 {
 
 func (m *mockSecurityAnalyzerClient) GetTPSStats() map[string]float64 {
 	return map[string]float64{
-		"last_tps":     100.0,
-		"average_tps":   100.0,
+		"last_tps":    100.0,
+		"average_tps": 100.0,
 	}
 }
 

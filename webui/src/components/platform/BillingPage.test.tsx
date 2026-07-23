@@ -102,7 +102,7 @@ describe('BillingPage', () => {
 
   it('calls adapter.fetch with the correct endpoint on mount', () => {
     renderSync();
-    expect(mockFetch).toHaveBeenCalledWith('/api/foundry/billing');
+    expect(mockFetch).toHaveBeenCalledWith('/checkout/plans');
   });
 
   it('does not show error state on initial render with adapter', () => {

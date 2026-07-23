@@ -54,9 +54,9 @@ const DashboardPage: React.FC = () => {
     setError(null);
 
     const [reposRes, tasksRes, usageRes] = await Promise.allSettled([
-      adapter.fetch('/api/user/me/repos?limit=12'),
-      adapter.fetch('/api/task?limit=5'),
-      adapter.fetch('/api/user/me/usage'),
+      adapter.fetch('/user/me/repos?limit=12'),
+      adapter.fetch('/api/tasks?limit=5'),
+      adapter.fetch('/user/me/usage'),
     ]);
 
     if (reposRes.status === 'fulfilled') {

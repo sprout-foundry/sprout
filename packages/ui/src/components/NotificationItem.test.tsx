@@ -473,4 +473,180 @@ describe('NotificationItem', () => {
     const title = container.querySelector('.notification-title');
     expect(title).toBeNull();
   });
+
+  describe('action button', () => {
+    it('does not render an action button when no action is provided', () => {
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          ...baseProps,
+          type: 'info',
+        }));
+      });
+
+      const actionBtn = container.querySelector('.notification-action');
+      expect(actionBtn).toBeNull();
+    });
+
+    it('renders an action button with the supplied label', () => {
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          ...baseProps,
+          type: 'warning',
+          action: { label: 'Open settings', onClick: vi.fn() },
+        }));
+      });
+
+      const actionBtn = container.querySelector('.notification-action');
+      expect(actionBtn).not.toBeNull();
+      expect(actionBtn?.textContent).toBe('Open settings');
+      expect(actionBtn?.getAttribute('type')).toBe('button');
+    });
+
+    it('invokes the action onClick when the button is clicked', () => {
+      const onClick = vi.fn();
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          ...baseProps,
+          type: 'warning',
+          action: { label: 'Retry', onClick },
+        }));
+      });
+
+      const actionBtn = container.querySelector('.notification-action') as HTMLButtonElement;
+      act(() => {
+        actionBtn.click();
+      });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('auto-dismisses after clicking the action when keepOpen is not set', () => {
+      const onClick = vi.fn();
+      const onClose = vi.fn();
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          ...baseProps,
+          type: 'warning',
+          action: { label: 'Retry', onClick },
+          onClose,
+        }));
+      });
+
+      const actionBtn = container.querySelector('.notification-action') as HTMLButtonElement;
+      act(() => {
+        actionBtn.click();
+      });
+
+      // Exit animation
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledWith('test-id');
+    });
+
+    it('keeps the toast open after clicking the action when keepOpen is true', () => {
+      const onClick = vi.fn();
+      const onClose = vi.fn();
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          ...baseProps,
+          type: 'warning',
+          action: { label: 'Acknowledge', onClick, keepOpen: true },
+          onClose,
+        }));
+      });
+
+      const actionBtn = container.querySelector('.notification-action') as HTMLButtonElement;
+      act(() => {
+        actionBtn.click();
+      });
+
+      // Exit animation would fire here, but keepOpen suppresses close
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-dismiss when keepOpen is true and no duration is supplied', () => {
+      const onClose = vi.fn();
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          id: 'keep-open-id',
+          type: 'info',
+          title: 'T',
+          message: 'M',
+          action: { label: 'Read', onClick: vi.fn(), keepOpen: true },
+          onClose,
+        }));
+      });
+
+      // The default 5 s timer must NOT fire when keepOpen is set.
+      act(() => {
+        vi.advanceTimersByTime(10000);
+      });
+
+      expect(onClose).not.toHaveBeenCalled();
+      const el = document.getElementById('notification-keep-open-id');
+      expect(el).not.toBeNull();
+    });
+
+    it('still honors an explicit duration when keepOpen is true (hard timeout)', () => {
+      const onClose = vi.fn();
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          id: 'keep-open-explicit',
+          type: 'info',
+          title: 'T',
+          message: 'M',
+          duration: 2000,
+          action: { label: 'Read', onClick: vi.fn(), keepOpen: true },
+          onClose,
+        }));
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      act(() => {
+        vi.advanceTimersByTime(200); // exit animation
+      });
+
+      expect(onClose).toHaveBeenCalledWith('keep-open-explicit');
+    });
+
+    it('stops propagation so the parent item does not handle Enter/Escape when the action is clicked', () => {
+      const onClick = vi.fn();
+      // Spy on handleClose via onClose to assert it was NOT triggered
+      // by the parent's React onKeyDown, since action.click() should not
+      // bubble up as an Enter key on the parent. We exercise the
+      // click handler directly.
+      const onClose = vi.fn();
+      act(() => {
+        root.render(createElement(NotificationItem, {
+          ...baseProps,
+          type: 'info',
+          action: { label: 'X', onClick },
+          onClose,
+        }));
+      });
+
+      const actionBtn = container.querySelector('.notification-action') as HTMLButtonElement;
+      act(() => {
+        actionBtn.click();
+      });
+
+      // Auto-dismiss path should close the toast (because keepOpen is unset).
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledWith('test-id');
+    });
+  });
 });

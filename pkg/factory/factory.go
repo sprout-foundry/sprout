@@ -339,50 +339,15 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 // CreateProviderClient is a factory function that creates providers
 func CreateProviderClient(clientType api.ClientType, model string) (api.ClientInterface, error) {
 	switch clientType {
-	case api.OpenAIClientType:
-		return CreateGenericProvider("openai", model)
-	case api.ChutesClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("chutes", model)
-	case api.ZAIClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("zai", model)
-	case api.ZAICodingClientType:
-		// GLM Coding Plan uses a dedicated endpoint
-		return CreateGenericProvider("zai-coding", model)
-	case api.DeepInfraClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("deepinfra", model)
-	case api.DeepSeekClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("deepseek", model)
 	case api.OllamaClientType, api.OllamaLocalClientType:
 		return api.NewOllamaLocalClient(model)
-	case api.OllamaCloudClientType:
-		return CreateGenericProvider("ollama-cloud", model)
-	case api.OpenRouterClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("openrouter", model)
-	case api.CerebrasClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("cerebras", model)
-	case api.LMStudioClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("lmstudio", model)
-	case api.MistralClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("mistral", model)
-	case api.MinimaxClientType:
-		return CreateGenericProvider("minimax", model)
 	case api.TestClientType:
-		// Return test/mock client for CI environments
 		testClient := &TestClient{model: model}
 		if model != "" {
 			testClient.SetModel(model)
 		}
 		return testClient, nil
 	default:
-		// For custom providers, try to use the generic provider system
 		return CreateGenericProvider(string(clientType), model)
 	}
 }

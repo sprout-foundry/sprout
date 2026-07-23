@@ -110,39 +110,13 @@ func (a *ProviderAdapter) GetType() ClientType {
 	return a.clientType
 }
 
-// GetEndpoint returns the API endpoint
+// GetEndpoint returns the API endpoint from the underlying client.
+// Falls back to an empty string if the client doesn't expose GetEndpoint.
 func (a *ProviderAdapter) GetEndpoint() string {
-	// Extract endpoint from the client implementation
-	switch a.clientType {
-	case OpenAIClientType:
-		return "https://api.openai.com/v1/chat/completions"
-	case DeepInfraClientType:
-		return "https://api.deepinfra.com/v1/openai/chat/completions"
-	case DeepSeekClientType:
-		return "https://api.deepseek.com/v1/chat/completions"
-	case OpenRouterClientType:
-		return "https://openrouter.ai/api/v1/chat/completions"
-	case ChutesClientType:
-		return "https://chutes.ai/v1/chat/completions"
-	case ZAIClientType:
-		return "https://z.ai/v1/chat/completions"
-	case OllamaClientType, OllamaLocalClientType:
-		// For local Ollama, use the default local endpoint
-		return "http://localhost:11434/v1/chat/completions"
-	case OllamaCloudClientType:
-		return "https://turbo.ollama.ai/v1/chat/completions"
-	case LMStudioClientType:
-		// For LM Studio, use the default local endpoint
-		return "http://localhost:1234/v1/chat/completions"
-	case TestClientType:
-		return "https://test.api.example.com/v1/chat/completions"
-	default:
-		// For unknown client types, try to extract from client if possible
-		if clientWithEndpoint, ok := a.client.(interface{ GetEndpoint() string }); ok {
-			return clientWithEndpoint.GetEndpoint()
-		}
-		return ""
+	if clientWithEndpoint, ok := a.client.(interface{ GetEndpoint() string }); ok {
+		return clientWithEndpoint.GetEndpoint()
 	}
+	return ""
 }
 
 // SupportsVision returns whether the provider supports vision

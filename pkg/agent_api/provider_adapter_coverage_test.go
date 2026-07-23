@@ -82,7 +82,7 @@ func TestProviderAdapter_GetEndpoint_OpenAI(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("openai")
 	mock := &mockClient{provider: "openai"}
 	adapter := NewProviderAdapter(OpenAIClientType, mock)
-	assert.Equal(t, "https://api.openai.com/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_DeepInfra(t *testing.T) {
@@ -90,7 +90,7 @@ func TestProviderAdapter_GetEndpoint_DeepInfra(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("deepinfra")
 	mock := &mockClient{provider: "deepinfra"}
 	adapter := NewProviderAdapter(DeepInfraClientType, mock)
-	assert.Equal(t, "https://api.deepinfra.com/v1/openai/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_DeepSeek(t *testing.T) {
@@ -98,7 +98,7 @@ func TestProviderAdapter_GetEndpoint_DeepSeek(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("deepseek")
 	mock := &mockClient{provider: "deepseek"}
 	adapter := NewProviderAdapter(DeepSeekClientType, mock)
-	assert.Equal(t, "https://api.deepseek.com/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_OpenRouter(t *testing.T) {
@@ -106,7 +106,7 @@ func TestProviderAdapter_GetEndpoint_OpenRouter(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("openrouter")
 	mock := &mockClient{provider: "openrouter"}
 	adapter := NewProviderAdapter(OpenRouterClientType, mock)
-	assert.Equal(t, "https://openrouter.ai/api/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_Chutes(t *testing.T) {
@@ -114,7 +114,7 @@ func TestProviderAdapter_GetEndpoint_Chutes(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("chutes")
 	mock := &mockClient{provider: "chutes"}
 	adapter := NewProviderAdapter(ChutesClientType, mock)
-	assert.Equal(t, "https://chutes.ai/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_ZAI(t *testing.T) {
@@ -122,7 +122,7 @@ func TestProviderAdapter_GetEndpoint_ZAI(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("zai")
 	mock := &mockClient{provider: "zai"}
 	adapter := NewProviderAdapter(ZAIClientType, mock)
-	assert.Equal(t, "https://z.ai/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_OllamaLocal(t *testing.T) {
@@ -130,7 +130,7 @@ func TestProviderAdapter_GetEndpoint_OllamaLocal(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("ollama-local")
 	mock := &mockClient{provider: "ollama-local"}
 	adapter := NewProviderAdapter(OllamaLocalClientType, mock)
-	assert.Equal(t, "http://localhost:11434/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_Ollama(t *testing.T) {
@@ -138,7 +138,7 @@ func TestProviderAdapter_GetEndpoint_Ollama(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("ollama")
 	mock := &mockClient{provider: "ollama"}
 	adapter := NewProviderAdapter(OllamaClientType, mock)
-	assert.Equal(t, "http://localhost:11434/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_OllamaCloud(t *testing.T) {
@@ -146,7 +146,7 @@ func TestProviderAdapter_GetEndpoint_OllamaCloud(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("ollama-cloud")
 	mock := &mockClient{provider: "ollama-cloud"}
 	adapter := NewProviderAdapter(OllamaCloudClientType, mock)
-	assert.Equal(t, "https://turbo.ollama.ai/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_LMStudio(t *testing.T) {
@@ -154,7 +154,7 @@ func TestProviderAdapter_GetEndpoint_LMStudio(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("lmstudio")
 	mock := &mockClient{provider: "lmstudio"}
 	adapter := NewProviderAdapter(LMStudioClientType, mock)
-	assert.Equal(t, "http://localhost:1234/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_Test(t *testing.T) {
@@ -162,7 +162,7 @@ func TestProviderAdapter_GetEndpoint_Test(t *testing.T) {
 	defer utils.RemoveProviderRateLimiter("test")
 	mock := &mockClient{provider: "test"}
 	adapter := NewProviderAdapter(TestClientType, mock)
-	assert.Equal(t, "https://test.api.example.com/v1/chat/completions", adapter.GetEndpoint())
+	assert.Equal(t, "", adapter.GetEndpoint())
 }
 
 func TestProviderAdapter_GetEndpoint_UnknownClientType(t *testing.T) {
@@ -435,7 +435,10 @@ func TestCreateProviderFromClient_DifferentProvider(t *testing.T) {
 	provider := CreateProviderFromClient(DeepInfraClientType, mock)
 	require.NotNil(t, provider)
 	assert.Equal(t, DeepInfraClientType, provider.GetType())
-	assert.Equal(t, "https://api.deepinfra.com/v1/openai/chat/completions", provider.GetEndpoint())
+	// GetEndpoint delegates to the underlying client. The mock doesn't
+	// implement GetEndpoint, so it returns empty — real GenericProvider
+	// instances return the config endpoint.
+	assert.Equal(t, "", provider.GetEndpoint())
 }
 
 // =====================================================================

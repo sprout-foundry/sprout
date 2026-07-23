@@ -14,7 +14,7 @@ import (
 // TestCumulativeFileStateTracking tests that the system maintains file state across review iterations
 func TestCumulativeFileStateTracking(t *testing.T) {
 	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "ledit_test_*")
+	tempDir, err := os.MkdirTemp("", "sprout_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

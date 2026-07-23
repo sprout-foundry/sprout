@@ -23,7 +23,7 @@ See `docs/TESTING.md` for the full testing strategy.
 Tests must never leak side effects into the codebase, git state, or config:
 
 - **Branch changes** — never create/switch branches in tests; a prior session accidentally created `new-branch` that diverged from `main`.
-- **Config/env mutation** — scope env changes with `t.Setenv()` and set *both* `SPROUT_CONFIG` and `LEDIT_CONFIG` to the same temp dir.
+- **Config/env mutation** — scope env changes with `t.Setenv()` and set `SPROUT_CONFIG` to a temp dir.
 - **Preferred helper**: `configuration.NewTestManager(t)` does all of the above in one call and ships a cleanup hook that fails the test if the real config file gets touched. Use it for any test that reads, writes, or mutates `configuration.Config`.
 - **NEVER persist `api.TestClientType` ("test")** to `LastUsedProvider` or `SubagentProvider` — that string is an in-process sentinel for mock clients; if it reaches disk, the next CLI run silently routes to a no-op mock. See `pkg/configuration/testing_isolation.go`.
 - **Uncommitted test artifacts** — `*_test.go` files created during a session must be committed or removed, not left in the tree.

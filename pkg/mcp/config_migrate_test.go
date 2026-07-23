@@ -15,21 +15,21 @@ import (
 // and forces the file-based credential backend so tests do not depend on an OS
 // keyring being present. Returns the temp directory path (the .sprout subdirectory).
 //
-// NOTE: getConfigDir() in config.go now respects LEDIT_CONFIG, so we set both
-// HOME (for os.UserHomeDir fallback) and LEDIT_CONFIG to ensure MCP config is
-// written to the correct location. The credentials package also uses LEDIT_CONFIG.
+// NOTE: getConfigDir() in config.go now respects SPROUT_CONFIG, so we set both
+// HOME (for os.UserHomeDir fallback) and SPROUT_CONFIG to ensure MCP config is
+// written to the correct location. The credentials package also uses SPROUT_CONFIG.
 func setupConfigTestEnv(t *testing.T) string {
 	t.Helper()
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".sprout")
 	t.Setenv("HOME", homeDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	// Prevent env var overrides from interfering with LoadMCPConfig
-	t.Setenv("LEDIT_MCP_ENABLED", "")
-	t.Setenv("LEDIT_MCP_AUTO_START", "")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "")
+	t.Setenv("SPROUT_MCP_ENABLED", "")
+	t.Setenv("SPROUT_MCP_AUTO_START", "")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 	credentials.ResetStorageBackend()
 	return configDir

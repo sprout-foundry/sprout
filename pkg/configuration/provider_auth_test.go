@@ -9,7 +9,7 @@ import (
 
 func TestCredentialsResolveProvider_CustomProviderUsesStoredKey(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	customProvider := CustomProviderConfig{
@@ -47,7 +47,7 @@ func TestCredentialsResolveProvider_CustomProviderUsesStoredKey(t *testing.T) {
 
 func TestCredentialsResolveProvider_LocalProviderReturnsNone(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	resolved, err := credentials.ResolveProvider("ollama")
@@ -67,7 +67,7 @@ func TestCredentialsResolveProvider_LocalProviderReturnsNone(t *testing.T) {
 
 func TestCredentialsResolveProvider_EnvVarTakesPrecedence(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "env-openai-priority-key")
 
@@ -91,7 +91,7 @@ func TestCredentialsResolveProvider_EnvVarTakesPrecedence(t *testing.T) {
 
 func TestCredentialsResolveProvider_UsesCredentialStore(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	// Clear any ambient OPENAI_API_KEY so the store is used instead
 	t.Setenv("OPENAI_API_KEY", "")
@@ -116,9 +116,9 @@ func TestCredentialsResolveProvider_UsesCredentialStore(t *testing.T) {
 
 func TestCredentialsResolveProvider_FallsBackToCredentialStore(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 
 	// Ensure no env var is set
@@ -143,9 +143,9 @@ func TestCredentialsResolveProvider_FallsBackToCredentialStore(t *testing.T) {
 
 func TestCredentialsResolveProvider_NoCredentialAvailable(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 
 	// Ensure no env var is set
@@ -163,7 +163,7 @@ func TestCredentialsResolveProvider_NoCredentialAvailable(t *testing.T) {
 
 func TestHasProviderAuth_LocalProvider(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	if !HasProviderAuth("lmstudio") {
@@ -176,7 +176,7 @@ func TestHasProviderAuth_LocalProvider(t *testing.T) {
 
 func TestHasProviderAuth_WithCredential(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "env-openai-key")
 
@@ -196,7 +196,7 @@ func TestHasProviderAuth_WithCredential(t *testing.T) {
 // key via an environment variable.
 func TestGetProviderAuthMetadata_RemoteOnlyProvider(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Restore whatever the package-init wired up (pkg/factory's
@@ -328,7 +328,7 @@ func TestKnownProviderNames_NoLookupReturnsStatic(t *testing.T) {
 // Static entries must still resolve via the fast static-map path.
 func TestGetProviderDisplayName_RemoteOnlyProvider(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	providerDisplayLookupMu.RLock()
@@ -364,9 +364,9 @@ func TestGetProviderDisplayName_RemoteOnlyProvider(t *testing.T) {
 
 func TestHasProviderAuth_WithoutCredential(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 
 	// Ensure no env var is set

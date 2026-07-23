@@ -41,12 +41,12 @@ func TestNewConfigDefaults(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Save / Load round-trip via LEDIT_CONFIG
+// 2. Save / Load round-trip via SPROUT_CONFIG
 // ---------------------------------------------------------------------------
 
 func TestConfigSaveLoadRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	original := NewConfig()
@@ -148,7 +148,7 @@ func TestGetSubagentTypeReturnsCatalogAllowedTools(t *testing.T) {
 func TestLoadReturnsDefaultWhenNoConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Point to an empty temp dir — no config.json exists yet
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg, err := Load()
@@ -160,7 +160,7 @@ func TestLoadReturnsDefaultWhenNoConfigFile(t *testing.T) {
 
 func TestSaveProducesValidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := NewConfig()
@@ -189,7 +189,7 @@ func TestSaveProducesValidJSON(t *testing.T) {
 // defaults (both true) instead of leaving them as the Go zero value (false).
 func TestLoadDefaultsAppliedForOmittedZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a config that has NO zsh-related keys.
@@ -216,7 +216,7 @@ func TestLoadDefaultsAppliedForOmittedZshFields(t *testing.T) {
 // explicit false values for the zsh fields is respected after Load().
 func TestLoadRespectsExplicitFalseZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a config that explicitly disables zsh detection.
@@ -243,7 +243,7 @@ func TestLoadRespectsExplicitFalseZshFields(t *testing.T) {
 // to disk (i.e. omitempty was removed from the JSON tag).
 func TestSavePersistsExplicitFalseZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := NewConfig()
@@ -270,7 +270,7 @@ func TestSavePersistsExplicitFalseZshFields(t *testing.T) {
 // set false, save, reload, and confirm the loaded value is still false.
 func TestSaveLoadRoundTripExplicitFalseZshFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	original := NewConfig()

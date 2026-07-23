@@ -733,7 +733,7 @@ func ShowNextSteps(provider, configDir string) {
 		fmt.Println()
 		fmt.Println("To enable AI features:")
 		fmt.Println("  • Run 'sprout agent -d' to launch the webui and configure providers")
-		fmt.Println("  • Or set the SPROUT_PROVIDER environment variable (LEDIT_PROVIDER also supported)")
+		fmt.Println("  • Or set the SPROUT_PROVIDER environment variable (SPROUT_PROVIDER also supported)")
 		fmt.Println()
 		return
 	}

@@ -253,7 +253,7 @@ func newCLIPathTestServer() *httptest.Server {
 //
 // Environment variables set by this helper:
 //
-//   - LEDIT_CONFIG / SPROUT_CONFIG: redirected to the temp dir via
+//   - SPROUT_CONFIG / SPROUT_CONFIG: redirected to the temp dir via
 //     NewTestManager (so any indirect Load() lands in the temp dir).
 //   - ALLOW_REAL_PROVIDER: bypasses the isRunningUnderTest() shortcut
 //     in newAgentWithConfigManagerInner that would route to TestClient.
@@ -268,15 +268,15 @@ func newCLIPathTestServer() *httptest.Server {
 //   - MODEL_REGISTRY_TIMEOUT=200ms: belt-and-braces fast timeout in
 //     case the registry URL is left enabled in some path.
 //
-// Both SPROUT_* and LEDIT_* prefixes are set for env vars that the
+// Both SPROUT_* and SPROUT_* prefixes are set for env vars that the
 // codebase reads under either name (configuration.GetEnvSimple looks
-// up both). This keeps the tests stable across the LEDIT→SPROUT
+// up both). Tests now use SPROUT_ prefix only
 // rename and matches the pattern used elsewhere in pkg/agent_tests.
 func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configuration.Manager, server *httptest.Server, cleanup func()) {
 	t.Helper()
 
 	// Step 1: isolated config dir so the test cannot touch the user's
-	// real config. NewTestManager handles LEDIT_CONFIG/SPROUT_CONFIG
+	// real config. NewTestManager handles SPROUT_CONFIG/SPROUT_CONFIG
 	// and the Layer-5 cleanup-detector that complains if the real
 	// config gets modified.
 	manager, mgrCleanup := configuration.NewTestManager(t)
@@ -284,24 +284,24 @@ func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configurati
 	// Step 2: bypass the isRunningUnderTest() shortcut in
 	// newAgentWithConfigManagerInner. Without this, the CLI path
 	// would route to TestClientType and never exercise our helper.
-	// GetEnvSimple checks SPROUT_ and LEDIT_ prefixes, so we set both
+	// GetEnvSimple checks SPROUT_ and SPROUT_ prefixes, so we set both
 	// to be safe.
 	t.Setenv("SPROUT_ALLOW_REAL_PROVIDER", "1")
-	t.Setenv("LEDIT_ALLOW_REAL_PROVIDER", "1")
+	t.Setenv("SPROUT_ALLOW_REAL_PROVIDER", "1")
 	// Skip the production connection-check request so the variable
 	// under test is profile resolution, not the network round-trip.
 	// See package-level comment's "What this test does NOT cover".
 	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
-	t.Setenv("LEDIT_SKIP_CONNECTION_CHECK", "1")
+	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
 	// Disable the model registry fetch so GenericProvider.GetModelContextLimit
 	// resolves through the config (default_context_limit) rather than
 	// hitting the remote registry. The fetch has a 2s timeout and
 	// returns Empty models when the registry 404s; both behaviors are
 	// noisy and avoidable in tests.
 	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
-	t.Setenv("LEDIT_MODEL_REGISTRY_URL", "off")
+	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
 	t.Setenv("SPROUT_MODEL_REGISTRY_TIMEOUT", "200ms")
-	t.Setenv("LEDIT_MODEL_REGISTRY_TIMEOUT", "200ms")
+	t.Setenv("SPROUT_MODEL_REGISTRY_TIMEOUT", "200ms")
 	// Skip the connection probe. Under `go test` stdin is a pipe,
 	// isNonInteractive() returns true, and any failed CheckConnection
 	// is fatal via recoverProviderStartup. The LCM logic under test
@@ -309,7 +309,7 @@ func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configurati
 	// GetModelContextLimit, which reads from the provider config we
 	// just upserted. Skipping the probe keeps the test focused.
 	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
-	t.Setenv("LEDIT_SKIP_CONNECTION_CHECK", "1")
+	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
 
 	// Step 3: write the provider config to a temp dir so the user
 	// (and the failure mode where the provider config is loaded from

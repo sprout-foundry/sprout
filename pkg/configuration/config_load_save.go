@@ -209,7 +209,7 @@ func (c *Config) Save() error {
 }
 
 // SaveToDir saves the configuration to a specific directory, bypassing
-// GetConfigPath() (which reads the SPROUT_CONFIG/LEDIT_CONFIG env vars).
+// GetConfigPath() (which reads the SPROUT_CONFIG/SPROUT_CONFIG env vars).
 // Use this when a Manager has an explicit configDir so that saves go to
 // the correct location even after the env var has been restored.
 func (c *Config) SaveToDir(dir string) error {

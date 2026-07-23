@@ -434,9 +434,9 @@ func TestDefaultMCPConfig(t *testing.T) {
 
 func TestAddGitHubServer_CreatesServerEntry(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Cleanup(func() { credentials.ResetStorageBackend() })
 	credentials.ResetStorageBackend()
 
@@ -474,9 +474,9 @@ func TestAddGitHubServer_CreatesServerEntry(t *testing.T) {
 
 func TestAddGitHubServer_SetsEnabled(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Cleanup(func() { credentials.ResetStorageBackend() })
 	credentials.ResetStorageBackend()
 
@@ -493,9 +493,9 @@ func TestAddGitHubServer_SetsEnabled(t *testing.T) {
 
 func TestAddGitHubServer_InitializesServersMap(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Cleanup(func() { credentials.ResetStorageBackend() })
 	credentials.ResetStorageBackend()
 
@@ -603,9 +603,9 @@ func TestRemoveServer_RemovesOneServerKeepsEnabled(t *testing.T) {
 
 func TestRemoveServer_CleansUpCredentials(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 
 	config := MCPConfig{
@@ -658,11 +658,11 @@ func TestRemoveServer_CleansUpCredentials(t *testing.T) {
 
 func TestLoadMCPConfig_EnvOverrideEnabledFalse(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_MCP_ENABLED", "false")
-	t.Setenv("LEDIT_MCP_AUTO_START", "false")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_MCP_ENABLED", "false")
+	t.Setenv("SPROUT_MCP_AUTO_START", "false")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 
 	config, err := LoadMCPConfig()
@@ -672,11 +672,11 @@ func TestLoadMCPConfig_EnvOverrideEnabledFalse(t *testing.T) {
 
 func TestLoadMCPConfig_EnvOverrideEnabledTrue(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_MCP_ENABLED", "true")
-	t.Setenv("LEDIT_MCP_AUTO_START", "false")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_MCP_ENABLED", "true")
+	t.Setenv("SPROUT_MCP_AUTO_START", "false")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 
 	config, err := LoadMCPConfig()
@@ -686,11 +686,11 @@ func TestLoadMCPConfig_EnvOverrideEnabledTrue(t *testing.T) {
 
 func TestLoadMCPConfig_EnvOverrideEnabledOne(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_MCP_ENABLED", "1")
-	t.Setenv("LEDIT_MCP_AUTO_START", "false")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_MCP_ENABLED", "1")
+	t.Setenv("SPROUT_MCP_AUTO_START", "false")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 
 	config, err := LoadMCPConfig()
@@ -700,11 +700,11 @@ func TestLoadMCPConfig_EnvOverrideEnabledOne(t *testing.T) {
 
 func TestLoadMCPConfig_EnvOverrideAutoStartTrue(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_MCP_ENABLED", "true")
-	t.Setenv("LEDIT_MCP_AUTO_START", "true")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_MCP_ENABLED", "true")
+	t.Setenv("SPROUT_MCP_AUTO_START", "true")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 
 	config, err := LoadMCPConfig()
@@ -714,11 +714,11 @@ func TestLoadMCPConfig_EnvOverrideAutoStartTrue(t *testing.T) {
 
 func TestLoadMCPConfig_EnvOverrideAutoDiscoverFalse(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_MCP_ENABLED", "true")
-	t.Setenv("LEDIT_MCP_AUTO_START", "false")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_MCP_ENABLED", "true")
+	t.Setenv("SPROUT_MCP_AUTO_START", "false")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 
 	config, err := LoadMCPConfig()
@@ -728,11 +728,11 @@ func TestLoadMCPConfig_EnvOverrideAutoDiscoverFalse(t *testing.T) {
 
 func TestLoadMCPConfig_LoadsFromCustomConfigDir(t *testing.T) {
 	customDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", customDir)
 	t.Setenv("SPROUT_CONFIG", customDir)
-	t.Setenv("LEDIT_MCP_ENABLED", "")
-	t.Setenv("LEDIT_MCP_AUTO_START", "")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "")
+	t.Setenv("SPROUT_CONFIG", customDir)
+	t.Setenv("SPROUT_MCP_ENABLED", "")
+	t.Setenv("SPROUT_MCP_AUTO_START", "")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 
 	// Create a custom config file

@@ -240,7 +240,7 @@ type Config struct {
 	// when the primary vision model fails after retries. When true and
 	// PDFOCRModel is configured, a single OCR attempt is made as a last
 	// resort. Default: true (enabled). Controlled by VISION_FALLBACK_TO_OCR
-	// env var (SPROUT_ / LEDIT_ prefixes).
+	// env var (SPROUT_ / SPROUT_ prefixes).
 	VisionFallbackToOCR bool `json:"vision_fallback_to_ocr,omitempty"`
 
 	// PDF OCR Configuration

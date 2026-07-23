@@ -35,7 +35,7 @@ func setupIsolatedConfig(t *testing.T) func(provider string) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	return func(provider string) {
 		writeTestConfig(t, tmpDir, provider)
@@ -146,7 +146,7 @@ func TestNeedsOnboarding_UnreadableConfig(t *testing.T) {
 		t.Fatalf("write decoy file: %v", err)
 	}
 	t.Setenv("SPROUT_CONFIG", configFile)
-	t.Setenv("LEDIT_CONFIG", configFile)
+	t.Setenv("SPROUT_CONFIG", configFile)
 
 	got := needsOnboarding()
 	if !got {
@@ -172,7 +172,7 @@ func TestNeedsOnboarding_CustomProvider(t *testing.T) {
 	// as known — isKnownProvider checks cfg.CustomProviders.
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a config with a custom provider entry
 	cfg := configuration.NewConfig()

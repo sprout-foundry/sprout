@@ -56,9 +56,8 @@ var skipDirs = map[string]bool{
 	// Terraform
 	".terraform": true,
 	// Sprout-specific
-	".ledit":   true, // Agent revision history / session data
 	".agent-i": true, // Agent session data
-	".sprout":  true, // Sprout runtime data (run/embeddings)
+	".sprout":  true, // Sprout runtime data (run/embeddings/revisions)
 	// Security-sensitive: credentials, keys, auth tokens
 	".ssh":    true, // SSH private keys, known hosts
 	".aws":    true, // AWS credentials and config

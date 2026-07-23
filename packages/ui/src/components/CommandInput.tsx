@@ -837,10 +837,15 @@ function CommandInput({
     async (command: string) => {
       resetHistoryNavigation();
 
-      if (onSend) {
-        onSend(command);
-      } else if (onSendCommand) {
+      // commandRef is only invoked from handleNewSession with '/clear'.
+      // Prefer onSendCommand (the dedicated /api/command/execute surface)
+      // over onSend (/api/query) so that SteerCapable slash commands
+      // bypass the WebUI safety gate. Fall back to onSend only if the
+      // caller wired up neither dedicated handler.
+      if (onSendCommand) {
         onSendCommand(command);
+      } else if (onSend) {
+        onSend(command);
       }
 
       updateValue('', { start: 0, end: 0 });
@@ -851,7 +856,7 @@ function CommandInput({
         }
       }, 100);
     },
-    [onSend, onSendCommand, updateValue],
+    [onSendCommand, onSend, updateValue],
   );
 
   const handleNewSession = useCallback(() => {

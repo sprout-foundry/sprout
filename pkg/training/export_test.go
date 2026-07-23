@@ -544,7 +544,7 @@ func TestWriteJSONArray(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "out.json")
 	data := []ShareGPTConversation{
-		{ID: "s1", Messages: []ShareGPTMessage{{Role: "user", Content: "hi"}}, Metadata: ShareGPTMetadata{Source: "ledit"}},
+		{ID: "s1", Messages: []ShareGPTMessage{{Role: "user", Content: "hi"}}, Metadata: ShareGPTMetadata{Source: "sprout"}},
 	}
 
 	if err := writeJSONArray(data, path); err != nil {
@@ -558,7 +558,7 @@ func TestWriteJSONArray(t *testing.T) {
 	if !strings.Contains(string(read), `"id": "s1"`) {
 		t.Error("output should contain session ID")
 	}
-	if !strings.Contains(string(read), `"source": "ledit"`) {
+	if !strings.Contains(string(read), `"source": "sprout"`) {
 		t.Error("output should contain source metadata")
 	}
 }

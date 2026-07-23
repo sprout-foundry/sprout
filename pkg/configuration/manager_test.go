@@ -13,11 +13,11 @@ func TestSaveConfig_AppliesDeletionAndScalarUpdates(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
-	// Clear SPROUT_CONFIG/LEDIT_CONFIG — if either is set in the test
+	// Clear SPROUT_CONFIG/SPROUT_CONFIG — if either is set in the test
 	// runner's environment, GetConfigDir() uses it before HOME, breaking
 	// the test's hermetic homeDir.
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 
 	m1, err := NewManager()
 	if err != nil {
@@ -71,7 +71,7 @@ func TestManager_RefreshAPIKeys(t *testing.T) {
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("SPROUT_CONFIG", "")
-	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 
 	// Create a manager
 	m, err := NewManager()

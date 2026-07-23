@@ -29,7 +29,7 @@ sprout agent --provider zai --model GLM-4.6 "implement feature X"
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub token for MCP | Auto-discovers GitHub MCP server |
 | `OPENAI_API_KEY`, `DEEPINFRA_API_KEY`, etc. | API keys for providers | Set directly or in `api_keys.json` |
 
-> **Legacy**: The `LEDIT_*` equivalents (`LEDIT_NO_STREAM`, `LEDIT_CONFIG`, etc.) still work as fallbacks but are deprecated. Use `SPROUT_*` in new scripts.
+> **Legacy**: The `SPROUT_*` in new scripts.
 
 ## config.json Settings
 

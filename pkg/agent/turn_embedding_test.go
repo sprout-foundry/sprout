@@ -89,14 +89,14 @@ func (m *mockEmbeddingProvider) Close() error      { return nil }
 // provider via SetForTesting. This bypasses ONNX initialization entirely so
 // tests run in any environment without the ~300MB model files.
 //
-// Config isolation is handled by setting SPROUT_CONFIG and LEDIT_CONFIG to a
+// Config isolation is handled by setting SPROUT_CONFIG and SPROUT_CONFIG to a
 // temp directory so no real config is touched.
 func newTestEmbeddingMgr(t *testing.T) *embedding.EmbeddingManager {
 	t.Helper()
 
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	cfg := &configuration.EmbeddingIndexConfig{
 		IndexDir: tempDir,

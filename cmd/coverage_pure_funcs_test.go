@@ -33,9 +33,9 @@ func TestIsServiceMode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// GetEnvSimple checks SPROUT_<name> then LEDIT_<name>
+			// GetEnvSimple checks SPROUT_<name> then SPROUT_<name>
 			t.Setenv("SPROUT_SERVICE", tt.value)
-			t.Setenv("LEDIT_SERVICE", "")
+			t.Setenv("SPROUT_SERVICE", "")
 			if got := isServiceMode(); got != tt.want {
 				t.Errorf("isServiceMode(SPROUT_SERVICE=%q) = %v, want %v", tt.value, got, tt.want)
 			}

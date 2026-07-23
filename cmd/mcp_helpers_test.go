@@ -23,19 +23,19 @@ import (
 func setupMCPTestEnv(t *testing.T) (string, func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	// Clear github token to prevent auto-discovery adding servers
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 	// Disable auto-discovery to ensure empty server list in tests
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
 	return tmpDir, func() {}
 }
 
 // shouldSkipIfRealMCPConfigExists skips the test if ~/.config/sprout/mcp_config.json
 // already exists. Tests that modify the real MCP config cannot be safely isolated
 // because pkg/mcp/config.go:getConfigDir() reads from ~/.config/sprout/ and does not
-// respect $LEDIT_CONFIG.
+// respect $SPROUT_CONFIG.
 func shouldSkipIfRealMCPConfigExists(t *testing.T) {
 	t.Helper()
 	home, err := os.UserHomeDir()

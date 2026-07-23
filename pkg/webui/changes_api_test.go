@@ -42,7 +42,7 @@ func newNoAgentTestServer(t *testing.T) *ReactWebServer {
 	// Isolate config so isProviderAvailable() returns false (editor mode).
 	cfgDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", cfgDir)
-	t.Setenv("LEDIT_CONFIG", cfgDir)
+	t.Setenv("SPROUT_CONFIG", cfgDir)
 	writeEditorConfig(t, cfgDir)
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")

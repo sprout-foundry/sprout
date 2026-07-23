@@ -93,7 +93,7 @@ func TestGetVisionParallelWorkers_EnvVarFallback(t *testing.T) {
 	// returns a zero-valued ParallelWorkers.
 	setEnv := func(key, val string) {
 		t.Setenv("SPROUT_"+key, val)
-		t.Setenv("LEDIT_"+key, val)
+		t.Setenv("SPROUT_"+key, val)
 	}
 
 	// With env var set, it should be picked up.

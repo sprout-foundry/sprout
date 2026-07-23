@@ -249,7 +249,7 @@ func TestExecuteSessionExport_RedactsMixedSensitiveAndNormalMessages(t *testing.
 OPENAI_API_KEY=sk-test1234567890abcdefghijklmnop
 GITHUB_TOKEN=ghpat_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij
 PATH=/usr/local/bin:/usr/bin
-LEDIT_DEBUG=true
+SPROUT_DEBUG=true
 Normal stuff: refactored the auth module, all tests passing.`
 
 	state := &agent.ConversationState{
@@ -286,8 +286,8 @@ Normal stuff: refactored the auth module, all tests passing.`
 	// Non-sensitive env vars should be preserved.
 	assertContains(t, exportedStr, "/usr/local/bin",
 		"PATH values should be preserved")
-	assertContains(t, exportedStr, "LEDIT_DEBUG=true",
-		"LEDIT_ prefixed values should be preserved")
+	assertContains(t, exportedStr, "SPROUT_DEBUG=true",
+		"SPROUT_ prefixed values should be preserved")
 
 	// Normal content preserved.
 	assertContains(t, exportedStr, "refactored the auth module",

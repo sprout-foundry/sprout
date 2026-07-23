@@ -15,13 +15,13 @@ import (
 // OpenAI, and most providers that support prompt caching can consume
 // this field.
 //
-// Note: we read both `SPROUT_VISION_CACHE_IMAGES` and `LEDIT_VISION_CACHE_IMAGES`
+// Note: we read both `SPROUT_VISION_CACHE_IMAGES` and `SPROUT_VISION_CACHE_IMAGES`
 // directly (rather than via `pkg/configuration`) to avoid a circular
 // import — `pkg/configuration/api_keys.go` already imports this package.
 func visionCacheImagesEnabled() bool {
 	raw := strings.TrimSpace(os.Getenv("SPROUT_VISION_CACHE_IMAGES"))
 	if raw == "" {
-		raw = strings.TrimSpace(os.Getenv("LEDIT_VISION_CACHE_IMAGES"))
+		raw = strings.TrimSpace(os.Getenv("SPROUT_VISION_CACHE_IMAGES"))
 	}
 	if raw == "" {
 		return true // default ON

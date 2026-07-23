@@ -58,7 +58,7 @@ func TestGetIgnoreRules_Gitignore(t *testing.T) {
 	}
 }
 
-func TestGetIgnoreRules_LeditIgnore(t *testing.T) {
+func TestGetIgnoreRules_SproutIgnore(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		".sprout/.ignore": "secret.txt\n",
 	})
@@ -84,7 +84,7 @@ func TestGetIgnoreRules_BothFiles(t *testing.T) {
 		t.Error("expected app.log to be ignored (gitignore)")
 	}
 	if !rules.MatchesPath("dist/bundle.js") {
-		t.Error("expected dist/bundle.js to be ignored (ledit ignore)")
+		t.Error("expected dist/bundle.js to be ignored (sprout ignore)")
 	}
 	if rules.MatchesPath("main.go") {
 		t.Error("expected main.go NOT to be ignored")
@@ -353,7 +353,7 @@ func TestGetIgnoreRules_ComplexGlobPatterns(t *testing.T) {
 	}
 }
 
-func TestGetIgnoreRules_MissingLeditDir(t *testing.T) {
+func TestGetIgnoreRules_MissingSproutDir(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		".gitignore": "*.log\n",
 	})
@@ -367,7 +367,7 @@ func TestGetIgnoreRules_MissingLeditDir(t *testing.T) {
 	}
 }
 
-func TestGetIgnoreRules_LeditPriority(t *testing.T) {
+func TestGetIgnoreRules_SproutPriority(t *testing.T) {
 	// Test that .sprout/.ignore rules are applied in addition to .gitignore
 	// Both should be combined
 	root := makeTree(t, map[string]string{

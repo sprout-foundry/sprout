@@ -30,7 +30,7 @@ func TestShellConfig_LoadWithShellSection(t *testing.T) {
 	}`
 
 	tmp := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmp)
+	t.Setenv("SPROUT_CONFIG", tmp)
 	t.Setenv("SPROUT_CONFIG", tmp)
 
 	configPath := filepath.Join(tmp, ConfigFileName)
@@ -84,7 +84,7 @@ func TestShellConfig_LoadWithoutShellSection(t *testing.T) {
 	}`
 
 	tmp := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmp)
+	t.Setenv("SPROUT_CONFIG", tmp)
 	t.Setenv("SPROUT_CONFIG", tmp)
 
 	configPath := filepath.Join(tmp, ConfigFileName)

@@ -13,7 +13,7 @@ Every place sprout substitutes a value with a default, inherits from a parent co
 ```
 1. Explicit --provider flag
 2. provider:model prefix in --model flag (e.g. --model openai:gpt-5-mini)
-3. SPROUT_PROVIDER env var (LEDIT_PROVIDER backward-compat)
+3. SPROUT_PROVIDER env var
 4. SPROUT_MODEL env var (parsed for provider:model prefix)
 5. Config last_used_provider
 6. If still empty: error returned. Caller surfaces interactive provider picker.

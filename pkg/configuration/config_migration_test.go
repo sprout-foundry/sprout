@@ -138,7 +138,7 @@ func TestRegisterMigration_DuplicateSource(t *testing.T) {
 // TestConfigMigration_Integration tests the full integration with Load()
 func TestConfigMigration_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Create a minimal config file without version or any new fields
@@ -155,7 +155,7 @@ func TestConfigMigration_Integration(t *testing.T) {
 
 	// Load the config - should apply migration
 	// Note: We can't use Load() directly here because it expects the config
-	// to be in LEDIT_CONFIG directory. Let's test the migration directly
+	// to be in SPROUT_CONFIG directory. Let's test the migration directly
 	// with raw JSON.
 	var raw map[string]interface{}
 	err = json.Unmarshal([]byte(configContent), &raw)

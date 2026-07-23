@@ -26,9 +26,9 @@ func newIsolatedTestAgent(t *testing.T) *agent.Agent {
 
 	configDir := t.TempDir() + "/.sprout"
 
-	// Set both env vars for isolation (NewAgentWithModel reads SPROUT_CONFIG/LEDIT_CONFIG
+	// Set both env vars for isolation (NewAgentWithModel reads SPROUT_CONFIG/SPROUT_CONFIG
 	// to determine the config directory; the env vars ensure the agent uses our temp dir)
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	testAgent, err := agent.NewAgentWithModel("test:test")
@@ -304,7 +304,7 @@ func TestSessionsCommand_selectSessionWithDropdown_AgentConsole(t *testing.T) {
 	defer testAgent.Shutdown()
 
 	// Set AGENT_CONSOLE env var BEFORE calling Execute
-	// GetEnvSimple("AGENT_CONSOLE") checks SPROUT_AGENT_CONSOLE and LEDIT_AGENT_CONSOLE
+	// GetEnvSimple("AGENT_CONSOLE") checks SPROUT_AGENT_CONSOLE and SPROUT_AGENT_CONSOLE
 	t.Setenv("SPROUT_AGENT_CONSOLE", "1")
 
 	cmd := &SessionsCommand{}
@@ -333,7 +333,7 @@ func TestSessionsCommand_selectSessionWithDropdown_NonTerminal(t *testing.T) {
 
 	// Ensure AGENT_CONSOLE is not set
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Get the actual working directory
 	workingDir, err := os.Getwd()
@@ -426,7 +426,7 @@ func TestSessionsCommand_MultipleSessions(t *testing.T) {
 
 	// Set AGENT_CONSOLE to see the list without interactive prompt
 	// IMPORTANT: Set env var before Execute is called
-	// GetEnvSimple("AGENT_CONSOLE") checks SPROUT_AGENT_CONSOLE and LEDIT_AGENT_CONSOLE
+	// GetEnvSimple("AGENT_CONSOLE") checks SPROUT_AGENT_CONSOLE and SPROUT_AGENT_CONSOLE
 	t.Setenv("SPROUT_AGENT_CONSOLE", "1")
 
 	cmd := &SessionsCommand{}
@@ -657,7 +657,7 @@ func TestSessionsCommand_SessionWithName(t *testing.T) {
 
 	// Set AGENT_CONSOLE to see the list
 	// IMPORTANT: Set env var before Execute is called
-	// GetEnvSimple("AGENT_CONSOLE") checks SPROUT_AGENT_CONSOLE and LEDIT_AGENT_CONSOLE
+	// GetEnvSimple("AGENT_CONSOLE") checks SPROUT_AGENT_CONSOLE and SPROUT_AGENT_CONSOLE
 	t.Setenv("SPROUT_AGENT_CONSOLE", "1")
 
 	cmd := &SessionsCommand{}
@@ -737,7 +737,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_Success(t *testin
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -797,7 +797,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_Cancel(t *testing
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -853,7 +853,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_InvalidInput(t *t
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -910,7 +910,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_OutOfRange(t *tes
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -964,7 +964,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_LoadError(t *test
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -1035,7 +1035,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_EmptyNameFallback
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -1122,7 +1122,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_MultipleSessions_
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -1193,7 +1193,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_NoInput(t *testin
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY manually (not via setupPTY) because we need to close the
 	// master before calling the function to trigger EOF, and we must avoid
@@ -1280,7 +1280,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay(t 
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -1354,7 +1354,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay_No
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)
@@ -1545,7 +1545,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_NegativeInput(t *
 
 	// Ensure agent console is OFF
 	t.Setenv("SPROUT_AGENT_CONSOLE", "")
-	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
 
 	// Setup PTY
 	ptmx, cleanup := setupPTY(t)

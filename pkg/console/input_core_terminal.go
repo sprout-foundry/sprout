@@ -10,13 +10,13 @@ import (
 
 // webTerminalEnabled reports whether the current process is running inside
 // the sprout webui embedded terminal. The webui backend sets
-// SPROUT_WEB_TERMINAL=1 (and the legacy LEDIT_WEB_TERMINAL=1) when
+// SPROUT_WEB_TERMINAL=1 (and the legacy SPROUT_WEB_TERMINAL=1) when
 // spawning the PTY that hosts the user-visible shell. We honor that flag
 // to skip terminal capabilities that xterm.js does not implement, so the
 // REPL falls back to the legacy xterm escape parser that still
 // understands the same keys via conventional sequences.
 func webTerminalEnabled() bool {
-	return os.Getenv("SPROUT_WEB_TERMINAL") != "" || os.Getenv("LEDIT_WEB_TERMINAL") != ""
+	return os.Getenv("SPROUT_WEB_TERMINAL") != "" || os.Getenv("SPROUT_WEB_TERMINAL") != ""
 }
 
 // writeModifyOtherKeysEnable writes the CSI > 4 ; 1 m enable sequence

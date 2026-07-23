@@ -36,9 +36,9 @@ func setupOnboardingTestServer(t *testing.T) (*ReactWebServer, string) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
-	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 
 	// Clear all provider API key environment variables so tests don't
 	// inherit credentials from the developer's shell.

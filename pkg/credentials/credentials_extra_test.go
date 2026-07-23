@@ -10,7 +10,7 @@ import (
 // with non-trivial values (spaces in provider name, special chars in values).
 func TestResolve_EnvVarAndStoredBothPresent(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{
@@ -38,7 +38,7 @@ func TestResolve_EnvVarAndStoredBothPresent(t *testing.T) {
 // trim produces a non-empty value — stored key should still be ignored.
 func TestResolve_EnvVarHasLeadingTrailingSpaces(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{
@@ -67,7 +67,7 @@ func TestResolve_EnvVarHasLeadingTrailingSpaces(t *testing.T) {
 // Unicode keys and values (CJK characters, emoji, accented chars).
 func TestLoad_UnicodeKeysAndValues(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")
@@ -102,7 +102,7 @@ func TestLoad_UnicodeKeysAndValues(t *testing.T) {
 // Unicode values exactly.
 func TestSaveLoadRoundTrip_UnicodeValues(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	original := Store{
@@ -132,7 +132,7 @@ func TestSaveLoadRoundTrip_UnicodeValues(t *testing.T) {
 // TestGetConfigDir_WhitespaceOnlyXDG duplicates coverage for the whitespace
 // fallthrough path, explicitly testing that TrimSpace on XDG causes home fallback.
 func TestGetConfigDir_WhitespaceOnlyXDG(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "   ")
 
@@ -152,7 +152,7 @@ func TestGetConfigDir_WhitespaceOnlyXDG(t *testing.T) {
 // whitespace-only provider name to empty string and returns no match from store.
 func TestResolve_WhitespaceOnlyProvider(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	resolved, err := resolve("   \t  ", "")
@@ -174,7 +174,7 @@ func TestResolve_WhitespaceOnlyProvider(t *testing.T) {
 // only provider, a valid env var still resolves correctly.
 func TestResolve_WhitespaceProviderWithEnvVar(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("MY_KEY", "env-value-42")
 
@@ -197,7 +197,7 @@ func TestResolve_WhitespaceProviderWithEnvVar(t *testing.T) {
 // an empty JSON object file.
 func TestLoad_EmptyJSONObject(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")

@@ -27,7 +27,7 @@ jobs:
 
       - name: Refresh provider catalog
         env:
-          LEDIT_MODEL_REGISTRY_URL: "disabled" # Disable registry so CLI hits provider APIs directly for fresh data
+          SPROUT_MODEL_REGISTRY_URL: "disabled" # Disable registry so CLI hits provider APIs directly for fresh data
           SPROUT_MODEL_REGISTRY_URL: "disabled"
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}

@@ -98,7 +98,7 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
 	}
 }
 
-func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
+func TestSearchFiles_ExcludeDotSprout(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, ".sprout/hidden.txt", "secret needle\n")
 	writeTestFile(t, root, "visible.txt", "needle\n")

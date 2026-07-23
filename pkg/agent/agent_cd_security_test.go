@@ -382,8 +382,7 @@ func TestUpdateShellCwd_BareCd(t *testing.T) {
 	defer os.RemoveAll(workspace)
 
 	// Set HOME to the workspace.
-	os.Setenv("HOME", workspace)
-	defer os.Unsetenv("HOME")
+	t.Setenv("HOME", workspace)
 
 	a := newTestAgentWithSecurity(workspace)
 	tracker := a.ensureShellCwd()

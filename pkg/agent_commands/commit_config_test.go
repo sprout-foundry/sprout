@@ -12,12 +12,12 @@ import (
 // TestCommitCommandUsesConfiguredProvider tests that commit command uses configured provider
 func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
 	// Create a test agent with temp config directory.
-	// Set SPROUT_CONFIG/LEDIT_CONFIG explicitly so the test is isolated
+	// Set SPROUT_CONFIG/SPROUT_CONFIG explicitly so the test is isolated
 	// even if the user has those env vars set in their shell.
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -60,7 +60,7 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -92,7 +92,7 @@ func TestCommitCommandPersistsToDisk(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	// Create first agent and set config
@@ -131,7 +131,7 @@ func TestCommitConfigSaveLoadRoundTrip(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config with commit settings
 	cfg := configuration.NewConfig()

@@ -10,19 +10,19 @@ set -euo pipefail
 # 6) Probe /health through the tunnel
 #
 # Required env:
-# - LEDIT_SSH_TEST_HOST_ALIAS
+# - SPROUT_SSH_TEST_HOST_ALIAS
 # Optional env:
-# - LEDIT_SSH_TEST_REMOTE_WORKSPACE_PATH (default: $HOME)
-# - LEDIT_SSH_TEST_LAUNCHER_URL (default: http://127.0.0.1:54421)
-# - LEDIT_SSH_TEST_RELEASE_TAG (default: latest)
+# - SPROUT_SSH_TEST_REMOTE_WORKSPACE_PATH (default: $HOME)
+# - SPROUT_SSH_TEST_LAUNCHER_URL (default: http://127.0.0.1:54421)
+# - SPROUT_SSH_TEST_RELEASE_TAG (default: latest)
 
-HOST_ALIAS="${LEDIT_SSH_TEST_HOST_ALIAS:-}"
-REMOTE_WORKSPACE_PATH="${LEDIT_SSH_TEST_REMOTE_WORKSPACE_PATH:-\$HOME}"
-LAUNCHER_URL="${LEDIT_SSH_TEST_LAUNCHER_URL:-http://127.0.0.1:54421}"
-RELEASE_TAG="${LEDIT_SSH_TEST_RELEASE_TAG:-latest}"
+HOST_ALIAS="${SPROUT_SSH_TEST_HOST_ALIAS:-}"
+REMOTE_WORKSPACE_PATH="${SPROUT_SSH_TEST_REMOTE_WORKSPACE_PATH:-\$HOME}"
+LAUNCHER_URL="${SPROUT_SSH_TEST_LAUNCHER_URL:-http://127.0.0.1:54421}"
+RELEASE_TAG="${SPROUT_SSH_TEST_RELEASE_TAG:-latest}"
 
 if [[ -z "$HOST_ALIAS" ]]; then
-  echo "error: LEDIT_SSH_TEST_HOST_ALIAS is required" >&2
+  echo "error: SPROUT_SSH_TEST_HOST_ALIAS is required" >&2
   exit 1
 fi
 
@@ -181,7 +181,7 @@ mkdir -p \"\$HOME/.cache/sprout-webui/logs\"
 cd ${workspace_expr}
 REMOTE_PORT=\"\$(choose_port)\"
 LOG_FILE=\"\$HOME/.cache/sprout-webui/logs/${HOST_ALIAS}.log\"
-nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=${host_alias_q} LEDIT_SSH_SESSION_KEY=${session_key_q} LEDIT_SSH_LAUNCHER_URL=${launcher_url_q} LEDIT_SSH_HOME=\"\$HOME\" ${remote_binary_q} --isolated-config agent --daemon --web-port \"\$REMOTE_PORT\" >\"\$LOG_FILE\" 2>&1 < /dev/null &
+nohup env BROWSER=none SPROUT_SSH_HOST_ALIAS=${host_alias_q} SPROUT_SSH_SESSION_KEY=${session_key_q} SPROUT_SSH_LAUNCHER_URL=${launcher_url_q} SPROUT_SSH_HOME=\"\$HOME\" ${remote_binary_q} --isolated-config agent --daemon --web-port \"\$REMOTE_PORT\" >\"\$LOG_FILE\" 2>&1 < /dev/null &
 REMOTE_PID=\$!
 REMOTE_PORT="$(echo "$REMOTE_INFO" | awk '{print $1}')"
 REMOTE_PID="$(echo "$REMOTE_INFO" | awk '{print $2}')"
@@ -274,7 +274,7 @@ echo "PASS: backend API commands verified"
 # ─────────────────────────────────────────────────────────────────────────────
 # Proxy path verification
 #
-# The local ledit process (LAUNCHER_URL) exposes the SSH workspace through a
+# The local sprout process (LAUNCHER_URL) exposes the SSH workspace through a
 # reverse-proxy at /ssh/{url-encoded-session-key}/.  All traffic goes through
 # the same origin — no new browser ports needed.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -289,14 +289,14 @@ print(urllib.parse.quote(sys.argv[1], safe=""))
 
 proxy_base="${LAUNCHER_URL}/ssh/${encoded_key}"
 
-# 1. Index — must return 200 with LEDIT_PROXY_BASE injected.
+# 1. Index — must return 200 with SPROUT_PROXY_BASE injected.
 index_body="$(curl -fsS "${proxy_base}/")"
-if ! echo "$index_body" | grep -q "LEDIT_PROXY_BASE"; then
-  echo "error: ${proxy_base}/ did not inject LEDIT_PROXY_BASE; body head:" >&2
+if ! echo "$index_body" | grep -q "SPROUT_PROXY_BASE"; then
+  echo "error: ${proxy_base}/ did not inject SPROUT_PROXY_BASE; body head:" >&2
   echo "$index_body" | head -5 >&2
   exit 1
 fi
-echo "    proxy index: LEDIT_PROXY_BASE injected OK"
+echo "    proxy index: SPROUT_PROXY_BASE injected OK"
 
 # 2. /sw.js — must be served from local embed (not dependent on remote backend).
 sw_status="$(curl -o /dev/null -fsS -w "%{http_code}" "${proxy_base}/sw.js")"

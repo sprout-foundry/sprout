@@ -167,7 +167,7 @@ func resolveEmbeddingIndexDir() (string, error) {
 	// Fall back to default, matching manager.go resolution order
 	configDir := os.Getenv("SPROUT_CONFIG")
 	if configDir == "" {
-		configDir = os.Getenv("LEDIT_CONFIG")
+		configDir = os.Getenv("SPROUT_CONFIG")
 	}
 	if configDir == "" {
 		configDir, err = configuration.GetConfigDir()

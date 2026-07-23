@@ -8,7 +8,7 @@ import (
 
 // TestWriteModifyOtherKeys_DisabledInWebTerminal verifies that the
 // CSI > 4 ; 1 m enable / CSI > 4 ; 0 m disable sequences are skipped when
-// SPROUT_WEB_TERMINAL or LEDIT_WEB_TERMINAL is set, and emitted otherwise.
+// SPROUT_WEB_TERMINAL or SPROUT_WEB_TERMINAL is set, and emitted otherwise.
 //
 // xterm.js (which backs the sprout webui terminal) does not implement the
 // modifyOtherKeys / CSI u keyboard protocol. Emitting the enable sequence
@@ -34,8 +34,8 @@ func TestWriteModifyOtherKeys_DisabledInWebTerminal(t *testing.T) {
 			wantEmpty: true,
 		},
 		{
-			name:      "LEDIT_WEB_TERMINAL=1 (legacy) → skip",
-			envVars:   map[string]string{"LEDIT_WEB_TERMINAL": "1"},
+			name:      "SPROUT_WEB_TERMINAL=1 (legacy) → skip",
+			envVars:   map[string]string{"SPROUT_WEB_TERMINAL": "1"},
 			wantEmpty: true,
 		},
 		{
@@ -44,13 +44,13 @@ func TestWriteModifyOtherKeys_DisabledInWebTerminal(t *testing.T) {
 			wantEmpty: false,
 		},
 		{
-			name:      "LEDIT_WEB_TERMINAL=\"\" treated as unset → emit",
-			envVars:   map[string]string{"LEDIT_WEB_TERMINAL": ""},
+			name:      "SPROUT_WEB_TERMINAL=\"\" treated as unset → emit",
+			envVars:   map[string]string{"SPROUT_WEB_TERMINAL": ""},
 			wantEmpty: false,
 		},
 		{
-			name:      "both SPROUT_WEB_TERMINAL=1 and LEDIT_WEB_TERMINAL=1 → skip",
-			envVars:   map[string]string{"SPROUT_WEB_TERMINAL": "1", "LEDIT_WEB_TERMINAL": "1"},
+			name:      "SPROUT_WEB_TERMINAL=1 → skip",
+			envVars:   map[string]string{"SPROUT_WEB_TERMINAL": "1"},
 			wantEmpty: true,
 		},
 	}
@@ -61,7 +61,7 @@ func TestWriteModifyOtherKeys_DisabledInWebTerminal(t *testing.T) {
 			// inherited value first so the empty-string test case
 			// exercises the true "unset" path.
 			t.Setenv("SPROUT_WEB_TERMINAL", "")
-			t.Setenv("LEDIT_WEB_TERMINAL", "")
+			t.Setenv("SPROUT_WEB_TERMINAL", "")
 			for k, v := range tt.envVars {
 				t.Setenv(k, v)
 			}

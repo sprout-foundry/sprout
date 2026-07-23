@@ -107,7 +107,7 @@ type AgentSecurityManager struct {
 	// reading. Workflow-declared paths (SP-128 allowed_paths) always
 	// carry a mode. Read tools don't consult this map; only write
 	// tools do (via IsFolderSessionWriteAllowed).
-	sessionPathModes     map[string]string
+	sessionPathModes        map[string]string
 	ignoredSecurityConcerns map[string]map[string]bool
 	ignoredSecurityMu       sync.RWMutex
 	outputRedactor          *security.OutputRedactor

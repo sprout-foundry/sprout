@@ -22,15 +22,15 @@ type AgentPersonaManager struct {
 	falseStopDetectionEnabled bool
 
 	// TaskActionStore — uses its own mutex (callers expect this specific mutex)
-	taskActions  []TaskAction
+	taskActions   []TaskAction
 	taskActionsMu sync.RWMutex
 }
 
 // NewAgentPersonaManager creates a new AgentPersonaManager with sensible defaults.
 func NewAgentPersonaManager() *AgentPersonaManager {
 	return &AgentPersonaManager{
-		activeSkills:            []string{},
-		activePersona:           personas.IDOrchestrator,
+		activeSkills:              []string{},
+		activePersona:             personas.IDOrchestrator,
 		falseStopDetectionEnabled: true,
 	}
 }

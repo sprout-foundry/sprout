@@ -19,36 +19,36 @@ func TestRenderSecurityAnalysisFallbackLine(t *testing.T) {
 		{
 			name: "approve recommendation prefixes with check",
 			view: &SecurityAnalysisView{
-				Summary:         "Removes only stale build artifacts.",
-				RiskAssessment:  "low",
-				Recommendation:  "approve",
+				Summary:        "Removes only stale build artifacts.",
+				RiskAssessment: "low",
+				Recommendation: "approve",
 			},
 			want: "[security analysis] \xE2\x9C\x93 Removes only stale build artifacts.",
 		},
 		{
 			name: "review recommendation prefixes with warning",
 			view: &SecurityAnalysisView{
-				Summary:         "Touches a tracked file outside CWD.",
-				RiskAssessment:  "moderate",
-				Recommendation:  "review",
+				Summary:        "Touches a tracked file outside CWD.",
+				RiskAssessment: "moderate",
+				Recommendation: "review",
 			},
 			want: "[security analysis] ! Touches a tracked file outside CWD.",
 		},
 		{
 			name: "reject recommendation prefixes with cross",
 			view: &SecurityAnalysisView{
-				Summary:         "Drops a remote DB without a dry-run.",
-				RiskAssessment:  "high",
-				Recommendation:  "reject",
+				Summary:        "Drops a remote DB without a dry-run.",
+				RiskAssessment: "high",
+				Recommendation: "reject",
 			},
 			want: "[security analysis] \xE2\x9C\x97 Drops a remote DB without a dry-run.",
 		},
 		{
 			name: "unknown recommendation defaults to warning glyph",
 			view: &SecurityAnalysisView{
-				Summary:         "Mixed-impact operation.",
-				RiskAssessment:  "moderate",
-				Recommendation:  "something_else",
+				Summary:        "Mixed-impact operation.",
+				RiskAssessment: "moderate",
+				Recommendation: "something_else",
 			},
 			want: "[security analysis] ! Mixed-impact operation.",
 		},

@@ -17,15 +17,15 @@ import (
 //
 // This is the SP-127 M3.5 integration test. It exercises the full path:
 //
-//	1. staticGateAutoApprove — Gate 1 entry point (bypass flags + path-tier)
-//	2. PrecheckFileAccess — handler-level precheck (resolves + classifies)
-//	3. Handler Execute — calls PrecheckFileAccess, handles allow/deny/prompt
+//  1. staticGateAutoApprove — Gate 1 entry point (bypass flags + path-tier)
+//  2. PrecheckFileAccess — handler-level precheck (resolves + classifies)
+//  3. Handler Execute — calls PrecheckFileAccess, handles allow/deny/prompt
 //
 // Assertion matrix:
-//	- Workspace path         → Allow (Gate 1 allows; precheck allows; handler proceeds)
-//	- Allowlisted read_write → Allow (Gate 1 allows; precheck allows; handler proceeds)
-//	- Allowlisted read_only → Deny (Gate 1 denies; precheck denies; handler returns typed error)
-//	- Sensitive /etc/shadow  → Prompt (Gate 1 prompts; precheck prompts; handler falls through)
+//   - Workspace path         → Allow (Gate 1 allows; precheck allows; handler proceeds)
+//   - Allowlisted read_write → Allow (Gate 1 allows; precheck allows; handler proceeds)
+//   - Allowlisted read_only → Deny (Gate 1 denies; precheck denies; handler returns typed error)
+//   - Sensitive /etc/shadow  → Prompt (Gate 1 prompts; precheck prompts; handler falls through)
 func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix fixtures only")

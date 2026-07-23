@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -224,7 +223,6 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 // input; the runner rejects destructive commands via SteerCapable.
 // See SP-114 Phase 2 for the gating rationale.
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
-	log.Printf("handleAPIQuery called")
 	if r.Method != http.MethodPost {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
@@ -241,18 +239,16 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
-		log.Printf("handleAPIQuery: invalid JSON: %v", err)
+		ws.logger.Warn("invalid query JSON", slog.String("err", err.Error()))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if query.Query == "" {
-		log.Printf("handleAPIQuery: empty query")
 		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
 		return
 	}
 
-	log.Printf("handleAPIQuery: processing query: %s", query.Query)
 	clientID := ws.resolveClientID(r)
 
 	// Resolve chat_id: prefer body parameter, fall back to query parameter

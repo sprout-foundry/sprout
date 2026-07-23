@@ -14,9 +14,16 @@ func (c *ClearCommand) Name() string {
 	return "clear"
 }
 
-// SafeDuringSteer returns false - /clear destroys conversation state
+// SafeDuringSteer returns true. /clear rotates to a new session — it
+// does NOT destroy conversation state. The prior session stays available
+// via /sessions (see ClearCommand.Usage below), so the operation is
+// reversible-by-design. Returning false here was wrong: this is the
+// canonical "start a new conversation" action for any chat UI, and
+// blocking it from the WebUI breaks the most basic functionality of a
+// chat application. If RotateSession is ever changed to do a hard-delete
+// instead of rotating, this must flip back to false.
 func (c *ClearCommand) SafeDuringSteer() bool {
-	return false
+	return true
 }
 
 func (c *ClearCommand) Description() string {

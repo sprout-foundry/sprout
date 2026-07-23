@@ -127,6 +127,12 @@ const (
 	// warning. WebUI consumers should display a "some output was
 	// dropped" indicator.
 	EventTypeCommandOutputDropped = "command_output_dropped"
+	// SP-127 Phase 2.7: AllowedPathHit is emitted when a file operation
+	// lands under a session-allowlisted folder (workflow-declared allowed_paths
+	// OR user clicked "Allow folder this session"). Distinct from the base
+	// "allowed" action in the JSONL audit log — this discriminated event
+	// lets the WebUI automations panel count per-run folder grants.
+	EventTypeAllowedPathHit = "allowed_path_hit"
 	// SP-065 Phase 2: Automate session lifecycle events
 	EventTypeAutomateSessionStarted = "automate.session_started"
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
@@ -1194,5 +1200,19 @@ func OOMWatchdogAlertEvent(nodeCount int, totalRSSBytes uint64, thresholdNodeCou
 		"threshold_rss_bytes":  thresholdRSSBytes,
 		"trigger_reason":       triggerReason,
 		"timestamp":            time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// AllowedPathHitEvent creates an allowed_path_hit event payload.
+// SP-127 Phase 2.7: emitted when a file operation lands under a
+// session-allowlisted folder so the WebUI automations panel can count
+// per-run folder grants.
+func AllowedPathHitEvent(sessionID, workflow, path, mode string) map[string]interface{} {
+	return map[string]interface{}{
+		"session_id": sessionID,
+		"workflow":   workflow,
+		"path":       path,
+		"mode":       mode,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 }

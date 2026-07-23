@@ -5,7 +5,7 @@ package webui
 import (
 	"bufio"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -279,7 +279,7 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[instances] panic in fire-and-forget SSH launch: %v", r)
+				ws.log().Error("panic in fire-and-forget SSH launch", slog.Any("panic", r))
 			}
 		}()
 		_, _ = ws.launchSSHWorkspace(req)

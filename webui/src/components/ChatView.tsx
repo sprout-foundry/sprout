@@ -326,14 +326,28 @@ function Chat(props: ChatProps): JSX.Element {
         const preview = output.length > 500 ? `${output.slice(0, 500)}\n…` : output;
         if (result.error) {
           setCommandOutputError(new Error(result.error));
-          notificationBus.notify('error', `/${result.command}`, result.error);
+          notificationBus.notify('error', `/${result.command}`, result.error, undefined, {
+            // Errors that come back on the command surface (e.g.
+            // command_not_safe) deserve a follow-up: the streaming
+            // CommandOutputPanel is already open and shows the full
+            // transcript, so this button focuses it for the user.
+            label: 'Show details',
+            onClick: () => {
+              setCommandOutputPanelVisible(true);
+            },
+          });
         } else {
           notificationBus.notify('success', `/${result.command}`, preview);
         }
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));
         setCommandOutputError(err);
-        notificationBus.notify('error', 'Command', err.message);
+        notificationBus.notify('error', 'Command', err.message, undefined, {
+          label: 'Show details',
+          onClick: () => {
+            setCommandOutputPanelVisible(true);
+          },
+        });
       }
     },
     [chatId],

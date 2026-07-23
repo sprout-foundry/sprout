@@ -65,9 +65,21 @@ function NotificationItem({
     }
   }, [id, onClose]);
 
-  // Auto-dismiss after duration
+  // Auto-dismiss after duration. When the notification carries an action
+  // with keepOpen=true, suppress auto-dismiss entirely (the toast stays
+  // until the user clicks the action or the dismiss button). With keepOpen,
+  // an explicit duration still acts as a hard timeout so the toast never
+  // gets stuck, but the 5 s default is not applied.
   useEffect(() => {
     if (duration <= 0) return; // No auto-dismiss
+
+    if (action?.keepOpen) {
+      // keepOpen + no explicit duration → toast sticks around until the
+      // user acts. The parent NotificationCenter also suppresses its own
+      // 5 s default timer when keepOpen is set, so this is the only
+      // timer path left, and it skips when duration falls back to default.
+      if (duration === DEFAULT_DURATION) return;
+    }
 
     autoDismissTimerRef.current = window.setTimeout(handleClose, duration);
 
@@ -76,9 +88,7 @@ function NotificationItem({
         clearTimeout(autoDismissTimerRef.current);
       }
     };
-  }, [duration, handleClose]);
-
-  // Cleanup timeouts on unmount
+  }, [duration, handleClose, action?.keepOpen]);
   useEffect(() => {
     return () => {
       if (exitAnimationRef.current) {

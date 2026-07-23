@@ -1300,3 +1300,175 @@ func TestResolveToolRisk_GitRebaseAbortWithOtherFlagsHardBlocks(t *testing.T) {
 		t.Error("IsHardBlock should be true for `git rebase --abort --no-verify` (has non-recovery flags)")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SP-068 SP-127 synergy — PathTier and FileMode structured fields
+// ---------------------------------------------------------------------------
+
+// containsSource is a test helper to check if a source is in the list.
+func containsSource(sources []RiskSource, target RiskSource) bool {
+	for _, s := range sources {
+		if s == target {
+			return true
+		}
+	}
+	return false
+}
+
+func TestResolveToolRisk_FileOperationPathTier_Sensitive(t *testing.T) {
+	// Drive ResolveToolRisk for write_file with a sensitive path.
+	// PathTier should be PathTierSensitive, FileMode should be "write",
+	// and Sources should include RiskSourceFSTier.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+	agent.SetShellCwd(workspace)
+
+	args := map[string]interface{}{"path": "/etc/passwd"}
+	assessment := agent.ResolveToolRisk("write_file", args)
+
+	if assessment.PathTier != PathTierSensitive {
+		t.Errorf("PathTier = %v, want PathTierSensitive", assessment.PathTier)
+	}
+	if assessment.FileMode != "write" {
+		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "write")
+	}
+	if !containsSource(assessment.Sources, RiskSourceFSTier) {
+		t.Errorf("Sources should include RiskSourceFSTier, got %v", assessment.Sources)
+	}
+}
+
+func TestResolveToolRisk_FileOperationPathTier_Workspace(t *testing.T) {
+	// write_file to a workspace path should NOT contribute fs-tier risk,
+	// but PathTier and FileMode should still be populated.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	// On macOS, t.TempDir() returns /var/folders/... which is a symlink.
+	if resolved, err := filepath.EvalSymlinks(workspace); err == nil {
+		workspace = resolved
+	}
+	agent.SetWorkspaceRoot(workspace)
+	agent.SetShellCwd(workspace)
+
+	testFile := filepath.Join(workspace, "test.txt")
+	args := map[string]interface{}{"path": testFile}
+	assessment := agent.ResolveToolRisk("write_file", args)
+
+	if assessment.PathTier != PathTierWorkspace {
+		t.Errorf("PathTier = %v, want PathTierWorkspace", assessment.PathTier)
+	}
+	if assessment.FileMode != "write" {
+		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "write")
+	}
+	// Workspace writes should NOT contribute fs-tier risk
+	if containsSource(assessment.Sources, RiskSourceFSTier) {
+		t.Errorf("Sources should NOT include RiskSourceFSTier for workspace path, got %v", assessment.Sources)
+	}
+}
+
+func TestResolveToolRisk_FileOperationPathTier_ReadMode(t *testing.T) {
+	// read_file (not in the write-tool risk contribution branch) should
+	// still populate PathTier and FileMode = "read" for consumer use.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	// On macOS, t.TempDir() returns /var/folders/... which is a symlink.
+	if resolved, err := filepath.EvalSymlinks(workspace); err == nil {
+		workspace = resolved
+	}
+	agent.SetWorkspaceRoot(workspace)
+	agent.SetShellCwd(workspace)
+
+	testFile := filepath.Join(workspace, "test.txt")
+	args := map[string]interface{}{"path": testFile}
+	assessment := agent.ResolveToolRisk("read_file", args)
+
+	if assessment.FileMode != "read" {
+		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "read")
+	}
+	if assessment.PathTier != PathTierWorkspace {
+		t.Errorf("PathTier = %v, want PathTierWorkspace", assessment.PathTier)
+	}
+	// Read operations should NOT contribute fs-tier risk
+	if containsSource(assessment.Sources, RiskSourceFSTier) {
+		t.Errorf("Sources should NOT include RiskSourceFSTier for read_file, got %v", assessment.Sources)
+	}
+}
+
+func TestResolveToolRisk_FileOperationPathTier_NonFileOperation(t *testing.T) {
+	// shell_command is not a file operation, so PathTier and FileMode
+	// should remain empty (zero values).
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+
+	args := map[string]interface{}{"command": "ls -la"}
+	assessment := agent.ResolveToolRisk("shell_command", args)
+
+	if assessment.PathTier != PathTierUnknown {
+		t.Errorf("PathTier = %v, want PathTierUnknown for non-file op", assessment.PathTier)
+	}
+	if assessment.FileMode != "" {
+		t.Errorf("FileMode = %q, want empty for non-file op", assessment.FileMode)
+	}
+}
+
+func TestResolveToolRisk_FileOperationPathTier_External(t *testing.T) {
+	// External path should populate PathTier = External, FileMode = "write"
+	// and contribute fs-tier Medium risk.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+	agent.SetShellCwd(workspace)
+
+	// Use a path outside workspace and home (and not a system dir).
+	// /tmp is external unless the workspace or home happens to be under /tmp.
+	externalPath := filepath.Join("/tmp", "sprout-test-"+t.Name(), "file.txt")
+	args := map[string]interface{}{"path": externalPath}
+	assessment := agent.ResolveToolRisk("write_file", args)
+
+	if assessment.PathTier != PathTierExternal {
+		t.Errorf("PathTier = %v, want PathTierExternal for /tmp path", assessment.PathTier)
+	}
+	if assessment.FileMode != "write" {
+		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "write")
+	}
+	if !containsSource(assessment.Sources, RiskSourceFSTier) {
+		t.Errorf("Sources should include RiskSourceFSTier for external path, got %v", assessment.Sources)
+	}
+}
+
+func TestAccessModeForTool(t *testing.T) {
+	tests := []struct {
+		toolName string
+		wantMode string
+	}{
+		{"write_file", "write"},
+		{"edit_file", "write"},
+		{"write_structured_file", "write"},
+		{"patch_structured_file", "write"},
+		{"read_file", "read"},
+		{"shell_command", "read"},
+		{"git", "read"},
+		{"mkdir", "read"},
+		{"unknown_tool", "read"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.toolName, func(t *testing.T) {
+			got := accessModeForTool(tc.toolName)
+			if got != tc.wantMode {
+				t.Errorf("accessModeForTool(%q) = %q, want %q", tc.toolName, got, tc.wantMode)
+			}
+		})
+	}
+}

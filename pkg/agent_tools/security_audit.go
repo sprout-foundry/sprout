@@ -21,6 +21,16 @@ type AuditEntry struct {
 	Source    string    `json:"source,omitempty"` // "classifier", "policy", "user_override"
 	SessionID string    `json:"session_id,omitempty"`
 	Workspace string    `json:"workspace,omitempty"`
+
+	// PathTier is the filesystem path-tier when the tool operates on a file
+	// (e.g. "workspace", "external", "sensitive"). Empty for non-file tools.
+	// SP-068 SP-127 synergy: enables consumers to distinguish path-tier
+	// elevation from risk-tier without parsing reasoning strings.
+	PathTier string `json:"path_tier,omitempty"`
+
+	// FileMode is "read" or "write" for file operations. Empty for
+	// non-file operations.
+	FileMode string `json:"file_mode,omitempty"`
 }
 
 // AuditLogger provides thread-safe JSONL audit logging for security decisions.

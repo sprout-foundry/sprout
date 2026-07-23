@@ -60,6 +60,10 @@ const (
 // RiskAssessment is the canonical, single-vocabulary verdict for a tool
 // call. Phase 2 makes it the single output of the unified resolver; Phase 1
 // builds and tests it alongside the existing gates.
+//
+// SP-068 SP-127 synergy: PathTier and FileMode are structured fields that let
+// consumers distinguish "elevated due to sensitive system path" from "elevated
+// due to destructive shell command" without parsing Reason strings.
 type RiskAssessment struct {
 	// Level is the canonical risk on the Low/Medium/High/Critical scale.
 	Level configuration.RiskLevel
@@ -79,6 +83,18 @@ type RiskAssessment struct {
 
 	// Reason is a human-readable explanation of the verdict.
 	Reason string
+
+	// PathTier is the filesystem path-tier for file-touching tools
+	// (PathTierWorkspace, PathTierExternal, PathTierSensitive). Zero value
+	// (empty string) means "not a file operation" or "tier not assessed".
+	// Consumers can use this to distinguish "elevated due to sensitive
+	// system path" from "elevated due to destructive shell command"
+	// without parsing Reason strings.
+	PathTier PathTier
+
+	// FileMode is "read" or "write" for file operations. Empty for
+	// non-file operations.
+	FileMode string
 }
 
 // ResolveToolRisk produces the unified, single-vocabulary assessment for a
@@ -199,13 +215,24 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 		}
 	}
 
-	// 5. Filesystem path-tier (file write tools)
-	if toolName == "write_file" || toolName == "edit_file" ||
-		toolName == "write_structured_file" || toolName == "patch_structured_file" {
-		if a != nil {
-			if pathRaw, ok := args["path"].(string); ok && pathRaw != "" {
-				home := detectHomeDir()
-				tier := ClassifyPathAccess(pathRaw, a.GetWorkspaceRoot(), home, a.effectiveCwd())
+	// 5. Filesystem path-tier (file tools)
+	// SP-068 SP-127 synergy: populate PathTier and FileMode for all file tools
+	// so consumers can distinguish path-tier from risk-tier. Risk contribution
+	// only applies to write tools (reads to sensitive paths are less concerning).
+	if (toolName == "write_file" || toolName == "edit_file" ||
+		toolName == "write_structured_file" || toolName == "patch_structured_file" ||
+		toolName == "read_file") && a != nil {
+		if pathRaw, ok := args["path"].(string); ok && pathRaw != "" {
+			home := detectHomeDir()
+			tier := ClassifyPathAccess(pathRaw, a.GetWorkspaceRoot(), home, a.effectiveCwd())
+			assessment.PathTier = tier
+			assessment.FileMode = accessModeForTool(toolName)
+
+			// Only write tools contribute fs-tier risk; reads are informational
+			isWriteTool := toolName == "write_file" || toolName == "edit_file" ||
+				toolName == "write_structured_file" || toolName == "patch_structured_file"
+
+			if isWriteTool {
 				switch tier {
 				case PathTierSensitive:
 					assessment = assessment.combine(
@@ -313,6 +340,12 @@ func (ra RiskAssessment) combine(other RiskAssessment) RiskAssessment {
 		RequiresIntentConfirmation: ra.RequiresIntentConfirmation || other.RequiresIntentConfirmation,
 		Reason:                     winner.Reason,
 		Sources:                    mergeRiskSources(winner.Sources, loser.Sources),
+		// Preserve file-operation context from the original assessment.
+		// SP-068 SP-127 synergy: these fields are set before any combine() calls
+		// and should survive the fold so consumers can distinguish path-tier
+		// from risk-tier elevation.
+		PathTier: ra.PathTier,
+		FileMode: ra.FileMode,
 	}
 	// A combined Critical Level always hard-blocks even if only one input
 	// flagged it, keeping the invariant that Critical is unconditional.

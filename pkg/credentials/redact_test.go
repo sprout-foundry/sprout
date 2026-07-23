@@ -68,7 +68,7 @@ func TestIsSensitiveEnvName(t *testing.T) {
 			{"GOPATH"},
 			{"GOROOT"},
 			{"NPM_CONFIG"},
-			{"LEDIT_MODE"},
+			{"SPROUT_MODE"},
 			{"MCP_DEBUG"},
 		}
 		for _, tc := range cases {

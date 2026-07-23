@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// skipWithoutBrowser skips tests unless LEDIT_TEST_BROWSER=1 is set.
+// skipWithoutBrowser skips tests unless SPROUT_TEST_BROWSER=1 is set.
 func skipWithoutBrowser(t *testing.T) {
 	t.Helper()
-	if os.Getenv("LEDIT_TEST_BROWSER") == "" {
-		t.Skip("skipping: set LEDIT_TEST_BROWSER=1 to run browser tests")
+	if os.Getenv("SPROUT_TEST_BROWSER") == "" {
+		t.Skip("skipping: set SPROUT_TEST_BROWSER=1 to run browser tests")
 	}
 }
 

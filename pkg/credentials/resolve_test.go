@@ -79,9 +79,9 @@ func TestHasProviderCredential_LocalProviders(t *testing.T) {
 func TestHasProviderCredential_EnvVarSet(t *testing.T) {
 	// Set up config dir (needed because HasProviderCredential may call Resolve)
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	// Unset any pre-existing OPENAI_API_KEY
@@ -92,9 +92,9 @@ func TestHasProviderCredential_EnvVarSet(t *testing.T) {
 
 func TestHasProviderCredential_NoCredential(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	// Ensure OPENAI_API_KEY is not set
@@ -105,9 +105,9 @@ func TestHasProviderCredential_NoCredential(t *testing.T) {
 
 func TestHasProviderCredential_StoredKey(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	// Ensure env var is not set so we test the stored credential path
@@ -128,9 +128,9 @@ func TestHasProviderCredential_StoredKey(t *testing.T) {
 
 func TestHasProviderCredential_EnvVarTakesPrecedence(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	// Set env var
@@ -150,9 +150,9 @@ func TestHasProviderCredential_EnvVarTakesPrecedence(t *testing.T) {
 
 func TestHasProviderCredential_CaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	// Set the canonical env var
@@ -166,9 +166,9 @@ func TestHasProviderCredential_CaseInsensitive(t *testing.T) {
 
 func TestHasProviderCredential_WhitespaceTrimmed(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	t.Setenv("OPENAI_API_KEY", "sk-whitespace-test")
@@ -179,9 +179,9 @@ func TestHasProviderCredential_WhitespaceTrimmed(t *testing.T) {
 
 func TestHasProviderCredential_EmptyEnvVarValue(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	// Set OPENAI_API_KEY to whitespace-only value — should be treated as unset
@@ -209,9 +209,9 @@ func TestHasProviderCredential_EmptyEnvVarValue(t *testing.T) {
 // fallback where providerRequiresAPIKey returns false for local providers.
 func TestResolveProvider_LocalProviderShortCircuit(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	localProviders := []string{"ollama", "ollama-local", "lmstudio", "test"}
@@ -236,9 +236,9 @@ func TestResolveProvider_LocalProviderShortCircuit(t *testing.T) {
 // Regression test for SP-022-4a: auth.type changed from "bearer" to "none".
 func TestLMStudio_Credentials_EdgeCases(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 	ResetProviderInfoFunc()
 
@@ -285,9 +285,9 @@ func TestProviderEnvVar_ConsistentWithHasProviderCredential(t *testing.T) {
 
 			// Now verify HasProviderCredential recognizes it via env var
 			tmpDir := t.TempDir()
-			t.Setenv("LEDIT_CONFIG", tmpDir)
 			t.Setenv("SPROUT_CONFIG", tmpDir)
-			t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+			t.Setenv("SPROUT_CONFIG", tmpDir)
+			t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 			ResetStorageBackend()
 
 			// Clear env and verify no credential

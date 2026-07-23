@@ -165,7 +165,7 @@ func TestHasSessionOverrides_AfterSetProvider(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -241,7 +241,7 @@ func TestHasSessionOverrides_AfterClearSessionOverrides(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -343,7 +343,7 @@ func TestGetProvider_ReturnsSessionOverride(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -437,7 +437,7 @@ func TestGetProviderType_ReturnsSessionOverride(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -530,7 +530,7 @@ func TestGetModel_ReturnsSessionOverride(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -627,7 +627,7 @@ func TestSetProvider_DoesNotPersistToConfig(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -748,7 +748,7 @@ func TestSetModel_DoesNotPersistToConfig(t *testing.T) {
 
 	// Set up custom provider config with initial model
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -842,7 +842,7 @@ func TestSetProviderPersisted_DoesPersistToConfig(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -932,7 +932,7 @@ func TestSessionOverrides_TakePrecedenceOverConfig(t *testing.T) {
 
 	// Set up custom provider config with a specific model
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -1025,7 +1025,7 @@ func TestSetProvider_WithSessionOverrideFlag(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")

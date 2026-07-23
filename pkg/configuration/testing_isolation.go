@@ -12,7 +12,7 @@ import (
 // NewTestManager builds a configuration Manager backed by an isolated
 // temp directory so that tests never read, modify, or create files in
 // the caller's real ~/.config/sprout config. Sets SPROUT_CONFIG +
-// LEDIT_CONFIG to that temp dir via t.Setenv so any code path that
+// SPROUT_CONFIG to that temp dir via t.Setenv so any code path that
 // uses GetConfigPath() (rather than the Manager) lands in the temp
 // dir too.
 //
@@ -50,11 +50,11 @@ func NewTestManager(t *testing.T) (*Manager, func()) {
 		t.Fatalf("NewTestManager: create temp config dir: %v", err)
 	}
 
-	// Scope BOTH env vars (SPROUT_CONFIG canonical, LEDIT_CONFIG legacy
+	// Scope BOTH env vars (SPROUT_CONFIG canonical, SPROUT_CONFIG legacy
 	// alias) so any indirect Load() that bypasses our Manager still
 	// lands in the temp dir. t.Setenv unwinds at test end.
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	mgr, err := NewManagerWithDir(configDir)
 	if err != nil {

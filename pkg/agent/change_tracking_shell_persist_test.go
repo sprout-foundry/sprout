@@ -16,12 +16,12 @@ import (
 func withShellSkipDirsFile(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	// SPROUT_CONFIG (canonical) + LEDIT_CONFIG (legacy) take precedence
+	// SPROUT_CONFIG (canonical) + SPROUT_CONFIG (legacy) take precedence
 	// over $HOME in envutil.GetConfigDir — without these, the test's
 	// pre-populated file in tmpDir is bypassed and saveAutoSkipDirsFor
 	// writes to the test-runner's real config dir instead.
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	return tmpDir

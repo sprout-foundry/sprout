@@ -31,7 +31,7 @@ func TestDefaultModelDir_Fallback(t *testing.T) {
 	// When no env vars are set, should fall back to ~/.config/sprout/models
 	os.Unsetenv("SPROUT_MODELS_DIR")
 	os.Unsetenv("SPROUT_CONFIG")
-	os.Unsetenv("LEDIT_CONFIG")
+	os.Unsetenv("SPROUT_CONFIG")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("no home dir")

@@ -8,7 +8,7 @@ import (
 
 func TestRequiresAPIKey_LocalProviders(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -21,7 +21,7 @@ func TestRequiresAPIKey_LocalProviders(t *testing.T) {
 
 func TestRequiresAPIKey_CloudProviders(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -35,7 +35,7 @@ func TestRequiresAPIKey_CloudProviders(t *testing.T) {
 
 func TestRequiresAPIKey_EmptyProvider(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -46,7 +46,7 @@ func TestRequiresAPIKey_EmptyProvider(t *testing.T) {
 
 func TestRequiresAPIKey_CustomProvider_WithEnvVar(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -65,7 +65,7 @@ func TestRequiresAPIKey_CustomProvider_WithEnvVar(t *testing.T) {
 
 func TestRequiresAPIKey_UnknownProvider(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")

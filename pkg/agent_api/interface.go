@@ -138,7 +138,7 @@ func NewOpenRouterClientWrapper(model string) (ClientInterface, error) {
 
 // DetermineProvider provides unified provider detection with clear precedence:
 // 1. Command-line flag (if provided)
-// 2. Environment variable (SPROUT_PROVIDER, with LEDIT_PROVIDER backward-compat)
+// 2. Environment variable (SPROUT_PROVIDER, with SPROUT_PROVIDER backward-compat)
 // 3. Config file (last_used_provider)
 //
 // Returns an error if no available provider is found; callers should surface

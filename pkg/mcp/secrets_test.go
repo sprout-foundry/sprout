@@ -40,7 +40,7 @@ func TestIsSecretEnvVar(t *testing.T) {
 		{"NODE_PATH prefix", "NODE_PATH", false},
 		{"PYTHON_PATH prefix", "PYTHON_PATH", false},
 		{"NPM_CONFIG_DIR prefix", "NPM_CONFIG_DIR", false},
-		{"LEDIT_ prefix", "LEDIT_SOMETHING", false},
+		{"SPROUT_ prefix", "SPROUT_SOMETHING", false},
 		{"MCP_ prefix", "MCP_ENABLED", false},
 		{"GO prefix", "GOPATH", false},
 		{"JAVA prefix", "JAVA_HOME", false},
@@ -318,15 +318,15 @@ func TestMaskEnvVars(t *testing.T) {
 // MigrateEnvSecretsFromServer  (needs credential backend)
 // ---------------------------------------------------------------------------
 
-// setupCredentialBackend creates a temp config dir, sets LEDIT_CONFIG,
+// setupCredentialBackend creates a temp config dir, sets SPROUT_CONFIG,
 // and forces the file-based credential backend so tests do not depend
 // on an OS keyring being present.
 func setupCredentialBackend(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 }
 

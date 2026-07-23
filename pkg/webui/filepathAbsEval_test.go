@@ -256,9 +256,9 @@ func TestFilepathAbsEval_BraceHomeSubPath(t *testing.T) {
 // than $HOME are NOT expanded (expandHomeVar is intentionally restricted to
 // $HOME / ${HOME} only).
 func TestFilepathAbsEval_OtherEnvVar(t *testing.T) {
-	t.Setenv("LEDIT_TEST_VAR", "/tmp/ledit_should_not_expand")
+	t.Setenv("SPROUT_TEST_VAR", "/tmp/sprout_should_not_expand")
 
-	input := "$LEDIT_TEST_VAR"
+	input := "$SPROUT_TEST_VAR"
 	got, err := filepathAbsEval(input)
 	if err != nil {
 		t.Fatalf("filepathAbsEval(%q) error: %v", input, err)
@@ -282,10 +282,10 @@ func TestFilepathAbsEval_OtherEnvVar(t *testing.T) {
 // TestFilepathAbsEval_OtherEnvVarSubPath verifies that a custom env var with a
 // sub-path is NOT expanded since expandHomeVar only handles $HOME.
 func TestFilepathAbsEval_OtherEnvVarSubPath(t *testing.T) {
-	t.Setenv("LEDIT_TMPDIR", "/tmp/ledit_should_not_expand")
+	t.Setenv("SPROUT_TMPDIR", "/tmp/sprout_should_not_expand")
 
 	subDir := "nested"
-	input := "$LEDIT_TMPDIR/" + subDir
+	input := "$SPROUT_TMPDIR/" + subDir
 	got, err := filepathAbsEval(input)
 	if err != nil {
 		t.Fatalf("filepathAbsEval(%q) error: %v", input, err)

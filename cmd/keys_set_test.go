@@ -56,7 +56,7 @@ func TestIsKnownProvider_Empty(t *testing.T) {
 func TestIsKnownProvider_CustomProviderInConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := configuration.NewConfig()
 	cfg.CustomProviders["my-custom-llm"] = configuration.CustomProviderConfig{

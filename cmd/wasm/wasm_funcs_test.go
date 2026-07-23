@@ -233,7 +233,7 @@ func setupWorkspaceTree(t *testing.T) string {
 		".vscode/settings.json":     "{}",
 		".terraform/main.tf":        "resource",
 		".sprout/run.log":           "run",
-		".ledit/revisions.md":       "rev",
+		".sprout/revisions.md":      "rev",
 		".agent-i/session.md":       "agent",
 	}
 	for rel, content := range ignoredFiles {

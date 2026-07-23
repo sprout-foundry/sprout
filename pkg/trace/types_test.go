@@ -642,18 +642,18 @@ func TestRandomID_ExpectedOutput(t *testing.T) {
 func TestCollectEnvConfig_NoEnvVars(t *testing.T) {
 	// Clear relevant env vars to test empty config
 	for _, key := range []string{
-		"LEDIT_INTERACTIVE_INPUT_MAX_CHARS",
-		"LEDIT_AUTOMATION_INPUT_MAX_CHARS",
-		"LEDIT_USER_INPUT_MAX_CHARS",
-		"LEDIT_READ_FILE_MAX_BYTES",
-		"LEDIT_SHELL_HEAD_TOKENS",
-		"LEDIT_SHELL_TAIL_TOKENS",
-		"LEDIT_VISION_MAX_TEXT_CHARS",
-		"LEDIT_SEARCH_MAX_BYTES",
-		"LEDIT_FETCH_URL_MAX_CHARS",
-		"LEDIT_SUBAGENT_MAX_TOKENS",
-		"LEDIT_NO_SUBAGENT_MODE",
-		"LEDIT_ISOLATED_CONFIG",
+		"SPROUT_INTERACTIVE_INPUT_MAX_CHARS",
+		"SPROUT_AUTOMATION_INPUT_MAX_CHARS",
+		"SPROUT_USER_INPUT_MAX_CHARS",
+		"SPROUT_READ_FILE_MAX_BYTES",
+		"SPROUT_SHELL_HEAD_TOKENS",
+		"SPROUT_SHELL_TAIL_TOKENS",
+		"SPROUT_VISION_MAX_TEXT_CHARS",
+		"SPROUT_SEARCH_MAX_BYTES",
+		"SPROUT_FETCH_URL_MAX_CHARS",
+		"SPROUT_SUBAGENT_MAX_TOKENS",
+		"SPROUT_NO_SUBAGENT_MODE",
+		"SPROUT_ISOLATED_CONFIG",
 	} {
 		t.Setenv(key, "")
 	}
@@ -665,18 +665,18 @@ func TestCollectEnvConfig_NoEnvVars(t *testing.T) {
 }
 
 func TestCollectEnvConfig_WithEnvVars(t *testing.T) {
-	t.Setenv("LEDIT_INTERACTIVE_INPUT_MAX_CHARS", "50000")
-	t.Setenv("LEDIT_AUTOMATION_INPUT_MAX_CHARS", "25000")
-	t.Setenv("LEDIT_USER_INPUT_MAX_CHARS", "10000")
-	t.Setenv("LEDIT_READ_FILE_MAX_BYTES", "500000")
-	t.Setenv("LEDIT_SHELL_HEAD_TOKENS", "200")
-	t.Setenv("LEDIT_SHELL_TAIL_TOKENS", "100")
-	t.Setenv("LEDIT_VISION_MAX_TEXT_CHARS", "30000")
-	t.Setenv("LEDIT_SEARCH_MAX_BYTES", "100000")
-	t.Setenv("LEDIT_FETCH_URL_MAX_CHARS", "80000")
-	t.Setenv("LEDIT_SUBAGENT_MAX_TOKENS", "8000")
-	t.Setenv("LEDIT_NO_SUBAGENT_MODE", "true")
-	t.Setenv("LEDIT_ISOLATED_CONFIG", "isolated.toml")
+	t.Setenv("SPROUT_INTERACTIVE_INPUT_MAX_CHARS", "50000")
+	t.Setenv("SPROUT_AUTOMATION_INPUT_MAX_CHARS", "25000")
+	t.Setenv("SPROUT_USER_INPUT_MAX_CHARS", "10000")
+	t.Setenv("SPROUT_READ_FILE_MAX_BYTES", "500000")
+	t.Setenv("SPROUT_SHELL_HEAD_TOKENS", "200")
+	t.Setenv("SPROUT_SHELL_TAIL_TOKENS", "100")
+	t.Setenv("SPROUT_VISION_MAX_TEXT_CHARS", "30000")
+	t.Setenv("SPROUT_SEARCH_MAX_BYTES", "100000")
+	t.Setenv("SPROUT_FETCH_URL_MAX_CHARS", "80000")
+	t.Setenv("SPROUT_SUBAGENT_MAX_TOKENS", "8000")
+	t.Setenv("SPROUT_NO_SUBAGENT_MODE", "true")
+	t.Setenv("SPROUT_ISOLATED_CONFIG", "isolated.toml")
 
 	config := collectEnvConfig()
 
@@ -713,13 +713,13 @@ func TestCollectEnvConfig_WithEnvVars(t *testing.T) {
 
 func TestCollectEnvConfig_PartialEnvVars(t *testing.T) {
 	for _, key := range []string{
-		"LEDIT_INTERACTIVE_INPUT_MAX_CHARS",
-		"LEDIT_AUTOMATION_INPUT_MAX_CHARS",
+		"SPROUT_INTERACTIVE_INPUT_MAX_CHARS",
+		"SPROUT_AUTOMATION_INPUT_MAX_CHARS",
 	} {
 		t.Setenv(key, "")
 	}
 
-	t.Setenv("LEDIT_NO_SUBAGENT_MODE", "lax")
+	t.Setenv("SPROUT_NO_SUBAGENT_MODE", "lax")
 
 	config := collectEnvConfig()
 	if len(config) != 1 {

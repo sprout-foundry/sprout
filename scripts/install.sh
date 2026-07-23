@@ -520,8 +520,7 @@ ENV VARS:
   SPROUT_INSTALL_RETRIES network retry count for curl (default 3).
   SPROUT_SKIP_CHECKSUM   if "1", skip SHA256 verification of the download.
                          Use only when a release is missing the manifest.
-  SPROUT_CONFIG          config dir override (see also LEDIT_CONFIG for
-                         pre-rebrand back-compat). Honored on uninstall.
+  SPROUT_CONFIG          config dir override. Honored on uninstall.
   XDG_CONFIG_HOME        XDG override; uninstall reads it before falling
                          back to ~/.config/sprout/.
 
@@ -535,15 +534,13 @@ EOF
 
 # Resolve the active sprout config directory using the same rules the
 # binary itself does (see pkg/envutil/env.go:GetConfigDir):
-#   1. $SPROUT_CONFIG / $LEDIT_CONFIG
+#   1. $SPROUT_CONFIG
 #   2. $XDG_CONFIG_HOME/sprout
 #   3. $HOME/.config/sprout
 # Prints the path; never creates it.
 resolve_config_dir() {
     if [ -n "${SPROUT_CONFIG:-}" ]; then
         echo "$SPROUT_CONFIG"
-    elif [ -n "${LEDIT_CONFIG:-}" ]; then
-        echo "$LEDIT_CONFIG"
     elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
         echo "${XDG_CONFIG_HOME}/sprout"
     elif [ -n "${HOME:-}" ]; then

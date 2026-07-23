@@ -413,7 +413,7 @@ func TestWriteLocalCopyRequest(t *testing.T) {
 	data := []byte("test request data")
 
 	// Without env var, should not write
-	t.Setenv("LEDIT_COPY_LOGS_TO_CWD", "")
+	t.Setenv("SPROUT_COPY_LOGS_TO_CWD", "")
 	WriteLocalCopyRequest("test_req.json", data)
 
 	testPath := filepath.Join(cwd, "test_req.json")
@@ -423,7 +423,7 @@ func TestWriteLocalCopyRequest(t *testing.T) {
 	}
 
 	// With env var set to 1, should write to CWD
-	t.Setenv("LEDIT_COPY_LOGS_TO_CWD", "1")
+	t.Setenv("SPROUT_COPY_LOGS_TO_CWD", "1")
 	WriteLocalCopyRequest("test_req2.json", data)
 
 	testPath2 := filepath.Join(cwd, "test_req2.json")

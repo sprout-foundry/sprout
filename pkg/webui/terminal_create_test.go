@@ -264,7 +264,6 @@ func TestBuildTerminalEnv_PreservesTerminalEnvVars(t *testing.T) {
 		"COLORTERM":           "truecolor",
 		"SHELL":               fakeShell,
 		"SPROUT_WEB_TERMINAL": "1",
-		"LEDIT_WEB_TERMINAL":  "1",
 		"COLUMNS":             "132",
 		"LINES":               "30",
 	}

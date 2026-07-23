@@ -28,7 +28,7 @@ func TestDetachWhilePTYActive_Race(t *testing.T) {
 
 	t.Setenv("TERM", "xterm-256color")
 
-	dir, err := os.MkdirTemp("", "ledit-terminal-race-*")
+	dir, err := os.MkdirTemp("", "sprout-terminal-race-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestDetachWhilePTYActive_Race(t *testing.T) {
 func TestDetachDoesNotPanicWithBufferedOutput(t *testing.T) {
 	t.Setenv("TERM", "xterm-256color")
 
-	dir, err := os.MkdirTemp("", "ledit-terminal-race-*")
+	dir, err := os.MkdirTemp("", "sprout-terminal-race-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestDetachDoesNotPanicWithBufferedOutput(t *testing.T) {
 func TestCloseSessionDoesNotPanic(t *testing.T) {
 	t.Setenv("TERM", "xterm-256color")
 
-	dir, err := os.MkdirTemp("", "ledit-terminal-race-*")
+	dir, err := os.MkdirTemp("", "sprout-terminal-race-*")
 	if err != nil {
 		t.Fatal(err)
 	}

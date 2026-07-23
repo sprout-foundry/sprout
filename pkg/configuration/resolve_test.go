@@ -53,7 +53,6 @@ func TestHasProviderAuth(t *testing.T) {
 				// Use a unique config dir for isolation
 				configDir := t.TempDir()
 				t.Setenv("SPROUT_CONFIG", configDir)
-				t.Setenv("SPROUT_CONFIG", configDir)
 				// Ensure env var is not set
 				t.Setenv("OPENAI_API_KEY", "")
 			},
@@ -74,7 +73,6 @@ func TestHasProviderAuth(t *testing.T) {
 				// Use a unique config dir for isolation
 				configDir := t.TempDir()
 				t.Setenv("SPROUT_CONFIG", configDir)
-				t.Setenv("SPROUT_CONFIG", configDir)
 				t.Setenv("OPENROUTER_API_KEY", "")
 			},
 			expectHasAuth: false,
@@ -93,7 +91,6 @@ func TestHasProviderAuth(t *testing.T) {
 			setupEnv: func() {
 				// Use a unique config dir for isolation
 				configDir := t.TempDir()
-				t.Setenv("SPROUT_CONFIG", configDir)
 				t.Setenv("SPROUT_CONFIG", configDir)
 				t.Setenv("DEEPINFRA_API_KEY", "")
 			},
@@ -130,7 +127,6 @@ func TestHasProviderAuth(t *testing.T) {
 				// Use a unique config dir for isolation
 				configDir := t.TempDir()
 				t.Setenv("SPROUT_CONFIG", configDir)
-				t.Setenv("SPROUT_CONFIG", configDir)
 				t.Setenv("JINA_API_KEY", "")
 			},
 			expectHasAuth: false,
@@ -150,7 +146,6 @@ func TestHasProviderAuth(t *testing.T) {
 				// Use a unique config dir for isolation
 				configDir := t.TempDir()
 				t.Setenv("SPROUT_CONFIG", configDir)
-				t.Setenv("SPROUT_CONFIG", configDir)
 				t.Setenv("ZAI_API_KEY", "")
 			},
 			expectHasAuth: false,
@@ -169,7 +164,6 @@ func TestHasProviderAuth(t *testing.T) {
 			setupEnv: func() {
 				// Use a unique config dir for isolation
 				configDir := t.TempDir()
-				t.Setenv("SPROUT_CONFIG", configDir)
 				t.Setenv("SPROUT_CONFIG", configDir)
 				// Don't set OLLAMA_API_KEY - it's a local provider
 			},
@@ -246,7 +240,6 @@ func TestHasProviderAuthCustomProvider(t *testing.T) {
 	t.Run("custom provider with env var returns true", func(t *testing.T) {
 		configDir := t.TempDir()
 		t.Setenv("SPROUT_CONFIG", configDir)
-		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("HOME", t.TempDir())
 		t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -273,7 +266,6 @@ func TestHasProviderAuthCustomProvider(t *testing.T) {
 
 	t.Run("custom provider with stored credential returns true", func(t *testing.T) {
 		configDir := t.TempDir()
-		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("HOME", t.TempDir())
 		t.Setenv("XDG_CONFIG_HOME", "")
@@ -305,7 +297,6 @@ func TestHasProviderAuthCustomProvider(t *testing.T) {
 
 	t.Run("custom provider without env var but registered returns true", func(t *testing.T) {
 		configDir := t.TempDir()
-		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("HOME", t.TempDir())
 		t.Setenv("XDG_CONFIG_HOME", "")

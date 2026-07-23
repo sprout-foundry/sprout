@@ -19,7 +19,6 @@ import (
 func TestRunLSPList(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
 		err := runLSPList()
@@ -63,7 +62,6 @@ func TestRunLSPList(t *testing.T) {
 func TestRunLSPInstall_Python(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("python")
@@ -86,7 +84,6 @@ func TestRunLSPInstall_Python(t *testing.T) {
 func TestRunLSPInstall_Go(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("go")
@@ -105,7 +102,6 @@ func TestRunLSPInstall_Go(t *testing.T) {
 
 func TestRunLSPInstall_TypeScript(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
@@ -126,7 +122,6 @@ func TestRunLSPInstall_TypeScript(t *testing.T) {
 func TestRunLSPInstall_CaseInsensitive(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("Go")
@@ -142,7 +137,6 @@ func TestRunLSPInstall_CaseInsensitive(t *testing.T) {
 
 func TestRunLSPInstall_WhitespaceTrimmed(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
@@ -160,7 +154,6 @@ func TestRunLSPInstall_WhitespaceTrimmed(t *testing.T) {
 func TestRunLSPInstall_UnknownLanguage(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	err := runLSPInstall("nonexistent")
 	if err == nil {
@@ -171,7 +164,6 @@ func TestRunLSPInstall_UnknownLanguage(t *testing.T) {
 func TestRunLSPInstall_EmptyLanguage(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	err := runLSPInstall("")
 	if err == nil {
@@ -181,7 +173,6 @@ func TestRunLSPInstall_EmptyLanguage(t *testing.T) {
 
 func TestRunLSPInstall_Shell(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
@@ -202,7 +193,6 @@ func TestRunLSPInstall_Shell(t *testing.T) {
 func TestRunLSPInstall_WithCustomOverride(t *testing.T) {
 	// Create a config with a custom server override
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a config.json with a custom language server override
@@ -245,7 +235,6 @@ func TestRunLSPInstall_WithCustomOverride(t *testing.T) {
 func TestRunLSPStatus(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
 		err := runLSPStatus()
@@ -282,7 +271,6 @@ func TestRunLSPStatus(t *testing.T) {
 func TestLoadLanguageServers(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	servers := loadLanguageServers()
 
@@ -307,7 +295,6 @@ func TestLoadLanguageServers(t *testing.T) {
 func TestLoadLanguageServers_WithNoConfig(t *testing.T) {
 	// Point config to a non-existent dir so LoadOrInitConfig fails
 	t.Setenv("SPROUT_CONFIG", "/nonexistent/sprout-test")
-	t.Setenv("SPROUT_CONFIG", "/nonexistent/sprout-test")
 
 	servers := loadLanguageServers()
 
@@ -331,7 +318,6 @@ func TestLoadLanguageServers_WithNoConfig(t *testing.T) {
 
 func TestLoadLanguageServers_WithCustomOverride(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a config.json with a custom language server override
@@ -411,7 +397,6 @@ func TestLangServerStatus_NotFound(t *testing.T) {
 func TestLspCmd_NoArgs_ShowsHelp(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := testutil.CaptureStdout(t, func() {
 		if err := lspCmd.RunE(lspCmd, []string{}); err != nil {
@@ -431,7 +416,6 @@ func TestLspCmd_NoArgs_ShowsHelp(t *testing.T) {
 
 func TestProxyPackageTypes(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Verify that loadLanguageServers returns proxy.LanguageServerConfig
@@ -456,7 +440,6 @@ func TestProxyPackageTypes(t *testing.T) {
 
 func TestRunLSPInstall_UpperCaseLanguage(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Test with various case variations

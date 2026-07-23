@@ -52,7 +52,6 @@ func TestRunCustomModelAddKnown_UserDeclines(t *testing.T) {
 	// the real keyring/file store.
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 
@@ -76,7 +75,6 @@ func TestRunCustomModelAddKnown_EmptyKey(t *testing.T) {
 
 	t.Setenv("AI_WORKER_API_KEY", "")
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
@@ -110,7 +108,6 @@ func TestRunCustomModelAddKnown_UserAcceptsAndStoresKey(t *testing.T) {
 
 	t.Setenv("AI_WORKER_API_KEY", "")
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()

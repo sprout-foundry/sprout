@@ -13,7 +13,6 @@ import (
 // ListModels validation.
 func TestIsCustomProvider_BuiltInNotCustom(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
-	t.Setenv("SPROUT_CONFIG", t.TempDir())
 
 	for _, builtIn := range KnownProviderNames() {
 		assert.False(t, isCustomProvider(builtIn),
@@ -26,7 +25,6 @@ func TestIsCustomProvider_BuiltInNotCustom(t *testing.T) {
 // false — so it gets full ListModels validation like any unknown provider.
 func TestIsCustomProvider_UnknownProviderNotCustom(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
-	t.Setenv("SPROUT_CONFIG", t.TempDir())
 
 	assert.False(t, isCustomProvider("definitely-not-a-real-provider"))
 }
@@ -35,7 +33,6 @@ func TestIsCustomProvider_UnknownProviderNotCustom(t *testing.T) {
 // SaveCustomProvider is correctly identified as custom — so its key can be
 // saved without ListModels validation when the endpoint lacks /models.
 func TestIsCustomProvider_RealCustomProvider(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", t.TempDir())
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
 
 	err := SaveCustomProvider(CustomProviderConfig{
@@ -53,7 +50,6 @@ func TestIsCustomProvider_RealCustomProvider(t *testing.T) {
 // key is still saved successfully. This is the core behavior that lets users
 // store keys for custom providers that don't expose a standard models route.
 func TestValidateAndSaveAPIKey_CustomProviderSkipsValidation(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", t.TempDir())
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
 
 	// Register a custom provider with a non-routable endpoint so ListModels
@@ -86,7 +82,6 @@ func TestValidateAndSaveAPIKey_CustomProviderSkipsValidation(t *testing.T) {
 // focuses on the routing decision: isCustomProvider must return false for
 // every built-in name, ensuring the validation-skip path is never taken.
 func TestValidateAndSaveAPIKey_BuiltInProviderGoesThroughValidation(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", t.TempDir())
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
 
 	// Every built-in name must be classified as non-custom so that

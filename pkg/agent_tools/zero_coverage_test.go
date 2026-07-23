@@ -275,7 +275,6 @@ func TestLimitVisionOutputText_ZC(t *testing.T) {
 	// NOTE: This test cannot use t.Parallel() because it modifies process-level
 	// environment variables, which would be visible to other parallel tests.
 	t.Setenv("SPROUT_VISION_MAX_TEXT_CHARS", "")
-	t.Setenv("SPROUT_VISION_MAX_TEXT_CHARS", "")
 
 	maxChars := getVisionMaxReturnedTextChars()
 	tests := []struct {

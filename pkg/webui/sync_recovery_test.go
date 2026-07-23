@@ -25,7 +25,6 @@ func newSyncTestAgent(t *testing.T) *agent.Agent {
 		t.Fatalf("NewManagerWithDir failed: %v", err)
 	}
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	ag, err := agent.NewAgentWithModel("test:test")
 	if err != nil {
@@ -44,7 +43,6 @@ func newSyncTestAgent(t *testing.T) *agent.Agent {
 func newNoProviderConfig(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a minimal config.json with last_used_provider = "editor"

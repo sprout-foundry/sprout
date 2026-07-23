@@ -15,7 +15,6 @@ func setupMemoryHandlers(t *testing.T) string {
 
 	// Set config dir to our temp dir
 	t.Setenv("SPROUT_CONFIG", tmp)
-	t.Setenv("SPROUT_CONFIG", tmp)
 
 	// Create the memories subdirectory
 	memDir := filepath.Join(tmp, "memories")

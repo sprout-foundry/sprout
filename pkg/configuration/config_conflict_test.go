@@ -17,7 +17,6 @@ func loadConfigFromTempDir(t *testing.T, body string) (*Config, string) {
 	t.Helper()
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmp)
-	t.Setenv("SPROUT_CONFIG", tmp)
 
 	configPath := filepath.Join(tmp, ConfigFileName)
 	if err := os.WriteFile(configPath, []byte(body), 0600); err != nil {
@@ -97,7 +96,6 @@ func TestConfigConflictError_NoFalsePositiveOnSequentialSaves(t *testing.T) {
 // "first ever save" or "reset to defaults" flows.
 func TestConfigConflictError_FreshConfigBypassesCheck(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmp)
 	t.Setenv("SPROUT_CONFIG", tmp)
 
 	// Pre-populate the file so a load-then-save would see a conflict;

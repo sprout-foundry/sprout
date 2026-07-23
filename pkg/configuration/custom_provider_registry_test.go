@@ -75,7 +75,6 @@ func TestSaveAndLoadCustomProviders(t *testing.T) {
 func TestConfigSaveOmitsInlineCustomProviders(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	cfg := NewConfig()
 	cfg.CustomProviders["gateway"] = CustomProviderConfig{
@@ -97,7 +96,6 @@ func TestConfigSaveOmitsInlineCustomProviders(t *testing.T) {
 
 func TestMigrateConfigFileAPIKeys(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config.json with custom_providers containing api_key values
@@ -145,7 +143,6 @@ func TestMigrateConfigFileAPIKeys(t *testing.T) {
 func TestMigrateConfigFileAPIKeys_NoAPIKeys(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config.json without api_key values
 	configPath := filepath.Join(configDir, ConfigFileName)
@@ -189,7 +186,6 @@ func TestMigrateConfigFileAPIKeys_NoAPIKeys(t *testing.T) {
 func TestMigrateConfigFileAPIKeys_Idempotent(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config.json with custom_providers containing api_key values
 	configPath := filepath.Join(configDir, ConfigFileName)
@@ -232,7 +228,6 @@ func TestMigrateConfigFileAPIKeys_Idempotent(t *testing.T) {
 
 func TestMigrateConfigFileAPIKeys_MultipleProviders(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config.json with multiple custom_providers, some with api_key, some without
@@ -299,7 +294,6 @@ func TestMigrateConfigFileAPIKeys_MultipleProviders(t *testing.T) {
 func TestLoad_MigratesConfigFileAPIKeys(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config.json with custom_providers containing api_key
 	configPath := filepath.Join(configDir, ConfigFileName)
@@ -346,7 +340,6 @@ func TestLoad_MigratesConfigFileAPIKeys(t *testing.T) {
 func TestMigrateConfigFileAPIKeys_NonStringAPIKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a config.json with a non-string api_key (should be silently left alone)
 	configPath := filepath.Join(configDir, ConfigFileName)
@@ -391,7 +384,6 @@ func TestMigrateConfigFileAPIKeys_NonStringAPIKey(t *testing.T) {
 func TestMigrateEmbeddedAPIKeys_MigratesKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Create a provider JSON file with an embedded api_key
 	providersDir, err := GetProvidersDir()
@@ -431,7 +423,6 @@ func TestMigrateEmbeddedAPIKeys_MigratesKey(t *testing.T) {
 func TestMigrateEmbeddedAPIKeys_SkipsWhenMarkerExists(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -470,7 +461,6 @@ func TestMigrateEmbeddedAPIKeys_SkipsWhenMarkerExists(t *testing.T) {
 func TestMigrateEmbeddedAPIKeys_Idempotent(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -506,7 +496,6 @@ func TestMigrateEmbeddedAPIKeys_Idempotent(t *testing.T) {
 func TestMigrateEmbeddedAPIKeys_CreatesMarkerWithNoProviders(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("SPROUT_CONFIG", configDir)
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -523,7 +512,6 @@ func TestMigrateEmbeddedAPIKeys_CreatesMarkerWithNoProviders(t *testing.T) {
 
 func TestMigrateEmbeddedAPIKeys_SkipsFilesWithoutAPIKey(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	providersDir, err := GetProvidersDir()
@@ -555,7 +543,6 @@ func TestMigrateEmbeddedAPIKeys_SkipsFilesWithoutAPIKey(t *testing.T) {
 
 func TestMigrateEmbeddedAPIKeys_SkipsEmptyAPIKey(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	providersDir, err := GetProvidersDir()
@@ -756,7 +743,6 @@ func TestLoadCustomProviders_FallsBackToGlobalHomeDir(t *testing.T) {
 	// the only place "ai-worker" can come from is the global home dir.
 	projDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", projDir)
-	t.Setenv("SPROUT_CONFIG", projDir)
 	require.NoError(t, os.MkdirAll(filepath.Join(projDir, "providers"), 0o700))
 
 	got, err := LoadCustomProviders()
@@ -792,7 +778,6 @@ func TestLoadCustomProviders_MergesScopedAndGlobal(t *testing.T) {
 
 	// SPROUT_CONFIG points at a project dir that has its OWN provider.
 	projDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", projDir)
 	t.Setenv("SPROUT_CONFIG", projDir)
 	require.NoError(t, os.MkdirAll(filepath.Join(projDir, "providers"), 0o700))
 	require.NoError(t, os.WriteFile(
@@ -833,7 +818,6 @@ func TestLoadCustomProviders_GlobalOverridesScoped(t *testing.T) {
 	))
 
 	projDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", projDir)
 	t.Setenv("SPROUT_CONFIG", projDir)
 	require.NoError(t, os.MkdirAll(filepath.Join(projDir, "providers"), 0o700))
 	require.NoError(t, os.WriteFile(

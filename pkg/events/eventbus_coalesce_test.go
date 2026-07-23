@@ -71,7 +71,7 @@ func TestPublish_HighRateDoesNotStall(t *testing.T) {
 			t0 := time.Now()
 			eb.Publish(EventTypeStreamChunk, StreamChunkEvent("x", "assistant_text"))
 			d := time.Since(t0).Microseconds()
-			if d > maxLatency {
+			if d > atomic.LoadInt64(&maxLatency) {
 				atomic.StoreInt64(&maxLatency, d)
 			}
 		}()

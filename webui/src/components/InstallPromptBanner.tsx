@@ -58,7 +58,9 @@ const InstallPromptBanner: React.FC = () => {
   return (
     <div className="install-prompt-banner" role="banner">
       <Download size={16} className="install-prompt-icon" />
-      <span className="install-prompt-text">Install Sprout Foundry for offline access and a native app experience.</span>
+      <span className="install-prompt-text">
+        Install Sprout Foundry for offline access and a native app experience.
+      </span>
       <button className="install-prompt-btn install-prompt-btn-primary" onClick={handleInstall}>
         Install
       </button>

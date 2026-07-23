@@ -74,9 +74,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sprout-foundry/sprout/pkg/factory"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
 // cliTestProviderName is the provider name used by the CLI-path tests

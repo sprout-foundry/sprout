@@ -39,9 +39,9 @@ func TestPasswordResponseData_Validate(t *testing.T) {
 			errSubstr: "request_id is required",
 		},
 		{
-			name:      "empty password allowed",
-			data:      PasswordResponseData{RequestID: "pwd_2"},
-			wantErr:   false,
+			name:    "empty password allowed",
+			data:    PasswordResponseData{RequestID: "pwd_2"},
+			wantErr: false,
 		},
 		{
 			name:      "password too long",

@@ -98,7 +98,7 @@ func TestWriteSecurityAnalysisPanel(t *testing.T) {
 		name    string
 		view    *utils.SecurityAnalysisView
 		want    []string // substrings that must appear in the rendered output
-		noColor bool    // disable colorization to verify the fallback path
+		noColor bool     // disable colorization to verify the fallback path
 	}{
 		{
 			name: "approve recommendation renders check + green tone",

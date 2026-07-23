@@ -11,11 +11,11 @@ type sessionAllowedFoldersContextKey string
 type auditLoggerContextKey string
 
 const (
-	workspaceRootContextKeyValue          workspaceRootContextKey = "workspace_root"
-	securityBypassContextKeyValue         workspaceRootContextKey = "security_bypass"
-	effectiveCwdContextKeyValue          effectiveCwdContextKey = "effective_cwd"
+	workspaceRootContextKeyValue         workspaceRootContextKey         = "workspace_root"
+	securityBypassContextKeyValue        workspaceRootContextKey         = "security_bypass"
+	effectiveCwdContextKeyValue          effectiveCwdContextKey          = "effective_cwd"
 	sessionAllowedFoldersContextKeyValue sessionAllowedFoldersContextKey = "session_allowed_folders"
-	auditLoggerContextKeyValue           auditLoggerContextKey = "audit_logger"
+	auditLoggerContextKeyValue           auditLoggerContextKey           = "audit_logger"
 )
 
 // AuditLogger is an interface for security audit logging.

@@ -23,6 +23,9 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		return
 	}
 
+	tools.ToolFuncMu.Lock()
+	defer tools.ToolFuncMu.Unlock()
+
 	tools.RunSubagentFunc = func(ctx context.Context, args map[string]any) (string, error) {
 		return handleRunSubagent(ctx, agent, args)
 	}

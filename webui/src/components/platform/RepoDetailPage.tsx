@@ -41,10 +41,10 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
 
     setLoading(true);
     const [repoRes, branchesRes, commitsRes, pullsRes] = await Promise.allSettled([
-      adapter.fetch(`/api/user/me/repos/${repoOwner}/${repoName}`),
-      adapter.fetch(`/api/user/me/repos/${repoOwner}/${repoName}/branches`),
-      adapter.fetch(`/api/user/me/repos/${repoOwner}/${repoName}/commits?limit=10`),
-      adapter.fetch(`/api/user/me/repos/${repoOwner}/${repoName}/pulls?limit=5`),
+      adapter.fetch(`/user/me/repos/${repoOwner}/${repoName}`),
+      adapter.fetch(`/user/me/repos/${repoOwner}/${repoName}/branches`),
+      adapter.fetch(`/user/me/repos/${repoOwner}/${repoName}/commits?limit=10`),
+      adapter.fetch(`/user/me/repos/${repoOwner}/${repoName}/pulls?limit=5`),
     ]);
 
     if (repoRes.status === 'rejected') {

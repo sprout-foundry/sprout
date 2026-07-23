@@ -98,7 +98,7 @@ describe('TeamPage', () => {
 
   it('calls adapter.fetch with the correct endpoint on mount', () => {
     renderSync();
-    expect(mockFetch).toHaveBeenCalledWith('/api/foundry/team');
+    expect(mockFetch).toHaveBeenCalledWith('/team/members');
   });
 
   it('fetches team data only once on mount', () => {

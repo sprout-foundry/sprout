@@ -309,14 +309,7 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
       doc: initialContent,
       extensions,
     });
-    let view: EditorView;
-    try {
-      view = new EditorView({ state, parent });
-    } catch (e) {
-      // Re-throw after invalidating any in-flight async work so the boundary
-      // surfaces the failure and the cleanup path runs.
-      throw e;
-    }
+    const view = new EditorView({ state, parent });
     const capturedView = view;
 
     apiRef.current.view = capturedView;

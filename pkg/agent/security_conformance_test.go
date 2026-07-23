@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,7 +8,6 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
-	"github.com/stretchr/testify/require"
 )
 
 // NonTmpTempDir returns a temp directory under a parent that is NOT /tmp.
@@ -104,13 +102,12 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 	_ = filesystem.EnsureDir(awsDir)
 
 	cases := []struct {
-		name             string
-		filePath         string
-		resolvedPath     string
-		mode             string
-		setup            func(*Agent)
-		wantClassifier   FileAccessDecision
-		wantAdapterAllow bool
+		name           string
+		filePath       string
+		resolvedPath   string
+		mode           string
+		setup          func(*Agent)
+		wantClassifier FileAccessDecision
 	}{
 		{
 			name:           "workspace root file",
@@ -118,7 +115,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   filepath.Join(workspaceRoot, "main.go"),
 			mode:           "read",
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "workspace nested file write",
@@ -126,7 +122,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   filepath.Join(workspaceRoot, "a", "b", "c.txt"),
 			mode:           "write",
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "workspace symlink",
@@ -134,7 +129,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   filepath.Join(workspaceRoot, "real"),
 			mode:           "read",
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "/tmp file read",
@@ -142,7 +136,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   filepath.Join(t.TempDir(), "test.txt"),
 			mode:           "read",
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "/tmp file write",
@@ -150,7 +143,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   filepath.Join(t.TempDir(), "out.txt"),
 			mode:           "write",
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "session-allowlisted folder read",
@@ -161,7 +153,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				a.AddSessionAllowedFolder(allowlistDir)
 			},
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "session-allowlisted folder write",
@@ -172,7 +163,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				a.AddSessionAllowedFolder(allowlistDir)
 			},
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "session-allowlisted read_only folder write denied",
@@ -184,7 +174,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
 			},
 			wantClassifier: FileAccessDeny,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "session-allowlisted read_only folder read allowed",
@@ -196,7 +185,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
 			},
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		{
 			name:           "off-workspace external file",
@@ -204,7 +192,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   externalFile,
 			mode:           "read",
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false, // non-interactive test agent has no approval channel
 		},
 		{
 			name:           "off-workspace external file write",
@@ -212,7 +199,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   externalFile,
 			mode:           "write",
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "sensitive /etc/passwd",
@@ -220,7 +206,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   "/etc/passwd",
 			mode:           "read",
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "sensitive /etc/shadow",
@@ -228,7 +213,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   "/etc/shadow",
 			mode:           "write",
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "sensitive SSH private key under home",
@@ -240,7 +224,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				t.Setenv("HOME", homeDir)
 			},
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "sensitive AWS credentials",
@@ -251,7 +234,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				t.Setenv("HOME", homeDir)
 			},
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "relative path uses resolvedPath when provided",
@@ -259,7 +241,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   filepath.Join(workspaceRoot, "foo.go"),
 			mode:           "read",
 			wantClassifier: FileAccessAllow,
-			wantAdapterAllow: true,
 		},
 		// --- Test #3: workspace symlink escape ---
 		// Create a symlink in the workspace pointing to /etc/passwd.
@@ -276,7 +257,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				_ = os.Symlink("/etc/passwd", filepath.Join(workspaceRoot, "evil_link"))
 			},
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		// --- M3.4: tool-specific deny cases (conformance pins) ---
 		// Each write tool must return FileAccessDeny when targeting a
@@ -293,7 +273,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
 			},
 			wantClassifier: FileAccessDeny,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "write_structured_file write denied on read_only folder",
@@ -305,7 +284,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
 			},
 			wantClassifier: FileAccessDeny,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "patch_structured_file write denied on read_only folder",
@@ -317,7 +295,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
 			},
 			wantClassifier: FileAccessDeny,
-			wantAdapterAllow: false,
 		},
 		// --- M3.4: each tool on sensitive path prompts ---
 		{
@@ -326,7 +303,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   "/etc/shadow",
 			mode:           "write",
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "write_structured_file sensitive /etc/shadow prompts",
@@ -334,7 +310,6 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   "/etc/shadow",
 			mode:           "write",
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		{
 			name:           "patch_structured_file sensitive /etc/shadow prompts",
@@ -342,25 +317,22 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			resolvedPath:   "/etc/shadow",
 			mode:           "write",
 			wantClassifier: FileAccessPrompt,
-			wantAdapterAllow: false,
 		},
 		// --- Test #4: list_directory on workspace ---
 		{
-			name:             "list_directory workspace root",
-			filePath:         workspaceRoot,
-			resolvedPath:     workspaceRoot,
-			mode:             "read",
-			wantClassifier:   FileAccessAllow,
-			wantAdapterAllow: true,
+			name:           "list_directory workspace root",
+			filePath:       workspaceRoot,
+			resolvedPath:   workspaceRoot,
+			mode:           "read",
+			wantClassifier: FileAccessAllow,
 		},
 		// --- Test #4: list_directory on external path ---
 		{
-			name:             "list_directory external /etc",
-			filePath:         "/etc",
-			resolvedPath:     "/etc",
-			mode:             "read",
-			wantClassifier:   FileAccessPrompt,
-			wantAdapterAllow: false,
+			name:           "list_directory external /etc",
+			filePath:       "/etc",
+			resolvedPath:   "/etc",
+			mode:           "read",
+			wantClassifier: FileAccessPrompt,
 		},
 	}
 
@@ -380,45 +352,9 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			// --- Gate 1: classifyFileAccess directly ---
 			classifierDecision := a.classifyFileAccess(tc.filePath, tc.resolvedPath, tc.mode)
 
-			// --- Gate 2: filesystemGateAdapter.RequestPathApproval ---
-			adapter := newFilesystemGateAdapter(a)
-			require.NotNil(t, adapter, "adapter should not be nil")
-
-			// Determine the error sentinel from mode.
-			var err error
-			if tc.mode == "write" {
-				err = filesystem.ErrWriteOutsideWorkingDirectory
-			} else {
-				err = filesystem.ErrOutsideWorkingDirectory
-			}
-
-			_, adapterAllowed := adapter.RequestPathApproval(context.Background(), "test_tool", tc.filePath, tc.resolvedPath, err)
-
-			// --- Conformance assertion ---
-			// Map classifier decision to adapter-allow bool.
-			var wantAdapterAllow bool
-			switch tc.wantClassifier {
-			case FileAccessAllow:
-				wantAdapterAllow = true
-			case FileAccessPrompt, FileAccessDeny:
-				wantAdapterAllow = false
-			}
-
 			if classifierDecision != tc.wantClassifier {
 				t.Errorf("classifyFileAccess(%q, %q, %q) = %v, want %v",
 					tc.filePath, tc.resolvedPath, tc.mode, classifierDecision, tc.wantClassifier)
-			}
-
-			if adapterAllowed != wantAdapterAllow {
-				t.Errorf("filesystemGateAdapter.RequestPathApproval(%q, %q, %q) approved = %v, want %v (classifier verdict = %v)",
-					tc.filePath, tc.resolvedPath, tc.mode, adapterAllowed, wantAdapterAllow, classifierDecision)
-			}
-
-			// Core invariant: both paths must agree on allow/deny.
-			classifierAllows := classifierDecision == FileAccessAllow
-			if classifierAllows != adapterAllowed {
-				t.Errorf("CONFORMANCE VIOLATION: classifyFileAccess allows=%v but adapter approved=%v for path=%q mode=%q",
-					classifierAllows, adapterAllowed, tc.filePath, tc.mode)
 			}
 		})
 	}

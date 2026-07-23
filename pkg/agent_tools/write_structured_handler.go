@@ -83,11 +83,10 @@ func (h *writeStructuredFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// WriteFile helper below extracts the FilesystemGate from ctx
-	// before resolving the path. Without this injection, an
-	// off-workspace write of a JSON/YAML config would hard-error
-	// instead of presenting the approve dialog.
-	ctx = WithFilesystemGateFromEnv(ctx, env)
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass the gate entirely. Prompt paths fall through and will
+	// fail with the raw filesystem error.
 
 	path, err := extractString(args, "path")
 	if err != nil {
@@ -96,7 +95,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
 	// resolve so Deny paths return a typed error immediately and Allow
-	// paths bypass withFilesystemApproval entirely.
+	// paths bypass the gate entirely.
 	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_structured_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},

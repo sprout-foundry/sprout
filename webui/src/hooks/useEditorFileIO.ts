@@ -305,11 +305,7 @@ export function useEditorFileIO(
           // swapped out from under us during the timeout — a buffer switch or
           // remount could install a new view before this callback fires.
           setTimeout(() => {
-            if (
-              viewAtLoadTime &&
-              viewAtLoadTime.scrollDOM &&
-              cmViewApiRef.current?.view === viewAtLoadTime
-            ) {
+            if (viewAtLoadTime && viewAtLoadTime.scrollDOM && cmViewApiRef.current?.view === viewAtLoadTime) {
               viewAtLoadTime.scrollDOM.scrollTop = top;
               viewAtLoadTime.scrollDOM.scrollLeft = left;
             }

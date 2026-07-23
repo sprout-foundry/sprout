@@ -64,14 +64,17 @@ func (h *respondClarificationHandler) Validate(args map[string]any) error {
 }
 
 func (h *respondClarificationHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	if RespondClarificationFunc == nil {
+	ToolFuncMu.RLock()
+	fn := RespondClarificationFunc
+	ToolFuncMu.RUnlock()
+	if fn == nil {
 		return ToolResult{
 			Output:  "respond_clarification is not available: agent integration not initialized (RespondClarificationFunc is nil)",
 			IsError: true,
 		}, nil
 	}
 
-	result, err := RespondClarificationFunc(ctx, args)
+	result, err := fn(ctx, args)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}

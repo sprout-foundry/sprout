@@ -78,14 +78,17 @@ func (h *createPullRequestHandler) Validate(args map[string]any) error {
 }
 
 func (h *createPullRequestHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	if CreatePullRequestFunc == nil {
+	ToolFuncMu.RLock()
+	fn := CreatePullRequestFunc
+	ToolFuncMu.RUnlock()
+	if fn == nil {
 		return ToolResult{
 			Output:  "create_pull_request is not available: agent integration not initialized (CreatePullRequestFunc is nil)",
 			IsError: true,
 		}, nil
 	}
 
-	result, err := CreatePullRequestFunc(ctx, args)
+	result, err := fn(ctx, args)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}

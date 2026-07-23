@@ -139,5 +139,7 @@ func (m *Manager) MapStringToClientType(s string) (api.ClientType, error) {
 
 // ResolveProviderModel resolves provider+model selection using canonical precedence.
 func (m *Manager) ResolveProviderModel(explicitProvider, explicitModel string) (api.ClientType, string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return ResolveProviderModel(m.config, explicitProvider, explicitModel)
 }

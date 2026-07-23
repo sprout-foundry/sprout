@@ -566,10 +566,11 @@ test.describe('Round-trip persistence', () => {
     await expect(approvedInput).toBeVisible({ timeout: 10_000 });
     await approvedInput.fill(command);
 
-    const addButton = page
-      .locator('.settings-subsection-content')
-      .locator('.settings-inline-row')
-      .getByRole('button', { name: 'Add', exact: true });
+    // Scope the Add button to the same inline row as the "git push" input —
+    // CommandPolicyEditor renders three sections (Allow, Ask, Deny), each
+    // with its own Add button. A broad selector hits all three (strict mode
+    // violation), so chain from the input to its sibling button.
+    const addButton = approvedInput.locator('xpath=following-sibling::button[contains(text(),"Add")]');
     await addButton.click();
 
     // The command should appear in the list.

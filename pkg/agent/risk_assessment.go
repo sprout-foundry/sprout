@@ -483,5 +483,4 @@ func isGitRebaseCommand(command string) bool {
 		}
 		remaining = remaining[idx+1:]
 	}
-	return false
 }

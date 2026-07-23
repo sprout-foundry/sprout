@@ -72,14 +72,17 @@ func (h *runParallelSubagentsHandler) Validate(args map[string]any) error {
 }
 
 func (h *runParallelSubagentsHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	if RunParallelSubagentsFunc == nil {
+	ToolFuncMu.RLock()
+	fn := RunParallelSubagentsFunc
+	ToolFuncMu.RUnlock()
+	if fn == nil {
 		return ToolResult{
 			Output:  "subagent support not configured: agent integration not initialized (RunParallelSubagentsFunc is nil)",
 			IsError: true,
 		}, nil
 	}
 
-	result, err := RunParallelSubagentsFunc(ctx, args)
+	result, err := fn(ctx, args)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}

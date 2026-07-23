@@ -93,10 +93,16 @@ describe('useCommandOutput', () => {
     const { result } = renderHook(() => useCommandOutput('chat-1'));
 
     act(() => {
-      dispatch({ type: 'command_output', data: { command: 'info', chunk: 'Hello ', is_final: false, chat_id: 'chat-1' } });
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk: 'Hello ', is_final: false, chat_id: 'chat-1' },
+      });
     });
     act(() => {
-      dispatch({ type: 'command_output', data: { command: 'info', chunk: 'world', is_final: false, chat_id: 'chat-1' } });
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk: 'world', is_final: false, chat_id: 'chat-1' },
+      });
     });
 
     expect(result.current.output).toBe('Hello world');
@@ -110,7 +116,10 @@ describe('useCommandOutput', () => {
     const { result } = renderHook(() => useCommandOutput('chat-1'));
 
     act(() => {
-      dispatch({ type: 'command_output', data: { command: 'info', chunk: 'Hello', is_final: false, chat_id: 'chat-1' } });
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk: 'Hello', is_final: false, chat_id: 'chat-1' },
+      });
     });
     expect(result.current.isRunning).toBe(true);
 
@@ -142,7 +151,10 @@ describe('useCommandOutput', () => {
     const { result: resultB } = renderHook(() => useCommandOutput('chat-B'));
 
     act(() => {
-      dispatch({ type: 'command_output', data: { command: 'info', chunk: 'leak', is_final: false, chat_id: 'chat-A' } });
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk: 'leak', is_final: false, chat_id: 'chat-A' },
+      });
     });
 
     expect(resultB.current.output).toBe('');
@@ -193,10 +205,9 @@ describe('useCommandOutput', () => {
   });
 
   it('resets state to INITIAL when chatId changes', () => {
-    const { result, rerender } = renderHook(
-      ({ chatId }: { chatId: string }) => useCommandOutput(chatId),
-      { initialProps: { chatId: 'chat-1' } },
-    );
+    const { result, rerender } = renderHook(({ chatId }: { chatId: string }) => useCommandOutput(chatId), {
+      initialProps: { chatId: 'chat-1' },
+    });
 
     act(() => {
       dispatch({

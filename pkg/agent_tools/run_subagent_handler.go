@@ -97,14 +97,17 @@ func (h *runSubagentHandler) Validate(args map[string]any) error {
 }
 
 func (h *runSubagentHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	if RunSubagentFunc == nil {
+	ToolFuncMu.RLock()
+	fn := RunSubagentFunc
+	ToolFuncMu.RUnlock()
+	if fn == nil {
 		return ToolResult{
 			Output:  "subagent support not configured: agent integration not initialized (RunSubagentFunc is nil)",
 			IsError: true,
 		}, nil
 	}
 
-	result, err := RunSubagentFunc(ctx, args)
+	result, err := fn(ctx, args)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}

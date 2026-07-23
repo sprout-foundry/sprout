@@ -241,12 +241,15 @@ function SecurityApprovalDialog({
                   <span
                     className="security-approval-analysis-recommendation"
                     style={{
-                      background: RECOMMENDATION_BG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--bg-tertiary)',
-                      color: RECOMMENDATION_FG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--text-muted)',
+                      background:
+                        RECOMMENDATION_BG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--bg-tertiary)',
+                      color:
+                        RECOMMENDATION_FG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--text-muted)',
                     }}
                   >
                     {RECOMMENDATION_ICON[securityAnalysis.recommendation as RecommendationKey] ?? null}
-                    {RECOMMENDATION_LABEL[securityAnalysis.recommendation as RecommendationKey] ?? securityAnalysis.recommendation}
+                    {RECOMMENDATION_LABEL[securityAnalysis.recommendation as RecommendationKey] ??
+                      securityAnalysis.recommendation}
                   </span>
                 )}
               </div>
@@ -266,9 +269,13 @@ function SecurityApprovalDialog({
                 <span
                   className="security-approval-analysis-risk-pill"
                   style={{
-                    color: RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ?? 'var(--text-muted)',
+                    color:
+                      RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ??
+                      'var(--text-muted)',
                     background: 'var(--bg-elevated)',
-                    borderColor: RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ?? 'var(--border-default)',
+                    borderColor:
+                      RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ??
+                      'var(--border-default)',
                   }}
                 >
                   {securityAnalysis.riskAssessment}
@@ -283,43 +290,42 @@ function SecurityApprovalDialog({
                   WebUI shows ALL subcommands; the CLI caps at 3 with a
                   "(+N more)" affordance to keep the terminal panel
                   scannable (see writeSecurityAnalysisChainStepper). */}
-              {securityAnalysis.chainSubcommands &&
-                securityAnalysis.chainSubcommands.length > 1 && (
-                  <div className="security-approval-chain-stepper" data-testid="chain-stepper">
-                    <div className="security-approval-chain-stepper-label">
-                      Chain ({securityAnalysis.chainLength ?? securityAnalysis.chainSubcommands.length} steps)
-                    </div>
-                    <ol className="security-approval-chain-stepper-list">
-                      {securityAnalysis.chainSubcommands.map((sub, idx) => {
-                        // Map the server-supplied tone to a dot color, falling
-                        // back to the neutral muted token for any value not in
-                        // the three-tone vocabulary (defensive — the server
-                        // may emit an empty string or a future tone like
-                        // "unknown" while the analyzer is mid-flight).
-                        const rawTone = securityAnalysis.chainClassifications?.[idx];
-                        const tone = (['low', 'moderate', 'high'] as const).includes(rawTone as ChainStepperTone)
-                          ? (rawTone as ChainStepperTone)
-                          : undefined;
-                        const toneColor = tone ? CHAIN_STEPPER_TONE_COLOR[tone] : 'var(--text-muted)';
-                        return (
-                          <li
-                            key={`${idx}-${sub}`}
-                            className="security-approval-chain-stepper-pill"
-                            data-testid="chain-stepper-pill"
-                            data-tone={rawTone ?? 'unknown'}
-                          >
-                            <span
-                              className="security-approval-chain-stepper-dot"
-                              style={{ background: toneColor }}
-                              aria-hidden="true"
-                            />
-                            <code className="security-approval-chain-stepper-cmd">{sub}</code>
-                          </li>
-                        );
-                      })}
-                    </ol>
+              {securityAnalysis.chainSubcommands && securityAnalysis.chainSubcommands.length > 1 && (
+                <div className="security-approval-chain-stepper" data-testid="chain-stepper">
+                  <div className="security-approval-chain-stepper-label">
+                    Chain ({securityAnalysis.chainLength ?? securityAnalysis.chainSubcommands.length} steps)
                   </div>
-                )}
+                  <ol className="security-approval-chain-stepper-list">
+                    {securityAnalysis.chainSubcommands.map((sub, idx) => {
+                      // Map the server-supplied tone to a dot color, falling
+                      // back to the neutral muted token for any value not in
+                      // the three-tone vocabulary (defensive — the server
+                      // may emit an empty string or a future tone like
+                      // "unknown" while the analyzer is mid-flight).
+                      const rawTone = securityAnalysis.chainClassifications?.[idx];
+                      const tone = (['low', 'moderate', 'high'] as const).includes(rawTone as ChainStepperTone)
+                        ? (rawTone as ChainStepperTone)
+                        : undefined;
+                      const toneColor = tone ? CHAIN_STEPPER_TONE_COLOR[tone] : 'var(--text-muted)';
+                      return (
+                        <li
+                          key={`${idx}-${sub}`}
+                          className="security-approval-chain-stepper-pill"
+                          data-testid="chain-stepper-pill"
+                          data-tone={rawTone ?? 'unknown'}
+                        >
+                          <span
+                            className="security-approval-chain-stepper-dot"
+                            style={{ background: toneColor }}
+                            aria-hidden="true"
+                          />
+                          <code className="security-approval-chain-stepper-cmd">{sub}</code>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
             </div>
           )}
 

@@ -1443,7 +1443,9 @@ describe('security_approval_request', () => {
   // SP-124-2: security_analysis parsing
   it('parses valid security_analysis JSON into camelCase state', () => {
     const { setStateMock, stateHolder } = setupHandler();
-    act(() => { root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) })); });
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
     const { handleEvent } = getHandleEvent();
     act(() => {
       handleEvent({
@@ -1476,7 +1478,9 @@ describe('security_approval_request', () => {
 
   it('silently omits securityAnalysis on malformed JSON (non-blocking)', () => {
     const { setStateMock, stateHolder } = setupHandler();
-    act(() => { root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) })); });
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
     const { handleEvent } = getHandleEvent();
     act(() => {
       handleEvent({
@@ -1497,7 +1501,9 @@ describe('security_approval_request', () => {
 
   it('sets securityAnalysis to undefined when field is absent', () => {
     const { setStateMock, stateHolder } = setupHandler();
-    act(() => { root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) })); });
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
     const { handleEvent } = getHandleEvent();
     act(() => {
       handleEvent({
@@ -1510,7 +1516,9 @@ describe('security_approval_request', () => {
 
   it('handles unknown recommendation values gracefully', () => {
     const { setStateMock, stateHolder } = setupHandler();
-    act(() => { root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) })); });
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
     const { handleEvent } = getHandleEvent();
     act(() => {
       handleEvent({

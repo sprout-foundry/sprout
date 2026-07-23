@@ -37,7 +37,7 @@ func (s stubClassifier) IsFolderSessionAllowed(_ string) bool {
 type denyClassifier struct{}
 
 func (denyClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string { return "deny" }
-func (denyClassifier) IsFolderSessionAllowed(_ string) bool                       { return false }
+func (denyClassifier) IsFolderSessionAllowed(_ string) bool                        { return false }
 
 // allowClassifier always returns "allow" for any access.
 type allowClassifier struct{}
@@ -51,9 +51,9 @@ func (allowClassifier) IsFolderSessionAllowed(_ string) bool                    
 func newTestEnvWithClassifier(t *testing.T, classifier FileAccessClassifier) ToolEnv {
 	t.Helper()
 	return ToolEnv{
-		WorkspaceRoot:         t.TempDir(),
-		OutputWriter:          os.Stderr,
-		FileAccessClassifier:  classifier,
+		WorkspaceRoot:        t.TempDir(),
+		OutputWriter:         os.Stderr,
+		FileAccessClassifier: classifier,
 	}
 }
 

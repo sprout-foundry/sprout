@@ -282,19 +282,16 @@ func TestElevationBypassesFilesystemGate(t *testing.T) {
 	}
 
 	// External path: must NOT land under any prefix ClassifyPathAccess
-	// treats as Sensitive (/var, /private/var, /etc, /usr, …).
-	// t.TempDir() returns /var/folders/... on macOS, which is Sensitive
-	// — so we build the path under $HOME instead. The test agent's
-	// effective CWD is also under $HOME, so the home-but-off-CWD
-	// "sensitive" branch doesn't trip either, leaving the path
-	// classified as External.
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("UserHomeDir: %v", err)
-	}
-	extDir, err := os.MkdirTemp(home, "sprout-elevation-test-")
-	if err != nil {
-		t.Fatalf("MkdirTemp in home: %v", err)
+	// treats as Sensitive (/var, /private/var, /etc, /usr, …) and must
+	// NOT be under $HOME when CWD is outside $HOME (off-CWD home is
+	// also Sensitive). Create a sibling of the workspace root — this
+	// guarantees: not under workspace, not a system dir, and since CWD
+	// == workspace, if the workspace is under home then CWD is too,
+	// so the off-CWD-home check doesn't trip.
+	wsRoot := a.GetWorkspaceRoot()
+	extDir := filepath.Join(filepath.Dir(wsRoot), "sprout-elevation-test-"+t.Name())
+	if err := os.MkdirAll(extDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(extDir) })
 

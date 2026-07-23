@@ -242,8 +242,8 @@ func TestIsGitRebaseCommand(t *testing.T) {
 
 		// --abort cases. Only the PURE form is permitted.
 		{"pure --abort", "git rebase --abort", false},
-		{"--abort with positional", "git rebase main --abort", true},  // positional means real rebase target, abort-with-target is invalid git anyway
-		{"--abort with HEAD positional", "git rebase HEAD --abort", true}, // HEAD + --abort is nonsensical; treat as banned
+		{"--abort with positional", "git rebase main --abort", true},        // positional means real rebase target, abort-with-target is invalid git anyway
+		{"--abort with HEAD positional", "git rebase HEAD --abort", true},   // HEAD + --abort is nonsensical; treat as banned
 		{"--abort with extra flag", "git rebase --abort --no-verify", true}, // mixing --abort with another flag = rewrite attempt
 
 		// git pull --rebase — subcommand is pull, but AGENTS.md bans this too.

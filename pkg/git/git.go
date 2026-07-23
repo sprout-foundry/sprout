@@ -430,6 +430,14 @@ func CommittedFilePaths(workDir string) (map[string]bool, error) {
 		if rootResolved != root {
 			committed[filepath.Join(rootResolved, p)] = true
 		}
+		// Also add paths using the original workDir as prefix, which may
+		// be a symlink that the workspace walker used un-resolved (e.g.,
+		// macOS /var → /private/var). Without this, the caller's pending
+		// change paths won't match the committed set.
+		absWork, _ := filepath.Abs(workDir)
+		if absWork != "" && absWork != root && absWork != rootResolved {
+			committed[filepath.Join(absWork, p)] = true
+		}
 	}
 	return committed, nil
 }

@@ -525,9 +525,14 @@ func isWithinWorkspace(filename string) bool {
 		// Try resolving the parent directory instead (file may not exist).
 		resolvedParent, parentErr := filepath.EvalSymlinks(filepath.Dir(absPath))
 		if parentErr != nil {
-			return false
+			// Neither file nor parent exists; use the un-resolved path.
+			// On macOS, /var/folders/... symlinks to /private/var/folders/...
+			// and the resolved CWD comparison handles this correctly as long
+			// as we also try the un-resolved CWD below.
+			resolvedAbs = absPath
+		} else {
+			resolvedAbs = filepath.Join(resolvedParent, filepath.Base(absPath))
 		}
-		resolvedAbs = filepath.Join(resolvedParent, filepath.Base(absPath))
 	}
 
 	resolvedCwd, err := filepath.EvalSymlinks(cwdAbs)
@@ -541,7 +546,20 @@ func isWithinWorkspace(filename string) bool {
 	}
 
 	// A relative path starting with ".." escapes the workspace root.
-	return !strings.HasPrefix(relPath, "..")
+	if !strings.HasPrefix(relPath, "..") {
+		return true
+	}
+
+	// On macOS, /var → /private/var symlink can cause the resolved CWD to
+	// differ from the un-resolved abs path. Try matching with the original
+	// (un-resolved) forms as a fallback.
+	if cwdAbs != resolvedCwd {
+		relPath2, err := filepath.Rel(cwdAbs, absPath)
+		if err == nil && !strings.HasPrefix(relPath2, "..") {
+			return true
+		}
+	}
+	return false
 }
 
 // isFileStale reports whether the file on disk differs from the content

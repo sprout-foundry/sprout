@@ -594,6 +594,11 @@ func TestSameToolJSONFixHint(t *testing.T) {
 func TestHandleEditFile_TracksFullFileContent(t *testing.T) {
 	agent := NewTestAgent()
 	ws := t.TempDir()
+	// Resolve symlinks — macOS /var/folders → /private/var/folders
+	// causes the filesystem gate to reject the path as "outside workspace".
+	if resolved, err := filepath.EvalSymlinks(ws); err == nil {
+		ws = resolved
+	}
 	agent.workspaceRoot = ws
 	agent.changeTracker = NewChangeTracker(agent, "test")
 	agent.changeTracker.Enable()

@@ -152,6 +152,7 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
           message: event.message,
           duration: clampedDuration,
           id: event.id,
+          action: event.action,
         },
       });
     });

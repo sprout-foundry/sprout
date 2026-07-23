@@ -67,7 +67,6 @@ func TestSteerCapable_UnsafeCommands(t *testing.T) {
 		"compact",
 		"sessions",
 		"commit",
-		"clear",
 		"exit",
 		"init",
 		"shell",

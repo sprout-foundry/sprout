@@ -4,7 +4,7 @@ package webui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -81,7 +81,7 @@ func (ws *ReactWebServer) handleAPISessionExport(w http.ResponseWriter, r *http.
 			http.Error(w, "Session not found", http.StatusNotFound)
 			return
 		}
-		log.Printf("failed to load session %s: %v", id, err)
+		ws.log().Error("failed to load session for export", slog.String("session_id", id), slog.Any("err", err))
 		writeJSONError(w, http.StatusInternalServerError, "failed to load session")
 		return
 	}

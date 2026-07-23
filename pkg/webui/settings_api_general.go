@@ -3,7 +3,7 @@
 package webui
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -47,13 +47,13 @@ func enrichCustomProviders(cfg *configuration.Config) {
 	// Always load from the global providers directory.
 	configDir, err := configuration.GetConfigDir()
 	if err != nil {
-		log.Printf("[settings] warning: failed to resolve config dir: %v", err)
+		slog.Default().Warn("failed to resolve config directory", slog.Any("err", err))
 		return
 	}
 	providersDir := filepath.Join(configDir, configuration.ProvidersDirName)
 	fileProviders, err := configuration.LoadCustomProvidersFromDir(providersDir)
 	if err != nil {
-		log.Printf("[settings] warning: failed to load custom provider files: %v", err)
+		slog.Default().Warn("failed to load custom provider files", slog.Any("err", err))
 		return
 	}
 	for name, provider := range fileProviders {

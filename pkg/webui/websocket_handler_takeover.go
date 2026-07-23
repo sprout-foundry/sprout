@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -34,17 +34,16 @@ func (ws *ReactWebServer) waitForTakeover(conn *websocket.Conn, sessionID string
 
 	msg, err := parseAndValidateMessage(rawMsg)
 	if err != nil {
-		log.Printf("[SP-118-Mode1] Session %s: invalid message during takeover wait: %v", sessionID, err)
+		ws.log().Warn("invalid message during takeover wait", slog.String("session_id", sessionID), slog.Any("err", err))
 		return false
 	}
 
 	if msg.Type != AllowedMessageTypeSessionTakeover {
-		log.Printf("[SP-118-Mode1] Session %s: unexpected message type %q during takeover wait (expected %q)",
-			sessionID, msg.Type, AllowedMessageTypeSessionTakeover)
+		ws.log().Warn("unexpected message type during takeover wait", slog.String("session_id", sessionID), slog.String("message_type", msg.Type), slog.String("expected_type", AllowedMessageTypeSessionTakeover))
 		return false
 	}
 
-	log.Printf("[SP-118-Mode1] Session %s confirmed takeover", sessionID)
+	ws.log().Info("WebSocket session confirmed takeover", slog.String("session_id", sessionID))
 	return true
 }
 
@@ -59,7 +58,7 @@ func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
 	}
 	active, ok := val.(*activeWSConn)
 	if !ok {
-		log.Printf("[SP-118-Mode1] unexpected type in activeWSByUserID for key %s", trackingKey)
+		ws.log().Error("unexpected active WebSocket entry type", slog.String("tracking_key", trackingKey))
 		return false
 	}
 
@@ -73,7 +72,7 @@ func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
 	})
 	active.safeConn.Close()
 
-	log.Printf("[SP-118-Mode1] Session %s evicted for user %s", active.sessionID, trackingKey)
+	ws.log().Info("WebSocket session evicted", slog.String("session_id", active.sessionID), slog.String("tracking_key", trackingKey))
 	return true
 }
 
@@ -83,7 +82,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	// Unmarshal the data payload
 	var data map[string]interface{}
 	if len(msg.Data) == 0 {
-		log.Printf("[SP-118-Mode1] sync_recover: empty data from %s", sessionID)
+		ws.log().Warn("sync recovery received empty data", slog.String("session_id", sessionID))
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "invalid sync_recover data"},
@@ -91,7 +90,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 		return
 	}
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		log.Printf("[SP-118-Mode1] sync_recover: invalid JSON from %s: %v", sessionID, err)
+		ws.log().Warn("sync recovery received invalid JSON", slog.String("session_id", sessionID), slog.Any("err", err))
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "invalid sync_recover data"},
@@ -102,7 +101,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	// Extract browser seq map from data
 	seqsRaw, ok := data["seqs"]
 	if !ok {
-		log.Printf("[SP-118-Mode1] sync_recover: missing seqs from %s", sessionID)
+		ws.log().Warn("sync recovery data missing sequences", slog.String("session_id", sessionID))
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "missing seqs in sync_recover"},
@@ -112,7 +111,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 
 	seqsMap, ok := seqsRaw.(map[string]interface{})
 	if !ok {
-		log.Printf("[SP-118-Mode1] sync_recover: seqs is not a map from %s", sessionID)
+		ws.log().Warn("sync recovery sequences have invalid type", slog.String("session_id", sessionID))
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "seqs must be a map"},
@@ -128,16 +127,16 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 		case int64:
 			browserSeqs[path] = v
 		default:
-			log.Printf("[SP-118-Mode1] sync_recover: unexpected seq type for %s: %T", path, seqVal)
+			ws.log().Warn("sync recovery sequence has unexpected type", slog.String("path", path), slog.String("value_type", fmt.Sprintf("%T", seqVal)))
 		}
 	}
 
-	log.Printf("[SP-118-Mode1] sync_recover from client %s: %d files", clientID, len(browserSeqs))
+	ws.log().Info("sync recovery started", slog.String("client_id", clientID), slog.Int("file_count", len(browserSeqs)))
 
 	// Run container death recovery with per-file seqs
 	result, err := ws.HandleContainerRecoveryWithSeqs(context.Background(), clientID, browserSeqs)
 	if err != nil {
-		log.Printf("[SP-118-Mode1] sync_recover reconciliation failed: %v", err)
+		ws.log().Error("sync recovery reconciliation failed", slog.Any("err", err))
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": fmt.Sprintf("reconciliation failed: %v", err)},
@@ -147,7 +146,7 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 
 	// Send reconciliation plan back to browser
 	if err := ws.SendSyncReconcile(safeConn, result); err != nil {
-		log.Printf("[SP-118-Mode1] sync_recover: failed to send reconcile plan: %v", err)
+		ws.log().Error("sync recovery reconcile plan send failed", slog.Any("err", err))
 		return
 	}
 
@@ -162,11 +161,11 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	if filesToReplay > 0 {
 		ag, err := ws.getClientAgent(clientID)
 		if err != nil {
-			log.Printf("[SP-118-Mode1] sync_recover: failed to get agent for %s: %v", clientID, err)
+			ws.log().Error("sync recovery agent lookup failed", slog.String("client_id", clientID), slog.Any("err", err))
 			return
 		}
 		if err := ws.SendSyncReplayStart(safeConn, clientID, filesToReplay); err != nil {
-			log.Printf("[SP-118-Mode1] sync_recover: failed to send replay start: %v", err)
+			ws.log().Error("sync recovery replay start send failed", slog.Any("err", err))
 			return
 		}
 
@@ -176,27 +175,27 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 			}
 			// Validate path to prevent traversal attacks
 			if filepath.IsAbs(action.FilePath) || strings.Contains(action.FilePath, "..") {
-				log.Printf("[SP-118-Mode1] sync_recover: skipping invalid path: %s", action.FilePath)
+				ws.log().Warn("sync recovery skipping invalid path", slog.String("path", action.FilePath))
 				continue
 			}
 			// Read the file content from container
 			content, err := ag.ReadFileContent(action.FilePath)
 			if err != nil {
-				log.Printf("[SP-118-Mode1] sync_recover: failed to read %s: %v", action.FilePath, err)
+				ws.log().Error("sync recovery file read failed", slog.String("path", action.FilePath), slog.Any("err", err))
 				continue
 			}
 			if err := ws.SendSyncReplayFile(safeConn, clientID, action.FilePath, content, action.ContainerSeq); err != nil {
-				log.Printf("[SP-118-Mode1] sync_recover: failed to replay %s: %v", action.FilePath, err)
+				ws.log().Error("sync recovery file replay failed", slog.String("path", action.FilePath), slog.Any("err", err))
 				return
 			}
 		}
 
 		if err := ws.SendSyncReplayComplete(safeConn, clientID); err != nil {
-			log.Printf("[SP-118-Mode1] sync_recover: failed to send replay complete: %v", err)
+			ws.log().Error("sync recovery replay completion send failed", slog.Any("err", err))
 		}
 	}
 
-	log.Printf("[SP-118-Mode1] sync_recover complete for client %s: %d files reconciled", clientID, len(result.Plan))
+	ws.log().Info("sync recovery completed", slog.String("client_id", clientID), slog.Int("files_reconciled", len(result.Plan)))
 }
 
 // notifyTerminalConnectionsDisplaced sends a session_displaced message to

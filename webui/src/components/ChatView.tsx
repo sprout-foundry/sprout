@@ -376,7 +376,8 @@ function Chat(props: ChatProps): JSX.Element {
               textAlign: 'center',
             }}
           >
-            Auto mode — powered by shared compute. Quality may vary. Upgrade or add an API key for guaranteed performance.
+            Auto mode — powered by shared compute. Quality may vary. Upgrade or add an API key for guaranteed
+            performance.
           </div>
         )}
         {/* Export button — shown when a session is active AND export is

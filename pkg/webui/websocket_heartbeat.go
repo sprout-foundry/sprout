@@ -3,7 +3,7 @@
 package webui
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -15,7 +15,7 @@ func (ws *ReactWebServer) handleHeartbeatMessage(safeConn *SafeConn, clientID st
 		"type": "heartbeat_ack",
 		"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 	}); err != nil {
-		log.Printf("[heartbeat] heartbeat_ack write failed for client %s: %v", clientID, err)
+		ws.log().Error("heartbeat acknowledgement write failed", slog.String("client_id", clientID), slog.Any("err", err))
 		return
 	}
 }

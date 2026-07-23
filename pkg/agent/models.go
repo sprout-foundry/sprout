@@ -49,70 +49,70 @@ func (a *Agent) GetProviderType() api.ClientType {
 }
 
 // selectDefaultModel chooses an appropriate default model from available models.
-// It prefers probe-recommended candidates first (primary > subagent), then falls
-// back to per-provider string-matching heuristics, and finally to the first model.
+// It prefers probe-recommended candidates first (primary > subagent), then applies
+// config-driven provider patterns, and finally falls back to the first model.
 func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientType) string {
-	// If there are no models, return empty
 	if len(models) == 0 {
 		return ""
 	}
 
-	// Probe-first: prefer models with RecommendedRoles from the capability probe.
-	// Primary (complex stage passed) is the strongest signal; subagent (gates
-	// passed) is the next tier. Only use this path if at least one model has
-	// probe-backed recommendations — empty RecommendedRoles means un-probed.
 	if probe := selectProbeRecommended(models); probe != "" {
 		return probe
 	}
 
-	// Provider-specific logic to select best default model
-	switch provider {
-	case api.DeepInfraClientType:
-		// Prefer DeepSeek models for DeepInfra
+	for _, pattern := range a.getDefaultModelPatterns(provider) {
 		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), "deepseek") && strings.Contains(strings.ToLower(model.ID), "instruct") {
+			if matchPattern(model.ID, pattern) {
 				return model.ID
 			}
 		}
-
-	case api.OpenRouterClientType:
-		// Prefer free models for OpenRouter
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), ":free") {
-				return model.ID
-			}
-		}
-
-	case api.OllamaClientType, api.OllamaLocalClientType:
-		// Prefer smaller models for local Ollama
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), "llama3.2") || strings.Contains(strings.ToLower(model.ID), "llama3.1") {
-				return model.ID
-			}
-		}
-
-	case api.OllamaCloudClientType:
-		// Prefer gpt-oss models for Ollama Cloud
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), "gpt-oss:20b") {
-				return model.ID
-			}
-		}
-
-	case api.LMStudioClientType:
-		// Prefer chat models for LM Studio, skip embedding models
-		for _, model := range models {
-			if !strings.Contains(strings.ToLower(model.ID), "embedding") &&
-				!strings.Contains(strings.ToLower(model.ID), "embed") {
-				return model.ID
-			}
-		}
-		// If no non-embedding models found, return the first one
-		return models[0].ID
 	}
 
-	// Default: return the first model
+	// LM Studio may expose embedding models alongside chat models. An empty
+	// configured pattern deliberately reaches this filter rather than matching all.
+	if provider == api.LMStudioClientType {
+		for _, model := range models {
+			id := strings.ToLower(model.ID)
+			if !strings.Contains(id, "embedding") && !strings.Contains(id, "embed") {
+				return model.ID
+			}
+		}
+	}
+
 	return models[0].ID
+}
+
+// getDefaultModelPatterns returns auto-selection preferences from the embedded
+// provider config. Local Ollama is special-cased because it has no JSON config.
+func (a *Agent) getDefaultModelPatterns(provider api.ClientType) []string {
+	if provider == api.OllamaClientType || provider == api.OllamaLocalClientType {
+		return []string{"llama3.2", "llama3.1"}
+	}
+
+	providerFactory := providers.NewProviderFactory()
+	if err := providerFactory.LoadEmbeddedConfigs(); err != nil {
+		return nil
+	}
+	config, err := providerFactory.GetProviderConfig(string(provider))
+	if err != nil {
+		return nil
+	}
+	return config.Models.DefaultModelPatterns
+}
+
+// matchPattern performs a case-insensitive substring match for every non-empty
+// component separated by '*'. Empty patterns do not match anything.
+func matchPattern(modelID, pattern string) bool {
+	if pattern == "" {
+		return false
+	}
+	id := strings.ToLower(modelID)
+	for _, part := range strings.Split(strings.ToLower(pattern), "*") {
+		if part != "" && !strings.Contains(id, part) {
+			return false
+		}
+	}
+	return true
 }
 
 // selectProbeRecommended scans the model list for probe-backed recommendations.

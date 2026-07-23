@@ -3,7 +3,8 @@
 package webui
 
 import (
-	"log"
+	"context"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -20,14 +21,14 @@ var (
 	logRateLastSeen = map[string]time.Time{}
 )
 
-// logRateLimitedf wraps log.Printf and emits at most one line per key per
+// logRateLimitedWarn emits at most one structured warning per key per
 // logRateMinInterval. Use for chatty repeating failures (e.g. periodic
-// model-discovery that hits an unreachable provider) where the first
+// model discovery that hits an unreachable provider) where the first
 // occurrence is useful but the 100th is just noise.
 //
 // Pick a stable key per logical event, e.g. "model_discovery_fail:ollama-local".
 // Different keys are independent — limiting one does not silence the other.
-func logRateLimitedf(key string, format string, args ...any) {
+func logRateLimitedWarn(key, message string, attrs ...slog.Attr) {
 	now := time.Now()
 	logRateMu.Lock()
 	last, seen := logRateLastSeen[key]
@@ -37,5 +38,5 @@ func logRateLimitedf(key string, format string, args ...any) {
 	}
 	logRateLastSeen[key] = now
 	logRateMu.Unlock()
-	log.Printf(format, args...)
+	webuiLogger.LogAttrs(context.Background(), slog.LevelWarn, message, attrs...)
 }

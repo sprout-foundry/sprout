@@ -29,8 +29,8 @@ func TestRefineRollupEnd_FindsTopicShift(t *testing.T) {
 	checkpoints := make([]TurnCheckpoint, total)
 	for i := 0; i < total; i++ {
 		checkpoints[i] = TurnCheckpoint{
-			ID:         "cp-" + string(rune('0'+i%10)) + string(rune('0'+i/10)),
-			Summary:    "summary",
+			ID:                "cp-" + string(rune('0'+i%10)) + string(rune('0'+i/10)),
+			Summary:           "summary",
 			ActionableSummary: "actionable summary",
 		}
 	}
@@ -230,9 +230,9 @@ func TestRefineRollupEnd_EndToEnd_ThroughEmbedAndStoreTurn(t *testing.T) {
 	checkpoints := make([]TurnCheckpoint, 20)
 	for i := 0; i < 20; i++ {
 		checkpoints[i] = TurnCheckpoint{
-			ID:                 "cp-" + formatInt(i),
-			Summary:            "summary",
-			ActionableSummary:  "actionable summary",
+			ID:                "cp-" + formatInt(i),
+			Summary:           "summary",
+			ActionableSummary: "actionable summary",
 		}
 	}
 

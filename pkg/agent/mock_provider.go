@@ -29,7 +29,7 @@ type MockLLMProvider struct {
 	// contextLimit overrides the default 128K context window when non-zero.
 	// Used by tests that exercise Low-Context Mode (SP-125) or the context
 	// floor. Zero means "use the 128K default."
-	contextLimit      int
+	contextLimit int
 }
 
 // NewMockLLMProvider creates a new mock LLM provider with sensible defaults.

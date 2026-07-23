@@ -89,14 +89,17 @@ func (h *mcpRefreshHandler) Validate(args map[string]any) error {
 }
 
 func (h *mcpRefreshHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	if MCPRefreshFunc == nil {
+	ToolFuncMu.RLock()
+	fn := MCPRefreshFunc
+	ToolFuncMu.RUnlock()
+	if fn == nil {
 		return ToolResult{
 			Output:  "mcp_refresh is not available: agent integration not initialized (MCPRefreshFunc is nil)",
 			IsError: true,
 		}, nil
 	}
 
-	result, err := MCPRefreshFunc(ctx, args)
+	result, err := fn(ctx, args)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}

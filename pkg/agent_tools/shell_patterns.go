@@ -504,12 +504,13 @@ func classifyXargsInvocation(cmdLower string) (SecurityRisk, bool) {
 //
 // This is intentionally narrow — we don't try to be a complete xargs parser.
 // The goal is to handle the common forms seen in agent-generated pipelines:
-//   xargs du -sh
-//   xargs -n 1 wc -l
-//   xargs -I{} grep pattern {}
-//   xargs -0 du -shc --files0-from=-
-//   xargs --null du -sh
-//   xargs --max-args=4 du -sh
+//
+//	xargs du -sh
+//	xargs -n 1 wc -l
+//	xargs -I{} grep pattern {}
+//	xargs -0 du -shc --files0-from=-
+//	xargs --null du -sh
+//	xargs --max-args=4 du -sh
 //
 // Unknown flags consume the token only (conservative: anything we don't
 // recognize as value-taking is treated as bare, so we never accidentally

@@ -55,11 +55,7 @@ function makeExtensionsBuilder(compartments: Record<string, any>) {
     built.push({ extensions: opts, settings: opts.settings, paneId: opts.paneId });
     // Spread extraKeymaps (which may include the updateListener) into the
     // extensions array — that's how the real buildExtensions composes them.
-    return [
-      EditorView.editable.of(true),
-      compartments.hotkeys.of([]),
-      ...(opts.extraKeymaps ?? []),
-    ];
+    return [EditorView.editable.of(true), compartments.hotkeys.of([]), ...(opts.extraKeymaps ?? [])];
   });
   return { buildExtensions, built };
 }
@@ -377,7 +373,7 @@ describe('useCMView — bug-class regression', () => {
 
   it('buffer.id change recreates the view and fires lifecycle hooks', () => {
     const order: string[] = [];
-    let renderCount = 0;
+    const renderCount = 0;
     const onDidMount = vi.fn(() => order.push('mount'));
     const onWillDestroy = vi.fn(() => order.push('destroy'));
 
@@ -391,11 +387,15 @@ describe('useCMView — bug-class regression', () => {
     const container2 = document.createElement('div');
     document.body.appendChild(container2);
     const root2 = createRoot(container2);
-    const api2 = render({ onDidMount, onWillDestroy, buffer: {
-      id: 'buf-2',
-      file: { path: '/test/file2.ts', name: 'file2.ts', ext: '.ts' },
-      content: 'second content',
-    } } as any).api;
+    const api2 = render({
+      onDidMount,
+      onWillDestroy,
+      buffer: {
+        id: 'buf-2',
+        file: { path: '/test/file2.ts', name: 'file2.ts', ext: '.ts' },
+        content: 'second content',
+      },
+    } as any).api;
 
     // The new view is a different EditorView instance.
     expect(api2.view).not.toBe(view1);
@@ -490,11 +490,7 @@ describe('useCMView — bug-class regression', () => {
       // when the view is built. It must resolve the ref lazily when the
       // registered callback eventually fires.
       getOpenWorkspaceBuffer = opts.actions.getOpenWorkspaceBuffer;
-      return [
-        EditorView.editable.of(true),
-        compartments.hotkeys.of([]),
-        ...(opts.extraKeymaps ?? []),
-      ];
+      return [EditorView.editable.of(true), compartments.hotkeys.of([]), ...(opts.extraKeymaps ?? [])];
     });
     const editorRef: React.RefObject<HTMLDivElement | null> = { current: container };
     const buffer = {

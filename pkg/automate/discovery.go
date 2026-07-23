@@ -208,12 +208,12 @@ func IsNotExists(err error) bool {
 // (unset = default, true, false) must round-trip through the wire without
 // collapsing to "absent."
 type Summary struct {
-	Description     string `json:"description,omitempty"`
-	ContinueOnError bool   `json:"continue_on_error,omitempty"`
-	NoWebUI         bool   `json:"no_web_ui,omitempty"`
+	Description     string          `json:"description,omitempty"`
+	ContinueOnError bool            `json:"continue_on_error,omitempty"`
+	NoWebUI         bool            `json:"no_web_ui,omitempty"`
 	Initial         *InitialSummary `json:"initial,omitempty"`
-	Steps           []StepSummary    `json:"steps,omitempty"`
-	Budget          *BudgetSummary   `json:"budget,omitempty"`
+	Steps           []StepSummary   `json:"steps,omitempty"`
+	Budget          *BudgetSummary  `json:"budget,omitempty"`
 	// RequiresApproval reports whether the run_automate tool path should
 	// prompt the user before launching this workflow. nil means the field
 	// was unset in JSON (defaults to true). Explicit false marks the
@@ -286,7 +286,7 @@ type InitialSummary struct {
 	RiskProfile       string                    `json:"risk_profile,omitempty"`
 	HasPrompt         bool                      `json:"has_prompt"`
 	SubagentOverrides []SubagentOverrideSummary `json:"subagent_overrides,omitempty"`
-	AllowedPaths      []AllowedPathSummary       `json:"allowed_paths,omitempty"`
+	AllowedPaths      []AllowedPathSummary      `json:"allowed_paths,omitempty"`
 }
 
 // SubagentOverrideSummary describes one entry of subagent_overrides for display.
@@ -301,13 +301,13 @@ type SubagentOverrideSummary struct {
 // Kind is one of "agent" (LLM inference) or "shell" (raw command). For shell
 // steps, CommandPreview holds a single-line excerpt of the command for display.
 type StepSummary struct {
-	Name           string `json:"name,omitempty"`
-	Kind           string `json:"kind"`
-	Persona        string `json:"persona,omitempty"`
-	Provider       string `json:"provider,omitempty"`
-	Model          string `json:"model,omitempty"`
-	When           string `json:"when,omitempty"`
-	CommandPreview string `json:"command_preview,omitempty"`
+	Name           string               `json:"name,omitempty"`
+	Kind           string               `json:"kind"`
+	Persona        string               `json:"persona,omitempty"`
+	Provider       string               `json:"provider,omitempty"`
+	Model          string               `json:"model,omitempty"`
+	When           string               `json:"when,omitempty"`
+	CommandPreview string               `json:"command_preview,omitempty"`
 	AllowedPaths   []AllowedPathSummary `json:"allowed_paths,omitempty"`
 }
 
@@ -356,25 +356,25 @@ func Summarize(path string) (*Summary, error) {
 
 	var raw struct {
 		Description            string           `json:"description,omitempty"`
-		ContinueOnError       bool             `json:"continue_on_error,omitempty"`
-		NoWebUI               bool             `json:"no_web_ui,omitempty"`
-		Initial               *initialRaw      `json:"initial,omitempty"`
-		Steps                 []stepRaw        `json:"steps,omitempty"`
-		Budget                *budgetRaw       `json:"budget,omitempty"`
-		RequiresApproval      *bool            `json:"requires_approval,omitempty"`
-		SubagentTimeoutSeconds *int            `json:"subagent_timeout_seconds,omitempty"`
-		AllowedPaths          []allowedPathRaw `json:"allowed_paths,omitempty"`
+		ContinueOnError        bool             `json:"continue_on_error,omitempty"`
+		NoWebUI                bool             `json:"no_web_ui,omitempty"`
+		Initial                *initialRaw      `json:"initial,omitempty"`
+		Steps                  []stepRaw        `json:"steps,omitempty"`
+		Budget                 *budgetRaw       `json:"budget,omitempty"`
+		RequiresApproval       *bool            `json:"requires_approval,omitempty"`
+		SubagentTimeoutSeconds *int             `json:"subagent_timeout_seconds,omitempty"`
+		AllowedPaths           []allowedPathRaw `json:"allowed_paths,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
 	out := &Summary{
-		Description:             raw.Description,
-		ContinueOnError:         raw.ContinueOnError,
-		NoWebUI:                 raw.NoWebUI,
-		RequiresApproval:        raw.RequiresApproval,
-		SubagentTimeoutSeconds:  raw.SubagentTimeoutSeconds,
+		Description:            raw.Description,
+		ContinueOnError:        raw.ContinueOnError,
+		NoWebUI:                raw.NoWebUI,
+		RequiresApproval:       raw.RequiresApproval,
+		SubagentTimeoutSeconds: raw.SubagentTimeoutSeconds,
 	}
 	if raw.Budget != nil && raw.Budget.USD > 0 {
 		out.Budget = &BudgetSummary{

@@ -104,7 +104,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 			Output:  "git rebase is not supported: AGENTS.md bans rebase unconditionally (interactive, non-interactive, `git rebase --continue`, `git rebase --skip`, and `git pull --rebase`). The only permitted invocation is `git rebase --abort` to recover from a prior session's interrupted rebase. Use `git merge` to integrate upstream.",
 			IsError: true,
 		}, nil
-	}// Map operation to git command
+	} // Map operation to git command
 	var gitCmd string
 	useCommitMessage := false
 	commitMsg := ""

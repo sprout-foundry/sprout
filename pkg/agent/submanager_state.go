@@ -51,8 +51,8 @@ type AgentStateManager struct {
 // Actions map.
 func NewAgentStateManager(debug bool) *AgentStateManager {
 	return &AgentStateManager{
-		AgentSessionManager:        NewAgentSessionManager(debug),
-		AgentMetricsManager:        NewAgentMetricsManager(),
+		AgentSessionManager:       NewAgentSessionManager(debug),
+		AgentMetricsManager:       NewAgentMetricsManager(),
 		AgentPersonaManager:       NewAgentPersonaManager(),
 		AgentSecurityStateManager: NewAgentSecurityStateManager(),
 	}

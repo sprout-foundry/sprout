@@ -72,8 +72,9 @@ if [ ! -d "$ui_dir" ] || [ ! -d "$webui_dir" ]; then
 fi
 
 # Get sorted basenames of .tsx and .css files from each directory
-ui_files=$(find "$ui_dir" -maxdepth 1 \( -name "*.tsx" -o -name "*.css" \) -printf '%f\n' | sort)
-webui_files=$(find "$webui_dir" -maxdepth 1 \( -name "*.tsx" -o -name "*.css" \) -printf '%f\n' | sort)
+# (use -exec basename instead of -printf for macOS/BSD compatibility)
+ui_files=$(find "$ui_dir" -maxdepth 1 \( -name "*.tsx" -o -name "*.css" \) -exec basename {} \; | sort)
+webui_files=$(find "$webui_dir" -maxdepth 1 \( -name "*.tsx" -o -name "*.css" \) -exec basename {} \; | sort)
 
 # Find overlapping basenames
 duplicates=$(comm -12 <(echo "$ui_files") <(echo "$webui_files"))

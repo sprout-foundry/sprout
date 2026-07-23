@@ -247,10 +247,10 @@ const sharedDeliveryQueueSize = 4096
 // remainingSubs stays at zero and Done is called inline so Publish
 // returns immediately.
 type eventDelivery struct {
-	event          UIEvent
-	isCritical     bool
-	remainingSubs  *int32
-	publishWG      *sync.WaitGroup
+	event         UIEvent
+	isCritical    bool
+	remainingSubs *int32
+	publishWG     *sync.WaitGroup
 }
 
 // isCriticalEvent reports whether eventType must never be silently dropped.

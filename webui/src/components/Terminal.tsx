@@ -77,11 +77,7 @@ function Terminal({
   const overflowMenuRef = useRef<HTMLDivElement>(null);
 
   // Attachable sessions (extracted)
-  const {
-    attachableSessions,
-    setAttachableSessions,
-    fetchAttachableSessions,
-  } = useAttachableSessions(isExpanded);
+  const { attachableSessions, setAttachableSessions, fetchAttachableSessions } = useAttachableSessions(isExpanded);
 
   // Font size
   const [fontSize, setFontSize] = usePersistedNumber(
@@ -315,7 +311,10 @@ function Terminal({
       {/* Body */}
       <div className="terminal-body">
         {isCloud && isExpanded && (
-          <div className="terminal-cloud-notice" title="The browser terminal runs commands in a WASM sandbox. Process-spawning commands may not work.">
+          <div
+            className="terminal-cloud-notice"
+            title="The browser terminal runs commands in a WASM sandbox. Process-spawning commands may not work."
+          >
             Browser terminal — limited command support
           </div>
         )}

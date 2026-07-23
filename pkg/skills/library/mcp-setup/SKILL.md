@@ -67,7 +67,7 @@ The server starts immediately. No restart needed.
 **GitHub (OAuth, remote — requires Copilot seat):**
 ```json
 {
-  "name": "github-remote",
+  "name": "github",
   "type": "http",
   "url": "https://api.githubcopilot.com/mcp/",
   "auto_start": true

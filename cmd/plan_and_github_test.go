@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // =============================================================================
@@ -350,102 +348,5 @@ func TestPlanFlagDefaults_Also(t *testing.T) {
 	}
 	if !planCreateTodos {
 		t.Errorf("planCreateTodos default should be true")
-	}
-}
-
-// =============================================================================
-// cmd/github_setup_prompt.go — promptGitHubMCPSetupIfNeeded
-// =============================================================================
-
-func TestPromptGitHubMCPSetupIfNeeded_SkipPromptDirect(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	cfg := a.GetConfigManager().GetConfig()
-	cfg.SkipPrompt = true
-
-	// Should return immediately without prompting
-	done := make(chan struct{})
-	go func() {
-		promptGitHubMCPSetupIfNeeded(a)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("promptGitHubMCPSetupIfNeeded did not return with SkipPrompt=true")
-	}
-}
-
-func TestPromptGitHubMCPSetupIfNeeded_DismissedPrompts(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	cfg := a.GetConfigManager().GetConfig()
-	cfg.SkipPrompt = false
-	if cfg.DismissedPrompts == nil {
-		cfg.DismissedPrompts = make(map[string]bool)
-	}
-	cfg.DismissedPrompts["github_mcp_setup"] = true
-
-	// ShouldPromptGitHubSetup should return false for dismissed prompt.
-	// The function should return early.
-	done := make(chan struct{})
-	go func() {
-		promptGitHubMCPSetupIfNeeded(a)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("promptGitHubMCPSetupIfNeeded did not return for dismissed prompt")
-	}
-}
-
-func TestPromptGitHubMCPSetupIfNeeded_WithExitInput(t *testing.T) {
-	// Provide stdin that would be read if we get past the ShouldPrompt check.
-	// In practice, ShouldPromptGitHubSetup will return false in test env (no git repo
-	// configured for GitHub), so the function returns early. This test verifies
-	// no panic in any case.
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	cfg := a.GetConfigManager().GetConfig()
-	cfg.SkipPrompt = false
-	cfg.DismissedPrompts = make(map[string]bool)
-
-	// Pipe input in case the function tries to read
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe error: %v", err)
-	}
-
-	origStdin := os.Stdin
-	os.Stdin = r
-	defer func() { os.Stdin = origStdin }()
-
-	go func() {
-		w.WriteString("n\n")
-		w.Close()
-	}()
-
-	done := make(chan struct{})
-	go func() {
-		promptGitHubMCPSetupIfNeeded(a)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("promptGitHubMCPSetupIfNeeded timed out")
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
@@ -193,54 +192,6 @@ func TestRunPlanMode_RequiresTerminal(t *testing.T) {
 	if !strings.Contains(strings.ToLower(err.Error()), "terminal") {
 		t.Errorf("expected error about terminal, got: %v", err)
 	}
-}
-
-// =============================================================================
-// Tests for promptGitHubMCPSetupIfNeeded (github_setup_prompt.go)
-// =============================================================================
-
-func TestPromptGitHubMCPSetupIfNeeded_SkipPromptSet(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() failed: %v", err)
-	}
-
-	// Set SkipPrompt so the function should return immediately.
-	updateErr := a.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.SkipPrompt = true
-		return nil
-	})
-	if updateErr != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", updateErr)
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("promptGitHubMCPSetupIfNeeded panicked: %v", r)
-		}
-	}()
-
-	promptGitHubMCPSetupIfNeeded(a)
-}
-
-func TestPromptGitHubMCPSetupIfNeeded_DoesNotPanic(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() failed: %v", err)
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("promptGitHubMCPSetupIfNeeded panicked: %v", r)
-		}
-	}()
-
-	// The function reads from stdin, but in a test environment without a TTY
-	// and running in a temp directory, it should either:
-	// 1. Return early because SkipPrompt is set, or
-	// 2. Return early because ShouldPromptGitHubSetup returns false, or
-	// 3. Try to read from stdin (will get EOF, ReadString returns error, returns early)
-	promptGitHubMCPSetupIfNeeded(a)
 }
 
 // =============================================================================

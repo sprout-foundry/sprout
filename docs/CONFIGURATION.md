@@ -26,7 +26,7 @@ sprout agent --provider zai --model GLM-4.6 "implement feature X"
 | `SPROUT_TRACE_DATASET_DIR=<dir>` | Enable dataset tracing | `SPROUT_TRACE_DATASET_DIR=traces` |
 | `SPROUT_CONFIG=<dir>` | Custom config directory | `SPROUT_CONFIG=/my/config` |
 | `CI=1` or `GITHUB_ACTIONS=1` | CI environment mode | `CI=1 sprout agent "task"` |
-| `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub token for MCP | Auto-discovers GitHub MCP server |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub token for MCP | Auto-starts a local `npx -y @modelcontextprotocol/server-github` server when present (see `pkg/agent/mcp.go`) |
 | `OPENAI_API_KEY`, `DEEPINFRA_API_KEY`, etc. | API keys for providers | Set directly or in `api_keys.json` |
 
 > **Legacy**: The `LEDIT_*` equivalents (`LEDIT_NO_STREAM`, `LEDIT_CONFIG`, etc.) still work as fallbacks but are deprecated. Use `SPROUT_*` in new scripts.

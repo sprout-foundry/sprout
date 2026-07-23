@@ -14,8 +14,8 @@ MCP servers extend Sprout's capabilities by providing external tools and service
 Sprout Agent
     ├── Base Tools (file operations, shell, etc.)
     └── MCP Manager
-        └── MCP Servers (GitHub, etc.)
-            └── MCP Tools (list_issues, create_pr, etc.)
+        └── MCP Servers (user-configured)
+            └── MCP Tools (provided by each server)
 ```
 
 ### 2. Key Components

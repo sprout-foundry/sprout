@@ -6,3 +6,4 @@ export { default as TaskDetailPage } from './TaskDetailPage';
 export { default as DashboardPage } from './DashboardPage';
 export { default as WorkspacesPage } from './WorkspacesPage';
 export { default as RepoDetailPage } from './RepoDetailPage';
+export { default as AdminBillingPage } from './AdminBillingPage';

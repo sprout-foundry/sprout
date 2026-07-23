@@ -218,6 +218,17 @@
   pointer-events: none;
 }
 
+.terminal-cloud-notice {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  font-size: 11px;
+  color: var(--text-muted, #5c6370);
+  background: var(--bg-tertiary, #21252b);
+  border-bottom: 1px solid var(--border-color, #3e4451);
+  text-align: center;
+  user-select: none;
+}
+
 /* ── Pane container ──────────────────────────────────────── */
 
 .terminal-panes-container {

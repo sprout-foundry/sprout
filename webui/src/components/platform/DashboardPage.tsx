@@ -2,6 +2,7 @@ import { GitBranch, Clock, Zap, LayoutDashboard, Search } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
 import { getEditorSync } from '../../services/crossTabSync';
+import { useAppStoreSetState } from '../../contexts/AppStore';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
 
@@ -33,6 +34,7 @@ interface UsageSummary {
 
 const DashboardPage: React.FC = () => {
   const log = useLog();
+  const setState = useAppStoreSetState();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -95,6 +97,15 @@ const DashboardPage: React.FC = () => {
     const q = searchQuery.toLowerCase();
     return repos.filter((r) => r.full_name?.toLowerCase().includes(q) || r.name?.toLowerCase().includes(q));
   }, [repos, searchQuery]);
+
+  const handleRepoClick = useCallback(
+    (fullName: string) => {
+      const [owner, name] = fullName.split('/');
+      if (!owner || !name) return;
+      setState(() => ({ currentView: 'repodetail', selectedRepo: { owner, name } }));
+    },
+    [setState],
+  );
 
   const taskPct = usage
     ? Math.min(100, Math.round((usage.task_credits.used / Math.max(1, usage.task_credits.included)) * 100))
@@ -171,15 +182,33 @@ const DashboardPage: React.FC = () => {
           ) : (
             <div className="dashboard-repo-list">
               {filteredRepos.map((repo) => (
-                <div key={repo.id} className="dashboard-repo-item">
+                <div
+                  key={repo.id}
+                  className="dashboard-repo-item dashboard-repo-item--clickable"
+                  onClick={() => handleRepoClick(repo.full_name)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleRepoClick(repo.full_name);
+                    }
+                  }}
+                >
                   <GitBranch size={14} className="dashboard-repo-icon" />
                   <div className="dashboard-repo-info">
-                    <a href={`/webui/?repo=${encodeURIComponent(repo.html_url)}`} className="dashboard-repo-name">
-                      {repo.full_name}
-                    </a>
+                    <span className="dashboard-repo-name">{repo.full_name}</span>
                     {repo.description && <p className="dashboard-repo-desc">{repo.description}</p>}
                     {repo.language && <span className="dashboard-repo-lang">{repo.language}</span>}
                   </div>
+                  <a
+                    href={`/webui/?repo=${encodeURIComponent(repo.html_url)}`}
+                    className="dashboard-repo-open-ide"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Open in Browser IDE"
+                  >
+                    IDE
+                  </a>
                 </div>
               ))}
             </div>

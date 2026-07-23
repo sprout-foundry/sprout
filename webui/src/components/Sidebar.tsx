@@ -16,6 +16,7 @@ import {
 } from '../hooks/useSidebarState';
 import type { ProviderLogEntry } from '../providers/types';
 import type { SproutInstance } from '../services/api';
+import type { ViewType } from '../types/app';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { debugLog } from '../utils/log';
 import AutomationsPanel from './AutomationsPanel';
@@ -36,6 +37,9 @@ import {
   Users,
   LayoutDashboard,
   ExternalLink,
+  Shield,
+  Server,
+  Monitor,
   Zap,
   CircleDollarSign,
 } from 'lucide-react';
@@ -59,20 +63,8 @@ interface SidebarProps {
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
-  currentView?:
-    | 'chat'
-    | 'editor'
-    | 'git'
-    | 'tasks'
-    | 'billing'
-    | 'team'
-    | 'costs'
-    | 'runners'
-    | 'dashboard'
-    | 'workspaces';
-  onViewChange?: (
-    view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs' | 'runners' | 'dashboard' | 'workspaces',
-  ) => void;
+  currentView?: ViewType;
+  onViewChange?: (view: ViewType) => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -149,7 +141,7 @@ const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = 
 ];
 
 /** Valid platform view IDs for type-safe navigation */
-const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs', 'runners']);
+const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs', 'runners', 'dashboard', 'admin', 'workspaces']);
 
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
@@ -158,6 +150,9 @@ const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   users: Users,
   'layout-dashboard': LayoutDashboard,
   'external-link': ExternalLink,
+  shield: Shield,
+  server: Server,
+  monitor: Monitor,
 };
 
 function Sidebar({
@@ -484,19 +479,7 @@ function Sidebar({
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(
-                              item.id as
-                                | 'chat'
-                                | 'editor'
-                                | 'git'
-                                | 'tasks'
-                                | 'billing'
-                                | 'team'
-                                | 'costs'
-                                | 'runners'
-                                | 'dashboard'
-                                | 'workspaces',
-                            );
+                            onViewChange(item.id as ViewType);
                           }
                         }}
                         title={item.label}

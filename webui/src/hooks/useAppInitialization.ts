@@ -324,6 +324,36 @@ export function useAppInitialization({
         } catch (error) {
           debugLog('[startup] ?chat= deep-link restore failed:', error);
         }
+
+        // Deep-link: ?file=<path> opens a specific file in the editor.
+        // Dispatches the same event that markdown file links use
+        // (sprout:open-in-editor), so the existing file handler picks it up.
+        try {
+          if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const fileParam = params.get('file');
+            if (fileParam) {
+              // The file handler expects to switch to editor view first,
+              // so we dispatch the event with a small delay to let the
+              // editor pane mount.
+              setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent('sprout:open-in-editor', {
+                    detail: {
+                      path: fileParam,
+                      lineNumber: params.get('line') ? parseInt(params.get('line')!, 10) : undefined,
+                    },
+                  }),
+                );
+              }, 300);
+              // Clean the URL so refresh doesn't re-trigger
+              const cleanUrl = window.location.pathname + window.location.hash;
+              window.history.replaceState({}, '', cleanUrl);
+            }
+          }
+        } catch (error) {
+          debugLog('[startup] ?file= deep-link failed:', error);
+        }
       };
       restoreStartupState().catch((err) => {
         debugLog('[startup] Restore startup state failed:', err);

@@ -39,6 +39,7 @@ const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
   { id: 'runners', label: 'Runners', href: '/runners', icon: 'server', order: 4 },
   { id: 'workspaces', label: 'Workspaces', href: '/workspaces', icon: 'monitor', order: 5 },
+  { id: 'admin', label: 'Admin', href: '/admin', icon: 'shield', order: 6 },
 ];
 
 const LOCALHOST_DEFAULTS: RuntimeConfig = {

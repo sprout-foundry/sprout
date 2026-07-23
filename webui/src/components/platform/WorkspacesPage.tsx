@@ -30,7 +30,7 @@ const WorkspacesPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await adapter.fetch('/api/workspace/fly');
+      const response = await adapter.fetch('/workspace');
       if (!response.ok) throw new Error(`Failed: ${response.status}`);
       const data = await response.json();
       setWorkspaces(data.workspaces ?? []);

@@ -49,7 +49,7 @@ const RunnersPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await adapter.fetch('/api/runners');
+      const response = await adapter.fetch('/runners');
       if (!response.ok) {
         throw new Error(`Failed to fetch runners: ${response.status} ${response.statusText}`);
       }
@@ -89,7 +89,7 @@ const RunnersPage: React.FC = () => {
     setCopied(false);
 
     try {
-      const response = await adapter.fetch('/api/runners/token', {
+      const response = await adapter.fetch('/runners/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmedName }),
@@ -139,7 +139,7 @@ const RunnersPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await adapter.fetch(`/api/runners/${encodeURIComponent(runnerId)}/rotate-key`, {
+      const response = await adapter.fetch(`/runners/${encodeURIComponent(runnerId)}/rotate-key`, {
         method: 'POST',
       });
 
@@ -182,7 +182,7 @@ const RunnersPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await adapter.fetch(`/api/runners/${encodeURIComponent(runnerId)}`, {
+      const response = await adapter.fetch(`/runners/${encodeURIComponent(runnerId)}`, {
         method: 'DELETE',
       });
 

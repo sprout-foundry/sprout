@@ -24,8 +24,8 @@ func NonTmpTempDir(t *testing.T) string {
 
 	// Candidates ordered by platform likelihood.
 	candidates := []string{
-		"/var/folders", // macOS per-user temp (not under /tmp)
-		"/var/tmp",     // Linux persistent temp (not under /tmp)
+		"/var/folders",     // macOS per-user temp (not under /tmp)
+		"/var/tmp",         // Linux persistent temp (not under /tmp)
 		"/private/var/tmp", // macOS resolved form
 	}
 
@@ -145,30 +145,30 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessAllow,
 		},
 		{
-			name:           "session-allowlisted folder read",
-			filePath:       allowlistFile,
-			resolvedPath:   allowlistFile,
-			mode:           "read",
+			name:         "session-allowlisted folder read",
+			filePath:     allowlistFile,
+			resolvedPath: allowlistFile,
+			mode:         "read",
 			setup: func(a *Agent) {
 				a.AddSessionAllowedFolder(allowlistDir)
 			},
 			wantClassifier: FileAccessAllow,
 		},
 		{
-			name:           "session-allowlisted folder write",
-			filePath:       allowlistFile,
-			resolvedPath:   allowlistFile,
-			mode:           "write",
+			name:         "session-allowlisted folder write",
+			filePath:     allowlistFile,
+			resolvedPath: allowlistFile,
+			mode:         "write",
 			setup: func(a *Agent) {
 				a.AddSessionAllowedFolder(allowlistDir)
 			},
 			wantClassifier: FileAccessAllow,
 		},
 		{
-			name:           "session-allowlisted read_only folder write denied",
-			filePath:       filepath.Join(allowlistReadOnlyDir, "secret.txt"),
-			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "secret.txt"),
-			mode:           "write",
+			name:         "session-allowlisted read_only folder write denied",
+			filePath:     filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			resolvedPath: filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			mode:         "write",
 			setup: func(a *Agent) {
 				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
@@ -176,10 +176,10 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessDeny,
 		},
 		{
-			name:           "session-allowlisted read_only folder read allowed",
-			filePath:       filepath.Join(allowlistReadOnlyDir, "secret.txt"),
-			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "secret.txt"),
-			mode:           "read",
+			name:         "session-allowlisted read_only folder read allowed",
+			filePath:     filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			resolvedPath: filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			mode:         "read",
 			setup: func(a *Agent) {
 				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
@@ -215,10 +215,10 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessPrompt,
 		},
 		{
-			name:           "sensitive SSH private key under home",
-			filePath:       filepath.Join(sshDir, "id_rsa"),
-			resolvedPath:   filepath.Join(sshDir, "id_rsa"),
-			mode:           "read",
+			name:         "sensitive SSH private key under home",
+			filePath:     filepath.Join(sshDir, "id_rsa"),
+			resolvedPath: filepath.Join(sshDir, "id_rsa"),
+			mode:         "read",
 			setup: func(a *Agent) {
 				// Set a mock home dir so IsSensitiveSystemPath can resolve ~.
 				t.Setenv("HOME", homeDir)
@@ -226,10 +226,10 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessPrompt,
 		},
 		{
-			name:           "sensitive AWS credentials",
-			filePath:       filepath.Join(awsDir, "credentials"),
-			resolvedPath:   filepath.Join(awsDir, "credentials"),
-			mode:           "write",
+			name:         "sensitive AWS credentials",
+			filePath:     filepath.Join(awsDir, "credentials"),
+			resolvedPath: filepath.Join(awsDir, "credentials"),
+			mode:         "write",
 			setup: func(a *Agent) {
 				t.Setenv("HOME", homeDir)
 			},
@@ -248,10 +248,10 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 		// classifier should return FileAccessPrompt, not FileAccessAllow.
 		// This verifies IsUnderWorkspaceRoot correctly resolves symlinks.
 		{
-			name:           "workspace symlink escape to /etc/passwd",
-			filePath:       filepath.Join(workspaceRoot, "evil_link"),
-			resolvedPath:   "/etc/passwd",
-			mode:           "read",
+			name:         "workspace symlink escape to /etc/passwd",
+			filePath:     filepath.Join(workspaceRoot, "evil_link"),
+			resolvedPath: "/etc/passwd",
+			mode:         "read",
 			setup: func(a *Agent) {
 				// Create symlink: workspace/evil_link → /etc/passwd
 				_ = os.Symlink("/etc/passwd", filepath.Join(workspaceRoot, "evil_link"))
@@ -264,10 +264,10 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 		// level (precheck_test.go) but are also pinned here so a future
 		// refactor that breaks the classifier won't silently widen access.
 		{
-			name:           "edit_file write denied on read_only folder",
-			filePath:       filepath.Join(allowlistReadOnlyDir, "secret.txt"),
-			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "secret.txt"),
-			mode:           "write",
+			name:         "edit_file write denied on read_only folder",
+			filePath:     filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			resolvedPath: filepath.Join(allowlistReadOnlyDir, "secret.txt"),
+			mode:         "write",
 			setup: func(a *Agent) {
 				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
@@ -275,10 +275,10 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessDeny,
 		},
 		{
-			name:           "write_structured_file write denied on read_only folder",
-			filePath:       filepath.Join(allowlistReadOnlyDir, "config.json"),
-			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "config.json"),
-			mode:           "write",
+			name:         "write_structured_file write denied on read_only folder",
+			filePath:     filepath.Join(allowlistReadOnlyDir, "config.json"),
+			resolvedPath: filepath.Join(allowlistReadOnlyDir, "config.json"),
+			mode:         "write",
 			setup: func(a *Agent) {
 				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")
@@ -286,10 +286,10 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessDeny,
 		},
 		{
-			name:           "patch_structured_file write denied on read_only folder",
-			filePath:       filepath.Join(allowlistReadOnlyDir, "config.json"),
-			resolvedPath:   filepath.Join(allowlistReadOnlyDir, "config.json"),
-			mode:           "write",
+			name:         "patch_structured_file write denied on read_only folder",
+			filePath:     filepath.Join(allowlistReadOnlyDir, "config.json"),
+			resolvedPath: filepath.Join(allowlistReadOnlyDir, "config.json"),
+			mode:         "write",
 			setup: func(a *Agent) {
 				a.AddSessionAllowedFolder(allowlistReadOnlyDir)
 				a.SetSessionAllowedFolderMode(allowlistReadOnlyDir, "read_only")

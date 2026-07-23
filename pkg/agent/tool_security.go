@@ -576,7 +576,7 @@ func (a *Agent) auditPathDecision(ctx context.Context, filePath, resolvedPath, m
 		return
 	}
 	_ = logger.LogJSON(data)
-}// staticGateAutoApprove reports whether a tool call that the static
+} // staticGateAutoApprove reports whether a tool call that the static
 // classifier (Gate 1) flagged as risky should skip the interactive
 // approval prompt because the session is in a bypass state:
 //

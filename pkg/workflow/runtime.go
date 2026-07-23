@@ -242,6 +242,7 @@ func ApplyWorkflowRuntimeAllowedPaths(chatAgent *agent.Agent, paths []AllowedPat
 //   - Step 2 addedPaths: [/b] (/a was already there)
 //   - Step 2 restore removes [/b], leaves [/a]
 //   - After step 2: allowlist = [/a]
+//
 // This is the documented "steps don't inherit paths from prior steps" behavior.
 func RestoreWorkflowRuntimeAllowedPaths(chatAgent *agent.Agent, snapshotPaths []string, snapshotModes map[string]string, addedPaths []string) error {
 	if chatAgent == nil {

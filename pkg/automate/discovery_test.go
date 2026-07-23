@@ -729,7 +729,7 @@ func TestSummary_JSON_AllowedPathsAndWarningsSerialize(t *testing.T) {
 	}
 
 	var decoded struct {
-		Description string `json:"description"`
+		Description  string `json:"description"`
 		AllowedPaths []struct {
 			Path   string `json:"path"`
 			Mode   string `json:"mode"`

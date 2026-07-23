@@ -111,11 +111,12 @@ func ParseChain(s string) Chain {
 // double quotes are not treated as chain operators.
 //
 // Example outputs:
-//   "a && b"     → ["a", "AND", "b"]
-//   "a || b"     → ["a", "OR", "b"]
-//   "a | b"      → ["a", "PIPE", "b"]
-//   "a ; b"      → ["a", "SEQ", "b"]
-//   "a && b || c | d" → ["a", "AND", "b", "OR", "c", "PIPE", "d"]
+//
+//	"a && b"     → ["a", "AND", "b"]
+//	"a || b"     → ["a", "OR", "b"]
+//	"a | b"      → ["a", "PIPE", "b"]
+//	"a ; b"      → ["a", "SEQ", "b"]
+//	"a && b || c | d" → ["a", "AND", "b", "OR", "c", "PIPE", "d"]
 func tokenizeChain(input string) []string {
 	input = strings.TrimSpace(input)
 	if input == "" {
@@ -498,10 +499,10 @@ func synthesizeChainFallback(chain Chain, analyses []*SecurityAnalysis) *Securit
 	}
 
 	return &SecurityAnalysis{
-		Summary:         summary,
-		Modifies:        modifies,
-		RiskAssessment:  overallRisk,
-		Recommendation:  overallRec,
+		Summary:        summary,
+		Modifies:       modifies,
+		RiskAssessment: overallRisk,
+		Recommendation: overallRec,
 	}
 }
 

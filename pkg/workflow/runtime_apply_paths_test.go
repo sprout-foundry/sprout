@@ -409,7 +409,7 @@ func TestRestoreWorkflowRuntimeAllowedPaths_ConsecutiveStepsBehavior(t *testing.
 
 	// Step 2: adds /b (was removed by step 1's restore) and /c (new).
 	snap2, modes2, added2, err := ApplyWorkflowRuntimeAllowedPaths(a, []AllowedPath{
-		{Path: "/b", Mode: "read_only"}, // re-declared; step 1 already removed it
+		{Path: "/b", Mode: "read_only"},  // re-declared; step 1 already removed it
 		{Path: "/c", Mode: "read_write"}, // new
 	})
 	if err != nil {

@@ -827,9 +827,9 @@ func isScreenshotPathAllowed(cleanedPath string) bool {
 // is preserved for backwards compatibility; new code uses this richer
 // type. SP-124b.
 type ChainedClassification struct {
-	Subcommand string       // the subcommand text (trimmed, not normalized)
+	Subcommand string // the subcommand text (trimmed, not normalized)
 	Risk       SecurityRisk
-	Reasoning  string       // human-readable why
+	Reasoning  string // human-readable why
 	Category   RiskCategory
 }
 

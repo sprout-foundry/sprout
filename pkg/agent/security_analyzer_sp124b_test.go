@@ -331,7 +331,7 @@ func TestSecurityAnalysisCache_Normalization(t *testing.T) {
 
 	sa := &SecurityAnalysis{
 		Summary:        "Test",
-		Modifies:      "/tmp",
+		Modifies:       "/tmp",
 		RiskAssessment: "low",
 		Recommendation: "approve",
 	}
@@ -366,7 +366,7 @@ func TestSecurityAnalysisCache_SingleCommand(t *testing.T) {
 
 	sa := &SecurityAnalysis{
 		Summary:        "Lists files",
-		Modifies:      "current directory",
+		Modifies:       "current directory",
 		RiskAssessment: "low",
 		Recommendation: "approve",
 	}
@@ -579,24 +579,28 @@ func (m *mockPromptCapturingClient) SendChatRequest(ctx context.Context, message
 func (m *mockPromptCapturingClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockPromptCapturingClient) CheckConnection() error                              { return nil }
-func (m *mockPromptCapturingClient) SetDebug(debug bool)                                {}
-func (m *mockPromptCapturingClient) SetModel(model string) error                       { return nil }
-func (m *mockPromptCapturingClient) GetModel() string                                   { return "test" }
-func (m *mockPromptCapturingClient) GetProvider() string                               { return "test" }
-func (m *mockPromptCapturingClient) GetModelContextLimit() (int, error)                { return 4096, nil }
-func (m *mockPromptCapturingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
-func (m *mockPromptCapturingClient) SupportsVision() bool                               { return false }
+func (m *mockPromptCapturingClient) CheckConnection() error             { return nil }
+func (m *mockPromptCapturingClient) SetDebug(debug bool)                {}
+func (m *mockPromptCapturingClient) SetModel(model string) error        { return nil }
+func (m *mockPromptCapturingClient) GetModel() string                   { return "test" }
+func (m *mockPromptCapturingClient) GetProvider() string                { return "test" }
+func (m *mockPromptCapturingClient) GetModelContextLimit() (int, error) { return 4096, nil }
+func (m *mockPromptCapturingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	return nil, nil
+}
+func (m *mockPromptCapturingClient) SupportsVision() bool { return false }
 func (m *mockPromptCapturingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockPromptCapturingClient) GetLastTPS() float64                          { return 100.0 }
-func (m *mockPromptCapturingClient) GetAverageTPS() float64                        { return 100.0 }
-func (m *mockPromptCapturingClient) GetTPSStats() map[string]float64               { return nil }
-func (m *mockPromptCapturingClient) ResetTPSStats()                                {}
-func (m *mockPromptCapturingClient) SupportsConversationalVision() bool            { return false }
-func (m *mockPromptCapturingClient) VisionCapabilities() api.VisionCapabilities     { return api.VisionCapabilities{} }
-func (m *mockPromptCapturingClient) GetVisionModel() string                        { return "" }
+func (m *mockPromptCapturingClient) GetLastTPS() float64                { return 100.0 }
+func (m *mockPromptCapturingClient) GetAverageTPS() float64             { return 100.0 }
+func (m *mockPromptCapturingClient) GetTPSStats() map[string]float64    { return nil }
+func (m *mockPromptCapturingClient) ResetTPSStats()                     {}
+func (m *mockPromptCapturingClient) SupportsConversationalVision() bool { return false }
+func (m *mockPromptCapturingClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilities{}
+}
+func (m *mockPromptCapturingClient) GetVisionModel() string { return "" }
 
 // mockCallCountingClient counts LLM calls for testing
 type mockCallCountingClient struct {
@@ -622,24 +626,28 @@ func (m *mockCallCountingClient) SendChatRequest(ctx context.Context, messages [
 func (m *mockCallCountingClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockCallCountingClient) CheckConnection() error                              { return nil }
-func (m *mockCallCountingClient) SetDebug(debug bool)                                {}
-func (m *mockCallCountingClient) SetModel(model string) error                         { return nil }
-func (m *mockCallCountingClient) GetModel() string                                   { return "test" }
-func (m *mockCallCountingClient) GetProvider() string                               { return "test" }
-func (m *mockCallCountingClient) GetModelContextLimit() (int, error)                { return 4096, nil }
-func (m *mockCallCountingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
-func (m *mockCallCountingClient) SupportsVision() bool                               { return false }
+func (m *mockCallCountingClient) CheckConnection() error             { return nil }
+func (m *mockCallCountingClient) SetDebug(debug bool)                {}
+func (m *mockCallCountingClient) SetModel(model string) error        { return nil }
+func (m *mockCallCountingClient) GetModel() string                   { return "test" }
+func (m *mockCallCountingClient) GetProvider() string                { return "test" }
+func (m *mockCallCountingClient) GetModelContextLimit() (int, error) { return 4096, nil }
+func (m *mockCallCountingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	return nil, nil
+}
+func (m *mockCallCountingClient) SupportsVision() bool { return false }
 func (m *mockCallCountingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockCallCountingClient) GetLastTPS() float64                          { return 100.0 }
-func (m *mockCallCountingClient) GetAverageTPS() float64                        { return 100.0 }
-func (m *mockCallCountingClient) GetTPSStats() map[string]float64               { return nil }
-func (m *mockCallCountingClient) ResetTPSStats()                                {}
-func (m *mockCallCountingClient) SupportsConversationalVision() bool            { return false }
-func (m *mockCallCountingClient) VisionCapabilities() api.VisionCapabilities     { return api.VisionCapabilities{} }
-func (m *mockCallCountingClient) GetVisionModel() string                        { return "" }
+func (m *mockCallCountingClient) GetLastTPS() float64                { return 100.0 }
+func (m *mockCallCountingClient) GetAverageTPS() float64             { return 100.0 }
+func (m *mockCallCountingClient) GetTPSStats() map[string]float64    { return nil }
+func (m *mockCallCountingClient) ResetTPSStats()                     {}
+func (m *mockCallCountingClient) SupportsConversationalVision() bool { return false }
+func (m *mockCallCountingClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilities{}
+}
+func (m *mockCallCountingClient) GetVisionModel() string { return "" }
 
 // Ensure mock clients implement api.ClientInterface
 var _ api.ClientInterface = (*mockSecurityAnalyzerClient)(nil)

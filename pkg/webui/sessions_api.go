@@ -6,7 +6,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -34,7 +34,7 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 		workingDir := ws.getWorkspaceRootForRequest(r)
 		sessionInfos, err := agent.ListSessionsWithTimestampsScoped(workingDir)
 		if err != nil {
-			log.Printf("handleAPISessions: failed to list scoped sessions: %v", err)
+			ws.log().Error("failed to list scoped sessions", slog.Any("err", err))
 			http.Error(w, fmt.Sprintf("Failed to list sessions: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -46,7 +46,7 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 		// Get all sessions across all scopes
 		sessionInfos, err := agent.ListAllSessionsWithTimestamps()
 		if err != nil {
-			log.Printf("handleAPISessions: failed to list all sessions: %v", err)
+			ws.log().Error("failed to list all sessions", slog.Any("err", err))
 			http.Error(w, fmt.Sprintf("Failed to list sessions: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -109,13 +109,13 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("handleAPIRestoreSession: invalid JSON: %v", err)
+		ws.log().Warn("invalid restore session JSON", slog.Any("err", err))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	if strings.TrimSpace(req.SessionID) == "" {
-		log.Printf("handleAPIRestoreSession: session_id is required")
+		ws.log().Warn("restore session ID is required")
 		http.Error(w, "session_id is required", http.StatusBadRequest)
 		return
 	}
@@ -126,7 +126,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	// Load the session state
 	state, err := agent.LoadStateWithoutAgentScoped(sessionID, workspaceRoot)
 	if err != nil {
-		log.Printf("handleAPIRestoreSession: failed to load session %s: %v", sessionID, err)
+		ws.log().Error("failed to load session", slog.String("session_id", sessionID), slog.Any("err", err))
 		http.Error(w, fmt.Sprintf("Failed to load session: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -146,7 +146,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		SessionID:               state.SessionID,
 	})
 	if err != nil {
-		log.Printf("handleAPIRestoreSession: failed to marshal state: %v", err)
+		ws.log().Error("failed to marshal session state", slog.Any("err", err))
 		http.Error(w, "Failed to prepare session data", http.StatusInternalServerError)
 		return
 	}

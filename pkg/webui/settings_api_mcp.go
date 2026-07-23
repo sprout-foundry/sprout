@@ -5,7 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -294,7 +294,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 	// updated config and refreshes the tool cache.
 	if ws.agent != nil {
 		if refreshErr := ws.agent.RefreshRuntimeConfig(r.Context()); refreshErr != nil {
-			log.Printf("[mcp] server %q saved to config but runtime refresh failed: %v", server.Name, refreshErr)
+			ws.log().Warn("MCP server saved but runtime refresh failed", slog.String("server", server.Name), slog.Any("err", refreshErr))
 		}
 	}
 
@@ -377,7 +377,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 	// Hot-reload: restart the updated MCP server if its config changed.
 	if ws.agent != nil {
 		if refreshErr := ws.agent.RefreshRuntimeConfig(r.Context()); refreshErr != nil {
-			log.Printf("[mcp] server %q updated in config but runtime refresh failed: %v", name, refreshErr)
+			ws.log().Warn("MCP server updated but runtime refresh failed", slog.String("server", name), slog.Any("err", refreshErr))
 		}
 	}
 
@@ -426,7 +426,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 	// Hot-reload: stop and deregister the removed MCP server immediately.
 	if ws.agent != nil {
 		if refreshErr := ws.agent.RefreshRuntimeConfig(r.Context()); refreshErr != nil {
-			log.Printf("[mcp] server %q removed from config but runtime refresh failed: %v", name, refreshErr)
+			ws.log().Warn("MCP server removed but runtime refresh failed", slog.String("server", name), slog.Any("err", refreshErr))
 		}
 	}
 
@@ -444,7 +444,7 @@ func cleanupMCPServerSecrets(serverName string, server mcp.MCPServerConfig) {
 		if mcp.IsSecretRef(value) {
 			key := mcp.CredentialKey(serverName, envVarName)
 			if err := credentials.DeleteFromActiveBackend(key); err != nil {
-				log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+				slog.Default().Warn("failed to delete MCP credential", slog.String("credential_key", key), slog.Any("err", err))
 			}
 		}
 	}
@@ -457,7 +457,7 @@ func cleanupMCPServerSecrets(serverName string, server mcp.MCPServerConfig) {
 				}
 				key := mcp.CredentialKey(serverName, actualEnvVarName)
 				if err := credentials.DeleteFromActiveBackend(key); err != nil {
-					log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+					slog.Default().Warn("failed to delete MCP credential", slog.String("credential_key", key), slog.Any("err", err))
 				}
 			}
 		}
@@ -669,7 +669,7 @@ func (ws *ReactWebServer) handlePutServerCredentials(w http.ResponseWriter, r *h
 				// Rollback: remove any credentials we already wrote
 				for _, rollbackKey := range writtenKeys {
 					if delErr := credentials.DeleteFromActiveBackend(rollbackKey); delErr != nil {
-						log.Printf("[mcp] Failed to rollback credential %s: %v", rollbackKey, delErr)
+						ws.log().Error("failed to roll back MCP credential", slog.String("credential_key", rollbackKey), slog.Any("err", delErr))
 					}
 				}
 				return fmt.Errorf("failed to store credential %s: %w", key, err)
@@ -757,7 +757,7 @@ func (ws *ReactWebServer) handleDeleteServerCredentials(w http.ResponseWriter, r
 		// Delete from credential store
 		key := mcp.CredentialKey(name, req.CredentialName)
 		if err := credentials.DeleteFromActiveBackend(key); err != nil {
-			log.Printf("[mcp] Failed to delete credential %s: %v", key, err)
+			ws.log().Warn("failed to delete MCP credential", slog.String("credential_key", key), slog.Any("err", err))
 			// Don't fail the request if delete fails - it might not exist
 		}
 

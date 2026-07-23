@@ -5,7 +5,7 @@ package webui
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -62,7 +62,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsRename(w http.ResponseWriter, r *
 	cs := ctx.getChatSession(chatID)
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionsRename: renamed chat session %s to %q for client %s", chatID, name, clientID)
+	ws.log().Info("renamed chat session", slog.String("chat_id", chatID), slog.String("name", name), slog.String("client_id", clientID))
 
 	summary := cs.chatSessionSummary(false)
 	ws.publishSessionChanged(clientID, chatID, "rename", summary)
@@ -135,7 +135,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsPin(w http.ResponseWriter, r *htt
 
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionsPin: pinned chat session %s for client %s", chatID, clientID)
+	ws.log().Info("pinned chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
 
 	summary := cs.chatSessionSummary(false)
 	ws.publishSessionChanged(clientID, chatID, "pin", summary)
@@ -208,7 +208,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsUnpin(w http.ResponseWriter, r *h
 
 	ws.mutex.Unlock()
 
-	log.Printf("handleAPIChatSessionsUnpin: unpinned chat session %s for client %s", chatID, clientID)
+	ws.log().Info("unpinned chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
 
 	summary := cs.chatSessionSummary(false)
 	ws.publishSessionChanged(clientID, chatID, "unpin", summary)

@@ -4,7 +4,7 @@ package webui
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -73,7 +73,7 @@ func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.R
 
 	var req editDecisionPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("handleAPIEditDecision: invalid JSON: %v", err)
+		ws.log().Warn("invalid edit decision JSON", slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -110,13 +110,15 @@ func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.R
 	editRegistry.Unlock()
 
 	if !delivered && !regOk {
-		log.Printf("handleAPIEditDecision: edit %s not found in broker or registry", editID)
+		ws.log().Warn("edit not found in broker or registry", slog.String("edit_id", editID))
 		writeJSONErr(w, http.StatusNotFound, "not_found", "Edit not found or already decided")
 		return
 	}
 
-	log.Printf("handleAPIEditDecision: delivered decision for edit %s (accepted=%d, rejected=%v)",
-		editID, len(req.AcceptedHunks), req.Rejected)
+	ws.log().Info("delivered edit decision",
+		slog.String("edit_id", editID),
+		slog.Int("accepted_hunks", len(req.AcceptedHunks)),
+		slog.Bool("rejected", req.Rejected))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"edit_id":  editID,

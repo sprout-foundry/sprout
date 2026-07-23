@@ -19,21 +19,17 @@ import (
 //
 // Behavioral contract:
 //   - "allow"  → caller proceeds directly with resolvedPath; no prompt fires
-//   - "prompt" → caller falls through to withFilesystemApproval for the
-//     interactive dialog
+//   - "prompt" → caller falls through; returns raw filesystem error
 //   - "deny"  → caller returns a typed error immediately; no prompt fires
 //
 // When classifier is nil (no agent context), returns ("", "prompt")
-// so callers fall through to withFilesystemApproval, which also has a nil
-// gate guard and returns the raw filesystem error — preserving the
-// pre-M2 behavior for tests that bypass the agent context.
+// so callers fall through and return the raw filesystem error.
 //
 // SP-127 M2: this function lives in pkg/agent_tools rather than
 // pkg/agent so handlers can call it without creating an import cycle.
 func PrecheckFileAccess(ctx context.Context, classifier FileAccessClassifier, toolName, filePath string) (resolvedPath string, decision string) {
 	if classifier == nil {
-		// No classifier available — fall through to withFilesystemApproval
-		// which will return the raw filesystem error.
+		// No classifier available — fall through and return the raw filesystem error.
 		return "", "prompt"
 	}
 

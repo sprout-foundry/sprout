@@ -16,6 +16,7 @@ import {
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalTabBar } from '@sprout/ui';
+import { isCloud } from '../config/mode';
 import { usePersistedBoolean, usePersistedNumber, useOutsideClickDismiss } from '../hooks/usePersistedPref';
 import { useTerminalPanes } from '../hooks/useTerminalPanes';
 import { useAvailableShells } from '../hooks/useAvailableShells';
@@ -313,6 +314,11 @@ function Terminal({
 
       {/* Body */}
       <div className="terminal-body">
+        {isCloud && isExpanded && (
+          <div className="terminal-cloud-notice" title="The browser terminal runs commands in a WASM sandbox. Process-spawning commands may not work.">
+            Browser terminal — limited command support
+          </div>
+        )}
         <div className={`terminal-panes-container ${isSplitActive ? `terminal-split-${splitDirection}` : ''}`}>
           {(() => {
             const actionsPaneIdx = splitDirection === 'horizontal' ? 0 : panes.length - 1;

@@ -151,7 +151,7 @@ describe('SecurityApprovalDialog', () => {
     // The stepper wrapper renders.
     expect(screen.getByTestId('chain-stepper')).toBeInTheDocument();
     // Each subcommand must appear as a pill in the stepper.
-    expect(screen.getByText("git add -A")).toBeInTheDocument();
+    expect(screen.getByText('git add -A')).toBeInTheDocument();
     expect(screen.getByText("git commit -m 'wip'")).toBeInTheDocument();
     expect(screen.getByText('git push')).toBeInTheDocument();
   });

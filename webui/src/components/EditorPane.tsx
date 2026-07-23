@@ -273,10 +273,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
     const client = await lspService.getClientForLanguage(langId);
     if (!client) return [];
-    return [
-      ...buildLSPPluginExtensions(client, filePath, langId),
-      ...lspSyncOnDocChange(langId),
-    ];
+    return [...buildLSPPluginExtensions(client, filePath, langId), ...lspSyncOnDocChange(langId)];
   }, []);
 
   // Per-view mount hook. Registers the view with the LSP service so

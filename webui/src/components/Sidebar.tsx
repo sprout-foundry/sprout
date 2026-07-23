@@ -141,7 +141,16 @@ const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = 
 ];
 
 /** Valid platform view IDs for type-safe navigation */
-const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs', 'runners', 'dashboard', 'admin', 'workspaces']);
+const VALID_PLATFORM_VIEWS = new Set([
+  'tasks',
+  'billing',
+  'team',
+  'costs',
+  'runners',
+  'dashboard',
+  'admin',
+  'workspaces',
+]);
 
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {

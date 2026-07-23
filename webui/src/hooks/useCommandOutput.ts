@@ -113,7 +113,7 @@ export function useCommandOutput(chatId: string | undefined): CommandOutputState
         const switchingCommand = commandName !== null && prev.command !== null && commandName !== prev.command;
         const isFirstChunk = prev.command === null && commandName !== null;
         return {
-          command: switchingCommand || isFirstChunk ? commandName : prev.command ?? commandName,
+          command: switchingCommand || isFirstChunk ? commandName : (prev.command ?? commandName),
           output: switchingCommand || isFirstChunk ? chunk : prev.output + chunk,
           isRunning: isFinal ? false : true,
           droppedBytes: prev.droppedBytes,

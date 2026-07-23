@@ -1776,7 +1776,10 @@
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   outline: none;
-  transition: background-color 0.12s var(--ease-out), border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+  transition:
+    background-color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
 }
 
 .password-prompt-input:hover {
@@ -1815,7 +1818,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  transition: background-color 0.12s var(--ease-out), border-color 0.12s var(--ease-out), color 0.12s var(--ease-out);
+  transition:
+    background-color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
 }
 
 .password-prompt-btn:focus-visible {

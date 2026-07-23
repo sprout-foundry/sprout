@@ -57,9 +57,9 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 		t.Fatalf("NewManagerWithDir failed: %v", err)
 	}
 
-	// Persist LEDIT_CONFIG for the test lifetime so any code path that reads
+	// Persist SPROUT_CONFIG for the test lifetime so any code path that reads
 	// the env var directly (bypassing configManager) stays isolated.
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	agent, err := NewAgentWithModel("test:test")
@@ -88,7 +88,7 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 // agent without prompting for API keys or running connection checks.
 func TestNewAgentWithClient(t *testing.T) {
 	configDir := t.TempDir() + "/.sprout"
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	mgr, err := configuration.NewManagerWithDir(configDir)
@@ -219,14 +219,14 @@ func TestGetTotalCostZero(t *testing.T) {
 }
 
 func TestGetActivePersonaDefault(t *testing.T) {
-	// Unset LEDIT_PERSONA to test the default value.
-	t.Setenv("LEDIT_PERSONA", "")
+	// Unset SPROUT_PERSONA to test the default value.
+	t.Setenv("SPROUT_PERSONA", "")
 
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
 	persona := agent.GetActivePersona()
-	// Under go test the default is "orchestrator" unless LEDIT_PERSONA is set.
+	// Under go test the default is "orchestrator" unless SPROUT_PERSONA is set.
 	if persona != "orchestrator" {
 		t.Errorf("GetActivePersona = %q, want %q", persona, "orchestrator")
 	}
@@ -245,15 +245,15 @@ func TestGetActivePersonaEmpty(t *testing.T) {
 }
 
 func TestAgentDebugField(t *testing.T) {
-	// Unset LEDIT_DEBUG to ensure debug defaults to false.
-	t.Setenv("LEDIT_DEBUG", "")
+	// Unset SPROUT_DEBUG to ensure debug defaults to false.
+	t.Setenv("SPROUT_DEBUG", "")
 
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
 	// Verify the debug field is accessible and false by default.
 	if agent.debug {
-		t.Error("agent.debug should be false when LEDIT_DEBUG is unset")
+		t.Error("agent.debug should be false when SPROUT_DEBUG is unset")
 	}
 
 	// Toggle the debug field (same-package access).
@@ -296,7 +296,7 @@ func TestAgentAddMessage(t *testing.T) {
 func TestContextCapActivationNotice(t *testing.T) {
 	// Create a temp config directory with a config that has MaxContextTokens set
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Test: When cap is set lower than native, the agent should have effectiveContextCap set
@@ -307,7 +307,7 @@ func TestContextCapActivationNotice(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewManagerWithDir failed: %v", err)
 		}
-		t.Setenv("LEDIT_CONFIG", configDir)
+		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("SPROUT_CONFIG", configDir)
 
 		// Set a cap of 64K (lower than test client's 128K context)
@@ -350,7 +350,7 @@ func TestContextCapActivationNotice(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewManagerWithDir failed: %v", err)
 		}
-		t.Setenv("LEDIT_CONFIG", configDir)
+		t.Setenv("SPROUT_CONFIG", configDir)
 		t.Setenv("SPROUT_CONFIG", configDir)
 
 		// Create agent without setting MaxContextTokens

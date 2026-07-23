@@ -174,16 +174,16 @@ func TestInsertCharFastPathTracking(t *testing.T) {
 }
 
 func TestInsertCharFastPathTrackingWithANSIPrompt(t *testing.T) {
-	ir := NewInputReader("\033[32mledit>\033[0m ")
-	ir.terminalWidth = 10
+	ir := NewInputReader("\033[32msprout>\033[0m ")
+	ir.terminalWidth = 11
 	ir.termFd = int(os.Stdout.Fd())
 
-	// Visible prompt width is 7 ("ledit> "), so 3 chars reaches exact boundary.
+	// Visible prompt width is 8 ("sprout> "), so 3 chars reaches exact boundary.
 	for _, ch := range []string{"a", "b", "c"} {
 		ir.InsertChar(ch)
 	}
 
-	if ir.lastLineLength != 10 {
+	if ir.lastLineLength != 11 {
 		t.Fatalf("expected lastLineLength=10, got %d", ir.lastLineLength)
 	}
 	if ir.currentPhysicalLine != 0 {

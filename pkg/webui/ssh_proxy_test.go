@@ -534,8 +534,8 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Real sprout backend integration test
-// Runs only when LEDIT_INTEGRATION_SSH_TEST=1 is set in the environment.
-// The test expects a local sprout process to be running on LEDIT_WEBUI_PORT
+// Runs only when SPROUT_INTEGRATION_SSH_TEST=1 is set in the environment.
+// The test expects a local sprout process to be running on SPROUT_WEBUI_PORT
 // (defaults to 56000) that has at least one SSH session attached.
 // It verifies:
 //   1. /ssh/{key}/ returns 200 with SPROUT_PROXY_BASE injected.
@@ -544,17 +544,17 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestSSHProxyRealBackendIntegration(t *testing.T) {
-	if os.Getenv("LEDIT_INTEGRATION_SSH_TEST") != "1" {
-		t.Skip("set LEDIT_INTEGRATION_SSH_TEST=1 to run this integration test")
+	if os.Getenv("SPROUT_INTEGRATION_SSH_TEST") != "1" {
+		t.Skip("set SPROUT_INTEGRATION_SSH_TEST=1 to run this integration test")
 	}
 
-	localPort := os.Getenv("LEDIT_WEBUI_PORT")
+	localPort := os.Getenv("SPROUT_WEBUI_PORT")
 	if localPort == "" {
 		localPort = "56000"
 	}
-	sshSessionRaw := os.Getenv("LEDIT_SSH_SESSION_KEY")
+	sshSessionRaw := os.Getenv("SPROUT_SSH_SESSION_KEY")
 	if sshSessionRaw == "" {
-		t.Fatal("LEDIT_SSH_SESSION_KEY must be set for the integration test")
+		t.Fatal("SPROUT_SSH_SESSION_KEY must be set for the integration test")
 	}
 
 	r := strings.NewReplacer(":", "%3A", "$", "%24")

@@ -240,7 +240,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 				if convoStoreDir == "" {
 					configDir := os.Getenv("SPROUT_CONFIG")
 					if configDir == "" {
-						configDir = os.Getenv("LEDIT_CONFIG")
+						configDir = os.Getenv("SPROUT_CONFIG")
 					}
 					if configDir == "" {
 						home, _ := os.UserHomeDir() // Unlikely to fail; fallback below handles it gracefully
@@ -535,7 +535,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 	}
 
 	// If running under `go test`, prefer the test/mock client to avoid network/API key
-	// dependencies unless explicitly overridden by SPROUT_ALLOW_REAL_PROVIDER (or legacy LEDIT_ALLOW_REAL_PROVIDER).
+	// dependencies unless explicitly overridden by SPROUT_ALLOW_REAL_PROVIDER (or legacy SPROUT_ALLOW_REAL_PROVIDER).
 	if isRunningUnderTest() && configuration.GetEnvSimple("ALLOW_REAL_PROVIDER") == "" {
 		clientType = api.TestClientType
 		finalModel = model
@@ -685,7 +685,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		debug := isDebugEnvEnabled()
 		client.SetDebug(debug)
 
-		// Check connection (allow tests to skip by setting SPROUT_SKIP_CONNECTION_CHECK or legacy LEDIT_SKIP_CONNECTION_CHECK)
+		// Check connection (allow tests to skip by setting SPROUT_SKIP_CONNECTION_CHECK or legacy SPROUT_SKIP_CONNECTION_CHECK)
 		// Also skip for providers where a fast/reliable connectivity probe is not
 		// available (Z.AI and GLM Coding Plan both use a slow subscription endpoint
 		// where the probe is unreliable). ZAICodingClientType is "zai-coding".

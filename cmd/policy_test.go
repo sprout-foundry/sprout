@@ -25,7 +25,7 @@ import (
 func setupPolicyTest(t *testing.T) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Pre-create config so Load() works
@@ -37,7 +37,7 @@ func setupPolicyTest(t *testing.T) {
 func setupPolicyTestWithPatterns(t *testing.T, safe, dangerous []configuration.ShellPattern) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := configuration.NewConfig()

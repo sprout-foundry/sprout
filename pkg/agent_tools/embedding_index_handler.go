@@ -110,7 +110,7 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 	if indexDir == "" {
 		configDir := os.Getenv("SPROUT_CONFIG")
 		if configDir == "" {
-			configDir = os.Getenv("LEDIT_CONFIG")
+			configDir = os.Getenv("SPROUT_CONFIG")
 		}
 		if configDir == "" {
 			home, err := os.UserHomeDir()

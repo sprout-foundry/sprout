@@ -260,7 +260,7 @@ func setupTestRegistry(t *testing.T) (*testServer, func()) {
 	t.Helper()
 
 	// Save original env var so we can restore it exactly.
-	originalEnvURL := os.Getenv("LEDIT_MODEL_REGISTRY_URL")
+	originalEnvURL := os.Getenv("SPROUT_MODEL_REGISTRY_URL")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)

@@ -14,7 +14,7 @@ import (
 // =============================================================================
 
 func TestGetTraceDatasetDir_EmptyFlag(t *testing.T) {
-	t.Setenv("LEDIT_TRACE_DATASET_DIR", "")
+	t.Setenv("SPROUT_TRACE_DATASET_DIR", "")
 
 	got := getTraceDatasetDir("")
 	if got != "" {
@@ -23,7 +23,7 @@ func TestGetTraceDatasetDir_EmptyFlag(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_NonEmptyFlag(t *testing.T) {
-	t.Setenv("LEDIT_TRACE_DATASET_DIR", "")
+	t.Setenv("SPROUT_TRACE_DATASET_DIR", "")
 
 	got := getTraceDatasetDir("/tmp/traces")
 	if got != "/tmp/traces" {
@@ -32,7 +32,7 @@ func TestGetTraceDatasetDir_NonEmptyFlag(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_EnvVar(t *testing.T) {
-	t.Setenv("LEDIT_TRACE_DATASET_DIR", "/env/traces")
+	t.Setenv("SPROUT_TRACE_DATASET_DIR", "/env/traces")
 
 	got := getTraceDatasetDir("")
 	if got != "/env/traces" {
@@ -41,7 +41,7 @@ func TestGetTraceDatasetDir_EnvVar(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_EnvVarEmpty(t *testing.T) {
-	t.Setenv("LEDIT_TRACE_DATASET_DIR", "")
+	t.Setenv("SPROUT_TRACE_DATASET_DIR", "")
 
 	got := getTraceDatasetDir("")
 	if got != "" {
@@ -50,7 +50,7 @@ func TestGetTraceDatasetDir_EnvVarEmpty(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_FlagTakesPriority(t *testing.T) {
-	t.Setenv("LEDIT_TRACE_DATASET_DIR", "/env/traces")
+	t.Setenv("SPROUT_TRACE_DATASET_DIR", "/env/traces")
 
 	got := getTraceDatasetDir("/flag/traces")
 	if got != "/flag/traces" {

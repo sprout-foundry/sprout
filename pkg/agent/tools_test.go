@@ -17,8 +17,8 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	// We use OPENAI_API_KEY to force use of OpenAI provider which doesn't have tool restrictions
 	t.Setenv("CI", "1")
 	t.Setenv("OPENAI_API_KEY", "test-key-for-tools-long-enough-to-openai")
-	t.Setenv("LEDIT_SUBAGENT", "")
-	t.Setenv("LEDIT_NO_SUBAGENTS", "")
+	t.Setenv("SPROUT_SUBAGENT", "")
+	t.Setenv("SPROUT_NO_SUBAGENTS", "")
 
 	// Create a test agent
 	agent, err := NewAgent()

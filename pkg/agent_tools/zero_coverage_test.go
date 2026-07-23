@@ -271,11 +271,11 @@ func TestClassifyPDFProcessingErrorCode_ZC(t *testing.T) {
 func TestLimitVisionOutputText_ZC(t *testing.T) {
 	// Ensure the environment variable does not interfere with the test.
 	// getVisionMaxReturnedTextChars reads VISION_MAX_TEXT_CHARS via
-	// configuration.GetEnvSimple, which checks both SPROUT_* and LEDIT_* prefixes.
+	// configuration.GetEnvSimple, which checks both SPROUT_* and SPROUT_* prefixes.
 	// NOTE: This test cannot use t.Parallel() because it modifies process-level
 	// environment variables, which would be visible to other parallel tests.
 	t.Setenv("SPROUT_VISION_MAX_TEXT_CHARS", "")
-	t.Setenv("LEDIT_VISION_MAX_TEXT_CHARS", "")
+	t.Setenv("SPROUT_VISION_MAX_TEXT_CHARS", "")
 
 	maxChars := getVisionMaxReturnedTextChars()
 	tests := []struct {

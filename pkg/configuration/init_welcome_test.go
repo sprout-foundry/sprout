@@ -54,7 +54,7 @@ func TestShowWelcomeMessage(t *testing.T) {
 
 func TestShowNextSteps_NormalProvider(t *testing.T) {
 	provider := "openrouter"
-	configDir := "/tmp/ledit-config"
+	configDir := "/tmp/sprout-config"
 
 	output := testutil.CaptureStdout(t, func() {
 		ShowNextSteps(provider, configDir)
@@ -79,7 +79,7 @@ func TestShowNextSteps_NormalProvider(t *testing.T) {
 
 func TestShowNextSteps_EditorOnly(t *testing.T) {
 	provider := "editor"
-	configDir := "/tmp/ledit-config"
+	configDir := "/tmp/sprout-config"
 
 	output := testutil.CaptureStdout(t, func() {
 		ShowNextSteps(provider, configDir)

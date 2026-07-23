@@ -193,9 +193,9 @@ func TestPopulateFromJSONEnv(t *testing.T) {
 			// t.Setenv handles cleanup automatically; no need to save/restore.
 
 			if tt.envValue == "" {
-				t.Setenv("LEDIT_API_KEYS_JSON", "")
+				t.Setenv("SPROUT_API_KEYS_JSON", "")
 			} else {
-				t.Setenv("LEDIT_API_KEYS_JSON", tt.envValue)
+				t.Setenv("SPROUT_API_KEYS_JSON", tt.envValue)
 			}
 
 			keys := make(APIKeys)

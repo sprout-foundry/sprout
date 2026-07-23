@@ -343,7 +343,7 @@ func (m *EmbeddingManager) snapshotQueryParams() (threshold float32, topK int) {
 
 // resolveIndexDirFromConfig resolves the embedding index directory using the
 // same precedence as initLocked: explicit config value first, then the
-// SPROUT_CONFIG / LEDIT_CONFIG env vars, then the user's default config dir.
+// SPROUT_CONFIG / SPROUT_CONFIG env vars, then the user's default config dir.
 func resolveIndexDirFromConfig(cfg *configuration.EmbeddingIndexConfig) string {
 	indexDir := ""
 	if cfg != nil {
@@ -356,12 +356,12 @@ func resolveIndexDirFromConfig(cfg *configuration.EmbeddingIndexConfig) string {
 }
 
 // resolveIndexDir resolves the embedding index directory from the SPROUT_CONFIG
-// or LEDIT_CONFIG environment variables, falling back to the user's default
+// or SPROUT_CONFIG environment variables, falling back to the user's default
 // config directory. Used by both initLocked and SetForTesting.
 func resolveIndexDir() string {
 	configDir := os.Getenv("SPROUT_CONFIG")
 	if configDir == "" {
-		configDir = os.Getenv("LEDIT_CONFIG")
+		configDir = os.Getenv("SPROUT_CONFIG")
 	}
 	if configDir == "" {
 		home, _ := os.UserHomeDir()

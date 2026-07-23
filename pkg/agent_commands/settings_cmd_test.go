@@ -256,7 +256,7 @@ func TestSettingsCommand_NonTTYFallback(t *testing.T) {
 }
 
 func TestSettingsCommand_SetFastPath(t *testing.T) {
-	// Create an isolated test config manager (sets SPROUT_CONFIG/LEDIT_CONFIG env).
+	// Create an isolated test config manager (sets SPROUT_CONFIG/SPROUT_CONFIG env).
 	mgr, cleanup := configuration.NewTestManager(t)
 	defer cleanup()
 

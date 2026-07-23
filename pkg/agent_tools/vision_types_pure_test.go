@@ -179,7 +179,7 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 
 	t.Run("default directory", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
-		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
 
 		got := resolveVisionOutputDirectory()
 		if !strings.HasSuffix(got, ".sprout_ocr_outputs") {
@@ -189,7 +189,7 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 
 	t.Run("custom directory from env", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
-		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "captures")
 
 		got := resolveVisionOutputDirectory()
 		// The directory should contain "captures" in the path
@@ -200,7 +200,7 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 
 	t.Run("absolute path in env is cleaned", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
-		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "/absolute/custom/path")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "/absolute/custom/path")
 
 		got := resolveVisionOutputDirectory()
 		// Should strip the leading / and join with cwd
@@ -217,7 +217,7 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
 	t.Run("with workspace root", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
-		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
 
 		dir := t.TempDir()
 		got := resolveVisionOutputDirectoryWithRoot(dir)
@@ -230,7 +230,7 @@ func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
 
 	t.Run("with custom env and workspace root", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
-		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "my_outputs")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "my_outputs")
 
 		dir := t.TempDir()
 		got := resolveVisionOutputDirectoryWithRoot(dir)
@@ -243,7 +243,7 @@ func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
 
 	t.Run("empty workspace root falls back to cwd", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
-		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
 
 		got := resolveVisionOutputDirectoryWithRoot("")
 

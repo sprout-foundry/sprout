@@ -93,7 +93,7 @@ func TestChangeTrackingE2E(t *testing.T) {
 	oldDir, _ := os.Getwd()
 
 	// Set environment variables for testing
-	t.Setenv("LEDIT_TEST_ENV", "1")
+	t.Setenv("SPROUT_TEST_ENV", "1")
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-testing")
 
 	// Restore directory in all cases

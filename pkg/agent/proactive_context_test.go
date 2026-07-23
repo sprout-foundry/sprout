@@ -623,7 +623,7 @@ func setupProactiveManager(t *testing.T) (*embedding.EmbeddingManager, *embeddin
 	ctx := context.Background()
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
@@ -1320,7 +1320,7 @@ func TestInjectProactiveContext_EmptyStore(t *testing.T) {
 	ctx := context.Background()
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
@@ -1358,7 +1358,7 @@ func TestInjectProactiveContext_WithResults(t *testing.T) {
 	now := time.Now().UTC()
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)

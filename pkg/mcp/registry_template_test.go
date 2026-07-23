@@ -84,7 +84,7 @@ func TestLoadTemplatesFromConfig_ValidConfig(t *testing.T) {
 	}
 
 	// Set environment variable to use temp directory as config dir
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	// Load templates from config
@@ -115,7 +115,7 @@ func TestLoadTemplatesFromConfig_MissingConfigFile(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	// Should return error when config file doesn't exist
@@ -136,7 +136,7 @@ func TestLoadTemplatesFromConfig_InvalidJSON(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()
@@ -165,7 +165,7 @@ func TestLoadTemplatesFromConfig_InvalidSchema(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()
@@ -200,7 +200,7 @@ func TestLoadTemplatesFromConfig_IDsMatchKeys(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()
@@ -231,7 +231,7 @@ func TestLoadTemplatesFromConfig_EmptyTemplates(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()

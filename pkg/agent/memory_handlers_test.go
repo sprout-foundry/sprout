@@ -8,14 +8,14 @@ import (
 )
 
 // setupMemoryHandlers creates an isolated memory directory for testing
-// by setting SPROUT_CONFIG and LEDIT_CONFIG to a temp dir.
+// by setting SPROUT_CONFIG and SPROUT_CONFIG to a temp dir.
 func setupMemoryHandlers(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
 
 	// Set config dir to our temp dir
 	t.Setenv("SPROUT_CONFIG", tmp)
-	t.Setenv("LEDIT_CONFIG", tmp)
+	t.Setenv("SPROUT_CONFIG", tmp)
 
 	// Create the memories subdirectory
 	memDir := filepath.Join(tmp, "memories")

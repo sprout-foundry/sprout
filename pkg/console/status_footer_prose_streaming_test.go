@@ -87,3 +87,47 @@ func TestSetProseStreaming_GatesRefresh(t *testing.T) {
 		t.Fatal("SetProseStreaming(false) did not clear the proseStreaming flag")
 	}
 }
+
+// TestSetProseStreaming_DeferredResizeNoDeadlock is a regression test for
+// the re-entrant outputMu self-deadlock that was introduced when
+// pendingResize was added. SetProseStreaming(false) fires a deferred
+// Resize() when pendingResize is true. The synchronous call deadlocked
+// because SetProseStreaming is called from paths that already hold
+// LockOutput (resetSegment inside FinalizeAtTurnEnd / OnExternalWrite).
+// The fix fires Resize asynchronously via a goroutine.
+//
+// This test verifies that calling SetProseStreaming(false) with
+// pendingResize=true while holding LockOutput does not deadlock.
+func TestSetProseStreaming_DeferredResizeNoDeadlock(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "test"})
+
+	// Simulate: SIGWINCH arrived during streaming, pendingResize was set.
+	f.mu.Lock()
+	f.pendingResize = true
+	f.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		LockOutput()
+		defer UnlockOutput()
+		// Must not block: SetProseStreaming(false) fires Resize
+		// asynchronously, so it must not re-enter outputMu.
+		f.SetProseStreaming(false)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// success — no deadlock
+	case <-time.After(2 * time.Second):
+		t.Fatal("SetProseStreaming(false) with pendingResize deadlocked under LockOutput (re-entrant outputMu)")
+	}
+
+	// pendingResize must have been consumed.
+	f.mu.Lock()
+	pending := f.pendingResize
+	f.mu.Unlock()
+	if pending {
+		t.Fatal("pendingResize was not cleared after SetProseStreaming(false)")
+	}
+}

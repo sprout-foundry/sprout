@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/term"
 )
@@ -88,6 +89,19 @@ type StatusFooter struct {
 	// stale when content scrolls between save and restore, scattering
 	// prose characters across the screen.
 	proseStreaming bool
+
+	// pendingResize is set when a SIGWINCH arrives during active prose
+	// streaming. Resize() defers scroll-region manipulation while
+	// streaming (it would displace in-flight prose), and
+	// SetProseStreaming(false) fires the deferred resize once the
+	// segment is done.
+	pendingResize bool
+
+	// resizeInFlight prevents multiple deferred-resize goroutines from
+	// stacking when SetProseStreaming(false) fires rapidly across
+	// consecutive segments. The first goroutine to CAS from false→true
+	// runs; others see true and skip. Cleared by the goroutine on exit.
+	resizeInFlight atomic.Bool
 
 	// Cost-warn thresholds (USD). Costs above warn render yellow; above
 	// alert render red. Sane defaults; future config wiring possible.
@@ -231,7 +245,38 @@ func (f *StatusFooter) SetProseStreaming(active bool) {
 	}
 	f.mu.Lock()
 	f.proseStreaming = active
+	// When prose streaming ends, fire a deferred resize if one was
+	// pended during streaming. This ensures the scroll region and
+	// footer rows catch up to the new terminal dimensions that
+	// couldn't be applied mid-stream.
+	//
+	// MUST run asynchronously: SetProseStreaming is called from
+	// resetSegment / OnExternalWriteRows, both of which run inside
+	// LockOutput. Resize() also acquires LockOutput. Calling it
+	// synchronously would re-enter the non-reentrant outputMu and
+	// self-deadlock — the exact bug that
+	// TestSetProseStreaming_NoDeadlockUnderOutputLock guards against.
+	// The goroutine is safe because Resize acquires its own locks
+	// (f.mu, LockOutput) from a clean stack.
+	shouldResize := false
+	if !active && f.pendingResize {
+		f.pendingResize = false
+		shouldResize = true
+	}
 	f.mu.Unlock()
+
+	if shouldResize {
+		// Only fire if no deferred resize is already in-flight. The
+		// CAS prevents goroutine stacking when consecutive segments
+		// end in rapid succession. Resize reads the latest terminal
+		// size itself, so skipping a duplicate is safe.
+		if f.resizeInFlight.CompareAndSwap(false, true) {
+			go func() {
+				defer f.resizeInFlight.Store(false)
+				f.Resize()
+			}()
+		}
+	}
 }
 
 // SetShowKeymapHint enables/disables the keyboard shortcut hint row
@@ -264,16 +309,30 @@ func (f *StatusFooter) Resize() {
 	if f == nil || !f.isTTY {
 		return
 	}
+
+	LockOutput()
+	defer UnlockOutput()
+
 	f.mu.Lock()
 	active := f.active
+	streaming := f.proseStreaming
 	oldRows := f.lastRows
 	f.mu.Unlock()
 	if !active {
 		return
 	}
 
-	LockOutput()
-	defer UnlockOutput()
+	// Defer resize while prose is actively streaming. Scroll-region
+	// manipulation during streaming displaces in-flight prose content,
+	// garbling the output. Set pendingResize so
+	// SetProseStreaming(false) fires the deferred resize once the
+	// segment ends.
+	if streaming {
+		f.mu.Lock()
+		f.pendingResize = true
+		f.mu.Unlock()
+		return
+	}
 
 	// Reset the scroll region temporarily so we can address rows by
 	// absolute number without the terminal clamping us inside the OLD

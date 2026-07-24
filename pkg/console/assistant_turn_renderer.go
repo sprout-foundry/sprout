@@ -230,13 +230,42 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	// Serialize against the status footer / input renderer so a concurrent
-	// footer redraw can't interleave with this stream and displace the
-	// cursor.
 	LockOutput()
 	defer UnlockOutput()
+	r.writeChunkLocked(chunk)
+}
 
+// WriteChunkWithSeparator is like WriteChunk but emits a separator
+// newline before the chunk text, all under a single LockOutput
+// acquisition. This prevents the race where a bare fmt.Println() (not
+// under LockOutput) advances the cursor, but a concurrent footer
+// draw's DECSC/DECRC (\0337/\0338) restores the cursor to its
+// pre-newline position — undoing the advance and causing the first
+// prose line to land on the wrong row (overwriting spinner residue or
+// appearing garbled). By folding the \n into the same locked section
+// as the chunk write, the footer cannot interleave between them.
+//
+// needsSeparator is pre-computed by the caller via CursorOnFreshRow()
+// and ReasoningActive(). When false, no \n is emitted and the method
+// behaves identically to WriteChunk.
+func (r *AssistantTurnRenderer) WriteChunkWithSeparator(chunk string, needsSeparator bool) {
+	if chunk == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
+	if needsSeparator {
+		fmt.Print("\n")
+	}
+	r.writeChunkLocked(chunk)
+}
+
+// writeChunkLocked is the lock-free inner body of WriteChunk and
+// WriteChunkWithSeparator. The caller MUST hold both r.mu and
+// LockOutput.
+func (r *AssistantTurnRenderer) writeChunkLocked(chunk string) {
 	// Prose has arrived — finalize any pending reasoning header so the
 	// "▽ Thinking…" line collapses to the summary before the first
 	// prose row lands.

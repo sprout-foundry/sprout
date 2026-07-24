@@ -64,9 +64,18 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			case <-stopCh:
 				return
 			case <-resizeCh:
-				// Terminal resized — re-render the steer line so the
-				// caret and content adapt to the new width.
-				r.renderLine()
+				// Terminal resized. Delegate to the footer's Resize
+				// which handles scroll-region re-application, row
+				// clearing, and redraw atomically under LockOutput.
+				// Calling renderLine directly would race with the
+				// footer's own SIGWINCH handler — both would try to
+				// manipulate scroll regions and cursor position,
+				// producing stacked-duplicates and garbled output.
+				if r.footer != nil {
+					r.footer.Resize()
+				} else {
+					r.renderLine()
+				}
 			case <-ticker.C:
 			}
 			continue

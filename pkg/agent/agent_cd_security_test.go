@@ -1,3 +1,4 @@
+//go:build !windows
 // Package agent: tests for cd-target validation against the session allowlist (SP-127 Phase 2.1)
 package agent
 

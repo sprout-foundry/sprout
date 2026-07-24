@@ -6,14 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  ChevronRight,
-  ChevronDown,
-  File,
-  Folder,
-  FolderOpen,
-  Loader2,
-} from 'lucide-react';
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { gitClient, FileEntry } from '../../services/gitClient';
 import './RepoFileTree.css';
 
@@ -35,8 +28,8 @@ export const RepoFileTree: React.FC<RepoFileTreeProps> = ({ dir, onFileClick }) 
       const items = await gitClient.listDir(dir, '/');
       setEntries(items);
       setError(null);
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to read directory');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to read directory');
     } finally {
       setLoading(false);
     }
@@ -65,13 +58,7 @@ export const RepoFileTree: React.FC<RepoFileTreeProps> = ({ dir, onFileClick }) 
   return (
     <div className="repo-file-tree">
       {entries.map((entry) => (
-        <TreeNode
-          key={entry.path}
-          entry={entry}
-          repoDir={dir}
-          depth={0}
-          onFileClick={onFileClick}
-        />
+        <TreeNode key={entry.path} entry={entry} repoDir={dir} depth={0} onFileClick={onFileClick} />
       ))}
     </div>
   );
@@ -84,12 +71,7 @@ interface TreeNodeProps {
   onFileClick: (filepath: string, content: string) => void;
 }
 
-const TreeNode: React.FC<TreeNodeProps> = ({
-  entry,
-  repoDir,
-  depth,
-  onFileClick,
-}) => {
+const TreeNode: React.FC<TreeNodeProps> = ({ entry, repoDir, depth, onFileClick }) => {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<FileEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -105,8 +87,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       try {
         const items = await gitClient.listDir(repoDir, entry.path);
         setChildren(items);
-      } catch (err: any) {
-        setFileError(err.message ?? 'Failed to read directory');
+      } catch (err) {
+        setFileError(err instanceof Error ? err.message : 'Failed to read directory');
       } finally {
         setLoading(false);
       }
@@ -124,8 +106,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       setFileContent(content);
       setFileError(null);
       onFileClick(entry.path, content);
-    } catch (err: any) {
-      setFileError(err.message ?? 'Failed to read file');
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : 'Failed to read file');
     }
   }, [entry, repoDir, onFileClick]);
 
@@ -155,9 +137,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           </>
         )}
         <span className="tree-node-name">{entry.name}</span>
-        {!isDir && entry.size > 0 && (
-          <span className="tree-node-size">{formatSize(entry.size)}</span>
-        )}
+        {!isDir && entry.size > 0 && <span className="tree-node-size">{formatSize(entry.size)}</span>}
       </div>
 
       {isDir && expanded && (
@@ -168,13 +148,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
           )}
           {children?.map((child) => (
-            <TreeNode
-              key={child.path}
-              entry={child}
-              repoDir={repoDir}
-              depth={depth + 1}
-              onFileClick={onFileClick}
-            />
+            <TreeNode key={child.path} entry={child} repoDir={repoDir} depth={depth + 1} onFileClick={onFileClick} />
           ))}
           {fileError && (
             <div className="tree-node-error" style={{ paddingLeft: (depth + 1) * 16 }}>

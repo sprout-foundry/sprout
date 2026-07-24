@@ -12,7 +12,7 @@ import {
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
 import { gitClient } from '../../services/gitClient';
-import { syncRepoToWasmVfs } from '../../services/repoVfsBridge';
+import { syncRepoToWasmVfs, type WasmWriter } from '../../services/repoVfsBridge';
 import { RepoFileTree } from './RepoFileTree';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
@@ -45,9 +45,9 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
   const [error, setError] = useState<string | null>(null);
 
   // Clone state
-  const [cloneStatus, setCloneStatus] = useState<
-    'idle' | 'checking' | 'cloning' | 'ready' | 'error' | 'needs-auth'
-  >('idle');
+  const [cloneStatus, setCloneStatus] = useState<'idle' | 'checking' | 'cloning' | 'ready' | 'error' | 'needs-auth'>(
+    'idle',
+  );
   const [cloneProgress, setCloneProgress] = useState<{
     phase: string;
     loaded: number;
@@ -128,22 +128,18 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
         const exists = await gitClient.exists(repoDir);
         if (!exists) {
           setCloneStatus('cloning');
-          await gitClient.clone(
-            `https://github.com/${repoOwner}/${repoName}`,
-            repoDir,
-            {
-              depth: 1,
-              branch: data?.repo?.default_branch ?? 'main',
-              token,
-              onProgress: ({ phase, loaded, total }) => {
-                setCloneProgress({ phase, loaded, total });
-              },
-            }
-          );
+          await gitClient.clone(`https://github.com/${repoOwner}/${repoName}`, repoDir, {
+            depth: 1,
+            branch: data?.repo?.default_branch ?? 'main',
+            token,
+            onProgress: ({ phase, loaded, total }) => {
+              setCloneProgress({ phase, loaded, total });
+            },
+          });
         }
         setCloneStatus('ready');
-      } catch (err: any) {
-        const msg = err?.message ?? String(err);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         if (/401|403|Unauthorized|authentication/i.test(msg)) {
           setCloneStatus('needs-auth');
         } else {
@@ -154,7 +150,7 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
         cloningRef.current = false;
       }
     },
-    [repoDir, repoOwner, repoName, data?.repo?.default_branch]
+    [repoDir, repoOwner, repoName, data?.repo?.default_branch],
   );
 
   const handleFileClick = useCallback(
@@ -162,7 +158,7 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
       setOpenedFile({ path: filepath, content });
       log.debug(`Opened ${filepath} from ${repoOwner}/${repoName}`);
     },
-    [repoOwner, repoName, log]
+    [repoOwner, repoName, log],
   );
 
   const handleOpenInIDE = useCallback(async () => {
@@ -170,14 +166,15 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
       await ensureCloned();
     }
     // Bridge to WASM VFS so the agent can read these files
-    const adapter = getAdapter() as any;
+    const adapter = getAdapter() as { getWasmShell?: () => WasmWriter };
     const shell = adapter?.getWasmShell?.();
     if (shell) {
       try {
         await syncRepoToWasmVfs(repoDir, '/workspace/repo', shell);
         log.info(`Synced ${repoOwner}/${repoName} to workspace`);
-      } catch (err: any) {
-        log.error(`Sync error: ${err.message ?? err}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error(`Sync error: ${msg}`);
       }
     }
     // Navigate to editor
@@ -322,11 +319,8 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
             <Loader2 size={16} className="spinner" /> Cloning from GitHub…
             {cloneProgress && (
               <span className="clone-progress">
-                {cloneProgress.phase}{' '}
-                {Math.round(cloneProgress.loaded / 1024)}KB
-                {cloneProgress.total
-                  ? ` / ${Math.round(cloneProgress.total / 1024)}KB`
-                  : ''}
+                {cloneProgress.phase} {Math.round(cloneProgress.loaded / 1024)}KB
+                {cloneProgress.total ? ` / ${Math.round(cloneProgress.total / 1024)}KB` : ''}
               </span>
             )}
           </div>
@@ -379,10 +373,7 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
               <div className="file-preview">
                 <div className="file-preview-header">
                   <code>{openedFile.path}</code>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    onClick={() => setOpenedFile(null)}
-                  >
+                  <button className="btn btn-sm btn-ghost" onClick={() => setOpenedFile(null)}>
                     ×
                   </button>
                 </div>

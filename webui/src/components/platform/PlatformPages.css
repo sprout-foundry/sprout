@@ -504,3 +504,113 @@
   background: var(--bg-info, rgba(97, 175, 239, 0.12));
   color: var(--text-info, #61afef);
 }
+
+/* Clone Status */
+.clone-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.clone-progress {
+  margin-left: auto;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.clone-error,
+.clone-needs-auth {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(229, 62, 62, 0.08);
+  border: 1px solid rgba(229, 62, 62, 0.3);
+  border-radius: 6px;
+  color: var(--accent-error, #e53e3e);
+  font-size: 13px;
+}
+
+.pat-input-row {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 300px;
+}
+
+.pat-input-row .input {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--bg-tertiary, #1a1a1a);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+}
+
+/* Repo Files Layout */
+.repo-files-container {
+  display: flex;
+  gap: 12px;
+  min-height: 300px;
+}
+
+.repo-files-container .repo-file-tree {
+  flex: 1;
+  max-height: 500px;
+  overflow-y: auto;
+  background: var(--bg-tertiary, #0e0e0e);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.file-preview {
+  flex: 2;
+  background: var(--bg-tertiary, #0e0e0e);
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.file-preview-header code {
+  font-family: 'SF Mono', Menlo, monospace;
+  color: var(--text-secondary);
+}
+
+.file-preview-content {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Spinner */
+.platform-spinner-spin {
+  animation: platform-spin 1s linear infinite;
+}
+
+@keyframes platform-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

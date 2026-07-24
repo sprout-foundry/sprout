@@ -1,0 +1,87 @@
+.repo-file-tree {
+  font-family: 'SF Mono', Menlo, Monaco, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  user-select: none;
+}
+
+.repo-file-tree-loading,
+.repo-file-tree-empty,
+.repo-file-tree-error {
+  padding: 12px;
+  color: var(--text-secondary, #888);
+  font-size: 13px;
+}
+
+.repo-file-tree-error {
+  color: var(--error-color, #e53e3e);
+}
+
+.tree-node {
+  width: 100%;
+}
+
+.tree-node-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.tree-node-row:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.tree-node-row:focus-visible {
+  outline: 2px solid var(--accent-color, #3b82f6);
+  outline-offset: -2px;
+}
+
+.tree-node-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-node-size {
+  color: var(--text-tertiary, #666);
+  font-size: 11px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.tree-node-dir .tree-node-name {
+  font-weight: 500;
+}
+
+.tree-node-children {
+  border-left: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  margin-left: 12px;
+}
+
+.tree-node-loading,
+.tree-node-error {
+  padding: 4px 8px;
+  color: var(--text-secondary, #888);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tree-node-error {
+  color: var(--error-color, #e53e3e);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

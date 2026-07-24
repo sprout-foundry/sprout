@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -101,7 +102,7 @@ func loadDefinitionsFromFS(fsys fs.FS, dir string) (map[string]Definition, error
 			continue
 		}
 
-		filename := filepath.Join(dir, entry.Name())
+		filename := path.Join(dir, entry.Name())
 		data, err := fs.ReadFile(fsys, filename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read persona config %s: %w", filename, err)

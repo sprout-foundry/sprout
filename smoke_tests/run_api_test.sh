@@ -5,6 +5,8 @@
 echo "=== Running API Functionality Smoke Test ==="
 echo
 echo "This test verifies the registry removal changes are working correctly."
+
+echo "This is a test, this is only a test"
 echo "It will make real API calls if API keys are set."
 echo
 

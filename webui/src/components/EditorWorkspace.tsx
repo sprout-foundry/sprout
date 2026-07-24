@@ -22,6 +22,7 @@ const TaskDetailPage = lazy(() => import('./platform').then((m) => ({ default: m
 const RepoDetailPage = lazy(() => import('./platform').then((m) => ({ default: m.RepoDetailPage })));
 const AdminBillingPage = lazy(() => import('./platform').then((m) => ({ default: m.AdminBillingPage })));
 const RepoOnboarding = lazy(() => import('./platform/RepoOnboarding'));
+const IntegrationsView = lazy(() => import('./platform/IntegrationsView'));
 const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
@@ -623,6 +624,14 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return (
       <Suspense fallback={<RouteFallback />}>
         <WorkspacesPage />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'integrations') {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <IntegrationsView />
       </Suspense>
     );
   }

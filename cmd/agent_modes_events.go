@@ -3,8 +3,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
@@ -114,10 +112,16 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 				// Advancing to a fresh row first would orphan the
 				// "▽ Thinking…" header and place the summary on the
 				// wrong row.
+				//
+				// The separator is emitted inside WriteChunkWithSeparator's
+				// LockOutput section so a concurrent footer draw's
+				// DECSC/DECRC can't undo the cursor advance between the
+				// \n and the chunk text.
+				needsSeparator := false
 				if chunk != "" && firstProseChunk.CompareAndSwap(false, true) && !r.CursorOnFreshRow() && !r.ReasoningActive() {
-					fmt.Println()
+					needsSeparator = true
 				}
-				r.WriteChunk(chunk)
+				r.WriteChunkWithSeparator(chunk, needsSeparator)
 				return
 			}
 			// Between turns: route through PrintExternal so background

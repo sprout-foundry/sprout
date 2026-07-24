@@ -17,6 +17,22 @@ import (
 //
 // Hold the lock only for the duration of a single atomic render. Do
 // not call user-supplied callbacks or block on I/O while holding it.
+// Lock ordering contract (MUST be followed to avoid deadlocks):
+//
+//   AssistantTurnRenderer.mu  →  outputMu  →  StatusFooter.mu
+//
+// - renderer.mu is always acquired first (by WriteChunk / OnExternalWrite),
+//   then outputMu inside the method body.
+// - outputMu serializes all terminal-chrome writes; it is acquired
+//   second, after renderer.mu.
+// - footer.mu is acquired last, only for brief field reads/writes
+//   (never during I/O).
+// - SetProseStreaming acquires ONLY footer.mu — never outputMu —
+//   because it is called from paths that already hold outputMu
+//   (resetSegment inside FinalizeAtTurnEnd / OnExternalWrite).
+// - The deferred resize fired by SetProseStreaming runs via
+//   `go f.Resize()` from a clean stack, so it freely acquires
+//   outputMu and footer.mu in the standard order.
 var outputMu sync.Mutex
 
 // activeInputReader points to the InputReader whose ReadLine loop is

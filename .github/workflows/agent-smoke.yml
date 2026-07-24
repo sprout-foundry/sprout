@@ -3,14 +3,18 @@ name: sprout-agent-smoke
 on:
   pull_request:
     types: [opened, synchronize]
+  issue_comment:
+    types: [created]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
 jobs:
+  # ─── REVIEW MODE: inline comments on a PR with real bugs ───
   review:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,4 +33,46 @@ jobs:
           timeout-minutes: "10"
           review-type: comprehensive
           comment-threshold: low
+          debug: "true"
+
+  # ─── FIX MODE: create a PR from an issue ───
+  fix:
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '/sprout-fix')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: sprout-foundry/sprout-agent@main
+        with:
+          mode: fix
+          primary-provider: deepinfra
+          primary-model: deepseek-ai/DeepSeek-V3.1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deepinfra-api-key: ${{ secrets.DEEPINFRA_API_KEY }}
+          max-iterations: "100"
+          max-budget-usd: "2.00"
+          timeout-minutes: "20"
+          trigger-phrase: "/sprout-fix"
+          debug: "true"
+
+  # ─── PLAN MODE: post a plan on an issue ───
+  plan:
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '/sprout-plan')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: sprout-foundry/sprout-agent@main
+        with:
+          mode: plan
+          primary-provider: deepinfra
+          primary-model: deepseek-ai/DeepSeek-V3.1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deepinfra-api-key: ${{ secrets.DEEPINFRA_API_KEY }}
+          max-iterations: "40"
+          max-budget-usd: "1.00"
+          timeout-minutes: "10"
+          trigger-phrase: "/sprout-plan"
           debug: "true"

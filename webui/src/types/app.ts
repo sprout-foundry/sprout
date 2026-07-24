@@ -88,7 +88,8 @@ export type ViewType =
   | 'dashboard'
   | 'repodetail'
   | 'admin'
-  | 'workspaces';
+  | 'workspaces'
+  | 'integrations';
 
 export interface AppState {
   isConnected: boolean;

@@ -960,51 +960,134 @@
   background: rgba(97, 175, 239, 0.08);
 }
 
-/* Provider badges (GitHub, GitLab, Bitbucket) */
-.provider-badge {
+/* Integrations View */
+.integrations-view {
+  padding: 24px;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.integrations-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.integrations-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.integrations-icon {
+  font-size: 28px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+}
+
+.integrations-card-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.integrations-status {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 6px;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.integrations-status.connected {
+  color: var(--accent-success);
+}
+
+.integrations-status.disconnected {
+  color: var(--text-muted);
+}
+
+.integrations-card-header .integrations-account {
+  margin-left: auto;
+  font-size: 13px;
+  font-family: 'SF Mono', Menlo, monospace;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
   border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  margin-right: 4px;
 }
 
-.provider-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.integrations-card-body {
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
 }
 
-.provider-badge--github {
-  background: rgba(36, 41, 46, 0.2);
-  color: #24292e;
+.integrations-btn-disconnect {
+  color: var(--accent-error);
+  border-color: var(--accent-error);
 }
 
-.provider-badge--github .provider-dot {
-  background: #24292e;
+.integrations-btn-disconnect:hover {
+  background: rgba(224, 108, 117, 0.12);
 }
 
-.provider-badge--gitlab {
-  background: rgba(226, 67, 41, 0.15);
-  color: #e2432a;
+.integrations-connect-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.provider-badge--gitlab .provider-dot {
-  background: #e2432a;
+.integrations-coming-soon {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
-.provider-badge--bitbucket {
-  background: rgba(0, 82, 204, 0.15);
-  color: #0052cc;
+.integrations-coming-soon svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent-warning);
 }
 
-.provider-badge--bitbucket .provider-dot {
-  background: #0052cc;
+.integrations-pat-row {
+  display: flex;
+  gap: 8px;
+}
+
+.integrations-pat-row .input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  outline: none;
+}
+
+.integrations-pat-row .input:focus {
+  border-color: var(--accent-primary);
+}
+
+.integrations-doc-link {
+  font-size: 12px;
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.integrations-doc-link:hover {
+  text-decoration: underline;
 }
 
 /* Dashboard connect bar */
@@ -1016,9 +1099,8 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   font-size: 12px;
-  flex-wrap: wrap;
 }
 
 .dashboard-connect-label {

@@ -16,6 +16,7 @@ import remarkGfm from 'remark-gfm';
 import { getAdapter } from '../../services/apiAdapter';
 import { gitClient } from '../../services/gitClient';
 import { syncRepoToWasmVfs, type WasmWriter } from '../../services/repoVfsBridge';
+import { downloadRepoAsZip } from '../../services/repoDownload';
 import { RepoFileTree } from './RepoFileTree';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
@@ -356,6 +357,22 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
           <a className="btn btn-sm" href={`/webui/?repo=${encodeURIComponent(data.repo.html_url)}`}>
             Browser IDE
           </a>
+          {cloneStatus === 'ready' && (
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={async () => {
+                try {
+                  await downloadRepoAsZip(repoDir, `${repoOwner}-${repoName}`);
+                  log.info(`Downloaded ${repoOwner}/${repoName} as ZIP`);
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  log.error(`ZIP download failed: ${msg}`);
+                }
+              }}
+            >
+              <Download size={14} /> ZIP
+            </button>
+          )}
           {data.repo.language && <span className="repo-detail-lang">{data.repo.language}</span>}
         </div>
       </div>

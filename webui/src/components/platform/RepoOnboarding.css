@@ -1,0 +1,420 @@
+/* RepoOnboarding — First-run onboarding styles */
+
+.onboarding-container {
+  max-width: 680px;
+  margin: 32px auto;
+  padding: 0 24px;
+}
+
+.onboarding-hero {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.onboarding-hero-icon {
+  color: var(--accent-primary);
+  margin-bottom: 12px;
+}
+
+.onboarding-hero h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.onboarding-hero-desc {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+/* Tab bar */
+.onboarding-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 20px;
+}
+
+.onboarding-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.onboarding-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.onboarding-tab.active {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Content area */
+.onboarding-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.onboarding-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0 0 10px 0;
+}
+
+.onboarding-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 8px 0 0 0;
+}
+
+.onboarding-hint code {
+  font-family: 'SF Mono', Menlo, monospace;
+  color: var(--text-secondary);
+}
+
+/* URL import row */
+.onboarding-url-row {
+  display: flex;
+  gap: 8px;
+}
+
+.onboarding-url-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  outline: none;
+}
+
+.onboarding-url-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.onboarding-url-input:disabled {
+  opacity: 0.5;
+}
+
+/* Search input for repo list */
+.onboarding-search-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.onboarding-search-input:focus {
+  border-color: var(--accent-primary);
+}
+
+/* Repo list */
+.onboarding-repo-list {
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.onboarding-repo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.onboarding-repo-card:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-elevated);
+}
+
+.onboarding-repo-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.onboarding-repo-name {
+  font-weight: 500;
+  font-size: 13px;
+  font-family: 'SF Mono', Menlo, monospace;
+}
+
+.private-icon {
+  color: var(--accent-warning);
+}
+
+.onboarding-repo-lang {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.onboarding-repo-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Loading, empty, error states for tab content */
+.onboarding-loading,
+.onboarding-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  justify-content: center;
+}
+
+.onboarding-empty {
+  flex-direction: column;
+}
+
+/* Success / Error banners */
+.onboarding-success,
+.onboarding-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.onboarding-success {
+  background: var(--bg-success, rgba(152, 195, 121, 0.12));
+  color: var(--accent-success);
+}
+
+.onboarding-error {
+  background: var(--bg-error, rgba(224, 108, 117, 0.12));
+  color: var(--accent-error);
+}
+
+/* Tips section */
+.onboarding-tips {
+  margin-top: 16px;
+}
+
+.onboarding-tips h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+}
+
+.onboarding-tip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.onboarding-tip-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.onboarding-tip-card svg {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+}
+
+/* Create tab */
+.onboarding-create {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onboarding-create-info {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.onboarding-create-info h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.onboarding-create-info ul {
+  margin: 0;
+  padding-left: 10px;
+  list-style: none;
+}
+
+.onboarding-create-info li {
+  margin: 4px 0;
+  padding-left: 4px;
+}
+
+.onboarding-create-info code {
+  font-family: 'SF Mono', Menlo, monospace;
+  color: var(--accent-primary);
+}
+
+/* Create repo dialog */
+.onboarding-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.onboarding-dialog {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  width: 460px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.onboarding-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.onboarding-dialog-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.onboarding-dialog-body {
+  padding: 20px;
+}
+
+.onboarding-dialog-field {
+  margin-bottom: 16px;
+}
+
+.onboarding-dialog-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.onboarding-dialog-field input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.onboarding-dialog-field input:focus {
+  border-color: var(--accent-primary);
+}
+
+.onboarding-dialog-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.onboarding-dialog-checkbox input {
+  margin: 0;
+}
+
+.onboarding-dialog-checkbox label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.onboarding-dialog-done {
+  padding: 8px 12px;
+  background: var(--bg-success, rgba(152, 195, 121, 0.12));
+  color: var(--accent-success);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.onboarding-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+}

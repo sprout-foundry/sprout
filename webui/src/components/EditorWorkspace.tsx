@@ -21,6 +21,7 @@ const WorkspacesPage = lazy(() => import('./platform').then((m) => ({ default: m
 const TaskDetailPage = lazy(() => import('./platform').then((m) => ({ default: m.TaskDetailPage })));
 const RepoDetailPage = lazy(() => import('./platform').then((m) => ({ default: m.RepoDetailPage })));
 const AdminBillingPage = lazy(() => import('./platform').then((m) => ({ default: m.AdminBillingPage })));
+const RepoOnboarding = lazy(() => import('./platform/RepoOnboarding'));
 const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
@@ -46,6 +47,8 @@ export interface EditorWorkspaceProps {
   selectedTaskId?: string | null;
   /** Selected repo in owner/name format for RepoDetailPage. */
   selectedRepo?: { owner: string; name: string } | null;
+  /** Called when a repo is selected from the onboarding screen. */
+  onRepoSelected?: (owner: string, name: string) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -132,6 +135,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   onViewChange,
   selectedTaskId,
   selectedRepo,
+  onRepoSelected,
 }) => {
   const {
     panes,
@@ -626,6 +630,18 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           repoOwner={selectedRepo.owner}
           repoName={selectedRepo.name}
           onBack={() => onViewChange?.('dashboard')}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'repodetail' && !selectedRepo) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <RepoOnboarding
+          onRepoSelected={(owner, name) => {
+            onRepoSelected?.(owner, name);
+          }}
         />
       </Suspense>
     );

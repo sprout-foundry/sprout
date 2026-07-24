@@ -197,6 +197,17 @@ const AppContent: React.FC<AppContentProps> = ({
     },
     [setAppState, state.provider],
   );
+
+  const handleRepoSelected = useCallback(
+    (owner: string, name: string) => {
+      setAppState((prev) => ({
+        selectedRepo: { owner, name },
+        currentView: 'repodetail' as const,
+      }));
+    },
+    [setAppState],
+  );
+
   const hotkeysConfigPath = useHotkeysConfig(apiService, isConnected);
   const {
     instances,
@@ -797,6 +808,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 onViewChange={onViewChange}
                 selectedTaskId={state.selectedTaskId}
                 selectedRepo={state.selectedRepo}
+                onRepoSelected={handleRepoSelected}
               />
             </ErrorBoundary>
           </div>

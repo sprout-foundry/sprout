@@ -43,7 +43,7 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
@@ -188,7 +188,7 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
@@ -259,7 +259,7 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 
 	clientID := "window-reset"
 	if _, err := ws.setClientWorkspaceRoot(clientID, startWorkspace); err != nil {
@@ -458,7 +458,7 @@ func TestCleanupInactiveClientContextsRemovesOnlyStaleInactiveDisconnectedClient
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 
 	old := time.Now().Add(-2 * time.Hour)
 	recent := time.Now().Add(-5 * time.Minute)

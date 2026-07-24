@@ -35,7 +35,7 @@ func setupConcurrentTestServer(t *testing.T) *ReactWebServer {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = workspaceRoot
+	ws.SetWorkspaceRoot(workspaceRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 

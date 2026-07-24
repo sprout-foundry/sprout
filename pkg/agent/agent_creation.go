@@ -778,11 +778,11 @@ func (a *Agent) autoActivateCoordinatorPersona() {
 	}
 	// Resolve symlinks on both paths to avoid mismatch
 	// (e.g., macOS /Users → /private/Users, or custom symlinked home)
-	resolvedWorkspace, wsErr := filepath.EvalSymlinks(a.workspaceRoot)
+	resolvedWorkspace, wsErr := filepath.EvalSymlinks(a.GetWorkspaceRoot())
 	resolvedHome, homeErr := filepath.EvalSymlinks(homeDir)
 	if wsErr != nil || homeErr != nil {
 		// Fall back to direct comparison if symlink resolution fails
-		resolvedWorkspace = a.workspaceRoot
+		resolvedWorkspace = a.GetWorkspaceRoot()
 		resolvedHome = homeDir
 	}
 	if resolvedWorkspace != resolvedHome {

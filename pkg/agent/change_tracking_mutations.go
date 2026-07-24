@@ -182,7 +182,7 @@ func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSna
 func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, toolCall string) {
 	workspaceRoot := ""
 	if ct.agent != nil {
-		workspaceRoot = ct.agent.workspaceRoot
+		workspaceRoot = ct.agent.GetWorkspaceRoot()
 	}
 	absWorkspace := workspaceRoot
 	if workspaceRoot != "" {

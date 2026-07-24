@@ -88,7 +88,7 @@ func (a *Agent) invalidateVisionCache() {
 // indirectly via SetBaseSystemPrompt; leaving it stale would let a
 // later persona clear reintroduce the old model's prompt.
 func (a *Agent) refreshSystemPrompt() {
-	if a == nil || a.configManager == nil || a.workspaceRoot == "" {
+	if a == nil || a.configManager == nil || a.GetWorkspaceRoot() == "" {
 		return
 	}
 	cfg := a.configManager.GetConfig()
@@ -106,7 +106,7 @@ func (a *Agent) refreshSystemPrompt() {
 		}
 		return
 	}
-	prompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, a.workspaceRoot)
+	prompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, a.GetWorkspaceRoot())
 	if err != nil {
 		if a.debug {
 			a.Logger().Debug("refreshSystemPrompt: failed to load prompt: %v", err)
@@ -140,8 +140,12 @@ type Agent struct {
 
 	// Configuration
 	configManager *configuration.Manager
-	workspaceRoot string
-	debug         bool
+	// workspaceRootMu protects workspaceRoot from concurrent SetWorkspaceRoot/GetWorkspaceRoot calls.
+	// Concurrent chat queries and session deletes both touch this field; without synchronization the
+	// string assignment can tear under the race detector.
+	workspaceRootMu sync.RWMutex
+	workspaceRoot   string
+	debug           bool
 	// contextProfile (SP-125) is the resolved set of context-engine
 	// levers (tool allowlist, prompt path, compaction trigger, etc.).
 	// Resolved once at agent creation by ResolveContextProfile and read

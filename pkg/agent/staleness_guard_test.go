@@ -23,7 +23,7 @@ import (
 func TestRecoverFile_SkipsStaleFile(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct
@@ -92,7 +92,7 @@ func TestRecoverFile_SkipsStaleFile(t *testing.T) {
 func TestRecoverFile_ProceedsWhenNotStale(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct
@@ -155,7 +155,7 @@ func TestRecoverFile_ProceedsWhenNotStale(t *testing.T) {
 func TestRevertMyChanges_SkipsStaleFile(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct
@@ -222,7 +222,7 @@ func TestRevertMyChanges_SkipsStaleFile(t *testing.T) {
 func TestRevertMyChanges_ProceedsWhenNotStale(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct
@@ -288,7 +288,7 @@ func TestRevertMyChanges_ProceedsWhenNotStale(t *testing.T) {
 func TestRecoverFile_CreateOp_SkipsStaleFile(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct
@@ -428,7 +428,7 @@ func TestIsStaleForRevert_FileDiffersFromNewCode(t *testing.T) {
 func TestRecoverFile_MultiEdit_SessionStart_Proceeds(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct
@@ -502,7 +502,7 @@ func TestRecoverFile_MultiEdit_SessionStart_Proceeds(t *testing.T) {
 func TestRevertMyChanges_MultiEdit_Proceeds(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct
@@ -578,7 +578,7 @@ func TestRevertMyChanges_MultiEdit_Proceeds(t *testing.T) {
 func TestRecoverFile_MultiEdit_SessionStart_SkipsGenuinelyStaleFile(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct

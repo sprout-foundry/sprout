@@ -1333,7 +1333,7 @@ func TestInjectProactiveContext_EmptyStore(t *testing.T) {
 	a := &Agent{}
 	a.state = NewAgentStateManager(false)
 	a.output = NewAgentOutputManager()
-	a.workspaceRoot = tempDir
+	a.SetWorkspaceRoot(tempDir)
 	a.embeddingMgr = mgr
 
 	err := a.InjectProactiveContext(ctx, "some query")
@@ -1381,7 +1381,7 @@ func TestInjectProactiveContext_WithResults(t *testing.T) {
 	a := &Agent{}
 	a.state = NewAgentStateManager(false)
 	a.output = NewAgentOutputManager()
-	a.workspaceRoot = tempDir
+	a.SetWorkspaceRoot(tempDir)
 	a.embeddingMgr = mgr
 
 	err = a.InjectProactiveContext(ctx, "How to build REST endpoints?")

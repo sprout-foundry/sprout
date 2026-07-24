@@ -959,3 +959,73 @@
   border-color: var(--accent-primary);
   background: rgba(97, 175, 239, 0.08);
 }
+
+/* Provider badges (GitHub, GitLab, Bitbucket) */
+.provider-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-right: 4px;
+}
+
+.provider-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.provider-badge--github {
+  background: rgba(36, 41, 46, 0.2);
+  color: #24292e;
+}
+
+.provider-badge--github .provider-dot {
+  background: #24292e;
+}
+
+.provider-badge--gitlab {
+  background: rgba(226, 67, 41, 0.15);
+  color: #e2432a;
+}
+
+.provider-badge--gitlab .provider-dot {
+  background: #e2432a;
+}
+
+.provider-badge--bitbucket {
+  background: rgba(0, 82, 204, 0.15);
+  color: #0052cc;
+}
+
+.provider-badge--bitbucket .provider-dot {
+  background: #0052cc;
+}
+
+/* Dashboard connect bar */
+.dashboard-connect-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.dashboard-connect-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.dashboard-connect-btn {
+  margin-left: auto;
+}

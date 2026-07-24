@@ -1,4 +1,4 @@
-import { GitBranch, Clock, Zap, LayoutDashboard, Search } from 'lucide-react';
+import { GitBranch, Clock, Zap, LayoutDashboard, Search, Plus } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
 import { getEditorSync } from '../../services/crossTabSync';
@@ -16,6 +16,34 @@ interface Repo {
   updated_at: string;
   open_issues_count: number;
   stargazers_count: number;
+  /** Provider source: "github", "gitlab", "bitbucket", or "local" */
+  provider?: string;
+}
+
+/** Map provider name to a display badge (colored dot + label). */
+function ProviderBadge({ provider }: { provider?: string }) {
+  if (!provider || provider === 'github') {
+    return (
+      <span className="provider-badge provider-badge--github" title="GitHub">
+        <span className="provider-dot" /> GitHub
+      </span>
+    );
+  }
+  if (provider === 'gitlab') {
+    return (
+      <span className="provider-badge provider-badge--gitlab" title="GitLab">
+        <span className="provider-dot" /> GitLab
+      </span>
+    );
+  }
+  if (provider === 'bitbucket') {
+    return (
+      <span className="provider-badge provider-badge--bitbucket" title="Bitbucket">
+        <span className="provider-dot" /> Bitbucket
+      </span>
+    );
+  }
+  return null;
 }
 
 interface TaskRecord {
@@ -68,7 +96,13 @@ const DashboardPage: React.FC = () => {
 
     if (reposRes.status === 'fulfilled') {
       const data = await reposRes.value.json().catch(() => ({ repos: [] }));
-      setRepos(data.repos ?? []);
+      setRepos(
+        (data.repos ?? []).map((r: Repo) => ({
+          ...r,
+          provider: r.provider || 'github',
+          updated_at: r.updated_at || new Date().toISOString(),
+        })),
+      );
     }
     if (tasksRes.status === 'fulfilled') {
       const data = await tasksRes.value.json().catch(() => ({ tasks: [] }));
@@ -236,7 +270,10 @@ const DashboardPage: React.FC = () => {
                 >
                   <GitBranch size={14} className="dashboard-repo-icon" />
                   <div className="dashboard-repo-info">
-                    <span className="dashboard-repo-name">{repo.full_name}</span>
+                    <span className="dashboard-repo-name">
+                      <ProviderBadge provider={repo.provider} />
+                      {repo.full_name}
+                    </span>
                     {repo.description && <p className="dashboard-repo-desc">{repo.description}</p>}
                     {repo.language && <span className="dashboard-repo-lang">{repo.language}</span>}
                   </div>

@@ -9,7 +9,7 @@
 import { gitClient } from './gitClient';
 
 /** Minimal interface for the WASM shell's write capability. */
-interface WasmWriter {
+export interface WasmWriter {
   writeFile(path: string, content: string): string; // returns error or ""
 }
 
@@ -29,7 +29,7 @@ export async function syncRepoToWasmVfs(
   repoDir: string,
   wasmDir: string,
   wasm: WasmWriter,
-  onProgress?: (p: SyncProgress) => void
+  onProgress?: (p: SyncProgress) => void,
 ): Promise<{ copied: number; skipped: number; errors: string[] }> {
   let copied = 0;
   let skipped = 0;
@@ -60,8 +60,9 @@ export async function syncRepoToWasmVfs(
       } else {
         copied++;
       }
-    } catch (err: any) {
-      errors.push(`${file.path}: ${err.message ?? err}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${file.path}: ${msg}`);
     }
   }
 
@@ -75,11 +76,7 @@ export async function syncRepoToWasmVfs(
 /**
  * Copy a single file from the WASM VFS back to the cloned repo (for agent edits).
  */
-export async function syncWasmFileToRepo(
-  repoDir: string,
-  wasmPath: string,
-  content: string
-): Promise<void> {
+export async function syncWasmFileToRepo(repoDir: string, wasmPath: string, content: string): Promise<void> {
   // Strip the WASM workspace prefix to get the repo-relative path
   // Convention: files are at /workspace/repo/<path> in WASM VFS
   const match = wasmPath.match(/^\/workspace\/repo\/(.+)$/);

@@ -43,6 +43,11 @@ type TerminalSubscriberState struct {
 	progressMu       sync.Mutex
 	subagentProgress map[string]SubagentProgressSnapshot
 	configMgr        *configuration.Manager // read live for output_verbosity
+	// chatAgent is the parent agent, used to flush the
+	// AssistantTurnRenderer's buffered prose via
+	// OutputRouter.FlushExternalWrite before terminal writes.
+	// May be nil in non-agent callers / tests.
+	chatAgent *agent.Agent
 	// thinkingActive tracks whether the "thinking…" spinner was started
 	// by a query_started event and is still showing. It lets
 	// HandleStreamChunkEvent know to stop the spinner when assistant
@@ -149,12 +154,26 @@ func extractStrArg(argsJSON, key string) string {
 
 // NewTerminalSubscriberState initializes a fresh subscriber state with
 // pre-allocated maps and the config manager for live verbosity reads.
-func NewTerminalSubscriberState(configMgr *configuration.Manager) *TerminalSubscriberState {
+func NewTerminalSubscriberState(configMgr *configuration.Manager, chatAgent *agent.Agent) *TerminalSubscriberState {
 	return &TerminalSubscriberState{
 		seenSpawn:        make(map[string]bool),
 		pendingArgs:      make(map[string]string),
 		subagentProgress: make(map[string]SubagentProgressSnapshot),
 		configMgr:        configMgr,
+		chatAgent:        chatAgent,
+	}
+}
+
+// flushExternalWrite flushes the AssistantTurnRenderer's buffered prose
+// (if any) via the OutputRouter's external-write hook so partial text
+// appears inline before tool chrome (spinner, result lines) is written.
+// No-op when no agent or router is available.
+func (s *TerminalSubscriberState) flushExternalWrite() {
+	if s.chatAgent == nil {
+		return
+	}
+	if router := s.chatAgent.OutputRouter(); router != nil {
+		router.FlushExternalWrite()
 	}
 }
 
@@ -233,6 +252,7 @@ func (s *TerminalSubscriberState) HandleToolStartEvent(data map[string]interface
 		taskDesc := s.spawnTasks[persona]
 		s.spawnMu.Unlock()
 		if announce {
+			s.flushExternalWrite()
 			indicator.Stop()
 			s.progressMu.Lock()
 			spawnSnap, hasSpawnSnap := s.subagentProgress[persona]
@@ -247,6 +267,7 @@ func (s *TerminalSubscriberState) HandleToolStartEvent(data map[string]interface
 	// Ensure the spinner lands on a fresh line so it never
 	// overwrites partial streamed text. Stdout for parity
 	// with how stream chunks were just printed.
+	s.flushExternalWrite()
 	console.LockOutput()
 	fmt.Fprintln(os.Stdout)
 	console.UnlockOutput()
@@ -311,6 +332,7 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	// so the user has minimal feedback in compact mode.
 	if s.IsCompact() && status == "completed" {
 		if diffSuffix := ComputeDiffStat(name, args); diffSuffix != "" {
+			s.flushExternalWrite()
 			fmt.Fprintln(os.Stderr, fmt.Sprintf("%s%s%s", console.ColorDim, FormatCompactDiffLine(name, args, diffSuffix), console.ColorReset))
 		}
 		s.run = nil // prevent stale state from contaminating error tool collapse
@@ -346,6 +368,7 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	// a new one. The 30s heuristic prevents collapse when
 	// the model has streamed text between calls (which
 	// would invalidate the row math).
+	s.flushExternalWrite()
 	now := time.Now()
 	if s.run != nil && s.run.Matches(name, depth, persona) && now.Sub(s.run.LastEnd) < 30*time.Second {
 		s.run.Count++
@@ -441,6 +464,7 @@ func (s *TerminalSubscriberState) HandleQueryCompletedEvent(data map[string]inte
 		parts = append(parts, formatCostSummary(cost))
 	}
 
+	s.flushExternalWrite()
 	line := fmt.Sprintf("%s %sturn complete · %s%s",
 		console.GlyphSuccess.Prefix(),
 		console.ColorDim,
@@ -547,6 +571,7 @@ func (s *TerminalSubscriberState) HandleSubagentActivityEvent(data map[string]in
 		// guessing wrong.
 		indicator.Stop()
 		s.thinkingActive = false
+		s.flushExternalWrite()
 		fmt.Fprintln(os.Stderr, FormatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0))
 		// Drop the cached progress for this persona once
 		// it's done — the next spawn starts fresh.
@@ -594,6 +619,7 @@ func (s *TerminalSubscriberState) HandleTodoUpdateEvent(data map[string]interfac
 	todosRaw, _ := data["todos"].([]interface{})
 	indicator.Stop()
 	s.thinkingActive = false
+	s.flushExternalWrite()
 	if len(todosRaw) == 0 {
 		console.LockOutput()
 		fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Todo list cleared")
@@ -630,6 +656,7 @@ func (s *TerminalSubscriberState) HandleAgentMessageEvent(data map[string]interf
 	}
 	indicator.Stop()
 	s.thinkingActive = false
+	s.flushExternalWrite()
 	// Route through console.PrintExternal so the message
 	// plays nicely with whichever reader owns the input:
 	//   - Between turns (InputReader active): clears the
@@ -748,7 +775,7 @@ func StartTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 		configMgr = chatAgent.GetConfigManager()
 	}
 
-	state := NewTerminalSubscriberState(configMgr)
+	state := NewTerminalSubscriberState(configMgr, chatAgent)
 	go func() {
 		defer eventBus.Unsubscribe(subName)
 		state.runEventLoop(ctx, ch, chatAgent, indicator, footer)

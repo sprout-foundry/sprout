@@ -104,55 +104,6 @@ func TestPrintContinuationHint_NilAgent(t *testing.T) {
 }
 
 // =============================================================================
-// github_setup_prompt.go - AgentAdapter tests
-// =============================================================================
-
-func TestAgentAdapter_GetConfigManager(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	adapter := &AgentAdapter{agent: a}
-
-	// GetConfigManager should return a config manager
-	cfgMgr := adapter.GetConfigManager()
-	if cfgMgr == nil {
-		t.Fatal("expected non-nil config manager")
-	}
-
-	// GetConfig should return a valid config
-	cfg := cfgMgr.GetConfig()
-	if cfg == nil {
-		t.Fatal("expected non-nil config")
-	}
-}
-
-func TestAgentAdapter_RefreshMCPTools(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	adapter := &AgentAdapter{agent: a}
-
-	// RefreshMCPTools should not panic
-	// In test environment it may fail, but should handle gracefully
-	err = adapter.RefreshMCPTools()
-	// Either succeeds or returns an error - we're testing it doesn't panic
-	if err != nil {
-		t.Logf("RefreshMCPTools returned error (expected in test env): %v", err)
-	}
-}
-
-func TestAgentAdapter_NilAgent(t *testing.T) {
-	// Note: This test reveals a bug in AgentAdapter - it panics when agent is nil.
-	// The actual GetConfigManager method calls a.GetConfigManager() without nil check.
-	// We skip this test to avoid the panic, but it exposes a code issue.
-	t.Skip("Skipping - AgentAdapter.GetConfigManager() panics with nil agent (code bug)")
-}
-
-// =============================================================================
 // SetupAgentEvents - test that it doesn't panic
 // =============================================================================
 

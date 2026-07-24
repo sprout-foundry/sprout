@@ -88,49 +88,6 @@ func (r *MCPServerRegistry) loadTemplatesFromConfig() error {
 
 // loadBuiltinTemplates loads the built-in server templates
 func (r *MCPServerRegistry) loadBuiltinTemplates() {
-	// GitHub MCP Server (Remote)
-	r.templates["github-remote"] = MCPServerTemplate{
-		ID:          "github-remote",
-		Name:        "GitHub MCP Server (Remote)",
-		Description: "Official GitHub MCP server for repository management, issues, PRs, and code analysis",
-		Type:        "http",
-		URL:         "https://api.githubcopilot.com/mcp/",
-		EnvVars: []EnvVarTemplate{
-			{
-				Name:        "GITHUB_PERSONAL_ACCESS_TOKEN",
-				Description: "GitHub Personal Access Token with repo, read:user, read:org, issues permissions",
-				Required:    true,
-				Secret:      true,
-			},
-		},
-		Timeout:  30 * time.Second,
-		Features: []string{"Repository management", "Issues & PRs", "GitHub Actions", "Code analysis", "Security findings"},
-		AuthType: "bearer",
-		Docs:     "https://github.com/github/github-mcp-server",
-	}
-
-	// GitHub MCP Server (Local Docker)
-	r.templates["github-docker"] = MCPServerTemplate{
-		ID:          "github-docker",
-		Name:        "GitHub MCP Server (Docker)",
-		Description: "Local Docker instance of GitHub MCP server",
-		Type:        "stdio",
-		Command:     "docker",
-		Args:        []string{"run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"},
-		EnvVars: []EnvVarTemplate{
-			{
-				Name:        "GITHUB_PERSONAL_ACCESS_TOKEN",
-				Description: "GitHub Personal Access Token",
-				Required:    true,
-				Secret:      true,
-			},
-		},
-		Timeout:  30 * time.Second,
-		Features: []string{"Repository management", "Issues & PRs", "GitHub Actions", "Code analysis"},
-		AuthType: "none", // Handled via env var
-		Docs:     "https://github.com/github/github-mcp-server",
-	}
-
 	// Git MCP Server (uvx)
 	r.templates["git-uvx"] = MCPServerTemplate{
 		ID:          "git-uvx",

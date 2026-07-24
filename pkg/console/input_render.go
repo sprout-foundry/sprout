@@ -31,9 +31,16 @@ func (ir *InputReader) refreshLocked() {
 	// edited the buffer. History-recalled lines (hasEditedLine == false)
 	// don't get a dropdown — arrow keys navigate history instead of the
 	// dropdown, and showing one the user can't interact with is confusing.
-	if ir.autocomplete != nil && ir.hasEditedLine {
+	//
+	// suppressAutocompleteNextRefresh (set by the Enter handler) skips
+	// this step for one invocation so the dropdown is erased by the
+	// leading clear() above but never re-rendered for the accepted line.
+	if ir.autocomplete != nil && ir.hasEditedLine && !ir.suppressAutocompleteNextRefresh {
 		ir.autocomplete.update(ir.line, ir.cursorPos, ir.completer, ir.richCompleter)
 		ir.autocomplete.render()
+	}
+	if ir.suppressAutocompleteNextRefresh {
+		ir.suppressAutocompleteNextRefresh = false
 	}
 }
 

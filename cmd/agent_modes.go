@@ -443,9 +443,6 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return fmt.Errorf("failed to update config for interactive mode: %w", err)
 		}
 
-		// Check if we should prompt for GitHub MCP setup (interactive, non-SkipPrompt)
-		promptGitHubMCPSetupIfNeeded(&AgentAdapter{agent: chatAgent})
-
 		err = runInteractiveMode(ctx, chatAgent, eventBus, indicator)
 	} else {
 		directModeStart := time.Now()

@@ -657,3 +657,167 @@ func TestAutocomplete_ClearThenHideErasesRows(t *testing.T) {
 		t.Error("dropdown should be invisible after hide()")
 	}
 }
+
+// TestEnterHandler_ForceClearsDropdownAfterRefresh verifies the fix for
+// the bug where autocomplete dropdown rows persisted on screen after
+// Enter:
+//
+//  1. User types "/he" — dropdown shows 3 rows below input.
+//  2. User presses Enter — the Enter handler accepts the candidate
+//     ("/help"), hides the dropdown state, and calls Refresh().
+//  3. Refresh() → refreshLocked() → clear() erases the OLD rows and
+//     redraws the input line with "/help". Without the fix, it then
+//     calls update()+render() and draws NEW rows for "/help" (the
+//     rich completer still matches it, e.g. for sub-commands).
+//  4. Those NEW rows persist on screen: the streaming response pushes
+//     the cursor down past them, after which a later clear() (which
+//     walks down from the cursor) cannot reach them — they stay
+//     visible until a fresh prompt draws.
+//
+// The fix: the Enter handler sets suppressAutocompleteNextRefresh
+// before Refresh(). refreshLocked honors the flag by skipping the
+// update+render step, so no dropdown rows are drawn for the accepted
+// line. The flag is consumed and cleared after one invocation.
+//
+// This test asserts:
+//   - After the Enter sequence, renderedRows=0 and visible=false
+//     (no dropdown state left for the next refresh to short-circuit on).
+//   - The accepted text ("/help") is on the input line.
+//   - The Refresh output contains clear-sequences for the typing-phase
+//     rows (pre-accept erase) but NO render-sequences for the
+//     post-accept rows (they were never drawn).
+func TestEnterHandler_ForceClearsDropdownAfterRefresh(t *testing.T) {
+	// Completer that returns matches for BOTH "/he" (typing phase) AND
+	// "/help" (post-accept phase) — this is the scenario where the
+	// re-rendered dropdown would stay on screen without the fix.
+	rich := func(line string, _ int) []CompletionCandidate {
+		switch line {
+		case "/he":
+			return []CompletionCandidate{
+				{Text: "/help", Description: "Show help"},
+				{Text: "/heart", Description: ""},
+				{Text: "/heat", Description: "Temperature"},
+			}
+		case "/help":
+			return []CompletionCandidate{
+				{Text: "/help ", Description: "Show help"},
+				{Text: "/help add", Description: "Add help topic"},
+				{Text: "/help search", Description: "Search help"},
+			}
+		}
+		return nil
+	}
+
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	ir.richCompleter = rich
+
+	// Set up: user has typed "/he" and the dropdown is rendered.
+	ir.InsertChar("/")
+	ir.InsertChar("h")
+	ir.InsertChar("e")
+	if !ir.autocomplete.visible {
+		t.Fatal("setup: dropdown should be visible after typing /he")
+	}
+	preAcceptRows := ir.autocomplete.renderedRows
+	if preAcceptRows == 0 {
+		t.Fatal("setup: dropdown should have rendered rows")
+	}
+
+	// --- Simulate the Enter handler (with the fix). ---
+	output := captureStdout(t, func() {
+		// Step 1: accept the selected candidate.
+		text := ir.autocomplete.accept()
+		if text != "" {
+			ir.line = text
+			ir.cursorPos = len(ir.line)
+		}
+		// Step 2: hide the dropdown state.
+		ir.autocomplete.hide()
+		// Step 3: set the suppression flag so refreshLocked skips
+		// the update+render step for the accepted line.
+		ir.suppressAutocompleteNextRefresh = true
+		// Step 4: Refresh erases the old rows + redraws the input
+		// line, but does NOT re-render the dropdown for "/help".
+		ir.Refresh()
+	})
+
+	// After the fix: no dropdown rows on screen, no stale state.
+	if ir.autocomplete.visible {
+		t.Error("dropdown should be invisible after Enter handler")
+	}
+	if ir.autocomplete.renderedRows != 0 {
+		t.Errorf("renderedRows should be 0, got %d", ir.autocomplete.renderedRows)
+	}
+	// The suppression flag must be consumed (cleared) by refreshLocked
+	// so subsequent Refresh calls behave normally.
+	if ir.suppressAutocompleteNextRefresh {
+		t.Error("suppressAutocompleteNextRefresh should be cleared after Refresh")
+	}
+
+	// The accepted text "/help" should be on the input line.
+	if ir.line != "/help" {
+		t.Errorf("expected accepted text /help on input line, got %q", ir.line)
+	}
+
+	// The captured output must contain clear-sequences to erase the
+	// pre-accept dropdown rows (refreshLocked's leading clear()).
+	fixedSeq := "\x1b[1B\r\x1b[2K"
+	clearCount := strings.Count(output, fixedSeq)
+	if clearCount < preAcceptRows {
+		t.Errorf("expected at least %d clear sequences (pre-accept erase), got %d\noutput=%q",
+			preAcceptRows, clearCount, output)
+	}
+
+	// The output must NOT contain the post-accept dropdown text —
+	// "/help search" is a candidate that only appears if render()
+	// was called for the accepted line. The suppression flag should
+	// have prevented it.
+	if strings.Contains(output, "/help search") {
+		t.Errorf("output should not contain post-accept dropdown candidates (/help search); "+
+			"suppressAutocompleteNextRefresh was not honored\noutput=%q", output)
+	}
+}
+
+// TestEnterHandler_NoDropdownStillClears verifies that the suppression
+// flag is safe when there is no dropdown to suppress — i.e., when the
+// user presses Enter on a non-slash line (no completer matches, no
+// dropdown was visible). The flag is set and immediately consumed;
+// no phantom rows are drawn or erased.
+func TestEnterHandler_NoDropdownStillClears(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	ir.richCompleter = mockRichCompleter
+
+	ir.InsertChar("h")
+	ir.InsertChar("i")
+
+	if ir.autocomplete.visible {
+		t.Fatal("setup: dropdown should not be visible for non-slash input")
+	}
+
+	// Simulate the Enter handler's suppression flag + Refresh.
+	ir.suppressAutocompleteNextRefresh = true
+	output := captureStdout(t, func() {
+		ir.Refresh()
+	})
+
+	// Should produce no dropdown clear sequences (no rows were drawn).
+	fixedSeq := "\x1b[1B\r\x1b[2K"
+	if got := strings.Count(output, fixedSeq); got != 0 {
+		t.Errorf("expected 0 clear sequences (no dropdown was rendered), got %d\noutput=%q",
+			got, output)
+	}
+
+	// Input line is preserved.
+	if ir.line != "hi" {
+		t.Errorf("input line should be preserved, got %q", ir.line)
+	}
+	if ir.autocomplete.renderedRows != 0 {
+		t.Errorf("renderedRows should be 0, got %d", ir.autocomplete.renderedRows)
+	}
+	// Flag consumed.
+	if ir.suppressAutocompleteNextRefresh {
+		t.Error("suppressAutocompleteNextRefresh should be cleared after Refresh")
+	}
+}

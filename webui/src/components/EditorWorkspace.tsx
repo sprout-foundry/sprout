@@ -47,8 +47,16 @@ export interface EditorWorkspaceProps {
   selectedTaskId?: string | null;
   /** Selected repo in owner/name format for RepoDetailPage. */
   selectedRepo?: { owner: string; name: string } | null;
+  /** All repos attached to the current workspace. */
+  attachedRepos?: Array<{ owner: string; name: string; id: string }>;
   /** Called when a repo is selected from the onboarding screen. */
   onRepoSelected?: (owner: string, name: string) => void;
+  /** Called when the user switches to a different repo in the tab bar. */
+  onRepoSwitch?: (id: string) => void;
+  /** Called when the user detaches a repo from the workspace. */
+  onRepoDetach?: (id: string) => void;
+  /** Called when the user clicks "+" to add a new repo. */
+  onRepoAdd?: () => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -135,7 +143,11 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   onViewChange,
   selectedTaskId,
   selectedRepo,
+  attachedRepos,
   onRepoSelected,
+  onRepoSwitch,
+  onRepoDetach,
+  onRepoAdd,
 }) => {
   const {
     panes,
@@ -630,6 +642,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           repoOwner={selectedRepo.owner}
           repoName={selectedRepo.name}
           onBack={() => onViewChange?.('dashboard')}
+          attachedRepos={attachedRepos}
+          onRepoSwitch={onRepoSwitch}
+          onRepoDetach={onRepoDetach}
+          onRepoAdd={onRepoAdd}
         />
       </Suspense>
     );

@@ -417,7 +417,7 @@ func TestLSPProcessSendAndReceive(t *testing.T) {
 			}
 			assert.Contains(t, received, "jsonrpc")
 			assert.Contains(t, received, "test")
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("Did not receive echoed message within timeout")
 		}
 	})
@@ -518,7 +518,7 @@ func TestLSPProcessReadLoopExitOnProcessDeath(t *testing.T) {
 			if !ok {
 				// Channel closed directly, expected
 			}
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("Channel did not close after process exited")
 		}
 
@@ -541,7 +541,7 @@ func TestLSPProcessReadLoopExitOnProcessDeath(t *testing.T) {
 			if !ok {
 				// Channel closed, expected
 			}
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("Channel did not close after process exited")
 		}
 

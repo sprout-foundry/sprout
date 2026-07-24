@@ -75,6 +75,20 @@ func (r *OutputRouter) SetExternalWriteHook(fn func()) {
 	r.externalWriteHook = fn
 }
 
+// FlushExternalWrite fires the external-write hook if one is registered.
+// Used by the terminal subscriber (pkg/cliui) to flush the
+// AssistantTurnRenderer's buffered prose before writing tool chrome
+// (spinner, result lines) so partial text doesn't accumulate in the
+// renderer's buffer until turn end.
+func (r *OutputRouter) FlushExternalWrite() {
+	r.mu.RLock()
+	hook := r.externalWriteHook
+	r.mu.RUnlock()
+	if hook != nil {
+		hook()
+	}
+}
+
 // SetTerminalSubscriberActive marks whether a terminal subscriber owns
 // rendering agent_message events. When true, RouteAgentMessage skips the
 // raw writeTerminalMessage fallback (the subscriber renders the line with

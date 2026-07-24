@@ -30,7 +30,7 @@ func TestTerminalSubscriber_VerbosityLiveRead(t *testing.T) {
 	}
 
 	// Start in default mode — not compact.
-	state := NewTerminalSubscriberState(mgr)
+	state := NewTerminalSubscriberState(mgr, nil)
 	if state.IsCompact() {
 		t.Fatal("IsCompact() = true with default config; want false")
 	}
@@ -66,7 +66,7 @@ func TestTerminalSubscriber_VerbosityLiveRead(t *testing.T) {
 // manager. IsCompact() must return false (non-compact) rather than
 // panicking, so the subscriber renders normally.
 func TestTerminalSubscriber_NilConfigManagerIsNonCompact(t *testing.T) {
-	state := NewTerminalSubscriberState(nil)
+	state := NewTerminalSubscriberState(nil, nil)
 	if state.IsCompact() {
 		t.Fatal("IsCompact() = true with nil config manager; want false")
 	}
@@ -83,7 +83,7 @@ func TestTerminalSubscriber_VerboseLiveRead(t *testing.T) {
 		t.Fatalf("NewManagerWithDir: %v", err)
 	}
 
-	state := NewTerminalSubscriberState(mgr)
+	state := NewTerminalSubscriberState(mgr, nil)
 	if state.IsVerbose() {
 		t.Fatal("IsVerbose() = true with default config; want false")
 	}
@@ -125,7 +125,7 @@ func TestTerminalSubscriber_VerboseLiveRead(t *testing.T) {
 // fallback for IsVerbose: a nil config manager must return false rather
 // than panicking, so the subscriber renders in default detail.
 func TestTerminalSubscriber_NilConfigManagerIsNonVerbose(t *testing.T) {
-	state := NewTerminalSubscriberState(nil)
+	state := NewTerminalSubscriberState(nil, nil)
 	if state.IsVerbose() {
 		t.Fatal("IsVerbose() = true with nil config manager; want false")
 	}
@@ -192,7 +192,7 @@ func TestHandleQueryCompletedEvent(t *testing.T) {
 		t.Fatalf("NewManagerWithDir: %v", err)
 	}
 
-	state := NewTerminalSubscriberState(mgr)
+	state := NewTerminalSubscriberState(mgr, nil)
 
 	// --- Non-compact (default) mode: should produce output ---
 	var stderrBuf bytes.Buffer
@@ -261,7 +261,7 @@ func TestHandleQueryStartedEvent(t *testing.T) {
 		t.Fatalf("NewManagerWithDir: %v", err)
 	}
 
-	state := NewTerminalSubscriberState(mgr)
+	state := NewTerminalSubscriberState(mgr, nil)
 	indicator := console.NewActivityIndicator(&bytes.Buffer{})
 
 	// Non-compact mode: indicator is inactive so thinking should start.
@@ -289,7 +289,7 @@ func TestHandleQueryStartedEvent(t *testing.T) {
 // with content_type clears the thinkingActive flag (CLI-UX-5). When
 // thinkingActive is true, the chunk handler stops the indicator.
 func TestHandleStreamChunkEvent_StopsThinking(t *testing.T) {
-	state := NewTerminalSubscriberState(nil)
+	state := NewTerminalSubscriberState(nil, nil)
 	indicator := console.NewActivityIndicator(&bytes.Buffer{})
 	state.thinkingActive = true
 
@@ -308,7 +308,7 @@ func TestHandleStreamChunkEvent_StopsThinking(t *testing.T) {
 // thinkingActive — only chunks that carry assistant text/reasoning
 // should stop the thinking spinner.
 func TestHandleStreamChunkEvent_NoContentTypeDoesNotClear(t *testing.T) {
-	state := NewTerminalSubscriberState(nil)
+	state := NewTerminalSubscriberState(nil, nil)
 	indicator := console.NewActivityIndicator(&bytes.Buffer{})
 	state.thinkingActive = true
 

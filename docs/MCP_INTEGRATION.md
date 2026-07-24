@@ -4,7 +4,7 @@ This guide explains how MCP servers are integrated with the Sprout agent and how
 
 ## Overview
 
-MCP servers extend Sprout's capabilities by providing external tools and services to the agent. The GitHub MCP server is the prototype implementation.
+MCP servers extend Sprout's capabilities by providing external tools and services to the agent. Servers are configured via `sprout mcp add`; see `pkg/mcp/registry.go` for built-in templates.
 
 ## How MCP Integration Works
 
@@ -14,8 +14,8 @@ MCP servers extend Sprout's capabilities by providing external tools and service
 Sprout Agent
     ├── Base Tools (file operations, shell, etc.)
     └── MCP Manager
-        └── MCP Servers (GitHub, etc.)
-            └── MCP Tools (list_issues, create_pr, etc.)
+        └── MCP Servers (user-configured)
+            └── MCP Tools (provided by each server)
 ```
 
 ### 2. Key Components

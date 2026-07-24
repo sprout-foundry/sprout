@@ -307,7 +307,22 @@ func (ir *InputReader) ReadLine() (string, error) {
 						// the accepted text so the user sees the final
 						// command (e.g. "/help") instead of the partial
 						// text they typed ("/he").
+						//
+						// suppressAutocompleteNextRefresh prevents
+						// refreshLocked from re-rendering the dropdown
+						// for the accepted line. Enter is for SUBMISSION,
+						// not completion cycling (that's Tab's job), so
+						// the dropdown must not survive into the upcoming
+						// streaming response. Without the suppression,
+						// refreshLocked would call update()+render() for
+						// the accepted line (the rich completer often
+						// still matches, e.g. "/help" has sub-commands),
+						// drawing rows that the streaming response would
+						// push the cursor past — after which a later
+						// clear() walks down the wrong rows and the stale
+						// dropdown stays visible until a fresh prompt.
 						ir.autocomplete.hide()
+						ir.suppressAutocompleteNextRefresh = true
 						ir.Refresh()
 					}
 					// End of input

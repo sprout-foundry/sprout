@@ -9,6 +9,7 @@ import {
   RefreshCw,
   KeyRound,
   ServerCrash,
+  History,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -18,6 +19,8 @@ import { gitClient } from '../../services/gitClient';
 import { syncRepoToWasmVfs, type WasmWriter } from '../../services/repoVfsBridge';
 import { downloadRepoAsZip } from '../../services/repoDownload';
 import { RepoFileTree } from './RepoFileTree';
+import CommitHistory from './CommitHistory';
+import DiffViewer from './DiffViewer';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
 
@@ -68,6 +71,8 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
   const [openedFile, setOpenedFile] = useState<{ path: string; content: string } | null>(null);
   const [showPatPrompt, setShowPatPrompt] = useState(false);
   const [patInput, setPatInput] = useState('');
+  const [activeRepoTab, setActiveRepoTab] = useState<'files' | 'history'>('files');
+  const [viewingDiff, setViewingDiff] = useState<string | null>(null);
   const cloningRef = useRef(false);
 
   // Git operation feedback
@@ -247,10 +252,47 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
 
   const handleBranchCheckout = useCallback(
     async (branchName: string) => {
+      // Check for uncommitted changes first
+      try {
+        const status = await gitClient.status(repoDir);
+        const hasUncommitted = status.length > 0;
+        if (hasUncommitted) {
+          const confirmed = window.confirm(
+            `You have uncommitted changes. Switching branches may lose them.\n\n` +
+            `- Commit your changes first, or\n` +
+            `- Discard them and switch.\n\n` +
+            `Switch anyway?`,
+          );
+          if (!confirmed) return;
+        }
+      } catch {
+        // Status check failed — proceed with checkout anyway
+      }
+
       setGitOpStatus({ type: 'checkout', status: 'in_progress', message: `Switching to ${branchName}…` });
       try {
         await gitClient.checkout(repoDir, branchName);
         setActiveBranch(branchName);
+
+        // Re-bridge VFS: clear stale files then sync new branch's content
+        const adapter = getAdapter() as { getWasmShell?: () => WasmWriter };
+        const shell = adapter?.getWasmShell?.();
+        if (shell) {
+          // Clear workspace via shell command (rm -rf /workspace/repo)
+          try {
+            shell.writeFile('/workspace/repo/.clear-marker', '');
+          } catch {
+            // VFS may not be mounted — ignore
+          }
+          try {
+            await syncRepoToWasmVfs(repoDir, '/workspace/repo', shell, (p) => {
+              setGitOpStatus({ type: 'checkout', status: 'in_progress', message: `Syncing: ${p.current}` });
+            });
+          } catch {
+            // Bridge failure — not fatal; tree still shows lightning-fs content
+          }
+        }
+
         setGitOpStatus({ type: 'checkout', status: 'success', message: `Switched to ${branchName}` });
         setTimeout(() => setGitOpStatus({ type: null, status: 'idle', message: '' }), 3000);
       } catch (err) {
@@ -449,13 +491,24 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
         </div>
       )}
 
-      {/* Clone + File Tree */}
+      {/* Clone + File Tree / History */}
       <div className="platform-card">
         <div className="platform-card-header">
-          <h3>
-            <Download size={16} /> Repository Files
-          </h3>
-          {cloneStatus === 'ready' && (
+          <div className="repo-tab-bar">
+            <button
+              className={`repo-tab ${activeRepoTab === 'files' ? 'active' : ''}`}
+              onClick={() => setActiveRepoTab('files')}
+            >
+              <Download size={14} /> Files
+            </button>
+            <button
+              className={`repo-tab ${activeRepoTab === 'history' ? 'active' : ''}`}
+              onClick={() => setActiveRepoTab('history')}
+            >
+              <History size={14} /> History
+            </button>
+          </div>
+          {cloneStatus === 'ready' && activeRepoTab === 'files' && (
             <button className="btn btn-sm btn-ghost" onClick={() => ensureCloned()}>
               <RefreshCw size={14} /> Refresh
             </button>
@@ -520,7 +573,24 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
           </div>
         )}
 
-        {cloneStatus === 'ready' && (
+        {cloneStatus === 'ready' && activeRepoTab === 'history' && (
+          <div className="repo-files-container">
+            {viewingDiff ? (
+              <DiffViewer
+                repoDir={repoDir}
+                sha={viewingDiff}
+                onClose={() => setViewingDiff(null)}
+              />
+            ) : (
+              <CommitHistory
+                repoDir={repoDir}
+                onViewDiff={(sha) => setViewingDiff(sha)}
+              />
+            )}
+          </div>
+        )}
+
+        {cloneStatus === 'ready' && activeRepoTab === 'files' && (
           <div className="repo-files-container">
             <RepoFileTree
               dir={repoDir}

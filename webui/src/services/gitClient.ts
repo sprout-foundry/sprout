@@ -457,6 +457,79 @@ class GitClient {
     return this.fs;
   }
 
+  /**
+   * Read a file's content from a specific commit tree.
+   * Returns null if the file didn't exist at that commit.
+   */
+  async readFileAtCommit(dir: string, filepath: string, oid: string): Promise<string | null> {
+    try {
+      const blob = await git.readBlob({
+        fs: this.fs,
+        dir,
+        oid,
+        filepath,
+      });
+      return new TextDecoder().decode(blob.blob);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get the list of files that changed between two commits.
+   * Returns the filepaths with their change type.
+   */
+  async getChangedFiles(
+    dir: string,
+    sha: string,
+    parentSha?: string,
+  ): Promise<Array<{ filepath: string; type: 'added' | 'deleted' | 'modified' }>> {
+    const currentTree = await git.readTree({ fs: this.fs, dir, oid: sha });
+
+    let parentTree: Awaited<ReturnType<typeof git.readTree>> | null = null;
+    if (parentSha) {
+      try {
+        parentTree = await git.readTree({ fs: this.fs, dir, oid: parentSha });
+      } catch {
+        parentTree = null;
+      }
+    }
+
+    const changed: Array<{ filepath: string; type: 'added' | 'deleted' | 'modified' }> = [];
+
+    if (!parentTree) {
+      // First commit — all files are added
+      for (const entry of currentTree.tree) {
+        if (entry.path !== '.git') {
+          changed.push({ filepath: entry.path, type: 'added' });
+        }
+      }
+      return changed;
+    }
+
+    const parentMap = new Map(parentTree.tree.map((e) => [e.path, e]));
+    const currentMap = new Map(currentTree.tree.map((e) => [e.path, e]));
+
+    for (const [path, entry] of currentMap) {
+      if (path === '.git') continue;
+      const parentEntry = parentMap.get(path);
+      if (!parentEntry) {
+        changed.push({ filepath: path, type: 'added' });
+      } else if (parentEntry.oid !== entry.oid) {
+        changed.push({ filepath: path, type: 'modified' });
+      }
+    }
+
+    for (const [path] of parentMap) {
+      if (path === '.git') continue;
+      if (!currentMap.has(path)) {
+        changed.push({ filepath: path, type: 'deleted' });
+      }
+    }
+
+    return changed;
+  }
+
   /** Standard repo path: /repos/<owner>/<name>. */
   static repoPath(owner: string, name: string): string {
     return `/repos/${owner}/${name}`;

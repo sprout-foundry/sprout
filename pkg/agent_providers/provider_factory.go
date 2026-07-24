@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -66,7 +67,7 @@ func (f *ProviderFactory) LoadEmbeddedConfigs() error {
 			continue
 		}
 
-		filename := filepath.Join("configs", entry.Name())
+		filename := path.Join("configs", entry.Name())
 		data, err := embeddedConfigs.ReadFile(filename)
 		if err != nil {
 			return agenterrors.NewConfig(fmt.Sprintf("failed to read embedded config file %s", filename), err)

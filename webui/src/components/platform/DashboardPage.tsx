@@ -234,6 +234,20 @@ const DashboardPage: React.FC = () => {
         </div>
       )}
 
+      <div className="dashboard-connect-bar">
+        <span className="dashboard-connect-label">Connected providers:</span>
+        <span className="provider-badge provider-badge--github">
+          <span className="provider-dot" /> GitHub
+        </span>
+        <button
+          className="btn btn-sm btn-ghost dashboard-connect-btn"
+          onClick={() => setState(() => ({ currentView: 'integrations' }))}
+          title="Manage connected accounts"
+        >
+          <Plus size={12} /> Manage
+        </button>
+      </div>
+
       <div className="dashboard-grid">
         {/* Repo list */}
         <div className="platform-card dashboard-repos">

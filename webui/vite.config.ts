@@ -142,6 +142,8 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['./src/vitest.setup.ts'],
       include: [
         'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+        // Playwright e2e specs in ../test/webui/ are excluded — they
+        // require a real browser and can't run in jsdom.
       ],
       // SP-104: Cap the worker pool. The default forks all CPU cores;
       // each jsdom worker is ~1–4 GB RSS. Webui uses Vitest 2.x which

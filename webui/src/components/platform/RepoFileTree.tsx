@@ -13,14 +13,25 @@ import './RepoFileTree.css';
 interface RepoFileTreeProps {
   dir: string;
   onFileClick: (filepath: string, content: string) => void;
+  onCreateFile?: (name: string) => Promise<void>;
+  onCreateFolder?: (name: string) => Promise<void>;
+  onRefresh?: () => Promise<void>;
 }
 
 const MAX_FILE_SIZE = 1_000_000; // 1MB
 
-export const RepoFileTree: React.FC<RepoFileTreeProps> = ({ dir, onFileClick }) => {
+export const RepoFileTree: React.FC<RepoFileTreeProps> = ({
+  dir,
+  onFileClick,
+  onCreateFile,
+  onCreateFolder,
+  onRefresh,
+}) => {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateInput, setShowCreateInput] = useState<'file' | 'folder' | null>(null);
+  const [createName, setCreateName] = useState('');
 
   const loadRoot = useCallback(async () => {
     try {
@@ -39,6 +50,49 @@ export const RepoFileTree: React.FC<RepoFileTreeProps> = ({ dir, onFileClick }) 
     loadRoot();
   }, [loadRoot]);
 
+  const handleCreate = useCallback(
+    async (type: 'file' | 'folder') => {
+      const name = createName.trim();
+      if (!name) return;
+      try {
+        if (type === 'file' && onCreateFile) {
+          await onCreateFile(name);
+        } else if (type === 'folder' && onCreateFolder) {
+          await onCreateFolder(name);
+        }
+        setShowCreateInput(null);
+        setCreateName('');
+        await loadRoot();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : `Failed to create ${type}`);
+      }
+    },
+    [createName, onCreateFile, onCreateFolder, loadRoot],
+  );
+
+  const renderCreateInput = () => (
+    <div className="tree-create-input-row">
+      <input
+        className="tree-create-input"
+        type="text"
+        placeholder={showCreateInput === 'file' ? 'filename.ts' : 'folder-name'}
+        value={createName}
+        onChange={(e) => setCreateName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleCreate(showCreateInput!);
+          if (e.key === 'Escape') {
+            setShowCreateInput(null);
+            setCreateName('');
+          }
+        }}
+        autoFocus
+      />
+      <button className="btn btn-sm btn-primary" onClick={() => handleCreate(showCreateInput!)}>
+        Create
+      </button>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="repo-file-tree-loading">
@@ -51,12 +105,42 @@ export const RepoFileTree: React.FC<RepoFileTreeProps> = ({ dir, onFileClick }) 
     return <div className="repo-file-tree-error">{error}</div>;
   }
 
-  if (entries.length === 0) {
-    return <div className="repo-file-tree-empty">No files in this repo.</div>;
+  if (entries.length === 0 && !showCreateInput) {
+    return (
+      <div className="repo-file-tree">
+        <div className="repo-file-tree-toolbar">
+          {onCreateFile && (
+            <button className="tree-toolbar-btn" onClick={() => setShowCreateInput('file')} title="New file">
+              + File
+            </button>
+          )}
+          {onCreateFolder && (
+            <button className="tree-toolbar-btn" onClick={() => setShowCreateInput('folder')} title="New folder">
+              + Folder
+            </button>
+          )}
+        </div>
+        <div className="repo-file-tree-empty">No files in this repo.</div>
+        {showCreateInput && renderCreateInput()}
+      </div>
+    );
   }
 
   return (
     <div className="repo-file-tree">
+      <div className="repo-file-tree-toolbar">
+        {onCreateFile && (
+          <button className="tree-toolbar-btn" onClick={() => setShowCreateInput('file')} title="New file">
+            + File
+          </button>
+        )}
+        {onCreateFolder && (
+          <button className="tree-toolbar-btn" onClick={() => setShowCreateInput('folder')} title="New folder">
+            + Folder
+          </button>
+        )}
+      </div>
+      {showCreateInput && renderCreateInput()}
       {entries.map((entry) => (
         <TreeNode key={entry.path} entry={entry} repoDir={dir} depth={0} onFileClick={onFileClick} />
       ))}

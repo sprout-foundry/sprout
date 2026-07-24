@@ -8,8 +8,11 @@ import {
   Loader2,
   RefreshCw,
   KeyRound,
+  ServerCrash,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getAdapter } from '../../services/apiAdapter';
 import { gitClient } from '../../services/gitClient';
 import { syncRepoToWasmVfs, type WasmWriter } from '../../services/repoVfsBridge';
@@ -38,6 +41,12 @@ interface RepoDetailPageProps {
   onBack: () => void;
 }
 
+/** Check if a filename is a README file (case-insensitive). */
+function isReadmeFile(filepath: string): boolean {
+  const name = filepath.split('/').pop() ?? filepath;
+  return /^readme(\.md|\.mdx|\.markdown|\.txt)?$/i.test(name);
+}
+
 const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, onBack }) => {
   const log = useLog();
   const [data, setData] = useState<RepoDetailData | null>(null);
@@ -59,6 +68,14 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
   const [showPatPrompt, setShowPatPrompt] = useState(false);
   const [patInput, setPatInput] = useState('');
   const cloningRef = useRef(false);
+
+  // Git operation feedback
+  const [gitOpStatus, setGitOpStatus] = useState<{
+    type: 'push' | 'pull' | 'checkout' | null;
+    status: 'idle' | 'in_progress' | 'success' | 'error';
+    message: string;
+  }>({ type: null, status: 'idle', message: '' });
+  const [activeBranch, setActiveBranch] = useState<string>('');
 
   const fetchDetail = useCallback(async () => {
     const adapter = getAdapter();
@@ -110,6 +127,9 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
         : [];
 
     setData({ repo: repoData, branches, recentCommits: commits, pullRequests: pulls });
+    if (!activeBranch && repoData?.default_branch) {
+      setActiveBranch(repoData.default_branch);
+    }
     setLoading(false);
   }, [repoOwner, repoName]);
 
@@ -182,6 +202,81 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
     window.dispatchEvent(new CustomEvent('sprout:navigate', { detail: 'editor' }));
   }, [cloneStatus, ensureCloned, repoDir, repoOwner, repoName, log]);
 
+  const handlePush = useCallback(async () => {
+    const PAT = localStorage.getItem('github_pat');
+    if (!PAT) {
+      setGitOpStatus({ type: 'push', status: 'error', message: 'No GitHub token configured. Add one in Settings.' });
+      return;
+    }
+    setGitOpStatus({ type: 'push', status: 'in_progress', message: 'Pushing to remote…' });
+    try {
+      await gitClient.push(repoDir, {
+        token: PAT,
+        branch: data?.repo?.default_branch ?? 'main',
+      });
+      setGitOpStatus({ type: 'push', status: 'success', message: 'Push successful' });
+      setTimeout(() => setGitOpStatus({ type: null, status: 'idle', message: '' }), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setGitOpStatus({ type: 'push', status: 'error', message: msg });
+    }
+  }, [repoDir, data?.repo?.default_branch]);
+
+  const handlePull = useCallback(async () => {
+    let token: string | undefined;
+    const stored = localStorage.getItem('github_pat');
+    if (stored && stored.length > 0) token = stored;
+
+    setGitOpStatus({ type: 'pull', status: 'in_progress', message: 'Pulling from remote…' });
+    try {
+      await gitClient.pull(repoDir, { token });
+      // Re-bridge VFS after pull
+      const adapter = getAdapter() as { getWasmShell?: () => WasmWriter };
+      const shell = adapter?.getWasmShell?.();
+      if (shell) {
+        await syncRepoToWasmVfs(repoDir, '/workspace/repo', shell);
+      }
+      setGitOpStatus({ type: 'pull', status: 'success', message: 'Pull successful — files synced' });
+      setTimeout(() => setGitOpStatus({ type: null, status: 'idle', message: '' }), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setGitOpStatus({ type: 'pull', status: 'error', message: msg });
+    }
+  }, [repoDir, log]);
+
+  const handleBranchCheckout = useCallback(
+    async (branchName: string) => {
+      setGitOpStatus({ type: 'checkout', status: 'in_progress', message: `Switching to ${branchName}…` });
+      try {
+        await gitClient.checkout(repoDir, branchName);
+        setActiveBranch(branchName);
+        setGitOpStatus({ type: 'checkout', status: 'success', message: `Switched to ${branchName}` });
+        setTimeout(() => setGitOpStatus({ type: null, status: 'idle', message: '' }), 3000);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setGitOpStatus({ type: 'checkout', status: 'error', message: msg });
+      }
+    },
+    [repoDir],
+  );
+
+  const handleCreateFile = useCallback(
+    async (name: string) => {
+      const filepath = `/${name}`;
+      await gitClient.writeFile(repoDir, filepath, '');
+      log.info(`Created file ${name} in ${repoOwner}/${repoName}`);
+    },
+    [repoDir, repoOwner, repoName, log],
+  );
+
+  const handleCreateFolder = useCallback(
+    async (name: string) => {
+      await gitClient.mkdir(repoDir, `/${name}`);
+      log.info(`Created folder ${name} in ${repoOwner}/${repoName}`);
+    },
+    [repoDir, repoOwner, repoName, log],
+  );
+
   useEffect(() => {
     ensureCloned();
   }, [ensureCloned]);
@@ -223,6 +318,41 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
         </div>
         {data.repo.description && <p className="repo-detail-desc">{data.repo.description}</p>}
         <div className="repo-detail-actions">
+          {cloneStatus === 'ready' && (
+            <div className="git-action-bar">
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={handlePush}
+                disabled={gitOpStatus.status === 'in_progress'}
+              >
+                {gitOpStatus.type === 'push' && gitOpStatus.status === 'in_progress' ? (
+                  <Loader2 size={14} className="spinner" />
+                ) : (
+                  <GitCommit size={14} />
+                )}
+                {' Push'}
+              </button>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={handlePull}
+                disabled={gitOpStatus.status === 'in_progress'}
+              >
+                {gitOpStatus.type === 'pull' && gitOpStatus.status === 'in_progress' ? (
+                  <Loader2 size={14} className="spinner" />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
+                {' Pull'}
+              </button>
+            </div>
+          )}
+          {gitOpStatus.status !== 'idle' && gitOpStatus.message && (
+            <span
+              className={`git-op-status git-op-status--${gitOpStatus.status === 'error' ? 'error' : gitOpStatus.status === 'success' ? 'success' : 'pending'}`}
+            >
+              {gitOpStatus.message}
+            </span>
+          )}
           <a className="btn btn-sm" href={`/webui/?repo=${encodeURIComponent(data.repo.html_url)}`}>
             Browser IDE
           </a>
@@ -287,9 +417,16 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
           </div>
           <div className="branch-chips">
             {data.branches.slice(0, 20).map((b) => (
-              <span key={b} className="branch-chip">
+              <button
+                key={b}
+                className={`branch-chip ${b === activeBranch ? 'branch-chip--active' : ''}`}
+                onClick={() => handleBranchCheckout(b)}
+                disabled={gitOpStatus.status === 'in_progress' || b === activeBranch}
+                title={`Checkout ${b}`}
+              >
+                {b === activeBranch ? <GitBranch size={12} /> : null}
                 {b}
-              </span>
+              </button>
             ))}
           </div>
         </div>
@@ -368,7 +505,12 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
 
         {cloneStatus === 'ready' && (
           <div className="repo-files-container">
-            <RepoFileTree dir={repoDir} onFileClick={handleFileClick} />
+            <RepoFileTree
+              dir={repoDir}
+              onFileClick={handleFileClick}
+              onCreateFile={handleCreateFile}
+              onCreateFolder={handleCreateFolder}
+            />
             {openedFile && (
               <div className="file-preview">
                 <div className="file-preview-header">
@@ -377,10 +519,18 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
                     ×
                   </button>
                 </div>
-                <pre className="file-preview-content">
-                  {openedFile.content.slice(0, 5000)}
-                  {openedFile.content.length > 5000 && '\n… (truncated)'}
-                </pre>
+                {isReadmeFile(openedFile.path) ? (
+                  <div className="readme-preview">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {openedFile.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <pre className="file-preview-content">
+                    {openedFile.content.slice(0, 5000)}
+                    {openedFile.content.length > 5000 && '\n… (truncated)'}
+                  </pre>
+                )}
               </div>
             )}
           </div>

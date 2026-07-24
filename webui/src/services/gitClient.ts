@@ -374,6 +374,12 @@ class GitClient {
     await this.pfs.writeFile(fullPath, content, 'utf8');
   }
 
+  /** Create an empty directory. Ensures parent path exists. */
+  async mkdir(dir: string, dirpath: string): Promise<void> {
+    const fullPath = `${dir}${dirpath.startsWith('/') ? '' : '/'}${dirpath}`;
+    await this.pfs.mkdir(fullPath);
+  }
+
   /** Delete a file. */
   async deleteFile(dir: string, filepath: string): Promise<void> {
     const fullPath = `${dir}${filepath.startsWith('/') ? '' : '/'}${filepath}`;

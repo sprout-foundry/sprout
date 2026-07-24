@@ -65,25 +65,23 @@ const IntegrationsView: React.FC = () => {
     }
     setLoading(true);
     try {
-      // Fetch provider connection status from the backend
-      const response = await adapter.fetch('/user/me');
+      // Fetch provider connection status from the dedicated endpoint
+      const response = await adapter.fetch('/user/me/provider-status');
       if (response.ok) {
         const data = await response.json();
-        // The backend returns user info including connected providers
-        // For now, check if user has github_token_encrypted set
         setStatuses({
           github: {
             provider: 'github',
-            connected: !!((data as any).github_connected),
-            accountName: (data as any).github_login || undefined,
+            connected: data.github?.connected ?? false,
+            accountName: data.github?.account_name || undefined,
           },
           gitlab: {
             provider: 'gitlab',
-            connected: false,
+            connected: data.gitlab?.connected ?? false,
           },
           bitbucket: {
             provider: 'bitbucket',
-            connected: false,
+            connected: data.bitbucket?.connected ?? false,
           },
         });
       }

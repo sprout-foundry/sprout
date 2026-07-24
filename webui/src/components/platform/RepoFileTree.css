@@ -89,3 +89,53 @@
     transform: rotate(360deg);
   }
 }
+
+/* File tree toolbar */
+.repo-file-tree-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.tree-toolbar-btn {
+  background: none;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 4px;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  transition: all 0.15s ease;
+}
+
+.tree-toolbar-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #eee);
+  border-color: var(--accent-color, rgba(97, 175, 239, 0.4));
+}
+
+/* Create file/folder input row */
+.tree-create-input-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  align-items: center;
+}
+
+.tree-create-input {
+  flex: 1;
+  background: var(--bg-input, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 4px;
+  color: var(--text-primary, #eee);
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  padding: 3px 6px;
+  outline: none;
+}
+
+.tree-create-input:focus {
+  border-color: var(--accent-color, #3b82f6);
+}

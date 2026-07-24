@@ -618,3 +618,201 @@
     transform: rotate(360deg);
   }
 }
+
+/* README Preview */
+.readme-preview {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  max-height: 480px;
+}
+
+.readme-preview h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.readme-preview h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 24px 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.readme-preview h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 20px 0 8px 0;
+}
+
+.readme-preview p {
+  margin: 0 0 12px 0;
+}
+
+.readme-preview ul,
+.readme-preview ol {
+  margin: 0 0 12px 0;
+  padding-left: 24px;
+}
+
+.readme-preview li {
+  margin: 4px 0;
+}
+
+.readme-preview code {
+  padding: 2px 6px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  color: var(--accent-primary);
+}
+
+.readme-preview pre {
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.readme-preview pre code {
+  padding: 0;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.readme-preview blockquote {
+  margin: 12px 0;
+  padding: 4px 16px;
+  border-left: 3px solid var(--accent-primary);
+  color: var(--text-secondary);
+}
+
+.readme-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.readme-preview th,
+.readme-preview td {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  text-align: left;
+  font-size: 13px;
+}
+
+.readme-preview th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+
+.readme-preview a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.readme-preview a:hover {
+  text-decoration: underline;
+}
+
+.readme-preview hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 24px 0;
+}
+
+.readme-preview img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.readme-preview table tr:nth-child(even) {
+  background: var(--bg-secondary);
+}
+
+/* Git action buttons in Repo Detail */
+.git-action-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.git-action-bar .btn {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* Branch chip styles */
+.branch-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.branch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: 'SF Mono', Menlo, monospace;
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+
+.branch-chip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent-primary);
+}
+
+.branch-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.branch-chip--active {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  border-color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.branch-chip--active:hover {
+  background: var(--accent-primary) !important;
+  border-color: var(--accent-primary) !important;
+}
+
+/* Git operation status */
+.git-op-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.git-op-status--success {
+  color: var(--accent-success);
+}
+
+.git-op-status--error {
+  color: var(--accent-error);
+}
+
+.git-op-status--pending {
+  color: var(--accent-warning);
+}

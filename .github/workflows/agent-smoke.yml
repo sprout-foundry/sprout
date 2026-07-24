@@ -24,8 +24,8 @@ jobs:
           primary-model: deepseek-ai/DeepSeek-V3.1
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deepinfra-api-key: ${{ secrets.DEEPINFRA_API_KEY }}
-          max-iterations: "5"
-          max-budget-usd: "0.50"
+          max-iterations: "60"
+          max-budget-usd: "1.00"
           timeout-minutes: "10"
           review-type: comprehensive
           comment-threshold: low

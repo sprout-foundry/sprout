@@ -179,15 +179,11 @@ func KeymapHelpTable() string {
 }
 
 // KeymapHintRow renders a single-line hint of keybindings suitable for
-// embedding in the footer hint row. It includes both the built-in
-// essential shortcuts (Ctrl+C, Enter) and any registered Alt+ bindings
-// from the GlobalKeymap.
+// embedding in the footer hint row. Includes the built-in essential
+// shortcuts (Ctrl+C, Enter, /, Tab) only.
 //
-// Format: "^C interrupt · Enter steer · Alt+T tools · Alt+V verbose"
-// Returns empty string when no bindings are registered.
+// Format: "^C interrupt · Enter steer · / commands · Tab autocomplete"
 func KeymapHintRow() string {
-	entries := GlobalKeymap().Entries()
-
 	type hint struct {
 		key   string
 		label string
@@ -200,28 +196,7 @@ func KeymapHintRow() string {
 		{"^C", "interrupt"},
 		{"Enter", "steer"},
 		{"/", "commands"},
-		{"/settings", "settings"},
 		{"Tab", "autocomplete"},
-	}
-
-	// Append registered Alt+ bindings with human-readable labels.
-	labelMap := map[string]string{
-		"footer.breakdown.toggle": "tools",
-		"output.verbosity.toggle": "verbose",
-	}
-
-	for _, e := range entries {
-		if e.Description == "" {
-			continue
-		}
-		label, ok := labelMap[e.Action]
-		if !ok {
-			label = extractShortLabel(e)
-			if len(label) > 30 {
-				label = truncateToWidth(label, 30, "…")
-			}
-		}
-		hints = append(hints, hint{e.Key, label})
 	}
 
 	if len(hints) == 0 {
@@ -233,38 +208,6 @@ func KeymapHintRow() string {
 		parts = append(parts, h.key+" "+h.label)
 	}
 	return strings.Join(parts, " · ")
-}
-
-// extractShortLabel derives a compact label from a keymap entry for use in
-// footer hints. It takes the second-to-last dot-separated segment of the
-// Action name (e.g., "footer.breakdown.toggle" → "breakdown",
-// "output.verbosity.toggle" → "verbosity"). The middle segment is the
-// "thing being controlled" — the most semantically useful for a hint.
-//
-// Edge cases:
-//   - Action has only one dot ("footer.tooltip"): returns "footer" (the
-//     first segment), since there's no second-to-last.
-//   - Action has no dots ("simpleaction"): returns the whole Action.
-//   - Action is empty: falls back to the first word of Description.
-func extractShortLabel(e KeymapEntry) string {
-	if e.Action != "" {
-		if lastDot := strings.LastIndex(e.Action, "."); lastDot > 0 {
-			// Walk back from lastDot to find the previous dot.
-			head := e.Action[:lastDot]
-			if prevDot := strings.LastIndex(head, "."); prevDot >= 0 {
-				return head[prevDot+1:]
-			}
-			// Only one dot in Action: return the head segment.
-			return head
-		}
-		// No dot: use the whole Action name.
-		return e.Action
-	}
-	// Fallback: first word of Description.
-	if idx := strings.Index(e.Description, " "); idx > 0 {
-		return e.Description[:idx]
-	}
-	return e.Description
 }
 
 func padRight(s string, n int) string {

@@ -24,7 +24,7 @@ func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 	}
 	root := ""
 	if ct.agent != nil {
-		root = ct.agent.workspaceRoot
+		root = ct.agent.GetWorkspaceRoot()
 	}
 	if root == "" {
 		var err error
@@ -48,7 +48,7 @@ func (ct *ChangeTracker) isOutsideWorkspace(filePath string) bool {
 	if ct.agent == nil {
 		return false
 	}
-	workspaceRoot := ct.agent.workspaceRoot
+	workspaceRoot := ct.agent.GetWorkspaceRoot()
 	if workspaceRoot == "" {
 		return false
 	}

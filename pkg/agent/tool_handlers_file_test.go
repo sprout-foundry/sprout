@@ -606,7 +606,7 @@ func TestHandleEditFile_TracksFullFileContent(t *testing.T) {
 	if resolved, err := filepath.EvalSymlinks(ws); err == nil {
 		ws = resolved
 	}
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 	agent.changeTracker = NewChangeTracker(agent, "test")
 	agent.changeTracker.Enable()
 

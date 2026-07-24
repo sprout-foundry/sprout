@@ -1265,7 +1265,7 @@ func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptes
 		ws = &ReactWebServer{eventBus: events.NewEventBus()}
 	}
 	// Override the workspace root for the test
-	ws.workspaceRoot = workspaceRoot
+	ws.SetWorkspaceRoot(workspaceRoot)
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin:     func(_ *http.Request) bool { return true },

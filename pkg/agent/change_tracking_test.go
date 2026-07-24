@@ -14,7 +14,7 @@ import (
 func TestTrackFileWrite_InWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -52,7 +52,7 @@ func TestTrackFileWrite_InWorkspace(t *testing.T) {
 func TestTrackFileWrite_OutOfWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -86,7 +86,7 @@ func TestTrackFileWrite_OutOfWorkspace(t *testing.T) {
 func TestTrackFileWrite_NewFileInWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -117,7 +117,7 @@ func TestTrackFileWrite_NewFileInWorkspace(t *testing.T) {
 func TestTrackFileWrite_NewFileOutOfWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -146,7 +146,7 @@ func TestTrackFileWrite_NewFileOutOfWorkspace(t *testing.T) {
 func TestTrackFileWrite_EmptyWorkspaceRoot(t *testing.T) {
 	// When workspaceRoot is empty, files should NOT be redacted
 	agent := NewTestAgent()
-	agent.workspaceRoot = ""
+	agent.SetWorkspaceRoot("")
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -180,7 +180,7 @@ func TestTrackFileWrite_EmptyWorkspaceRoot(t *testing.T) {
 func TestTrackFileWrite_RelativePathInWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -222,7 +222,7 @@ func TestTrackFileWrite_RelativePathInWorkspace(t *testing.T) {
 func TestTrackFileWrite_Disabled(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	ct.Disable()
@@ -248,7 +248,7 @@ func TestTrackFileWrite_Disabled(t *testing.T) {
 func TestTrackFileEdit_InWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -279,7 +279,7 @@ func TestTrackFileEdit_InWorkspace(t *testing.T) {
 func TestTrackFileEdit_OutOfWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -306,7 +306,7 @@ func TestTrackFileEdit_OutOfWorkspace(t *testing.T) {
 
 func TestTrackFileEdit_EmptyWorkspaceRoot(t *testing.T) {
 	agent := NewTestAgent()
-	agent.workspaceRoot = ""
+	agent.SetWorkspaceRoot("")
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -334,7 +334,7 @@ func TestTrackFileEdit_EmptyWorkspaceRoot(t *testing.T) {
 func TestTrackFileEdit_Disabled(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	ct.Disable()
@@ -368,7 +368,7 @@ func TestIsOutsideWorkspace_NilAgent(t *testing.T) {
 func TestIsOutsideWorkspace_NestedPathInWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test")
 
@@ -384,7 +384,7 @@ func TestIsOutsideWorkspace_SiblingDirectory(t *testing.T) {
 	ws := t.TempDir()
 	siblingDir := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test")
 
@@ -399,7 +399,7 @@ func TestIsOutsideWorkspace_SiblingDirectory(t *testing.T) {
 func TestIsOutsideWorkspace_WorkspaceRootIsParentOfFile(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test")
 
@@ -443,7 +443,7 @@ func TestDetermineWriteOperation_Overwrite(t *testing.T) {
 func TestGetTrackedFiles(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test")
 
@@ -465,7 +465,7 @@ func TestGetTrackedFiles(t *testing.T) {
 func TestClear(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test")
 	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "content")
@@ -484,7 +484,7 @@ func TestClear(t *testing.T) {
 func TestReset(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "old instruction")
 	oldID := ct.GetRevisionID()
@@ -507,7 +507,7 @@ func TestReset(t *testing.T) {
 func TestEnableDisable(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test")
 
@@ -537,7 +537,7 @@ func TestEnableDisable(t *testing.T) {
 func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -572,7 +572,7 @@ func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
 func TestTrackFileEdit_RelativePathNormalizedToAbsolute(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -597,7 +597,7 @@ func TestTrackFileEdit_RelativePathNormalizedToAbsolute(t *testing.T) {
 func TestResolveAbsPath_AlreadyAbsolute(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -613,7 +613,7 @@ func TestResolveAbsPath_AlreadyAbsolute(t *testing.T) {
 func TestResolveAbsPath_UsesWorkspaceRoot(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -633,7 +633,7 @@ func TestResolveAbsPath_UsesWorkspaceRoot(t *testing.T) {
 // TestResolveAbsPath_FallsBackToCwd uses CWD when workspace root is empty.
 func TestResolveAbsPath_FallsBackToCwd(t *testing.T) {
 	agent := NewTestAgent()
-	agent.workspaceRoot = ""
+	agent.SetWorkspaceRoot("")
 
 	ct := NewChangeTracker(agent, "test instruction")
 
@@ -663,7 +663,7 @@ func TestResolveAbsPath_FallsBackToCwd(t *testing.T) {
 func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test instruction")
 	agent.changeTracker = ct

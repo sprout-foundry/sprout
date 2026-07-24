@@ -21,6 +21,7 @@ import { downloadRepoAsZip } from '../../services/repoDownload';
 import { RepoFileTree } from './RepoFileTree';
 import CommitHistory from './CommitHistory';
 import DiffViewer from './DiffViewer';
+import RepoTabBar from './RepoTabBar';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
 
@@ -43,6 +44,10 @@ interface RepoDetailPageProps {
   repoOwner: string;
   repoName: string;
   onBack: () => void;
+  attachedRepos?: Array<{ owner: string; name: string; id: string }>;
+  onRepoSwitch?: (id: string) => void;
+  onRepoDetach?: (id: string) => void;
+  onRepoAdd?: () => void;
 }
 
 /** Check if a filename is a README file (case-insensitive). */
@@ -51,7 +56,15 @@ function isReadmeFile(filepath: string): boolean {
   return /^readme(\.md|\.mdx|\.markdown|\.txt)?$/i.test(name);
 }
 
-const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, onBack }) => {
+const RepoDetailPage: React.FC<RepoDetailPageProps> = ({
+  repoOwner,
+  repoName,
+  onBack,
+  attachedRepos,
+  onRepoSwitch,
+  onRepoDetach,
+  onRepoAdd,
+}) => {
   const log = useLog();
   const [data, setData] = useState<RepoDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -352,6 +365,16 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
       <button className="btn btn-sm btn-ghost" onClick={onBack}>
         <ArrowLeft size={14} /> Back to Repos
       </button>
+
+      {attachedRepos && attachedRepos.length > 0 && (
+        <RepoTabBar
+          repos={attachedRepos}
+          activeRepoId={data?.repo?.full_name ?? ''}
+          onSelectRepo={(id) => onRepoSwitch?.(id)}
+          onAddRepo={() => onRepoAdd?.()}
+          onDetachRepo={(id) => onRepoDetach?.(id)}
+        />
+      )}
 
       {/* Repo header */}
       <div className="platform-card repo-detail-header">

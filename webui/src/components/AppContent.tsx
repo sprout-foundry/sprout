@@ -200,13 +200,61 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const handleRepoSelected = useCallback(
     (owner: string, name: string) => {
-      setAppState((prev) => ({
-        selectedRepo: { owner, name },
-        currentView: 'repodetail' as const,
-      }));
+      const id = `${owner}/${name}`;
+      setAppState((prev) => {
+        const repos = prev.attachedRepos ?? [];
+        const alreadyAttached = repos.some((r) => r.id === id);
+        return {
+          selectedRepo: { owner, name },
+          currentView: 'repodetail' as const,
+          attachedRepos: alreadyAttached
+            ? repos
+            : [...repos, { owner, name, id }],
+        };
+      });
     },
     [setAppState],
   );
+
+  const handleRepoSwitch = useCallback(
+    (id: string) => {
+      // Find the repo in the attached list and set it as active
+      setAppState((prev) => {
+        const repo = (prev.attachedRepos ?? []).find((r) => r.id === id);
+        if (!repo) return {};
+        return {
+          selectedRepo: { owner: repo.owner, name: repo.name },
+          currentView: 'repodetail' as const,
+        };
+      });
+    },
+    [setAppState],
+  );
+
+  const handleRepoDetach = useCallback(
+    (id: string) => {
+      setAppState((prev) => {
+        const repos = (prev.attachedRepos ?? []).filter((r) => r.id !== id);
+        // If we detached the active repo, switch to the first remaining or go to dashboard
+        if (prev.selectedRepo) {
+          const activeId = `${prev.selectedRepo.owner}/${prev.selectedRepo.name}`;
+          if (activeId === id) {
+            if (repos.length > 0) {
+              return { attachedRepos: repos, selectedRepo: { owner: repos[0].owner, name: repos[0].name } };
+            }
+            return { attachedRepos: repos, selectedRepo: null, currentView: 'dashboard' as const };
+          }
+        }
+        return { attachedRepos: repos };
+      });
+    },
+    [setAppState],
+  );
+
+  const handleRepoAdd = useCallback(() => {
+    setAppState((prev) => ({ currentView: 'repodetail' as const }));
+    // The onboarding screen will handle the repo selection
+  }, [setAppState]);
 
   const hotkeysConfigPath = useHotkeysConfig(apiService, isConnected);
   const {
@@ -808,7 +856,11 @@ const AppContent: React.FC<AppContentProps> = ({
                 onViewChange={onViewChange}
                 selectedTaskId={state.selectedTaskId}
                 selectedRepo={state.selectedRepo}
+                attachedRepos={state.attachedRepos}
                 onRepoSelected={handleRepoSelected}
+                onRepoSwitch={handleRepoSwitch}
+                onRepoDetach={handleRepoDetach}
+                onRepoAdd={handleRepoAdd}
               />
             </ErrorBoundary>
           </div>

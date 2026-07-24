@@ -105,6 +105,11 @@ export interface AppState {
   selectedTaskId?: string | null;
   /** Selected repo in "owner/name" format for RepoDetailPage. */
   selectedRepo?: { owner: string; name: string } | null;
+  /**
+   * Multi-repo workspace — all repos attached to the current session.
+   * The active repo is the one matching selectedRepo.
+   */
+  attachedRepos?: Array<{ owner: string; name: string; id: string }>;
   toolExecutions: ToolExecution[];
   queryProgress: QueryProgress | null;
   stats: Record<string, unknown>; // Enhanced stats from API

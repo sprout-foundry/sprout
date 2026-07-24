@@ -821,9 +821,12 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
     },
   };
 
-  // Write the provider config to the virtual filesystem
+  // Write the provider config to the virtual filesystem.
+  // Must use the absolute path that matches Go's GetConfigDir()
+  // resolution: $HOME/.config/sprout/providers/platform.json
+  // In the WASM VFS, HOME is /home/user.
   try {
-    shell.writeFile('.config/sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
+    shell.writeFile('/home/user/.config/sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
   } catch {
     // May already exist — ignore
   }

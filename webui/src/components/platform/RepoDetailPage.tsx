@@ -1,6 +1,19 @@
-import { GitBranch, GitCommit, GitPullRequest, AlertCircle, ArrowLeft } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import {
+  GitBranch,
+  GitCommit,
+  GitPullRequest,
+  AlertCircle,
+  ArrowLeft,
+  Download,
+  Loader2,
+  RefreshCw,
+  KeyRound,
+} from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
+import { gitClient } from '../../services/gitClient';
+import { syncRepoToWasmVfs } from '../../services/repoVfsBridge';
+import { RepoFileTree } from './RepoFileTree';
 import { useLog } from '../../utils/log';
 import './PlatformPages.css';
 
@@ -30,6 +43,22 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
   const [data, setData] = useState<RepoDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Clone state
+  const [cloneStatus, setCloneStatus] = useState<
+    'idle' | 'checking' | 'cloning' | 'ready' | 'error' | 'needs-auth'
+  >('idle');
+  const [cloneProgress, setCloneProgress] = useState<{
+    phase: string;
+    loaded: number;
+    total: number;
+  } | null>(null);
+  const [cloneError, setCloneError] = useState<string>('');
+  const [repoDir] = useState(`/repos/${repoOwner}/${repoName}`);
+  const [openedFile, setOpenedFile] = useState<{ path: string; content: string } | null>(null);
+  const [showPatPrompt, setShowPatPrompt] = useState(false);
+  const [patInput, setPatInput] = useState('');
+  const cloningRef = useRef(false);
 
   const fetchDetail = useCallback(async () => {
     const adapter = getAdapter();
@@ -87,6 +116,78 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
+
+  const ensureCloned = useCallback(
+    async (token?: string) => {
+      if (cloningRef.current) return;
+      cloningRef.current = true;
+      setCloneStatus('checking');
+      setCloneError('');
+
+      try {
+        const exists = await gitClient.exists(repoDir);
+        if (!exists) {
+          setCloneStatus('cloning');
+          await gitClient.clone(
+            `https://github.com/${repoOwner}/${repoName}`,
+            repoDir,
+            {
+              depth: 1,
+              branch: data?.repo?.default_branch ?? 'main',
+              token,
+              onProgress: ({ phase, loaded, total }) => {
+                setCloneProgress({ phase, loaded, total });
+              },
+            }
+          );
+        }
+        setCloneStatus('ready');
+      } catch (err: any) {
+        const msg = err?.message ?? String(err);
+        if (/401|403|Unauthorized|authentication/i.test(msg)) {
+          setCloneStatus('needs-auth');
+        } else {
+          setCloneError(msg);
+          setCloneStatus('error');
+        }
+      } finally {
+        cloningRef.current = false;
+      }
+    },
+    [repoDir, repoOwner, repoName, data?.repo?.default_branch]
+  );
+
+  const handleFileClick = useCallback(
+    (filepath: string, content: string) => {
+      setOpenedFile({ path: filepath, content });
+      log.debug(`Opened ${filepath} from ${repoOwner}/${repoName}`);
+    },
+    [repoOwner, repoName, log]
+  );
+
+  const handleOpenInIDE = useCallback(async () => {
+    if (cloneStatus !== 'ready') {
+      await ensureCloned();
+    }
+    // Bridge to WASM VFS so the agent can read these files
+    const adapter = getAdapter() as any;
+    const shell = adapter?.getWasmShell?.();
+    if (shell) {
+      try {
+        await syncRepoToWasmVfs(repoDir, '/workspace/repo', shell);
+        log.info(`Synced ${repoOwner}/${repoName} to workspace`);
+      } catch (err: any) {
+        log.error(`Sync error: ${err.message ?? err}`);
+      }
+    }
+    // Navigate to editor
+    window.history.pushState({}, '', `/webui/?repo=${encodeURIComponent(`${repoOwner}/${repoName}`)}`);
+    window.dispatchEvent(new CustomEvent('sprout:navigate', { detail: 'editor' }));
+  }, [cloneStatus, ensureCloned, repoDir, repoOwner, repoName, log]);
+
+  useEffect(() => {
+    ensureCloned();
+  }, [ensureCloned]);
 
   if (loading) {
     return (
@@ -196,6 +297,104 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({ repoOwner, repoName, on
           </div>
         </div>
       )}
+
+      {/* Clone + File Tree */}
+      <div className="platform-card">
+        <div className="platform-card-header">
+          <h3>
+            <Download size={16} /> Repository Files
+          </h3>
+          {cloneStatus === 'ready' && (
+            <button className="btn btn-sm btn-ghost" onClick={() => ensureCloned()}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+          )}
+        </div>
+
+        {cloneStatus === 'checking' && (
+          <div className="clone-status">
+            <Loader2 size={16} className="spinner" /> Checking local cache…
+          </div>
+        )}
+
+        {cloneStatus === 'cloning' && (
+          <div className="clone-status">
+            <Loader2 size={16} className="spinner" /> Cloning from GitHub…
+            {cloneProgress && (
+              <span className="clone-progress">
+                {cloneProgress.phase}{' '}
+                {Math.round(cloneProgress.loaded / 1024)}KB
+                {cloneProgress.total
+                  ? ` / ${Math.round(cloneProgress.total / 1024)}KB`
+                  : ''}
+              </span>
+            )}
+          </div>
+        )}
+
+        {cloneStatus === 'error' && (
+          <div className="clone-error">
+            <AlertCircle size={14} /> {cloneError}
+            <button className="btn btn-sm" onClick={() => ensureCloned()}>
+              Retry
+            </button>
+          </div>
+        )}
+
+        {cloneStatus === 'needs-auth' && (
+          <div className="clone-needs-auth">
+            <AlertCircle size={14} /> This repository is private.
+            {!showPatPrompt ? (
+              <button className="btn btn-sm" onClick={() => setShowPatPrompt(true)}>
+                <KeyRound size={14} /> Add GitHub Token
+              </button>
+            ) : (
+              <div className="pat-input-row">
+                <input
+                  type="password"
+                  className="input"
+                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                  value={patInput}
+                  onChange={(e) => setPatInput(e.target.value)}
+                />
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    localStorage.setItem('github_pat', patInput);
+                    setShowPatPrompt(false);
+                    ensureCloned(patInput);
+                  }}
+                >
+                  Clone with Token
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {cloneStatus === 'ready' && (
+          <div className="repo-files-container">
+            <RepoFileTree dir={repoDir} onFileClick={handleFileClick} />
+            {openedFile && (
+              <div className="file-preview">
+                <div className="file-preview-header">
+                  <code>{openedFile.path}</code>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setOpenedFile(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <pre className="file-preview-content">
+                  {openedFile.content.slice(0, 5000)}
+                  {openedFile.content.length > 5000 && '\n… (truncated)'}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

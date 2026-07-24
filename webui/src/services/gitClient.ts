@@ -22,11 +22,7 @@ export interface CloneProgress {
   total: number;
 }
 
-export type FileStatusType =
-  | 'modified'
-  | 'added'
-  | 'deleted'
-  | 'untracked';
+export type FileStatusType = 'modified' | 'added' | 'deleted' | 'untracked';
 
 export interface GitStatusEntry {
   filepath: string;
@@ -102,8 +98,8 @@ class GitClient {
       dir,
       next.then(
         () => {},
-        () => {}
-      )
+        () => {},
+      ),
     );
     try {
       return await next;
@@ -135,12 +131,9 @@ class GitClient {
         singleBranch: opts.singleBranch ?? true,
         ref: opts.branch ?? 'main',
         corsProxy: undefined,
-        onAuth: opts.token
-          ? () => Promise.resolve({ token: opts.token } as GitAuth)
-          : undefined,
+        onAuth: opts.token ? () => Promise.resolve({ token: opts.token } as GitAuth) : undefined,
         onProgress: opts.onProgress
-          ? ({ phase, loaded, total }) =>
-              opts.onProgress!({ phase, loaded, total })
+          ? ({ phase, loaded, total }) => opts.onProgress!({ phase, loaded, total })
           : undefined,
       });
     });
@@ -156,9 +149,7 @@ class GitClient {
         ref: opts.branch,
         singleBranch: true,
         author: opts.author,
-        onAuth: opts.token
-          ? () => Promise.resolve({ token: opts.token } as GitAuth)
-          : undefined,
+        onAuth: opts.token ? () => Promise.resolve({ token: opts.token } as GitAuth) : undefined,
       });
     });
   }
@@ -227,11 +218,7 @@ class GitClient {
   }
 
   /** Create a commit with staged changes. Returns the commit oid. */
-  async commit(
-    dir: string,
-    message: string,
-    opts: CommitOptions = {}
-  ): Promise<string> {
+  async commit(dir: string, message: string, opts: CommitOptions = {}): Promise<string> {
     const author = opts.author ?? {
       name: 'Sprout User',
       email: 'user@sprout.local',
@@ -247,10 +234,7 @@ class GitClient {
   }
 
   /** Get commit log. */
-  async log(
-    dir: string,
-    opts: { depth?: number; ref?: string } = {}
-  ): Promise<GitLogEntry[]> {
+  async log(dir: string, opts: { depth?: number; ref?: string } = {}): Promise<GitLogEntry[]> {
     const commits = await git.log({
       fs: this.fs,
       dir,
@@ -451,8 +435,7 @@ class GitClient {
         }
         results.push({
           filepath: entry.filepath,
-          type:
-            entry.type === 'untracked' ? 'added' : entry.type,
+          type: entry.type === 'untracked' ? 'added' : entry.type,
           patch,
         });
       } catch {

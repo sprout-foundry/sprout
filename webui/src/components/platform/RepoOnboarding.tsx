@@ -113,7 +113,14 @@ const RepoOnboarding: React.FC<RepoOnboardingProps> = ({ onRepoSelected, isDeskt
       const response = await adapter.fetch('/user/me/repos');
       if (response.ok) {
         const data = await response.json();
-        const list: RepoItem[] = (data.repos || data || []).map((r: any) => ({
+        const reposData: {
+          name?: string;
+          full_name?: string;
+          description?: string;
+          language?: string | null;
+          private?: boolean;
+        }[] = data.repos || data || [];
+        const list: RepoItem[] = reposData.map((r) => ({
           name: r.name || '',
           fullName: r.full_name || r.name || '',
           description: r.description || '',
@@ -201,17 +208,12 @@ const RepoOnboarding: React.FC<RepoOnboardingProps> = ({ onRepoSelected, isDeskt
                 onClick={handleUrlImport}
                 disabled={cloneStatus === 'cloning' || !urlInput.trim()}
               >
-                {cloneStatus === 'cloning' ? (
-                  <Loader2 size={14} className="spinner" />
-                ) : (
-                  <ArrowRight size={14} />
-                )}
+                {cloneStatus === 'cloning' ? <Loader2 size={14} className="spinner" /> : <ArrowRight size={14} />}
                 {cloneStatus === 'cloning' ? ' Cloning…' : ' Clone'}
               </button>
             </div>
             <p className="onboarding-hint">
-              Supports <code>https://github.com/owner/repo</code>,{' '}
-              <code>git@github.com:owner/repo</code>, or shorthand{' '}
+              Supports <code>https://github.com/owner/repo</code>, <code>git@github.com:owner/repo</code>, or shorthand{' '}
               <code>owner/repo</code>
             </p>
             {cloneStatus === 'error' && (
@@ -239,8 +241,7 @@ const RepoOnboarding: React.FC<RepoOnboardingProps> = ({ onRepoSelected, isDeskt
               </div>
             ) : repos.length === 0 ? (
               <div className="onboarding-empty">
-                No repositories found. Make sure your GitHub token has{' '}
-                <code>repo</code> scope.
+                No repositories found. Make sure your GitHub token has <code>repo</code> scope.
               </div>
             ) : (
               <>
@@ -267,13 +268,9 @@ const RepoOnboarding: React.FC<RepoOnboardingProps> = ({ onRepoSelected, isDeskt
                         <GitBranch size={14} />
                         <span className="onboarding-repo-name">{repo.fullName}</span>
                         {repo.isPrivate && <KeyRound size={12} className="private-icon" />}
-                        {repo.language && (
-                          <span className="onboarding-repo-lang">{repo.language}</span>
-                        )}
+                        {repo.language && <span className="onboarding-repo-lang">{repo.language}</span>}
                       </div>
-                      {repo.description && (
-                        <span className="onboarding-repo-desc">{repo.description}</span>
-                      )}
+                      {repo.description && <span className="onboarding-repo-desc">{repo.description}</span>}
                     </button>
                   ))}
                 </div>
@@ -300,12 +297,14 @@ const RepoOnboarding: React.FC<RepoOnboardingProps> = ({ onRepoSelected, isDeskt
             )}
 
             <div className="onboarding-create-info">
-              <h4>Can't find your repo?</h4>
+              <h4>Can&apos;t find your repo?</h4>
               <ul>
                 <li>
                   <strong>Add a GitHub token</strong> in Settings to see private repositories.
                 </li>
-                <li>Make sure your token has <code>repo</code> scope.</li>
+                <li>
+                  Make sure your token has <code>repo</code> scope.
+                </li>
               </ul>
             </div>
           </div>

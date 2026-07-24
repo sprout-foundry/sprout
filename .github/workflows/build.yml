@@ -79,6 +79,13 @@ jobs:
     - name: Run full build pipeline (make build-all)
       run: make build-all
 
+    - name: Run webui unit tests (vitest)
+      run: npx vitest run --reporter=verbose
+      working-directory: webui
+      env:
+        CI: "true"
+        VITEST_MAX_FORKS: "2"
+
     - name: Commit updated UI assets
       run: |
         git config --global user.name "github-actions"

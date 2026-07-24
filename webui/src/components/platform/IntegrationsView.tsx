@@ -9,15 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  GitBranch,
-  Check,
-  X,
-  Loader2,
-  ExternalLink,
-  AlertCircle,
-  KeyRound,
-} from 'lucide-react';
+import { GitBranch, Check, X, Loader2, ExternalLink, AlertCircle, KeyRound } from 'lucide-react';
 import { getAdapter } from '../../services/apiAdapter';
 import './PlatformPages.css';
 
@@ -33,7 +25,8 @@ const PROVIDER_META: Record<string, { label: string; color: string; icon: string
     label: 'GitHub',
     color: '#24292e',
     icon: '🐙',
-    docUrl: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens',
+    docUrl:
+      'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens',
   },
   gitlab: {
     label: 'GitLab',
@@ -68,14 +61,14 @@ const IntegrationsView: React.FC = () => {
       // Fetch provider connection status from the backend
       const response = await adapter.fetch('/user/me');
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { github_connected?: boolean; github_login?: string };
         // The backend returns user info including connected providers
         // For now, check if user has github_token_encrypted set
         setStatuses({
           github: {
             provider: 'github',
-            connected: !!((data as any).github_connected),
-            accountName: (data as any).github_login || undefined,
+            connected: !!data.github_connected,
+            accountName: data.github_login || undefined,
           },
           gitlab: {
             provider: 'gitlab',
@@ -107,7 +100,8 @@ const IntegrationsView: React.FC = () => {
     setConnecting(provider);
     try {
       // Initiate OAuth flow: redirect to the backend
-      const baseUrl = (getAdapter() as any)?.config?.apiBase || '';
+      const adapter = getAdapter();
+      const baseUrl = (adapter as { config?: { apiBase?: string } })?.config?.apiBase || '';
       window.location.href = `${baseUrl}/auth/${provider}/login`;
     } catch {
       setConnecting(null);
@@ -115,8 +109,13 @@ const IntegrationsView: React.FC = () => {
   };
 
   const handleDisconnect = async (provider: string) => {
-    if (!window.confirm(`Disconnect ${PROVIDER_META[provider]?.label ?? provider}? This will remove access to repos from this provider.`))
+    if (
+      !window.confirm(
+        `Disconnect ${PROVIDER_META[provider]?.label ?? provider}? This will remove access to repos from this provider.`,
+      )
+    ) {
       return;
+    }
 
     const adapter = getAdapter();
     if (!adapter) return;
@@ -176,7 +175,10 @@ const IntegrationsView: React.FC = () => {
     <div className="integrations-view">
       <div className="platform-page-header">
         <h2>Connected Accounts</h2>
-        <p>Link your git provider accounts to access your repositories. Repos from all connected providers appear in your unified dashboard.</p>
+        <p>
+          Link your git provider accounts to access your repositories. Repos from all connected providers appear in your
+          unified dashboard.
+        </p>
       </div>
 
       <div className="integrations-grid">
@@ -243,9 +245,7 @@ const IntegrationsView: React.FC = () => {
                             className="input"
                             placeholder="ghp_xxx or gitlab_pat_xxx"
                             value={patInputs[key] ?? ''}
-                            onChange={(e) =>
-                              setPatInputs((prev) => ({ ...prev, [key]: e.target.value }))
-                            }
+                            onChange={(e) => setPatInputs((prev) => ({ ...prev, [key]: e.target.value }))}
                           />
                           <button
                             className="btn btn-sm"

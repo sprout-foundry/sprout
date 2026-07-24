@@ -169,7 +169,7 @@ test-coverage: prepare-grammars
 	echo ""; \
 	echo "Generating coverage report..."; \
 	go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt; \
-	total_coverage=$$(go tool cover -func=/tmp/sprout-coverage.out | grep "^total:" | awk "{print \$$3}" | sed "s/%//"); \
+	total_coverage=$$(go tool cover -func=/tmp/sprout-coverage.out | grep "^total:" | awk "{print \$$NF}" | sed "s/%//"); \
 	if [ -z "$${total_coverage}" ]; then \
 		echo "ERROR: Failed to extract coverage information"; \
 		exit 1; \
@@ -364,6 +364,12 @@ test-webui:
 	@echo "Open http://localhost:8801 to test the UI"
 	@echo "Press Ctrl+C to stop the server"
 	cd test && ./test_webserver
+
+# Run vitest unit tests for the webui
+# These test the React component layer with jsdom
+test-webui-vitest:
+	@echo "Running webui vitest tests..."
+	@cd webui && npx vitest run --reporter=verbose
 
 # Build WASM shell module (sprout.wasm + wasm_exec.js)
 build-wasm: prepare-grammars

@@ -71,6 +71,7 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 		json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("/api/bootstrap", ws.handleAPIBootstrap)
+	mux.HandleFunc("/greet", ws.handleAPIGreet)
 }
 
 func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {

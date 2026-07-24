@@ -260,3 +260,17 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 		"filename": filename,
 	})
 }
+
+// handleAPIGreet handles API requests for greeting endpoint
+func (ws *ReactWebServer) handleAPIGreet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Hello from Sprout!",
+		"status":  "success",
+	})
+}

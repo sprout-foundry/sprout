@@ -4,6 +4,9 @@ package webui
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -149,4 +152,63 @@ func TestTryParseMultipartFile_OnlyImageFieldEmpty(t *testing.T) {
 	if len(data) != 0 {
 		t.Errorf("expected empty data, got %d bytes", len(data))
 	}
+}
+
+// ---------------------------------------------------------------------------
+// handleAPIGreet — greeting endpoint
+// ---------------------------------------------------------------------------
+
+func TestHandleAPIGreet(t *testing.T) {
+	t.Parallel()
+	
+	// Create a test server
+	server := &ReactWebServer{}
+	
+	t.Run("GET request returns greeting", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/greet", nil)
+		
+		server.handleAPIGreet(w, r)
+		
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", w.Code)
+		}
+		
+		var response map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		
+		expectedMessage := "Hello from Sprout!"
+		if msg, ok := response["message"]; !ok || msg != expectedMessage {
+			t.Errorf("expected message '%s', got '%v'", expectedMessage, msg)
+		}
+		
+		if status, ok := response["status"]; !ok || status != "success" {
+			t.Errorf("expected status 'success', got '%v'", status)
+		}
+	})
+	
+	t.Run("non-GET methods return method not allowed", func(t *testing.T) {
+		methods := []string{"POST", "PUT", "DELETE", "PATCH"}
+		for _, method := range methods {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(method, "/greet", nil)
+			
+			server.handleAPIGreet(w, r)
+			
+			if w.Code != http.StatusMethodNotAllowed {
+				t.Errorf("expected status 405 for %s, got %d", method, w.Code)
+			}
+			
+			var response map[string]interface{}
+			if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+				t.Fatalf("failed to decode response for %s: %v", method, err)
+			}
+			
+			if code, ok := response["code"]; !ok || code != "method_not_allowed" {
+				t.Errorf("expected error code 'method_not_allowed' for %s, got '%v'", method, code)
+			}
+		}
+	})
 }

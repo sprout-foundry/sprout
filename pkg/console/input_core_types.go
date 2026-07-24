@@ -146,6 +146,16 @@ type InputReader struct {
 	// Initialized to a default that writes to os.Stderr; tests can
 	// override via SetFooterTooltip.
 	footerTooltip *FooterTooltip
+
+	// suppressAutocompleteNextRefresh is a one-shot flag consumed by
+	// refreshLocked: when true, it skips the update+render step that
+	// draws the inline dropdown after the input line. The Enter handler
+	// sets it before its Refresh call so the dropdown is erased (by
+	// refreshLocked's leading clear()) but never re-drawn for the
+	// accepted line — leaving no stale rows to persist during the
+	// upcoming streaming response. The flag is cleared immediately
+	// after the Refresh returns.
+	suppressAutocompleteNextRefresh bool
 }
 
 type pasteSpan struct {

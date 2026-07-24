@@ -385,7 +385,7 @@ func TestHistoryPathKey(t *testing.T) {
 
 	t.Run("uses workspace root as key", func(t *testing.T) {
 		a := newMinimalTestAgent(t)
-		a.workspaceRoot = "/home/user/project"
+		a.SetWorkspaceRoot("/home/user/project")
 
 		key := a.historyPathKey()
 		if key != "/home/user/project" {
@@ -395,7 +395,7 @@ func TestHistoryPathKey(t *testing.T) {
 
 	t.Run("cleans path", func(t *testing.T) {
 		a := newMinimalTestAgent(t)
-		a.workspaceRoot = "/home/user/project/../project"
+		a.SetWorkspaceRoot("/home/user/project/../project")
 
 		key := a.historyPathKey()
 		// Path should be cleaned to normalize .. and .
@@ -406,7 +406,7 @@ func TestHistoryPathKey(t *testing.T) {
 
 	t.Run("returns 'unknown' for empty root only when Getwd returns '.'", func(t *testing.T) {
 		a := newMinimalTestAgent(t)
-		a.workspaceRoot = "."
+		a.SetWorkspaceRoot(".")
 		// When explicitly set to ".", should return "unknown"
 
 		key := a.historyPathKey()
@@ -417,7 +417,7 @@ func TestHistoryPathKey(t *testing.T) {
 
 	t.Run("returns 'unknown' for whitespace root only when Getwd returns '.'", func(t *testing.T) {
 		a := newMinimalTestAgent(t)
-		a.workspaceRoot = "."
+		a.SetWorkspaceRoot(".")
 		// When explicitly set to ".", should return "unknown"
 
 		key := a.historyPathKey()
@@ -428,7 +428,7 @@ func TestHistoryPathKey(t *testing.T) {
 
 	t.Run("uses actual working directory when root is empty", func(t *testing.T) {
 		a := newMinimalTestAgent(t)
-		a.workspaceRoot = ""
+		a.SetWorkspaceRoot("")
 		// Falls back to os.Getwd(), which returns actual directory
 
 		key := a.historyPathKey()

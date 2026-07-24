@@ -97,11 +97,15 @@ func (a *Agent) GetContextProfile() configuration.ContextProfile {
 
 // SetWorkspaceRoot records the logical workspace root for this agent instance.
 func (a *Agent) SetWorkspaceRoot(workspaceRoot string) {
+	a.workspaceRootMu.Lock()
+	defer a.workspaceRootMu.Unlock()
 	a.workspaceRoot = strings.TrimSpace(workspaceRoot)
 }
 
 // GetWorkspaceRoot returns the logical workspace root for this agent instance.
 func (a *Agent) GetWorkspaceRoot() string {
+	a.workspaceRootMu.RLock()
+	defer a.workspaceRootMu.RUnlock()
 	return strings.TrimSpace(a.workspaceRoot)
 }
 
@@ -118,7 +122,7 @@ func (a *Agent) GetConfigOverrides() map[string]interface{} {
 
 // currentWorkspaceRoot resolves the agent workspace, falling back to the process cwd.
 func (a *Agent) currentWorkspaceRoot() string {
-	if root := strings.TrimSpace(a.workspaceRoot); root != "" {
+	if root := a.GetWorkspaceRoot(); root != "" {
 		return root
 	}
 	if wd, err := os.Getwd(); err == nil {
@@ -255,7 +259,7 @@ func (a *Agent) GetSubagentRunner() *SubagentRunner {
 			TodoManager:   a.todoMgr,
 			EmbeddingMgr:  a.GetEmbeddingManager(),
 			ConfigManager: a.configManager,
-			WorkspaceRoot: a.workspaceRoot,
+			WorkspaceRoot: a.GetWorkspaceRoot(),
 		})
 	}
 	return a.subagentRunner

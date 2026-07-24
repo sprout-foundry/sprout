@@ -74,7 +74,7 @@ func TestHandleAPIGitPullRequestInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.SetWorkspaceRoot("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/pull-request", strings.NewReader("not json"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitPullRequest(rec, req)
@@ -89,7 +89,7 @@ func TestHandleAPIGitPullRequestMissingTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.SetWorkspaceRoot("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/pull-request",
 		strings.NewReader(`{"title":"","head":"feature"}`))
 	rec := httptest.NewRecorder()
@@ -127,7 +127,7 @@ func TestHandleAPIGitPullRequestSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = dir
+	ws.SetWorkspaceRoot(dir)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/git/pull-request",
 		strings.NewReader(`{"title":"Fix bug","head":"feature-test","base":"main"}`))
@@ -180,7 +180,7 @@ func TestHandleAPIGitPullRequestCreateError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = dir
+	ws.SetWorkspaceRoot(dir)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/git/pull-request",
 		strings.NewReader(`{"title":"Failing PR","head":"feature-error","base":"main"}`))
@@ -231,7 +231,7 @@ func TestHandleAPIGitPullRequestDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = dir
+	ws.SetWorkspaceRoot(dir)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/git/pull-request",
 		strings.NewReader(`{"title":"Draft PR","head":"feature-draft","base":"main","draft":true}`))
@@ -278,7 +278,7 @@ func TestHandleAPIGitPullRequestWithBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = dir
+	ws.SetWorkspaceRoot(dir)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/git/pull-request",
 		strings.NewReader(`{"title":"PR with body","body":"Detailed description here","head":"feature-body","base":"main"}`))

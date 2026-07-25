@@ -272,9 +272,9 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({
         if (hasUncommitted) {
           const confirmed = window.confirm(
             `You have uncommitted changes. Switching branches may lose them.\n\n` +
-            `- Commit your changes first, or\n` +
-            `- Discard them and switch.\n\n` +
-            `Switch anyway?`,
+              `- Commit your changes first, or\n` +
+              `- Discard them and switch.\n\n` +
+              `Switch anyway?`,
           );
           if (!confirmed) return;
         }
@@ -599,16 +599,9 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({
         {cloneStatus === 'ready' && activeRepoTab === 'history' && (
           <div className="repo-files-container">
             {viewingDiff ? (
-              <DiffViewer
-                repoDir={repoDir}
-                sha={viewingDiff}
-                onClose={() => setViewingDiff(null)}
-              />
+              <DiffViewer repoDir={repoDir} sha={viewingDiff} onClose={() => setViewingDiff(null)} />
             ) : (
-              <CommitHistory
-                repoDir={repoDir}
-                onViewDiff={(sha) => setViewingDiff(sha)}
-              />
+              <CommitHistory repoDir={repoDir} onViewDiff={(sha) => setViewingDiff(sha)} />
             )}
           </div>
         )}
@@ -631,9 +624,7 @@ const RepoDetailPage: React.FC<RepoDetailPageProps> = ({
                 </div>
                 {isReadmeFile(openedFile.path) ? (
                   <div className="readme-preview">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {openedFile.content}
-                    </ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{openedFile.content}</ReactMarkdown>
                   </div>
                 ) : (
                   <pre className="file-preview-content">

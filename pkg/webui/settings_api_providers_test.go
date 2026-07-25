@@ -51,33 +51,24 @@ func TestSettingsProvidersDeleteLoadsProviderFromDisk(t *testing.T) {
 }
 
 func TestSettingsProvidersPutPersistenceFailureReturns500(t *testing.T) {
-	// SaveCustomProvider resolves its write path via getDefaultProvidersDir()
-	// (HOME-based, ignoring SPROUT_CONFIG). Manager.EnrichCustomProviders
-	// reads from the manager's configDir (SPROUT_CONFIG-resolved). To
-	// force a Save failure while keeping the Enrich path working, we
-	// point HOME at a dir where the providers path is blocked by a
-	// regular file, and SPROUT_CONFIG at a separate dir that holds a
-	// normal providers directory + provider JSON.
-	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	scopedDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", scopedDir)
+	// SaveCustomProvider writes to SPROUT_CONFIG-scoped providers dir.
+	// To force a write failure: create the providers dir, write the
+	// existing provider, then make the provider file read-only so the
+	// overwrite WriteFile fails.
+	configDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
-	// Write provider JSON under the SPROUT_CONFIG providers dir — the
-	// manager's Enrich path will find it.
-	writeProviderFile(t, scopedDir, configuration.CustomProviderConfig{Name: "disk-only", Endpoint: "https://old.example.com"})
+	// Write the existing provider so PUT finds it.
+	writeProviderFile(t, configDir, configuration.CustomProviderConfig{Name: "disk-only", Endpoint: "https://old.example.com"})
 
-	// Block SaveCustomProvider by making HOME/.config/sprout/providers
-	// be a regular file. MkdirAll inside GetCustomProviderPath will
-	// refuse to create the directory because the path already exists
-	// as a non-directory.
-	blockedProviders := filepath.Join(homeDir, ".config", "sprout", configuration.ProvidersDirName)
-	if err := os.MkdirAll(filepath.Join(homeDir, ".config", "sprout"), 0700); err != nil {
-		t.Fatalf("create HOME config dir: %v", err)
+	// Make the provider file read-only so SaveCustomProvider's WriteFile fails.
+	providerFile := filepath.Join(configDir, configuration.ProvidersDirName, "disk-only.json")
+	if err := os.Chmod(providerFile, 0400); err != nil {
+		t.Fatalf("chmod provider file read-only: %v", err)
 	}
-	if err := os.WriteFile(blockedProviders, []byte("not-a-directory"), 0600); err != nil {
-		t.Fatalf("create blocking file at providers path: %v", err)
-	}
+	t.Cleanup(func() { _ = os.Chmod(providerFile, 0600) })
 
 	ws := &ReactWebServer{}
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/providers/disk-only", strings.NewReader(`{"endpoint":"https://new.example.com"}`))

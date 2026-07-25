@@ -34,6 +34,8 @@ func TestIsCustomProvider_UnknownProviderNotCustom(t *testing.T) {
 // saved without ListModels validation when the endpoint lacks /models.
 func TestIsCustomProvider_RealCustomProvider(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := SaveCustomProvider(CustomProviderConfig{
 		Name:     "my-custom-endpoint",
@@ -51,6 +53,8 @@ func TestIsCustomProvider_RealCustomProvider(t *testing.T) {
 // store keys for custom providers that don't expose a standard models route.
 func TestValidateAndSaveAPIKey_CustomProviderSkipsValidation(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Register a custom provider with a non-routable endpoint so ListModels
 	// will fail — but the key should still be saved.

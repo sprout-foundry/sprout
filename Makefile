@@ -82,8 +82,8 @@ TEST_PARALLEL ?= 4
 test-unit: prepare-grammars
 	@echo "Running unit tests (race=$(TEST_RACE) -p $(TEST_P) -parallel $(TEST_PARALLEL))..."
 	@bash -lc 'set -o pipefail; \
-	go test $(TEST_RACE) -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=300s -short -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
-	status=$${PIPESTATUS[0]}; \
+	go test $(TEST_RACE) -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=300s -short -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-unit-coverage.out > /tmp/sprout-test-unit.log 2>&1; \
+	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
 		echo "Unit tests failed. Last 200 lines:"; \
@@ -108,8 +108,8 @@ test-unit-lowmem:
 test-race: prepare-grammars
 	@echo "Running tests with race detection (-race -p 2 -parallel 4)..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=120s -p 2 -parallel 4 2>&1 | tee /tmp/sprout-test-race.log; \
-	status=$${PIPESTATUS[0]}; \
+	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=120s -p 2 -parallel 4 > /tmp/sprout-test-race.log 2>&1; \
+	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
 		echo "Race tests failed. Last 200 lines:"; \
@@ -158,8 +158,8 @@ test-ci: test-unit
 test-coverage: prepare-grammars
 	@echo "Running unit tests with coverage check..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
-	status=$${PIPESTATUS[0]}; \
+	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-coverage.out > /tmp/sprout-test-coverage.log 2>&1; \
+	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
 		echo "Tests failed with race detection enabled. Last 200 lines:"; \
@@ -169,7 +169,7 @@ test-coverage: prepare-grammars
 	echo ""; \
 	echo "Generating coverage report..."; \
 	go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt; \
-	total_coverage=$$(go tool cover -func=/tmp/sprout-coverage.out | grep "^total:" | awk "{print \$$NF}" | sed "s/%//"); \
+	total_coverage=$$(awk "/^total:/ {print \$$NF}" /tmp/sprout-coverage-func.txt | sed "s/%//"); \
 	if [ -z "$${total_coverage}" ]; then \
 		echo "ERROR: Failed to extract coverage information"; \
 		exit 1; \
@@ -185,7 +185,7 @@ test-coverage: prepare-grammars
 		echo ""; \
 		echo "ERROR: Coverage ($${total_coverage}%) is below minimum threshold ($${min_coverage}%)"; \
 		echo "Packages with lowest coverage:"; \
-		go tool cover -func=/tmp/sprout-coverage.out | grep -v "^total:" | awk -F" " "{print \$$NF, \$$0}" | sort -n | head -10 | awk "{\$$1=\"\"; print substr(\$$0,2)}"; \
+		awk "!/^total:/ {print \$$NF, \$$0}" /tmp/sprout-coverage-func.txt | sort -n | head -10 | awk "{\$$1=\"\"; print substr(\$$0,2)}"; \
 		exit 1; \
 	fi; \
 	echo ""; \

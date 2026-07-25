@@ -6,16 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  GitCommit,
-  GitFork,
-  Calendar,
-  User,
-  ChevronDown,
-  ChevronRight,
-  Eye,
-  Loader2,
-} from 'lucide-react';
+import { GitCommit, GitFork, Calendar, User, ChevronDown, ChevronRight, Eye, Loader2 } from 'lucide-react';
 import { gitClient, type GitLogEntry } from '../../services/gitClient';
 import './CommitHistory.css';
 
@@ -164,9 +155,7 @@ const CommitHistory: React.FC<CommitHistoryProps> = ({ repoDir, onViewDiff }) =>
                   <span className="commit-card-sha">
                     <code>{shortSha}</code>
                   </span>
-                  <span className="commit-card-changed">
-                    {fileCounts[commit.oid] ?? '…'} files changed
-                  </span>
+                  <span className="commit-card-changed">{fileCounts[commit.oid] ?? '…'} files changed</span>
                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </div>
               </div>
@@ -186,10 +175,7 @@ const CommitHistory: React.FC<CommitHistoryProps> = ({ repoDir, onViewDiff }) =>
                     <GitFork size={12} /> {shortSha}
                   </div>
                 </div>
-                <button
-                  className="commit-card-diff-btn btn btn-sm btn-ghost"
-                  onClick={() => onViewDiff(commit.oid)}
-                >
+                <button className="commit-card-diff-btn btn btn-sm btn-ghost" onClick={() => onViewDiff(commit.oid)}>
                   <Eye size={12} /> View diff
                 </button>
               </div>
@@ -200,11 +186,7 @@ const CommitHistory: React.FC<CommitHistoryProps> = ({ repoDir, onViewDiff }) =>
 
       {hasMore && (
         <div className="commit-history-load-more">
-          <button
-            className="btn btn-sm btn-ghost"
-            onClick={loadMore}
-            disabled={loadingMore}
-          >
+          <button className="btn btn-sm btn-ghost" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? <Loader2 size={14} className="spinner" /> : null}
             {loadingMore ? ' Loading…' : 'Load more'}
           </button>

@@ -14,21 +14,21 @@ import (
 
 func TestNormalizeCustomProviderConfigNormalizesEndpoint(t *testing.T) {
 
-	// SP-116 regression: custom provider paths must always resolve to the
-	// global (home) providers directory, not the SPROUT_CONFIG-scoped one.
-	t.Run("GetCustomProviderPath always uses global home dir", func(t *testing.T) {
-		homeDir := t.TempDir()
+	// GetCustomProviderPath must resolve via SPROUT_CONFIG so tests that
+	// set it don't pollute the real ~/.config/sprout/providers/. The
+	// LoadCustomProviders merge still reads from the global home dir for
+	// backwards compatibility with existing provider files.
+	t.Run("GetCustomProviderPath honors SPROUT_CONFIG", func(t *testing.T) {
 		scopedDir := t.TempDir()
-		t.Setenv("HOME", homeDir)
+		t.Setenv("HOME", t.TempDir())
 		t.Setenv("SPROUT_CONFIG", scopedDir)
 		t.Setenv("XDG_CONFIG_HOME", "")
 
 		path, err := GetCustomProviderPath("my-provider")
 		require.NoError(t, err)
 
-		// Must be under the home directory, NOT the scoped SPROUT_CONFIG dir
-		assert.Contains(t, path, homeDir)
-		assert.NotContains(t, path, scopedDir)
+		// Must be under the SPROUT_CONFIG-scoped dir
+		assert.Contains(t, path, scopedDir)
 		assert.Contains(t, path, "providers")
 		assert.Contains(t, path, "my-provider.json")
 	})
@@ -48,14 +48,13 @@ func TestNormalizeCustomProviderConfigNormalizesEndpoint(t *testing.T) {
 }
 
 func TestSaveAndLoadCustomProviders(t *testing.T) {
-	// SaveCustomProvider always writes to the global (home) providers
-	// directory, not the SPROUT_CONFIG-scoped one. This is by design —
-	// custom providers are a global resource. Use t.TempDir as HOME so
-	// the test doesn't pollute the real global config.
-	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	t.Setenv("SPROUT_CONFIG", t.TempDir()) // scoped dir must NOT be used
-	t.Setenv("XDG_CONFIG_HOME", "")        // force HOME-based path
+	// SaveCustomProvider writes to the SPROUT_CONFIG-resolved providers
+	// directory. LoadCustomProviders merges from both the scoped dir
+	// and the global home dir.
+	scopedDir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("SPROUT_CONFIG", scopedDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := SaveCustomProvider(CustomProviderConfig{
 		Name:     "gateway",

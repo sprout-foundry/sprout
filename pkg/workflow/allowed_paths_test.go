@@ -172,7 +172,6 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_Traversal(t *testing.T) {
 // mode loads successfully and the trimmed values land on the
 // config struct.
 func TestAgentWorkflowConfig_Validate_AllowedPaths_AbsoluteAccepted(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wf.json")
 	content := `{

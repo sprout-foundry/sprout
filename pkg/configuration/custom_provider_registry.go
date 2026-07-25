@@ -38,39 +38,20 @@ func GetProvidersDir() (string, error) {
 }
 
 // GetCustomProviderPath returns the path where a custom provider JSON
-// file is stored. Custom providers are a global resource — they are
-// always written to the default (home) providers directory so they're
-// visible across all workspaces. This deliberately ignores SPROUT_CONFIG
-// so that adding a provider from a workspace-scoped session doesn't
-// bury it in a .sprout/providers/ subdirectory that other sessions
-// can't find.
+// file is stored. Resolves the providers directory via GetProvidersDir,
+// which honors SPROUT_CONFIG (falling back to the home directory).
+// This ensures tests that set SPROUT_CONFIG write to the temp dir
+// rather than polluting the real ~/.config/sprout/providers/.
 func GetCustomProviderPath(name string) (string, error) {
-	providersDir, err := getDefaultProvidersDir()
+	providersDir, err := GetProvidersDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get providers directory: %w", err)
-	}
-	if err := os.MkdirAll(providersDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create providers directory: %w", err)
 	}
 	normalized, err := CanonicalizeCustomProviderName(name)
 	if err != nil {
 		return "", fmt.Errorf("failed to normalize provider name: %w", err)
 	}
 	return filepath.Join(providersDir, normalized+".json"), nil
-}
-
-// getDefaultProvidersDir returns the home ~/.config/sprout/providers
-// path, ignoring SPROUT_CONFIG. Custom providers are conceptually a
-// global resource — see LoadConfigWithLayers and the manager's
-// "always load from the global config directory" comment for the
-// design rationale. This helper exists so LoadCustomProviders can
-// honor that contract while still respecting SPROUT_CONFIG for writes.
-func getDefaultProvidersDir() (string, error) {
-	configDir, err := getDefaultConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get default config directory: %w", err)
-	}
-	return filepath.Join(configDir, ProvidersDirName), nil
 }
 
 // LoadCustomProviders loads all custom provider configs. It merges
@@ -87,14 +68,18 @@ func getDefaultProvidersDir() (string, error) {
 // provider" error when trying to switch to one (via LoadCustomProviders,
 // which would otherwise only see the SPROUT_CONFIG-resolved dir).
 func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
+	// Read from both the SPROUT_CONFIG-resolved dir and the global home
+	// dir. Custom providers saved in the home dir (from non-scoped sessions
+	// or prior to this fix) remain visible to scoped sessions.
 	scopedDir, err := GetProvidersDir()
 	if err != nil {
 		return nil, fmt.Errorf("get providers directory: %w", err)
 	}
-	globalDir, err := getDefaultProvidersDir()
+	globalDir, err := getDefaultConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("get default providers directory: %w", err)
+		return nil, fmt.Errorf("get default config directory: %w", err)
 	}
+	globalProvidersDir := filepath.Join(globalDir, ProvidersDirName)
 
 	merged := make(map[string]CustomProviderConfig)
 
@@ -109,7 +94,7 @@ func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 		}
 	}
 
-	if globalProviders, globalErr := LoadCustomProvidersFromDir(globalDir); globalErr != nil {
+	if globalProviders, globalErr := LoadCustomProvidersFromDir(globalProvidersDir); globalErr != nil {
 		log.Printf("[config] warning: failed to read global custom providers from %s: %v", globalDir, globalErr)
 	} else {
 		for name, provider := range globalProviders {

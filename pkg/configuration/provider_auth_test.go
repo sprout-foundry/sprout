@@ -10,6 +10,8 @@ import (
 func TestCredentialsResolveProvider_CustomProviderUsesStoredKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	customProvider := CustomProviderConfig{
 		Name:           "gateway",

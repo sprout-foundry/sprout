@@ -207,9 +207,7 @@ const AppContent: React.FC<AppContentProps> = ({
         return {
           selectedRepo: { owner, name },
           currentView: 'repodetail' as const,
-          attachedRepos: alreadyAttached
-            ? repos
-            : [...repos, { owner, name, id }],
+          attachedRepos: alreadyAttached ? repos : [...repos, { owner, name, id }],
         };
       });
     },

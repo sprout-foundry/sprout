@@ -153,7 +153,10 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 		}
 
 		if chunk, err := api.ParseSSEData(data); err == nil && chunk != nil {
-			_ = builder.ProcessChunk(chunk)
+			if err := builder.ProcessChunk(chunk); err != nil {
+				resp.Body.Close()
+				return nil, err
+			}
 		}
 	}
 

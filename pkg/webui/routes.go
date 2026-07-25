@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"runtime/pprof"
 	"time"
 
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
@@ -71,6 +72,17 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 		json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("/api/bootstrap", ws.handleAPIBootstrap)
+
+	// Always-on goroutine dump endpoint. Unlike --debug-pprof (which requires
+	// a separate port and is opt-in), this is available on the main webui port
+	// so a stuck session can be diagnosed by curling
+	//   curl http://localhost:<port>/debug/goroutines
+	// without restarting the process. Returns the same stack dump as SIGQUIT
+	// but does NOT kill the process.
+	mux.HandleFunc("/debug/goroutines", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_ = pprof.Lookup("goroutine").WriteTo(w, 1)
+	})
 }
 
 func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {

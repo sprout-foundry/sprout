@@ -98,7 +98,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ repoDir, sha, onClose }) => {
       const diffs: FileDiff[] = [];
       for (const file of changed) {
         const oldContent = parentSha
-          ? (await gitClient.readFileAtCommit(repoDir, file.filepath, parentSha)) ?? ''
+          ? ((await gitClient.readFileAtCommit(repoDir, file.filepath, parentSha)) ?? '')
           : '';
         const newContent = (await gitClient.readFileAtCommit(repoDir, file.filepath, sha)) ?? '';
         const lines = computeDiff(oldContent, newContent);
@@ -212,11 +212,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ repoDir, sha, onClose }) => {
                               ? `-${line.oldLine}`
                               : `${line.oldLine || ''}`;
                         const lineNumRight =
-                          line.type === 'add'
-                            ? `${line.newLine}`
-                            : line.type === 'del'
-                              ? ''
-                              : `${line.newLine || ''}`;
+                          line.type === 'add' ? `${line.newLine}` : line.type === 'del' ? '' : `${line.newLine || ''}`;
 
                         return (
                           <div key={idx} className={`diff-line diff-line--${line.type}`}>

@@ -786,6 +786,8 @@ func TestCreateCustomProvider_NoCredentialsRequired(t *testing.T) {
 	// Set up isolated config directory
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Mock server that returns valid responses
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -873,6 +875,8 @@ func TestCreateCustomProvider_CredentialsRequired(t *testing.T) {
 	// Set up isolated config directory
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Save custom provider with RequiresAPIKey=true.
 	// No credentials are set, so CreateCustomProvider should return a
@@ -916,6 +920,8 @@ func TestCreateCustomProvider_CredentialsRequiredWithEnvVar(t *testing.T) {
 	// Set up isolated config directory
 	configDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Ensure the env var is NOT set
 	t.Setenv("MY_MOCK_API_KEY", "")

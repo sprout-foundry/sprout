@@ -80,6 +80,10 @@ type SelectList struct {
 	// that want to forward the dismissed keystroke (e.g. pre-filling
 	// the REPL input buffer) should read it via DismissKey().
 	dismissKey string
+
+	// lastEnterProcessed tracks whether we've already processed an Enter
+	// key to avoid re-processing multi-byte sequences like \r\n.
+	lastEnterProcessed bool
 }
 
 // NewSelectList constructs a picker with the given options. Items
@@ -156,8 +160,20 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 	switch {
 	case b == 0x03: // Ctrl+C
 		return true, "", false
-	case b == 0x0D, b == 0x0A: // Enter
+	case b == 0x0D, b == 0x0A: // Enter (CR or LF)
+		// Handle Enter key - confirm the selection
+		// Track whether we've processed an Enter to avoid re-processing
+		// multi-byte sequences like \r\n which can cause the picker to
+		// hang or behave unexpectedly
+		if s.lastEnterProcessed {
+			// Already processed an Enter - this is likely the second byte
+			// of a \r\n sequence. Skip it to avoid re-confirming.
+			return false, "", false
+		}
+		s.lastEnterProcessed = true
 		val, ok := s.confirm()
+		// Reset the flag after processing
+		s.lastEnterProcessed = false
 		return true, val, ok
 	case b == 0x1B: // Esc or arrow-key prefix
 		return s.handleEscape(n, buf[:])

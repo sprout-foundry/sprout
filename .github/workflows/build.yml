@@ -103,6 +103,7 @@ jobs:
         CI: "true"
         TEST_P: "1"
         TEST_PARALLEL: "2"
+        TEST_RACE: ${{ runner.os == 'Windows' && '' || '-race' }}
       run: make test-coverage
 
     - name: Display coverage summary
@@ -110,16 +111,17 @@ jobs:
       continue-on-error: true
       run: |
         if [ -f /tmp/sprout-coverage.out ]; then
+          go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage.txt
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          go tool cover -func=/tmp/sprout-coverage.out | grep "^total:" >> $GITHUB_STEP_SUMMARY
+          awk '/^total:/ {print $0}' /tmp/sprout-coverage.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Packages with Lowest Coverage" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          go tool cover -func=/tmp/sprout-coverage.out | grep -v "^total:" | awk -F" " '{print $NF, $0}' | sort -n | head -15 | awk '{$1=""; print substr($0,2)}' >> $GITHUB_STEP_SUMMARY
+          awk '!/^total:/ {print $NF, $0}' /tmp/sprout-coverage.txt | sort -n | head -15 | awk '{$1=""; print substr($0,2)}' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
         else
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY

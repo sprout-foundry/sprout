@@ -156,9 +156,9 @@ test-ci: test-unit
 # Note: timeout is the per-test-binary cap, not the wall clock. -race slows
 # pkg/agent + pkg/embedding enough that 10m wasn't enough; 20m gives headroom.
 test-coverage: prepare-grammars
-	@echo "Running unit tests with coverage check..."
+	@echo "Running unit tests with coverage check (race=$(TEST_RACE))..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-coverage.out > /tmp/sprout-test-coverage.log 2>&1; \
+	go test $(TEST_RACE) -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-coverage.out > /tmp/sprout-test-coverage.log 2>&1; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \

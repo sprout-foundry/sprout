@@ -5,6 +5,7 @@ package tools
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	astp "github.com/sprout-foundry/sprout/pkg/ast"
@@ -220,7 +221,22 @@ func extractSymbolsForFile(path string, ext string, content []byte) ([]SymbolEnt
 		return extractGoSymbolsAST(path, content)
 	}
 	if treeSitterExtensions[ext] {
-		return extractSymbolsViaTreeSitter(path, ext, content)
+		symbols, err := extractSymbolsViaTreeSitter(path, ext, content)
+		if err == nil && len(symbols) > 0 {
+			return symbols, nil
+		}
+		// Fallback: tree-sitter returned 0 symbols (e.g. grammar blob can't
+		// parse complex syntax). Try regex-based extraction.
+		regexSymbols := extractSymbolsViaRegex(content, ext)
+		if len(regexSymbols) > 0 {
+			return regexSymbols, nil
+		}
+		return symbols, err // return whatever tree-sitter gave (possibly empty)
+	}
+	// Non-Go, non-tree-sitter extensions: use regex fallback
+	regexSymbols := extractSymbolsViaRegex(content, ext)
+	if len(regexSymbols) > 0 {
+		return regexSymbols, nil
 	}
 	return nil, fmt.Errorf("unsupported file extension: %s", ext)
 }
@@ -249,4 +265,161 @@ func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte
 	edges := resolveEdgesForTS(result.Calls, buildTSImportMap(path, content))
 
 	return &SymbolWithEdges{Symbols: entries, Edges: edges}, nil
+}
+
+// extractSymbolsViaRegex is a fallback symbol extractor for languages where
+// tree-sitter produces 0 symbols (e.g. Kotlin with inheritance syntax that
+// the grammar blob can't parse). Uses language-specific regex patterns.
+func extractSymbolsViaRegex(content []byte, ext string) []SymbolEntry {
+	text := string(content)
+	var entries []SymbolEntry
+
+	switch ext {
+	case ".kt", ".kts":
+		// Kotlin: class, object, interface, enum, fun
+		entries = append(entries, regexKotlinSymbols(text)...)
+	case ".swift":
+		entries = append(entries, regexSwiftSymbols(text)...)
+	case ".rb":
+		entries = append(entries, regexRubySymbols(text)...)
+	case ".m", ".mm":
+		entries = append(entries, regexObjCSymbols(text)...)
+	default:
+		// Generic C-family: class, function, def
+		entries = append(entries, regexGenericSymbols(text)...)
+	}
+
+	return entries
+}
+
+func regexKotlinSymbols(text string) []SymbolEntry {
+	var entries []SymbolEntry
+	lines := strings.Split(text, "\n")
+
+	// Match: (class|object|interface|enum class) Name
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// class declaration
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal |open |abstract |sealed |data |final |annotation )*class\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "class " + m, Line: i + 1})
+		}
+		// object declaration (singleton)
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal |open |companion )*object\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "object " + m, Line: i + 1})
+		}
+		// interface
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal )*interface\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "interface " + m, Line: i + 1})
+		}
+		// enum class
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal )*enum\s+class\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "enum " + m, Line: i + 1})
+		}
+		// fun (top-level or class member)
+		if m := matchKotlinDecl(trimmed, `^\s*(?:public |private |internal |protected |open |override |abstract |suspend |inline |operator |infix )*(?:fun(?:<[^>]+>)?)\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "fun " + m, Line: i + 1})
+		}
+	}
+
+	return entries
+}
+
+func regexSwiftSymbols(text string) []SymbolEntry {
+	var entries []SymbolEntry
+	lines := strings.Split(text, "\n")
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal |open |final |class )*class\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "class " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal |open |final |protocol )*protocol\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "protocol " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal |open |final |static )*struct\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "struct " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^(?:public |private |internal |open |final |static )*enum\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "enum " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^\s*(?:public |private |internal |open |static |final |override )*(?:func|init)\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "func " + m, Line: i + 1})
+		}
+	}
+
+	return entries
+}
+
+func regexRubySymbols(text string) []SymbolEntry {
+	var entries []SymbolEntry
+	lines := strings.Split(text, "\n")
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if m := matchKotlinDecl(trimmed, `^class\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "class " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^module\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "module " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^def\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "def " + m, Line: i + 1})
+		}
+	}
+
+	return entries
+}
+
+func regexObjCSymbols(text string) []SymbolEntry {
+	var entries []SymbolEntry
+	lines := strings.Split(text, "\n")
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if m := matchKotlinDecl(trimmed, `^@(?:interface|implementation)\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "class " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^@protocol\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "protocol " + m, Line: i + 1})
+		}
+		if m := matchKotlinDecl(trimmed, `^[+-]\s*\((?:[\w\s*]+)\)(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "func " + m, Line: i + 1})
+		}
+	}
+
+	return entries
+}
+
+func regexGenericSymbols(text string) []SymbolEntry {
+	var entries []SymbolEntry
+	lines := strings.Split(text, "\n")
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Python-style def
+		if m := matchKotlinDecl(trimmed, `^def\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "def " + m, Line: i + 1})
+		}
+		// class
+		if m := matchKotlinDecl(trimmed, `^class\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "class " + m, Line: i + 1})
+		}
+		// JS/TS function
+		if m := matchKotlinDecl(trimmed, `^(?:export\s+)?(?:async\s+)?function\s+(\w+)`); m != "" {
+			entries = append(entries, SymbolEntry{Name: "function " + m, Line: i + 1})
+		}
+	}
+
+	return entries
+}
+
+// matchKotlinDecl runs a regex against a line and returns the first capture group.
+func matchKotlinDecl(line, pattern string) string {
+	re := regexp.MustCompile(pattern)
+	matches := re.FindStringSubmatch(line)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
 }

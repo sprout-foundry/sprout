@@ -86,6 +86,47 @@ type StreamingResponseBuilder struct {
 	streamCallback   StreamCallback
 	firstTokenTime   time.Time // Track when first token arrives
 	lastTokenTime    time.Time // Track when last token arrives
+	repetition       repetitionDetector // Detects model degeneration (repetition loops)
+}
+
+// repetitionDetector tracks recent content deltas to catch repetition loops.
+// When a model degenerates it emits the same short token/phrase over and over.
+type repetitionDetector struct {
+	window    []string // last 20 content deltas (trimmed)
+	threshold int      // consecutive repeats before flagging (10)
+	maxLen    int      // skip deltas longer than this (30 chars)
+}
+
+// checkRepetition returns an error if the same short content delta has been
+// received consec exceeds the threshold. Long deltas are skipped because
+// degenerate loops produce short tokens, not meaningful text.
+func (d *repetitionDetector) checkRepetition(content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" || len(content) > d.maxLen {
+		return nil
+	}
+
+	d.window = append(d.window, content)
+	// Keep only the last 20 entries
+	for len(d.window) > 20 {
+		d.window = d.window[1:]
+	}
+
+	// Count consecutive trailing matches
+	count := 0
+	for i := len(d.window) - 1; i >= 0; i-- {
+		if d.window[i] == content {
+			count++
+		} else {
+			break
+		}
+	}
+
+	if count > d.threshold {
+		return agenterrors.NewNetwork("repetition loop detected — model generating degenerate output", nil)
+	}
+
+	return nil
 }
 
 // NewStreamingResponseBuilder creates a new streaming response builder
@@ -94,6 +135,7 @@ func NewStreamingResponseBuilder(callback StreamCallback) *StreamingResponseBuil
 		toolCalls:      make(map[int]*ToolCall),
 		toolCallArgs:   make(map[int]*strings.Builder),
 		streamCallback: callback,
+		repetition:     repetitionDetector{window: make([]string, 0, 20), threshold: 10, maxLen: 30},
 	}
 }
 
@@ -133,6 +175,11 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 
 		// Process content delta
 		if choice.Delta.Content != "" {
+			// Check for degenerate repetition before accumulating content
+			if err := b.repetition.checkRepetition(choice.Delta.Content); err != nil {
+				return err
+			}
+
 			b.content.WriteString(choice.Delta.Content)
 			// Sanitize content before displaying (remove think tags and ANSI codes)
 			sanitizedContent := sanitizeStreamingContent(choice.Delta.Content)

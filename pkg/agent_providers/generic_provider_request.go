@@ -65,13 +65,20 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	if p.config.Defaults.Temperature != nil {
 		request["temperature"] = *p.config.Defaults.Temperature
 	}
+
+	// Always apply output token budgeting against context limits.
+	// If MaxTokens is configured, it acts as a ceiling — not a fixed value.
+	// This prevents requesting more output tokens than the remaining context allows.
+	contextLimit, _ := p.GetModelContextLimit()
+	completionLimit := p.getModelCompletionLimit()
+	budgetedMax := CalculateMaxTokensWithLimits(contextLimit, completionLimit, messages, tools)
 	if p.config.Defaults.MaxTokens != nil && *p.config.Defaults.MaxTokens > 0 {
-		request["max_tokens"] = *p.config.Defaults.MaxTokens
-	} else {
-		contextLimit, _ := p.GetModelContextLimit()
-		completionLimit := p.getModelCompletionLimit()
-		request["max_tokens"] = CalculateMaxTokensWithLimits(contextLimit, completionLimit, messages, tools)
+		if budgetedMax > *p.config.Defaults.MaxTokens {
+			budgetedMax = *p.config.Defaults.MaxTokens
+		}
 	}
+	request["max_tokens"] = budgetedMax
+
 	if p.config.Defaults.TopP != nil {
 		request["top_p"] = *p.config.Defaults.TopP
 	}

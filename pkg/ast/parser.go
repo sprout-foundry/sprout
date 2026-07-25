@@ -33,6 +33,16 @@ var SupportedLanguages = map[string]bool{
 	"tsx":        true,
 	"javascript": true,
 	"python":     true,
+	"kotlin":     true,
+	"swift":      true,
+	"ruby":       true,
+	"c":          true,
+	"cpp":        true,
+	"csharp":     true,
+	"java":       true,
+	"rust":       true,
+	"php":        true,
+	"scala":      true,
 }
 
 // ASTResult holds the output of ParseFile: the concrete syntax tree, a
@@ -288,6 +298,7 @@ func extractSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, lang st
 		}
 		nodeType := bt.NodeType(child)
 
+
 		sym, ok := extractSymbol(child, bt, nodeType, lang)
 		if !ok {
 			continue
@@ -309,6 +320,63 @@ func extractSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType
 		return extractTSSymbol(node, bt, nodeType, lang) // JS shares TS node types
 	case "python":
 		return extractPythonSymbol(node, bt, nodeType, lang)
+	default:
+		// Generic C-family fallback: handles Kotlin, Swift, Java, C#, Rust, etc.
+		// These languages share similar declaration node types.
+		return extractGenericSymbol(node, bt, nodeType, lang)
+	}
+}
+
+// --- Generic C-family symbol extraction (Kotlin, Swift, Java, C#, Rust, etc.) ---
+
+// genericChildName finds the name of a declaration node for C-family languages.
+// Kotlin uses type_identifier, Swift uses simple_identifier, etc.
+func genericChildName(node *gotreesitter.Node, bt *gotreesitter.BoundTree) string {
+	// Try standard names first
+	name := childText(node, bt, "name")
+	if name != "" {
+		return name
+	}
+	// Fallback: look for type_identifier or simple_identifier children
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
+		if child == nil {
+			continue
+		}
+		nt := bt.NodeType(child)
+		if nt == "type_identifier" || nt == "simple_identifier" {
+			return bt.NodeText(child)
+		}
+	}
+	return ""
+}
+
+func extractGenericSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, lang string) (Symbol, bool) {
+	switch nodeType {
+	case "function_declaration", "function_definition", "method_declaration", "method_definition":
+		name := genericChildName(node, bt)
+		return makeSymbolWithBody(name, "function", node, bt, lang), name != ""
+	case "class_declaration", "class_definition":
+		name := genericChildName(node, bt)
+		return makeSymbolWithBody(name, "class", node, bt, lang), name != ""
+	case "object_declaration":  // Kotlin object (singleton)
+		name := genericChildName(node, bt)
+		return makeSymbolWithBody(name, "object", node, bt, lang), name != ""
+	case "interface_declaration", "interface_definition":
+		name := genericChildName(node, bt)
+		return makeSymbolWithBody(name, "interface", node, bt, lang), name != ""
+	case "enum_declaration", "enum_definition":
+		name := genericChildName(node, bt)
+		return makeSymbolWithBody(name, "enum", node, bt, lang), name != ""
+	case "property_declaration", "variable_declaration":
+		name := genericChildName(node, bt)
+		if name != "" {
+			return makeSymbolWithBody(name, "property", node, bt, lang), true
+		}
+		return Symbol{}, false
+	case "type_alias", "type_declaration":
+		name := genericChildName(node, bt)
+		return makeSymbolWithBody(name, "type", node, bt, lang), name != ""
 	default:
 		return Symbol{}, false
 	}

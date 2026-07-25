@@ -101,6 +101,8 @@ jobs:
     - name: Run unit tests with race detection and coverage
       env:
         CI: "true"
+        TEST_P: "1"
+        TEST_PARALLEL: "2"
       run: make test-coverage
 
     - name: Display coverage summary

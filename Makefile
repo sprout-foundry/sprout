@@ -169,7 +169,7 @@ test-coverage: prepare-grammars
 	echo ""; \
 	echo "Generating coverage report..."; \
 	go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt; \
-	total_coverage=$$(awk "/^total:/ {print \$$NF}" /tmp/sprout-coverage-func.txt | sed "s/%//"); \
+	total_coverage=$$(awk "/^total:/ {gsub(/[\r%]/,\"\",\$$NF); print \$$NF}" /tmp/sprout-coverage-func.txt); \
 	if [ -z "$${total_coverage}" ]; then \
 		echo "ERROR: Failed to extract coverage information"; \
 		exit 1; \

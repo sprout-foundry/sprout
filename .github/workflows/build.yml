@@ -103,7 +103,7 @@ jobs:
         CI: "true"
         TEST_P: "1"
         TEST_PARALLEL: "2"
-        TEST_RACE: ${{ runner.os == 'Windows' && '' || '-race' }}
+        TEST_RACE: ${{ runner.os != 'Windows' && '-race' || '' }}
       run: make test-coverage
 
     - name: Display coverage summary

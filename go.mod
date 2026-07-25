@@ -138,3 +138,5 @@ require (
 // in-package atomic-write helper. Source lives in ./internal/hnsw/.
 // Drop this replace when upstream merges a Windows fix.
 replace github.com/coder/hnsw => ./internal/hnsw
+
+replace github.com/sprout-foundry/seed => /home/aprice/dev/sprout-foundry/seed

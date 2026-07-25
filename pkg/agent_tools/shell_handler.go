@@ -79,7 +79,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 
 	// Extract parameters
 	var command string
-	if cmdRaw, ok := args["command"]; ok && cmdRaw != nil {
+	if cmdRaw, ok := lookupKey(args, "command"); ok && cmdRaw != nil {
 		cmd, err := extractString(args, "command")
 		if err != nil {
 			return agenterrors.NewValidation("parameter 'command' must be a string", nil)
@@ -88,7 +88,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	}
 
 	var checkBackground string
-	if cbRaw, ok := args["check_background"]; ok && cbRaw != nil {
+	if cbRaw, ok := lookupKey(args, "check_background"); ok && cbRaw != nil {
 		cb, err := extractString(args, "check_background")
 		if err != nil {
 			return agenterrors.NewValidation("parameter 'check_background' must be a string", nil)
@@ -97,7 +97,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	}
 
 	var stopBackground string
-	if sbRaw, ok := args["stop_background"]; ok && sbRaw != nil {
+	if sbRaw, ok := lookupKey(args, "stop_background"); ok && sbRaw != nil {
 		sb, err := extractString(args, "stop_background")
 		if err != nil {
 			return agenterrors.NewValidation("parameter 'stop_background' must be a string", nil)
@@ -106,7 +106,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	}
 
 	// Validate background parameter if provided
-	if bgRaw, exists := args["background"]; exists && bgRaw != nil {
+	if bgRaw, exists := lookupKey(args, "background"); exists && bgRaw != nil {
 		switch bgRaw.(type) {
 		case bool:
 			// Valid
@@ -129,7 +129,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	}
 
 	// wait_seconds is only meaningful with check_background.
-	if waitRaw, ok := args["wait_seconds"]; ok && waitRaw != nil {
+	if waitRaw, ok := lookupKey(args, "wait_seconds"); ok && waitRaw != nil {
 		wait, err := extractInt(args, "wait_seconds")
 		if err != nil {
 			return err
@@ -143,7 +143,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	}
 
 	// wakeup_timeout is only valid with background=true.
-	if wtRaw, ok := args["wakeup_timeout"]; ok && wtRaw != nil {
+	if wtRaw, ok := lookupKey(args, "wakeup_timeout"); ok && wtRaw != nil {
 		wt, err := extractInt(args, "wakeup_timeout")
 		if err != nil {
 			return err
@@ -175,7 +175,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 
 	// Extract parameters
 	var command string
-	if cmdRaw, ok := args["command"]; ok && cmdRaw != nil {
+	if cmdRaw, ok := lookupKey(args, "command"); ok && cmdRaw != nil {
 		var err error
 		command, err = extractString(args, "command")
 		if err != nil {
@@ -184,7 +184,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	var checkBackground string
-	if cbRaw, ok := args["check_background"]; ok && cbRaw != nil {
+	if cbRaw, ok := lookupKey(args, "check_background"); ok && cbRaw != nil {
 		var err error
 		checkBackground, err = extractString(args, "check_background")
 		if err != nil {
@@ -193,7 +193,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	var stopBackground string
-	if sbRaw, ok := args["stop_background"]; ok && sbRaw != nil {
+	if sbRaw, ok := lookupKey(args, "stop_background"); ok && sbRaw != nil {
 		var err error
 		stopBackground, err = extractString(args, "stop_background")
 		if err != nil {

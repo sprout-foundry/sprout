@@ -42,14 +42,14 @@ func (h *listDirHandler) Definition() ToolDefinition {
 
 func (h *listDirHandler) Validate(args map[string]any) error {
 	// If path is provided, validate it's a string
-	if path, exists := args["path"]; exists && path != nil {
+	if path, exists := lookupKey(args, "path"); exists && path != nil {
 		if _, ok := path.(string); !ok {
 			return fmt.Errorf("parameter 'path' must be a string, got %T", path)
 		}
 	}
 
 	// If show_hidden is provided, validate it's a boolean
-	if sh, exists := args["show_hidden"]; exists && sh != nil {
+	if sh, exists := lookupKey(args, "show_hidden"); exists && sh != nil {
 		if _, ok := sh.(bool); !ok {
 			return fmt.Errorf("parameter 'show_hidden' must be a boolean, got %T", sh)
 		}
@@ -61,14 +61,14 @@ func (h *listDirHandler) Validate(args map[string]any) error {
 func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	// Extract parameters
 	targetPath := "."
-	if p, exists := args["path"]; exists && p != nil {
+	if p, exists := lookupKey(args, "path"); exists && p != nil {
 		if s, ok := p.(string); ok && strings.TrimSpace(s) != "" {
 			targetPath = s
 		}
 	}
 
 	showHidden := false
-	if sh, exists := args["show_hidden"]; exists && sh != nil {
+	if sh, exists := lookupKey(args, "show_hidden"); exists && sh != nil {
 		if b, ok := sh.(bool); ok {
 			showHidden = b
 		}

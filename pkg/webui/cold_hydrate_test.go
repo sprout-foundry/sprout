@@ -1261,11 +1261,14 @@ func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptes
 	ws, err := NewReactWebServer(nil, bus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		// Fall back to minimal server — NewReactWebServer may fail
-		// in some test environments (e.g., missing home dir)
+		// in some test environments (e.g., missing home dir). We assign
+		// workspaceRoot directly so the hydration handler reads from
+		// the test temp dir, not the original cwd.
 		ws = &ReactWebServer{eventBus: events.NewEventBus()}
+		ws.workspaceRoot = workspaceRoot
+	} else {
+		ws.workspaceRoot = workspaceRoot
 	}
-	// Override the workspace root for the test
-	ws.SetWorkspaceRoot(workspaceRoot)
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin:     func(_ *http.Request) bool { return true },

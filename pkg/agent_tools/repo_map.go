@@ -38,7 +38,19 @@ const (
 var sourceExtensions = map[string]bool{
 	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true,
 	".py": true, ".rs": true, ".java": true, ".c": true, ".cpp": true,
-	".h": true,
+	".h": true, ".hpp": true, ".cc": true, ".cxx": true,
+	".kt": true, ".kts": true,
+	".swift": true,
+	".cs": true,
+	".rb": true,
+	".m": true, ".mm": true,
+	".scala": true, ".sbt": true,
+	".lua": true,
+	".php": true,
+	".dart": true,
+	".ex": true, ".exs": true,
+	".clj": true, ".cljs": true, ".cljc": true,
+	".sh": true, ".bash": true, ".zsh": true,
 }
 
 var ignoredDirs = map[string]bool{

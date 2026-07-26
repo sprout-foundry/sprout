@@ -3,8 +3,7 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
-	"os"
-	"path/filepath"
+	"fmt"
 )
 
 // PricingEntry is the verified pricing for a single model.
@@ -33,18 +32,13 @@ var manifestJSON []byte
 var manifests = loadManifest()
 
 func loadManifest() map[string]ProviderManifest {
-	m := make(map[string]ProviderManifest)
-	_ = json.Unmarshal(manifestJSON, &m)
+	var m map[string]ProviderManifest
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		panic(fmt.Sprintf("audit_pricing: failed to parse embedded manifest.json: %v", err))
+	}
+	if m == nil {
+		m = make(map[string]ProviderManifest)
+	}
 	return m
 }
 
-// saveManifest writes the merged manifest back to a manifest.json file on disk
-// so that the next build embeds the updated values.
-func saveManifest(dir string, m map[string]ProviderManifest) error {
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(dir, "manifest.json")
-	return os.WriteFile(path, append(data, '\n'), 0o644)
-}

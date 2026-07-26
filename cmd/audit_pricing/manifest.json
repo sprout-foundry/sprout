@@ -1,0 +1,197 @@
+{
+  "deepseek": {
+    "source": "https://api-docs.deepseek.com/quick_start/pricing",
+    "last_verified": "2026-07-26",
+    "models": [
+      {
+        "id": "deepseek-v4-flash(1)",
+        "input_per_mtok": 0.14,
+        "output_per_mtok": 0.28
+      },
+      {
+        "id": "deepseek-v4-pro",
+        "input_per_mtok": 0.435,
+        "output_per_mtok": 0.87
+      }
+    ]
+  },
+  "minimax": {
+    "source": "https://platform.minimax.io/docs/api-reference/api-overview",
+    "last_verified": "2026-07-26",
+    "models": [
+      {
+        "id": "MiniMax-M2",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 1.15
+      },
+      {
+        "id": "MiniMax-M2.1",
+        "input_per_mtok": 0.1,
+        "output_per_mtok": 0.1
+      },
+      {
+        "id": "MiniMax-M2.5",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 1.15
+      },
+      {
+        "id": "MiniMax-M2.7",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 1.15
+      }
+    ]
+  },
+  "mistral": {
+    "source": "https://docs.mistral.ai/",
+    "last_verified": "2026-07-26",
+    "models": [
+      {
+        "id": "mistral-large-latest",
+        "input_per_mtok": 2,
+        "output_per_mtok": 6
+      },
+      {
+        "id": "mistral-medium-latest",
+        "input_per_mtok": 0.4,
+        "output_per_mtok": 2
+      },
+      {
+        "id": "mistral-small-latest",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 0.6
+      },
+      {
+        "id": "codestral-latest",
+        "input_per_mtok": 0.3,
+        "output_per_mtok": 0.9
+      }
+    ]
+  },
+  "openai": {
+    "source": "https://platform.openai.com/docs/pricing",
+    "last_verified": "2026-07-26",
+    "models": [
+      {
+        "id": "gpt-5",
+        "input_per_mtok": 1.25,
+        "output_per_mtok": 10
+      },
+      {
+        "id": "gpt-5-mini",
+        "input_per_mtok": 0.25,
+        "output_per_mtok": 2
+      },
+      {
+        "id": "gpt-5-nano",
+        "input_per_mtok": 0.05,
+        "output_per_mtok": 0.4
+      },
+      {
+        "id": "gpt-5-pro",
+        "input_per_mtok": 15,
+        "output_per_mtok": 120
+      },
+      {
+        "id": "gpt-4o",
+        "input_per_mtok": 2.5,
+        "output_per_mtok": 10
+      },
+      {
+        "id": "gpt-4o-mini",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 0.6
+      },
+      {
+        "id": "gpt-4.1",
+        "input_per_mtok": 2,
+        "output_per_mtok": 8
+      },
+      {
+        "id": "gpt-4.1-mini",
+        "input_per_mtok": 0.4,
+        "output_per_mtok": 1.6
+      },
+      {
+        "id": "gpt-4.1-nano",
+        "input_per_mtok": 0.1,
+        "output_per_mtok": 0.4
+      },
+      {
+        "id": "o3",
+        "input_per_mtok": 2,
+        "output_per_mtok": 8
+      },
+      {
+        "id": "o3-mini",
+        "input_per_mtok": 1.1,
+        "output_per_mtok": 4.4
+      },
+      {
+        "id": "o4-mini",
+        "input_per_mtok": 1.1,
+        "output_per_mtok": 4.4
+      }
+    ]
+  },
+  "zai": {
+    "source": "https://docs.z.ai/devpack/overview",
+    "last_verified": "2026-07-26",
+    "models": [
+      {
+        "id": "GLM-4.5",
+        "input_per_mtok": 0.6,
+        "output_per_mtok": 2.2
+      },
+      {
+        "id": "GLM-4.5-air",
+        "input_per_mtok": 0.2,
+        "output_per_mtok": 1.1
+      },
+      {
+        "id": "GLM-4.6",
+        "input_per_mtok": 0.6,
+        "output_per_mtok": 2.2
+      },
+      {
+        "id": "glm-4.5v",
+        "input_per_mtok": 0.6,
+        "output_per_mtok": 1.8
+      },
+      {
+        "id": "glm-4.6v",
+        "input_per_mtok": 0.3,
+        "output_per_mtok": 0.9
+      },
+      {
+        "id": "glm-4.7",
+        "input_per_mtok": 0.6,
+        "output_per_mtok": 2.2
+      },
+      {
+        "id": "glm-5",
+        "input_per_mtok": 1,
+        "output_per_mtok": 3.2
+      },
+      {
+        "id": "glm-5-turbo",
+        "input_per_mtok": 1.2,
+        "output_per_mtok": 4
+      },
+      {
+        "id": "glm-5.1",
+        "input_per_mtok": 1.4,
+        "output_per_mtok": 4.4
+      },
+      {
+        "id": "glm-5.2",
+        "input_per_mtok": 1.4,
+        "output_per_mtok": 4.4
+      },
+      {
+        "id": "glm-5v-turbo",
+        "input_per_mtok": 1.2,
+        "output_per_mtok": 4
+      }
+    ]
+  }
+}

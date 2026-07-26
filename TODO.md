@@ -51,6 +51,18 @@ behavior is well-tested, just under a different name than the SHIPPED
 note records. **Net coverage is solid (~101 subtests across 5 functions);
 only the documentation was wrong.**
 
+Actual test counts (verified via `go test -v`):
+
+| Function | Claimed | Actual |
+|---|---|---|
+| `TestIsSafeRmRfComponent` | 23 | 22 |
+| `TestIsSafeRmRfPrefixBackwardCompatibility` | 16 | 17 |
+| `TestSafeRmRfTraversalEscape` | 6 | 6 ✓ |
+| `TestClassifyChainedCommand` | 25 | 25 ✓ |
+| `TestNestedPathRmRfSafety` | (not listed) | 31 cases |
+
+**Net: 101 subtests across 5 functions.**
+
 **Follow-up: `xargs rm -rf` classification gap (non-security, low priority):**
 
 The TODO documents this as a "known gap": `ls | xargs rm -rf` classifies

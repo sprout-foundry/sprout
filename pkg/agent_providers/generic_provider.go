@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -24,8 +25,13 @@ type GenericProvider struct {
 	streamingClient *http.Client
 	debug           bool
 	model           string
-	models          []api.ModelInfo
-	modelsCached    bool
+
+	// mu guards models and modelsCached, which are written by the
+	// background warmModelsCache goroutine and read by GetModelContextLimit
+	// / ListModels / SetModel on the main goroutine.
+	mu           sync.RWMutex
+	models       []api.ModelInfo
+	modelsCached bool
 }
 
 // HTTP error formatting helpers are in generic_provider_http_errors.go:
@@ -44,7 +50,7 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	timeout := config.GetTimeout()
 	streamingTimeout := config.GetStreamingTimeout()
 
-	return &GenericProvider{
+	p := &GenericProvider{
 		config: config,
 		httpClient: &http.Client{
 			Timeout: timeout,
@@ -54,7 +60,32 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 		},
 		debug: false,
 		model: config.Defaults.Model,
-	}, nil
+	}
+	// Warm the models cache in the background so GetModelContextLimit can
+	// use the endpoint-declared context_length on subsequent calls, without
+	// delaying startup. Only fire when we have a model and a remote endpoint
+	// (skip for local instances where the endpoint may not be up yet).
+	if p.model != "" && p.config.Endpoint != "" &&
+		!strings.Contains(p.config.Endpoint, "127.0.0.1") &&
+		!strings.Contains(p.config.Endpoint, "localhost") {
+		p.warmModelsCache()
+	}
+	return p, nil
+}
+// /models endpoint data (including context_length) is populated for
+// GetModelContextLimit without blocking startup. The first call to
+// GetModelContextLimit uses the fast registry/config fallback tiers;
+// subsequent calls (seconds later) hit the warm cache.
+func (p *GenericProvider) warmModelsCache() {
+	// alreadyCached could change concurrently; a redundant fetch is harmless.
+	if p.modelsCached {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = p.ListModels(ctx)
+	}()
 }
 
 // SendChatRequest sends a non-streaming chat request
@@ -197,7 +228,9 @@ func (p *GenericProvider) SetDebug(debug bool) {
 // SetModel sets the current model
 func (p *GenericProvider) SetModel(model string) error {
 	p.model = model
+	p.mu.Lock()
 	p.modelsCached = false
+	p.mu.Unlock()
 	return nil
 }
 
@@ -268,13 +301,18 @@ func (p *GenericProvider) GetStreamingClient() *http.Client {
 func (p *GenericProvider) GetModelContextLimit() (int, error) {
 	// 1. If ListModels() has been called and cached a context length for this
 	//    model, use it — it came from the provider's own API.
+	//    (Cache is warmed asynchronously by warmModelsCache, started from
+	//    NewGenericProvider so it never blocks startup.)
+	p.mu.RLock()
 	if p.modelsCached {
 		for _, model := range p.models {
 			if model.ID == p.model && model.ContextLength > 0 {
+				p.mu.RUnlock()
 				return model.ContextLength, nil
 			}
 		}
 	}
+	p.mu.RUnlock()
 
 	// 2. Consult the published model registry (canonical per-provider files at
 	//    sprout-foundry.github.io). These carry the exact context window that
@@ -309,9 +347,13 @@ const modelregistryFetchTimeout = 2 * time.Second
 // 3. Fall back to config model_info if endpoint fails
 // 4. Final fallback: return just current model
 func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	p.mu.RLock()
 	if p.modelsCached && len(p.models) > 0 {
-		return p.models, nil
+		models := p.models
+		p.mu.RUnlock()
+		return models, nil
 	}
+	p.mu.RUnlock()
 
 	var models []api.ModelInfo
 
@@ -428,9 +470,18 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 		return p.fallbackToConfigOrCurrent()
 	}
 
+	p.setCachedModels(models)
+	return models, nil
+}
+
+// setCachedModels stores the fetched model list and marks the cache warm.
+// Called under the write lock so concurrent GetModelContextLimit callers
+// see a consistent snapshot.
+func (p *GenericProvider) setCachedModels(models []api.ModelInfo) {
+	p.mu.Lock()
 	p.models = models
 	p.modelsCached = true
-	return p.models, nil
+	p.mu.Unlock()
 }
 
 // fallbackToConfigOrCurrent returns config model_info or current model as fallback
@@ -448,9 +499,8 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 				Tags:          mi.Tags,
 			}
 		}
-		p.models = models
-		p.modelsCached = true
-		return p.models, nil
+		p.setCachedModels(models)
+		return models, nil
 	}
 
 	// Next try to use available_models list (legacy)
@@ -478,20 +528,19 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 			}
 			models[i] = modelInfo
 		}
-		p.models = models
-		p.modelsCached = true
-		return p.models, nil
+		p.setCachedModels(models)
+		return models, nil
 	}
 
 	// Final fallback: return just the current model
-	p.models = []api.ModelInfo{{
+	models := []api.ModelInfo{{
 		ID:            p.model,
 		Name:          p.model,
 		Provider:      p.config.Name,
 		ContextLength: p.config.GetContextLimit(p.model),
 	}}
-	p.modelsCached = true
-	return p.models, nil
+	p.setCachedModels(models)
+	return models, nil
 }
 
 // SupportsVision is defined in generic_provider_vision.go

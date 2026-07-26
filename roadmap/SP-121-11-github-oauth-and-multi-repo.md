@@ -1,4 +1,4 @@
-# SP-121-11: GitHub OAuth + Multi-Repo Workspace
+# SP-121-11: Git Provider OAuth + Multi-Repo Workspace
 
 **Status:** 🟡 Draft | **Priority:** High | **Effort Estimate:** Multi-week | **Depends on:** SP-121-7, SP-121-8, SP-121-9
 
@@ -6,58 +6,96 @@
 
 Two foundational gaps block the rest of the platform:
 
-1. **OAuth is missing.** Users can authenticate with a manually-entered PAT, but there is no OAuth flow. This means no refresh tokens, no per-user credential storage, no scope management, and a fragile UX where the PAT is a magic string with no revocation or expiry handling.
+1. **OAuth is missing.** Users can authenticate with a manually-entered PAT, but there is no OAuth flow. This means no refresh tokens, no per-user credential storage, no scope management, and a fragile UX where the PAT is a magic string with no revocation or expiry handling. This applies to GitHub, GitLab, and Bitbucket — users on any major git provider need a first-class auth experience.
 
 2. **Single-repo-at-a-time.** The current architecture supports exactly one active repo per workspace. Users with polyrepos or who need to work across multiple repos simultaneously must maintain multiple browser tabs. The agent also lacks a "current repo" context, so it can't answer "which repo am I in?" reliably.
 
+## Provider Abstraction
+
+All three providers (GitHub, GitLab, Bitbucket) share the same OAuth 2.0 authorization code flow pattern. The differences are captured in a provider config:
+
+| Parameter | GitHub | GitLab | Bitbucket |
+|---|---|---|---|
+| **Auth URL** | `https://github.com/login/oauth/authorize` | `https://gitlab.com/oauth/authorize` | `https://bitbucket.org/site/oauth2/authorize` |
+| **Token URL** | `https://github.com/login/oauth/access_token` | `https://gitlab.com/oauth/token` | `https://bitbucket.org/site/oauth2/access_token` |
+| **Refresh URL** | Same as token URL | Same as token URL | Same as token URL |
+| **User API** | `https://api.github.com/user` | `https://gitlab.com/api/v4/user` | `https://api.bitbucket.org/2.0/user` |
+| **Repos API** | `https://api.github.com/user/repos` | `https://gitlab.com/api/v4/projects?membership=true` | `https://api.bitbucket.org/2.0/repositories?role=member` |
+| **Scope (read)** | `repo,read:user` | `api,read_user,read_repository` | `repository:read,account:read` |
+| **Scope (write)** | + `repo` (already included) | + `write_repository` | + `repository:write` |
+| **Token expiry** | None (static, but refresh token supported) | 2 hours (refresh token) | 1 hour (refresh token) |
+| **OAuth app setup** | GitHub OAuth App (org-level) | GitLab Application (group-level) | Bitbucket OAuth Consumer (workspace-level) |
+| **CORS friendly** | api.github.com (yes) | gitlab.com/api/v4 (yes) | api.bitbucket.org (yes) |
+| **Sign in with** | GitHub | GitLab | Bitbucket Cloud |
+
+**Provider routing:**
+The `auth/github/login` → `auth/github/callback` pattern is replicated for each provider. A shared middleware parses the provider name from the URL path and dispatches to the correct OAuth provider configuration. The frontend shows a provider picker ("Connect GitHub / GitLab / Bitbucket"), and each provider's OAuth flow is independent — the user can connect multiple providers simultaneously.
+
 ## Proposed Solution
 
-### 6c (full): GitHub OAuth flow
+### 6c (full): Multi-provider OAuth flow
 
-**OAuth app registration:**
-- Register a GitHub OAuth app (client ID + secret).
-- Recommended: register in the `sprout-foundry` organization or a dedicated `sprout-github-oauth` org so it's not per-developer.
-- Redirect URI: `https://app.sprout.dev/auth/github/callback` (or `http://localhost:PORT/auth/github/callback` for local dev).
+**Shared OAuth abstraction:**
+- `internal/oauth/provider.go` — defines `Provider` interface with `AuthURL()`, `Exchange(code)`, `Refresh(token)`, `Revoke(token)`, `UserInfo(token)`, `ListRepos(token)` methods
+- One implementation per provider: `oauth/github.go`, `oauth/gitlab.go`, `oauth/bitbucket.go`
+- Provider configs injected at startup via env vars (`GITHUB_CLIENT_ID`, `GITLAB_CLIENT_ID`, `BITBUCKET_CLIENT_ID`, etc.)
 
-**Flow:**
+**OAuth app registration (per provider):**
+- **GitHub:** Register a GitHub OAuth App in the `sprout-foundry` organization. Redirect URI: `https://app.sprout.dev/auth/github/callback`.
+- **GitLab:** Register a GitLab Application under the `sprout-foundry` group. Redirect URI: `https://app.sprout.dev/auth/gitlab/callback`.
+- **Bitbucket:** Register a Bitbucket OAuth Consumer under the `sprout-foundry` workspace. Redirect URI: `https://app.sprout.dev/auth/bitbucket/callback`.
+
+**Flow (identical for all providers):**
 ```
-User clicks "Connect GitHub"
-  └─► redirect to https://github.com/login/oauth/authorize
+User clicks "Connect <Provider>"
+  └─► redirect to <Provider Auth URL>
             ?client_id=...
-            &scope=repo,read:user
+            &scope=...
             &redirect_uri=...
             &state=<CSRF token>
-  └─► GitHub redirects back with ?code=...
+  └─► Provider redirects back with ?code=...
   └─► Backend exchanges code for access_token + refresh_token
-  └─► Store tokens per-user (encrypted at rest)
-  └─► Set "GitHub connected" state in app
+        (OAuth2 authorization code flow, provider-specific token URL)
+  └─► Store tokens per-provider per-user (encrypted at rest)
+  └─► Set "<Provider> connected" state in app
+  └─► If first provider, optionally fetch and import user's repos
 ```
 
-**Scope management:**
-- Request `repo` (full repo access) — needed for push, create, private repo operations.
-- Request `read:user` — needed to fetch the user's profile and avatar.
-- Future: `delete_repo`, `admin:org` if those features are added.
+**Scope management per provider:**
+- **GitHub:** `repo,read:user` — full repo access, profile read.
+- **GitLab:** `api,read_user,read_repository` — API access, profile read, repo read. Write ops add `write_repository`.
+- **Bitbucket:** `repository:read,account:read` — repo read, account read. Write ops add `repository:write`.
 
 **Token refresh:**
-- Access tokens expire in 8 hours. Use the refresh token to obtain a new access token proactively (refresh before expiry) or on-demand (when a 401 is received).
-- Store refresh token securely; rotate on each refresh.
+- GitHub tokens are static (no built-in expiry). GitLab expires in 2h, Bitbucket in 1h.
+- Refresh proactively: background timer checks token age every 30 minutes. If within 10 minutes of expiry (for providers with expiry), refresh.
+- Refresh on-demand: when a git operation receives a 401, attempt a refresh before surfacing the error to the user.
+- Store refresh token securely alongside access token; rotate both on each refresh.
 
-**PAT as fallback:**
-- Users who prefer PAT-only auth can still enter a PAT in settings. PAT and OAuth should coexist — if a PAT is present, use it in preference to the OAuth token for git operations (PAT is more reliable for git until GitHub's OAuth token integration with git is stable).
-- Clearly indicate which auth method is active in the UI.
+**PAT as fallback (all providers):**
+- Users who prefer PAT/token auth can still enter a token in Settings.
+- PAT and OAuth coexist — if a PAT is present for a given provider, use it in preference to the OAuth token for git operations (PAT is more reliable for git protocol operations).
+- Clearly indicate which auth method is active per provider in the UI.
+- Provider-agnostic PAT input: one field per connected provider.
 
 **Backend changes needed:**
-- New endpoint: `GET /auth/github` — initiates OAuth redirect
-- New endpoint: `GET /auth/github/callback` — exchanges code for tokens, stores per-user
-- New endpoint: `POST /auth/refresh` — refreshes access token
-- New endpoint: `DELETE /auth/github` — revokes tokens, disconnects GitHub
-- Token storage: encrypted in the user's credential store (same backend used for provider API keys)
+- `internal/oauth/provider.go` — shared OAuth interface + factories
+- `internal/oauth/github.go` — GitHub OAuth implementation
+- `internal/oauth/gitlab.go` — GitLab OAuth implementation
+- `internal/oauth/bitbucket.go` — Bitbucket OAuth implementation
+- `internal/api/auth_oauth.go` — HTTP handlers for all 3 providers:
+  - `GET /auth/{provider}/login` — initiates OAuth redirect (one handler, dispatches by provider param)
+  - `GET /auth/{provider}/callback` — exchanges code for tokens (one handler, dispatches by provider param)
+  - `POST /auth/refresh` — refreshes access token (provider-agnostic, reads `provider` from body)
+  - `DELETE /auth/{provider}` — revokes tokens, disconnects provider
+- Token storage: encrypted credential store (same backend used for provider API keys), keyed by `user_id:provider`
 
 **Frontend changes needed:**
-- "Connect GitHub" button in Settings → Integrations page
-- OAuth status indicator (connected/disconnected, which account)
-- "Disconnect" action
-- Wire OAuth token into `gitClient` auth callbacks in place of PAT when OAuth is active
+- "Connect Provider" section in Settings → Integrations page (list of 3 providers)
+- Per-provider status indicator (connected/disconnected, which account)
+- "Disconnect" action per provider
+- Provider picker on the onboarding screen (shows all connected providers' repos)
+- Wire OAuth token into `gitClient` auth callbacks — select the correct provider's token based on the repo URL's domain
 
 ### 8. Multi-repo workspace
 
@@ -139,13 +177,17 @@ These must be resolved before or during implementation:
 ## Done Means
 
 ### OAuth
-- [ ] GitHub OAuth app registered and credentials injected via config
-- [ ] OAuth redirect flow works end-to-end (connect → authorize → callback → stored tokens)
-- [ ] Token refresh works (proactive refresh before expiry)
-- [ ] OAuth token wired into `gitClient` auth callbacks
-- [ ] PAT remains functional as a fallback; UI clearly shows active auth method
-- [ ] "Disconnect GitHub" revokes tokens and clears stored credentials
-- [ ] GitHub connected/disconnected status visible in Settings
+- [ ] OAuth provider abstraction layer (`Provider` interface + 3 implementations)
+- [ ] GitHub OAuth app registered; credentials injected via config
+- [ ] GitLab Application registered; credentials injected via config
+- [ ] Bitbucket OAuth Consumer registered; credentials injected via config
+- [ ] OAuth redirect flow works end-to-end for all 3 providers (connect → authorize → callback → stored tokens)
+- [ ] Token refresh works per provider (proactive + on-demand)
+- [ ] OAuth token wired into `gitClient` auth callbacks — provider auto-detected from repo URL domain
+- [ ] PAT remains functional as a fallback per provider; UI clearly shows active auth method per provider
+- [ ] "Disconnect" revokes tokens and clears stored credentials per provider
+- [ ] Provider connection status visible in Settings (all 3)
+- [ ] Provider picker on onboarding screen shows repos from all connected providers
 
 ### Multi-repo
 - [ ] Workspace holds multiple repos simultaneously in lightning-fs

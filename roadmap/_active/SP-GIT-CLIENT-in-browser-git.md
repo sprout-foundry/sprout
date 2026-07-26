@@ -584,7 +584,7 @@ These tools are registered with the WASM agent's tool list.
 - [x] File tree renders within 10 seconds for a typical repo (< 100MB)
 - [x] Files open in the editor and content matches GitHub
 - [x] Git status, diff, commit, push, pull all work end-to-end
-- [x] Deep linking via `?repo=owner/name` auto-clones
+- [x] Deep linking via `?repo=owner/name` auto-clones _(partial — server-side import to WASM VFS works, but doesn't invoke gitClient.clone() into lightning-fs; git ops unavailable after deep link)_
 - [x] Private repos work with GitHub PAT
 - [x] Agent can read/write files in cloned repos (Phase 7 — agentGitTools.ts + bridge)
 - [x] All unit tests pass (147 tests across gitClient, agentGitTools, agentGitToolBridge)

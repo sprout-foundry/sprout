@@ -69,6 +69,32 @@ func ExtractSymbolsWithMaxDepth(root *gotreesitter.Node, bt *gotreesitter.BoundT
 		symbols = extractTSSymbols(root, bt, maxDepth, lang) // JS shares TS node types
 	case "python":
 		symbols = extractPythonSymbols(root, bt, maxDepth, lang)
+	case "ruby":
+		symbols = extractRubySymbols(root, bt, maxDepth, lang)
+	case "php":
+		symbols = extractPHPSymbols(root, bt, maxDepth, lang)
+	case "swift":
+		symbols = extractSwiftSymbols(root, bt, maxDepth, lang)
+	case "kotlin":
+		symbols = extractKotlinSymbols(root, bt, maxDepth, lang)
+	case "java":
+		symbols = extractJavaSymbols(root, bt, maxDepth, lang)
+	case "rust":
+		symbols = extractRustSymbols(root, bt, maxDepth, lang)
+	case "dart":
+		symbols = extractDartSymbols(root, bt, maxDepth, lang)
+	case "lua":
+		symbols = extractLuaSymbols(root, bt, maxDepth, lang)
+	case "haskell":
+		symbols = extractHaskellSymbols(root, bt, maxDepth, lang)
+	case "bash":
+		symbols = extractBashSymbols(root, bt, maxDepth, lang)
+	case "elixir":
+		symbols = extractElixirSymbols(root, bt, maxDepth, lang)
+	case "c", "cpp":
+		symbols = extractCSymbols(root, bt, maxDepth, lang)
+	case "c_sharp":
+		symbols = extractCSharpSymbols(root, bt, maxDepth, lang)
 	default:
 		// Fallback: extract top-level symbols only via the generic walker.
 		symbols = extractGenericSymbols(root, bt, maxDepth, lang)

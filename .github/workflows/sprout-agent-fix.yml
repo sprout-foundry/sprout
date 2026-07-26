@@ -1,0 +1,31 @@
+name: Sprout Agent (fix)
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  fix:
+    if: contains(github.event.comment.body, '/sprout-fix')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: sprout-foundry/sprout-agent@v1
+        id: sprout
+        with:
+          mode: fix
+          primary-provider: deepseek
+          primary-model: deepseek-v4-pro
+          github-token: ${{ secrets.GH_PAT }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          mcp: github
+          max-budget-usd: "3.00"
+          timeout-minutes: "25"
+          trigger-phrase: /sprout-fix

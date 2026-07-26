@@ -1,111 +1,70 @@
 name: Pricing Audit Agent
 on:
   schedule:
-    - cron: 27 9 * * *
-  workflow_dispatch: {}
-_comment: This workflow runs the sprout-agent in fix mode to discover pricing drift and create a PR.
+    - cron: "27 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: pricing-audit
+  cancel-in-progress: true
+
 jobs:
   pricing-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
-      issues: write
       pull-requests: write
-    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Create or update pricing audit issue
+
+      - name: Install sprout
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check if an open pricing audit issue already exists
-          ISSUE_NUMBER=$(gh issue list --label "pricing-audit" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-          if [ -z "$ISSUE_NUMBER" ]; then
-            ISSUE_URL=$(gh issue create \
-              --title "Pricing Audit: verify provider pricing against official docs" \
-              --label "pricing-audit" \
-              --body "See the pricing audit task in the first comment.")
-            ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
-          fi
-
-          echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
-
-          # Post the task body as a comment so fix mode reads it
-          gh issue comment "$ISSUE_NUMBER" --body-file- - <<'TASK_EOF'
-          /sprout-fix
-
-          ## Pricing Audit Task
-
-          Verify that provider pricing in `pkg/agent_providers/configs/*.json` matches the official pricing published by each provider. If you find discrepancies, update the config files and create a PR.
-
-          ### Steps
-
-          1. **Run the audit tool** to see current drift:
-             ```
-             go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs
-             ````
-
-          2. **For each provider in the manifest** (`cmd/audit_pricing/manifest.go`), fetch the official pricing page and compare:
-             - **DeepSeek**: https://api-docs.deepseek.com/quick_start/pricing — look for the pricing table with cache-hit, cache-miss, and output prices for deepseek-v4-flash and deepseek-v4-pro. Note that deepseek-chat and deepseek-reasoner are aliases for v4-flash (non-thinking and thinking modes).
-             - **ZAI**: https://docs.z.ai/devpack/overview — look for GLM model pricing.
-             - **OpenAI**: https://platform.openai.com/docs/pricing — look for GPT and o-series model pricing.
-             - **MiniMax**: https://platform.minimax.io/docs/api-reference/api-overview
-             - **Mistral**: https://docs.mistral.ai/ — look for per-model pricing.
-
-          3. **If pricing has changed**, update BOTH:
-             - The verified manifest in `cmd/audit_pricing/manifest.go` (the `manifests` map) with the new prices and `LastVerified` date set to today.
-             - The provider config files in `pkg/agent_providers/configs/*.json` — update the `model_info[].input_cost`, `output_cost`, and `cached_input_cost` fields.
-             - The top-level `cost.input_token_cost` and `cost.output_token_cost` in each config should match the default model's pricing.
-
-          4. **Verify your changes**:
-             ```
-             go build ./cmd/audit_pricing/...
-             go test ./cmd/audit_pricing/...
-             go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs
-             ````
-             The audit should report 0 drift after your updates.
-
-          5. **Commit and push** your changes to the `pricing-audit` branch.
-
-          ### Important notes
-          - Only update pricing values — don't change model IDs, descriptions, context lengths, or other metadata.
-          - If a provider's page is unreachable or you can't determine the price, skip that provider and note it in the PR description.
-          - Cached input pricing (cache-hit rate) may be listed separately. If found, update `cached_input_cost`.
-          - Prices are in USD per 1 million tokens.
-          TASK_EOF
-        shell: bash
+      - name: Run pricing audit agent
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run sprout agent
-        uses: sprout-foundry/sprout-agent@v1
-        with:
-          mcp: github
-          primary-model: deepseek-v4-pro
-          primary-provider: deepseek
-          github-token: ${{ secrets.GH_PAT }}
-          mode: fix
-          timeout-minutes: "25"
-          trigger-phrase: /sprout-fix
-          debug: "false"
-          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
-          max-budget-usd: "3.00"
-      - if: success()
-        name: Close audit issue if successful
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          if [ -n "${{ env.ISSUE_NUMBER }}" ]; then
-            gh issue comment "${{ env.ISSUE_NUMBER }}" --body "Pricing audit complete. PR: ${{ steps.sprout.outputs.pr-url || 'no PR created (no drift found)' }}"
+          git checkout -b pricing-audit/$(date -u +%Y-%m-%d)
+
+          sprout --output-json "Run the pricing audit:
+
+          1. Run: go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs
+          2. For each provider (deepseek, zai, openai, minimax, mistral), fetch the official pricing page and compare against the config files.
+          3. Update pkg/agent_providers/configs/*.json and cmd/audit_pricing/manifest.json with corrected pricing.
+          4. Run: go build ./cmd/audit_pricing/... && go test ./cmd/audit_pricing/...
+          5. Commit changes with message 'fix(pricing): automated pricing audit corrections'
+          6. Push the branch
+
+          Only modify files in pkg/agent_providers/configs/ and cmd/audit_pricing/manifest.json. Do not change any other files." \
+            --provider deepseek --model deepseek-v4-pro \
+            --max-iterations 200 --max-budget-usd 3.00 \
+            --risk-profile permissive
+
+          # Push whatever the agent produced
+          git push origin pricing-audit/$(date -u +%Y-%m-%d) 2>/dev/null || true
+
+          # Create PR if there are changes
+          if ! git diff --quiet main; then
+            gh pr create --title "fix(pricing): automated pricing audit $(date -u +%Y-%m-%d)" \
+              --body "Automated pricing audit corrections. See commit history for details." \
+              --base main || true
           fi
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: |
-          if [ -n "${{ env.ISSUE_NUMBER }}" ]; then
-            gh issue comment "${{ env.ISSUE_NUMBER }}" --body "Pricing audit failed. Check the workflow run for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          fi
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: failure()
-        name: Close audit issue on failure
-    timeout-minutes: 30
+
+      - name: Validate agent only touched pricing files
+        run: |
+          CHANGED=$(git diff --name-only main...HEAD)
+          for f in $CHANGED; do
+            case "$f" in
+              pkg/agent_providers/configs/*.json|cmd/audit_pricing/manifest.json) ;;
+              *) echo "ERROR: agent modified unexpected file: $f"; exit 1 ;;
+            esac
+          done

@@ -66,9 +66,11 @@ func main() {
 // Minimal flag helpers to avoid importing flag for simple cases.
 func flagString(name, def, _ string) *string {
 	val := def
-	for i := 1; i < len(os.Args)-1; i++ {
+	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--"+name {
-			val = os.Args[i+1]
+			if i+1 < len(os.Args) {
+				val = os.Args[i+1]
+			}
 			break
 		}
 		if strings.HasPrefix(os.Args[i], "--"+name+"=") {

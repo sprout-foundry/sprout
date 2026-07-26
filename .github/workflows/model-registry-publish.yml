@@ -70,9 +70,8 @@ jobs:
       - name: Audit pricing against verified manifest
         # Compares provider config pricing against a hand-verified manifest
         # (cmd/audit_pricing/manifest.go). Reports drift, missing pricing,
-        # and stale entries. Does NOT fail the build — it's informational
-        # so drift is visible in CI logs for follow-up. Use --fail-on-drift
-        # once the manifest is comprehensive enough to be authoritative.
+        # and stale entries. The daily pricing-audit-agent.yml workflow
+        # handles automatic discovery and correction via a sprout agent.
         run: go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs || true
 
       - name: Generate model index

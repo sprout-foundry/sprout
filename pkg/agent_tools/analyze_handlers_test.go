@@ -213,6 +213,7 @@ func TestAnalyzeUIScreenshot_HTMLInputDetected(t *testing.T) {
 
 	env := ToolEnv{
 		VisionProcessor: NewVisionProcessor(nil, nil, false),
+		// WebBrowser is nil — the new error path should trigger.
 	}
 
 	// Local .html extension — IsHTMLInput checks the extension without I/O.
@@ -220,9 +221,9 @@ func TestAnalyzeUIScreenshot_HTMLInputDetected(t *testing.T) {
 		"image_path": "/tmp/page.html",
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "html content requires browser rendering")
+	require.Contains(t, err.Error(), "no browser is available")
 	require.True(t, result.IsError)
-	require.Contains(t, result.Output, "HTML content requires a browser")
+	require.Contains(t, result.Output, "no browser is available")
 
 	// Also verify .htm extension is detected.
 	result2, err2 := h.Execute(ctx, env, map[string]any{
@@ -230,7 +231,7 @@ func TestAnalyzeUIScreenshot_HTMLInputDetected(t *testing.T) {
 	})
 	require.Error(t, err2)
 	require.True(t, result2.IsError)
-	require.Contains(t, result2.Output, "HTML content requires a browser")
+	require.Contains(t, result2.Output, "no browser is available")
 
 	// A non-HTML path should NOT trigger the browser error.
 	result3, err3 := h.Execute(ctx, env, map[string]any{

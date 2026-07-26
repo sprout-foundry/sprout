@@ -4,6 +4,12 @@ package tools
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -46,16 +52,73 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 		analysisPrompt = v
 	}
 
-	// TODO(SP-079-3): When browser support lands in ToolEnv, use viewportWidth/viewportHeight
-	// to render HTML content before analysis. For now, only direct image paths are supported.
-
-	// Detect HTML content — requires a browser to render, which is not yet
-	// wired into ToolEnv (separate SP task).
+	// Detect HTML content — render via browser then analyze the screenshot.
 	if IsHTMLInput(imagePath) {
-		return ToolResult{
-			Output:  "HTML content requires a browser for rendering. Please provide a screenshot image file instead.",
-			IsError: true,
-		}, agenterrors.NewTool("analyze_ui_screenshot", "html content requires browser rendering", nil)
+		if env.WebBrowser == nil {
+			return ToolResult{
+				Output:  "HTML content requires a browser for rendering, but no browser is available in this environment. Please provide a screenshot image file instead.",
+				IsError: true,
+			}, agenterrors.NewTool("analyze_ui_screenshot", "html content requires browser rendering but no browser is available", errNoBrowser)
+		}
+
+		// Build the URL to browse.
+		var fileURL string
+		if strings.HasPrefix(imagePath, "http://") || strings.HasPrefix(imagePath, "https://") {
+			fileURL = imagePath
+		} else {
+			absPath, absErr := filepath.Abs(imagePath)
+			if absErr != nil {
+				msg := fmt.Sprintf("failed to resolve HTML path: %v", absErr)
+				return ToolResult{Output: msg, IsError: true},
+					agenterrors.NewTool("analyze_ui_screenshot", msg, absErr)
+			}
+			// filepath.ToSlash normalizes Windows backslashes so url.URL
+			// produces a well-formed file:// URL (forward slashes, no %5C
+			// escapes). On POSIX this is a no-op.
+			fileURL = (&url.URL{Scheme: "file", Path: filepath.ToSlash(absPath)}).String()
+		}
+
+		// Read viewport dimensions (default 1280x720).
+		// The tool framework may pass these as int (direct call) or float64
+		// (JSON deserialization) — handle both.
+		viewportWidth := viewportDim(args, "viewport_width", 1280)
+		viewportHeight := viewportDim(args, "viewport_height", 720)
+
+		// Create a temporary file for the screenshot, then close it so
+		// the browser can write to it.
+		tmpFile, tmpErr := os.CreateTemp("", "sprout-html-render-*.png")
+		if tmpErr != nil {
+			msg := fmt.Sprintf("failed to create temp screenshot file: %v", tmpErr)
+			return ToolResult{Output: msg, IsError: true},
+				agenterrors.NewTool("analyze_ui_screenshot", msg, tmpErr)
+		}
+		tmpPath := tmpFile.Name()
+		tmpFile.Close()
+
+		// Render the HTML page and capture a screenshot.
+		opts := map[string]any{
+			"action":            "screenshot",
+			"screenshot_path":   tmpPath,
+			"viewport_width":    viewportWidth,
+			"viewport_height":   viewportHeight,
+			"allow_file_url":    true,
+		}
+		_, browseErr := env.WebBrowser.BrowseURL(ctx, fileURL, opts)
+		if browseErr != nil {
+			os.Remove(tmpPath) // best-effort cleanup
+			msg := fmt.Sprintf("browser rendering failed: %v", browseErr)
+			return ToolResult{Output: msg, IsError: true},
+				agenterrors.NewTool("analyze_ui_screenshot", msg, browseErr)
+		}
+
+		defer os.Remove(tmpPath)
+
+		result, analyzeErr := AnalyzeImage(ctx, tmpPath, analysisPrompt, visionModeFrontend)
+		if analyzeErr != nil {
+			return ToolResult{Output: result, IsError: true}, analyzeErr
+		}
+
+		return ToolResult{Output: result}, nil
 	}
 
 	result, err := AnalyzeImage(ctx, imagePath, analysisPrompt, visionModeFrontend)
@@ -71,3 +134,24 @@ func (h *analyzeUIScreenshotHandler) Timeout() time.Duration { return 0 }
 func (h *analyzeUIScreenshotHandler) MaxResultSize() int     { return 0 }
 func (h *analyzeUIScreenshotHandler) SafeForParallel() bool  { return false }
 func (h *analyzeUIScreenshotHandler) Interactive() bool      { return false }
+
+// errNoBrowser is the underlying cause returned when HTML input is received
+// but no browser backend is wired into ToolEnv.
+var errNoBrowser = errors.New("browser not available in this environment")
+
+// viewportDim extracts an integer viewport dimension from tool args, handling
+// both int (direct calls) and float64 (JSON deserialization) representations.
+// Falls back to def when the key is missing or non-positive.
+func viewportDim(args map[string]any, key string, def float64) float64 {
+	switch v := args[key].(type) {
+	case int:
+		if v > 0 {
+			return float64(v)
+		}
+	case float64:
+		if v > 0 {
+			return v
+		}
+	}
+	return def
+}

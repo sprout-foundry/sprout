@@ -8,11 +8,14 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // ---------------------------------------------------------------------------
@@ -413,18 +416,12 @@ func (a *Agent) RequestShellApproval(ctx context.Context, p ShellProposal) (map[
 		return map[string]bool{}, nil
 	}
 
-	// WebUI surface — stub for now (SP-093-3 wires real per-part UI).
+	// WebUI surface — publish a shell_approval_request event and block
+	// until the user responds via the per-part dialog (SP-093-3).
 	isSubagent := a.IsSubagent()
 	hasWebUI := !a.isNonInteractive() && !isSubagent && a.HasActiveWebUIClients()
 	if hasWebUI {
-		if a.debug {
-			a.debugLog("[SHELL-PART] RequestShellApproval: WebUI active — returning stub all-approved (SP-093-3)\n")
-		}
-		decisions := make(map[string]bool, len(p.Parts))
-		for _, part := range p.Parts {
-			decisions[part.ID] = true
-		}
-		return decisions, nil
+		return a.requestShellApprovalViaWebUI(ctx, p)
 	}
 
 	// CLI surface — use the per-part picker.
@@ -440,6 +437,71 @@ func (a *Agent) RequestShellApproval(ctx context.Context, p ShellProposal) (map[
 		}
 	}
 	return console.PromptShellApprovalParts(ctx, parts)
+}
+
+// shellApprovalTimeout is the maximum time a WebUI shell approval blocks
+// waiting for the user. Shell approvals are less time-sensitive than
+// password prompts, but keeping a bound prevents indefinite hangs if the
+// browser disconnects mid-dialog.
+var shellApprovalTimeout = 10 * time.Minute
+
+// requestShellApprovalViaWebUI publishes a shell_approval_request event and
+// blocks until the WebUI user responds (or the timeout fires). On timeout
+// or cancellation, all parts are denied (safer than approving).
+func (a *Agent) requestShellApprovalViaWebUI(ctx context.Context, p ShellProposal) (map[string]bool, error) {
+	requestID := generateShellApprovalRequestID()
+	ch := shellApprovalBroker.register(requestID)
+	defer shellApprovalBroker.cleanup(requestID)
+
+	// Build the per-part payload (events.ShellApprovalPartArg avoids an
+	// import cycle — events can't import agent).
+	parts := make([]events.ShellApprovalPartArg, len(p.Parts))
+	for i, part := range p.Parts {
+		parts[i] = events.ShellApprovalPartArg{
+			ID:       part.ID,
+			Text:     part.Text,
+			Kind:     string(part.Kind),
+			Semantic: part.Semantic,
+			Risk:     kindRiskLabel(part.Kind),
+		}
+	}
+
+	payload := events.ShellApprovalRequestEvent(
+		requestID, p.Command, parts,
+		events.BuildShellApprovalUnifiedView(parts),
+		string(p.RiskLevel),
+	)
+	a.publishEvent(events.EventTypeShellApprovalRequest, payload)
+
+	if a.debug {
+		a.debugLog("[SHELL-PART] request %s — waiting up to %v for WebUI response (%d parts)\n",
+			requestID, shellApprovalTimeout, len(p.Parts))
+	}
+
+	// denyAll is the safe fallback on timeout/cancellation — never approve
+	// when we don't have an explicit user decision.
+	denyAll := make(map[string]bool, len(p.Parts))
+	for _, part := range p.Parts {
+		denyAll[part.ID] = false
+	}
+
+	timer := time.NewTimer(shellApprovalTimeout)
+	defer timer.Stop()
+
+	select {
+	case decisions, ok := <-ch:
+		if !ok {
+			log.Printf("[shell-approval] request %s — channel closed without response", requestID)
+			return denyAll, nil
+		}
+		return decisions, nil
+	case <-ctx.Done():
+		log.Printf("[shell-approval] request %s — context cancelled (denying all parts)", requestID)
+		return denyAll, nil
+	case <-timer.C:
+		log.Printf("[shell-approval] request %s — timed out after %v (denying all parts)", requestID, shellApprovalTimeout)
+		return denyAll, nil
+	}
 }
 
 // kindRiskLabel returns a short risk-tier label for CLI display.

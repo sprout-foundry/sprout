@@ -131,6 +131,28 @@ export function useAppInitialization({
               });
             });
           }
+          // Register the agent git tool bridge so the WASM agent can call
+          // browser-side git tools via the setToolExecutionHook + globalThis.
+          if (isCloud) {
+            import('../services/agentGitToolBridge')
+              .then(({ registerGitToolGlobal, installGitToolBridge }) => {
+                const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
+                if (shell) {
+                  registerGitToolGlobal();
+                  // The WASM binary exposes setToolExecutionHook on SproutWasm.
+                  const wasmApi = shell.wasm?.SproutWasm as { setToolExecutionHook?: (fn: (cmd: string) => unknown) => void } | undefined;
+                  if (wasmApi?.setToolExecutionHook) {
+                    installGitToolBridge(wasmApi);
+                    debugLog('[startup] Agent git tool bridge installed');
+                  } else {
+                    debugLog('[startup] setToolExecutionHook not found on SproutWasm — bridge sync hook not installed');
+                  }
+                }
+              })
+              .catch((err) => {
+                debugLog('[startup] agentGitToolBridge import failed:', err);
+              });
+          }
         } else if (isCloud) {
           console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
           setState((prev) => ({ ...prev, wasmLoading: false, wasmError: 'Failed to load browser runtime' }));

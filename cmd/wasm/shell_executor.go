@@ -3,8 +3,10 @@
 package main
 
 import (
+	"strings"
 	"sync"
 	"syscall/js"
+	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/wasmshell"
@@ -32,6 +34,13 @@ var (
 
 func init() {
 	tools.RegisterWASMShellExecutor(func(command string) (stdout, stderr string, exitCode int) {
+		// Intercept gittool: commands — dispatch to browser-side async git tools.
+		// This path uses the channel-blocking pattern (same as asPromise) to
+		// wait for the JS Promise from globalThis.__sproutGitTools.execute().
+		if strings.HasPrefix(command, "gittool:") {
+			return callGitToolJS(command)
+		}
+
 		toolHookMu.RLock()
 		hook := toolExecutionHook
 		toolHookMu.RUnlock()
@@ -68,4 +77,73 @@ func init() {
 		r := wasmshell.ParseAndExecute(command)
 		return r.Stdout, r.Stderr, r.ExitCode
 	})
+}
+
+// callGitToolJS dispatches a "gittool:<name> <json>" command to the
+// browser-side async git tools via globalThis.__sproutGitTools.execute().
+// Blocks until the Promise resolves (or 30s timeout) using the channel
+// pattern — the same approach as asPromise for bridging Go goroutines
+// with JS Promises.
+func callGitToolJS(command string) (stdout, stderr string, exitCode int) {
+	gitTools := js.Global().Get("__sproutGitTools")
+	if !gitTools.Truthy() {
+		return "", "git tools not registered: call registerGitToolGlobal() first", 1
+	}
+
+	// Parse "gittool:<name> <json>" — name is between prefix and first space
+	rest := strings.TrimPrefix(command, "gittool:")
+	spaceIdx := strings.IndexAny(rest, " \t")
+	var toolName, argsStr string
+	if spaceIdx == -1 {
+		toolName = strings.TrimSpace(rest)
+		argsStr = "{}"
+	} else {
+		toolName = strings.TrimSpace(rest[:spaceIdx])
+		argsStr = strings.TrimSpace(rest[spaceIdx:])
+	}
+	if toolName == "" {
+		return "", "gittool: empty tool name", 1
+	}
+	if argsStr == "" {
+		argsStr = "{}"
+	}
+
+	// Parse args JSON → JS object
+	argsObj := js.Global().Get("JSON").Call("parse", argsStr)
+
+	// Call execute() → returns a Promise<string>
+	promise := gitTools.Call("execute", toolName, argsObj)
+
+	// Block on the Promise via callbacks writing to channels.
+	resultCh := make(chan string, 1)
+	errCh := make(chan string, 1)
+
+	then := js.FuncOf(func(_ js.Value, pargs []js.Value) interface{} {
+		if len(pargs) > 0 {
+			resultCh <- pargs[0].String()
+		} else {
+			resultCh <- ""
+		}
+		return nil
+	})
+	catch := js.FuncOf(func(_ js.Value, pargs []js.Value) interface{} {
+		if len(pargs) > 0 {
+			errCh <- pargs[0].String()
+		} else {
+			errCh <- "unknown error"
+		}
+		return nil
+	})
+	defer then.Release()
+	defer catch.Release()
+	promise.Call("then", then, catch)
+
+	select {
+	case result := <-resultCh:
+		return result, "", 0
+	case errMsg := <-errCh:
+		return "", "git tool error: " + errMsg, 1
+	case <-time.After(30 * time.Second):
+		return "", "git tool timeout (30s)", 1
+	}
 }

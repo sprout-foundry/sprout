@@ -11,7 +11,7 @@ concurrency:
 jobs:
   pricing-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 45  # most days: <1 min (no drift). Drift days: up to 40 min for agent.
     permissions:
       contents: write
       pull-requests: write
@@ -24,7 +24,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check for pricing drift (skip agent if clean)
+        run: |
+          go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs > /tmp/audit.txt 2>&1
+          cat /tmp/audit.txt
+          DRIFT=$(grep -c "drift\|missing" /tmp/audit.txt || true)
+          if [ "$DRIFT" -eq 0 ]; then
+            echo "NO_DRIFT=true" >> $GITHUB_ENV
+            echo "No pricing drift detected — skipping agent run"
+          else
+            echo "NO_DRIFT=false" >> $GITHUB_ENV
+            echo "Pricing drift detected — agent will investigate"
+          fi
+
       - name: Create tracking issue
+        if: env.NO_DRIFT != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -36,11 +50,13 @@ jobs:
           echo "Created issue #$ISSUE_NUM"
 
       - name: Install sprout
+        if: env.NO_DRIFT != 'true'
         run: |
           curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | bash
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Run pricing audit agent
+        if: env.NO_DRIFT != 'true'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
@@ -53,6 +69,7 @@ jobs:
             --budget-usd 3.00
 
       - name: Validate only pricing files changed
+        if: env.NO_DRIFT != 'true'
         run: |
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only --cached)
           if [ -z "$CHANGED" ]; then
@@ -68,6 +85,7 @@ jobs:
           echo "All changed files are within allowed paths"
 
       - name: Push and create PR
+        if: env.NO_DRIFT != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

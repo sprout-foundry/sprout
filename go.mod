@@ -22,7 +22,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v1.3.15
+require github.com/sprout-foundry/seed v1.3.16
 
 require github.com/odvcencio/gotreesitter v0.16.0
 
@@ -138,5 +138,3 @@ require (
 // in-package atomic-write helper. Source lives in ./internal/hnsw/.
 // Drop this replace when upstream merges a Windows fix.
 replace github.com/coder/hnsw => ./internal/hnsw
-
-replace github.com/sprout-foundry/seed => /home/aprice/dev/sprout-foundry/seed

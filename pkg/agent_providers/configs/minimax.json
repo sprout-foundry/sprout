@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.15,
-    "output_token_cost": 1.15
+    "input_token_cost": 0.30,
+    "output_token_cost": 1.20
   },
   "defaults": {
     "model": "MiniMax-M2.5",
@@ -56,8 +56,8 @@
         "context_length": 196608,
         "description": "MiniMax-M2.5 - SOTA large language model for real-world productivity with 196K context",
         "id": "MiniMax-M2.5",
-        "input_cost": 0.15,
-        "output_cost": 1.15,
+        "input_cost": 0.30,
+        "output_cost": 1.20,
         "cached_input_cost": 0.03,
         "name": "MiniMax M2.5",
         "tags": [
@@ -70,9 +70,9 @@
         "context_length": 196608,
         "description": "MiniMax-M2.7 - Enhanced M2.5 with improved reasoning and coding capabilities",
         "id": "MiniMax-M2.7",
-        "input_cost": 0.15,
-        "output_cost": 1.15,
-        "cached_input_cost": 0.03,
+        "input_cost": 0.30,
+        "output_cost": 1.20,
+        "cached_input_cost": 0.06,
         "name": "MiniMax M2.7",
         "tags": [
           "coding",
@@ -84,8 +84,8 @@
         "context_length": 196608,
         "description": "MiniMax-M2.5-Lightning - Cost-effective variant with 1M context window",
         "id": "MiniMax-M2.5-Lightning",
-        "input_cost": 0.15,
-        "output_cost": 1.15,
+        "input_cost": 0.60,
+        "output_cost": 2.40,
         "cached_input_cost": 0.03,
         "name": "MiniMax M2.5 Lightning",
         "tags": [
@@ -97,8 +97,8 @@
         "context_length": 196608,
         "description": "MiniMax-M2 - Previous generation model",
         "id": "MiniMax-M2",
-        "input_cost": 0.15,
-        "output_cost": 1.15,
+        "input_cost": 0.30,
+        "output_cost": 1.20,
         "cached_input_cost": 0.03,
         "name": "MiniMax M2",
         "tags": [
@@ -110,9 +110,9 @@
         "context_length": 196608,
         "description": "MiniMax-M2.1 - Enhanced version of M2",
         "id": "MiniMax-M2.1",
-        "input_cost": 0.1,
-        "output_cost": 0.1,
-        "cached_input_cost": 0.02,
+        "input_cost": 0.30,
+        "output_cost": 1.20,
+        "cached_input_cost": 0.03,
         "name": "MiniMax M2.1",
         "tags": [
           "coding",
@@ -123,8 +123,8 @@
         "context_length": 196608,
         "description": "MiniMax-M2-Stable - Stable variant of M2",
         "id": "MiniMax-M2-Stable",
-        "input_cost": 0.15,
-        "output_cost": 1.15,
+        "input_cost": 0.30,
+        "output_cost": 1.20,
         "cached_input_cost": 0.03,
         "name": "MiniMax M2 Stable",
         "tags": [
@@ -136,6 +136,9 @@
         "context_length": 204800,
         "description": "MiniMax-VL-01 - Vision language model",
         "id": "MiniMax-VL-01",
+        "input_cost": 0.30,
+        "output_cost": 1.20,
+        "cached_input_cost": 0.03,
         "name": "MiniMax VL-01",
         "tags": [
           "vision",

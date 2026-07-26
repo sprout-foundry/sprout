@@ -46,13 +46,11 @@ jobs:
         run: |
           git checkout -b "$BRANCH"
 
-          sprout "Read the task in .github/pricing-audit-task.md and execute it. \
-            Run go build ./cmd/audit_pricing/... and go test ./cmd/audit_pricing/... when done. \
-            Commit your changes." \
+          sprout agent "Read the task in .github/pricing-audit-task.md and execute it. Run go build ./cmd/audit_pricing/... and go test ./cmd/audit_pricing/... when done. Commit your changes." \
             --provider deepseek \
             --model deepseek-v4-pro \
             --risk-profile permissive \
-            --max-budget-usd 3.00
+            --budget-usd 3.00
 
       - name: Validate only pricing files changed
         run: |

@@ -44,7 +44,8 @@ func TestGenericProviderSetModelInvalidatesCache(t *testing.T) {
 	}
 
 	// Verify modelsCached is now false
-	if provider.modelsCached {
+	provider.mu.RLock(); cached := provider.modelsCached; provider.mu.RUnlock()
+	if cached {
 		t.Error("expected modelsCached to be false after SetModel")
 	}
 
@@ -78,7 +79,7 @@ func TestGenericProviderSetModelPreservesCache(t *testing.T) {
 	}
 
 	// Explicitly set cache to false
-	provider.modelsCached = false
+	provider.mu.Lock(); provider.modelsCached = false; provider.mu.Unlock()
 
 	// Set the model and verify cache remains false
 	model := "another-model"
@@ -88,7 +89,8 @@ func TestGenericProviderSetModelPreservesCache(t *testing.T) {
 	}
 
 	// Verify modelsCached is still false
-	if provider.modelsCached {
+	provider.mu.RLock(); cached := provider.modelsCached; provider.mu.RUnlock()
+	if cached {
 		t.Error("expected modelsCached to remain false after SetModel")
 	}
 
@@ -130,7 +132,8 @@ func TestGenericProviderSetModelMultipleTimes(t *testing.T) {
 		}
 
 		// Verify cache is invalidated after each call
-		if provider.modelsCached {
+		provider.mu.RLock(); cached := provider.modelsCached; provider.mu.RUnlock()
+	if cached {
 			t.Errorf("expected modelsCached to be false after SetModel(%q), iteration %d", model, i)
 		}
 
@@ -172,18 +175,18 @@ func TestGenericProviderSetModelWithModelsCached(t *testing.T) {
 	}
 
 	// Manually set modelsCached to true (simulating a successful ListModels call)
-	provider.models = []api.ModelInfo{
+	provider.setCachedModels([]api.ModelInfo{
 		{
 			ID:            model,
 			Name:          model,
 			Provider:      "test-provider",
 			ContextLength: 128000,
 		},
-	}
-	provider.modelsCached = true
+	})
 
 	// Verify cache is true
-	if !provider.modelsCached {
+	provider.mu.RLock(); cached := provider.modelsCached; provider.mu.RUnlock()
+	if !cached {
 		t.Error("expected modelsCached to be true after manual cache set")
 	}
 
@@ -195,7 +198,8 @@ func TestGenericProviderSetModelWithModelsCached(t *testing.T) {
 	}
 
 	// Verify cache is now false
-	if provider.modelsCached {
+	provider.mu.RLock(); cached = provider.modelsCached; provider.mu.RUnlock()
+	if cached {
 		t.Error("expected modelsCached to be false after SetModel with cached models")
 	}
 

@@ -239,12 +239,3 @@ func floatsEqual(a, b float64) bool {
 	return math.Abs(a-b) < floatEpsilon
 }
 
-// findManifestEntry returns the manifest pricing entry for a model ID.
-func findManifestEntry(providerID, modelID string) PricingEntry {
-	for _, mp := range manifests[providerID].Models {
-		if mp.ID == modelID {
-			return mp
-		}
-	}
-	return PricingEntry{}
-}

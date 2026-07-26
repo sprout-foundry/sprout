@@ -769,12 +769,12 @@ func TestRegistryExtensibility(t *testing.T) {
 		RegisterBodyExtractor("ruby", &genericBodyExtractor{})
 	}()
 
-	// Parse a Go file but pass "ruby" as the language to trigger the custom extractor.
-	src := []byte(`package main
-
-func hello() {}
+	// Parse a Ruby file so the tree has Ruby node types that the Ruby
+	// extractor recognizes.
+	src := []byte(`def hello
+end
 `)
-	result, err := ParseFile("test.go", src)
+	result, err := ParseFile("test.rb", src)
 	if err != nil {
 		t.Fatalf("ParseFile: %v", err)
 	}

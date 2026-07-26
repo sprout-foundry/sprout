@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-07-24):** 95 shipped · 0 pending · 2 parked in `future/`.
+**Counts (as of 2026-07-26):** 96 shipped · 0 pending · 2 parked in `future/`.
 
 ## Shipped
 
@@ -98,6 +98,7 @@ Spec bodies preserved in git history; no per-spec archive (83 historical specs).
 | SP-119 | Workspace-aware Directory Resolution | ✅ Implemented — `automate.DirIn(workspaceDir)` helper threads workspace context through agent-tool and interface-handler paths so daemon-served workspaces find `<workspace>/automate/` instead of the daemon root. 3 phases shipped 2026-07-15 (`6608ecf3`, `aa2d05a9`). Out-of-scope follow-ups (~25 callsites across `pkg/agent/persistence.go`, `pkg/agent/skills.go`, `pkg/agent_tools/shell_native.go`, etc.) tracked under SP-091. |
 | SP-120 | Codebase Organization & Test Infrastructure Cleanup | ✅ Implemented — Phase 1 + 2a/2b/2c + Phase 3 all shipped 2026-07-15. The 199-file cmd/ god package lost another ~2000 lines to a new pkg/cliui/ (terminal subscriber, tool/subagent display, turn stats). Tests/builds all clean. |
 | SP-123 | User-Level Command Policies | ✅ Shipped — Phases 1–3 (2026-07-16). Unified command-policy layer with `Always Allow` / `Always Prompt` / `Always Deny` actions across the five fragmented pre-existing config surfaces; overrides `permissive`-mode auto-approval. |
+| SP-129 | Provider Pricing Automation — Enrichment Fixes + Agent-Driven Audit | ✅ Implemented (2026-07-26) — enrichment pipeline fixes (ZAI $0 pricing, missing DeepSeek models, negative sentinels, OpenAI date matching, meta-model filtering); DeepSeek pricing corrected to official docs; `cmd/audit_pricing` verification tool with verified manifest; `pricing-audit-agent.yml` daily agent-driven workflow (drift-gated fast path); agent successfully created and merged PR #27 with MiniMax/Mistral/OpenAI corrections. 41 models verified, 0 drift. |
 
 ## Pending
 
@@ -116,7 +117,7 @@ the root directory._
 | SP-114 | [Unify CLI and Steer Panel Command Execution](./SP-114-unify-command-execution.md) | 🟢 Phase 1 + Phase 2 + Phase 2c + Phase 2d shipped (`ab6c975e` 2026-07-17, `d0f2ee56` 2026-07-21 server streaming, `44e4fe4f` 2026-07-22 web UI streaming). `POST /api/command/execute` dedicated command surface; stdout streams over the chat WebSocket via `EventTypeCommandOutput` + UTF-8-safe `streamPipeChunks`; `useCommandOutput` hook + `CommandOutputPanel` (`webui/src/components/CommandOutputPanel.tsx`) integrate into `ChatView.tsx`. Destructive commands (`/commit`, `/clear`, `/exit`, `/init`, etc.) remain CLI-only. |
 | SP-124 | [LLM-Augmented Security Analysis](./SP-124-llm-security-analysis.md) | 🟢 Phase 1, 2, 3 shipped (2026-07-19) — backend `AnalyzeShellCommand` + cache + broker plumbing; WebUI dialog renders analysis panel with risk-tone badge (`SecurityApprovalDialog.tsx`); CLI picker renders analysis + Elevate option via `pkg/utils.SecurityAnalysisView` shared helper. |
 | SP-121 | [Unified Product Experience](./SP-121-unified-product.md) | ✅ All 6 phases shipped — editor is now the unified product surface. Mobile-responsive, PWA, auth bridge, dashboard pages ported to editor shell, deep linking (`?view=`, `?chat=`, `?file=`), cross-tab BroadcastChannel sync. 100% complete. |
-| SP-121-7 | [Repo Click → GitHub Content Flow](./_active/SP-121-7-repo-content-flow.md) | ✅ Browser-side GitHub clone via isomorphic-git + lightning-fs. Multi-repo gitClient service (clone/status/log/branch/checkout/read/diff/add/commit/push). File tree with VFS bridge to WASM shell. |
+| SP-121-7 | [Repo Click → GitHub Content Flow](./_active/SP-121-7-repo-content-flow.md) | ✅ Browser-side GitHub clone via isomorphic-git + lightning-fs. Multi-repo gitClient service (clone/status/log/branch/checkout/read/diff/add/commit/push). File tree with VFS bridge to WASM shell. Phase 7 (agent integration) shipped — agentGitTools.ts + agentGitToolBridge.ts (Go↔JS bridge for 13 git tools). Playwright E2E tests deferred. |
 | SP-121-8 | [Git UI Polish](./SP-121-8-git-ui-polish.md) | ✅ README preview (ReactMarkdown + remark-gfm), Push/Pull buttons, branch chip checkout, file/folder creation, ZIP download, Download as ZIP. All backend primitives wired to UI. |
 | SP-121-9 | [First-Run UX + Onboarding](./SP-121-9-first-run-ux.md) | ✅ Onboarding screen (URL import, PAT-authenticated repo list, create new repo dialog with git init), Download as ZIP (JSZip), wire into EditorWorkspace routing. |
 | SP-121-10 | [Git Power Features](./SP-121-10-git-power-features.md) | ✅ Commit history panel (paginated, expandable, changed-file counts), DiffViewer (LCS-based unified diff, per-file expand), full branch switch with VFS re-bridge + uncommitted changes dialog, gitClient helpers (readFileAtCommit, getChangedFiles). |

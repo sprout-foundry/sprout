@@ -222,15 +222,14 @@ func TestGenericProviderGetModelContextLimitUsesCachedModel(t *testing.T) {
 	}
 
 	provider.model = "cached-model"
-	provider.models = []api.ModelInfo{
+	provider.setCachedModels([]api.ModelInfo{
 		{
 			ID:            "cached-model",
 			Name:          "cached-model",
 			Provider:      "test",
 			ContextLength: 128000,
 		},
-	}
-	provider.modelsCached = true
+	})
 
 	contextLimit, err := provider.GetModelContextLimit()
 	if err != nil {
@@ -259,15 +258,14 @@ func TestGenericProviderGetModelContextLimitFallsBackWhenCachedEntryHasNoContext
 	}
 
 	provider.model = "cached-model"
-	provider.models = []api.ModelInfo{
+	provider.setCachedModels([]api.ModelInfo{
 		{
 			ID:            "cached-model",
 			Name:          "cached-model",
 			Provider:      "test",
 			ContextLength: 0,
 		},
-	}
-	provider.modelsCached = true
+	})
 
 	contextLimit, err := provider.GetModelContextLimit()
 	if err != nil {

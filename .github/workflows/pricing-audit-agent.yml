@@ -9,62 +9,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pricing-audit:
+  create-task:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     permissions:
-      contents: write
-      pull-requests: write
+      issues: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v5
 
-      - name: Install sprout
+      - name: Create or reuse pricing audit issue
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          # Ensure the label exists
+          gh label create "pricing-audit" --color "7057ff" \
+            --description "Automated pricing audit tasks" 2>/dev/null || true
 
-      - name: Run pricing audit agent
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          git checkout -b pricing-audit/$(date -u +%Y-%m-%d)
-
-          sprout --output-json "Run the pricing audit:
-
-          1. Run: go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs
-          2. For each provider (deepseek, zai, openai, minimax, mistral), fetch the official pricing page and compare against the config files.
-          3. Update pkg/agent_providers/configs/*.json and cmd/audit_pricing/manifest.json with corrected pricing.
-          4. Run: go build ./cmd/audit_pricing/... && go test ./cmd/audit_pricing/...
-          5. Commit changes with message 'fix(pricing): automated pricing audit corrections'
-          6. Push the branch
-
-          Only modify files in pkg/agent_providers/configs/ and cmd/audit_pricing/manifest.json. Do not change any other files." \
-            --provider deepseek --model deepseek-v4-pro \
-            --max-iterations 200 --max-budget-usd 3.00 \
-            --risk-profile permissive
-
-          # Push whatever the agent produced
-          git push origin pricing-audit/$(date -u +%Y-%m-%d) 2>/dev/null || true
-
-          # Create PR if there are changes
-          if ! git diff --quiet main; then
-            gh pr create --title "fix(pricing): automated pricing audit $(date -u +%Y-%m-%d)" \
-              --body "Automated pricing audit corrections. See commit history for details." \
-              --base main || true
+          # Reuse an existing open issue labeled pricing-audit, or create one
+          EXISTING=$(gh issue list --label "pricing-audit" --state open \
+            --json number --jq '.[0].number' 2>/dev/null)
+          if [ -n "$EXISTING" ]; then
+            ISSUE_NUMBER="$EXISTING"
+          else
+            ISSUE_NUMBER=$(gh issue create \
+              --title "Pricing Audit: verify provider pricing against official docs" \
+              --label "pricing-audit" \
+              --body "Automated pricing audit task. The agent will fetch official pricing pages, compare against provider configs, and open a PR with corrections." \
+            | grep -oE '[0-9]+$')
           fi
 
-      - name: Validate agent only touched pricing files
-        run: |
-          CHANGED=$(git diff --name-only main...HEAD)
-          for f in $CHANGED; do
-            case "$f" in
-              pkg/agent_providers/configs/*.json|cmd/audit_pricing/manifest.json) ;;
-              *) echo "ERROR: agent modified unexpected file: $f"; exit 1 ;;
-            esac
-          done
+          # Post the task body (with /sprout-fix trigger) from the checked-in file.
+          gh issue comment "$ISSUE_NUMBER" --body-file .github/pricing-audit-task.md
+          echo "Posted /sprout-fix task to issue #$ISSUE_NUMBER"

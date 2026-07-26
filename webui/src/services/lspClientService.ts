@@ -843,13 +843,3 @@ export function getLSPClientService(): LSPClientService {
  * Get LSPClientService class instance.
  */
 export { LSPClientService };
-
-/**
- * @deprecated Use getLSPClientService() instead.
- */
-export { getLSPClientService as getInstance };
-
-/**
- * @deprecated Use getLSPClientService() instead.
- */
-export { getLSPClientService as getLSPCLientService };

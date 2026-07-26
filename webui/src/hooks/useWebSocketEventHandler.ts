@@ -1078,6 +1078,85 @@ const handleChatRunRestored = (ctx: EventHandlerContext): void => {
   window.dispatchEvent(new CustomEvent('sprout:chat-gap-reload', { detail: { chatId } }));
 };
 
+// Handle session_terminated event.
+// The Go backend publishes this when a chat session crashes (panic recovery)
+// or is force-closed. Without this handler the frontend keeps the "running"
+// spinner / active-query state indefinitely since no query_completed or
+// error event will ever follow — the session is dead. This handler resets
+// the active request counter and surfaces an error banner so the user knows
+// what happened and can send a new query.
+const handleSessionTerminated = (ctx: EventHandlerContext): void => {
+  const { event, setState, activeRequestsRef } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'error';
+  // The in-flight turn will never complete — the session is dead.
+  if (activeRequestsRef.current > 0) activeRequestsRef.current = 0;
+  const data = (event.data ?? {}) as { session_id?: string; status?: string; code?: string; message?: string };
+  setState((prev) => ({
+    isProcessing: false,
+    lastError: data.message || 'Session terminated',
+    queryProgress: null,
+    // Mark in-flight tool executions as errored so they don't persist as
+    // phantom "running" badges into the next query. Mirrors handleReconnect.
+    toolExecutions: prev.toolExecutions.map((t) => {
+      if (t.status === 'started' || t.status === 'running') {
+        return { ...t, status: 'error' as const, endTime: new Date(), result: 'Session terminated' };
+      }
+      return t;
+    }),
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[session] Session terminated:', data.code, data.message);
+};
+
+// Handle delegate_clarification_requested event (log-only; full UI is a follow-up).
+const handleDelegateClarificationRequested = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'tool';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[delegate] Clarification requested:', data);
+};
+
+// Handle delegate_clarification_responded event (log-only; full UI is a follow-up).
+const handleDelegateClarificationResponded = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'tool';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[delegate] Clarification responded:', data);
+};
+
+// Handle workspace_patch event (log-only; full VFS integration is a follow-up).
+// Redact file contents from the log entry — workspace_patch carries the full
+// written `content`, which may include secrets/PII and should not persist in
+// React state. Only path/action/seq are safe to log.
+const handleWorkspacePatch = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const raw = (event.data ?? {}) as { path?: unknown; action?: unknown; seq?: unknown; content?: unknown };
+  const logEntry = createLogEntry({ ...event, data: { path: String(raw.path ?? ''), action: String(raw.action ?? ''), seq: raw.seq } });
+  logEntry.category = 'file';
+  logEntry.level = 'info';
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[workspace] Patch:', String(raw.path ?? ''));
+};
+
+// Handle recall_diagnostic event (log-only; structured diagnostics UI is a follow-up).
+const handleRecallDiagnostic = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[recall] Diagnostic:', data);
+};
+
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -1209,6 +1288,16 @@ export function useWebSocketEventHandler({
           return handleContextManagementDiagnostic(ctx);
         case 'chat_run_restored':
           return handleChatRunRestored(ctx);
+        case 'session_terminated':
+          return handleSessionTerminated(ctx);
+        case 'delegate_clarification_requested':
+          return handleDelegateClarificationRequested(ctx);
+        case 'delegate_clarification_responded':
+          return handleDelegateClarificationResponded(ctx);
+        case 'workspace_patch':
+          return handleWorkspacePatch(ctx);
+        case 'recall_diagnostic':
+          return handleRecallDiagnostic(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';

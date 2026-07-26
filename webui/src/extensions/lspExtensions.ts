@@ -149,7 +149,6 @@ export {
   getLSPClientService,
   LSPClientService,
   createTransport,
-  getInstance,
   LSP_SUPPORTED_LANGUAGES,
   type LSPLanguageInfo,
   type LSPStatusResponse,

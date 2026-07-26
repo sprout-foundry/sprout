@@ -1,5 +1,4 @@
 import type { SproutSettings, ProviderOption, ApiService } from '../../services/api';
-import type { SubagentTypeInfo } from '../../services/api/types';
 
 /**
  * Shared context passed to domain-specific mutation hooks.
@@ -25,9 +24,6 @@ export interface MutationContext {
    *  the ProviderSettingsTab and SubagentSettingsTab dropdowns. */
   refreshProviderCatalog?: () => void;
 }
-
-/** @deprecated Use SubagentTypeInfo from services/api/types */
-export type SubagentTypeEntry = SubagentTypeInfo;
 
 /**
  * Legacy flat tab IDs — kept for backward compatibility with useSettingsState.

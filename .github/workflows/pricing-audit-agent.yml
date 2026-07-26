@@ -18,7 +18,9 @@ jobs:
 
       - name: Create or reuse pricing audit issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT is required here — comments posted via GITHUB_TOKEN
+          # don't trigger issue_comment workflows (anti-spam measure).
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           # Ensure the label exists
           gh label create "pricing-audit" --color "7057ff" \

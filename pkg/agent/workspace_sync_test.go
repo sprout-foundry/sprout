@@ -1,12 +1,17 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // mustEvalSymlinks resolves symlinks in path, failing the test on error.
@@ -1380,4 +1385,884 @@ func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
 			}
 		})
 	}
+}
+
+// expectWorkspacePatchEvent waits for a workspace_patch event on the given
+// channel, draining any non-workspace_patch events (e.g. file_changed) that
+// arrive first. Both events are published for each write, so the subscriber
+// channel sees both in order: file_changed, then workspace_patch.
+func expectWorkspacePatchEvent(t *testing.T, ch <-chan events.UIEvent, expectedPath, expectedAction string) map[string]interface{} {
+	t.Helper()
+
+	for {
+		select {
+		case event := <-ch:
+			if event.Type == events.EventTypeWorkspacePatch {
+				data, ok := event.Data.(map[string]interface{})
+				require.True(t, ok, "event data should be a map[string]interface{}")
+
+				actualPath, ok := data["file_path"].(string)
+				require.True(t, ok, "file_path should be a string")
+				assert.Equal(t, expectedPath, actualPath, "file_path mismatch")
+
+				actualAction, ok := data["action"].(string)
+				require.True(t, ok, "action should be a string")
+				assert.Equal(t, expectedAction, actualAction, "action mismatch")
+
+				// Verify seq is present and positive
+				seq, ok := data["seq"].(int64)
+				require.True(t, ok, "seq should be int64")
+				assert.Positive(t, seq, "seq should be positive")
+
+				return data
+			}
+			// Not a workspace_patch event — skip it (e.g. file_changed)
+			// and continue waiting.
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("timed out waiting for workspace_patch event")
+			return nil
+		}
+	}
+}
+
+// expectNoWorkspacePatchEvent verifies that no workspace_patch event is
+// published within the timeout window. Used for failure-path tests.
+func expectNoWorkspacePatchEvent(t *testing.T, ch <-chan events.UIEvent) {
+	t.Helper()
+
+	select {
+	case event := <-ch:
+		// If we got an event, it should NOT be a workspace_patch.
+		// It could be a file_changed or another event type.
+		assert.NotEqual(t, events.EventTypeWorkspacePatch, event.Type,
+			"expected no workspace_patch event but got one")
+	case <-time.After(100 * time.Millisecond):
+		// Good: no event published at all
+	}
+}
+
+// TestNextPatchSeqMonotonic verifies that nextPatchSeq returns strictly
+// increasing values on successive calls. The first value must be >= 1
+// since atomic.AddInt64 starts from 0 and returns the new value.
+func TestNextPatchSeqMonotonic(t *testing.T) {
+	var prev int64
+	for i := 0; i < 100; i++ {
+		seq := nextPatchSeq()
+		assert.Greater(t, seq, prev, "seq should be strictly increasing at call %d", i)
+		prev = seq
+	}
+	// The first value should be >= 1 (counter starts at 0, AddInt64 returns post-increment)
+	assert.GreaterOrEqual(t, prev, int64(100), "last seq should be at least 100 after 100 calls")
+}
+
+// TestWorkspacePatchEventCreation verifies that events.WorkspacePatchEvent
+// constructs a properly shaped map with all required fields.
+func TestWorkspacePatchEventCreation(t *testing.T) {
+	data := events.WorkspacePatchEvent("/path/to/file.txt", "content", "write", 42)
+
+	assert.Equal(t, "/path/to/file.txt", data["file_path"])
+	assert.Equal(t, "content", data["content"])
+	assert.Equal(t, "write", data["action"])
+	assert.Equal(t, int64(42), data["seq"])
+}
+
+// TestWriteFileEmitsWorkspacePatchEvent verifies that handleWriteFile
+// publishes a workspace_patch event with action "write" after a
+// successful file write, including a positive sequence number.
+func TestWriteFileEmitsWorkspacePatchEvent(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_write_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "hello.txt")
+	content := "hello world\n"
+
+	result, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, filePath, "result should mention the file path")
+
+	// Expect the workspace_patch event (helper drains file_changed first)
+	data := expectWorkspacePatchEvent(t, ch, filePath, "write")
+
+	// Verify content matches
+	assert.Equal(t, content, data["content"], "event content should match written content")
+}
+
+// TestEditFileEmitsWorkspacePatchEvent verifies that handleEditFile
+// publishes a workspace_patch event with action "edit" after a
+// successful file edit, including a positive sequence number.
+func TestEditFileEmitsWorkspacePatchEvent(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_edit_test")
+
+	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
+	filePath := filepath.Join(tmpDir, "config.txt")
+
+	// Create initial file
+	initialContent := "key = old_value\nother = data\n"
+	err := os.WriteFile(filePath, []byte(initialContent), 0644)
+	require.NoError(t, err)
+
+	result, err := handleEditFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"old_str": "key = old_value",
+		"new_str": "key = new_value",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+
+	// Expect the workspace_patch event (helper drains file_changed first)
+	data := expectWorkspacePatchEvent(t, ch, filePath, "edit")
+
+	// Verify content reflects the edit
+	assert.Contains(t, data["content"], "key = new_value", "event content should reflect the edit")
+}
+
+// TestWriteStructuredFileEmitsWorkspacePatchEvent verifies that
+// handleWriteStructuredFile publishes a workspace_patch event with
+// action "write" for both JSON and YAML files.
+func TestWriteStructuredFileEmitsWorkspacePatchEvent(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_structured_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "data.json")
+
+	data := map[string]interface{}{
+		"name":    "sprout",
+		"version": 2,
+		"tags":    []interface{}{"agent", "ai"},
+	}
+
+	result, err := handleWriteStructuredFile(context.Background(), agent, map[string]interface{}{
+		"path":   filePath,
+		"format": "json",
+		"data":   data,
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+
+	// Expect the workspace_patch event
+	eventData := expectWorkspacePatchEvent(t, ch, filePath, "write")
+
+	// The content should contain the serialized JSON
+	assert.Contains(t, eventData["content"], "sprout", "event content should contain the JSON data")
+}
+
+// TestPatchStructuredFileEmitsWorkspacePatchEvent verifies that
+// handlePatchStructuredFile publishes a workspace_patch event after
+// a successful patch operation. The action is "write" since patches
+// go through writeFileContent.
+func TestPatchStructuredFileEmitsWorkspacePatchEvent(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_structured_patch_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "config.json")
+
+	// Create initial JSON file
+	initialContent := `{
+  "name": "old-name",
+  "version": 1,
+  "enabled": true
+}
+`
+	err := os.WriteFile(filePath, []byte(initialContent), 0644)
+	require.NoError(t, err)
+
+	// Mark the file as read so the staleness guard doesn't block the patch
+	agent.RecordFileReadThisTurn(filePath)
+
+	result, err := handlePatchStructuredFile(context.Background(), agent, map[string]interface{}{
+		"path":   filePath,
+		"format": "json",
+		"patch_ops": []interface{}{
+			map[string]interface{}{
+				"op":    "replace",
+				"path":  "/name",
+				"value": "new-name",
+			},
+			map[string]interface{}{
+				"op":    "add",
+				"path":  "/description",
+				"value": "a test agent",
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+
+	// Expect the workspace_patch event (action is "write" since it goes
+	// through writeFileContent)
+	eventData := expectWorkspacePatchEvent(t, ch, filePath, "write")
+
+	// The content should contain the patched data
+	assert.Contains(t, eventData["content"], "new-name", "event content should contain patched data")
+}
+
+// TestWorkspacePatchSeqIncrement verifies that when multiple files are
+// written in sequence, the seq field in workspace_patch events is
+// strictly increasing.
+func TestWorkspacePatchSeqIncrement(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_seq_test")
+
+	tmpDir := t.TempDir()
+	fileA := filepath.Join(tmpDir, "a.txt")
+	fileB := filepath.Join(tmpDir, "b.txt")
+
+	// Write file A
+	_, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    fileA,
+		"content": "content A",
+	})
+	require.NoError(t, err)
+
+	// Write file B
+	_, err = handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    fileB,
+		"content": "content B",
+	})
+	require.NoError(t, err)
+
+	// Expect workspace_patch for file A
+	dataA := expectWorkspacePatchEvent(t, ch, fileA, "write")
+	seqA, ok := dataA["seq"].(int64)
+	require.True(t, ok, "seq A should be int64")
+
+	// Expect workspace_patch for file B
+	dataB := expectWorkspacePatchEvent(t, ch, fileB, "write")
+	seqB, ok := dataB["seq"].(int64)
+	require.True(t, ok, "seq B should be int64")
+
+	// Seq numbers must be strictly increasing
+	assert.Greater(t, seqB, seqA, "second workspace_patch seq (%d) should be greater than first (%d)", seqB, seqA)
+}
+
+// TestWorkspacePatchEventIncludesMetadata verifies that event metadata
+// (client_id, chat_id) is merged into the workspace_patch event payload
+// via decorateEventPayload, the same as file_changed events.
+func TestWorkspacePatchEventIncludesMetadata(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_metadata_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "meta.txt")
+	content := "test"
+
+	// Set event metadata on the agent
+	agent.SetEventMetadata(map[string]interface{}{
+		"client_id": "test-client-123",
+		"chat_id":   "chat-456",
+	})
+
+	_, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.NoError(t, err)
+
+	// Get the workspace_patch event (helper drains file_changed first)
+	data := expectWorkspacePatchEvent(t, ch, filePath, "write")
+
+	// Verify metadata was merged in by decorateEventPayload
+	assert.Equal(t, "test-client-123", data["client_id"], "client_id should be merged from event metadata")
+	assert.Equal(t, "chat-456", data["chat_id"], "chat_id should be merged from event metadata")
+}
+
+// TestWriteFileNoWorkspacePatchOnFailure verifies that when a write
+// fails, no workspace_patch event is published.
+//
+// Note: tools.WriteFile does os.MkdirAll on the parent, so a missing
+// directory is NOT a failure case — the prior version of this test
+// happened to pass on macOS only because of leftover /tmp state.
+// To get a deterministic write failure we create a regular file and
+// then try to write to a path that treats that file as a parent
+// directory, which makes MkdirAll fail with ENOTDIR on every OS.
+func TestWriteFileNoWorkspacePatchOnFailure(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_failure_test")
+
+	// Create a regular file, then build a path that uses it as a
+	// parent directory. tools.WriteFile's MkdirAll cannot create a
+	// directory beneath an existing file, so this fails reliably.
+	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(parentFile, []byte("blocker"), 0644); err != nil {
+		t.Fatalf("setup: write blocker file: %v", err)
+	}
+	filePath := filepath.Join(parentFile, "impossible.txt")
+
+	_, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": "this should fail",
+	})
+	require.Error(t, err, "writing under a non-directory parent should fail")
+
+	// No workspace_patch should be published on failure
+	expectNoWorkspacePatchEvent(t, ch)
+}
+
+// TestWorkspacePatchRegisteredInOutboundTypes verifies that the
+// workspace_patch event type string is correctly defined and can be
+// added to the outbound registry. The actual presence in
+// allowedOutboundMessageTypes is maintained by the sync contract
+// (SP-034-6a) — this test ensures the event type constant and the
+// outbound registry agree on the string value.
+func TestWorkspacePatchRegisteredInOutboundTypes(t *testing.T) {
+	// Verify the event type constant has the expected string value
+	assert.Equal(t, "workspace_patch", events.EventTypeWorkspacePatch,
+		"EventTypeWorkspacePatch should equal the literal used in the outbound registry")
+
+	// The outbound registry (pkg/webui/websocket_outbound_registry.go) includes
+	// events.EventTypeWorkspacePatch in allowedOutboundMessageTypes at init time.
+	// This is verified indirectly: if the constant's value diverges, the
+	// registry key would silently stop matching. A complementary test in
+	// the webui package (or the existing registry-sync assertions) catches
+	// stale entries. Here we verify the constant is what we expect.
+}
+
+// TestWriteFileEmitsBothEventsInOrder verifies that handleWriteFile
+// publishes both file_changed and workspace_patch events, and that they
+// arrive in the correct order: file_changed first, then workspace_patch.
+// This ordering is important because the frontend may use file_changed
+// for general notification and workspace_patch for the actual content.
+func TestWriteFileEmitsBothEventsInOrder(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_both_order_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "order.txt")
+	content := "ordered content\n"
+
+	result, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, filePath, "result should mention the file path")
+
+	// First event should be file_changed
+	event1 := <-ch
+	assert.Equal(t, events.EventTypeFileChanged, event1.Type,
+		"first event should be file_changed")
+	data1, ok := event1.Data.(map[string]interface{})
+	require.True(t, ok, "file_changed data should be a map")
+	assert.Equal(t, filePath, data1["file_path"])
+	assert.Equal(t, "write", data1["action"])
+
+	// Second event should be workspace_patch
+	event2 := <-ch
+	assert.Equal(t, events.EventTypeWorkspacePatch, event2.Type,
+		"second event should be workspace_patch")
+	data2, ok := event2.Data.(map[string]interface{})
+	require.True(t, ok, "workspace_patch data should be a map")
+	assert.Equal(t, filePath, data2["file_path"])
+	assert.Equal(t, "write", data2["action"])
+	assert.Equal(t, content, data2["content"])
+}
+
+// expectWorkspacePatchConflict checks the workspace_patch event data for
+// conflict-related fields. When expectConflict is true, it asserts that
+// the event contains conflict=true and the given theirs_path. When false,
+// it asserts that conflict and theirs_path keys are absent.
+func expectWorkspacePatchConflict(t *testing.T, data map[string]interface{}, expectConflict bool, expectedTheirsPath string) {
+	t.Helper()
+
+	if expectConflict {
+		assert.Contains(t, data, "conflict", "workspace_patch event should contain conflict key when browser has unsynced edits")
+		assert.Equal(t, true, data["conflict"], "conflict should be true")
+		assert.Contains(t, data, "theirs_path", "workspace_patch event should contain theirs_path key when browser has unsynced edits")
+		assert.Equal(t, expectedTheirsPath, data["theirs_path"], "theirs_path should match expected value")
+	} else {
+		assert.NotContains(t, data, "conflict", "workspace_patch event should NOT contain conflict key when browser has no unsynced edits")
+		assert.NotContains(t, data, "theirs_path", "workspace_patch event should NOT contain theirs_path key when browser has no unsynced edits")
+	}
+}
+
+// TestWriteFileWithConflictRefused verifies that handleWriteFile REFUSES to
+// write when the file has unsynced browser edits (checkWriteStaleness blocks
+// it), so no workspace_patch event is emitted with conflict metadata. This
+// is correct: the agent must ask the user before overwriting. The conflict
+// detection via CheckPatchConflict in writeFileContent is only reachable when
+// the write succeeds (no staleness block).
+func TestWriteFileWithConflictRefused(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_write_refused_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "refused.txt")
+	content := "conflict content\n"
+
+	// Set up metadata showing the browser has unsynced edits
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        10,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 5,
+	})
+
+	// Write should be REFUSED because of unsynced browser edits
+	_, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.Error(t, err, "write should be refused when browser has unsynced edits")
+	assert.Contains(t, err.Error(), "unsynced edits", "error should mention unsynced edits")
+
+	// No events should be published since the write was refused
+	select {
+	case event := <-ch:
+		t.Fatalf("no events expected after refused write, got %s", event.Type)
+	case <-time.After(200 * time.Millisecond):
+		// OK — no event published
+	}
+}
+
+// TestWriteFileWithoutConflictEmitsNoConflictFields verifies that when
+// a workspace_patch event is published for a file that has NO unsynced
+// browser edits (BrowserSeq == LastSyncedBrowser), the event does NOT
+// include conflict or theirs_path keys.
+func TestWriteFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_no_conflict_write_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "noconflict.txt")
+	content := "no conflict content\n"
+
+	// Set up metadata showing browser is fully synced
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        5,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 5, // Equal to BrowserSeq → fully synced
+	})
+
+	result, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, filePath, "result should mention the file path")
+
+	// Expect the workspace_patch event WITHOUT conflict metadata
+	data := expectWorkspacePatchEvent(t, ch, filePath, "write")
+
+	// Verify conflict fields are NOT present
+	expectWorkspacePatchConflict(t, data, false, "")
+}
+
+// TestWriteFileNoMetadataEmitsNoConflictFields verifies that when there
+// is NO metadata for a file at all, the workspace_patch event does NOT
+// include conflict or theirs_path keys.
+func TestWriteFileNoMetadataEmitsNoConflictFields(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_no_metadata_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "nometa.txt")
+	content := "no metadata content\n"
+
+	// Do NOT set any metadata — file has no entry in the metadata store
+	result, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, filePath, "result should mention the file path")
+
+	data := expectWorkspacePatchEvent(t, ch, filePath, "write")
+	expectWorkspacePatchConflict(t, data, false, "")
+}
+
+// TestEditFileWithConflictEmitsConflictPatch verifies that when
+// handleEditFile publishes a workspace_patch event for a file with
+// unsynced browser edits, the event includes conflict metadata.
+// Unlike handleWriteFile (which is blocked by checkWriteStaleness),
+// handleEditFile does NOT call checkWriteStaleness, so edits can
+// succeed and the conflict detection in the event emission path runs.
+func TestEditFileWithConflictEmitsConflictPatch(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_conflict_edit_test")
+
+	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
+	filePath := filepath.Join(tmpDir, "edit_conflict.txt")
+
+	// Create initial file
+	initialContent := "old line\nkeep this\n"
+	err := os.WriteFile(filePath, []byte(initialContent), 0644)
+	require.NoError(t, err)
+
+	// Set up metadata showing the browser has unsynced edits
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        8,
+		ContainerSeq:      2,
+		LastSyncedBrowser: 3,
+	})
+
+	result, err := handleEditFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"old_str": "old line",
+		"new_str": "new line",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+
+	// Expect the workspace_patch event with conflict metadata
+	data := expectWorkspacePatchEvent(t, ch, filePath, "edit")
+
+	// Verify conflict fields are present
+	expectWorkspacePatchConflict(t, data, true, filePath+".theirs")
+}
+
+// TestEditFileWithoutConflictEmitsNoConflictFields verifies that when
+// handleEditFile publishes a workspace_patch event for a file with NO
+// unsynced browser edits, the event does NOT include conflict fields.
+func TestEditFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_no_conflict_edit_test")
+
+	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
+	filePath := filepath.Join(tmpDir, "edit_noconflict.txt")
+
+	// Create initial file
+	initialContent := "original value\nsome data\n"
+	err := os.WriteFile(filePath, []byte(initialContent), 0644)
+	require.NoError(t, err)
+
+	// Set up metadata showing browser is fully synced
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        4,
+		ContainerSeq:      2,
+		LastSyncedBrowser: 4,
+	})
+
+	result, err := handleEditFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"old_str": "original value",
+		"new_str": "updated value",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+
+	// Expect the workspace_patch event WITHOUT conflict metadata
+	data := expectWorkspacePatchEvent(t, ch, filePath, "edit")
+
+	// Verify conflict fields are NOT present
+	expectWorkspacePatchConflict(t, data, false, "")
+}
+
+// TestCheckPatchConflict_NoMetadata verifies that when no metadata exists
+// for the given path, CheckPatchConflict returns (false, "").
+func TestCheckPatchConflict_NoMetadata(t *testing.T) {
+	agent, _ := newTestAgentWithEventBus(t)
+	bus := events.NewEventBus()
+	agent.SetEventBus(bus)
+
+	conflict, theirsPath := agent.CheckPatchConflict("nonexistent.txt")
+	assert.False(t, conflict, "should not report conflict when no metadata exists")
+	assert.Empty(t, theirsPath, "theirs_path should be empty when no metadata exists")
+}
+
+// TestCheckPatchConflict_NoUnsyncedEdits verifies that when metadata exists
+// but BrowserSeq == LastSyncedBrowser (fully synced), CheckPatchConflict
+// returns (false, "").
+func TestCheckPatchConflict_NoUnsyncedEdits(t *testing.T) {
+	agent, _ := newTestAgentWithEventBus(t)
+
+	agent.SetFileMetadata("synced.txt", WorkspaceFileMetadata{
+		BrowserSeq:        5,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 5, // Equal to BrowserSeq → fully synced
+	})
+
+	conflict, theirsPath := agent.CheckPatchConflict("synced.txt")
+	assert.False(t, conflict, "should not report conflict when browser edits are fully synced")
+	assert.Empty(t, theirsPath, "theirs_path should be empty when fully synced")
+}
+
+// TestCheckPatchConflict_HasUnsyncedEdits verifies that when
+// BrowserSeq > LastSyncedBrowser (unsynced browser edits exist),
+// CheckPatchConflict returns (true, path+".theirs").
+func TestCheckPatchConflict_HasUnsyncedEdits(t *testing.T) {
+	agent, _ := newTestAgentWithEventBus(t)
+
+	testPath := "conflict.txt"
+	agent.SetFileMetadata(testPath, WorkspaceFileMetadata{
+		BrowserSeq:        10,
+		ContainerSeq:      5,
+		LastSyncedBrowser: 7, // Less than BrowserSeq → 3 unsynced edits
+	})
+
+	conflict, theirsPath := agent.CheckPatchConflict(testPath)
+	require.True(t, conflict, "should report conflict when browser has unsynced edits")
+	assert.Equal(t, testPath+".theirs", theirsPath, "theirs_path should be <path>.theirs")
+}
+
+// TestCheckPatchConflict_NilAgent verifies that CheckPatchConflict is safe
+// to call on a nil agent and returns (false, "") without panicking.
+func TestCheckPatchConflict_NilAgent(t *testing.T) {
+	var agent *Agent = nil
+	conflict, theirsPath := agent.CheckPatchConflict("anything.txt")
+	assert.False(t, conflict, "nil agent should not report conflict")
+	assert.Empty(t, theirsPath, "nil agent should return empty theirs_path")
+}
+
+// TestCheckPatchConflict_EqualNonZeroSeqs verifies that when BrowserSeq and
+// LastSyncedBrowser are both non-zero but equal, there is no conflict.
+func TestCheckPatchConflict_EqualNonZeroSeqs(t *testing.T) {
+	agent, _ := newTestAgentWithEventBus(t)
+
+	agent.SetFileMetadata("equal.txt", WorkspaceFileMetadata{
+		BrowserSeq:        99,
+		ContainerSeq:      50,
+		LastSyncedBrowser: 99,
+	})
+
+	conflict, theirsPath := agent.CheckPatchConflict("equal.txt")
+	assert.False(t, conflict)
+	assert.Empty(t, theirsPath)
+}
+
+// TestCheckPatchConflict_ZeroSeqs verifies that when all seq values are zero
+// (freshly created metadata), there is no conflict.
+func TestCheckPatchConflict_ZeroSeqs(t *testing.T) {
+	agent, _ := newTestAgentWithEventBus(t)
+
+	agent.SetFileMetadata("fresh.txt", WorkspaceFileMetadata{})
+
+	conflict, theirsPath := agent.CheckPatchConflict("fresh.txt")
+	assert.False(t, conflict, "zero-value metadata should not indicate a conflict")
+	assert.Empty(t, theirsPath)
+}
+
+// TestCheckPatchConflict_LargeSeqGap verifies conflict detection with a large
+// gap between BrowserSeq and LastSyncedBrowser.
+func TestCheckPatchConflict_LargeSeqGap(t *testing.T) {
+	agent, _ := newTestAgentWithEventBus(t)
+
+	testPath := "largegap.txt"
+	agent.SetFileMetadata(testPath, WorkspaceFileMetadata{
+		BrowserSeq:        10000,
+		ContainerSeq:      1,
+		LastSyncedBrowser: 1,
+	})
+
+	conflict, theirsPath := agent.CheckPatchConflict(testPath)
+	require.True(t, conflict, "should report conflict with large seq gap")
+	assert.Equal(t, testPath+".theirs", theirsPath)
+}
+
+// TestCheckPatchConflict_ContainerSeqDoesntMatter verifies that ContainerSeq
+// vs LastSyncedContainer does NOT trigger a conflict in CheckPatchConflict —
+// only BrowserSeq vs LastSyncedBrowser matters (the container-side conflict
+// is handled in ApplySyncOp, not here).
+func TestCheckPatchConflict_ContainerSeqDoesntMatter(t *testing.T) {
+	agent, _ := newTestAgentWithEventBus(t)
+
+	agent.SetFileMetadata("container.txt", WorkspaceFileMetadata{
+		BrowserSeq:          5,
+		ContainerSeq:        10, // Container ahead of browser
+		LastSyncedBrowser:   5,  // Browser fully synced
+		LastSyncedContainer: 3,  // Browser hasn't seen latest container writes
+	})
+
+	// CheckPatchConflict only checks browser-side unsynced edits.
+	// Container-side unsynced writes are NOT a conflict for patch emission.
+	conflict, theirsPath := agent.CheckPatchConflict("container.txt")
+	assert.False(t, conflict, "container-side unsynced writes should not trigger CheckPatchConflict")
+	assert.Empty(t, theirsPath)
+}
+
+// TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_True verifies that
+// HasUnsyncedBrowserEdits returns true when BrowserSeq > LastSyncedBrowser.
+// This is the core condition that drives conflict detection in both
+// CheckPatchConflict (workspace_patch enrichment) and ApplySyncOp
+// (browser→container conflict detection).
+func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_True(t *testing.T) {
+	md := WorkspaceFileMetadata{
+		BrowserSeq:        10,
+		ContainerSeq:      5,
+		LastSyncedBrowser: 3,
+	}
+	assert.True(t, md.HasUnsyncedBrowserEdits(), "should detect 7 unsynced browser edits")
+}
+
+// TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_False_Synced verifies that
+// HasUnsyncedBrowserEdits returns false when BrowserSeq == LastSyncedBrowser
+// (fully synced state).
+func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_False_Synced(t *testing.T) {
+	md := WorkspaceFileMetadata{
+		BrowserSeq:        5,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 5,
+	}
+	assert.False(t, md.HasUnsyncedBrowserEdits(), "should not report unsynced edits when fully synced")
+}
+
+// TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_False_Zero verifies that
+// zero-value metadata (fresh state) does not report unsynced edits.
+func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_False_Zero(t *testing.T) {
+	md := WorkspaceFileMetadata{}
+	assert.False(t, md.HasUnsyncedBrowserEdits(), "zero-value metadata should not report unsynced edits")
+}
+
+// TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_OneOff verifies
+// detection with a minimal gap (BrowserSeq = LastSyncedBrowser + 1).
+func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_OneOff(t *testing.T) {
+	md := WorkspaceFileMetadata{
+		BrowserSeq:        1,
+		ContainerSeq:      0,
+		LastSyncedBrowser: 0,
+	}
+	assert.True(t, md.HasUnsyncedBrowserEdits(), "should detect single unsynced edit")
+}
+
+// TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_LargeSeq verifies
+// detection with large sequence numbers (as might occur in long-running sessions).
+func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_LargeSeq(t *testing.T) {
+	md := WorkspaceFileMetadata{
+		BrowserSeq:        999999,
+		ContainerSeq:      500000,
+		LastSyncedBrowser: 999990,
+	}
+	assert.True(t, md.HasUnsyncedBrowserEdits(), "should detect 9 unsynced edits with large seq values")
+}
+
+// TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_ContainerDoesntMatter verifies
+// that ContainerSeq vs LastSyncedContainer does NOT affect HasUnsyncedBrowserEdits.
+// Only BrowserSeq vs LastSyncedBrowser matters.
+func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_ContainerDoesntMatter(t *testing.T) {
+	md := WorkspaceFileMetadata{
+		BrowserSeq:          5,
+		ContainerSeq:        20, // Container far ahead
+		LastSyncedBrowser:   5,  // Browser fully synced
+		LastSyncedContainer: 1,  // Browser hasn't seen latest container writes
+	}
+	assert.False(t, md.HasUnsyncedBrowserEdits(), "container-side unsynced writes should not affect HasUnsyncedBrowserEdits")
+}
+
+// TestAgentSetAndGetFileMetadata_RoundTrip verifies the SetFileMetadata /
+// GetFileMetadata round-trip through the agent's metadata store.
+func TestAgentSetAndGetFileMetadata_RoundTrip(t *testing.T) {
+	a, _ := newTestAgentWithEventBus(t)
+
+	testPath := "roundtrip.txt"
+	original := WorkspaceFileMetadata{
+		BrowserSeq:          42,
+		ContainerSeq:        10,
+		LastSyncedBrowser:   38,
+		LastSyncedContainer: 8,
+	}
+
+	a.SetFileMetadata(testPath, original)
+
+	retrieved, ok := a.GetFileMetadata(testPath)
+	require.True(t, ok, "metadata should be found after setting it")
+	assert.Equal(t, original, retrieved, "retrieved metadata should match what was set")
+}
+
+// TestAgentSetAndGetFileMetadata_MissingPath verifies that GetFileMetadata
+// returns (zero-value, false) when no metadata exists for the given path.
+func TestAgentSetAndGetFileMetadata_MissingPath(t *testing.T) {
+	a, _ := newTestAgentWithEventBus(t)
+
+	retrieved, ok := a.GetFileMetadata("missing.txt")
+	assert.False(t, ok, "should not find metadata for a path that was never set")
+	assert.Equal(t, WorkspaceFileMetadata{}, retrieved, "should return zero-value metadata for missing path")
+}
+
+// TestAgentSetAndGetFileMetadata_NilAgent verifies that GetFileMetadata is
+// safe on a nil agent.
+func TestAgentSetAndGetFileMetadata_NilAgent(t *testing.T) {
+	var a *Agent = nil
+	retrieved, ok := a.GetFileMetadata("anything.txt")
+	assert.False(t, ok, "nil agent should return false")
+	assert.Equal(t, WorkspaceFileMetadata{}, retrieved, "nil agent should return zero-value metadata")
+}
+
+// TestAgentSetFileMetadata_NilAgent verifies that SetFileMetadata is safe
+// on a nil agent without panicking.
+func TestAgentSetFileMetadata_NilAgent(t *testing.T) {
+	var a *Agent = nil
+	// Should not panic
+	a.SetFileMetadata("anything.txt", WorkspaceFileMetadata{BrowserSeq: 1})
+}
+
+// TestAgentSetAndGetFileMetadata_Overwrite verifies that setting metadata
+// for the same path a second time overwrites the previous value.
+func TestAgentSetAndGetFileMetadata_Overwrite(t *testing.T) {
+	a, _ := newTestAgentWithEventBus(t)
+
+	testPath := "overwrite.txt"
+	a.SetFileMetadata(testPath, WorkspaceFileMetadata{BrowserSeq: 1})
+	a.SetFileMetadata(testPath, WorkspaceFileMetadata{BrowserSeq: 99, ContainerSeq: 50})
+
+	retrieved, ok := a.GetFileMetadata(testPath)
+	require.True(t, ok)
+	assert.Equal(t, int64(99), retrieved.BrowserSeq, "should have the overwritten BrowserSeq")
+	assert.Equal(t, int64(50), retrieved.ContainerSeq, "should have the overwritten ContainerSeq")
+}
+
+// TestAgentCheckPatchConflict_Integration is an end-to-end test that
+// exercises the same conflict detection path used in workspace_patch
+// event emission: set metadata with unsynced browser edits, then call
+// CheckPatchConflict and verify the result matches what the tool handlers
+// would see when publishing a workspace_patch event.
+func TestAgentCheckPatchConflict_Integration(t *testing.T) {
+	a, _ := newTestAgentWithEventBus(t)
+
+	// Simulate the browser having written 5 edits that haven't been synced
+	testPath := "agent_test.go"
+	a.SetFileMetadata(testPath, WorkspaceFileMetadata{
+		BrowserSeq:        100,
+		ContainerSeq:      50,
+		LastSyncedBrowser: 95, // 5 unsynced edits
+	})
+
+	conflict, theirsPath := a.CheckPatchConflict(testPath)
+	require.True(t, conflict, "should detect conflict with 5 unsynced browser edits")
+	assert.Equal(t, testPath+".theirs", theirsPath, "theirs_path should be <path>.theirs")
+}
+
+// TestAgentCheckPatchConflict_AfterSync verifies that after syncing
+// (setting LastSyncedBrowser to equal BrowserSeq), the conflict goes away.
+func TestAgentCheckPatchConflict_AfterSync(t *testing.T) {
+	a, _ := newTestAgentWithEventBus(t)
+
+	testPath := "synced_after.txt"
+	// Start with unsynced edits
+	a.SetFileMetadata(testPath, WorkspaceFileMetadata{
+		BrowserSeq:        100,
+		ContainerSeq:      50,
+		LastSyncedBrowser: 95,
+	})
+
+	conflict, _ := a.CheckPatchConflict(testPath)
+	require.True(t, conflict, "should detect conflict before sync")
+
+	// Now sync: update LastSyncedBrowser to match BrowserSeq
+	a.SetFileMetadata(testPath, WorkspaceFileMetadata{
+		BrowserSeq:        100,
+		ContainerSeq:      51,
+		LastSyncedBrowser: 100, // Synced!
+	})
+
+	conflict, _ = a.CheckPatchConflict(testPath)
+	assert.False(t, conflict, "should NOT detect conflict after syncing")
+}
+
+// TestWorkspaceFileMetadata_ZeroValue_Safe verifies that zero-value
+// WorkspaceFileMetadata can be compared and used without issues.
+func TestWorkspaceFileMetadata_ZeroValue_Safe(t *testing.T) {
+	var md WorkspaceFileMetadata
+	assert.False(t, md.HasUnsyncedBrowserEdits())
+	assert.Equal(t, int64(0), md.BrowserSeq)
+	assert.Equal(t, int64(0), md.ContainerSeq)
+	assert.Equal(t, int64(0), md.LastSyncedBrowser)
+	assert.Equal(t, int64(0), md.LastSyncedContainer)
 }

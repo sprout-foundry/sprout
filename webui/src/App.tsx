@@ -43,6 +43,7 @@ import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHand
 import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
 import { ApiService } from './services/api';
 import { loadPersistedAppState } from './services/appStatePersistence';
+import { clientFetch } from './services/clientSession';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { notificationBus } from './services/notificationBus';
 import { debugLog } from './utils/log';
@@ -271,6 +272,34 @@ function AppInner() {
     setState((_prev) => ({ editApprovalRequest: null }));
   }, [setState]);
 
+  // POST per-part shell approval decisions to the backend, then dismiss
+  // the dialog. The backend delivers the decisions to the blocked agent
+  // goroutine via the package-level shell approval broker. On failure the
+  // error propagates to ShellApprovalPanel's error UI — the dialog stays
+  // open so the user can retry.
+  const handleShellApprovalSubmit = useCallback(
+    async (requestId: string, decisions: Record<string, boolean>) => {
+      const resp = await clientFetch(
+        `/api/shell-approvals/${encodeURIComponent(requestId)}/decision`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request_id: requestId, decisions }),
+        },
+      );
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(`Decision POST failed: ${body || `HTTP ${resp.status}`}`);
+      }
+      const result = await resp.json();
+      if (!result.delivered) {
+        throw new Error('Decision not delivered by server (expired or unknown request)');
+      }
+      setState(() => ({ shellApprovalRequest: null }));
+    },
+    [setState],
+  );
+
   // ── Initialization ───────────────────────────────────────────────
 
   useAppInitialization({
@@ -491,9 +520,8 @@ function AppInner() {
                               }
                             : undefined,
                         }}
-                        onSubmit={async () => {
-                          // Clear the request on submit; the handler POSTs the decision
-                          setState(() => ({ shellApprovalRequest: null }));
+                        onSubmit={async (decisions) => {
+                          await handleShellApprovalSubmit(state.shellApprovalRequest!.requestId, decisions);
                         }}
                       />
                     )}

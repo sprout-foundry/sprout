@@ -12,48 +12,10 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
-
-// pendingShellApproval tracks a shell approval awaiting user decision.
-type pendingShellApproval struct {
-	ID           string
-	Command      string
-	Parts        []agent.ShellPart
-	CreatedAt    time.Time
-	decisionsCh  chan map[string]bool
-	decisionMade bool
-}
-
-// shellApprovalRegistry tracks pending shell approvals by ID.
-var shellApprovalRegistry = struct {
-	sync.Mutex
-	pending map[string]*pendingShellApproval
-}{pending: make(map[string]*pendingShellApproval)}
-
-// RegisterShellApproval stores a pending approval and returns a channel
-// that will receive the per-part decisions map when the WebUI responds.
-// Returns nil if the request ID is already registered (deduplication).
-func RegisterShellApproval(id, command string, parts []agent.ShellPart) chan map[string]bool {
-	shellApprovalRegistry.Lock()
-	defer shellApprovalRegistry.Unlock()
-	if _, ok := shellApprovalRegistry.pending[id]; ok {
-		return nil
-	}
-	p := &pendingShellApproval{
-		ID:          id,
-		Command:     command,
-		Parts:       parts,
-		CreatedAt:   time.Now(),
-		decisionsCh: make(chan map[string]bool, 1),
-	}
-	shellApprovalRegistry.pending[id] = p
-	return p.decisionsCh
-}
 
 // handleAPIShellApprovals dispatches /api/shell-approvals/{id}/decision.
 func (ws *ReactWebServer) handleAPIShellApprovals(w http.ResponseWriter, r *http.Request) {
@@ -91,19 +53,34 @@ func (ws *ReactWebServer) handleAPIShellApprovalDecision(w http.ResponseWriter, 
 		http.Error(w, "decisions map required", http.StatusBadRequest)
 		return
 	}
-	shellApprovalRegistry.Lock()
-	p, ok := shellApprovalRegistry.pending[id]
-	if ok && !p.decisionMade {
-		p.decisionMade = true
-		select {
-		case p.decisionsCh <- req.Decisions:
-		default:
-		}
-		delete(shellApprovalRegistry.pending, id)
+
+	// Deliver the decisions to the blocked agent goroutine via the
+	// package-level broker. Mirrors the edit-approval pattern: try
+	// ws.agent first (shared CLI+WebUI mode), then the daemon chat agent.
+	ag := ws.resolveShellApprovalAgent()
+	delivered := false
+	if ag != nil {
+		delivered = ag.RespondToShellApproval(id, req.Decisions)
 	}
-	shellApprovalRegistry.Unlock()
+	if !delivered {
+		ws.log().Warn("shell approval decision not delivered (unknown/expired request ID)",
+			slog.String("request_id", id))
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "request_id": id})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "request_id": id, "delivered": delivered})
+}
+
+// resolveShellApprovalAgent returns an agent instance for delivering shell
+// approval decisions. Mirrors resolveEditAgent: ws.agent in shared mode,
+// any chat agent in daemon mode (the broker is package-level).
+func (ws *ReactWebServer) resolveShellApprovalAgent() *agent.Agent {
+	if ws.agent != nil {
+		return ws.agent
+	}
+	if ag, err := ws.getChatAgent(defaultWebClientID, ""); err == nil && ag != nil {
+		return ag
+	}
+	return nil
 }
 
 // extractShellApprovalIDFromPath extracts the ID from

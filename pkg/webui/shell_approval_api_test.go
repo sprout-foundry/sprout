@@ -8,60 +8,38 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestHandleAPIShellApprovalDecision_ValidPayload(t *testing.T) {
-	var reqID = "test-valid-" + t.Name()
-	parts := []agent.ShellPart{
-		{ID: "part-0", Text: "echo hi", Kind: "unknown", Semantic: ""},
-		{ID: "part-1", Text: "rm -rf foo", Kind: "rm", Semantic: "delete"},
-	}
+// TestHandleAPIShellApprovalDecision_NoAgent verifies that the handler returns
+// 200 even when there's no agent instance (resolveEditAgent returns nil).
+// The decision is lost but the HTTP response is still OK (the frontend
+// doesn't need to retry; the agent broker was already cleaned up).
+func TestHandleAPIShellApprovalDecision_NoAgent(t *testing.T) {
+	var reqID = "test-no-agent-" + t.Name()
 
-	// Register the pending approval and grab the channel
-	ch := RegisterShellApproval(reqID, "echo hi && rm -rf foo", parts)
-	require.NotNil(t, ch, "RegisterShellApproval should return a channel for a new ID")
+	// Register in the broker.
+	ch := agent.TestShellApprovalRegister(reqID)
+	defer agent.TestShellApprovalCleanup(reqID)
+	require.NotNil(t, ch)
 
-	// Build the decision payload
 	payload := map[string]any{
 		"request_id": reqID,
 		"decisions":  map[string]bool{"part-0": true, "part-1": false},
 	}
 	body, _ := json.Marshal(payload)
 
-	// Create the HTTP request
 	req := httptest.NewRequest(http.MethodPost, "/api/shell-approvals/"+reqID+"/decision", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	// Call the handler via a zero-value ReactWebServer (no real server needed)
+	// Zero-value ReactWebServer — resolveEditAgent returns nil.
 	ws := &ReactWebServer{}
 	ws.handleAPIShellApprovalDecision(rec, req)
 
-	// The goroutine should receive the decisions within 1 second
-	var wg sync.WaitGroup
-	wg.Add(1)
-	var received map[string]bool
-	go func() {
-		defer wg.Done()
-		select {
-		case got := <-ch:
-			received = got
-		case <-time.After(time.Second):
-			t.Error("timed out waiting for decisions on channel")
-		}
-	}()
-
-	// Give the handler time to send
-	time.Sleep(50 * time.Millisecond)
-	wg.Wait()
-
-	// Assert the response
 	assert.Equal(t, http.StatusOK, rec.Code, "expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 
 	var respBody map[string]any
@@ -69,8 +47,59 @@ func TestHandleAPIShellApprovalDecision_ValidPayload(t *testing.T) {
 	assert.Equal(t, true, respBody["ok"])
 	assert.Equal(t, reqID, respBody["request_id"])
 
-	// Assert the channel received the correct decisions
-	assert.Equal(t, map[string]bool{"part-0": true, "part-1": false}, received)
+	// The decision was NOT delivered (no agent), so the channel should be empty.
+	select {
+	case <-ch:
+		t.Fatal("channel should be empty — no agent means no delivery")
+	default:
+		// Good — channel is empty as expected.
+	}
+}
+
+// TestHandleAPIShellApprovalDecision_WithAgent verifies the full delivery path:
+// the handler calls RespondToShellApproval on the agent, which delivers to
+// the broker channel, unblocking the goroutine in RequestShellApproval.
+func TestHandleAPIShellApprovalDecision_WithAgent(t *testing.T) {
+	var reqID = "test-with-agent-" + t.Name()
+
+	// Register in the broker (simulates RequestShellApproval registering).
+	ch := agent.TestShellApprovalRegister(reqID)
+	defer agent.TestShellApprovalCleanup(reqID)
+	require.NotNil(t, ch)
+
+	payload := map[string]any{
+		"request_id": reqID,
+		"decisions":  map[string]bool{"part-0": true, "part-1": false, "part-2": true},
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/shell-approvals/"+reqID+"/decision", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	ws := &ReactWebServer{}
+	ag, err := agent.NewAgentWithModel("test:test")
+	require.NoError(t, err)
+	defer ag.Shutdown()
+	ws.agent = ag
+
+	ws.handleAPIShellApprovalDecision(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var respBody map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &respBody))
+	assert.Equal(t, true, respBody["ok"])
+	assert.Equal(t, reqID, respBody["request_id"])
+
+	// Verify the channel received the decisions.
+	select {
+	case decisions := <-ch:
+		assert.True(t, decisions["part-0"], "part-0 should be approved")
+		assert.False(t, decisions["part-1"], "part-1 should be rejected")
+		assert.True(t, decisions["part-2"], "part-2 should be approved")
+	default:
+		t.Fatal("decisions not received on channel — agent delivery failed")
+	}
 }
 
 func TestHandleAPIShellApprovalDecision_InvalidJSON(t *testing.T) {
@@ -135,22 +164,58 @@ func TestExtractShellApprovalIDFromPath(t *testing.T) {
 	}
 }
 
-func TestRegisterShellApproval_Deduplication(t *testing.T) {
-	var reqID = "test-dedup-" + t.Name()
-	parts := []agent.ShellPart{{ID: "p0", Text: "echo", Kind: "unknown", Semantic: ""}}
+// TestShellApprovalDecision_DoubleRespond verifies that a second POST
+// for the same request ID returns 200 (the frontend doesn't retry) but
+// the channel doesn't receive a second value.
+func TestShellApprovalDecision_DoubleRespond(t *testing.T) {
+	var reqID = "test-double-respond-" + t.Name()
 
-	ch1 := RegisterShellApproval(reqID, "echo", parts)
-	require.NotNil(t, ch1, "first registration should return a channel")
+	ch := agent.TestShellApprovalRegister(reqID)
+	defer agent.TestShellApprovalCleanup(reqID)
+	require.NotNil(t, ch)
 
-	ch2 := RegisterShellApproval(reqID, "echo", parts)
-	assert.Nil(t, ch2, "second registration with same ID should return nil (dedup)")
-
-	// Cleanup: deliver a decision so the registry entry is removed
-	payload := map[string]any{"request_id": reqID, "decisions": map[string]bool{"p0": true}}
+	payload := map[string]any{
+		"request_id": reqID,
+		"decisions":  map[string]bool{"part-0": true},
+	}
 	body, _ := json.Marshal(payload)
-	req := httptest.NewRequest(http.MethodPost, "/api/shell-approvals/"+reqID+"/decision", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
+
 	ws := &ReactWebServer{}
-	ws.handleAPIShellApprovalDecision(rec, req)
-	_ = rec // response not important for this test
+	ag, err := agent.NewAgentWithModel("test:test")
+	require.NoError(t, err)
+	defer ag.Shutdown()
+	ws.agent = ag
+
+	// First POST — should deliver.
+	req1 := httptest.NewRequest(http.MethodPost, "/api/shell-approvals/"+reqID+"/decision", bytes.NewReader(body))
+	rec1 := httptest.NewRecorder()
+	ws.handleAPIShellApprovalDecision(rec1, req1)
+	assert.Equal(t, http.StatusOK, rec1.Code)
+
+	// Receive the first delivery.
+	select {
+	case decisions := <-ch:
+		assert.True(t, decisions["part-0"])
+	default:
+		t.Fatal("first delivery not received")
+	}
+
+	// Second POST with same ID — handler returns 200 but RespondToShellApproval
+	// returns false (channel is full / already responded).
+	body2, _ := json.Marshal(map[string]any{
+		"request_id": reqID,
+		"decisions":  map[string]bool{"part-0": false},
+	})
+	req2 := httptest.NewRequest(http.MethodPost, "/api/shell-approvals/"+reqID+"/decision", bytes.NewReader(body2))
+	rec2 := httptest.NewRecorder()
+	ws.handleAPIShellApprovalDecision(rec2, req2)
+	assert.Equal(t, http.StatusOK, rec2.Code)
+
+	// Channel should NOT have a second value.
+	select {
+	case <-ch:
+		t.Fatal("channel should not have a second delivery")
+	default:
+		// Good — only one delivery.
+	}
 }

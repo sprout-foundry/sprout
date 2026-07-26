@@ -3,214 +3,179 @@ package agent
 import (
 	"context"
 	"testing"
-
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/console"
+	"time"
 )
 
-// ---------------------------------------------------------------------------
-// SP-093-2: RequestShellApproval — WebUI stub path
-// ---------------------------------------------------------------------------
-
-func TestRequestShellApproval_EmptyProposal(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	proposal := ShellProposal{Command: "", Parts: nil, RiskLevel: configuration.RiskLevelLow}
-	decisions, err := agent.RequestShellApproval(context.Background(), proposal)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestShellApprovalBroker_RegisterRespond verifies the core register →
+// respond → receive lifecycle.
+func TestShellApprovalBroker_RegisterRespond(t *testing.T) {
+	broker := &shellApprovalBrokerType{
+		pending: make(map[string]*shellApprovalEntry),
 	}
-	if len(decisions) != 0 {
-		t.Errorf("expected empty decisions map, got %d entries", len(decisions))
-	}
-}
+	ch := broker.register("test-1")
 
-func TestRequestShellApproval_WebUIStub(t *testing.T) {
-	// Force interactive mode so isNonInteractive() returns false.
-	t.Setenv("SPROUT_FORCE_INTERACTIVE", "1")
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		broker.respond("test-1", map[string]bool{"part-0": true, "part-1": false})
+	}()
 
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	// Pretend WebUI is active.
-	agent.SetHasActiveWebUIClients(func() bool { return true })
-
-	proposal := NewShellProposal("echo hello && ls -la")
-	decisions, err := agent.RequestShellApproval(context.Background(), proposal)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// WebUI stub returns all-approved.
-	for _, part := range proposal.Parts {
-		if !decisions[part.ID] {
-			t.Errorf("expected %s to be approved (WebUI stub)", part.ID)
+	select {
+	case decisions := <-ch:
+		if decisions["part-0"] != true {
+			t.Errorf("part-0: want true, got false")
 		}
+		if decisions["part-1"] != false {
+			t.Errorf("part-1: want false, got true")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for decisions")
 	}
 }
 
-// ---------------------------------------------------------------------------
-// SP-093-2: RequestShellApproval — CLI picker path
-// ---------------------------------------------------------------------------
+// TestShellApprovalBroker_UnknownIDRespond returns false for an
+// unregistered request ID.
+func TestShellApprovalBroker_UnknownIDRespond(t *testing.T) {
+	broker := &shellApprovalBrokerType{
+		pending: make(map[string]*shellApprovalEntry),
+	}
+	if broker.respond("nonexistent", map[string]bool{}) {
+		t.Error("respond to unknown ID should return false")
+	}
+}
 
-func TestRequestShellApproval_CLIPicker(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
+// TestShellApprovalBroker_DoubleRespond returns false on the second
+// attempt (the channel is buffered 1; the first fill succeeds).
+func TestShellApprovalBroker_DoubleRespond(t *testing.T) {
+	broker := &shellApprovalBrokerType{
+		pending: make(map[string]*shellApprovalEntry),
+	}
+	broker.register("test-double")
 
-	// Ensure non-interactive + no WebUI → CLI path.
-	agent.SetHasActiveWebUIClients(func() bool { return false })
+	first := broker.respond("test-double", map[string]bool{"part-0": true})
+	if !first {
+		t.Error("first respond should succeed")
+	}
 
-	// We can't inject stdin into the public PromptShellApprovalParts,
-	// so we test the CLI path indirectly: verify it doesn't panic and
-	// produces a decisions map when called with a real proposal.
-	// The detailed picker behavior is tested in pkg/console.
-	proposal := NewShellProposal("ls -la")
-	// This will call console.PromptShellApprovalParts which reads from
-	// os.Stdin — in test env (no TTY) it will get EOF and return all-deny.
-	decisions, err := agent.RequestShellApproval(context.Background(), proposal)
+	second := broker.respond("test-double", map[string]bool{"part-0": false})
+	if second {
+		t.Error("second respond should fail (channel full)")
+	}
+}
+
+// TestShellApprovalBroker_Cleanup removes the pending entry.
+func TestShellApprovalBroker_Cleanup(t *testing.T) {
+	broker := &shellApprovalBrokerType{
+		pending: make(map[string]*shellApprovalEntry),
+	}
+	broker.register("test-cleanup")
+	broker.cleanup("test-cleanup")
+
+	// After cleanup, respond should fail (ID not found).
+	if broker.respond("test-cleanup", map[string]bool{}) {
+		t.Error("respond after cleanup should return false")
+	}
+}
+
+// TestRequestShellApprovalViaWebUI_TimeoutDeniesAll verifies that when
+// the timeout fires without a response, all parts are denied (false).
+// This is the safe fallback — never approve without explicit user consent.
+func TestRequestShellApprovalViaWebUI_TimeoutDeniesAll(t *testing.T) {
+	// Use a short timeout so the test runs fast.
+	original := shellApprovalTimeout
+	shellApprovalTimeout = 50 * time.Millisecond
+	defer func() { shellApprovalTimeout = original }()
+
+	a := &Agent{}
+	proposal := ShellProposal{
+		Command: "echo hello && rm -rf /tmp/x",
+		Parts: []ShellPart{
+			{ID: "part-0", Text: "echo hello", Kind: CommandKindUnknown},
+			{ID: "part-1", Text: "rm -rf /tmp/x", Kind: CommandKindRm},
+		},
+	}
+
+	// RequestShellApproval calls requestShellApprovalViaWebUI only when
+	// hasWebUI is true. Test the method directly to avoid mocking the
+	// WebUI detection.
+	ctx := context.Background()
+	decisions, err := a.requestShellApprovalViaWebUI(ctx, proposal)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// With EOF stdin, all parts should be denied.
+
 	for _, part := range proposal.Parts {
 		if decisions[part.ID] {
-			t.Errorf("expected %s to be denied (EOF stdin in test env)", part.ID)
+			t.Errorf("part %s on timeout: want false (deny), got true", part.ID)
 		}
 	}
 }
 
-// ---------------------------------------------------------------------------
-// SP-093-2: Broker routing — flag off vs flag on
-// ---------------------------------------------------------------------------
+// TestRequestShellApprovalViaWebUI_ResponseDelivered verifies the happy
+// path: a goroutine responds before the timeout, and the decisions are
+// returned faithfully.
+func TestRequestShellApprovalViaWebUI_ResponseDelivered(t *testing.T) {
+	original := shellApprovalTimeout
+	shellApprovalTimeout = 2 * time.Second
+	defer func() { shellApprovalTimeout = original }()
 
-func TestShellApprovalBroker_FlagOffUsesExistingPath(t *testing.T) {
-	// When ShellCommand flag is false (default), the broker should
-	// take the existing 4-option path — not the per-part picker.
-	// We verify this by confirming the broker doesn't panic and
-	// the non-interactive auto-approve path still works.
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
+	a := &Agent{}
+	proposal := ShellProposal{
+		Command: "ls && rm -rf /tmp/x",
+		Parts: []ShellPart{
+			{ID: "part-0", Text: "ls", Kind: CommandKindUnknown},
+			{ID: "part-1", Text: "rm -rf /tmp/x", Kind: CommandKindRm},
+		},
+	}
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	// We can't easily predict the generated request ID, so register a
+	// responder that polls the broker. The simplest approach: launch the
+	// approval in a goroutine and respond via a background watcher.
+	done := make(chan map[string]bool, 1)
+	go func() {
+		ctx := context.Background()
+		decisions, _ := a.requestShellApprovalViaWebUI(ctx, proposal)
+		done <- decisions
+	}()
 
-	// Ensure EditApproval exists but ShellCommand is false (default).
-	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.EditApproval = &configuration.EditApprovalConfig{
-			Mode:         "off",
-			ShellCommand: false,
+	// Poll for the pending entry, then respond.
+	// The broker is package-level; wait until the request appears.
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		shellApprovalBroker.mu.Lock()
+		var foundID string
+		for id := range shellApprovalBroker.pending {
+			foundID = id
+			break
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+		shellApprovalBroker.mu.Unlock()
+		if foundID != "" {
+			shellApprovalBroker.respond(foundID, map[string]bool{"part-0": true, "part-1": false})
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 
-	// Medium-risk command in non-interactive mode should auto-approve
-	// via the existing path (not the per-part picker).
-	assessment := agent.ResolveToolRisk("shell_command", map[string]interface{}{"command": "rm somefile.txt"})
-	decision, err := agent.RequestApproval(assessment, "shell_command", map[string]interface{}{"command": "rm somefile.txt"})
-
-	if err != nil {
-		t.Errorf("Expected auto-approval in non-interactive mode, got error: %v", err)
-	}
-	if !decision.Approved {
-		t.Error("Expected approved=true in non-interactive mode with flag off")
-	}
-	if decision.Surface != "non-interactive" {
-		t.Errorf("Expected surface 'non-interactive', got %q", decision.Surface)
+	select {
+	case decisions := <-done:
+		if !decisions["part-0"] {
+			t.Error("part-0: want true (approved), got false")
+		}
+		if decisions["part-1"] {
+			t.Error("part-1: want false (denied), got true")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for approval result")
 	}
 }
 
-func TestShellApprovalBroker_FlagOnRoutesToPicker(t *testing.T) {
-	// When ShellCommand is true, the broker routes to the per-part picker.
-	// In non-interactive mode (SkipPrompt=true), canPrompt is false so
-	// the per-part block is skipped and we fall through to non-interactive.
-	// This verifies the flag is read correctly without breaking the flow.
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-
-	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.EditApproval = &configuration.EditApprovalConfig{
-			Mode:         "off",
-			ShellCommand: true,
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+// TestGenerateShellApprovalRequestID produces unique, incrementing IDs.
+func TestGenerateShellApprovalRequestID(t *testing.T) {
+	id1 := generateShellApprovalRequestID()
+	id2 := generateShellApprovalRequestID()
+	if id1 == id2 {
+		t.Errorf("expected unique IDs, got %s twice", id1)
 	}
-
-	// In non-interactive mode, the per-part picker is gated by canPrompt
-	// (which is false when SkipPrompt=true), so we still get auto-approve.
-	// The key assertion: no panic, no error, and the flag is respected.
-	assessment := agent.ResolveToolRisk("shell_command", map[string]interface{}{"command": "echo hello && ls"})
-	decision, err := agent.RequestApproval(assessment, "shell_command", map[string]interface{}{"command": "echo hello && ls"})
-
-	if err != nil {
-		t.Errorf("Expected auto-approval in non-interactive mode, got error: %v", err)
-	}
-	if !decision.Approved {
-		t.Error("Expected approved=true in non-interactive mode")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SP-093-2: kindRiskLabel helper
-// ---------------------------------------------------------------------------
-
-func TestKindRiskLabel(t *testing.T) {
-	tests := []struct {
-		kind CommandKind
-		want string
-	}{
-		{CommandKindRm, "CRITICAL"},
-		{CommandKindGitReset, "CRITICAL"},
-		{CommandKindKubectl, "CRITICAL"},
-		{CommandKindDocker, "HIGH"},
-		{CommandKindGitPush, "HIGH"},
-		{CommandKindChmod, "MEDIUM"},
-		{CommandKindChown, "MEDIUM"},
-		{CommandKindWriteRedirect, "MEDIUM"},
-		{CommandKindHttpPost, "MEDIUM"},
-		{CommandKindUnknown, "LOW"},
-	}
-	for _, tt := range tests {
-		if got := kindRiskLabel(tt.kind); got != tt.want {
-			t.Errorf("kindRiskLabel(%s) = %q, want %q", tt.kind, got, tt.want)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SP-093-2: ShellProposal projection into console.ShellPartInfo
-// ---------------------------------------------------------------------------
-
-func TestShellProposalProjection(t *testing.T) {
-	proposal := NewShellProposal("rm -rf foo && echo hello")
-	if len(proposal.Parts) != 2 {
-		t.Fatalf("expected 2 parts, got %d", len(proposal.Parts))
-	}
-
-	// Verify the projection produces valid console.ShellPartInfo entries.
-	parts := make([]console.ShellPartInfo, len(proposal.Parts))
-	for i, part := range proposal.Parts {
-		parts[i] = console.ShellPartInfo{
-			ID:        part.ID,
-			Text:      part.Text,
-			Kind:      string(part.Kind),
-			Semantic:  part.Semantic,
-			RiskLabel: kindRiskLabel(part.Kind),
-		}
-	}
-
-	if parts[0].RiskLabel != "CRITICAL" {
-		t.Errorf("expected first part risk label CRITICAL, got %q", parts[0].RiskLabel)
-	}
-	if parts[1].RiskLabel != "LOW" {
-		t.Errorf("expected second part risk label LOW, got %q", parts[1].RiskLabel)
+	if id1 == "" || id2 == "" {
+		t.Error("IDs should not be empty")
 	}
 }

@@ -67,6 +67,14 @@ jobs:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=300 --from-embedded-configs=pkg/agent_providers/configs
 
+      - name: Audit pricing against verified manifest
+        # Compares provider config pricing against a hand-verified manifest
+        # (cmd/audit_pricing/manifest.go). Reports drift, missing pricing,
+        # and stale entries. Does NOT fail the build — it's informational
+        # so drift is visible in CI logs for follow-up. Use --fail-on-drift
+        # once the manifest is comprehensive enough to be authoritative.
+        run: go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs || true
+
       - name: Generate model index
         run: bash scripts/generate-model-index.sh models/models
 

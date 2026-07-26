@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,6 +29,8 @@ var openRouterModelsURL = "https://openrouter.ai/api/v1/models"
 // lazily on the first call to enrichFromOpenRouter and reused for every
 // provider in that run.
 var openRouterModelsCache map[string]openRouterModel
+
+
 
 // openRouterResponse mirrors the JSON shape from /api/v1/models.
 type openRouterResponse struct {
@@ -87,6 +90,7 @@ func main() {
 		}
 
 		canon = enrichFromConfig(providerID, canon)
+		canon = mergeConfigOnlyModels(providerID, canon)
 
 		// Final fallback: fill pricing gaps from OpenRouter's public model list.
 		// Uses a shared cache so OpenRouter is only queried once per run.
@@ -228,11 +232,30 @@ func writeProviderJSON(registryDir, providerID, updatedAt string, models []model
 	fmt.Fprintf(os.Stdout, "  → wrote %s (%d models)\n", filePath, len(models))
 }
 
+// openRouterMetaSet is the denylist used inside normalizeModels to filter
+// out OpenRouter routing aliases that are not real models.
+var openRouterMetaSet = map[string]bool{
+	"openrouter/auto":         true,
+	"openrouter/auto-beta":    true,
+	"openrouter/bodybuilder":  true,
+	"openrouter/fusion":       true,
+	"openrouter/pareto-code":  true,
+}
+
 func normalizeModels(models []api.ModelInfo) []providercatalog.Model {
 	out := make([]providercatalog.Model, 0, len(models))
 	for _, model := range models {
 		id := strings.TrimSpace(model.ID)
 		if id == "" {
+			continue
+		}
+		// Filter out OpenRouter meta-models (routing aliases, not real models).
+		if openRouterMetaSet[id] {
+			continue
+		}
+		// Filter out models with negative costs (sentinel values from
+		// OpenRouter variable-pricing meta-models or malformed data).
+		if model.InputCost < 0 || model.OutputCost < 0 {
 			continue
 		}
 		out = append(out, providercatalog.Model{
@@ -257,6 +280,32 @@ func failf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
+// dateSuffixRE matches a YYYY-MM-DD date suffix (e.g. "-2025-08-07").
+var dateSuffixRE = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}$`)
+
+// stripDateSuffix removes a YYYY-MM-DD date suffix from a model ID.
+// "gpt-5-2025-08-07" → "gpt-5". Returns the original if no suffix found.
+func stripDateSuffix(id string) string {
+	if dateSuffixRE.MatchString(id) {
+		return id[:len(id)-11] // strip "-YYYY-MM-DD" (11 chars)
+	}
+	return id
+}
+
+// lookupModel looks up a model ID in the config lookup map, with a fuzzy
+// fallback that strips date suffixes (e.g. "gpt-5-2025-08-07" → "gpt-5").
+func lookupModel(lookup map[string]providers.ModelInfo, id string) (providers.ModelInfo, bool) {
+	if mi, ok := lookup[id]; ok {
+		return mi, true
+	}
+	if stripped := stripDateSuffix(id); stripped != id {
+		if mi, ok := lookup[stripped]; ok {
+			return mi, true
+		}
+	}
+	return providers.ModelInfo{}, false
+}
+
 // enrichFromConfig merges pricing, context window, capabilities, and display
 // metadata from the embedded provider config's model_info entries into the
 // canonical models returned by the provider's API. API-provided data takes
@@ -274,12 +323,16 @@ func enrichFromConfig(providerID string, models []modelcontract.CanonicalModel) 
 	}
 
 	for i := range models {
-		mi, ok := lookup[models[i].ID]
+		mi, ok := lookupModel(lookup, models[i].ID)
 		if !ok {
 			continue
 		}
 
-		if models[i].Pricing == nil && (mi.InputCost > 0 || mi.OutputCost > 0) {
+		// Fill pricing when it is nil OR present but zero-valued
+		// (common for OpenAI-compatible endpoints that return empty Pricing structs).
+		pricingIsZero := models[i].Pricing == nil ||
+			(models[i].Pricing.InputPerMTok == 0 && models[i].Pricing.OutputPerMTok == 0)
+		if pricingIsZero && (mi.InputCost > 0 || mi.OutputCost > 0) {
 			models[i].Pricing = &modelcontract.Pricing{
 				InputPerMTok:  mi.InputCost,
 				OutputPerMTok: mi.OutputCost,
@@ -318,6 +371,39 @@ func enrichFromConfig(providerID string, models []modelcontract.CanonicalModel) 
 	return models
 }
 
+// mergeConfigOnlyModels adds models from the embedded provider config that
+// the provider API didn't return. This ensures models like deepseek-chat or
+// deepseek-reasoner — which exist in config but not in /v1/models — appear
+// in the catalog with their config-provided metadata.
+func mergeConfigOnlyModels(providerID string, models []modelcontract.CanonicalModel) []modelcontract.CanonicalModel {
+	configPath := filepath.Join("pkg", "agent_providers", "configs", providerID+".json")
+	cfg, err := providers.LoadProviderConfig(configPath)
+	if err != nil || len(cfg.Models.ModelInfo) == 0 {
+		return models
+	}
+
+	existing := make(map[string]bool, len(models))
+	for _, m := range models {
+		existing[m.ID] = true
+	}
+
+	for _, mi := range cfg.Models.ModelInfo {
+		if existing[mi.ID] {
+			continue
+		}
+		models = append(models, modelcontract.CanonicalModel{
+			ID:            mi.ID,
+			DisplayName:  mi.Name,
+			Description:  mi.Description,
+			ContextWindow: mi.ContextLength,
+			Status:       modelcontract.StatusActive,
+			Capabilities: modelcontract.CapabilitiesFromTags(mi.Tags),
+			Source:       "embedded-config",
+		})
+	}
+	return models
+}
+
 // fetchOpenRouterModels fetches OpenRouter's public model list and builds a
 // lookup map keyed by the model ID (with provider/ prefix stripped). The map
 // is cached in openRouterModelsCache so it's only fetched once per run.
@@ -340,6 +426,11 @@ func fetchOpenRouterModels(ctx context.Context) map[string]openRouterModel {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		fmt.Fprintf(os.Stderr, "warn: OpenRouter returned HTTP %d\n", resp.StatusCode)
+		return nil
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warn: read OpenRouter response: %v\n", err)
@@ -355,7 +446,7 @@ func fetchOpenRouterModels(ctx context.Context) map[string]openRouterModel {
 	cache := make(map[string]openRouterModel, len(orResp.Data))
 	for _, m := range orResp.Data {
 		// Strip the provider/ prefix (e.g. "deepseek/deepseek-v4-flash" → "deepseek-v4-flash")
-		id := strings.TrimPrefix(m.ID, strings.SplitN(m.ID, "/", 2)[0]+"/")
+		_, id, _ := strings.Cut(m.ID, "/")
 		cache[id] = m
 	}
 
@@ -367,7 +458,7 @@ func fetchOpenRouterModels(ctx context.Context) map[string]openRouterModel {
 // public model list. OpenRouter aggregates pricing for 300+ models across
 // providers. Prices include OpenRouter's markup over native provider pricing,
 // so the source is stamped as "openrouter-cross-ref". Runs after
-// enrichFromConfig; only fills models where Pricing is still nil.
+// enrichFromConfig; only fills models where Pricing is still nil or zero-valued.
 func enrichFromOpenRouter(ctx context.Context, models []modelcontract.CanonicalModel) []modelcontract.CanonicalModel {
 	cache := fetchOpenRouterModels(ctx)
 	if cache == nil {
@@ -375,11 +466,18 @@ func enrichFromOpenRouter(ctx context.Context, models []modelcontract.CanonicalM
 	}
 
 	for i := range models {
-		if models[i].Pricing != nil {
+		// Skip models that already have meaningful pricing (non-nil AND non-zero).
+		pricingHasValues := models[i].Pricing != nil &&
+			(models[i].Pricing.InputPerMTok > 0 || models[i].Pricing.OutputPerMTok > 0)
+		if pricingHasValues {
 			continue
 		}
 
 		orModel, ok := cache[models[i].ID]
+		if !ok {
+			// Try fuzzy match: strip date suffix (e.g. "gpt-5-2025-08-07" → "gpt-5").
+			orModel, ok = cache[stripDateSuffix(models[i].ID)]
+		}
 		if !ok {
 			continue
 		}
@@ -390,22 +488,27 @@ func enrichFromOpenRouter(ctx context.Context, models []modelcontract.CanonicalM
 		}
 
 		if orModel.Pricing.Prompt != "" {
-			if v, err := strconv.ParseFloat(orModel.Pricing.Prompt, 64); err == nil {
+			if v, err := strconv.ParseFloat(orModel.Pricing.Prompt, 64); err == nil && v > 0 {
 				pricing.InputPerMTok = v * 1e6
 			}
 		}
 		if orModel.Pricing.Completion != "" {
-			if v, err := strconv.ParseFloat(orModel.Pricing.Completion, 64); err == nil {
+			if v, err := strconv.ParseFloat(orModel.Pricing.Completion, 64); err == nil && v > 0 {
 				pricing.OutputPerMTok = v * 1e6
 			}
 		}
 		if orModel.Pricing.InputCacheRead != "" {
-			if v, err := strconv.ParseFloat(orModel.Pricing.InputCacheRead, 64); err == nil {
+			if v, err := strconv.ParseFloat(orModel.Pricing.InputCacheRead, 64); err == nil && v > 0 {
 				pricing.CachedPerMTok = v * 1e6
 			}
 		}
 
-		models[i].Pricing = pricing
+		// Only assign pricing if at least one field was populated; leaving
+		// Pricing as nil/zero-valued avoids downstream code misinterpreting
+		// a zero-valued struct as "priced at $0" rather than "pricing unknown".
+		if pricing.InputPerMTok > 0 || pricing.OutputPerMTok > 0 || pricing.CachedPerMTok > 0 {
+			models[i].Pricing = pricing
+		}
 	}
 
 	return models

@@ -1148,3 +1148,127 @@ func TestModelcontractRoleHas(t *testing.T) {
 		t.Error("substring match leaked through RoleHas")
 	}
 }
+
+func TestSetProviderFallsBackWhenConfiguredCustomModelIsInvalid(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "qwen3.5-4b"},
+					{"id": "qwen3.5-35-A3B"},
+				},
+			})
+		case "/v1/chat/completions":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode chat request: %v", err)
+			}
+
+			model, _ := body["model"].(string)
+			if model != "qwen3.5-4b" {
+				http.Error(w, "error code: 502", http.StatusBadGateway)
+				return
+			}
+
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "chatcmpl-test",
+				"object":  "chat.completion",
+				"created": 1,
+				"model":   model,
+				"choices": []map[string]any{
+					{
+						"index": 0,
+						"message": map[string]any{
+							"role":    "assistant",
+							"content": "ok",
+						},
+						"finish_reason": "stop",
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	configDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "ai-worker",
+		Endpoint:       server.URL + "/v1",
+		ModelName:      "2",
+		RequiresAPIKey: false,
+	})
+	if err != nil {
+		t.Fatalf("failed to save custom provider: %v", err)
+	}
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	if err := agent.SetProviderPersisted(api.ClientType("ai-worker")); err != nil {
+		t.Fatalf("expected provider switch to recover from invalid configured model, got error: %v", err)
+	}
+
+	if got := agent.GetModel(); got != "qwen3.5-4b" {
+		t.Fatalf("expected fallback model to be persisted on switch, got %q", got)
+	}
+
+	savedCfg, err := configuration.Load()
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+	if got := savedCfg.GetModelForProvider("ai-worker"); got != "qwen3.5-4b" {
+		t.Fatalf("expected saved provider model to be updated, got %q", got)
+	}
+}
+
+func TestSelectDefaultModel(t *testing.T) {
+	a := &Agent{}
+	tests := []struct {
+		name     string
+		provider api.ClientType
+		models   []api.ModelInfo
+		want     string
+	}{
+		{"empty", api.DeepInfraClientType, nil, ""},
+		{"deepinfra ordered compound pattern", api.DeepInfraClientType, []api.ModelInfo{{ID: "other"}, {ID: "DeepSeek-Chat"}, {ID: "DeepSeek-Coder-Instruct"}}, "DeepSeek-Coder-Instruct"},
+		{"deepinfra fallback pattern", api.DeepInfraClientType, []api.ModelInfo{{ID: "other"}, {ID: "DeepSeek-Chat"}}, "DeepSeek-Chat"},
+		{"openrouter free", api.OpenRouterClientType, []api.ModelInfo{{ID: "paid"}, {ID: "model:FREE"}}, "model:FREE"},
+		{"ollama local ordered patterns", api.OllamaLocalClientType, []api.ModelInfo{{ID: "llama3.1:8b"}, {ID: "llama3.2:3b"}}, "llama3.2:3b"},
+		{"ollama cloud", api.OllamaCloudClientType, []api.ModelInfo{{ID: "deepseek"}, {ID: "gpt-oss:20b"}}, "gpt-oss:20b"},
+		{"lmstudio skips embedding", api.LMStudioClientType, []api.ModelInfo{{ID: "text-embedding"}, {ID: "chat-model"}}, "chat-model"},
+		{"default first", api.OpenAIClientType, []api.ModelInfo{{ID: "first"}, {ID: "second"}}, "first"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := a.selectDefaultModel(tt.models, tt.provider); got != tt.want {
+				t.Fatalf("selectDefaultModel() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchPattern(t *testing.T) {
+	for _, tc := range []struct {
+		id, pattern string
+		want        bool
+	}{
+		{"Org/DeepSeek-Coder-Instruct", "deepseek*instruct", true},
+		{"model:free", ":free", true},
+		{"llama3.2:3b", "llama3.2", true},
+		{"deepseek-chat", "deepseek*instruct", false},
+		{"anything", "", false},
+	} {
+		if got := matchPattern(tc.id, tc.pattern); got != tc.want {
+			t.Errorf("matchPattern(%q, %q) = %v, want %v", tc.id, tc.pattern, got, tc.want)
+		}
+	}
+}

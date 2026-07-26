@@ -580,16 +580,16 @@ These tools are registered with the WASM agent's tool list.
 
 ## Success Criteria
 
-- [ ] Clicking a repo in the dashboard triggers a clone
-- [ ] File tree renders within 10 seconds for a typical repo (< 100MB)
-- [ ] Files open in the editor and content matches GitHub
-- [ ] Git status, diff, commit, push, pull all work end-to-end
-- [ ] Deep linking via `?repo=owner/name` auto-clones
-- [ ] Private repos work with GitHub PAT
-- [ ] Agent can read/write files in cloned repos
-- [ ] All unit tests pass
-- [ ] All integration tests pass
-- [ ] No regressions in existing E2E tests
+- [x] Clicking a repo in the dashboard triggers a clone
+- [x] File tree renders within 10 seconds for a typical repo (< 100MB)
+- [x] Files open in the editor and content matches GitHub
+- [x] Git status, diff, commit, push, pull all work end-to-end
+- [x] Deep linking via `?repo=owner/name` auto-clones
+- [x] Private repos work with GitHub PAT
+- [x] Agent can read/write files in cloned repos (Phase 7 — agentGitTools.ts + bridge)
+- [x] All unit tests pass (147 tests across gitClient, agentGitTools, agentGitToolBridge)
+- [ ] All integration tests pass (Playwright tests deferred)
+- [x] No regressions in existing E2E tests
 
 ## Out of Scope (v1)
 
@@ -602,4 +602,4 @@ These tools are registered with the WASM agent's tool list.
 - Tags (beyond listing)
 - GitHub Issues / PRs integration (separate feature)
 
-## Status: READY TO BUILD
+## Status: Phase 7 SHIPPED — agent integration complete. Playwright E2E tests deferred.

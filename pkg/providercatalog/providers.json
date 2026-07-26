@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-24T11:14:42Z",
+  "updated_at": "2026-07-26T10:55:19Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -400,8 +400,8 @@
         {
           "id": "deepseek-v4-flash",
           "name": "deepseek-v4-flash",
-          "input_cost": 0.098,
-          "output_cost": 0.196
+          "input_cost": 0.14,
+          "output_cost": 0.28
         },
         {
           "id": "deepseek-v4-pro",
@@ -422,8 +422,8 @@
         {
           "id": "glm-5.2",
           "name": "glm-5.2",
-          "input_cost": 0.8204,
-          "output_cost": 2.5784000000000002
+          "input_cost": 0.6804,
+          "output_cost": 2.1384000000000003
         },
         {
           "id": "gpt-oss:120b",
@@ -442,14 +442,14 @@
         {
           "id": "kimi-k2.6",
           "name": "kimi-k2.6",
-          "input_cost": 0.684,
-          "output_cost": 3.42
+          "input_cost": 0.646,
+          "output_cost": 2.7199999999999998
         },
         {
           "id": "kimi-k2.7-code",
           "name": "kimi-k2.7-code",
-          "input_cost": 0.71,
-          "output_cost": 3.49
+          "input_cost": 0.75,
+          "output_cost": 3.5
         },
         {
           "id": "minimax-m2.5",
@@ -824,6 +824,34 @@
           "output_cost": 50
         },
         {
+          "id": "anthropic/claude-opus-5",
+          "name": "Claude Opus 5",
+          "description": "Claude Opus 5 is Anthropic’s flagship model for demanding reasoning, coding, and long-horizon agentic work. It is particularly strong at end-to-end software tasks, code review and bug finding, visual analysis...",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 5,
+          "output_cost": 25
+        },
+        {
+          "id": "anthropic/claude-opus-5-fast",
+          "name": "Claude Opus 5 (Fast)",
+          "description": "Fast-mode variant of [Opus 5](/anthropic/claude-opus-5) - identical capabilities with higher output speed at 2x pricing relative to regular Opus 5.\n\nLearn more in Anthropic's docs: https://platform.claude.com/docs/en/build-with-claude/fast-mode",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 10,
+          "output_cost": 50
+        },
+        {
           "id": "anthropic/claude-sonnet-4",
           "name": "Anthropic: Claude Sonnet 4",
           "description": "Claude Sonnet 4 significantly enhances the capabilities of its predecessor, Sonnet 3.7, excelling in both coding and reasoning tasks with improved precision and controllability. Achieving state-of-the-art performance on SWE-bench (72.7%),...",
@@ -888,8 +916,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.25,
-          "output_cost": 0.7999999999999999
+          "input_cost": 0.22,
+          "output_cost": 0.85
         },
         {
           "id": "arcee-ai/virtuoso-large",
@@ -1184,8 +1212,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.098,
-          "output_cost": 0.196
+          "input_cost": 0.14,
+          "output_cost": 0.28
         },
         {
           "id": "deepseek/deepseek-v4-pro",
@@ -1557,8 +1585,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.35
+          "input_cost": 0.14,
+          "output_cost": 0.39999999999999997
         },
         {
           "id": "google/gemma-4-31b-it:free",
@@ -2285,8 +2313,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.684,
-          "output_cost": 3.42
+          "input_cost": 0.646,
+          "output_cost": 2.7199999999999998
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -2299,8 +2327,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.71,
-          "output_cost": 3.49
+          "input_cost": 0.75,
+          "output_cost": 3.5
         },
         {
           "id": "moonshotai/kimi-k3",
@@ -2452,8 +2480,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.08,
-          "output_cost": 0.44999999999999996
+          "input_cost": 0.08499999999999999,
+          "output_cost": 0.39999999999999997
         },
         {
           "id": "nvidia/nemotron-3-super-120b-a12b:free",
@@ -2476,8 +2504,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.5,
-          "output_cost": 2.2
+          "input_cost": 0.6,
+          "output_cost": 3.5999999999999996
         },
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -3244,7 +3272,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.029,
+          "input_cost": 0.03,
           "output_cost": 0.14
         },
         {
@@ -3751,8 +3779,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.13,
-          "output_cost": 0.52
+          "input_cost": 0.12,
+          "output_cost": 0.5
         },
         {
           "id": "qwen/qwen3-30b-a3b-instruct-2507",
@@ -3763,8 +3791,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.3
+          "input_cost": 0.04815,
+          "output_cost": 0.19305
         },
         {
           "id": "qwen/qwen3-30b-a3b-thinking-2507",
@@ -3814,8 +3842,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.38,
-          "output_cost": 1.55
+          "input_cost": 0.3,
+          "output_cost": 1
         },
         {
           "id": "qwen/qwen3-coder-30b-a3b-instruct",
@@ -3899,8 +3927,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 1.2
+          "input_cost": 0.09999999999999999,
+          "output_cost": 1.1
         },
         {
           "id": "qwen/qwen3-next-80b-a3b-thinking",
@@ -4132,8 +4160,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.288,
-          "output_cost": 2.4
+          "input_cost": 0.3,
+          "output_cost": 2
         },
         {
           "id": "qwen/qwen3.6-35b-a3b",
@@ -4700,8 +4728,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.8204,
-          "output_cost": 2.5784000000000002
+          "input_cost": 0.6804,
+          "output_cost": 2.1384000000000003
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -5355,7 +5383,7 @@
             "structured_output"
           ],
           "input_cost": 0.02,
-          "output_cost": 0.030000000000000002
+          "output_cost": 0.04
         },
         {
           "id": "microsoft/phi-4",
@@ -5904,7 +5932,7 @@
           "id": "thinkingmachines/Inkling",
           "name": "thinkingmachines/Inkling",
           "description": "Inkling is a general-purpose multimodal model that accepts text, image and audio inputs and generates text outputs.",
-          "context_length": 131072,
+          "context_length": 524288,
           "tags": [
             "tools",
             "vision",

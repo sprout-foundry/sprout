@@ -416,6 +416,17 @@ func SplitChainedCommand(cmd string) []string {
 				i++
 				continue
 			}
+			// Newline is a command separator — multi-line pastes (e.g.,
+			// "echo hello\nrm -rf x") must be classified per-line so that
+			// a dangerous command on the second line isn't hidden by a
+			// safe command on the first line.
+			if c == '\n' {
+				if current.Len() > 0 {
+					parts = append(parts, strings.TrimSpace(current.String()))
+					current.Reset()
+				}
+				continue
+			}
 			if c == ';' || c == '|' {
 				if current.Len() > 0 {
 					parts = append(parts, strings.TrimSpace(current.String()))
@@ -524,10 +535,27 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecuritySafe
 	}
 
+	// Destructive find commands (find -delete, find -exec rm/chmod/chown) must be
+	// intercepted BEFORE isCautionPattern because isCautionPattern catches "chmod 777"
+	// and "rm " as sub-patterns within the -exec body. Without this ordering,
+	// "find . -exec chmod 777 {} \;" would return CAUTION (matching chmod 777)
+	// instead of DANGEROUS (bulk destructive operation across unknown file set).
+	if isDestructiveFind(cmdLower) {
+		return SecurityDangerous
+	}
+
 	// Check caution patterns BEFORE safe patterns, so that specific
 	// caution-level commands (like rm -rf, eval, docker rm) override
 	// broad safe matches.
 	if isCautionPattern(cmdLower) {
+		return SecurityCaution
+	}
+
+	// Interpreter command escapes (bash -c '...', python -c '...', etc.)
+	// have opaque inline code bodies that we can't statically inspect.
+	// They must return CAUTION, not SAFE — the safe-list matches "bash",
+	// "python", etc. but doesn't know the -c/-e body could be destructive.
+	if isInterpreterCommandEscape(cmdLower) {
 		return SecurityCaution
 	}
 

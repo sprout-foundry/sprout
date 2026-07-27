@@ -838,7 +838,16 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
         const event = JSON.parse(eventJson);
         // Events from Go's wireAgentEventForwarding are already in
         // { type, data } shape (UIEvent serializes to this format).
-        // Just stamp chat_id if missing.
+        // Skip query_started — it's already dispatched above (optimistic)
+        // and the agent's own query_started from the streaming callback
+        // would duplicate the user message + isProcessing flip.
+        if (event.type === 'query_started') return;
+        // query_completed is handled by the .then() below which carries
+        // the final response from the resolved promise. Skipping the
+        // streaming version avoids a double decrement of
+        // activeRequestsRef and potential message duplication.
+        if (event.type === 'query_completed') return;
+        // Stamp chat_id if missing.
         if (event.data && chatId && !event.data.chat_id) {
           event.data.chat_id = chatId;
         }

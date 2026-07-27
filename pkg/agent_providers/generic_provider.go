@@ -607,9 +607,20 @@ func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
 			MaxImageDimension: 2048,
 			DetailTiers:       []string{"low", "high", "auto"},
 		}
+	case "gemini":
+		// Google Gemini: up to ~20MB per image, ~3072px longest side,
+		// up to 10 images per request. No named detail tiers.
+		return api.VisionCapabilities{
+			MaxImageBytes:     20_000_000,
+			MaxImageCount:     10,
+			MaxImageDimension: 3072,
+		}
 	default:
 		// Conservative defaults for all other OpenAI-compatible backends
-		// (OpenRouter, Chutes, LM Studio, etc.).
+		// (Chutes, LM Studio, etc.). OpenRouter is a multi-model proxy so
+		// its backend model determines the real caps; this generous tier
+		// (500 images) avoids false negatives while the caller is expected
+		// to respect per-model limits downstream.
 		return api.VisionCapabilities{
 			MaxImageBytes:     20_000_000,
 			MaxImageCount:     500,

@@ -179,6 +179,72 @@ func TestGenericProvider_VisionCapabilities_PerProviderDifferentiation(t *testin
 		}
 	})
 
+	t.Run("gemini returns documented caps", func(t *testing.T) {
+		provider, err := NewGenericProvider(newConfig("gemini"))
+		if err != nil {
+			t.Fatalf("failed to create GenericProvider: %v", err)
+		}
+
+		caps := provider.VisionCapabilities()
+
+		// Gemini: 20MB per image, 10 images, 3072px longest side.
+		if caps.MaxImageBytes != 20_000_000 {
+			t.Errorf("MaxImageBytes: got %d, want 20000000", caps.MaxImageBytes)
+		}
+		if caps.MaxImageCount != 10 {
+			t.Errorf("MaxImageCount: got %d, want 10", caps.MaxImageCount)
+		}
+		if caps.MaxImageDimension != 3072 {
+			t.Errorf("MaxImageDimension: got %d, want 3072", caps.MaxImageDimension)
+		}
+		// Gemini doesn't use named detail tiers.
+		if len(caps.DetailTiers) != 0 {
+			t.Errorf("DetailTiers: got %v, want empty", caps.DetailTiers)
+		}
+	})
+
+	t.Run("gemini caps differ from anthropic", func(t *testing.T) {
+		pGemini, err := NewGenericProvider(newConfig("gemini"))
+		if err != nil {
+			t.Fatalf("failed to create gemini provider: %v", err)
+		}
+		pAnthropic, err := NewGenericProvider(newConfig("anthropic"))
+		if err != nil {
+			t.Fatalf("failed to create anthropic provider: %v", err)
+		}
+
+		gCaps := pGemini.VisionCapabilities()
+		aCaps := pAnthropic.VisionCapabilities()
+
+		// Gemini=3072 vs Anthropic=1568
+		if gCaps.MaxImageDimension == aCaps.MaxImageDimension {
+			t.Errorf("gemini and anthropic should differ on MaxImageDimension (both %d)", gCaps.MaxImageDimension)
+		}
+		// Gemini=20MB vs Anthropic=5MB
+		if gCaps.MaxImageBytes == aCaps.MaxImageBytes {
+			t.Errorf("gemini and anthropic should differ on MaxImageBytes (both %d)", gCaps.MaxImageBytes)
+		}
+	})
+
+	t.Run("gemini caps differ from openai", func(t *testing.T) {
+		pGemini, err := NewGenericProvider(newConfig("gemini"))
+		if err != nil {
+			t.Fatalf("failed to create gemini provider: %v", err)
+		}
+		pOpenAI, err := NewGenericProvider(newConfig("openai"))
+		if err != nil {
+			t.Fatalf("failed to create openai provider: %v", err)
+		}
+
+		gCaps := pGemini.VisionCapabilities()
+		oCaps := pOpenAI.VisionCapabilities()
+
+		// Gemini=3072 vs OpenAI=2048
+		if gCaps.MaxImageDimension == oCaps.MaxImageDimension {
+			t.Errorf("gemini and openai should differ on MaxImageDimension (both %d)", gCaps.MaxImageDimension)
+		}
+	})
+
 	t.Run("anthropic and openai differ", func(t *testing.T) {
 		// Regression: ensure the two named providers don't accidentally
 		// return the same values.

@@ -92,7 +92,7 @@ func writeTestConfig(t *testing.T, dir, providerID string, models []providers.Mo
 	t.Helper()
 	cfg := providers.ProviderConfig{
 		Name: providerID, Endpoint: "https://api.example.com/v1",
-		Auth: providers.AuthConfig{Type: "none"},
+		Auth:   providers.AuthConfig{Type: "none"},
 		Models: providers.ModelConfig{DefaultContextLimit: 100000, ModelInfo: models},
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -465,7 +465,9 @@ func TestManifest_MinimumModelsAndUniqueness(t *testing.T) {
 		}
 		seen := make(map[string]bool)
 		for _, mp := range m.Models {
-			if seen[mp.ID] { t.Errorf("%q: duplicate model %q", id, mp.ID) }
+			if seen[mp.ID] {
+				t.Errorf("%q: duplicate model %q", id, mp.ID)
+			}
 			seen[mp.ID] = true
 		}
 	}

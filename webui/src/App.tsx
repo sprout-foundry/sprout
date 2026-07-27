@@ -279,14 +279,11 @@ function AppInner() {
   // open so the user can retry.
   const handleShellApprovalSubmit = useCallback(
     async (requestId: string, decisions: Record<string, boolean>) => {
-      const resp = await clientFetch(
-        `/api/shell-approvals/${encodeURIComponent(requestId)}/decision`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ request_id: requestId, decisions }),
-        },
-      );
+      const resp = await clientFetch(`/api/shell-approvals/${encodeURIComponent(requestId)}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId, decisions }),
+      });
       if (!resp.ok) {
         const body = await resp.text();
         throw new Error(`Decision POST failed: ${body || `HTTP ${resp.status}`}`);

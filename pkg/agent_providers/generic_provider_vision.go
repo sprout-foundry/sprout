@@ -29,7 +29,9 @@ func (p *GenericProvider) SupportsVision() bool {
 		return false
 	}
 
+	p.mu.RLock()
 	currentModel := strings.TrimSpace(p.model)
+	p.mu.RUnlock()
 	if currentModel == "" {
 		currentModel = strings.TrimSpace(p.config.Defaults.Model)
 	}
@@ -61,6 +63,8 @@ func (p *GenericProvider) GetVisionModel() string {
 	if p.config.Models.VisionModel != "" {
 		return p.config.Models.VisionModel
 	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.model // Fallback to current model
 }
 
@@ -72,10 +76,19 @@ func (p *GenericProvider) SendVisionRequest(ctx context.Context, messages []api.
 
 	// Use vision model if specified
 	visionModel := p.GetVisionModel()
-	if visionModel != p.model {
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
+	if visionModel != currentModel {
+		p.mu.Lock()
 		originalModel := p.model
 		p.model = visionModel
-		defer func() { p.model = originalModel }()
+		p.mu.Unlock()
+		defer func() {
+			p.mu.Lock()
+			p.model = originalModel
+			p.mu.Unlock()
+		}()
 	}
 
 	return p.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)

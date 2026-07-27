@@ -10,7 +10,7 @@ import (
 
 // Command audit_pricing validates provider pricing in embedded configs and
 // the provider catalog against a verified pricing manifest. It reports
-	// mismatches, missing pricing, and stale entries. Use --update to write
+// mismatches, missing pricing, and stale entries. Use --update to write
 // corrected pricing back to the config files.
 
 func main() {

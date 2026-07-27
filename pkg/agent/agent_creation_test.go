@@ -69,6 +69,14 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 	// the env var directly (bypassing configManager) stays isolated.
 	t.Setenv("SPROUT_CONFIG", configDir)
 
+	// Prevent git from launching an interactive editor (vi/vim) when tests
+	// execute git commands like "git rebase -i" or "git commit". Without these,
+	// git blocks forever on stdin in non-interactive test environments.
+	// Using t.Setenv ensures these are scoped to the test and auto-cleaned.
+	t.Setenv("GIT_EDITOR", "true")
+	t.Setenv("GIT_SEQUENCE_EDITOR", "true")
+	t.Setenv("GIT_MERGE_AUTOEDIT", "no")
+
 	agent, err := NewAgentWithModel("test:test")
 	if err != nil {
 		t.Fatalf("NewAgentWithModel failed: %v", err)

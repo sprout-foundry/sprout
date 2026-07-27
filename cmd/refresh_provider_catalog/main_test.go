@@ -683,10 +683,10 @@ func TestStripDateSuffix(t *testing.T) {
 		{"claude-sonnet-4-2026-01-15", "claude-sonnet-4"},
 		{"gpt-5", "gpt-5"},
 		{"deepseek-v4-flash", "deepseek-v4-flash"},
-		{"some-model-2024", "some-model-2024"},  // no -MM-DD suffix
-		{"model-12345", "model-12345"},          // no date pattern
+		{"some-model-2024", "some-model-2024"}, // no -MM-DD suffix
+		{"model-12345", "model-12345"},         // no date pattern
 		{"", ""},
-		{"gpt-5-2025-07", "gpt-5-2025-07"},      // partial date (no day)
+		{"gpt-5-2025-07", "gpt-5-2025-07"}, // partial date (no day)
 	}
 	for _, tt := range tests {
 		got := stripDateSuffix(tt.input)
@@ -736,7 +736,6 @@ func TestLookupModel_NoMatch(t *testing.T) {
 		t.Error("expected no match for unknown model")
 	}
 }
-
 
 // TestEnrichFromOpenRouter_FuzzyDateMatch verifies that a dated model ID
 // gets pricing from an undated OpenRouter entry via date suffix stripping.
@@ -851,9 +850,9 @@ func TestEnrichFromOpenRouter_MixedZeroAndNil(t *testing.T) {
 
 	m3Ptr := &modelcontract.Pricing{InputPerMTok: 99.0, OutputPerMTok: 99.0}
 	models := []modelcontract.CanonicalModel{
-		{ID: "m1"},                                     // nil Pricing → should be filled
-		{ID: "m2", Pricing: &modelcontract.Pricing{}},  // zero-valued → should be filled
-		{ID: "m3", Pricing: m3Ptr},                      // non-zero → should be preserved
+		{ID: "m1"}, // nil Pricing → should be filled
+		{ID: "m2", Pricing: &modelcontract.Pricing{}}, // zero-valued → should be filled
+		{ID: "m3", Pricing: m3Ptr},                    // non-zero → should be preserved
 	}
 
 	out := enrichFromOpenRouter(context.Background(), models)

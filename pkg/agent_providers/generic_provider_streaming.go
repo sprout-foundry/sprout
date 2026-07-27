@@ -16,6 +16,12 @@ import (
 
 // SendChatRequestStream sends a streaming chat request
 func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+	// Snapshot model under lock for all logging calls below — prevents races
+	// with SetModel or the background warmModelsCache goroutine.
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
+
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, true)
 	if err != nil {
 		return nil, agenterrors.Wrap(err, "failed to build chat request")
@@ -24,14 +30,19 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 	req, sentBody, err := p.buildHTTPRequestCtx(ctx, requestBody, true)
 	if err != nil {
 		// Log request on build error — use the actual sent body (post-redaction)
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true, "build_http_request", err)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "build_http_request", err)
 		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
 
-	resp, err := p.streamingClient.Do(req)
+	// Read streamingClient under lock, then release before the network call.
+	p.mu.RLock()
+	client := p.streamingClient
+	p.mu.RUnlock()
+
+	resp, err := client.Do(req)
 	if err != nil {
 		// Log request on HTTP error — use the actual sent body (post-redaction)
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true, "http_request_failed", err)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "http_request_failed", err)
 		return nil, agenterrors.NewNetwork("HTTP request failed", err)
 	}
 
@@ -47,7 +58,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 		if retried {
 			requestBody = retryBody
 			if retryErr != nil {
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true,
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true,
 					"retry_max_completion_tokens_build", retryErr)
 				return nil, agenterrors.NewNetwork("failed retry with max_completion_tokens", retryErr)
 			}
@@ -55,14 +66,14 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 			if retryResp.StatusCode != http.StatusOK {
 				retryErrBody, _ := io.ReadAll(retryResp.Body)
 				formattedErr := formatProviderHTTPError(retryResp.StatusCode, retryResp.Header, retryErrBody)
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true,
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true,
 					fmt.Sprintf("api_error_%d", retryResp.StatusCode), formattedErr)
 				return nil, formattedErr
 			}
 
 			response, err := p.handleStreamingResponse(ctx, retryResp, callback)
 			if err != nil {
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true, "streaming_response", err)
 				return nil, agenterrors.NewNetwork("chat request failed", err)
 			}
 			return response, nil
@@ -70,7 +81,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 
 		// Log request on API error — use the actual sent body (post-redaction)
 		formattedErr := formatProviderHTTPError(resp.StatusCode, resp.Header, body)
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true,
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), formattedErr)
 		return nil, formattedErr
 	}
@@ -79,7 +90,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 	response, err := p.handleStreamingResponse(ctx, resp, callback)
 	if err != nil {
 		// Log request on streaming error — use the actual sent body (post-redaction)
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true, "streaming_response", err)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "streaming_response", err)
 		return nil, agenterrors.NewNetwork("chat request failed (streaming)", err)
 	}
 
@@ -167,7 +178,9 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 		respObj = &api.ChatResponse{Choices: []api.Choice{{}}}
 	}
 	if respObj.Model == "" {
+		p.mu.RLock()
 		respObj.Model = p.model
+		p.mu.RUnlock()
 	}
 
 	// If the provider didn't send a finish_reason but we received content and the stream

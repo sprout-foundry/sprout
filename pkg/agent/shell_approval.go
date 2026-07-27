@@ -462,7 +462,9 @@ func (a *Agent) requestShellApprovalViaWebUI(ctx context.Context, p ShellProposa
 			Text:     part.Text,
 			Kind:     string(part.Kind),
 			Semantic: part.Semantic,
-			Risk:     kindRiskLabel(part.Kind),
+			// Lowercase to match configuration.RiskLevel constants and
+			// the frontend's defaultDecisionForRisk comparison.
+			Risk: strings.ToLower(kindRiskLabel(part.Kind)),
 		}
 	}
 

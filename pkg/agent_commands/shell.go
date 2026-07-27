@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -52,8 +50,8 @@ func (c *ShellCommand) Usage() string {
 		"/shell <description>   Generate a shell script from a description.",
 		"",
 		"Collects environmental context (OS, shell, PATH, tools) and asks the",
-		"LLM to generate an executable command or script. Prompts to execute",
-		"after generation.",
+		"LLM to generate an executable command or script. Displays the result",
+		"for you to copy and run manually.",
 		"",
 		"Example:",
 		`  /shell "count all Go files in this repo"`,
@@ -192,67 +190,9 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		fmt.Println("═" + strings.Repeat("═", 60))
 	}
 
-	// Ask user for confirmation
-	fmt.Printf("\n[?] Do you want to execute this %s? (yes/no): ", c.getScriptType(isSingleCommand))
-
-	reader := bufio.NewReader(os.Stdin)
-	userResponse, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read user response: %v", err)
-	}
-
-	userResponse = strings.ToLower(strings.TrimSpace(userResponse))
-	if userResponse != "yes" && userResponse != "y" {
-		console.GlyphError.Print("Execution cancelled.")
-		return nil
-	}
-
-	// Execute the command/script
-	fmt.Printf("\n[>>] Executing %s...\n\n", c.getScriptType(isSingleCommand))
-
-	var execErr error
-
-	// Security check: block git checkout/switch/discard operations in generated scripts
-	if IsGitCheckoutSubcommand(generatedScript) || IsGitDiscardCommand(generatedScript) {
-		return fmt.Errorf("git %s operations are not allowed via /shell. Use the git tool with explicit user approval", ExtractGitSubcommand(generatedScript))
-	}
-
-	if isSingleCommand {
-		// Execute single command directly (output streams in real-time)
-		_, execErr = tools.ExecuteShellCommandWithSafety(c.getContext(), generatedScript, true, "", true)
-	} else {
-		// For scripts, save to temporary file and execute
-		tmpFile, err := os.CreateTemp("", "sprout-script-*.sh")
-		if err != nil {
-			return fmt.Errorf("failed to create temporary script file: %v", err)
-		}
-		defer os.Remove(tmpFile.Name())
-
-		if _, err := tmpFile.WriteString(generatedScript); err != nil {
-			return fmt.Errorf("failed to write script to temporary file: %v", err)
-		}
-
-		if err := tmpFile.Close(); err != nil {
-			return fmt.Errorf("failed to close temporary file: %v", err)
-		}
-
-		// Make script executable
-		if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
-			return fmt.Errorf("failed to make script executable: %v", err)
-		}
-
-		// Execute the script (output streams in real-time)
-		_, execErr = tools.ExecuteShellCommandWithSafety(c.getContext(), tmpFile.Name(), true, "", true)
-	}
-
-	// Display results (output has been streamed in real-time)
-	if execErr != nil {
-		console.GlyphError.Printf("Execution failed: %v", execErr)
-		return nil
-	}
-
-	console.GlyphSuccess.Printf("%s executed successfully!", c.getScriptType(isSingleCommand))
-
+	// Print a brief success message and return — no execution.
+	fmt.Println()
+	console.GlyphSuccess.Print("Shell script generated — copy and run manually when ready.")
 	return nil
 }
 
@@ -320,14 +260,6 @@ func (c *ShellCommand) gatherEnvironmentalContext() (string, error) {
 	context.WriteString("\n")
 
 	return context.String(), nil
-}
-
-// getScriptType returns a user-friendly description of what's being executed
-func (c *ShellCommand) getScriptType(isSingleCommand bool) string {
-	if isSingleCommand {
-		return "command"
-	}
-	return "script"
 }
 
 // cleanMarkdownCodeBlocks removes markdown code block formatting if present

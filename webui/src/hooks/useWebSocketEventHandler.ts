@@ -64,27 +64,31 @@ const handleConnectionStatus = (ctx: EventHandlerContext): void => {
       : 'disconnected';
 
   if (newConnectionState !== lastConnectionStateRef.current) {
+    // Update the ref immediately so subsequent events see the correct
+    // connection state without waiting for the debounce timer.
+    lastConnectionStateRef.current = newConnectionState;
+
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
-    connectionTimeoutRef.current = setTimeout(() => {
-      lastConnectionStateRef.current = newConnectionState;
-      // On disconnect, reset the active request counter — any in-flight
-      // turn's completion event will never arrive over a dead socket.
-      // On reconnect, the backend replay will set it correctly if the
-      // turn is still running server-side.
-      if (!newConnectionState && activeRequestsRef.current > 0) {
-        activeRequestsRef.current = 0;
-      }
-      setState((prev) => ({
-        sessionId: incomingSessionId || prev.sessionId,
-        isConnected: newConnectionState,
-        stats: {
-          ...prev.stats,
-          connection_phase: phase,
-          transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
-        },
-        logs: appendCappedLog(prev.logs, logEntry),
-      }));
-    }, 300);
+
+    // On disconnect, reset the active request counter immediately — any
+    // in-flight turn's completion event will never arrive over a dead
+    // socket. On reconnect, the backend replay (handleReconnect) will
+    // set it correctly if the turn is still running server-side.
+    if (!newConnectionState) {
+      activeRequestsRef.current = 0;
+    }
+
+    setState((prev) => ({
+      sessionId: incomingSessionId || prev.sessionId,
+      isConnected: newConnectionState,
+      isProcessing: newConnectionState ? prev.isProcessing : false,
+      stats: {
+        ...prev.stats,
+        connection_phase: phase,
+        transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
+      },
+      logs: appendCappedLog(prev.logs, logEntry),
+    }));
   }
   debugLog('[link] Connection status updated:', newConnectionState);
 };

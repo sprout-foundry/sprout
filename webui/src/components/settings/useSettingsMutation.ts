@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { SproutSettings, ApiService } from '../../services/api';
 import { debugLog } from '../../utils/log';
-import { setNestedValue } from './settingsHelpers';
+import { getNestedValue, setNestedValue } from './settingsHelpers';
 import type { MutationContext } from './types';
 import { useMCPServerMutations } from './useMCPServerMutations';
 import { useProviderMutations } from './useProviderMutations';
@@ -223,7 +223,13 @@ export function useSettingsMutation(params: MutationHookParams) {
       const current = settingsRef.current;
       if (!current) return;
 
-      const prev = { ...current };
+      // Capture only the specific field's previous value for targeted
+      // rollback. A full-state shallow copy (`{ ...current }`) is unsafe
+      // under concurrent saves: if setting B changes while setting A's
+      // API call is in-flight, rolling back A to the full-state snapshot
+      // would silently revert B's optimistic update. By reverting only
+      // the failed key, concurrent saves to other keys are preserved.
+      const prevValue = getNestedValue(current, keyOrPath);
       setSavingKey(keyOrPath);
 
       try {
@@ -246,7 +252,13 @@ export function useSettingsMutation(params: MutationHookParams) {
         }
       } catch (err) {
         debugLog('[SettingsPanel] failed to save setting:', err);
-        onSettingsChanged(prev);
+        // Roll back only the failed key, preserving any concurrent
+        // optimistic updates to other keys.
+        const latest = settingsRef.current;
+        if (latest) {
+          const reverted = setNestedValue(latest, keyOrPath, prevValue) as SproutSettings;
+          onSettingsChanged(reverted);
+        }
         addNotification('error', 'Settings', 'Save failed', 5000);
       } finally {
         setSavingKey(null);

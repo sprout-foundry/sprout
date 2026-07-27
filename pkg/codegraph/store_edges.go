@@ -40,15 +40,23 @@ func (s *SQLiteStore) InsertAllEdges(ctx context.Context, edges []Edge) error {
 		return tx.Commit()
 	}
 
-	// Insert edges by resolving qualified names from the database.
+	// Build in-memory resolution maps from a single SELECT. This replaces
+	// O(E × N) per-edge SQL queries (including a full table scan on every
+	// LIKE '%.leaf' fallback) with O(E) map lookups after one O(N) scan.
+	maps, err := buildResolutionMaps(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("build resolution maps: %w", err)
+	}
+
+	// Insert edges by resolving qualified names from the maps.
 	// All nodes must already exist in the DB for cross-file resolution to work.
 	for _, edge := range edges {
-		sourceID, srcFound := resolveEdgeNode(ctx, tx, edge.SourceQualifiedName)
+		sourceID, srcFound := maps.resolve(edge.SourceQualifiedName)
 		if !srcFound {
 			continue
 		}
 
-		targetID, tgtFound := resolveEdgeNode(ctx, tx, edge.TargetQualifiedName)
+		targetID, tgtFound := maps.resolve(edge.TargetQualifiedName)
 		if !tgtFound {
 			continue
 		}
@@ -202,12 +210,18 @@ func (s *SQLiteStore) InsertEdgesForFiles(ctx context.Context, stalePaths, refer
 	}
 
 	// Re-insert edges from the freshly-parsed affected files.
+	// Build resolution maps once instead of querying per-edge.
+	maps, err := buildResolutionMaps(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("build resolution maps: %w", err)
+	}
+
 	for _, edge := range edges {
-		sourceID, srcFound := resolveEdgeNode(ctx, tx, edge.SourceQualifiedName)
+		sourceID, srcFound := maps.resolve(edge.SourceQualifiedName)
 		if !srcFound {
 			continue
 		}
-		targetID, tgtFound := resolveEdgeNode(ctx, tx, edge.TargetQualifiedName)
+		targetID, tgtFound := maps.resolve(edge.TargetQualifiedName)
 		if !tgtFound {
 			continue
 		}

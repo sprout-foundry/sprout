@@ -722,7 +722,7 @@ func TestClassifyChainedCommand(t *testing.T) {
 
 		// ── pipe chains ────────────────────────────────────────────
 		{"pipe two safe", "cat file.txt | grep foo", SecuritySafe},
-		{"pipe safe to xargs rm", "ls | xargs rm -rf", SecurityCaution},
+		{"pipe safe to xargs rm", "ls | xargs rm -rf", SecurityDangerous},
 		// pipe to shell interpreters — now CAUTION (downgraded from DANGEROUS)
 		{"pipe to bash (remote code execution)", "echo hello | bash", SecurityCaution},
 		{"pipe to sh", "echo hello | sh", SecurityCaution},
@@ -757,9 +757,8 @@ func TestClassifyChainedCommand(t *testing.T) {
 // xargs is dangerous only insofar as the command it invokes is dangerous;
 // the inner command is recursively classified after stripping xargs flags.
 //
-// Regression case: `ls | xargs rm -rf` (test above) MUST remain CAUTION.
-// Here we verify the per-subcommand classifier routes xargs-prefixed
-// invocations correctly in isolation and in pipelines.
+// `ls | xargs rm -rf` is DANGEROUS: rm -rf with no explicit target, fed
+// by arbitrary piped input, is unbounded mass deletion.
 func TestClassifyXargsInvocation(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -801,15 +800,15 @@ func TestClassifyXargsInvocation(t *testing.T) {
 		{"xargs --max-args=4 du -sh", "xargs --max-args=4 du -sh", SecuritySafe},
 		{"xargs --max-args 4 du -sh", "xargs --max-args 4 du -sh", SecuritySafe},
 
-		// Dangerous inner commands remain CAUTION via recursion into
-		// the inner command's classifier (isCautionPattern catches
-		// "rm -rf ", "chmod 777", etc.).
-		{"xargs rm -rf", "xargs rm -rf", SecurityCaution},
+		// Dangerous inner commands with no explicit target (rm -rf, rm -r,
+		// rm -f) are DANGEROUS: xargs feeds arbitrary piped input as the
+		// targets, making the destruction unbounded.
+		{"xargs rm -rf", "xargs rm -rf", SecurityDangerous},
 		{"xargs rm file", "xargs rm file", SecurityCaution},
 		{"xargs chmod 777", "xargs chmod 777", SecurityCaution},
 		{"xargs chmod 666", "xargs chmod 666", SecurityCaution},
-		{"xargs -n 1 rm -rf", "xargs -n 1 rm -rf", SecurityCaution},
-		{"xargs --max-args 1 rm -rf", "xargs --max-args 1 rm -rf", SecurityCaution},
+		{"xargs -n 1 rm -rf", "xargs -n 1 rm -rf", SecurityDangerous},
+		{"xargs --max-args 1 rm -rf", "xargs --max-args 1 rm -rf", SecurityDangerous},
 		// sudo-prefixed inner command — must NOT lower to SAFE; the
 		// top-level critical-operation detector catches this via the
 		// invokesCommand("rm") path that recognizes "sudo" as a
@@ -848,13 +847,9 @@ func TestClassifyXargsInvocation(t *testing.T) {
 		{"xargs eval \"rm\"", "xargs eval \"rm\"", SecurityCaution},
 
 		// Recursion depth 2: xargs xargs rm -rf — inner = "xargs rm -rf",
-		// recursive classifySingleCommand classifies that and falls
-		// through to default-CAUTION (because the inner cmd starts
-		// with "xargs" not "rm -rf"). This is a false negative on
-		// the dangerous case, but xargs xargs is exotic and the
-		// chained-command classifier still catches it at the pipe
-		// level (CAUTION via maxRisk aggregation).
-		{"xargs xargs rm -rf", "xargs xargs rm -rf", SecurityCaution},
+		// recursive classifySingleCommand classifies that via the
+		// isUnboundedDestructiveXargs check → DANGEROUS (unbounded rm -rf).
+		{"xargs xargs rm -rf", "xargs xargs rm -rf", SecurityDangerous},
 
 		// Degenerate forms.
 		{"bare xargs", "xargs", SecurityCaution},
@@ -866,8 +861,8 @@ func TestClassifyXargsInvocation(t *testing.T) {
 			"find ~/Library/Caches -type d -size +5G 2>/dev/null | xargs du -sh | sort -hr",
 			SecuritySafe},
 
-		// Regression: existing dangerous-pipe test must not flip to SAFE.
-		{"regression: ls | xargs rm -rf", "ls | xargs rm -rf", SecurityCaution},
+		// Regression: ls | xargs rm -rf is DANGEROUS (unbounded mass deletion).
+		{"regression: ls | xargs rm -rf", "ls | xargs rm -rf", SecurityDangerous},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -16,9 +16,9 @@ import (
 )
 
 // TestHandleAPIShellApprovalDecision_NoAgent verifies that the handler returns
-// 200 even when there's no agent instance (resolveEditAgent returns nil).
-// The decision is lost but the HTTP response is still OK (the frontend
-// doesn't need to retry; the agent broker was already cleaned up).
+// 503 when there's no agent instance (resolveShellApprovalAgent returns nil).
+// The frontend's handleShellApprovalSubmit treats non-2xx as an error and
+// keeps the dialog open so the user can retry.
 func TestHandleAPIShellApprovalDecision_NoAgent(t *testing.T) {
 	var reqID = "test-no-agent-" + t.Name()
 
@@ -36,16 +36,11 @@ func TestHandleAPIShellApprovalDecision_NoAgent(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/shell-approvals/"+reqID+"/decision", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	// Zero-value ReactWebServer — resolveEditAgent returns nil.
+	// Zero-value ReactWebServer — resolveShellApprovalAgent returns nil.
 	ws := &ReactWebServer{}
 	ws.handleAPIShellApprovalDecision(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code, "expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-
-	var respBody map[string]any
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &respBody))
-	assert.Equal(t, true, respBody["ok"])
-	assert.Equal(t, reqID, respBody["request_id"])
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, "expected 503, got %d: %s", rec.Code, rec.Body.String())
 
 	// The decision was NOT delivered (no agent), so the channel should be empty.
 	select {
@@ -200,8 +195,8 @@ func TestShellApprovalDecision_DoubleRespond(t *testing.T) {
 		t.Fatal("first delivery not received")
 	}
 
-	// Second POST with same ID — handler returns 200 but RespondToShellApproval
-	// returns false (channel is full / already responded).
+	// Second POST with same ID — RespondToShellApproval returns false
+	// (entry already resolved), so the handler returns 410 Gone.
 	body2, _ := json.Marshal(map[string]any{
 		"request_id": reqID,
 		"decisions":  map[string]bool{"part-0": false},
@@ -209,7 +204,7 @@ func TestShellApprovalDecision_DoubleRespond(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodPost, "/api/shell-approvals/"+reqID+"/decision", bytes.NewReader(body2))
 	rec2 := httptest.NewRecorder()
 	ws.handleAPIShellApprovalDecision(rec2, req2)
-	assert.Equal(t, http.StatusOK, rec2.Code)
+	assert.Equal(t, http.StatusGone, rec2.Code, "expected 410 for already-responded request")
 
 	// Channel should NOT have a second value.
 	select {

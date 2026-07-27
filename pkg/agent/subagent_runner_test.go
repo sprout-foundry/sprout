@@ -17,6 +17,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -1257,7 +1258,7 @@ func (c *trackingClient) SupportsConversationalVision() bool {
 }
 func (c *trackingClient) GetVisionModel() string { return "" }
 func (c *trackingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
-	return nil, fmt.Errorf("vision not supported")
+	return nil, agenterrors.NewInvalidInputError("vision not supported", nil)
 }
 func (c *trackingClient) GetLastTPS() float64    { return 100 }
 func (c *trackingClient) GetAverageTPS() float64 { return 100 }

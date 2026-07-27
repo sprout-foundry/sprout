@@ -24,7 +24,7 @@ are approved and ready to assign are listed.
 
 - [x] **SP-094 Wave 3: Migrate subagent + delegator errors** — Convert `pkg/agent/subagent_*.go` from `fmt.Errorf` to `TypedError`. ~60 sites. **~2 hours.** — Migration was already largely done; only 1 remaining `fmt.Errorf` in `subagent_runner_test.go` converted to `agenterrors.NewInvalidInputError`.
 
-- [ ] **SP-094 Wave 4: Migrate remaining pkg/agent errors** — Convert remaining `pkg/agent/*.go` from `fmt.Errorf` to `TypedError`. ~330 sites across multiple files. **~4 hours.** — Partial: many done across 20+ files, ~250 remaining.
+- [x] **SP-094 Wave 4: Migrate remaining pkg/agent errors** — Convert remaining `pkg/agent/*.go` from `fmt.Errorf` to `TypedError`. ~330 sites across multiple files. **~4 hours.** — All done: last 11 `fmt.Errorf` calls across 7 files converted to `agenterrors.NewConfig`, `agenterrors.NewInvalidInputError`, and `agenterrors.NewNotFound`.
 
 - [x] **SP-094: Wire broker exponential backoff** — Add exponential backoff on `ProviderError+RateLimitError` in provider retry path. Emit per-category labels. **~2 hours.**
 

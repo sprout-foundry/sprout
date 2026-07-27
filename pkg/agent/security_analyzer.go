@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
@@ -264,10 +265,10 @@ func NormalizeChain(chain Chain) string {
 // render the per-subcommand stepper. SP-124b Phase 2.
 func AnalyzeChain(ctx context.Context, agent *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	if agent == nil {
-		return nil, fmt.Errorf("nil agent")
+		return nil, agenterrors.NewInvalidInputError("nil agent", nil)
 	}
 	if len(chain.Subcommands) == 0 {
-		return nil, fmt.Errorf("empty chain")
+		return nil, agenterrors.NewInvalidInputError("empty chain", nil)
 	}
 
 	// SP-124b Phase 2: long chains fall back to per-subcommand single-command
@@ -281,7 +282,7 @@ func AnalyzeChain(ctx context.Context, agent *Agent, chain Chain, classification
 
 	client := agent.getClient()
 	if client == nil {
-		return nil, fmt.Errorf("no client configured")
+		return nil, agenterrors.NewConfig("no client configured", nil)
 	}
 
 	var systemPrompt string
@@ -304,17 +305,17 @@ Focus on: data destruction, data exfiltration, privilege escalation, unrecoverab
 
 	resp, err := client.SendChatRequest(ctx, msgs, nil, model, false)
 	if err != nil {
-		return nil, fmt.Errorf("llm call: %w", err)
+		return nil, agenterrors.NewAgent("security_analyzer", "llm call", err)
 	}
 	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("no response choices")
+		return nil, agenterrors.NewAgent("security_analyzer", "no response choices", nil)
 	}
 	content := strings.TrimSpace(resp.Choices[0].Message.Content)
 	content = extractJSON(content)
 
 	var sa SecurityAnalysis
 	if err := json.Unmarshal([]byte(content), &sa); err != nil {
-		return nil, fmt.Errorf("parse analysis: %w (got: %s)", err, content)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("parse analysis (got: %s)", content), err)
 	}
 
 	sa.RiskAssessment = strings.ToLower(strings.TrimSpace(sa.RiskAssessment))
@@ -372,10 +373,10 @@ func classificationToneFor(classifications []agenttools.ChainedClassification, s
 // without an LLM round-trip succeeding. SP-124b Phase 2.
 func AnalyzeChainFallback(ctx context.Context, agent *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	if agent == nil {
-		return nil, fmt.Errorf("nil agent")
+		return nil, agenterrors.NewInvalidInputError("nil agent", nil)
 	}
 	if len(chain.Subcommands) == 0 {
-		return nil, fmt.Errorf("empty chain")
+		return nil, agenterrors.NewInvalidInputError("empty chain", nil)
 	}
 
 	// Build per-subcommand classification tones for the stepper dots up-front
@@ -569,10 +570,10 @@ Respond with ONLY a JSON object matching:
 // Bounded by ctx — must return within the deadline (2s in production).
 func AnalyzeShellCommand(ctx context.Context, agent *Agent, command, cwd string) (*SecurityAnalysis, error) {
 	if agent == nil {
-		return nil, fmt.Errorf("nil agent")
+		return nil, agenterrors.NewInvalidInputError("nil agent", nil)
 	}
 	if command == "" {
-		return nil, fmt.Errorf("empty command")
+		return nil, agenterrors.NewInvalidInputError("empty command", nil)
 	}
 
 	chain := ParseChain(command)

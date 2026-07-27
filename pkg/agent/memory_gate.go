@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // DefaultMemoryGate returns a MemoryGate with production defaults.
@@ -159,7 +161,7 @@ func readMemAvailable() (int64, error) {
 	case "darwin":
 		return readMemDarwin()
 	default:
-		return 0, fmt.Errorf("memory gate: unsupported OS %s", runtime.GOOS)
+		return 0, agenterrors.NewAgent("memory_gate", fmt.Sprintf("memory gate: unsupported OS %s", runtime.GOOS), nil)
 	}
 }
 
@@ -169,7 +171,7 @@ func readMemAvailable() (int64, error) {
 func readMemLinux() (int64, error) {
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
-		return 0, fmt.Errorf("read /proc/meminfo: %w", err)
+		return 0, agenterrors.NewTransientError("read /proc/meminfo", err)
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		// Lines look like: "MemAvailable:  12345678 kB"
@@ -177,12 +179,12 @@ func readMemLinux() (int64, error) {
 		if len(fields) >= 2 && fields[0] == "MemAvailable:" {
 			kb, err := strconv.ParseInt(fields[1], 10, 64)
 			if err != nil {
-				return 0, fmt.Errorf("parse MemAvailable value %q: %w", fields[1], err)
+				return 0, agenterrors.NewInvalidInputError(fmt.Sprintf("parse MemAvailable value %q", fields[1]), err)
 			}
 			return kb * 1024, nil
 		}
 	}
-	return 0, fmt.Errorf("MemAvailable not found in /proc/meminfo")
+	return 0, agenterrors.NewAgent("memory_gate", "MemAvailable not found in /proc/meminfo", nil)
 }
 
 // readMemDarwin estimates available memory on macOS using vm_stat.
@@ -197,7 +199,7 @@ func readMemLinux() (int64, error) {
 func readMemDarwin() (int64, error) {
 	freePages, err := getVMStatField("Pages free")
 	if err != nil {
-		return 0, fmt.Errorf("vm_stat Pages free: %w", err)
+		return 0, agenterrors.NewTransientError("vm_stat Pages free", err)
 	}
 	// Speculative pages are clean cached pages that macOS eagerly reclaims.
 	// Purgable pages are app-allocated memory registered for purging.
@@ -220,7 +222,7 @@ func readMemDarwin() (int64, error) {
 func getVMStatField(fieldName string) (int64, error) {
 	out, err := exec.Command("vm_stat").Output()
 	if err != nil {
-		return 0, fmt.Errorf("run vm_stat: %w", err)
+		return 0, agenterrors.NewTransientError("run vm_stat", err)
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
@@ -229,27 +231,27 @@ func getVMStatField(fieldName string) (int64, error) {
 		if strings.HasPrefix(line, fieldName+":") {
 			parts := strings.Fields(line)
 			if len(parts) < 2 {
-				return 0, fmt.Errorf("unexpected vm_stat line format: %q", line)
+				return 0, agenterrors.NewInvalidInputError(fmt.Sprintf("unexpected vm_stat line format: %q", line), nil)
 			}
 			val, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
 			if err != nil {
-				return 0, fmt.Errorf("parse %s value %q: %w", fieldName, parts[len(parts)-1], err)
+				return 0, agenterrors.NewInvalidInputError(fmt.Sprintf("parse %s value %q", fieldName, parts[len(parts)-1]), err)
 			}
 			return val, nil
 		}
 	}
-	return 0, fmt.Errorf("%s not found in vm_stat output", fieldName)
+	return 0, agenterrors.NewAgent("memory_gate", fmt.Sprintf("%s not found in vm_stat output", fieldName), nil)
 }
 
 // getPageSize reads the system page size via `sysctl hw.pagesize`.
 func getPageSize() (int64, error) {
 	out, err := exec.Command("sysctl", "-n", "hw.pagesize").Output()
 	if err != nil {
-		return 0, fmt.Errorf("run sysctl hw.pagesize: %w", err)
+		return 0, agenterrors.NewTransientError("run sysctl hw.pagesize", err)
 	}
 	val, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("parse page size %q: %w", strings.TrimSpace(string(out)), err)
+		return 0, agenterrors.NewInvalidInputError(fmt.Sprintf("parse page size %q", strings.TrimSpace(string(out))), err)
 	}
 	return val, nil
 }

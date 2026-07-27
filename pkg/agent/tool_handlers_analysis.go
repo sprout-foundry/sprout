@@ -184,8 +184,7 @@ func captureScreenshot(ctx context.Context, a *Agent, target string, viewportWid
 	if err := browser.Screenshot(ctx, target, screenshotPath, viewportWidth, viewportHeight, ""); err != nil {
 		_ = os.Remove(screenshotPath)
 		if strings.Contains(err.Error(), "browser rendering not available") {
-			return "", fmt.Errorf("cannot analyze '%s': a headless browser is required to render HTML content. "+
-				"Please rebuild with the 'browser' build tag (e.g., go build -tags browser ...)", target)
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("cannot analyze '%s': a headless browser is required to render HTML content. Please rebuild with the 'browser' build tag (e.g., go build -tags browser ...)", target), nil)
 		}
 		return "", agenterrors.NewTool("analysis", fmt.Sprintf("failed to screenshot '%s'", target), err)
 	}
@@ -581,12 +580,12 @@ func normalizeVisionToolOutput(result string, preferPlainText bool) (string, err
 			return "", agenterrors.NewTransientError("vision analysis failed", nil)
 		}
 		if code == "" {
-			return "", fmt.Errorf("vision analysis failed: %s", msg)
+			return "", agenterrors.NewAgent("analysis", fmt.Sprintf("vision analysis failed: %s", msg), nil)
 		}
 		if msg == "" {
-			return "", fmt.Errorf("vision analysis failed (%s)", code)
+			return "", agenterrors.NewAgent("analysis", fmt.Sprintf("vision analysis failed (%s)", code), nil)
 		}
-		return "", fmt.Errorf("vision analysis failed (%s): %s", code, msg)
+		return "", agenterrors.NewAgent("analysis", fmt.Sprintf("vision analysis failed (%s): %s", code, msg), nil)
 	}
 
 	if !preferPlainText {

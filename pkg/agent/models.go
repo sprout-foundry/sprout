@@ -215,11 +215,10 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				if a.debug {
 					a.Logger().Debug("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
-			} else {
-				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider))
-			}
-		}
+					} else {
+			// No models available from API and no model specified
+			return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
+		}}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
 		model = resolvedModel
 	} else if len(availableModels) > 0 {
@@ -276,7 +275,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 // The test/mock provider is rejected since it should never be the persisted default.
 func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	if provider == api.TestClientType {
-		return fmt.Errorf("test provider cannot be persisted as the active provider")
+		return agenterrors.NewInvalidInputError("test provider cannot be persisted as the active provider", nil)
 	}
 
 	prevProvider := a.GetProvider()
@@ -305,11 +304,10 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 				if a.debug {
 					a.Logger().Debug("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
-			} else {
-				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider))
-			}
-		}
+					} else {
+			// No models available from API and no model specified
+			return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
+		}}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
 		model = resolvedModel
 	} else if len(availableModels) > 0 {
@@ -508,7 +506,7 @@ func (a *Agent) SetModelPersisted(model string) error {
 func (a *Agent) getModelsForProvider(provider api.ClientType) ([]api.ModelInfo, error) {
 	// Check if provider is available first
 	if !a.isProviderAvailable(provider) {
-		return nil, fmt.Errorf("provider %s not available", api.GetProviderName(provider))
+		return nil, agenterrors.NewProviderError(fmt.Sprintf("provider %s not available", api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
 	}
 
 	// Use the same logic as the main API to avoid discrepancies

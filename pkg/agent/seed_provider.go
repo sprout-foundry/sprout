@@ -91,6 +91,43 @@ func extractHTTPStatusCode(msg string) int {
 	return 0
 }
 
+// exponentialBackoffDelay calculates the delay for a given retry attempt.
+// Formula: 2^attempt * baseDelay, capped at maxDelay.
+// Base delay is 100ms, max delay is 10s.
+func exponentialBackoffDelay(attempt int) time.Duration {
+	const baseDelay = 100 * time.Millisecond
+	const maxDelay = 10 * time.Second
+
+	delay := baseDelay
+	for i := 0; i < attempt; i++ {
+		delay *= 2
+		if delay >= maxDelay {
+			return maxDelay
+		}
+	}
+	if delay > maxDelay {
+		return maxDelay
+	}
+	return delay
+}
+
+// isRetryableProviderError returns true if the error should trigger a provider retry.
+// Retries are performed on:
+//   - RateLimitError (always retryable)
+//   - ProviderError with a retryable cause (server errors, overload)
+func isRetryableProviderError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if agenterrors.IsRateLimited(err) {
+		return true
+	}
+	if agenterrors.IsProviderError(err) && agenterrors.IsRetryable(err) {
+		return true
+	}
+	return false
+}
+
 // recordProviderError stores error info in the agent's state for observability.
 func (sp *sproutProvider) recordProviderError(err error, retries int) {
 	if sp.agent == nil || err == nil {
@@ -115,21 +152,56 @@ func (sp *sproutProvider) clearProviderError() {
 	sp.agent.state.SetLastProviderError(nil)
 }
 
-// doChatWithRetry performs a single chat request with fleet budget tracking and error recording.
-// Retry logic is handled by the seed core's chatFn in conversation.go;
-// this layer no longer retries to avoid nested retry explosion.
+// doChatWithRetry performs a chat request with exponential backoff retry,
+// fleet budget tracking, and error recording.
+//
+// Retries on ProviderError (retryable) and RateLimitError with exponential
+// backoff (2^attempt * 100ms base, capped at 10s). Max 3 retries.
 func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	resp, err := sp.doChatOnce(ctx, req)
-	if err != nil {
-		sp.recordProviderError(err, 0)
-		return nil, err
+	const maxRetries = 3
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// On retry attempts, wait for the backoff delay before retrying.
+		if attempt > 0 {
+			delay := exponentialBackoffDelay(attempt)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		resp, err := sp.doChatOnce(ctx, req)
+		if err == nil {
+			sp.clearProviderError()
+			// Fleet budget tracking: debit tokens after each LLM call.
+			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+				return nil, budgetErr
+			}
+			return resp, nil
+		}
+
+		lastErr = err
+
+		// Record the error for observability and emit retry event.
+		sp.recordProviderError(err, attempt)
+		if sp.agent != nil && sp.agent.eventBus != nil {
+			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider())
+		}
+
+		// Check if this error is retryable. If not, fail immediately.
+		if !isRetryableProviderError(err) {
+			return nil, err
+		}
+
+		// If we've exhausted retries, return the last error.
+		if attempt >= maxRetries {
+			return nil, err
+		}
 	}
-	sp.clearProviderError()
-	// Fleet budget tracking: debit tokens after each LLM call.
-	if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-		return nil, budgetErr
-	}
-	return resp, nil
+
+	return nil, lastErr
 }
 
 // doChatOnce performs a single chat request, attaching pasted images to the
@@ -493,21 +565,56 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	return nil
 }
 
-// doChatWithRetryStreaming performs a single streaming chat request with fleet budget tracking and error recording.
-// Retry logic is handled by the seed core's chatFn in conversation.go;
-// this layer no longer retries to avoid nested retry explosion.
+// doChatWithRetryStreaming performs a single streaming chat request with exponential
+// backoff retry, fleet budget tracking, and error recording.
+//
+// Retries on ProviderError (retryable) and RateLimitError with exponential
+// backoff (2^attempt * 100ms base, capped at 10s). Max 3 retries.
 func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-	resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
-	if err != nil {
-		sp.recordProviderError(err, 0)
-		return nil, err
+	const maxRetries = 3
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// On retry attempts, wait for the backoff delay before retrying.
+		if attempt > 0 {
+			delay := exponentialBackoffDelay(attempt)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
+		if err == nil {
+			sp.clearProviderError()
+			// Fleet budget tracking: debit tokens after each LLM call
+			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+				return nil, budgetErr
+			}
+			return resp, nil
+		}
+
+		lastErr = err
+
+		// Record the error for observability and emit retry event.
+		sp.recordProviderError(err, attempt)
+		if sp.agent != nil && sp.agent.eventBus != nil {
+			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider())
+		}
+
+		// Check if this error is retryable. If not, fail immediately.
+		if !isRetryableProviderError(err) {
+			return nil, err
+		}
+
+		// If we've exhausted retries, return the last error.
+		if attempt >= maxRetries {
+			return nil, err
+		}
 	}
-	sp.clearProviderError()
-	// Fleet budget tracking: debit tokens after each LLM call
-	if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-		return nil, budgetErr
-	}
-	return resp, nil
+
+	return nil, lastErr
 }
 
 func (sp *sproutProvider) Info() core.ProviderInfo {

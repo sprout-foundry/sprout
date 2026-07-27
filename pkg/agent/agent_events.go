@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/validation"
 )
@@ -162,6 +163,46 @@ func (a *Agent) PublishRecallDiagnostic(diag recallRetrievalDiagnostic) {
 func (a *Agent) PublishRateLimited(ev *events.RateLimitedEvent) {
 	if ev != nil {
 		a.publishEvent(events.EventTypeRateLimited, ev)
+	}
+}
+
+// publishRetryEvent emits metrics updates for retry events with the
+// error category label. This is called from the provider retry loop
+// in seed_provider.go on each retry attempt.
+func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider string) {
+	if err == nil || a.eventBus == nil {
+		return
+	}
+	// Determine the error category for the metrics label.
+	category := "unknown"
+	if te := agenterrors.AsTypedError(err); te != nil {
+		category = string(te.Code)
+	} else if cat, ok := agenterrors.GetCategory(err); ok {
+		category = cat.String()
+	}
+
+	// Emit a metrics update with the category so the status footer can
+	// show "rate-limited, retrying…" vs "provider error, retrying…"
+	a.publishEvent(
+		events.EventTypeMetricsUpdate,
+		events.MetricsUpdateEventWithCategory(
+			a.state.GetTotalTokens(),
+			a.state.GetCurrentContextTokens(),
+			a.getModelContextLimit(),
+			a.state.GetCurrentIteration(),
+			a.state.GetTotalCost(),
+			category,
+		),
+	)
+
+	// Also publish a rate_limited event if this is a rate limit error.
+	if agenterrors.IsRateLimited(err) {
+		a.PublishRateLimited(&events.RateLimitedEvent{
+			Provider:    provider,
+			Attempt:     attempt,
+			MaxAttempts: maxRetries,
+			Message:     err.Error(),
+		})
 	}
 }
 

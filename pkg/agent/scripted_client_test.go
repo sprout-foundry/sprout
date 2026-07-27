@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -212,7 +212,7 @@ func TestNewLengthResponse(t *testing.T) {
 func TestNewErrorResponse(t *testing.T) {
 	t.Parallel()
 
-	testErr := fmt.Errorf("test error")
+	testErr := errors.New("test error")
 	resp := NewErrorResponse(testErr)
 
 	if resp.Error == nil {
@@ -281,7 +281,7 @@ func TestScriptedClient_SendChatRequestStream_WithError(t *testing.T) {
 		&ScriptedResponse{
 			StreamConfig: &StreamConfig{
 				Chunks:           []string{"chunk1"},
-				StreamError:      fmt.Errorf("stream error"),
+				StreamError:      errors.New("stream error"),
 				ErrorAfterChunks: 1,
 			},
 		},
@@ -643,7 +643,7 @@ func TestScriptedClient_IndexManagement(t *testing.T) {
 func TestScriptedClient_ErrorInjection(t *testing.T) {
 	t.Parallel()
 
-	testErr := fmt.Errorf("injected error")
+	testErr := errors.New("injected error")
 	client := NewScriptedClient(
 		&ScriptedResponse{
 			Error: testErr,
@@ -663,8 +663,8 @@ func TestScriptedClient_SequentialErrors(t *testing.T) {
 	t.Parallel()
 
 	client := NewScriptedClient(
-		&ScriptedResponse{Error: fmt.Errorf("error 1")},
-		&ScriptedResponse{Error: fmt.Errorf("error 2")},
+		&ScriptedResponse{Error: errors.New("error 1")},
+		&ScriptedResponse{Error: errors.New("error 2")},
 		&ScriptedResponse{Content: "success"},
 	)
 
@@ -692,7 +692,7 @@ func TestScriptedClient_StreamingErrorInjection(t *testing.T) {
 
 	client := NewScriptedClient(
 		&ScriptedResponse{
-			Error: fmt.Errorf("stream error"),
+			Error: errors.New("stream error"),
 			StreamConfig: &StreamConfig{
 				Chunks: []string{"chunk1"},
 			},
@@ -817,7 +817,7 @@ func TestScriptedClient_SendChatRequestStream_StreamErrorAdvancesIndex(t *testin
 	t.Parallel()
 
 	client := NewScriptedClient(
-		&ScriptedResponse{Error: fmt.Errorf("stream error")},
+		&ScriptedResponse{Error: errors.New("stream error")},
 		&ScriptedResponse{Content: "retry content", FinishReason: "stop"},
 	)
 

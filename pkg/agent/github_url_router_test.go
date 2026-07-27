@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"testing"
 
@@ -314,7 +314,7 @@ func TestTryRouteGitHubToMCP_GistURL_NotHandled(t *testing.T) {
 func TestTryRouteGitHubToMCP_MCPError_FallsThrough(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().
 		withGitHubServer(true).
-		withCallErr(fmt.Errorf("server unreachable"))
+		withCallErr(errors.New("server unreachable"))
 	a := testAgent(mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/1")

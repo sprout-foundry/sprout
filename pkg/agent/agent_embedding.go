@@ -3,7 +3,6 @@ package agent
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -160,41 +159,25 @@ func (a *Agent) RestoreEmbeddingIndex() {
 }
 
 // persistEmbeddingIndexPreference saves the indexing enabled/disabled state
-// to the workspace config file so it persists across sessions.
+// to the workspace config via the config manager so it persists across
+// sessions and doesn't conflict with the manager's own save path (which
+// would clobber a raw file write via its conflict-detection check).
 func (a *Agent) persistEmbeddingIndexPreference(workspaceRoot string, enabled bool) {
-	wsCfgPath := configuration.GetWorkspaceConfigPath(workspaceRoot)
-	wsCfgDir := filepath.Dir(wsCfgPath)
-
-	// Ensure the .sprout directory exists
-	if err := os.MkdirAll(wsCfgDir, 0755); err != nil {
-		a.Logger().Warn("Failed to create embedding index config directory %s: %v", wsCfgDir, err)
+	mgr := a.GetConfigManager()
+	if mgr == nil {
+		a.Logger().Warn("Cannot persist embedding index preference: no config manager")
 		return
 	}
 
-	// Read existing config or start fresh
-	var existing map[string]interface{}
-	if data, err := os.ReadFile(wsCfgPath); err == nil {
-		_ = json.Unmarshal(data, &existing)
-	}
-	if existing == nil {
-		existing = make(map[string]interface{})
-	}
-
-	// Update the embedding_index section
-	eiMap, ok := existing["embedding_index"].(map[string]interface{})
-	if !ok {
-		eiMap = make(map[string]interface{})
-	}
-	eiMap["enabled"] = enabled
-	eiMap["auto_index"] = enabled
-	existing["embedding_index"] = eiMap
-
-	// Write back
-	if data, err := json.MarshalIndent(existing, "", "  "); err == nil {
-		if err := os.WriteFile(wsCfgPath, data, 0600); err != nil {
-			a.Logger().Warn("Failed to write embedding index config to %s: %v", wsCfgPath, err)
+	err := mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.EmbeddingIndex == nil {
+			cfg.EmbeddingIndex = &configuration.EmbeddingIndexConfig{}
 		}
-	} else {
-		a.Logger().Warn("Failed to marshal embedding index config: %v", err)
+		cfg.EmbeddingIndex.Enabled = enabled
+		cfg.EmbeddingIndex.AutoIndex = enabled
+		return nil
+	})
+	if err != nil {
+		a.Logger().Warn("Failed to persist embedding index preference: %v", err)
 	}
 }

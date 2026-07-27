@@ -99,7 +99,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_structured_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
-			fmt.Errorf("write blocked: %s is declared read_only", path)
+			agenterrors.NewPermission(fmt.Sprintf("write blocked: %s is declared read_only", path), nil)
 	}
 	if decision == "allow" {
 		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.

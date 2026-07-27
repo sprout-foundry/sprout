@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
@@ -330,10 +331,10 @@ func requireArgs(toolName string, args map[string]any, required ...string) error
 	for _, key := range required {
 		v, ok := args[key]
 		if !ok {
-			return fmt.Errorf("%s: missing required parameter %q", toolName, key)
+			return agenterrors.NewValidation(fmt.Sprintf("%s: missing required parameter %q", toolName, key), nil)
 		}
 		if s, ok := v.(string); ok && s == "" {
-			return fmt.Errorf("%s: parameter %q must not be empty", toolName, key)
+			return agenterrors.NewValidation(fmt.Sprintf("%s: parameter %q must not be empty", toolName, key), nil)
 		}
 	}
 	return nil

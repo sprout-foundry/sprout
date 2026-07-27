@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -55,7 +56,7 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "patch_structured_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("patch blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
-			fmt.Errorf("patch blocked: %s is declared read_only", path)
+			agenterrors.NewPermission(fmt.Sprintf("patch blocked: %s is declared read_only", path), nil)
 	}
 	if decision == "allow" {
 		// Path is workspace/tmp/allowlisted — resolve directly and bypass the gate.

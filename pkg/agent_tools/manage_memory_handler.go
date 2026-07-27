@@ -338,15 +338,15 @@ func (h *manageMemoryHandler) semanticSearch(env ToolEnv, query string, topK int
 
 	convoStore, err := env.EmbeddingMgr.GetConversationStore(ctx)
 	if err != nil {
-		return "", fmt.Errorf("conversation store unavailable: %w", err)
+		return "", agenterrors.NewAgent("manage_memory", "conversation store unavailable", err)
 	}
 	if convoStore == nil {
-		return "", fmt.Errorf("conversation store is nil")
+		return "", agenterrors.NewAgent("manage_memory", "conversation store is nil", nil)
 	}
 
 	results, err := convoStore.QueryMemories(ctx, query, topK, threshold)
 	if err != nil {
-		return "", fmt.Errorf("semantic search failed: %w", err)
+		return "", agenterrors.NewAgent("manage_memory", "semantic search failed", err)
 	}
 
 	if len(results) == 0 {

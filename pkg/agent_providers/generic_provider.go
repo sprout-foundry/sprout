@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -32,6 +33,10 @@ type GenericProvider struct {
 	mu           sync.RWMutex
 	models       []api.ModelInfo
 	modelsCached bool
+
+	// warmPending prevents goroutine accumulation from rapid warmModelsCache
+	// calls (e.g. multiple SetModel in quick succession).
+	warmPending atomic.Bool
 }
 
 // HTTP error formatting helpers are in generic_provider_http_errors.go:
@@ -77,11 +82,21 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 // GetModelContextLimit uses the fast registry/config fallback tiers;
 // subsequent calls (seconds later) hit the warm cache.
 func (p *GenericProvider) warmModelsCache() {
-	// alreadyCached could change concurrently; a redundant fetch is harmless.
-	if p.modelsCached {
+	p.mu.RLock()
+	cached := p.modelsCached
+	p.mu.RUnlock()
+	if cached {
 		return
 	}
+	// Deduplication: prevent goroutine accumulation under rapid SetModel
+	// calls. Each warm-up makes an HTTP request to the provider's /models
+	// endpoint; without this guard, 100 rapid SetModel calls would spawn
+	// 100 concurrent goroutines all hitting the API.
+	if !p.warmPending.CompareAndSwap(false, true) {
+		return // Another warm-up is already in flight
+	}
 	go func() {
+		defer p.warmPending.Store(false)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = p.ListModels(ctx)
@@ -483,7 +498,7 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 }
 
 // setCachedModels stores the fetched model list and marks the cache warm.
-// Called under the write lock so concurrent GetModelContextLimit callers
+// Acquires the write lock so concurrent GetModelContextLimit callers
 // see a consistent snapshot.
 func (p *GenericProvider) setCachedModels(models []api.ModelInfo) {
 	p.mu.Lock()

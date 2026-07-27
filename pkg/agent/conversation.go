@@ -458,17 +458,9 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	}
 
 	// SP-103-D2: Split images into inline (multimodal) and overflow (OCR fallback).
-	// When the query has more images than the provider supports inline, the
-	// first maxImageCount go through as multimodal content and the rest are
-	// processed via OCR so the model still gets text descriptions of them.
-	inlinePlaceholders := placeholders
-	overflowPlaceholders := []placeholderInfo(nil)
-	if len(placeholders) > maxImageCount {
-		inlinePlaceholders = placeholders[:maxImageCount]
-		overflowPlaceholders = placeholders[maxImageCount:]
-		a.Logger().Debug("[WARN] Query has %d images, but provider %s supports at most %d inline; %d will be processed via OCR fallback\n",
-			len(placeholders), a.getClientType(), maxImageCount, len(overflowPlaceholders))
-	}
+	// Uses BatchSplit which considers both count AND total payload bytes to
+	// avoid provider 400 (context overflow) errors.
+	inlinePlaceholders, overflowPlaceholders := a.splitPlaceholdersWithBatchSplit(placeholders, caps, maxImageCount, maxTotalImagePayloadBytes)
 
 	// Rewrite the query once, replacing every occurrence of each placeholder.
 	// SP-103-B4: when there are multiple images, label each one with a numeric
@@ -597,6 +589,56 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 type placeholderInfo struct {
 	fullMatch string
 	filePath  string
+}
+
+// splitPlaceholdersWithBatchSplit uses the BatchSplit function to determine
+// which images go inline (multimodal) and which are processed via OCR
+// fallback. It first stats the files to get approximate sizes so BatchSplit
+// can make a byte-aware decision, not just a count-based one. This avoids
+// provider 400 (context overflow) errors when embedding many/large images.
+func (a *Agent) splitPlaceholdersWithBatchSplit(placeholders []placeholderInfo, caps api.VisionCapabilities, maxImageCount int, maxTotalImagePayloadBytes int) (inline, overflow []placeholderInfo) {
+	if len(placeholders) == 0 {
+		return placeholders, nil
+	}
+
+	// Quick stat pass: get file sizes for all images.
+	sizes := make([]int, len(placeholders))
+	for i, ph := range placeholders {
+		stat, err := os.Stat(ph.filePath)
+		if err != nil {
+			// Can't stat the file; it'll fail later during read. Use size 0
+			// so it stays inline — the existing read-time skip logic handles
+			// read failures gracefully without changing the label format.
+			sizes[i] = 0
+			continue
+		}
+		sizes[i] = int(stat.Size())
+	}
+
+	// Use BatchSplit for proactive byte-aware splitting.
+	result := BatchSplit(sizes, caps)
+
+	// Build inline and overflow lists from indices.
+	inline = make([]placeholderInfo, 0, len(result.InlineIndices))
+	overflow = make([]placeholderInfo, 0, len(result.OverflowIndices))
+
+	for _, idx := range result.InlineIndices {
+		if idx >= 0 && idx < len(placeholders) {
+			inline = append(inline, placeholders[idx])
+		}
+	}
+	for _, idx := range result.OverflowIndices {
+		if idx >= 0 && idx < len(placeholders) {
+			overflow = append(overflow, placeholders[idx])
+		}
+	}
+
+	if len(overflow) > 0 {
+		a.Logger().Debug("[WARN] Query has %d images, but provider %s supports at most %d inline with ~%d bytes total; %d will be processed via OCR fallback\n",
+			len(placeholders), a.getClientType(), maxImageCount, maxTotalImagePayloadBytes, len(overflow))
+	}
+
+	return inline, overflow
 }
 
 // appendOCRFallback processes overflow images (those exceeding the provider's

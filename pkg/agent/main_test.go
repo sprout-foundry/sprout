@@ -42,6 +42,13 @@ import (
 func TestMain(m *testing.M) {
 	os.Setenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX", "1")
 
+	// Isolate all agent-package tests from the real workspace config.
+	// Inside a git repo, SPROUT_CONFIG is set to .sprout/ by the CLI;
+	// without this override, tests calling NewManagerSilent/NewManager
+	// without per-test SPROUT_CONFIG isolation read/write the real
+	// workspace config file, corrupting it with test fixtures.
+	os.Setenv("SPROUT_CONFIG", filepath.Join(os.TempDir(), "sprout-agent-test-config"))
+
 	// Share one ONNX model/runtime cache across the whole suite. Each test
 	// isolates SPROUT_CONFIG to its own t.TempDir(), and the model dir
 	// normally derives from that — so without this every embedding-dependent

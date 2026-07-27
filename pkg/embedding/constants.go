@@ -23,3 +23,10 @@ const MaxFileCount = 10000
 // ProgressInterval controls how many files must be processed before a
 // progress event is emitted (both during walk and batch embedding).
 const ProgressInterval = 500
+
+// BuildTimeout is the absolute maximum for the full index build lifecycle
+// (ONNX init + directory walk + file parsing + batch embedding). This is
+// used by BuildIndexBackground so a background build on a large workspace
+// does not get killed after WalkTimeout (30s), which only covers the
+// directory-walk phase.
+const BuildTimeout = 10 * time.Minute

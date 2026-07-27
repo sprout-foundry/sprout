@@ -520,7 +520,7 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 		default:
 		}
 
-		ctx, cancel := context.WithTimeout(ctx, WalkTimeout)
+		ctx, cancel := context.WithTimeout(ctx, BuildTimeout)
 		defer cancel()
 
 		if err := m.Init(ctx); err != nil {
@@ -582,7 +582,7 @@ func (m *EmbeddingManager) AutoBuildWhenReady() {
 	default:
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), BuildTimeout)
 	defer cancel()
 	stats, err := m.BuildIndex(ctx)
 	if err != nil {
@@ -636,6 +636,50 @@ func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, 
 		return nil, err
 	}
 	return idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
+}
+
+// UpdateFromGitDiffBackground starts an incremental index update in a
+// background goroutine. It reuses the build lock so update and build cannot
+// run simultaneously. The returned channel receives exactly one result.
+func (m *EmbeddingManager) UpdateFromGitDiffBackground(ctx context.Context) <-chan *BuildResult {
+	ch := make(chan *BuildResult, 1)
+
+	m.mu.Lock()
+	if m.building {
+		m.mu.Unlock()
+		ch <- &BuildResult{
+			Err: fmt.Errorf("embedding: build already in progress"),
+		}
+		return ch
+	}
+	m.building = true
+	m.mu.Unlock()
+
+	go func() {
+		defer func() {
+			m.mu.Lock()
+			m.building = false
+			m.mu.Unlock()
+		}()
+
+		select {
+		case <-m.closeCh():
+			ch <- &BuildResult{Err: ErrStoreClosed}
+			return
+		default:
+		}
+
+		ctx, cancel := context.WithTimeout(ctx, BuildTimeout)
+		defer cancel()
+
+		stats, err := m.UpdateFromGitDiff(ctx)
+		ch <- &BuildResult{
+			Stats: stats,
+			Err:   err,
+		}
+	}()
+
+	return ch
 }
 
 // CheckDuplicates checks if file content duplicates existing code.

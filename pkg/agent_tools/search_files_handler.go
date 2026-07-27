@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 type searchFilesHandler struct{}
@@ -93,6 +95,11 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 	matchCount := 0
 
 	err = walkDirCompat(directory, func(path string, info os.DirEntry, err error) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		if err != nil {
 			return nil
 		}
@@ -153,7 +160,7 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 }
 
 func (h *searchFilesHandler) Aliases() []string      { return nil }
-func (h *searchFilesHandler) Timeout() time.Duration { return 0 }
+func (h *searchFilesHandler) Timeout() time.Duration { return 30 * time.Second }
 func (h *searchFilesHandler) MaxResultSize() int     { return 0 }
 func (h *searchFilesHandler) SafeForParallel() bool  { return false }
 func (h *searchFilesHandler) Interactive() bool      { return false }
@@ -175,35 +182,15 @@ func compileSearchPattern(pattern string, caseSensitive bool) (*regexp.Regexp, e
 }
 
 // shouldSkipDir returns true for well-known directories that should never be
-// searched. The list covers VCS directories, language package managers, build
-// outputs, cache directories, CI artifacts, and framework-specific caches.
+// searched. Delegates to the canonical shared list in pkg/filesystem so
+// search_files stays in sync with embedding and codegraph exclusion behavior.
 func shouldSkipDir(path string) bool {
 	name := filepath.Base(path)
-	skipDirs := []string{
-		// VCS
-		".git", ".hg", ".svn",
-		// package managers & dependency directories
-		"node_modules", "vendor", "Pods", "Carthage",
-		// Python
-		"__pycache__", ".venv", "venv", ".tox", "eggs", ".eggs",
-		// build & distribution artifacts
-		"build", "dist", "target", "out", ".build",
-		// caches & generated code
-		".cache", ".parcel-cache", ".turbo", ".next", ".nuxt", ".expo",
-		// IDE & tooling
-		".idea", ".vscode", ".vs", ".fleet", ".sprout",
-		// CI / test / coverage
-		"coverage", ".nyc_output", "test-results",
-		// Java / Kotlin
-		".gradle", ".kotlin",
-		// Rust
-		".cargo",
+	if filesystem.IsSkipDir(name) {
+		return true
 	}
-	for _, skip := range skipDirs {
-		if name == skip {
-			return true
-		}
-	}
+	// Cover directory names that are in search_files' historical list but
+	// not yet in the shared list (shouldn't exist, but as a safety net).
 	return false
 }
 

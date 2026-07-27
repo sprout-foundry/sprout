@@ -150,12 +150,7 @@ func TestIsValidShellCode_MixedCases(t *testing.T) {
 	assert.True(t, cmd.isValidShellCode("ls"))
 }
 
-func TestGetScriptType(t *testing.T) {
-	cmd := &ShellCommand{}
 
-	assert.Equal(t, "command", cmd.getScriptType(true))
-	assert.Equal(t, "script", cmd.getScriptType(false))
-}
 
 func TestIsValidShellCode_ComplexScript(t *testing.T) {
 	cmd := &ShellCommand{}

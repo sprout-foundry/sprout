@@ -58,6 +58,16 @@ var ignoredDirs = map[string]bool{
 	"build": true, ".next": true, "coverage": true, ".cache": true, ".sprout": true,
 }
 
+// isIgnoredDir checks if a directory should be skipped during walks.
+// Uses the canonical shared list from pkg/filesystem so repo_map stays
+// in sync with embedding and codegraph exclusion behavior.
+func isIgnoredDir(name string) bool {
+	if ignoredDirs[name] {
+		return true
+	}
+	return filesystem.IsSkipDir(name)
+}
+
 // GenerateRepoMap walks the directory tree rooted at rootDir and produces a
 // lightweight overview of the codebase showing file paths and top-level symbols.
 // For Go files it uses go/ast; for TS/JS/Python it uses tree-sitter via pkg/ast.
@@ -157,7 +167,7 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 			return nil
 		}
 		if d.IsDir() {
-			if ignoredDirs[name] {
+			if isIgnoredDir(name) {
 				return filepath.SkipDir
 			}
 			if path != absRoot && strings.HasPrefix(name, ".") {

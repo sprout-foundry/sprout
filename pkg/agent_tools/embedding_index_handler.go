@@ -74,19 +74,19 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 	switch operation {
 	case "status":
 		// Status is a directory walk; doesn't need an embedding manager.
-		return h.handleStatus(embeddingCfg, workspaceRoot)
+		return h.handleStatus(embeddingCfg, workspaceRoot, env.EmbeddingMgr)
 	case "build":
 		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
 		if ownsMgr {
 			defer mgr.Close()
 		}
-		return h.handleBuild(ctx, mgr)
+		return h.handleBuild(ctx, mgr, !ownsMgr)
 	case "update":
 		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
 		if ownsMgr {
 			defer mgr.Close()
 		}
-		return h.handleUpdate(ctx, mgr)
+		return h.handleUpdate(ctx, mgr, !ownsMgr)
 	default:
 		return ToolResult{
 			Output:  fmt.Sprintf("Unknown operation '%s'. Valid operations: build, update, status", operation),
@@ -105,7 +105,7 @@ func pickEmbeddingMgr(env ToolEnv, cfg *configuration.EmbeddingIndexConfig, work
 	return embedding.NewEmbeddingManager(cfg, workspaceRoot), true
 }
 
-func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
+func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string, mgr *embedding.EmbeddingManager) (ToolResult, error) {
 	indexDir := cfg.IndexDir
 	if indexDir == "" {
 		configDir := os.Getenv("SPROUT_CONFIG")
@@ -127,12 +127,17 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 	var sb strings.Builder
 	sb.WriteString("Embedding Index Status:\n\n")
 	sb.WriteString(fmt.Sprintf("  Enabled: %v\n", enabled))
-	// Provider is always the bundled ONNX EmbeddingGemma-300M today —
-	// the previously-configurable `provider` field was removed because no
-	// code branched on it. If remote providers are ever added, restore the
-	// config field and the per-provider routing in pkg/embedding/manager.go.
 	sb.WriteString("  Provider: bundled\n")
 	sb.WriteString(fmt.Sprintf("  Index Directory: %s\n", indexDir))
+
+	// Report build status from the agent-owned manager when available.
+	if mgr != nil {
+		if mgr.IsBuilding() {
+			sb.WriteString("  Build State: building in progress\n")
+		} else {
+			sb.WriteString(fmt.Sprintf("  Build State: idle (%d records indexed)\n", mgr.IndexSize()))
+		}
+	}
 
 	info, err := os.Stat(indexDir)
 	if err != nil {
@@ -147,10 +152,6 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 			sb.WriteString(fmt.Sprintf("  State: Error reading index directory: %v\n", readErr))
 		} else {
 			sb.WriteString(fmt.Sprintf("  State: Index exists (%d file(s))\n", len(files)))
-			sb.WriteString("  Files:\n")
-			for _, f := range files {
-				sb.WriteString(fmt.Sprintf("    - %s\n", f.Name()))
-			}
 		}
 	}
 
@@ -160,8 +161,30 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 	}, nil
 }
 
-func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.EmbeddingManager) (ToolResult, error) {
-	// Use a timeout for the build
+// handleBuild builds the embedding index. When agentOwned is true (the manager
+// is the persistent, agent-owned one), the build runs in a background goroutine
+// and the tool returns immediately so the conversation is not blocked. When
+// agentOwned is false (a transient manager with no agent context), the build
+// runs synchronously.
+func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.EmbeddingManager, agentOwned bool) (ToolResult, error) {
+	if mgr.IsBuilding() {
+		return ToolResult{
+			Output:  "Embedding index build is already in progress. Use 'status' to check progress.",
+			IsError: false,
+		}, nil
+	}
+
+	if agentOwned {
+		// Detach from the tool's context so the build survives the tool
+		// timeout. BuildIndexBackground applies its own BuildTimeout (10min).
+		mgr.BuildIndexBackground(context.Background())
+		return ToolResult{
+			Output:  "Embedding index build started in the background. Use 'status' to check progress.",
+			IsError: false,
+		}, nil
+	}
+
+	// Transient manager — run synchronously.
 	buildCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
@@ -180,8 +203,6 @@ func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.
 	sb.WriteString(fmt.Sprintf("  Units embedded: %d\n", stats.UnitsEmbedded))
 	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
 
-	// Also build the code intelligence graph (non-blocking — failure is reported but
-	// does not fail the overall operation).
 	cgStats, cgErr := buildCodegraphIndex(buildCtx)
 	sb.WriteString("\nCode Intelligence Graph:\n")
 	if cgErr != nil {
@@ -196,8 +217,27 @@ func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.
 	}, nil
 }
 
-func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding.EmbeddingManager) (ToolResult, error) {
-	// Use a timeout for the update
+// backgroundBuildKey is a context key used to signal that the agent owns the
+// embedding manager and the build should run in the background.
+type backgroundBuildKey struct{}
+
+func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding.EmbeddingManager, agentOwned bool) (ToolResult, error) {
+	if mgr.IsBuilding() {
+		return ToolResult{
+			Output:  "Embedding index build/update is already in progress. Use 'status' to check progress.",
+			IsError: false,
+		}, nil
+	}
+
+	if agentOwned {
+		mgr.UpdateFromGitDiffBackground(context.Background())
+		return ToolResult{
+			Output:  "Embedding index update started in the background. Use 'status' to check progress.",
+			IsError: false,
+		}, nil
+	}
+
+	// Transient manager — run synchronously.
 	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
@@ -216,7 +256,6 @@ func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding
 	sb.WriteString(fmt.Sprintf("  Units embedded: %d\n", stats.UnitsEmbedded))
 	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
 
-	// Also update the code intelligence graph (non-blocking).
 	cgStats, cgErr := updateCodegraphIndex(updateCtx)
 	sb.WriteString("\nCode Intelligence Graph:\n")
 	if cgErr != nil {
@@ -232,7 +271,10 @@ func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding
 }
 
 func (h *embeddingIndexHandler) Aliases() []string      { return nil }
-func (h *embeddingIndexHandler) Timeout() time.Duration { return 0 }
+func (h *embeddingIndexHandler) Timeout() time.Duration {
+	// Background builds return immediately; transient builds need up to 5min.
+	return 5 * time.Minute
+}
 func (h *embeddingIndexHandler) MaxResultSize() int     { return 0 }
 func (h *embeddingIndexHandler) SafeForParallel() bool  { return false }
 func (h *embeddingIndexHandler) Interactive() bool      { return false }

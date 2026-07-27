@@ -193,7 +193,7 @@ func (h *listDirHandler) listDirectoryContents(ctx context.Context, env ToolEnv,
 }
 
 func (h *listDirHandler) Aliases() []string      { return nil }
-func (h *listDirHandler) Timeout() time.Duration { return 0 }
+func (h *listDirHandler) Timeout() time.Duration { return 30 * time.Second }
 func (h *listDirHandler) MaxResultSize() int     { return 0 }
 func (h *listDirHandler) SafeForParallel() bool  { return false }
 func (h *listDirHandler) Interactive() bool      { return false }

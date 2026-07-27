@@ -532,7 +532,7 @@ func TestEmbeddingIndexHandler_Status_NoIndexDir(t *testing.T) {
 
 	// Empty config — should fall back to ~/.config/sprout/embeddings
 	cfg := &configuration.EmbeddingIndexConfig{}
-	res, err := h.handleStatus(cfg, t.TempDir())
+	res, err := h.handleStatus(cfg, t.TempDir(), nil)
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 	require.Contains(t, res.Output, "Embedding Index Status")

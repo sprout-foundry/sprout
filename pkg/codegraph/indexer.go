@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // FileParser is a function that parses a source file at the given path and
@@ -25,12 +27,6 @@ type FileParser func(path string, content []byte) ([]Symbol, []Edge, error)
 var sourceExtensions = map[string]bool{
 	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true,
 	".py": true,
-}
-
-// ignoredDirs are directory names to skip during file walking.
-var ignoredDirs = map[string]bool{
-	".git": true, "node_modules": true, "vendor": true, "dist": true,
-	"build": true, ".next": true, "coverage": true, ".cache": true, ".sprout": true,
 }
 
 // IndexAll performs a full walk of all source files in the repo and indexes
@@ -63,7 +59,7 @@ func (s *SQLiteStore) IndexAll(ctx context.Context, parseFile FileParser) error 
 
 		// Skip ignored/hidden directories
 		if d.IsDir() {
-			if ignoredDirs[name] {
+			if filesystem.IsSkipDir(name) {
 				return filepath.SkipDir
 			}
 			if path != s.baseDir && strings.HasPrefix(name, ".") {

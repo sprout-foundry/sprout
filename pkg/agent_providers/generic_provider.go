@@ -229,8 +229,16 @@ func (p *GenericProvider) SetDebug(debug bool) {
 func (p *GenericProvider) SetModel(model string) error {
 	p.model = model
 	p.mu.Lock()
+	hadCache := p.modelsCached
 	p.modelsCached = false
 	p.mu.Unlock()
+	// If we previously had a warm cache, re-fire the background warm-up so
+	// GetModelContextLimit picks up the new model's context_length from the
+	// endpoint. Without this, the cache stays cold after SetModel and
+	// context limits fall back to static config defaults permanently.
+	if hadCache {
+		p.warmModelsCache()
+	}
 	return nil
 }
 

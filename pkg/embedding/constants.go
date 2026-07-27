@@ -30,3 +30,37 @@ const ProgressInterval = 500
 // does not get killed after WalkTimeout (30s), which only covers the
 // directory-walk phase.
 const BuildTimeout = 10 * time.Minute
+
+// EmbedBatchSize is the number of code units embedded per ONNX inference
+// call during a full index build. The batch is what flows through
+// provider.EmbedBatch — a single session.Run with a [batch, seq] tensor.
+const EmbedBatchSize = 32
+
+// autoBuildTimeout calculates an adaptive timeout for the background index
+// build based on the number of files to process. Each batch of
+// EmbedBatchSize units takes roughly 50ms of ONNX inference on a desktop
+// CPU; on a constrained mobile device that can be 5–10x slower. The formula
+// budgets generously (perEmbedBudget per unit) plus a fixed base for model
+// loading and file I/O.
+//
+// The result is clamped to [2min, 15min] so tiny workspaces don't get an
+// absurdly short budget and large ones don't run indefinitely.
+func autoBuildTimeout(fileCount int) time.Duration {
+	const (
+		perEmbedBudget = 100 * time.Millisecond // generous per-unit budget
+		baseOverhead   = 30 * time.Second       // model load + walk + I/O
+		minTimeout     = 2 * time.Minute
+		maxTimeout     = 15 * time.Minute
+	)
+	// fileCount maps roughly to fileCount * 4 code units (avg symbols/file).
+	// Use perEmbedBudget on the estimated unit count.
+	estimatedUnits := fileCount * 4
+	d := baseOverhead + time.Duration(estimatedUnits)*perEmbedBudget
+	if d < minTimeout {
+		return minTimeout
+	}
+	if d > maxTimeout {
+		return maxTimeout
+	}
+	return d
+}

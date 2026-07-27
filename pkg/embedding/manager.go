@@ -547,7 +547,9 @@ type BuildResult struct {
 // AutoBuildWhenReady runs a background index build after a short delay.
 // This is called at agent startup so the index is ready for duplicate
 // detection and context enrichment without waiting for an explicit query.
-// A 2-minute timeout prevents the build from hanging indefinitely.
+// The timeout is adaptive — large workspaces get proportionally more time
+// (see autoBuildTimeout) so the build doesn't get killed mid-way on
+// resource-constrained devices like Termux/Android.
 //
 // Two teardown paths are honored so a DisableEmbeddingIndex call arriving
 // during the startup sleep (or during Init/Build) does not race into a
@@ -582,7 +584,17 @@ func (m *EmbeddingManager) AutoBuildWhenReady() {
 	default:
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), BuildTimeout)
+	// Walk the workspace to count files, then derive an adaptive timeout.
+	// The walk is fast (directory traversal, no embedding) and its own
+	// WalkTimeout guards against pathological cases.
+	walkCtx, walkCancel := context.WithTimeout(context.Background(), WalkTimeout)
+	files, _ := WalkCodeFiles(walkCtx, m.workspaceRoot)
+	walkCancel()
+
+	timeout := autoBuildTimeout(len(files))
+	debugLogf("embedding: auto-build budget for %d files: %v", len(files), timeout)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stats, err := m.BuildIndex(ctx)
 	if err != nil {

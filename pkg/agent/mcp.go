@@ -274,7 +274,7 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 	toolName = strings.TrimPrefix(toolName, "mcp_")
 	parts := strings.SplitN(toolName, "_", 2)
 	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid MCP tool name format: %s", toolName)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid MCP tool name format: %s", toolName), nil)
 	}
 
 	serverName := parts[0]
@@ -368,6 +368,6 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		return "Stopped all MCP servers", nil
 
 	default:
-		return "", fmt.Errorf("unknown action: %s", action)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown action: %s", action), nil)
 	}
 }

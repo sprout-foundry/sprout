@@ -24,18 +24,18 @@ are approved and ready to assign are listed.
 
 - [x] **SP-094 Wave 3: Migrate subagent + delegator errors** — Convert `pkg/agent/subagent_*.go` from `fmt.Errorf` to `TypedError`. ~60 sites. **~2 hours.** — Migration was already largely done; only 1 remaining `fmt.Errorf` in `subagent_runner_test.go` converted to `agenterrors.NewInvalidInputError`.
 
-- [ ] **SP-094 Wave 4: Migrate remaining pkg/agent errors** — Convert remaining `pkg/agent/*.go` from `fmt.Errorf` to `TypedError`. ~330 sites across multiple files. **~4 hours.**
+- [ ] **SP-094 Wave 4: Migrate remaining pkg/agent errors** — Convert remaining `pkg/agent/*.go` from `fmt.Errorf` to `TypedError`. ~330 sites across multiple files. **~4 hours.** — Partial: many done across 20+ files, ~250 remaining.
 
-- [ ] **SP-094: Wire broker exponential backoff** — Add exponential backoff on `ProviderError+RateLimitError` in `pkg/agent/approval_broker.go`. Emit per-category labels in `pkg/agent/metrics.go`. **~2 hours.**
+- [x] **SP-094: Wire broker exponential backoff** — Add exponential backoff on `ProviderError+RateLimitError` in provider retry path. Emit per-category labels. **~2 hours.**
 
-- [ ] **SP-094: `sprout explain` typed errors** — Integrate typed error hierarchy into `sprout explain <hash>` instead of raw stack traces. **~1 hour.**
+- [x] **SP-094: `sprout explain` typed errors** — Integrate typed error hierarchy into `sprout explain <hash>` instead of raw stack traces. **~1 hour.**
 
 ---
 
 ## SP-098: Large-File Decomposition
 
 **Highest priority (grew since audit):**
-- [ ] **SP-098: Split `pkg/agent/tool_security.go` (1142 lines)** — Extract `tool_security_policy.go` + `tool_security_paths.go` + `tool_security_audit.go`. **~2 hours.**
+- [x] **SP-098: Split `pkg/agent/tool_security.go` (1142 lines)** — Extract `tool_security_policy.go` + `tool_security_paths.go` + `tool_security_audit.go`. **~2 hours.**
 - [ ] **SP-098: Split `pkg/events/events.go` (1218 lines)** — Extract `events_types.go` + `events_bus.go` + `events_filter.go`. **~2 hours.**
 
 **Remaining (stable, ≥800 lines):**

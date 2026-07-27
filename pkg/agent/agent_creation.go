@@ -156,7 +156,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		nativeWindow := agent.getNativeModelContextLimit()
 		resolvedCap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
 		if capErr != nil {
-			return nil, fmt.Errorf("resolving effective context cap: %w", capErr)
+			return nil, agenterrors.NewConfig("resolving effective context cap", capErr)
 		}
 		agent.effectiveContextCap = resolvedCap
 

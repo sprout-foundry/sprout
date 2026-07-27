@@ -406,9 +406,9 @@ func (a *Agent) ForkAtBreakpoint(breakpointIndex int) (string, error) {
 	}
 	if cutoffIdx == -1 {
 		if userCount == 0 {
-			return "", fmt.Errorf("no user messages in conversation (requested breakpoint %d)", breakpointIndex)
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("no user messages in conversation (requested breakpoint %d)", breakpointIndex), nil)
 		}
-		return "", fmt.Errorf("breakpoint %d out of range (%d user message(s) available)", breakpointIndex, userCount)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("breakpoint %d out of range (%d user message(s) available)", breakpointIndex, userCount), nil)
 	}
 
 	// Save current session to disk before truncating.

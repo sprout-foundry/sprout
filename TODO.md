@@ -8,21 +8,21 @@ are approved and ready to assign are listed.
 
 ## SP-103: Vision Pipeline Reliability
 
-- [ ] **SP-103 D1: Inline-image cost into budget tracker** — When `processImagesAsMultimodal` embeds images, per-image `image_tokens` / `cache_read_input_tokens` from provider response are dropped. Bridge them into cost tracking so users see actual vision cost. **~2 hours.** Touches `conversation.go` and provider response structs.
+- [x] **SP-103 D1: Inline-image cost into budget tracker** — When `processImagesAsMultimodal` embeds images, per-image `image_tokens` / `cache_read_input_tokens` from provider response are dropped. Bridge them into cost tracking so users see actual vision cost. **~2 hours.** Touches `conversation.go` and provider response structs.
 
-- [ ] **SP-103 D2: Batch splitting with fallback** — When N images exceed provider's vision context window, inline path fails with 400. Add batch splitting: try inline; on overflow, keep first K inline, call `analyze_image_content` for the rest. **~2 hours.** New `vision_batch_split.go` helper.
+- [x] **SP-103 D2: Batch splitting with fallback** — When N images exceed provider's vision context window, inline path fails with 400. Add batch splitting: try inline; on overflow, keep first K inline, call `analyze_image_content` for the rest. **~2 hours.** New `vision_batch_split.go` helper.
 
-- [ ] **SP-103 D3: Per-provider VisionCapabilities values** — Struct exists with defaults. Ollama and OpenAI-compatible populate values. Populate per-provider values for Anthropic, Gemini, and other non-OpenAI providers. **~1 hour.**
+- [x] **SP-103 D3: Per-provider VisionCapabilities values** — Struct exists with defaults. Ollama and OpenAI-compatible populate values. Populate per-provider values for Anthropic, Gemini, and other non-OpenAI providers. **~1 hour.**
 
 ---
 
 ## SP-094: Typed Error Hierarchy
 
-- [ ] **SP-094 Wave 1: Migrate tool handler errors** — Convert `pkg/agent_tools/*_handler.go` from `fmt.Errorf` to `TypedError`. ~80 sites, partial progress (vision handlers done). **~2 hours.**
+- [x] **SP-094 Wave 1: Migrate tool handler errors** — Convert `pkg/agent_tools/*_handler.go` from `fmt.Errorf` to `TypedError`. ~80 sites, partial progress (vision handlers done). **~2 hours.**
 
-- [ ] **SP-094 Wave 2: Migrate provider client errors** — Convert `pkg/agent/api_client*.go` from `fmt.Errorf` to `TypedError`. ~40 sites. **~2 hours.**
+- [x] **SP-094 Wave 2: Migrate provider client errors** — Convert `pkg/agent/api_client*.go` from `fmt.Errorf` to `TypedError`. ~40 sites. **~2 hours.** — Already done: `api_client.go` was deleted in seed-integration refactor, remaining files have zero `fmt.Errorf`.
 
-- [ ] **SP-094 Wave 3: Migrate subagent + delegator errors** — Convert `pkg/agent/subagent_*.go` from `fmt.Errorf` to `TypedError`. ~60 sites. **~2 hours.**
+- [x] **SP-094 Wave 3: Migrate subagent + delegator errors** — Convert `pkg/agent/subagent_*.go` from `fmt.Errorf` to `TypedError`. ~60 sites. **~2 hours.** — Migration was already largely done; only 1 remaining `fmt.Errorf` in `subagent_runner_test.go` converted to `agenterrors.NewInvalidInputError`.
 
 - [ ] **SP-094 Wave 4: Migrate remaining pkg/agent errors** — Convert remaining `pkg/agent/*.go` from `fmt.Errorf` to `TypedError`. ~330 sites across multiple files. **~4 hours.**
 

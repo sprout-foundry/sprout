@@ -140,7 +140,10 @@ export function useChatSessionManager({
           fileEdits: cached?.fileEdits ?? [],
           subagentActivities: cached?.subagentActivities ?? [],
           currentTodos: cached?.currentTodos ?? [],
-          queryProgress: cached?.queryProgress ?? null,
+          // Only restore queryProgress if the chat is still processing.
+          // A stale progress indicator from a query that completed while
+          // viewing another chat is worse than no indicator.
+          queryProgress: restoredIsProcessing ? (cached?.queryProgress ?? null) : null,
           lastError: cached?.lastError ?? null,
           perChatCache: newCache,
         };

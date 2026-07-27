@@ -176,7 +176,14 @@ func (f *MarkdownFormatter) Format(text string) string {
 			// gutter. For column-0 fences (codeBlockIndent == 0) this is
 			// a no-op, preserving byte-identical output.
 			codeLine := dedentLine(line, codeBlockIndent)
-			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, f.formatCodeLine(codeLine, inCodeBlockLang), ColorReset))
+			// Dim only the gutter, then reset BEFORE the code so syntax
+			// highlighting (which embeds its own ColorReset sequences)
+			// renders at full color. The prior form wrapped the whole
+			// line in ColorDim…ColorReset, but the inner resets from
+			// highlightGo/highlightJSON/etc. killed the dim mid-line,
+			// producing an inconsistently-styled row (dim gutter, then
+			// bright code after the first highlighted token).
+			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, ColorReset, f.formatCodeLine(codeLine, inCodeBlockLang)))
 			continue
 		}
 

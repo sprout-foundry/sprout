@@ -9,6 +9,16 @@ import type { EventsProvider } from '@sprout/events';
 import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 
+// The action names must match the server-side ApprovalDecisionFromString in
+// pkg/security/approval_manager.go.
+export type SecurityApprovalAction =
+  | 'approve_once'
+  | 'approve_always'
+  | 'always_ask'
+  | 'elevate'
+  | 'allow_folder_session'
+  | 'deny';
+
 export interface UseSecurityHandlersOptions {
   eventsProvider: EventsProvider;
   provider: string;
@@ -16,7 +26,11 @@ export interface UseSecurityHandlersOptions {
 }
 
 export interface UseSecurityHandlersReturn {
-  handleSecurityApprovalResponse: (requestId: string, approved: boolean) => void;
+  handleSecurityApprovalResponse: (
+    requestId: string,
+    approved: boolean,
+    action?: SecurityApprovalAction,
+  ) => void;
   handleSecurityPromptResponse: (requestId: string, response: boolean) => void;
   handleAskUserResponse: (requestId: string, response: string) => void;
   handlePasswordResponse: (requestId: string, password: string) => void;
@@ -30,11 +44,11 @@ export function useSecurityHandlers({
   setState,
 }: UseSecurityHandlersOptions): UseSecurityHandlersReturn {
   const handleSecurityApprovalResponse = useCallback(
-    (requestId: string, approved: boolean) => {
+    (requestId: string, approved: boolean, action?: SecurityApprovalAction) => {
       if (!eventsProvider.isConnected()) return;
       eventsProvider.sendEvent({
         type: 'security_approval_response',
-        data: { request_id: requestId, approved },
+        data: { request_id: requestId, approved, ...(action ? { action } : {}) },
       });
       setState((_prev) => ({ securityApprovalRequest: null }));
     },

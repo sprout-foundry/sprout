@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { Check, Eye, TriangleAlert, X } from 'lucide-react';
-import type { SecurityApprovalAction } from '../hooks/useSecurityApproval';
+import type { SecurityApprovalAction } from '../hooks/useSecurityHandlers';
 import './ThemedDialog.css';
 
 export interface SecurityApprovalDialogProps {

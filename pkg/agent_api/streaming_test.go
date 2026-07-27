@@ -1111,3 +1111,138 @@ func TestRepetitionDetector_EmptyContentSkipped(t *testing.T) {
 		}
 	}
 }
+
+// TestProcessChunk_ImageTokensMapping verifies that ImageTokens from the streaming
+// chunk's usage are correctly mapped to the response's ChatUsage when ProcessChunk
+// processes a final chunk with usage data.
+func TestProcessChunk_ImageTokensMapping(t *testing.T) {
+	t.Parallel()
+	builder := NewStreamingResponseBuilder(nil)
+
+	chunk := &StreamingChatResponse{
+		ID:      "img-test-123",
+		Model:   "vision-model",
+		Created: 1234567890,
+		Choices: []StreamingChoice{
+			{
+				Index: 0,
+				Delta: StreamingDelta{
+					Role:    "assistant",
+					Content: "Here is an analysis of the image.",
+				},
+				FinishReason: stringPtr("stop"),
+			},
+		},
+		Usage: &StreamingUsage{
+			PromptTokens:     50,
+			CompletionTokens: 30,
+			TotalTokens:      80,
+			ImageTokens:      42,
+			EstimatedCost:    0.0015,
+		},
+	}
+
+	err := builder.ProcessChunk(chunk)
+	if err != nil {
+		t.Fatalf("ProcessChunk returned error: %v", err)
+	}
+
+	resp := builder.GetResponse()
+	if resp == nil {
+		t.Fatal("GetResponse returned nil")
+	}
+
+	if resp.Usage.ImageTokens != 42 {
+		t.Errorf("Expected ImageTokens=42, got %d", resp.Usage.ImageTokens)
+	}
+	if resp.Usage.PromptTokens != 50 {
+		t.Errorf("Expected PromptTokens=50, got %d", resp.Usage.PromptTokens)
+	}
+	if resp.Usage.CompletionTokens != 30 {
+		t.Errorf("Expected CompletionTokens=30, got %d", resp.Usage.CompletionTokens)
+	}
+	if resp.Usage.TotalTokens != 80 {
+		t.Errorf("Expected TotalTokens=80, got %d", resp.Usage.TotalTokens)
+	}
+}
+
+// TestProcessChunk_ImageTokensZero verifies that when ImageTokens is 0,
+// the response's ChatUsage still has ImageTokens=0.
+func TestProcessChunk_ImageTokensZero(t *testing.T) {
+	t.Parallel()
+	builder := NewStreamingResponseBuilder(nil)
+
+	chunk := &StreamingChatResponse{
+		ID:      "no-img-123",
+		Model:   "text-model",
+		Created: 1234567890,
+		Choices: []StreamingChoice{
+			{
+				Index: 0,
+				Delta: StreamingDelta{
+					Role:    "assistant",
+					Content: "No images in this response.",
+				},
+				FinishReason: stringPtr("stop"),
+			},
+		},
+		Usage: &StreamingUsage{
+			PromptTokens:     10,
+			CompletionTokens: 20,
+			TotalTokens:      30,
+			ImageTokens:      0,
+		},
+	}
+
+	err := builder.ProcessChunk(chunk)
+	if err != nil {
+		t.Fatalf("ProcessChunk returned error: %v", err)
+	}
+
+	resp := builder.GetResponse()
+	if resp == nil {
+		t.Fatal("GetResponse returned nil")
+	}
+
+	if resp.Usage.ImageTokens != 0 {
+		t.Errorf("Expected ImageTokens=0, got %d", resp.Usage.ImageTokens)
+	}
+}
+
+// TestProcessChunk_UsageNil verifies that when chunk.Usage is nil, we don't panic.
+func TestProcessChunk_UsageNil(t *testing.T) {
+	t.Parallel()
+	builder := NewStreamingResponseBuilder(nil)
+
+	chunk := &StreamingChatResponse{
+		ID:      "no-usage-123",
+		Model:   "test-model",
+		Created: 1234567890,
+		Choices: []StreamingChoice{
+			{
+				Index: 0,
+				Delta: StreamingDelta{
+					Role:    "assistant",
+					Content: "No usage data.",
+				},
+				FinishReason: stringPtr("stop"),
+			},
+		},
+		Usage: nil,
+	}
+
+	err := builder.ProcessChunk(chunk)
+	if err != nil {
+		t.Fatalf("ProcessChunk returned error: %v", err)
+	}
+
+	resp := builder.GetResponse()
+	if resp == nil {
+		t.Fatal("GetResponse returned nil")
+	}
+
+	// Usage should be zero-value (not set because chunk.Usage was nil)
+	if resp.Usage.ImageTokens != 0 {
+		t.Errorf("Expected ImageTokens=0 (unset), got %d", resp.Usage.ImageTokens)
+	}
+}

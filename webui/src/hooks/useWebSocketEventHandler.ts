@@ -1162,6 +1162,36 @@ const handleRecallDiagnostic = (ctx: EventHandlerContext): void => {
   debugLog('[recall] Diagnostic:', data);
 };
 
+// Handle session_displaced event — another browser tab/connection has taken
+// over this session. The WebSocket service already neutralized the old
+// connection and stopped reconnecting (websocket.ts:326). Here we surface
+// the takeover to the user so they understand why the UI went silent —
+// without this, the user sees stale state with no spinner, no error, and
+// no indication that their connection was stolen.
+const handleSessionDisplaced = (ctx: EventHandlerContext): void => {
+  const { event, setState, activeRequestsRef } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  // Reset processing state — the displaced session can't receive
+  // query_completed, so the spinner would hang forever.
+  if (activeRequestsRef.current > 0) activeRequestsRef.current = 0;
+  setState((prev) => ({
+    isProcessing: false,
+    queryProgress: null,
+    lastError: String(data.message || 'This session was taken over by another tab or window.'),
+    toolExecutions: prev.toolExecutions.map((t) => {
+      if (t.status === 'started' || t.status === 'running') {
+        return { ...t, status: 'error' as const, endTime: new Date(), result: 'Session displaced' };
+      }
+      return t;
+    }),
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[session] Displaced by another connection:', data.message);
+};
+
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -1303,6 +1333,8 @@ export function useWebSocketEventHandler({
           return handleWorkspacePatch(ctx);
         case 'recall_diagnostic':
           return handleRecallDiagnostic(ctx);
+        case 'session_displaced':
+          return handleSessionDisplaced(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';

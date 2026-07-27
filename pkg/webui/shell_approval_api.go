@@ -58,16 +58,20 @@ func (ws *ReactWebServer) handleAPIShellApprovalDecision(w http.ResponseWriter, 
 	// package-level broker. Mirrors the edit-approval pattern: try
 	// ws.agent first (shared CLI+WebUI mode), then the daemon chat agent.
 	ag := ws.resolveShellApprovalAgent()
-	delivered := false
-	if ag != nil {
-		delivered = ag.RespondToShellApproval(id, req.Decisions)
+	if ag == nil {
+		ws.log().Warn("shell approval decision: no agent available",
+			slog.String("request_id", id))
+		http.Error(w, `{"error":"no agent available to receive decision"}`, http.StatusServiceUnavailable)
+		return
 	}
-	if !delivered {
+	if !ag.RespondToShellApproval(id, req.Decisions) {
 		ws.log().Warn("shell approval decision not delivered (unknown/expired request ID)",
 			slog.String("request_id", id))
+		http.Error(w, `{"error":"decision not delivered (unknown or expired request)"}`, http.StatusGone)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "request_id": id, "delivered": delivered})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "request_id": id, "delivered": true})
 }
 
 // resolveShellApprovalAgent returns an agent instance for delivering shell

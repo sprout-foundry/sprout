@@ -485,7 +485,59 @@ func classifyXargsInvocation(cmdLower string) (SecurityRisk, bool) {
 		return SecurityDangerous, true
 	}
 
+	// Destructive inner command with no explicit target (e.g. `rm -rf`,
+	// `rm -r`, `chmod -R`). When fed by xargs, the targets come from
+	// arbitrary piped input — the destruction is unbounded. Elevate to
+	// DANGEROUS because there's no safe-path whitelist check on the
+	// piped arguments. This closes the `ls | xargs rm -rf` gap where
+	// `rm -rf` alone classifies as CAUTION (no target → no critical hit)
+	// but the actual effect is mass deletion of whatever `ls` emitted.
+	if isUnboundedDestructiveXargs(inner) {
+		return SecurityDangerous, true
+	}
+
 	return classifySingleCommand(inner), true
+}
+
+// isUnboundedDestructiveXargs reports whether inner is a destructive command
+// (rm -rf, rm -r, rm -f, rmdir, chmod -R, chown -R) without an explicit file
+// target. In an xargs context the targets are piped input — unbounded and
+// not checked by the safe-path whitelist.
+func isUnboundedDestructiveXargs(inner string) bool {
+	fields := strings.Fields(inner)
+	if len(fields) == 0 {
+		return false
+	}
+	cmd := fields[0]
+	flags := strings.Join(fields[1:], " ")
+	// rm with recursive/force flags but no path argument (only flags).
+	if cmd == "rm" && (strings.Contains(flags, "-r") || strings.Contains(flags, "-f") || strings.Contains(flags, "-rf") || strings.Contains(flags, "-fr")) {
+		// Check that there are no non-flag arguments (paths).
+		hasPathArg := false
+		for _, f := range fields[1:] {
+			if !strings.HasPrefix(f, "-") {
+				hasPathArg = true
+				break
+			}
+		}
+		return !hasPathArg
+	}
+	// rmdir with no path argument.
+	if cmd == "rmdir" && len(fields) == 1 {
+		return true
+	}
+	// chmod -R / chown -R with no path argument.
+	if (cmd == "chmod" || cmd == "chown") && strings.Contains(flags, "-R") {
+		hasPathArg := false
+		for _, f := range fields[1:] {
+			if !strings.HasPrefix(f, "-") {
+				hasPathArg = true
+				break
+			}
+		}
+		return !hasPathArg
+	}
+	return false
 }
 
 // stripXargsFlags removes xargs flag tokens from the front of cmdLower and

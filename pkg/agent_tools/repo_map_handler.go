@@ -66,7 +66,7 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 }
 
 func (h *repoMapHandler) Aliases() []string      { return nil }
-func (h *repoMapHandler) Timeout() time.Duration { return 0 }
+func (h *repoMapHandler) Timeout() time.Duration { return 30 * time.Second }
 func (h *repoMapHandler) MaxResultSize() int     { return 0 }
 func (h *repoMapHandler) SafeForParallel() bool  { return false }
 func (h *repoMapHandler) Interactive() bool      { return false }

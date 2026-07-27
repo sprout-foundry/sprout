@@ -8,86 +8,50 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
-// skipDirs holds directory component names that should never be indexed.
-// This includes build artifacts, package managers, AND security-sensitive
-// or user-data directories. When the embedding index walks from a home
-// directory (daemon/service mode), these entries prevent it from touching
-// private keys, credentials, media libraries, and other non-project data.
-var skipDirs = map[string]bool{
-	// Package managers
-	"node_modules": true,
-	"vendor":       true,
-	// Version control
-	".git":  true,
-	".hg":   true,
-	".svn":  true,
-	".npm":  true,
-	".yarn": true,
-	".pnp":  true,
-	// Python
-	"__pycache__": true,
-	".tox":        true,
-	".venv":       true,
-	"venv":        true,
-	"env":         true,
-	".env":        true,
-	".direnv":     true,
-	// JavaScript/Node
-	".next":    true,
-	".nuxt":    true,
-	".turbo":   true,
-	"coverage": true,
-	".cache":   true,
-	// Java/Kotlin
-	".gradle": true,
-	".mvn":    true,
-	// Build artifacts
-	"dist":             true,
-	"build":            true,
-	"out":              true,
-	"target":           true,
-	"storybook-static": true, // Storybook build output
-	".storybook":       true, // Storybook config
-	// IDE
-	".idea":   true,
-	".vscode": true,
-	// Terraform
-	".terraform": true,
-	// Sprout-specific
-	".agent-i": true, // Agent session data
-	".sprout":  true, // Sprout runtime data (run/embeddings/revisions)
+// skipDirs delegates to the canonical shared list in pkg/filesystem.
+// Additional security-sensitive and user-data directories are added below
+// for embedding-specific safety (preventing private key/media indexing when
+// walking from a home directory in daemon mode).
+var skipDirs = func() map[string]bool {
+	m := make(map[string]bool, len(filesystem.SkipDirs)+30)
+	for k, v := range filesystem.SkipDirs {
+		m[k] = v
+	}
 	// Security-sensitive: credentials, keys, auth tokens
-	".ssh":    true, // SSH private keys, known hosts
-	".aws":    true, // AWS credentials and config
-	".kube":   true, // Kubernetes configs and tokens
-	".gnupg":  true, // GPG keys
-	".gpg":    true, // GPG keys (alternate)
-	".pki":    true, // Public key infrastructure
-	".vault":  true, // HashiCorp Vault
-	".docker": true, // Docker credentials (config.json with auth tokens)
+	m[".ssh"] = true
+	m[".aws"] = true
+	m[".kube"] = true
+	m[".gnupg"] = true
+	m[".gpg"] = true
+	m[".pki"] = true
+	m[".vault"] = true
+	m[".docker"] = true
 	// User data directories (macOS / Linux home)
-	"Library":      true, // macOS app data, keychains, caches
-	"Applications": true, // macOS apps
-	"Desktop":      true, // User desktop files
-	"Downloads":    true, // User downloads
-	"Documents":    true, // User documents
-	"Music":        true, // User media
-	"Pictures":     true, // User media
-	"Videos":       true, // User media
-	"Public":       true, // macOS shared folder
+	m["Library"] = true
+	m["Applications"] = true
+	m["Desktop"] = true
+	m["Downloads"] = true
+	m["Documents"] = true
+	m["Music"] = true
+	m["Pictures"] = true
+	m["Videos"] = true
+	m["Public"] = true
 	// Email
-	".maildir": true,
-	"Maildir":  true,
+	m[".maildir"] = true
+	m["Maildir"] = true
 	// E-readers / books
-	"calibre": true,
+	m["calibre"] = true
 	// Trash
-	".Trash": true,
+	m[".Trash"] = true
 	// Config and local data (may contain sensitive app configs)
-	".config": true,
-	".local":  true,
-}
+	m[".config"] = true
+	m[".local"] = true
+	return m
+}()
 
 // ShouldIgnorePath reports whether the given path should be excluded from
 // indexing. It applies two layers of filtering:

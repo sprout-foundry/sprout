@@ -238,7 +238,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 		return nil, "", agenterrors.NewTool("read_file", "failed to access file", err).WithDetail("path", cleanPath)
 	}
 	if info.IsDir() {
-		return nil, "", fmt.Errorf("path is a directory, not a file: %s", cleanPath)
+		return nil, "", agenterrors.NewInvalidInputError(fmt.Sprintf("path is a directory, not a file: %s", cleanPath), nil)
 	}
 
 	// Read file data
@@ -251,12 +251,12 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
 		// Not a valid image — fall back to text handler error
-		return nil, "", fmt.Errorf("cannot read file %s: not a text file or unsupported image format", cleanPath)
+		return nil, "", agenterrors.NewInvalidInputError(fmt.Sprintf("cannot read file %s: not a text file or unsupported image format", cleanPath), nil)
 	}
 
 	// Check size limit
 	if len(data) > console.MaxPastedImageSize {
-		return nil, "", fmt.Errorf("image file too large (%d bytes, max %d bytes): %s", len(data), console.MaxPastedImageSize, cleanPath)
+		return nil, "", agenterrors.NewInvalidInputError(fmt.Sprintf("image file too large (%d bytes, max %d bytes): %s", len(data), console.MaxPastedImageSize, cleanPath), nil)
 	}
 
 	// Optimize/resize if needed (using existing vision_types.go function)

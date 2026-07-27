@@ -629,7 +629,7 @@ func RenameSessionScoped(sessionID, newName, workingDir string) error {
 func ListSessions() ([]string, error) {
 	sessions, err := ListSessionsWithTimestamps()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list sessions: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to list sessions", err)
 	}
 
 	var sessionIDs []string
@@ -649,14 +649,14 @@ func DeleteSession(sessionID string) error {
 func DeleteSessionScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return fmt.Errorf("failed to get state directory: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to get state directory", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return fmt.Errorf("failed to resolve session file: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to resolve session file", err)
 	}
 	if err := os.Remove(stateFile); err != nil {
-		return fmt.Errorf("failed to delete session file %q: %w", stateFile, err)
+		return agenterrors.NewAgent("persistence", fmt.Sprintf("failed to delete session file %q", stateFile), err)
 	}
 	return nil
 }
@@ -776,11 +776,11 @@ func (a *Agent) GetLastMessages(n int) []api.Message {
 func cleanupMemorySessions() error {
 	workingDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("failed to resolve current working directory for session cleanup: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to resolve current working directory for session cleanup", err)
 	}
 	sessions, err := ListSessionsWithTimestampsScoped(workingDir)
 	if err != nil {
-		return fmt.Errorf("failed to list sessions: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to list sessions", err)
 	}
 
 	if len(sessions) <= sessionRetentionLimit {
@@ -795,7 +795,7 @@ func cleanupMemorySessions() error {
 	// Delete oldest sessions beyond the retention limit for this directory scope.
 	for i := 0; i < len(sessions)-sessionRetentionLimit; i++ {
 		if err := DeleteSessionScoped(sessions[i].SessionID, sessions[i].WorkingDirectory); err != nil {
-			return fmt.Errorf("failed to delete session %s: %w", sessions[i].SessionID, err)
+			return agenterrors.NewAgent("persistence", fmt.Sprintf("failed to delete session %s", sessions[i].SessionID), err)
 		}
 	}
 
@@ -818,12 +818,12 @@ func ExportStateToJSON(state *ConversationState) ([]byte, error) {
 func ImportStateFromJSONFile(filename string) (*ConversationState, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read import file: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to read import file", err)
 	}
 
 	var state ConversationState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal state from file: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to unmarshal state from file", err)
 	}
 
 	return &state, nil
@@ -850,7 +850,7 @@ func SetGetStateDirForTest(dir string) func() (string, error) {
 // SetGetStateDirForTestError is a convenience helper that sets getStateDirFunc
 // to return an error for testing error handling.
 func SetGetStateDirForTestError(msg string) func() (string, error) {
-	err := fmt.Errorf("%s", msg)
+	err := agenterrors.NewAgent("persistence", msg, nil)
 	return SetGetStateDirFunc(func() (string, error) {
 		return "", err
 	})

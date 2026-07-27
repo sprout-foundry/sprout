@@ -699,7 +699,7 @@ func readImageAsImageData(filePath string, maxEdgePx int) (api.ImageData, int, e
 		return api.ImageData{}, 0, agenterrors.NewAgent("conversation", "failed to stat file", err)
 	}
 	if stat.Size() > console.MaxPastedImageSize {
-		return api.ImageData{}, 0, fmt.Errorf("image too large (%d bytes)", stat.Size())
+		return api.ImageData{}, 0, agenterrors.NewInvalidInputError(fmt.Sprintf("image too large (%d bytes)", stat.Size()), nil)
 	}
 
 	data, err := os.ReadFile(filePath)

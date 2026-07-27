@@ -175,7 +175,7 @@ func DeleteMemory(name string) error {
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fmt.Errorf("memory file %q does not exist", name)
+		return agenterrors.NewNotFound(fmt.Sprintf("memory file %q does not exist", name))
 	}
 
 	// Delete the file

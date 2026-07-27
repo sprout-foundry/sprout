@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // registerPreviewPortHandler implements ToolHandler for register_preview_port.
@@ -36,13 +38,13 @@ func (h *registerPreviewPortHandler) Definition() ToolDefinition {
 func (h *registerPreviewPortHandler) Validate(args map[string]any) error {
 	port, err := extractInt(args, "port")
 	if err != nil {
-		return fmt.Errorf("register_preview_port: 'port' is required")
+		return agenterrors.NewValidation("register_preview_port: 'port' is required", nil)
 	}
 	if port < 1024 || port > 65535 {
-		return fmt.Errorf("register_preview_port: port must be between 1024 and 65535")
+		return agenterrors.NewValidation("register_preview_port: port must be between 1024 and 65535", nil)
 	}
 	if label, err := extractString(args, "label"); err == nil && len(label) > 64 {
-		return fmt.Errorf("register_preview_port: label must be 64 characters or fewer")
+		return agenterrors.NewValidation("register_preview_port: label must be 64 characters or fewer", nil)
 	}
 	return nil
 }

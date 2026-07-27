@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	provider_factory "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -41,37 +42,37 @@ func (h *manageSettingsHandler) Definition() ToolDefinition {
 func (h *manageSettingsHandler) Validate(args map[string]any) error {
 	op, _ := extractString(args, "operation")
 	if op == "" {
-		return fmt.Errorf("manage_settings: 'operation' is required")
+		return agenterrors.NewValidation("manage_settings: 'operation' is required", nil)
 	}
 	op = strings.TrimSpace(strings.ToLower(op))
 
 	switch op {
 	case "get", "describe":
 		if _, err := extractString(args, "key"); err != nil {
-			return fmt.Errorf("manage_settings: 'key' is required for %s", op)
+			return agenterrors.NewValidation(fmt.Sprintf("manage_settings: 'key' is required for %s", op), nil)
 		}
 	case "set":
 		if _, err := extractString(args, "key"); err != nil {
-			return fmt.Errorf("manage_settings: 'key' is required for set")
+			return agenterrors.NewValidation("manage_settings: 'key' is required for set", nil)
 		}
 		if _, err := extractString(args, "value"); err != nil {
-			return fmt.Errorf("manage_settings: 'value' is required for set")
+			return agenterrors.NewValidation("manage_settings: 'value' is required for set", nil)
 		}
 	case "preview":
 		if _, err := extractString(args, "key"); err != nil {
-			return fmt.Errorf("manage_settings: 'key' is required for preview")
+			return agenterrors.NewValidation("manage_settings: 'key' is required for preview", nil)
 		}
 		if _, err := extractString(args, "value"); err != nil {
-			return fmt.Errorf("manage_settings: 'value' is required for preview")
+			return agenterrors.NewValidation("manage_settings: 'value' is required for preview", nil)
 		}
 	case "test_credential":
 		if _, err := extractString(args, "provider"); err != nil {
-			return fmt.Errorf("manage_settings: 'provider' is required for test_credential")
+			return agenterrors.NewValidation("manage_settings: 'provider' is required for test_credential", nil)
 		}
 	case "list_providers", "describe_all":
 		// No required params
 	default:
-		return fmt.Errorf("manage_settings: unknown operation %q", op)
+		return agenterrors.NewValidation(fmt.Sprintf("manage_settings: unknown operation %q", op), nil)
 	}
 	return nil
 }
@@ -331,7 +332,7 @@ func validateSettingKey(key string) error {
 		validKeys = append(validKeys, k)
 	}
 	sort.Strings(validKeys)
-	return fmt.Errorf("unknown setting key %q; valid keys: %s", key, strings.Join(validKeys, ", "))
+	return agenterrors.NewValidation(fmt.Sprintf("unknown setting key %q; valid keys: %s", key, strings.Join(validKeys, ", ")), nil)
 }
 
 // settingKeys returns a sorted list of all supported setting keys.
@@ -394,7 +395,7 @@ func setConfigField(cfg *configuration.Config, key, value string) error {
 		cfg.LastUsedProvider = value
 	case "model":
 		if cfg.LastUsedProvider == "" {
-			return fmt.Errorf("cannot set model: no provider selected")
+			return agenterrors.NewValidation("cannot set model: no provider selected", nil)
 		}
 		if cfg.ProviderModels == nil {
 			cfg.ProviderModels = make(map[string]string)
@@ -405,7 +406,7 @@ func setConfigField(cfg *configuration.Config, key, value string) error {
 		case "low", "medium", "high", "":
 			cfg.ReasoningEffort = strings.ToLower(value)
 		default:
-			return fmt.Errorf("reasoning_effort must be low, medium, or high, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("reasoning_effort must be low, medium, or high, got %q", value), nil)
 		}
 	case "disable_thinking":
 		switch strings.ToLower(value) {
@@ -414,7 +415,7 @@ func setConfigField(cfg *configuration.Config, key, value string) error {
 		case "false":
 			cfg.DisableThinking = false
 		default:
-			return fmt.Errorf("disable_thinking must be true or false, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("disable_thinking must be true or false, got %q", value), nil)
 		}
 	case "resource_directory":
 		cfg.ResourceDirectory = value
@@ -423,7 +424,7 @@ func setConfigField(cfg *configuration.Config, key, value string) error {
 		case "project", "global", "":
 			cfg.HistoryScope = strings.ToLower(value)
 		default:
-			return fmt.Errorf("history_scope must be project or global, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("history_scope must be project or global, got %q", value), nil)
 		}
 	case "subagent_provider":
 		cfg.SubagentProvider = value
@@ -446,7 +447,7 @@ func setConfigField(cfg *configuration.Config, key, value string) error {
 		case "compact", "default", "verbose", "":
 			cfg.OutputVerbosity = strings.ToLower(value)
 		default:
-			return fmt.Errorf("output_verbosity must be compact, default, or verbose, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("output_verbosity must be compact, default, or verbose, got %q", value), nil)
 		}
 	case "commit_provider":
 		cfg.CommitProvider = value

@@ -179,6 +179,7 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 		PromptTokens:     resp.Usage.PromptTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
 		CachedTokens:     resp.Usage.CachedTokens,
+		ImageTokens:      resp.Usage.ImageTokens,
 	}
 	sp.agent.state.AddCostEntry(entry)
 
@@ -218,6 +219,9 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 		if n := *resp.Usage.CacheWriteTokens; n > 0 {
 			sp.agent.state.SetCacheWriteTokens(sp.agent.state.GetCacheWriteTokens() + n)
 		}
+	}
+	if n := resp.Usage.ImageTokens; n > 0 {
+		sp.agent.state.SetImageTokens(sp.agent.state.GetImageTokens() + n)
 	}
 }
 

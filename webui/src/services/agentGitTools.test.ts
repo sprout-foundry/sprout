@@ -39,7 +39,9 @@ const mockLocalStorage = {
   setItem: vi.fn(),
   removeItem: vi.fn(),
   clear: vi.fn(),
-  get length() { return 0; },
+  get length() {
+    return 0;
+  },
   key: vi.fn(),
 };
 
@@ -212,9 +214,7 @@ describe('git_diff', () => {
   });
 
   it('formats diff blocks with filepath and patch', async () => {
-    mockGitClient.diff.mockResolvedValue([
-      { filepath: 'a.ts', type: 'modified', patch: '+new code' },
-    ]);
+    mockGitClient.diff.mockResolvedValue([{ filepath: 'a.ts', type: 'modified', patch: '+new code' }]);
     const result = await findTool('git_diff').execute({ repo: 'owner/repo' });
     expect(result).toContain('Diff for owner/repo');
     expect(result).toContain('--- a.ts (modified)');
@@ -307,11 +307,7 @@ describe('git_write_file', () => {
       content: 'const x = 2;',
     });
     expect(result).toBe('Wrote src/main.ts in owner/repo');
-    expect(mockGitClient.writeFile).toHaveBeenCalledWith(
-      '/repos/owner/repo',
-      'src/main.ts',
-      'const x = 2;',
-    );
+    expect(mockGitClient.writeFile).toHaveBeenCalledWith('/repos/owner/repo', 'src/main.ts', 'const x = 2;');
   });
 });
 
@@ -629,7 +625,11 @@ describe('error handling', () => {
       // Spy on each method to reject, then restore after.
       const spies: ReturnType<typeof vi.spyOn>[] = [];
       for (const key of Object.keys(mockGitClient)) {
-        spies.push(vi.spyOn(mockGitClient as any, key as keyof typeof mockGitClient).mockRejectedValue(new Error('simulated error')));
+        spies.push(
+          vi
+            .spyOn(mockGitClient as any, key as keyof typeof mockGitClient)
+            .mockRejectedValue(new Error('simulated error')),
+        );
       }
 
       // push/pull check localStorage *before* calling gitClient,

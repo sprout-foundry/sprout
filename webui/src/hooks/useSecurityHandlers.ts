@@ -26,11 +26,7 @@ export interface UseSecurityHandlersOptions {
 }
 
 export interface UseSecurityHandlersReturn {
-  handleSecurityApprovalResponse: (
-    requestId: string,
-    approved: boolean,
-    action?: SecurityApprovalAction,
-  ) => void;
+  handleSecurityApprovalResponse: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
   handleSecurityPromptResponse: (requestId: string, response: boolean) => void;
   handleAskUserResponse: (requestId: string, response: string) => void;
   handlePasswordResponse: (requestId: string, password: string) => void;

@@ -30,8 +30,6 @@ var openRouterModelsURL = "https://openrouter.ai/api/v1/models"
 // provider in that run.
 var openRouterModelsCache map[string]openRouterModel
 
-
-
 // openRouterResponse mirrors the JSON shape from /api/v1/models.
 type openRouterResponse struct {
 	Data []openRouterModel `json:"data"`
@@ -235,11 +233,11 @@ func writeProviderJSON(registryDir, providerID, updatedAt string, models []model
 // openRouterMetaSet is the denylist used inside normalizeModels to filter
 // out OpenRouter routing aliases that are not real models.
 var openRouterMetaSet = map[string]bool{
-	"openrouter/auto":         true,
-	"openrouter/auto-beta":    true,
-	"openrouter/bodybuilder":  true,
-	"openrouter/fusion":       true,
-	"openrouter/pareto-code":  true,
+	"openrouter/auto":        true,
+	"openrouter/auto-beta":   true,
+	"openrouter/bodybuilder": true,
+	"openrouter/fusion":      true,
+	"openrouter/pareto-code": true,
 }
 
 func normalizeModels(models []api.ModelInfo) []providercatalog.Model {
@@ -393,12 +391,12 @@ func mergeConfigOnlyModels(providerID string, models []modelcontract.CanonicalMo
 		}
 		models = append(models, modelcontract.CanonicalModel{
 			ID:            mi.ID,
-			DisplayName:  mi.Name,
-			Description:  mi.Description,
+			DisplayName:   mi.Name,
+			Description:   mi.Description,
 			ContextWindow: mi.ContextLength,
-			Status:       modelcontract.StatusActive,
-			Capabilities: modelcontract.CapabilitiesFromTags(mi.Tags),
-			Source:       "embedded-config",
+			Status:        modelcontract.StatusActive,
+			Capabilities:  modelcontract.CapabilitiesFromTags(mi.Tags),
+			Source:        "embedded-config",
 		})
 	}
 	return models

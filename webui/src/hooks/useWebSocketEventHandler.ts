@@ -1144,7 +1144,10 @@ const handleDelegateClarificationResponded = (ctx: EventHandlerContext): void =>
 const handleWorkspacePatch = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const raw = (event.data ?? {}) as { path?: unknown; action?: unknown; seq?: unknown; content?: unknown };
-  const logEntry = createLogEntry({ ...event, data: { path: String(raw.path ?? ''), action: String(raw.action ?? ''), seq: raw.seq } });
+  const logEntry = createLogEntry({
+    ...event,
+    data: { path: String(raw.path ?? ''), action: String(raw.action ?? ''), seq: raw.seq },
+  });
   logEntry.category = 'file';
   logEntry.level = 'info';
   setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));

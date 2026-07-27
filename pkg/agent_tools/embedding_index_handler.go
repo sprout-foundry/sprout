@@ -270,14 +270,14 @@ func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding
 	}, nil
 }
 
-func (h *embeddingIndexHandler) Aliases() []string      { return nil }
+func (h *embeddingIndexHandler) Aliases() []string { return nil }
 func (h *embeddingIndexHandler) Timeout() time.Duration {
 	// Background builds return immediately; transient builds need up to 5min.
 	return 5 * time.Minute
 }
-func (h *embeddingIndexHandler) MaxResultSize() int     { return 0 }
-func (h *embeddingIndexHandler) SafeForParallel() bool  { return false }
-func (h *embeddingIndexHandler) Interactive() bool      { return false }
+func (h *embeddingIndexHandler) MaxResultSize() int    { return 0 }
+func (h *embeddingIndexHandler) SafeForParallel() bool { return false }
+func (h *embeddingIndexHandler) Interactive() bool     { return false }
 
 // --- codegraph helpers ---
 

@@ -78,9 +78,7 @@ describe('parseGitToolCommand', () => {
   });
 
   it('parses command with multiple args', () => {
-    const result = parseGitToolCommand(
-      'gittool:git_read_file {"repo":"owner/repo","filepath":"src/main.ts"}'
-    );
+    const result = parseGitToolCommand('gittool:git_read_file {"repo":"owner/repo","filepath":"src/main.ts"}');
     expect(result).not.toBe(null);
     expect(result!.toolName).toBe('git_read_file');
     expect(result!.args).toEqual({ repo: 'owner/repo', filepath: 'src/main.ts' });
@@ -145,9 +143,7 @@ describe('dispatchGitTool', () => {
   });
 
   it('throws on unknown tool name', async () => {
-    await expect(dispatchGitTool('git_nonexistent', {})).rejects.toThrow(
-      /Unknown git tool: git_nonexistent/
-    );
+    await expect(dispatchGitTool('git_nonexistent', {})).rejects.toThrow(/Unknown git tool: git_nonexistent/);
   });
 
   it('includes available tool names in error', async () => {
@@ -211,9 +207,7 @@ describe('registerGitToolGlobal', () => {
     mockExecute.mockResolvedValue('OK');
     registerGitToolGlobal();
 
-    await expect(
-      globalThis.__sproutGitTools.execute('bad_tool', {})
-    ).rejects.toThrow(/Unknown git tool/);
+    await expect(globalThis.__sproutGitTools.execute('bad_tool', {})).rejects.toThrow(/Unknown git tool/);
   });
 });
 
@@ -225,16 +219,16 @@ describe('installGitToolBridge', () => {
   it('returns silently when setToolExecutionHook is missing', () => {
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     installGitToolBridge({});
-    expect(spy).toHaveBeenCalledWith(
-      '[agentGitToolBridge] setToolExecutionHook not available on WASM API'
-    );
+    expect(spy).toHaveBeenCalledWith('[agentGitToolBridge] setToolExecutionHook not available on WASM API');
     spy.mockRestore();
   });
 
   it('registers a sync hook that returns null for non-gittool commands', () => {
     let registeredHook: ((cmd: string) => unknown) | null = null;
     installGitToolBridge({
-      setToolExecutionHook: (fn) => { registeredHook = fn; },
+      setToolExecutionHook: (fn) => {
+        registeredHook = fn;
+      },
     });
     expect(registeredHook).not.toBe(null);
     expect(registeredHook!('ls -la')).toBe(null);
@@ -245,7 +239,9 @@ describe('installGitToolBridge', () => {
   it('returns structured error for known gittool commands', () => {
     let registeredHook: ((cmd: string) => unknown) | null = null;
     installGitToolBridge({
-      setToolExecutionHook: (fn) => { registeredHook = fn; },
+      setToolExecutionHook: (fn) => {
+        registeredHook = fn;
+      },
     });
     const result = registeredHook!('gittool:git_status {"repo":"a/b"}');
     // NOTE: in production the Go side intercepts gittool: commands before
@@ -262,7 +258,9 @@ describe('installGitToolBridge', () => {
   it('rejects unknown tool names in the sync hook', () => {
     let registeredHook: ((cmd: string) => unknown) | null = null;
     installGitToolBridge({
-      setToolExecutionHook: (fn) => { registeredHook = fn; },
+      setToolExecutionHook: (fn) => {
+        registeredHook = fn;
+      },
     });
     const result = registeredHook!('gittool:unknown_tool {}');
     expect(result).toMatchObject({
@@ -277,7 +275,9 @@ describe('installGitToolBridge', () => {
   it('sync hook does not call execute (fire-and-forget only)', () => {
     let registeredHook: ((cmd: string) => unknown) | null = null;
     installGitToolBridge({
-      setToolExecutionHook: (fn) => { registeredHook = fn; },
+      setToolExecutionHook: (fn) => {
+        registeredHook = fn;
+      },
     });
     // The sync hook returns immediately without calling dispatchGitTool
     const result = registeredHook!('gittool:git_status {}');
@@ -292,7 +292,9 @@ describe('installGitToolBridge', () => {
   it('sync hook passes args in the error message', () => {
     let registeredHook: ((cmd: string) => unknown) | null = null;
     installGitToolBridge({
-      setToolExecutionHook: (fn) => { registeredHook = fn; },
+      setToolExecutionHook: (fn) => {
+        registeredHook = fn;
+      },
     });
     const result = registeredHook!('gittool:git_read_file {"repo":"x/y","filepath":"a.ts"}');
     const stderr = (result as any).stderr;

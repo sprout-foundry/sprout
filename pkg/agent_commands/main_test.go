@@ -25,6 +25,10 @@ func TestMain(m *testing.M) {
 	// spawns a background build/inference goroutine. Multiplied across tests
 	// those goroutines can balloon a single test process to 25–30GB RSS.
 	os.Setenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX", "1")
+	// Isolate from the real workspace config. Inside a git repo,
+	// SPROUT_CONFIG points at .sprout/; without this override, tests
+	// using NewManagerSilent/NewManager leak config writes there.
+	os.Setenv("SPROUT_CONFIG", filepath.Join(os.TempDir(), "sprout-cmds-test-config"))
 	if os.Getenv("SPROUT_MODELS_DIR") == "" {
 		os.Setenv("SPROUT_MODELS_DIR", filepath.Join(os.TempDir(), "sprout-test-models"))
 	}

@@ -52,6 +52,30 @@ type onnxRuntimeReleaseConfig struct {
 	Format string
 }
 
+// androidMavenBase is the Maven Central artifact path for the ONNX Runtime
+// Android package. AARs ship as .zip archives with per-ABI .so files under
+// jni/<abi>/libonnxruntime.so. Unlike the GitHub releases page (Linux,
+// macOS, Windows only), Microsoft publishes Android builds exclusively via
+// Maven Central.
+const androidMavenBase = "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/"
+
+// androidABI maps GOARCH to the Android Application Binary Interface name
+// used inside the AAR's jni/ directory. Returns "" for unsupported archs.
+func androidABI(goarch string) string {
+	switch goarch {
+	case "arm64":
+		return "arm64-v8a"
+	case "arm": // 32-bit arm (GOARM)
+		return "armeabi-v7a"
+	case "amd64":
+		return "x86_64"
+	case "386":
+		return "x86"
+	default:
+		return ""
+	}
+}
+
 // onnxRuntimeReleaseFor returns the release config for the current
 // GOOS/GOARCH, or false if no published archive matches this platform.
 func onnxRuntimeReleaseFor(goos, goarch string) (onnxRuntimeReleaseConfig, bool) {
@@ -96,15 +120,23 @@ func onnxRuntimeReleaseFor(goos, goarch string) (onnxRuntimeReleaseConfig, bool)
 				Format:         "zip",
 			}, true
 		}
+	case "android":
+		// Android ONNX Runtime builds are distributed via Maven Central as
+		// AAR archives (a ZIP with per-ABI .so files under jni/<abi>/).
+		// Microsoft does not publish a standalone Android artifact on the
+		// GitHub releases page.
+		abi := androidABI(goarch)
+		if abi == "" {
+			return onnxRuntimeReleaseConfig{}, false
+		}
+		return onnxRuntimeReleaseConfig{
+			URL: androidMavenBase + onnxRuntimeVersion + "/onnxruntime-android-" + onnxRuntimeVersion + ".aar",
+			// Match the per-ABI .so inside the AAR. AAR entries use no
+			// leading slash (e.g. "jni/arm64-v8a/libonnxruntime.so").
+			InnerLibSuffix: "jni/" + abi + "/libonnxruntime.so",
+			Format:         "zip",
+		}, true
 	}
-	// Note: Android has no entry here because Microsoft does not publish a
-	// standalone Android artifact on the GitHub releases page. Android ONNX
-	// Runtime builds ship via Maven Central as
-	// `com.microsoft.onnxruntime:onnxruntime-android:<ver>` (AAR format).
-	// Auto-download from Maven is a separate implementation — for now,
-	// Android users must stage the library manually and point sprout at it
-	// via SPROUT_ONNX_RUNTIME_LIB. See docs/ONNX_RUNTIME.md ("Termux /
-	// Android").
 	return onnxRuntimeReleaseConfig{}, false
 }
 

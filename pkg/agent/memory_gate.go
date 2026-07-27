@@ -152,7 +152,9 @@ func (g *MemoryGate) Check() error {
 // readMemAvailable dispatches to the platform-specific reader.
 func readMemAvailable() (int64, error) {
 	switch runtime.GOOS {
-	case "linux":
+	case "linux", "android":
+		// Android's kernel exposes the same /proc/meminfo as desktop Linux;
+		// MemAvailable is the right metric on both.
 		return readMemLinux()
 	case "darwin":
 		return readMemDarwin()

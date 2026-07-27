@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -165,7 +166,7 @@ func TestMemoryGate_FailOpenWhenReaderReturnsError(t *testing.T) {
 		gate := &MemoryGate{
 			readMem: func() (int64, error) {
 				calls++
-				return 0, fmt.Errorf("simulated read failure")
+				return 0, errors.New("simulated read failure")
 			},
 		}
 		err := gate.Check()
@@ -188,7 +189,7 @@ func TestMemoryGate_FailOpenWhenReaderReturnsError(t *testing.T) {
 				if calls == 1 {
 					return 12 * gb, nil // enter retry zone
 				}
-				return 0, fmt.Errorf("simulated read failure during retry")
+				return 0, errors.New("simulated read failure during retry")
 			},
 		}
 		err := gate.Check()
@@ -411,7 +412,7 @@ func TestMeminfoParsingLogic(t *testing.T) {
 				}
 			}
 			if !found && err == nil {
-				err = fmt.Errorf("MemAvailable not found in /proc/meminfo")
+				err = errors.New("MemAvailable not found in /proc/meminfo")
 			}
 			if err != nil {
 				if !tt.wantError {
@@ -515,7 +516,7 @@ func TestVMStatParsingLogic(t *testing.T) {
 				if strings.HasPrefix(line, tt.fieldName+":") {
 					parts := strings.Fields(line)
 					if len(parts) < 2 {
-						err = fmt.Errorf("unexpected vm_stat line format: %q", line)
+						err = errors.New(fmt.Sprintf("unexpected vm_stat line format: %q", line))
 						break
 					}
 					found, err = strconv.ParseInt(parts[len(parts)-1], 10, 64)
@@ -527,7 +528,7 @@ func TestVMStatParsingLogic(t *testing.T) {
 				}
 			}
 			if !foundIt && err == nil {
-				err = fmt.Errorf("%s not found in vm_stat output", tt.fieldName)
+				err = errors.New(fmt.Sprintf("%s not found in vm_stat output", tt.fieldName))
 			}
 			if err != nil {
 				if !tt.wantError {

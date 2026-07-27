@@ -14,6 +14,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
@@ -634,11 +635,11 @@ func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configurati
 	buildTestConfig := func() (*providers.ProviderConfig, error) {
 		data, err := os.ReadFile(configFile)
 		if err != nil {
-			return nil, fmt.Errorf("read provider config: %w", err)
+			return nil, agenterrors.Wrap(err, "read provider config")
 		}
 		var cfg providers.ProviderConfig
 		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("parse provider config: %w", err)
+			return nil, agenterrors.Wrap(err, "parse provider config")
 		}
 		cfg.Endpoint = server.URL + "/v1/chat/completions"
 		return &cfg, nil
@@ -843,7 +844,7 @@ func TestCLIPath_LCM_HelperConcurrencySmoke(t *testing.T) {
 			defer wg.Done()
 			ag, err := newAgentWithConfigManagerInner(manager, workspaceRoot, "")
 			if err != nil {
-				errs <- fmt.Errorf("goroutine %d: %w", idx, err)
+				errs <- agenterrors.Wrapf(err, "goroutine %d", idx)
 				return
 			}
 			defer ag.Shutdown()

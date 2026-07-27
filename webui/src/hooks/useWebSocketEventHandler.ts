@@ -29,6 +29,7 @@ import { getWebUIClientId } from '../services/clientSession';
 import { notifyIfHidden } from '../services/desktopNotify';
 import { getServerErrorCode } from '../services/errorCodes';
 import { LSPClientService } from '../services/lspClientService';
+import { switchChatSession } from '../services/chatSessions';
 import { toQueryProgress } from '../types/app';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog } from '../utils/log';
@@ -1324,12 +1325,6 @@ export function useWebSocketEventHandler({
 
   const handleReconnect = useCallback(() => {
     debugLog('[reconnect] syncing state after websocket reconnect');
-    // The reconnect itself is the recovery signal — clear lastError up front
-    // so the "chat failed" red banner in ChatFooter dismisses immediately. If
-    // getStats() is slow/fails (very common — same network/daemon hiccup that
-    // caused the send failure is still resolving), the .then branch that also
-    // sets lastError: null will not run, and without this unconditional clear
-    // the banner sticks until the user sends a new message or reloads.
     setState((prev) => ({ ...prev, lastError: null }));
     apiService
       .getStats()
@@ -1337,6 +1332,17 @@ export function useWebSocketEventHandler({
         const statsRecord = stats as Record<string, unknown>;
         const backendProcessing = statsRecord.is_processing === true;
         activeRequestsRef.current = backendProcessing ? 1 : 0;
+
+        const wasProcessing = (() => {
+          // Read the current isProcessing before setState overwrites it.
+          let processing = false;
+          setState((prev) => {
+            processing = prev.isProcessing;
+            return prev;
+          });
+          return processing;
+        })();
+
         setState((prev) => {
           const nextToolExecutions = backendProcessing
             ? prev.toolExecutions
@@ -1360,6 +1366,38 @@ export function useWebSocketEventHandler({
             stats: { ...prev.stats, ...statsRecord, connection_phase: 'reconnected' },
           };
         });
+
+        // If a query was processing when we disconnected but the backend
+        // says it's done now, the query_completed event was lost during
+        // the disconnect. Reload messages for the active chat to recover
+        // the assistant's response.
+        if (wasProcessing && !backendProcessing) {
+          const chatId = activeChatIdRef.current;
+          if (chatId) {
+            debugLog('[reconnect] query completed during disconnect — reloading messages for', chatId);
+            switchChatSession(chatId)
+              .then((response) => {
+                // Bail if user switched chats while we were loading.
+                if (activeChatIdRef.current !== chatId) return;
+                const backendMessages: Message[] = (response.chat_session.messages ?? [])
+                  .filter((m) => m.role === 'user' || m.role === 'assistant')
+                  .map((m, i) => ({
+                    id: `chat-${chatId}-${i}`,
+                    type: m.role as 'user' | 'assistant',
+                    content: typeof m.content === 'string' ? m.content : '',
+                    timestamp: new Date(),
+                    ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+                  }));
+                setState((prev) => {
+                  const useBackendMessages = backendMessages.length >= prev.messages.length;
+                  return useBackendMessages ? { messages: trimMessages(backendMessages) } : {};
+                });
+              })
+              .catch((err) => {
+                debugLog('[reconnect] failed to reload messages:', err);
+              });
+          }
+        }
       })
       .catch((error: unknown) => {
         debugLog('[reconnect] failed to sync backend state:', error);

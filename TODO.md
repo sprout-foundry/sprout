@@ -39,7 +39,7 @@ are approved and ready to assign are listed.
 - [x] **SP-098: Split `pkg/events/events.go` (1218 lines)** — Extract `events_types.go` + `events_bus.go` + `events_filter.go`. **~2 hours.**
 
 **Remaining (stable, ≥800 lines):**
-- [ ] **SP-098: Split `pkg/embedding/manager.go` (902 lines)** — Extract `embedding_models.go` + `embedding_batch.go` + `embedding_cache.go`. **~2 hours.**
+- [x] **SP-098: Split `pkg/embedding/manager.go` (902 lines)** — Extract `embedding_models.go` + `embedding_batch.go` + `embedding_cache.go`. **~2 hours.**
 - [ ] **SP-098: Split `pkg/agent_tools/security_classifier.go` (900 lines)** — Extract `security_classifier_path.go` + `security_classifier_shell_patterns.go`. **~2 hours.**
 - [ ] **SP-098: Split `pkg/agent_tools/background_process.go` (885 lines)** — Extract `background_process_log.go` + `background_process_pty.go`. **~2 hours.**
 - [ ] **SP-098: Split `pkg/providerregistry/registry.go` (871 lines)** — Extract `registry_models.go` + `registry_providers.go` + `registry_aliases.go`. **~2 hours.**

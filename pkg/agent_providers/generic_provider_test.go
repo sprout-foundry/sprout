@@ -221,7 +221,9 @@ func TestGenericProviderGetModelContextLimitUsesCachedModel(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
+	provider.mu.Lock()
 	provider.model = "cached-model"
+	provider.mu.Unlock()
 	provider.setCachedModels([]api.ModelInfo{
 		{
 			ID:            "cached-model",
@@ -257,7 +259,9 @@ func TestGenericProviderGetModelContextLimitFallsBackWhenCachedEntryHasNoContext
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
+	provider.mu.Lock()
 	provider.model = "cached-model"
+	provider.mu.Unlock()
 	provider.setCachedModels([]api.ModelInfo{
 		{
 			ID:            "cached-model",

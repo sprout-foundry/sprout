@@ -8,10 +8,10 @@ import (
 
 // PricingEntry is the verified pricing for a single model.
 type PricingEntry struct {
-	ID             string  `json:"id"`
-	InputPerMTok   float64 `json:"input_per_mtok"`
-	OutputPerMTok  float64 `json:"output_per_mtok"`
-	CachedPerMTok  float64 `json:"cached_per_mtok,omitempty"`
+	ID            string  `json:"id"`
+	InputPerMTok  float64 `json:"input_per_mtok"`
+	OutputPerMTok float64 `json:"output_per_mtok"`
+	CachedPerMTok float64 `json:"cached_per_mtok,omitempty"`
 }
 
 // ProviderManifest is the verified pricing for a provider's models.
@@ -41,4 +41,3 @@ func loadManifest() map[string]ProviderManifest {
 	}
 	return m
 }
-

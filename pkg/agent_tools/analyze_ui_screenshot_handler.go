@@ -97,11 +97,11 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 
 		// Render the HTML page and capture a screenshot.
 		opts := map[string]any{
-			"action":            "screenshot",
-			"screenshot_path":   tmpPath,
-			"viewport_width":    viewportWidth,
-			"viewport_height":   viewportHeight,
-			"allow_file_url":    true,
+			"action":          "screenshot",
+			"screenshot_path": tmpPath,
+			"viewport_width":  viewportWidth,
+			"viewport_height": viewportHeight,
+			"allow_file_url":  true,
 		}
 		_, browseErr := env.WebBrowser.BrowseURL(ctx, fileURL, opts)
 		if browseErr != nil {

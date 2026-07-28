@@ -77,6 +77,7 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	}
 	return p, nil
 }
+
 // /models endpoint data (including context_length) is populated for
 // GetModelContextLimit without blocking startup. The first call to
 // GetModelContextLimit uses the fast registry/config fallback tiers;
@@ -105,6 +106,12 @@ func (p *GenericProvider) warmModelsCache() {
 
 // SendChatRequest sends a non-streaming chat request
 func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	// Snapshot model under lock for all logging calls below — prevents races
+	// with SetModel or the background warmModelsCache goroutine.
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
+
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, false)
 	if err != nil {
 		return nil, agenterrors.Wrap(err, "failed to build chat request")
@@ -113,14 +120,19 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 	req, sentBody, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
 	if err != nil {
 		// Log request on build error — use the actual sent body (post-redaction)
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, false, "build_http_request", err)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "build_http_request", err)
 		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
 
-	resp, err := p.httpClient.Do(req)
+	// Read httpClient under lock, then release before the network call.
+	p.mu.RLock()
+	client := p.httpClient
+	p.mu.RUnlock()
+
+	resp, err := client.Do(req)
 	if err != nil {
 		// Log request on HTTP error
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, false, "http_request_failed", err)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "http_request_failed", err)
 		return nil, agenterrors.NewNetwork("HTTP request failed", err)
 	}
 
@@ -134,7 +146,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 		if retried {
 			requestBody = retryBody
 			if retryErr != nil {
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false,
 					"retry_max_completion_tokens_build", retryErr)
 				return nil, agenterrors.NewNetwork("failed retry with max_completion_tokens", retryErr)
 			}
@@ -142,14 +154,14 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 			if retryResp.StatusCode != http.StatusOK {
 				retryErrBody, _ := io.ReadAll(retryResp.Body)
 				formattedErr := formatProviderHTTPError(retryResp.StatusCode, retryResp.Header, retryErrBody)
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false,
 					fmt.Sprintf("api_error_%d", retryResp.StatusCode), formattedErr)
 				return nil, formattedErr
 			}
 
 			retryResponse, err := decodeChatResponseWithCost(retryResp.Body)
 			if err != nil {
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false, "decode_response", err)
 				return nil, agenterrors.NewNetwork("failed to decode response", err)
 			}
 			return retryResponse, nil
@@ -157,7 +169,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 
 		// Log request on API error — use the actual sent body (post-redaction)
 		formattedErr := formatProviderHTTPError(resp.StatusCode, resp.Header, body)
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, false,
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), formattedErr)
 		return nil, formattedErr
 	}
@@ -166,7 +178,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 	response, err := decodeChatResponseWithCost(resp.Body)
 	if err != nil {
 		// Log request on decode error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false, "decode_response", err)
 		return nil, agenterrors.NewNetwork("failed to decode response", err)
 	}
 
@@ -242,8 +254,8 @@ func (p *GenericProvider) SetDebug(debug bool) {
 
 // SetModel sets the current model
 func (p *GenericProvider) SetModel(model string) error {
-	p.model = model
 	p.mu.Lock()
+	p.model = model
 	hadCache := p.modelsCached
 	p.modelsCached = false
 	p.mu.Unlock()
@@ -262,7 +274,9 @@ func (p *GenericProvider) SetHTTPClient(c *http.Client) {
 	if c == nil {
 		return
 	}
+	p.mu.Lock()
 	p.httpClient = c
+	p.mu.Unlock()
 }
 
 // SetStreamingClient sets the HTTP client used for streaming requests.
@@ -270,7 +284,9 @@ func (p *GenericProvider) SetStreamingClient(c *http.Client) {
 	if c == nil {
 		return
 	}
+	p.mu.Lock()
 	p.streamingClient = c
+	p.mu.Unlock()
 }
 
 // RefreshAPIKey re-resolves the provider's API key from the credential store,
@@ -295,6 +311,8 @@ func (p *GenericProvider) RefreshAPIKey() error {
 
 // GetModel returns the current model
 func (p *GenericProvider) GetModel() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.model
 }
 
@@ -311,12 +329,16 @@ func (p *GenericProvider) GetEndpoint() string {
 // GetHTTPClient returns the current HTTP client used for non-streaming requests.
 // Useful for WASM environments that need to verify client injection.
 func (p *GenericProvider) GetHTTPClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.httpClient
 }
 
 // GetStreamingClient returns the current HTTP client used for streaming requests.
 // Useful for WASM environments that need to verify client injection.
 func (p *GenericProvider) GetStreamingClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.streamingClient
 }
 
@@ -327,9 +349,10 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 	//    (Cache is warmed asynchronously by warmModelsCache, started from
 	//    NewGenericProvider so it never blocks startup.)
 	p.mu.RLock()
+	modelName := p.model
 	if p.modelsCached {
 		for _, model := range p.models {
-			if model.ID == p.model && model.ContextLength > 0 {
+			if model.ID == modelName && model.ContextLength > 0 {
 				p.mu.RUnlock()
 				return model.ContextLength, nil
 			}
@@ -342,12 +365,12 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 	//    the refresh workflow fetched from the provider's API, which is more
 	//    accurate than the static config defaults below. Best-effort: a fetch
 	//    failure or cache miss silently falls through to the config.
-	if p.model != "" {
+	if modelName != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), modelregistryFetchTimeout)
 		defer cancel()
 		if rawModels, err := modelregistry.FetchModels(ctx, p.config.Name); err == nil {
 			for _, rm := range rawModels {
-				if rm.ID == p.model && rm.ContextLength > 0 {
+				if rm.ID == modelName && rm.ContextLength > 0 {
 					return rm.ContextLength, nil
 				}
 			}
@@ -356,7 +379,7 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 
 	// 3. Fall back to the static config (model_overrides → pattern_overrides
 	//    → model_info → default_context_limit → legacy context_limit → 32k).
-	return p.config.GetContextLimit(p.model), nil
+	return p.config.GetContextLimit(modelName), nil
 }
 
 // modelregistryFetchTimeout bounds the registry lookup in
@@ -407,7 +430,12 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 		req.Header.Set(key, value)
 	}
 
-	resp, err := p.httpClient.Do(req)
+	// Read httpClient under lock, then release before the network call.
+	p.mu.RLock()
+	client := p.httpClient
+	p.mu.RUnlock()
+
+	resp, err := client.Do(req)
 	if err != nil {
 		// Request failed, skip to fallback
 		return p.fallbackToConfigOrCurrent()
@@ -555,12 +583,15 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 		return models, nil
 	}
 
-	// Final fallback: return just the current model
+	// Final fallback: return just the current model.
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
 	models := []api.ModelInfo{{
-		ID:            p.model,
-		Name:          p.model,
+		ID:            currentModel,
+		Name:          currentModel,
 		Provider:      p.config.Name,
-		ContextLength: p.config.GetContextLimit(p.model),
+		ContextLength: p.config.GetContextLimit(currentModel),
 	}}
 	p.setCachedModels(models)
 	return models, nil

@@ -337,6 +337,13 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Get the actual model being used (might be different due to fallback)
 	actualModel := newClient.GetModel()
 
+	// Mirror SetProvider: update session state so GetModel()/GetProvider()
+	// return the new values immediately. Without this, a stale session
+	// override from a prior SetProvider/SetModel call masks the new client
+	// and the footer shows the old model until the override is cleared.
+	a.state.SetSessionProvider(provider)
+	a.state.SetSessionModel(actualModel)
+
 	// Save to configuration (persisted for CLI use)
 	if err := a.configManager.SetProvider(provider); err != nil {
 		return agenterrors.NewConfig("failed to save provider", err)

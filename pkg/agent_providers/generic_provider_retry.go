@@ -29,10 +29,14 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 		return retryBody, nil, true, agenterrors.NewNetwork("build HTTP request", err)
 	}
 
+	// Read the client pointer under lock, then release before the network call.
+	p.mu.RLock()
 	client := p.httpClient
 	if streaming {
 		client = p.streamingClient
 	}
+	p.mu.RUnlock()
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return retryBody, nil, true, agenterrors.NewNetwork("execute HTTP request", err)

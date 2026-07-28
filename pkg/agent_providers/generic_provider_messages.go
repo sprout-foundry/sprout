@@ -274,22 +274,27 @@ func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{}
 
 // getModelCompletionLimit returns the max completion token limit for the current model/provider.
 func (p *GenericProvider) getModelCompletionLimit() int {
+	// Snapshot model under lock to prevent races with SetModel.
+	p.mu.RLock()
+	model := p.model
+	p.mu.RUnlock()
+
 	// First honor explicit config overrides.
-	if limit := p.config.GetMaxCompletionLimit(p.model); limit > 0 {
+	if limit := p.config.GetMaxCompletionLimit(model); limit > 0 {
 		return limit
 	}
 
 	// Then apply provider/model-specific known limits.
 	provider := strings.ToLower(p.config.Name)
-	model := strings.ToLower(p.model)
+	modelLower := strings.ToLower(model)
 
 	switch provider {
 	case "openrouter":
-		if strings.Contains(model, "gpt-5") {
+		if strings.Contains(modelLower, "gpt-5") {
 			return 128000
 		}
 	case "minimax":
-		if strings.Contains(model, "minimax-m2") {
+		if strings.Contains(modelLower, "minimax-m2") {
 			return 196608
 		}
 	}
@@ -309,10 +314,13 @@ func (p *GenericProvider) requiresStrictToolCallSyntax() bool {
 	if name == "minimax" || name == "deepseek" {
 		return true
 	}
-	if strings.Contains(strings.ToLower(strings.TrimSpace(p.model)), "minimax") {
+	p.mu.RLock()
+	model := p.model
+	p.mu.RUnlock()
+	if strings.Contains(strings.ToLower(strings.TrimSpace(model)), "minimax") {
 		return true
 	}
-	if strings.Contains(strings.ToLower(strings.TrimSpace(p.model)), "deepseek") {
+	if strings.Contains(strings.ToLower(strings.TrimSpace(model)), "deepseek") {
 		return true
 	}
 	return false

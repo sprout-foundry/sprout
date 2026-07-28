@@ -150,8 +150,6 @@ func TestIsValidShellCode_MixedCases(t *testing.T) {
 	assert.True(t, cmd.isValidShellCode("ls"))
 }
 
-
-
 func TestIsValidShellCode_ComplexScript(t *testing.T) {
 	cmd := &ShellCommand{}
 

@@ -2,6 +2,11 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.10] - 2026-07-28
+
+- Initial release
+
+
 ## [Unreleased]
 
 - feat(security): SP-127 M1–M3 filesystem gate promotion — path-tier classification unified into Gate 1; `classifyFileAccess` is Gate 1's single source of truth; all 6 file-touching handlers (`write_file`, `edit_file`, `read_file`, `list_directory`, `write_structured_file`, `patch_structured_file`) migrated to `PrecheckFileAccess` pre-check so Deny paths return typed errors and Allow paths bypass the approval dialog; audit trail added for every allow/prompt/deny verdict via JSONL logging; conformance tests and integration tests extended. M4 (remove old machinery) deferred. See `roadmap/SP-127-filesystem-gate-promotion.md`.

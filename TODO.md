@@ -46,7 +46,7 @@ are approved and ready to assign are listed.
 - [x] **SP-098: Split `pkg/history/changetracker.go` (868 lines)** — Extract `changetracker_record.go` + `changetracker_revert.go` + `changetracker_persist.go`. **~2 hours.**
 - [x] **SP-098: Split `pkg/console/select_list.go` (868 lines)** — Extract `select_list_filter.go` + `select_list_keymap.go`. **~2 hours.**
 - [x] **SP-098: Split `pkg/credentials/encrypt.go` (861 lines)** — Extract `encrypt_aes.go` + `encrypt_keyring.go` + `encrypt_migrate.go`. **~2 hours.**
-- [ ] **SP-098: Split `pkg/agent/persistence.go` (857 lines)** — Extract `persistence_session.go` + `persistence_message.go` + `persistence_index.go`. **~2 hours.**
+- [x] **SP-098: Split `pkg/agent/persistence.go` (857 lines)** — Extract `persistence_session.go` + `persistence_message.go` + `persistence_index.go`. **~2 hours.**
 - [ ] **SP-098: Split `pkg/webui/settings_api_mcp.go` (847 lines)** — Extract `settings_api_mcp_oauth.go`. **~2 hours.**
 - [ ] **SP-098: Split `pkg/agent/scripted_playback.go` (835 lines)** — Extract `scripted_record.go` + `scripted_assert.go`. **~2 hours.**
 

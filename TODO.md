@@ -36,7 +36,7 @@ are approved and ready to assign are listed.
 
 **Highest priority (grew since audit):**
 - [x] **SP-098: Split `pkg/agent/tool_security.go` (1142 lines)** — Extract `tool_security_policy.go` + `tool_security_paths.go` + `tool_security_audit.go`. **~2 hours.**
-- [ ] **SP-098: Split `pkg/events/events.go` (1218 lines)** — Extract `events_types.go` + `events_bus.go` + `events_filter.go`. **~2 hours.**
+- [x] **SP-098: Split `pkg/events/events.go` (1218 lines)** — Extract `events_types.go` + `events_bus.go` + `events_filter.go`. **~2 hours.**
 
 **Remaining (stable, ≥800 lines):**
 - [ ] **SP-098: Split `pkg/embedding/manager.go` (902 lines)** — Extract `embedding_models.go` + `embedding_batch.go` + `embedding_cache.go`. **~2 hours.**

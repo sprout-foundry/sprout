@@ -81,22 +81,48 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 	// 4. Load custom providers from individual files.
 	// Custom providers are never persisted to config.json (CustomProviders is set
 	// to nil before saving), so they must be loaded from the provider directory.
-	// Always load from the global config directory, not from the (possibly
-	// overridden) SPROUT_CONFIG env var — custom providers are a global resource.
+	// Custom providers are global-first with optional project-scoped overrides:
+	// load from both the global home dir and the scoped config dir, with the
+	// scoped dir overriding the global one on name conflicts.
 	if result.CustomProviders == nil {
 		result.CustomProviders = make(map[string]CustomProviderConfig)
 	}
-	var globalProvidersDir string
+
+	// Determine the scoped providers dir (from globalPath or globalDir).
+	var scopedProvidersDir string
 	if globalPath != "" {
-		globalProvidersDir = filepath.Join(filepath.Dir(globalPath), ProvidersDirName)
+		scopedProvidersDir = filepath.Join(filepath.Dir(globalPath), ProvidersDirName)
 	} else if globalDir != "" {
-		// Use explicit globalDir if available (for hermetic environments)
-		globalProvidersDir = filepath.Join(globalDir, ProvidersDirName)
+		scopedProvidersDir = filepath.Join(globalDir, ProvidersDirName)
 	}
-	if globalProvidersDir != "" {
-		fileProviders, err := LoadCustomProvidersFromDir(globalProvidersDir)
-		if err != nil {
-			log.Printf("[config] warning: failed to load custom provider files from %s: %v", globalProvidersDir, err)
+
+	// Determine the true global home providers dir (always from the
+	// home/XDG path, never from SPROUT_CONFIG — that's the scoped dir).
+	globalHomeProvidersDir := ""
+	if homeDir, err := getDefaultConfigDir(); err == nil {
+		candidate := filepath.Join(homeDir, ProvidersDirName)
+		// Only treat it as a separate global dir if it differs from the
+		// scoped dir (avoids double-loading the same files).
+		if candidate != scopedProvidersDir {
+			globalHomeProvidersDir = candidate
+		}
+	}
+
+	// Load global home providers first (lowest priority).
+	if globalHomeProvidersDir != "" {
+		if fileProviders, err := LoadCustomProvidersFromDir(globalHomeProvidersDir); err != nil {
+			log.Printf("[config] warning: failed to load global custom providers from %s: %v", globalHomeProvidersDir, err)
+		} else {
+			for name, provider := range fileProviders {
+				result.CustomProviders[name] = provider
+			}
+		}
+	}
+
+	// Load scoped providers second (overrides global on conflict).
+	if scopedProvidersDir != "" {
+		if fileProviders, err := LoadCustomProvidersFromDir(scopedProvidersDir); err != nil {
+			log.Printf("[config] warning: failed to load scoped custom providers from %s: %v", scopedProvidersDir, err)
 		} else {
 			for name, provider := range fileProviders {
 				result.CustomProviders[name] = provider

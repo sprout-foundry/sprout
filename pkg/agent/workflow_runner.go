@@ -155,11 +155,11 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 	// Parse the workflow config file.
 	cfg, err := parseWorkflowFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse workflow config %q: %w", configPath, err)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("failed to parse workflow config %q", configPath), err)
 	}
 
 	if cfg.Loop == nil {
-		return nil, fmt.Errorf("workflow %q has no 'loop' section", configPath)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("workflow %q has no 'loop' section", configPath), nil)
 	}
 
 	loop := cfg.Loop
@@ -168,11 +168,11 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 	// Read the gate prompt file.
 	gatePromptBytes, err := os.ReadFile(filepath.Clean(loop.GatePromptFile))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read gate_prompt_file %q: %w", loop.GatePromptFile, err)
+		return nil, agenterrors.NewAgent("workflow_runner", fmt.Sprintf("failed to read gate_prompt_file %q", loop.GatePromptFile), err)
 	}
 	gatePromptText := strings.TrimSpace(string(gatePromptBytes))
 	if gatePromptText == "" {
-		return nil, fmt.Errorf("gate_prompt_file %q is empty", loop.GatePromptFile)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("gate_prompt_file %q is empty", loop.GatePromptFile), nil)
 	}
 
 	// Derive provider/model from the parent agent.
@@ -314,7 +314,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 		// Check context cancellation.
 		if err := ctx.Err(); err != nil {
 			stopBudget()
-			result.Error = fmt.Errorf("workflow cancelled: %w", err)
+			result.Error = agenterrors.NewAgent("workflow_runner", "workflow cancelled", err)
 			return result, nil
 		}
 
@@ -338,7 +338,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 				return result, nil
 			}
 			stopBudget()
-			return nil, fmt.Errorf("failed to find next TODO item: %w", findErr)
+			return nil, agenterrors.NewAgent("workflow_runner", "failed to find next TODO item", findErr)
 		}
 
 		fmt.Fprintln(os.Stderr)
@@ -569,7 +569,7 @@ func startWorkflowHeartbeat(chatAgent *Agent, interval time.Duration) func() {
 func findNextTodoItemInFile(todoFile string, startAfterLine int) (lineNum int, sectionText string, err error) {
 	data, err := os.ReadFile(filepath.Clean(todoFile))
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to read %s: %w", todoFile, err)
+		return 0, "", agenterrors.NewAgent("workflow_runner", fmt.Sprintf("failed to read %s", todoFile), err)
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -587,7 +587,7 @@ func findNextTodoItemInFile(todoFile string, startAfterLine int) (lineNum int, s
 		}
 	}
 	if itemLine < 0 {
-		return 0, "", fmt.Errorf("no unchecked [ ] items found in %s", todoFile)
+		return 0, "", agenterrors.NewInvalidInputError(fmt.Sprintf("no unchecked [ ] items found in %s", todoFile), nil)
 	}
 
 	// Find the enclosing ## section header by searching upward.
@@ -618,12 +618,12 @@ func findNextTodoItemInFile(todoFile string, startAfterLine int) (lineNum int, s
 func markTodoDoneInFile(todoFile string, lineNum int) error {
 	data, err := os.ReadFile(filepath.Clean(todoFile))
 	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", todoFile, err)
+		return agenterrors.NewAgent("workflow_runner", fmt.Sprintf("failed to read %s", todoFile), err)
 	}
 
 	lines := bytes.Split(data, []byte("\n"))
 	if lineNum < 1 || lineNum > len(lines) {
-		return fmt.Errorf("line number %d out of range (file has %d lines)", lineNum, len(lines))
+		return agenterrors.NewInvalidInputError(fmt.Sprintf("line number %d out of range (file has %d lines)", lineNum, len(lines)), nil)
 	}
 
 	idx := lineNum - 1 // 0-based
@@ -631,7 +631,7 @@ func markTodoDoneInFile(todoFile string, lineNum int) error {
 	modified := bytes.Replace(orig, []byte("- [ ]"), []byte("- [x]"), 1)
 
 	if bytes.Equal(orig, modified) {
-		return fmt.Errorf("line %d does not contain '- [ ]': %s", lineNum, orig)
+		return agenterrors.NewInvalidInputError(fmt.Sprintf("line %d does not contain '- [ ]': %s", lineNum, orig), nil)
 	}
 
 	lines[idx] = modified
@@ -648,7 +648,7 @@ func parseWorkflowGateResponse(text string) (workflowGateResult, error) {
 	text = trimWorkflowMarkdownFence(text)
 	var result workflowGateResult
 	if err := json.Unmarshal([]byte(strings.TrimSpace(text)), &result); err != nil {
-		return workflowGateResult{}, fmt.Errorf("failed to parse gate JSON: %w (text: %s)", err, text)
+		return workflowGateResult{}, agenterrors.NewInvalidInputError(fmt.Sprintf("failed to parse gate JSON (text: %s)", text), err)
 	}
 	return result, nil
 }
@@ -659,7 +659,7 @@ func parseWorkflowTriageResponse(text string) (workflowGateTriageResult, error) 
 	text = trimWorkflowMarkdownFence(text)
 	var result workflowGateTriageResult
 	if err := json.Unmarshal([]byte(strings.TrimSpace(text)), &result); err != nil {
-		return workflowGateTriageResult{}, fmt.Errorf("failed to parse triage JSON: %w (text: %s)", err, text)
+		return workflowGateTriageResult{}, agenterrors.NewInvalidInputError(fmt.Sprintf("failed to parse triage JSON (text: %s)", text), err)
 	}
 	return result, nil
 }
@@ -713,11 +713,11 @@ func classifyWorkflowOutcome(buildFailed bool, processErr error, retrySucceeded 
 func parseWorkflowFile(path string) (*workflowFileConfig, error) {
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %q: %w", path, err)
+		return nil, agenterrors.NewAgent("workflow_runner", fmt.Sprintf("failed to read %q", path), err)
 	}
 	var cfg workflowFileConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse %q: %w", path, err)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("failed to parse %q", path), err)
 	}
 	return &cfg, nil
 }

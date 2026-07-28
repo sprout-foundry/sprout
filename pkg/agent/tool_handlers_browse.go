@@ -123,7 +123,7 @@ func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {
 	for idx, rawStep := range rawSteps {
 		stepMap, ok := rawStep.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("browse_url steps[%d] must be an object", idx)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] must be an object", idx), nil)
 		}
 		encoded, err := json.Marshal(stepMap)
 		if err != nil {
@@ -134,7 +134,7 @@ func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {
 			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] parse failed", idx)
 		}
 		if strings.TrimSpace(step.Action) == "" {
-			return nil, fmt.Errorf("browse_url steps[%d] requires action", idx)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] requires action", idx), nil)
 		}
 		steps = append(steps, step)
 	}

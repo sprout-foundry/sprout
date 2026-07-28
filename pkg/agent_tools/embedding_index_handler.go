@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -302,12 +303,12 @@ func buildCodegraphIndex(ctx context.Context) (string, error) {
 
 	store, err := codegraph.NewStore("")
 	if err != nil {
-		return "", fmt.Errorf("failed to open codegraph store: %w", err)
+		return "", agenterrors.NewAgent("embedding_index", "failed to open codegraph store", err)
 	}
 	defer store.Close()
 
 	if err := store.IndexAll(buildCtx, codegraphFileParser); err != nil {
-		return "", fmt.Errorf("indexing failed: %w", err)
+		return "", agenterrors.NewAgent("embedding_index", "indexing failed", err)
 	}
 
 	stats := store.Stats()
@@ -319,12 +320,12 @@ func buildCodegraphIndex(ctx context.Context) (string, error) {
 func updateCodegraphIndex(ctx context.Context) (string, error) {
 	store, err := codegraph.NewStore("")
 	if err != nil {
-		return "", fmt.Errorf("failed to open codegraph store: %w", err)
+		return "", agenterrors.NewAgent("embedding_index", "failed to open codegraph store", err)
 	}
 	defer store.Close()
 
 	if err := store.IndexChangedFiles(ctx, codegraphFileParser); err != nil {
-		return "", fmt.Errorf("update failed: %w", err)
+		return "", agenterrors.NewAgent("embedding_index", "update failed", err)
 	}
 
 	stats := store.Stats()

@@ -99,7 +99,7 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "edit_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("edit blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
-			fmt.Errorf("edit blocked: %s is declared read_only", path)
+			agenterrors.NewPermission(fmt.Sprintf("edit blocked: %s is declared read_only", path), nil)
 	}
 	if decision == "allow" {
 		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.

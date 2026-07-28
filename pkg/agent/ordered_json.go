@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/errors"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ParseJSONOrdered parses a JSON string into an *OrderedMap, preserving the
@@ -37,7 +38,7 @@ func ParseJSONOrderedAny(content string) (interface{}, error) {
 	if err != nil {
 		// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
 		// via errors.As for callers that need line/col diagnostics.
-		return nil, fmt.Errorf("failed to read JSON token: %w", err)
+		return nil, agenterrors.NewInvalidInputError("failed to read JSON token", err)
 	}
 
 	result, err := parseJSONValueFromToken(dec, tok)
@@ -65,7 +66,7 @@ func parseJSONObject(dec *json.Decoder) (*OrderedMap, error) {
 		if err != nil {
 			// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
 			// via errors.As for callers that need line/col diagnostics.
-			return nil, fmt.Errorf("failed to read JSON object key: %w", err)
+			return nil, agenterrors.NewInvalidInputError("failed to read JSON object key", err)
 		}
 
 		if delim, ok := tok.(json.Delim); ok && delim == '}' {
@@ -98,7 +99,7 @@ func parseJSONArray(dec *json.Decoder) ([]interface{}, error) {
 		if err != nil {
 			// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
 			// via errors.As for callers that need line/col diagnostics.
-			return nil, fmt.Errorf("failed to read JSON array element: %w", err)
+			return nil, agenterrors.NewInvalidInputError("failed to read JSON array element", err)
 		}
 
 		if delim, ok := tok.(json.Delim); ok && delim == ']' {
@@ -120,7 +121,7 @@ func parseJSONValue(dec *json.Decoder) (interface{}, error) {
 	if err != nil {
 		// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
 		// via errors.As for callers that need line/col diagnostics.
-		return nil, fmt.Errorf("failed to read JSON value: %w", err)
+		return nil, agenterrors.NewInvalidInputError("failed to read JSON value", err)
 	}
 	return parseJSONValueFromToken(dec, tok)
 }

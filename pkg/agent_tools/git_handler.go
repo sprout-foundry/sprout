@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -262,13 +263,13 @@ func (h *gitHandler) Interactive() bool      { return false }
 // the workspace boundary.
 func validateRepoDir(repoDir, workspaceRoot string) (string, error) {
 	if workspaceRoot == "" {
-		return "", fmt.Errorf("workspace root is not set")
+		return "", agenterrors.NewConfig("workspace root is not set", nil)
 	}
 
 	// Resolve workspace root to absolute path.
 	absWorkspace, err := filepath.Abs(workspaceRoot)
 	if err != nil {
-		return "", fmt.Errorf("resolve workspace root: %w", err)
+		return "", agenterrors.NewAgent("git", "resolve workspace root", err)
 	}
 
 	// Resolve repoDir: if relative, join to workspace root; if absolute, use as-is.
@@ -283,25 +284,25 @@ func validateRepoDir(repoDir, workspaceRoot string) (string, error) {
 	// Normalize to absolute.
 	absRepoDir, err = filepath.Abs(absRepoDir)
 	if err != nil {
-		return "", fmt.Errorf("resolve repo_dir: %w", err)
+		return "", agenterrors.NewAgent("git", "resolve repo_dir", err)
 	}
 
 	// Check the resolved path is within the workspace root.
 	rel, err := filepath.Rel(absWorkspace, absRepoDir)
 	if err != nil {
-		return "", fmt.Errorf("compute relative path: %w", err)
+		return "", agenterrors.NewAgent("git", "compute relative path", err)
 	}
 	if strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("repo_dir %q resolves outside workspace root %q", repoDir, workspaceRoot)
+		return "", agenterrors.NewPermission(fmt.Sprintf("repo_dir %q resolves outside workspace root %q", repoDir, workspaceRoot), nil)
 	}
 
 	// Verify the directory exists.
 	info, err := os.Stat(absRepoDir)
 	if err != nil {
-		return "", fmt.Errorf("repo_dir %q does not exist or is not accessible: %w", repoDir, err)
+		return "", agenterrors.NewNotFoundCause(fmt.Sprintf("repo_dir %q", repoDir), err)
 	}
 	if !info.IsDir() {
-		return "", fmt.Errorf("repo_dir %q is not a directory", repoDir)
+		return "", agenterrors.NewValidation(fmt.Sprintf("repo_dir %q is not a directory", repoDir), nil)
 	}
 
 	return absRepoDir, nil

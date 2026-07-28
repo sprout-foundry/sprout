@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ---------------------------------------------------------------------------
@@ -296,6 +298,51 @@ func isGitRebaseCommand(command string) bool {
 // Contributing-check model
 // ---------------------------------------------------------------------------
 
+// formatTypedError formats a typed error with category, message, and metadata
+// for human-readable display. Returns the formatted string.
+func formatTypedError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	// Check for TypedError first (SP-094 hierarchy)
+	if te := agenterrors.AsTypedError(err); te != nil {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("Error [%s] (%s): %s", te.Code, te.Severity, te.Message))
+		if te.Component != "" {
+			b.WriteString(fmt.Sprintf("\n  Component: %s", te.Component))
+		}
+		if len(te.Details) > 0 {
+			b.WriteString("\n  Details:")
+			for k, v := range te.Details {
+				b.WriteString(fmt.Sprintf("\n    %s: %v", k, v))
+			}
+		}
+		return b.String()
+	}
+
+	// Check for AgentError (legacy category-based)
+	var agentErr *agenterrors.AgentError
+	if errors.As(err, &agentErr) {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("Category: %s\n", agentErr.Category))
+		b.WriteString(fmt.Sprintf("Message: %s\n", agentErr.Message))
+		if len(agentErr.Metadata) > 0 {
+			b.WriteString("Metadata:\n")
+			for k, v := range agentErr.Metadata {
+				b.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
+			}
+		}
+		if agentErr.Cause != nil {
+			b.WriteString(fmt.Sprintf("Cause: %v\n", agentErr.Cause))
+		}
+		return strings.TrimSpace(b.String())
+	}
+
+	// Fallback: just the error message
+	return err.Error()
+}
+
 // explainSource labels a single contributing check in the risk assessment.
 type explainSource struct {
 	id      string
@@ -352,14 +399,20 @@ Examples:
 		asJSON, _ := cmd.Flags().GetBool("json")
 
 		if !explainSupportedTools[toolName] {
-			return fmt.Errorf("unknown or unsupported tool %q (valid: %s)", toolName, explainToolList())
+			return agenterrors.NewInvalidInputError(
+				fmt.Sprintf("unknown or unsupported tool %q (valid: %s)", toolName, explainToolList()),
+				nil,
+			).WithMetadata("tool", toolName)
 		}
 
 		cliArgs := buildExplainArgs(args, toolName, pathFlag, opFlag)
 
 		if msg := validateExplainInput(toolName, cliArgs); msg != "" {
 			fmt.Fprintln(cmd.ErrOrStderr(), msg)
-			return fmt.Errorf("no input provided for tool %q", toolName)
+			return agenterrors.NewInvalidInputError(
+				fmt.Sprintf("no input provided for tool %q", toolName),
+				nil,
+			).WithMetadata("tool", toolName)
 		}
 
 		secResult := tools.ClassifyToolCall(toolName, cliArgs)

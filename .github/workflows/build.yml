@@ -104,6 +104,9 @@ jobs:
         TEST_P: "1"
         TEST_PARALLEL: "2"
         TEST_RACE: ${{ runner.os != 'Windows' && '-race' || '' }}
+        # Go 1.25's coverage merge crashes at the OS level on Windows
+        # (STATUS_DLL_INIT_FAILED). Coverage is collected on ubuntu/macos.
+        TEST_COVER: ${{ runner.os == 'Windows' && 'no' || '' }}
       run: make test-coverage
 
     - name: Display coverage summary

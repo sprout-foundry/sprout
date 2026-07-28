@@ -15,6 +15,7 @@ func createTestAgentWithTempConfig(t *testing.T) *agent.Agent {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("SPROUT_CONFIG", "") // Ensure real config dir is not used
 	// Ensure an API key is present so NewManagerSilent doesn't spin up a provider
 	// selection prompt.
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
@@ -126,13 +127,17 @@ func TestSetPersonaEnabled_DisableThenReEnableViaDisabledList(t *testing.T) {
 	config := cm.GetConfig()
 	var personaID string
 	for id := range config.SubagentTypes {
-		personaID = id
-		break
+		if !cm.GetConfig().IsPersonaDisabled(id) {
+			personaID = id
+			break
+		}
 	}
 	if personaID == "" {
-		t.Skip("no persona found to test with")
+		t.Skip("no enabled persona found to test with")
 	}
 
+	// Defensive: should always be true given the selection above, but kept
+	// as a clear precondition marker.
 	if cm.GetConfig().IsPersonaDisabled(personaID) {
 		t.Fatal("precondition failed: persona should not be disabled before test")
 	}
@@ -246,13 +251,17 @@ func TestSubagentPersona_DisablePersistedToDisk(t *testing.T) {
 	}
 	cm := chatAgent.GetConfigManager()
 
+	// Pick an enabled persona (skip any that are disabled by default) so
+	// the test is deterministic regardless of Go's map iteration order.
 	var personaID string
 	for id := range cm.GetConfig().SubagentTypes {
-		personaID = id
-		break
+		if !cm.GetConfig().IsPersonaDisabled(id) {
+			personaID = id
+			break
+		}
 	}
 	if personaID == "" {
-		t.Skip("no persona found")
+		t.Skip("no enabled persona found")
 	}
 
 	cmd := &SubagentPersonaCommand{}

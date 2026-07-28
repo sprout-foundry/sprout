@@ -21,6 +21,11 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 		return nil, agenterrors.NewNetwork("ensure model", err)
 	}
 
+	// Snapshot the model name under lock after ensureModel() resolved it.
+	p.mu.RLock()
+	model := p.model
+	p.mu.RUnlock()
+
 	// Convert messages according to provider configuration
 	convertedMessages := p.convertMessages(messages, reasoning)
 
@@ -56,7 +61,7 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	}
 
 	request := map[string]interface{}{
-		"model":    p.model,
+		"model":    model,
 		"messages": convertedMessages,
 		"stream":   stream,
 	}
@@ -91,9 +96,9 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	}
 
 	// Apply model-specific defaults and suppress unsupported fields.
-	applyModelSpecificSettings(p.model, request)
-	applyReasoningEffort(p.model, reasoning, request)
-	applyDisableThinking(p.model, disableThinking, request)
+	applyModelSpecificSettings(model, request)
+	applyReasoningEffort(model, reasoning, request)
+	applyDisableThinking(model, disableThinking, request)
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -251,7 +256,10 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 }
 
 func (p *GenericProvider) ensureModel() error {
-	if strings.TrimSpace(p.model) != "" {
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
+	if strings.TrimSpace(currentModel) != "" {
 		return nil
 	}
 
@@ -266,7 +274,9 @@ func (p *GenericProvider) ensureModel() error {
 		return fmt.Errorf("provider %s did not return any models", p.config.Name)
 	}
 
+	p.mu.Lock()
 	p.model = strings.TrimSpace(models[0].ID)
+	p.mu.Unlock()
 	return nil
 }
 

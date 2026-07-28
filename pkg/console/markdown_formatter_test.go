@@ -667,3 +667,38 @@ func TestMarkdownFormatter_Column0FenceAfterIndented(t *testing.T) {
 		t.Errorf("Expected no leaked backticks, got:\n%s", plain)
 	}
 }
+
+// TestMarkdownFormatter_CodeBlockGutterDimIsSelfContained guards the
+// gutter-dim rendering fix. The code-block row must be:
+//
+//	<ColorDim>│ <ColorReset><highlighted code>
+//
+// — the dim wraps ONLY the gutter and resets before the code so that the
+// inner ColorReset sequences embedded by highlightGo/highlightJSON/etc.
+// (one per highlighted token) don't kill a line-wide dim. The prior form
+// wrapped the whole row in ColorDim…ColorReset; the first token's reset
+// dropped the dim, making the row inconsistently styled (dim gutter, then
+// bright code from the first keyword onward). A later attempt removed the
+// dim entirely, losing the visual hierarchy. This test pins the correct
+// split.
+func TestMarkdownFormatter_CodeBlockGutterDimIsSelfContained(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	result := formatter.Format("```go\nfunc main()\n```")
+
+	// The gutter must be dimmed and that dim must be reset before the
+	// highlighted code begins (func keyword is blue).
+	want := ColorDim + "│ " + ColorReset
+	if !strings.Contains(result, want) {
+		t.Errorf("expected self-contained dim gutter %q in result:\n%s", want, result)
+	}
+
+	// The func keyword highlight must follow the gutter's reset, not be
+	// swallowed by a line-wide dim. i.e. ColorBlue+"func" must appear
+	// after the gutter reset, with no trailing ColorDim leaking into it.
+	if !strings.Contains(result, want+ColorBlue+"func") {
+		t.Errorf("expected highlighted func to follow the reset gutter in result:\n%s", result)
+	}
+}

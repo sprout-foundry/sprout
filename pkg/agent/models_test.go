@@ -1272,3 +1272,120 @@ func TestMatchPattern(t *testing.T) {
 		}
 	}
 }
+
+// TestSetProviderPersisted_UpdatesSessionState guards the stale-footer
+// regression: GetModel()/GetProvider() check session state FIRST and fall
+// back to the client only when the session override is empty. SetProviderPersisted
+// swaps the client pointer, and before the fix it never wrote the new
+// provider/model into session state — so a stale session override left by a
+// prior SetProvider/SetModel call masked the freshly-switched client, making
+// the CLI footer show the old model/provider "for a while" until the override
+// was cleared. The fix adds SetSessionProvider/SetSessionModel calls to
+// SetProviderPersisted; this test fails without them.
+func TestSetProviderPersisted_UpdatesSessionState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "modelA"},
+					{"id": "modelB"},
+				},
+			})
+		case "/v1/chat/completions":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode chat request: %v", err)
+			}
+			model, _ := body["model"].(string)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "chatcmpl-test",
+				"object":  "chat.completion",
+				"created": 1,
+				"model":   model,
+				"choices": []map[string]any{
+					{
+						"index": 0,
+						"message": map[string]any{
+							"role":    "assistant",
+							"content": "ok",
+						},
+						"finish_reason": "stop",
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	configDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	if err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "provider-a",
+		Endpoint:       server.URL + "/v1",
+		ModelName:      "modelA",
+		RequiresAPIKey: false,
+	}); err != nil {
+		t.Fatalf("failed to save provider-a: %v", err)
+	}
+	if err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "provider-b",
+		Endpoint:       server.URL + "/v1",
+		ModelName:      "modelB",
+		RequiresAPIKey: false,
+	}); err != nil {
+		t.Fatalf("failed to save provider-b: %v", err)
+	}
+
+	ag, err := NewAgent()
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Step 1: Establish a stale session override on provider-a.
+	// SetProvider populates session state; SetModel pins a specific model
+	// into the session override that GetModel() returns first.
+	if err := ag.SetProvider(api.ClientType("provider-a")); err != nil {
+		t.Fatalf("failed to set provider-a: %v", err)
+	}
+	if err := ag.SetModel("modelA"); err != nil {
+		t.Fatalf("failed to set session model on provider-a: %v", err)
+	}
+	staleModel := ag.GetModel()
+	if staleModel != "modelA" {
+		t.Fatalf("setup: expected stale session model %q, got %q", "modelA", staleModel)
+	}
+
+	// Step 2: Switch to provider-b via SetProviderPersisted. Before the fix,
+	// session state still held provider-a/modelA, so GetProvider()/GetModel()
+	// returned the stale values instead of the new client's.
+	if err := ag.SetProviderPersisted(api.ClientType("provider-b")); err != nil {
+		t.Fatalf("failed to set provider-b persisted: %v", err)
+	}
+
+	// Step 3: GetProvider must reflect the new provider immediately.
+	if got := ag.GetProvider(); got != "provider-b" {
+		t.Errorf("GetProvider() = %q, want %q (stale session override not cleared)", got, "provider-b")
+	}
+
+	// Step 4: GetModel must match the new client's model — i.e. session state
+	// was refreshed and no longer masks the swapped client. We compare against
+	// the client's own model rather than a hardcoded name because model
+	// resolution for custom providers may fall back to selectDefaultModel.
+	clientModel := ag.getClient().GetModel()
+	if clientModel == "" {
+		t.Fatal("client returned empty model after switch; cannot verify")
+	}
+	if got := ag.GetModel(); got != clientModel {
+		t.Errorf("GetModel() = %q, want %q (new client's model; stale session override %q not cleared)",
+			got, clientModel, staleModel)
+	}
+	if ag.GetModel() == staleModel && staleModel != clientModel {
+		t.Errorf("GetModel() still returns stale session override %q after SetProviderPersisted", staleModel)
+	}
+}

@@ -84,8 +84,8 @@ type StreamingResponseBuilder struct {
 	toolCallArgs     map[int]*strings.Builder // Index to arguments builder
 	finishReason     string
 	streamCallback   StreamCallback
-	firstTokenTime   time.Time // Track when first token arrives
-	lastTokenTime    time.Time // Track when last token arrives
+	firstTokenTime   time.Time          // Track when first token arrives
+	lastTokenTime    time.Time          // Track when last token arrives
 	repetition       repetitionDetector // Detects model degeneration (repetition loops)
 }
 

@@ -119,7 +119,11 @@ declare global {
   interface Window {
     __sproutGitTools: SproutGitToolsGlobal;
   }
+  /* eslint-disable no-var -- `var` is required in `declare global` blocks: only `var`
+     augments `typeof globalThis`. `let`/`const` declare block-scoped globals that do not
+     appear on `globalThis`, which would break `globalThis.__sproutGitTools`. */
   var __sproutGitTools: SproutGitToolsGlobal;
+  /* eslint-enable no-var */
 }
 
 /**
@@ -177,39 +181,40 @@ export interface ToolHookWasmApi {
  * ```
  */
 export function installGitToolBridge(wasmApi: ToolHookWasmApi): void {
-	if (!wasmApi.setToolExecutionHook) {
-		console.warn('[agentGitToolBridge] setToolExecutionHook not available on WASM API');
-		return;
-	}
+  if (!wasmApi.setToolExecutionHook) {
+    console.warn('[agentGitToolBridge] setToolExecutionHook not available on WASM API');
+    return;
+  }
 
-	const syncHook = (command: string): unknown => {
-		const parsed = parseGitToolCommand(command);
-		if (!parsed) {
-			// Not a gittool command — allow normal wasmshell execution.
-			return null;
-		}
+  const syncHook = (command: string): unknown => {
+    const parsed = parseGitToolCommand(command);
+    if (!parsed) {
+      // Not a gittool command — allow normal wasmshell execution.
+      return null;
+    }
 
-		// Validate that the tool name is registered. Unknown tool names
-		// get a simple rejection; known tools get the async guidance message.
-		if (!AGENT_GIT_TOOL_NAMES.has(parsed.toolName)) {
-			return {
-				stdout: '',
-				stderr: `Unknown git tool: ${parsed.toolName}`,
-				exitCode: 1,
-			};
-		}
+    // Validate that the tool name is registered. Unknown tool names
+    // get a simple rejection; known tools get the async guidance message.
+    if (!AGENT_GIT_TOOL_NAMES.has(parsed.toolName)) {
+      return {
+        stdout: '',
+        stderr: `Unknown git tool: ${parsed.toolName}`,
+        exitCode: 1,
+      };
+    }
 
-		// Known git tool — in production the Go side handles this before
-		// the hook fires, but for direct JS invocation or testing we return
-		// a guidance message since this hook cannot await the async result.
-		const argsJson = JSON.stringify(parsed.args);
-		return {
-			stdout: '',
-			stderr: `Git tool '${parsed.toolName}' requires async execution. ` +
-				`Use: globalThis.__sproutGitTools.execute('${parsed.toolName}', ${argsJson})`,
-			exitCode: 1,
-		};
-	};
+    // Known git tool — in production the Go side handles this before
+    // the hook fires, but for direct JS invocation or testing we return
+    // a guidance message since this hook cannot await the async result.
+    const argsJson = JSON.stringify(parsed.args);
+    return {
+      stdout: '',
+      stderr:
+        `Git tool '${parsed.toolName}' requires async execution. ` +
+        `Use: globalThis.__sproutGitTools.execute('${parsed.toolName}', ${argsJson})`,
+      exitCode: 1,
+    };
+  };
 
-	wasmApi.setToolExecutionHook(syncHook);
+  wasmApi.setToolExecutionHook(syncHook);
 }

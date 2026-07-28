@@ -22,10 +22,10 @@ package filesystem
 //   - Sprout:              .agent-i, .sprout
 var SkipDirs = map[string]bool{
 	// Package managers
-	"node_modules": true,
-	"vendor":       true,
-	"Pods":         true,
-	"Carthage":     true,
+	"node_modules":     true,
+	"vendor":           true,
+	"Pods":             true,
+	"Carthage":         true,
 	"bower_components": true,
 	// Version control
 	".git":  true,
@@ -45,22 +45,22 @@ var SkipDirs = map[string]bool{
 	"eggs":        true,
 	".eggs":       true,
 	// JS/Node build
-	".next":          true,
-	".nuxt":          true,
-	".turbo":         true,
-	"coverage":       true,
-	".nyc_output":    true,
-	".cache":         true,
-	".parcel-cache":  true,
-	".expo":          true,
-	"test-results":   true,
+	".next":         true,
+	".nuxt":         true,
+	".turbo":        true,
+	"coverage":      true,
+	".nyc_output":   true,
+	".cache":        true,
+	".parcel-cache": true,
+	".expo":         true,
+	"test-results":  true,
 	// Java/Kotlin
 	".gradle": true,
 	".mvn":    true,
 	".kotlin": true,
 	// iOS/Android native build
-	".cxx":         true,
-	"DerivedData":  true,
+	".cxx":        true,
+	"DerivedData": true,
 	// Build artifacts
 	"dist":             true,
 	"build":            true,

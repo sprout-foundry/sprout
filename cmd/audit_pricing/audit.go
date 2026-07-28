@@ -15,17 +15,17 @@ const floatEpsilon = 1e-9
 
 // ModelAudit holds the audit result for a single model.
 type ModelAudit struct {
-	ModelID     string
-	Status      string // "verified", "drift", "missing_in_config", "missing_in_manifest"
-	InputCost   float64
-	OutputCost  float64
-	CachedCost  float64
-	Drifts      []PriceDrift
+	ModelID    string
+	Status     string // "verified", "drift", "missing_in_config", "missing_in_manifest"
+	InputCost  float64
+	OutputCost float64
+	CachedCost float64
+	Drifts     []PriceDrift
 }
 
 // PriceDrift describes a single field where config and manifest diverge.
 type PriceDrift struct {
-	Field    string  // "input_cost", "output_cost", "cached_input_cost"
+	Field    string // "input_cost", "output_cost", "cached_input_cost"
 	Config   float64
 	Manifest float64
 }
@@ -238,4 +238,3 @@ func updateConfig(configPath string, manifest ProviderManifest) error {
 func floatsEqual(a, b float64) bool {
 	return math.Abs(a-b) < floatEpsilon
 }
-

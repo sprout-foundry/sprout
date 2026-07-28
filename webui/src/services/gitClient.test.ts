@@ -208,9 +208,9 @@ describe('clone()', () => {
   it('propagates clone error', async () => {
     mockFns.gitClone.mockRejectedValue(new Error('network timeout'));
 
-    await expect(
-      gitClient.clone('https://github.com/owner/repo.git', '/repos/owner/repo'),
-    ).rejects.toThrow('network timeout');
+    await expect(gitClient.clone('https://github.com/owner/repo.git', '/repos/owner/repo')).rejects.toThrow(
+      'network timeout',
+    );
   });
 });
 
@@ -315,9 +315,9 @@ describe('status()', () => {
 
   it('maps multiple entries with mixed types', async () => {
     mockFns.gitStatusMatrix.mockResolvedValue([
-      ['a.ts', 1, 2, 2],     // modified
-      ['b.ts', 1, 0, 0],     // untracked
-      ['c.ts', 0, 1, 1],     // deleted
+      ['a.ts', 1, 2, 2], // modified
+      ['b.ts', 1, 0, 0], // untracked
+      ['c.ts', 0, 1, 1], // deleted
     ]);
     const result = await gitClient.status('/repos/owner/repo');
     expect(result).toHaveLength(3);
@@ -341,20 +341,16 @@ describe('add()', () => {
 
   it('stages all changes when no filepath given', async () => {
     mockFns.gitStatusMatrix.mockResolvedValue([
-      ['new.ts', 1, 0, 0],       // untracked -> add
-      ['del.ts', 0, 1, 1],       // deleted -> remove
+      ['new.ts', 1, 0, 0], // untracked -> add
+      ['del.ts', 0, 1, 1], // deleted -> remove
     ]);
 
     await gitClient.add('/repos/owner/repo');
 
     // Should call add for untracked
-    expect(mockFns.gitAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ filepath: 'new.ts' }),
-    );
+    expect(mockFns.gitAdd).toHaveBeenCalledWith(expect.objectContaining({ filepath: 'new.ts' }));
     // Should call remove for deleted
-    expect(mockFns.gitRemove).toHaveBeenCalledWith(
-      expect.objectContaining({ filepath: 'del.ts' }),
-    );
+    expect(mockFns.gitRemove).toHaveBeenCalledWith(expect.objectContaining({ filepath: 'del.ts' }));
   });
 });
 
@@ -601,13 +597,13 @@ describe('file operations', () => {
       const fileStat = { isDirectory: () => false, size: 100 };
       const dirStat = { isDirectory: () => true, size: 0 };
       mockFns.pfsStat
-        .mockImplementationOnce(() => Promise.resolve(dirStat))    // src -> dir
-        .mockImplementationOnce(() => Promise.resolve(fileStat))    // src/readme.md (readdir inside src)
-        .mockImplementationOnce(() => Promise.resolve(fileStat));   // readme.md
+        .mockImplementationOnce(() => Promise.resolve(dirStat)) // src -> dir
+        .mockImplementationOnce(() => Promise.resolve(fileStat)) // src/readme.md (readdir inside src)
+        .mockImplementationOnce(() => Promise.resolve(fileStat)); // readme.md
 
       mockFns.pfsReaddir
-        .mockImplementationOnce(() => Promise.resolve(['src', 'readme.md']))  // top level
-        .mockImplementationOnce(() => Promise.resolve(['readme.md']));        // inside src
+        .mockImplementationOnce(() => Promise.resolve(['src', 'readme.md'])) // top level
+        .mockImplementationOnce(() => Promise.resolve(['readme.md'])); // inside src
 
       await gitClient.delete('/repos/owner/repo');
 
@@ -686,13 +682,13 @@ describe('listDir()', () => {
 describe('listAllFiles()', () => {
   it('recursively lists all entries excluding .git', async () => {
     mockFns.pfsReaddir
-      .mockImplementationOnce(() => Promise.resolve(['src', 'readme.md']))  // /repos/owner/repo
-      .mockImplementationOnce(() => Promise.resolve(['main.ts']));          // /repos/owner/repo/src
+      .mockImplementationOnce(() => Promise.resolve(['src', 'readme.md'])) // /repos/owner/repo
+      .mockImplementationOnce(() => Promise.resolve(['main.ts'])); // /repos/owner/repo/src
 
     mockFns.pfsStat
-      .mockImplementationOnce(() => Promise.resolve({ isDirectory: () => true, size: 0 }))    // src
-      .mockImplementationOnce(() => Promise.resolve({ isDirectory: () => false, size: 10 }))   // readme.md
-      .mockImplementationOnce(() => Promise.resolve({ isDirectory: () => false, size: 50 }));  // main.ts
+      .mockImplementationOnce(() => Promise.resolve({ isDirectory: () => true, size: 0 })) // src
+      .mockImplementationOnce(() => Promise.resolve({ isDirectory: () => false, size: 10 })) // readme.md
+      .mockImplementationOnce(() => Promise.resolve({ isDirectory: () => false, size: 50 })); // main.ts
 
     const entries = await gitClient.listAllFiles('/repos/owner/repo');
 
@@ -815,18 +811,24 @@ describe('getChangedFiles()', () => {
   it('detects added, deleted, and modified between two commits', async () => {
     // Parent commit tree
     mockFns.gitReadTree
-      .mockImplementationOnce(() => Promise.resolve({          // current
-        tree: [
-          { path: 'a.txt', oid: 'aaa' },
-          { path: 'c.txt', oid: 'ccc' },
-        ],
-      }))
-      .mockImplementationOnce(() => Promise.resolve({          // parent
-        tree: [
-          { path: 'a.txt', oid: 'aaa' },
-          { path: 'b.txt', oid: 'bbb' },
-        ],
-      }));
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          // current
+          tree: [
+            { path: 'a.txt', oid: 'aaa' },
+            { path: 'c.txt', oid: 'ccc' },
+          ],
+        }),
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          // parent
+          tree: [
+            { path: 'a.txt', oid: 'aaa' },
+            { path: 'b.txt', oid: 'bbb' },
+          ],
+        }),
+      );
 
     const changed = await gitClient.getChangedFiles('/repos/owner/repo', 'current', 'parent');
 
@@ -836,13 +838,14 @@ describe('getChangedFiles()', () => {
   });
 
   it('skips .git in changed files', async () => {
-    mockFns.gitReadTree
-      .mockImplementationOnce(() => Promise.resolve({
+    mockFns.gitReadTree.mockImplementationOnce(() =>
+      Promise.resolve({
         tree: [
           { path: '.git', oid: 'git_oid' },
           { path: 'file.txt', oid: 'aaa' },
         ],
-      }));
+      }),
+    );
 
     const changed = await gitClient.getChangedFiles('/repos/owner/repo', 'abc123');
     expect(changed).toHaveLength(1);
@@ -851,9 +854,11 @@ describe('getChangedFiles()', () => {
 
   it('handles parent tree read failure gracefully (treats as first commit)', async () => {
     mockFns.gitReadTree
-      .mockImplementationOnce(() => Promise.resolve({
-        tree: [{ path: 'file.txt', oid: 'aaa' }],
-      }))
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          tree: [{ path: 'file.txt', oid: 'aaa' }],
+        }),
+      )
       .mockImplementationOnce(() => Promise.reject(new Error('bad parent sha')));
 
     const changed = await gitClient.getChangedFiles('/repos/owner/repo', 'current', 'badparent');
@@ -874,10 +879,24 @@ describe('withLock (concurrent operations)', () => {
     mockFns.gitLog.mockImplementation(() => {
       const idx = callIndex++;
       return new Promise((resolve) => {
-        setTimeout(() => {
-          callOrder.push(idx);
-          resolve([{ oid: idx === 0 ? 'first' : 'second', commit: { message: idx === 0 ? 'one' : 'two', author: { name: '', email: '', timestamp: 0 }, committer: { name: '', email: '', timestamp: 0 }, tree: '', parent: [] } }]);
-        }, 50 + idx * 50);
+        setTimeout(
+          () => {
+            callOrder.push(idx);
+            resolve([
+              {
+                oid: idx === 0 ? 'first' : 'second',
+                commit: {
+                  message: idx === 0 ? 'one' : 'two',
+                  author: { name: '', email: '', timestamp: 0 },
+                  committer: { name: '', email: '', timestamp: 0 },
+                  tree: '',
+                  parent: [],
+                },
+              },
+            ]);
+          },
+          50 + idx * 50,
+        );
       });
     });
 
@@ -899,15 +918,23 @@ describe('withLock (concurrent operations)', () => {
       started++;
       return new Promise((resolve) => {
         setTimeout(() => {
-          resolve([{ oid: 'x', commit: { message: 'm', author: { name: '', email: '', timestamp: 0 }, committer: { name: '', email: '', timestamp: 0 }, tree: '', parent: [] } }]);
+          resolve([
+            {
+              oid: 'x',
+              commit: {
+                message: 'm',
+                author: { name: '', email: '', timestamp: 0 },
+                committer: { name: '', email: '', timestamp: 0 },
+                tree: '',
+                parent: [],
+              },
+            },
+          ]);
         }, 10);
       });
     });
 
-    const [r1, r2] = await Promise.all([
-      gitClient.log('/repos/a/repo'),
-      gitClient.log('/repos/b/repo'),
-    ]);
+    const [r1, r2] = await Promise.all([gitClient.log('/repos/a/repo'), gitClient.log('/repos/b/repo')]);
 
     // Both should have started concurrently (both before either finishes)
     expect(started).toBe(2);
@@ -923,7 +950,18 @@ describe('withLock (concurrent operations)', () => {
       if (n === 0) {
         return Promise.reject(new Error('first fails'));
       }
-      return Promise.resolve([{ oid: 'second', commit: { message: 'ok', author: { name: '', email: '', timestamp: 0 }, committer: { name: '', email: '', timestamp: 0 }, tree: '', parent: [] } }]);
+      return Promise.resolve([
+        {
+          oid: 'second',
+          commit: {
+            message: 'ok',
+            author: { name: '', email: '', timestamp: 0 },
+            committer: { name: '', email: '', timestamp: 0 },
+            tree: '',
+            parent: [],
+          },
+        },
+      ]);
     });
 
     const p1 = gitClient.log('/repos/owner/repo').catch(() => 'error1');

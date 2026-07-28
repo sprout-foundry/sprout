@@ -3,7 +3,6 @@ package commands
 import (
 	"testing"
 
-	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 )
@@ -267,10 +266,7 @@ func TestResolvePersona(t *testing.T) {
 }
 
 func TestPersonaCommandSmoke(t *testing.T) {
-	chatAgent, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("failed to create agent: %v", err)
-	}
+	chatAgent := createTestAgentWithTempConfig(t)
 
 	cmd := &PersonaCommand{}
 

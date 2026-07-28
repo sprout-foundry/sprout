@@ -117,7 +117,9 @@ func TestSupportsVision_EmptyModel_ReturnsFalse(t *testing.T) {
 	}
 
 	// Explicitly set model to empty to simulate unset state.
+	provider.mu.Lock()
 	provider.model = ""
+	provider.mu.Unlock()
 
 	if provider.SupportsVision() {
 		t.Fatal("expected SupportsVision() == false when both provider.model and config.Defaults.Model are empty")
@@ -139,7 +141,9 @@ func TestSupportsVision_FallsBackToConfigDefaultModel(t *testing.T) {
 	}
 
 	// Clear provider.model so it falls back to config.Defaults.Model
+	provider.mu.Lock()
 	provider.model = ""
+	provider.mu.Unlock()
 
 	if !provider.SupportsVision() {
 		t.Fatal("expected SupportsVision() == true when falling back to config.Defaults.Model which has vision tag")
@@ -160,7 +164,9 @@ func TestSupportsVision_FallsBackToConfigDefaultModel_NoVisionTag(t *testing.T) 
 	}
 
 	// Clear provider.model so it falls back to config.Defaults.Model
+	provider.mu.Lock()
 	provider.model = ""
+	provider.mu.Unlock()
 
 	if provider.SupportsVision() {
 		t.Fatal("expected SupportsVision() == false when fallback model lacks vision tag")
@@ -319,7 +325,9 @@ func TestGetVisionModel_UsesConfigVisionModel(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	provider.model = "gpt-5-mini"
+	if err := provider.SetModel("gpt-5-mini"); err != nil {
+		t.Fatalf("SetModel failed: %v", err)
+	}
 
 	got := provider.GetVisionModel()
 	if got != "gpt-4o" {
@@ -336,7 +344,9 @@ func TestGetVisionModel_FallsBackToCurrentModel(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	provider.model = "current-model"
+	if err := provider.SetModel("current-model"); err != nil {
+		t.Fatalf("SetModel failed: %v", err)
+	}
 
 	got := provider.GetVisionModel()
 	if got != "current-model" {

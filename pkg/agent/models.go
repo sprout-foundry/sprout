@@ -215,10 +215,11 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				if a.debug {
 					a.Logger().Debug("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
-					} else {
-			// No models available from API and no model specified
-			return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
-		}}
+			} else {
+				// No models available from API and no model specified
+				return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
+			}
+		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
 		model = resolvedModel
 	} else if len(availableModels) > 0 {
@@ -304,10 +305,11 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 				if a.debug {
 					a.Logger().Debug("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
-					} else {
-			// No models available from API and no model specified
-			return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
-		}}
+			} else {
+				// No models available from API and no model specified
+				return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
+			}
+		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
 		model = resolvedModel
 	} else if len(availableModels) > 0 {

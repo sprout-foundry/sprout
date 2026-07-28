@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	provider_factory "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // manageSettingsHandler implements ToolHandler for the manage_settings tool.

@@ -141,6 +141,7 @@ func (a *Agent) ClassifyFileAccess(ctx context.Context, filePath, resolvedPath, 
 		return "prompt"
 	}
 }
+
 // handleFileSecurityError checks if an error is due to filesystem security and prompts the user.
 // Returns a context with security bypass enabled if user approves, original context otherwise.
 //
@@ -276,6 +277,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	}
 	return ctx, false
 }
+
 // filesystemDecisionFromCLIChoice maps the CLI prompt's typed choice
 // to the shared security.ApprovalDecision so the post-prompt handling
 // is the same regardless of input surface.
@@ -289,6 +291,7 @@ func filesystemDecisionFromCLIChoice(c utils.ApprovalChoice) security.ApprovalDe
 		return security.ApprovalDeny
 	}
 }
+
 // applyFilesystemDecision performs the side effects of the user's
 // choice on a filesystem approval dialog and returns the (ctx, ok)
 // pair the caller (handleFileSecurityError) returns to the tool layer.

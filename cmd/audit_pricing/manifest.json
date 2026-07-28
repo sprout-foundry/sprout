@@ -1,73 +1,262 @@
 {
   "deepseek": {
-    "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-07-26",
-    "models": [
-      {"id": "deepseek-v4-flash", "input_per_mtok": 0.14, "output_per_mtok": 0.28, "cached_per_mtok": 0.0028},
-      {"id": "deepseek-v4-pro", "input_per_mtok": 0.435, "output_per_mtok": 0.87, "cached_per_mtok": 0.003625},
-      {"id": "deepseek-v4-flash-max", "input_per_mtok": 0.14, "output_per_mtok": 0.28, "cached_per_mtok": 0.0028},
-      {"id": "deepseek-chat", "input_per_mtok": 0.14, "output_per_mtok": 0.28, "cached_per_mtok": 0.0028},
-      {"id": "deepseek-reasoner", "input_per_mtok": 0.14, "output_per_mtok": 0.28, "cached_per_mtok": 0.0028},
-      {"id": "deepseek-v3", "input_per_mtok": 0.27, "output_per_mtok": 1.1, "cached_per_mtok": 0.027},
-      {"id": "deepseek-coder", "input_per_mtok": 0.14, "output_per_mtok": 0.28, "cached_per_mtok": 0.0028}
-    ]
-  },
+  "last_verified": "2026-07-28",
+  "models": [
+  {
+  "input_per_mtok": 0.14,
+  "output_per_mtok": 0.28,
+  "cached_per_mtok": 0.0028,
+  "id": "deepseek-v4-flash"
+},
+  {
+  "input_per_mtok": 0.435,
+  "output_per_mtok": 0.87,
+  "cached_per_mtok": 0.003625,
+  "id": "deepseek-v4-pro"
+},
+  {
+  "id": "deepseek-v4-flash-max",
+  "input_per_mtok": 0.14,
+  "output_per_mtok": 0.28,
+  "cached_per_mtok": 0.0028
+},
+  {
+  "input_per_mtok": 0.14,
+  "output_per_mtok": 0.28,
+  "cached_per_mtok": 0.0028,
+  "id": "deepseek-chat"
+},
+  {
+  "id": "deepseek-reasoner",
+  "input_per_mtok": 0.14,
+  "output_per_mtok": 0.28,
+  "cached_per_mtok": 0.0028
+},
+  {
+  "cached_per_mtok": 0.027,
+  "id": "deepseek-v3",
+  "input_per_mtok": 0.27,
+  "output_per_mtok": 1.1
+},
+  {
+  "cached_per_mtok": 0.0028,
+  "id": "deepseek-coder",
+  "input_per_mtok": 0.14,
+  "output_per_mtok": 0.28
+}
+],
+  "source": "https://api-docs.deepseek.com/quick_start/pricing"
+},
   "minimax": {
-    "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-07-26",
-    "models": [
-      {"id": "MiniMax-M2", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.03},
-      {"id": "MiniMax-M2.1", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.03},
-      {"id": "MiniMax-M2.5", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.03},
-      {"id": "MiniMax-M2.7", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.06},
-      {"id": "MiniMax-M2-Stable", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.03},
-      {"id": "MiniMax-M2.5-Lightning", "input_per_mtok": 0.60, "output_per_mtok": 2.40, "cached_per_mtok": 0.03},
-      {"id": "MiniMax-VL-01", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.03}
-    ]
-  },
+  "last_verified": "2026-07-28",
+  "models": [
+  {
+  "cached_per_mtok": 0.03,
+  "id": "MiniMax-M2",
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 1.2
+},
+  {
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 1.2,
+  "cached_per_mtok": 0.03,
+  "id": "MiniMax-M2.1"
+},
+  {
+  "cached_per_mtok": 0.03,
+  "id": "MiniMax-M2.5",
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 1.2
+},
+  {
+  "cached_per_mtok": 0.06,
+  "id": "MiniMax-M2.7",
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 1.2
+},
+  {
+  "cached_per_mtok": 0.03,
+  "id": "MiniMax-M2-Stable",
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 1.2
+},
+  {
+  "output_per_mtok": 2.4,
+  "cached_per_mtok": 0.03,
+  "id": "MiniMax-M2.5-Lightning",
+  "input_per_mtok": 0.6
+},
+  {
+  "cached_per_mtok": 0.03,
+  "id": "MiniMax-VL-01",
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 1.2
+}
+],
+  "source": "https://platform.minimax.io/docs/guides/pricing-paygo"
+},
   "mistral": {
-    "source": "https://docs.mistral.ai/",
-    "last_verified": "2026-07-26",
-    "models": [
-      {"id": "mistral-large-latest", "input_per_mtok": 2.0, "output_per_mtok": 6.0},
-      {"id": "mistral-medium-latest", "input_per_mtok": 0.4, "output_per_mtok": 2.0},
-      {"id": "mistral-small-latest", "input_per_mtok": 0.15, "output_per_mtok": 0.6},
-      {"id": "codestral-latest", "input_per_mtok": 0.3, "output_per_mtok": 0.9}
-    ]
-  },
+  "models": [
+  {
+  "input_per_mtok": 0.5,
+  "output_per_mtok": 1.5,
+  "id": "mistral-large-latest"
+},
+  {
+  "id": "mistral-medium-latest",
+  "input_per_mtok": 1.5,
+  "output_per_mtok": 7.5
+},
+  {
+  "id": "mistral-small-latest",
+  "input_per_mtok": 0.15,
+  "output_per_mtok": 0.6
+},
+  {
+  "id": "codestral-latest",
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 0.9
+}
+],
+  "source": "https://mistral.ai/pricing/api/",
+  "last_verified": "2026-07-28"
+},
   "openai": {
-    "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-07-26",
-    "models": [
-      {"id": "gpt-5", "input_per_mtok": 1.25, "output_per_mtok": 10.0},
-      {"id": "gpt-5-mini", "input_per_mtok": 0.25, "output_per_mtok": 2.0},
-      {"id": "gpt-5-nano", "input_per_mtok": 0.05, "output_per_mtok": 0.4},
-      {"id": "gpt-5-pro", "input_per_mtok": 15.0, "output_per_mtok": 120.0},
-      {"id": "gpt-4o", "input_per_mtok": 2.5, "output_per_mtok": 10.0},
-      {"id": "gpt-4o-mini", "input_per_mtok": 0.15, "output_per_mtok": 0.6},
-      {"id": "gpt-4.1", "input_per_mtok": 2.0, "output_per_mtok": 8.0},
-      {"id": "gpt-4.1-mini", "input_per_mtok": 0.4, "output_per_mtok": 1.6},
-      {"id": "gpt-4.1-nano", "input_per_mtok": 0.1, "output_per_mtok": 0.4},
-      {"id": "o3", "input_per_mtok": 2.0, "output_per_mtok": 8.0},
-      {"id": "o3-mini", "input_per_mtok": 1.1, "output_per_mtok": 4.4},
-      {"id": "o4-mini", "input_per_mtok": 1.1, "output_per_mtok": 4.4}
-    ]
-  },
+  "last_verified": "2026-07-28",
+  "models": [
+  {
+  "id": "gpt-5",
+  "input_per_mtok": 1.25,
+  "output_per_mtok": 10
+},
+  {
+  "id": "gpt-5-mini",
+  "input_per_mtok": 0.25,
+  "output_per_mtok": 2
+},
+  {
+  "input_per_mtok": 0.05,
+  "output_per_mtok": 0.4,
+  "id": "gpt-5-nano"
+},
+  {
+  "output_per_mtok": 120,
+  "id": "gpt-5-pro",
+  "input_per_mtok": 15
+},
+  {
+  "id": "gpt-4o",
+  "input_per_mtok": 2.5,
+  "output_per_mtok": 10
+},
+  {
+  "input_per_mtok": 0.15,
+  "output_per_mtok": 0.6,
+  "id": "gpt-4o-mini"
+},
+  {
+  "id": "gpt-4.1",
+  "input_per_mtok": 2,
+  "output_per_mtok": 8
+},
+  {
+  "input_per_mtok": 0.4,
+  "output_per_mtok": 1.6,
+  "id": "gpt-4.1-mini"
+},
+  {
+  "input_per_mtok": 0.1,
+  "output_per_mtok": 0.4,
+  "id": "gpt-4.1-nano"
+},
+  {
+  "id": "o3",
+  "input_per_mtok": 2,
+  "output_per_mtok": 8
+},
+  {
+  "input_per_mtok": 1.1,
+  "output_per_mtok": 4.4,
+  "id": "o3-mini"
+},
+  {
+  "id": "o4-mini",
+  "input_per_mtok": 1.1,
+  "output_per_mtok": 4.4
+}
+],
+  "source": "https://platform.openai.com/docs/pricing"
+},
   "zai": {
-    "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-07-26",
-    "models": [
-      {"id": "GLM-4.5", "input_per_mtok": 0.6, "output_per_mtok": 2.2},
-      {"id": "GLM-4.5-air", "input_per_mtok": 0.2, "output_per_mtok": 1.1},
-      {"id": "GLM-4.6", "input_per_mtok": 0.6, "output_per_mtok": 2.2},
-      {"id": "glm-4.5v", "input_per_mtok": 0.6, "output_per_mtok": 1.8},
-      {"id": "glm-4.6v", "input_per_mtok": 0.3, "output_per_mtok": 0.9},
-      {"id": "glm-4.7", "input_per_mtok": 0.6, "output_per_mtok": 2.2},
-      {"id": "glm-5", "input_per_mtok": 1.0, "output_per_mtok": 3.2},
-      {"id": "glm-5-turbo", "input_per_mtok": 1.2, "output_per_mtok": 4.0},
-      {"id": "glm-5.1", "input_per_mtok": 1.4, "output_per_mtok": 4.4},
-      {"id": "glm-5.2", "input_per_mtok": 1.4, "output_per_mtok": 4.4},
-      {"id": "glm-5v-turbo", "input_per_mtok": 1.2, "output_per_mtok": 4.0}
-    ]
-  }
+  "last_verified": "2026-07-28",
+  "models": [
+  {
+  "cached_per_mtok": 0.11,
+  "id": "GLM-4.5",
+  "input_per_mtok": 0.6,
+  "output_per_mtok": 2.2
+},
+  {
+  "output_per_mtok": 1.1,
+  "cached_per_mtok": 0.03,
+  "id": "GLM-4.5-air",
+  "input_per_mtok": 0.2
+},
+  {
+  "id": "glm-4.5v",
+  "input_per_mtok": 0.6,
+  "output_per_mtok": 1.8,
+  "cached_per_mtok": 0.11
+},
+  {
+  "input_per_mtok": 0.3,
+  "output_per_mtok": 0.9,
+  "cached_per_mtok": 0.05,
+  "id": "glm-4.6v"
+},
+  {
+  "id": "glm-4.7",
+  "input_per_mtok": 0.6,
+  "output_per_mtok": 2.2,
+  "cached_per_mtok": 0.11
+},
+  {
+  "cached_per_mtok": 0.11,
+  "id": "GLM-4.6",
+  "input_per_mtok": 0.6,
+  "output_per_mtok": 2.2
+},
+  {
+  "cached_per_mtok": 0.2,
+  "id": "glm-5",
+  "input_per_mtok": 1,
+  "output_per_mtok": 3.2
+},
+  {
+  "cached_per_mtok": 0.24,
+  "id": "glm-5-turbo",
+  "input_per_mtok": 1.2,
+  "output_per_mtok": 4
+},
+  {
+  "cached_per_mtok": 0.26,
+  "id": "glm-5.1",
+  "input_per_mtok": 1.4,
+  "output_per_mtok": 4.4
+},
+  {
+  "cached_per_mtok": 0.26,
+  "id": "glm-5.2",
+  "input_per_mtok": 1.4,
+  "output_per_mtok": 4.4
+},
+  {
+  "cached_per_mtok": 0.24,
+  "id": "glm-5v-turbo",
+  "input_per_mtok": 1.2,
+  "output_per_mtok": 4
+}
+],
+  "source": "https://docs.z.ai/guides/overview/pricing"
+}
 }

@@ -1,30 +1,38 @@
 {
-  "name": "openai",
-  "endpoint": "https://api.openai.com/v1/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "OPENAI_API_KEY"
+    "env_var": "OPENAI_API_KEY",
+    "type": "bearer"
   },
-  "headers": {},
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0.25,
+    "output_token_cost": 2
+  },
   "defaults": {
+    "max_tokens": -1,
     "model": "gpt-5-mini",
     "temperature": 0.7,
-    "max_tokens": -1,
-    "top_p": 1.0
+    "top_p": 1
   },
+  "display_name": "OpenAI",
+  "endpoint": "https://api.openai.com/v1/chat/completions",
+  "headers": {},
   "message_conversion": {
-    "include_tool_call_id": true,
     "convert_tool_role_to_user": false,
+    "include_tool_call_id": true,
     "reasoning_content_field": "reasoning_content"
   },
-  "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 300000,
-    "done_marker": "[DONE]"
-  },
   "models": {
+    "available_models": [],
+    "completion_pattern_overrides": [
+      {
+        "context_limit": 128000,
+        "pattern": "gpt-5.*"
+      }
+    ],
     "default_context_limit": 200000,
     "default_max_completion_tokens": 128000,
+    "default_model": "gpt-5-mini",
     "max_completion_overrides": {
       "gpt-4o": 16384,
       "gpt-4o-mini": 16384,
@@ -32,52 +40,168 @@
       "gpt-5-mini": 128000,
       "gpt-5-nano": 128000
     },
-    "completion_pattern_overrides": [
+    "model_info": [
       {
-        "pattern": "gpt-5.*",
-        "context_limit": 128000
+        "context_length": 400000,
+        "description": "GPT-5 - Flagship model",
+        "id": "gpt-5",
+        "input_cost": 1.25,
+        "name": "GPT-5",
+        "output_cost": 10,
+        "tags": [
+          "reasoning",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5 Mini - Smaller GPT-5 variant",
+        "id": "gpt-5-mini",
+        "input_cost": 0.25,
+        "name": "GPT-5 Mini",
+        "output_cost": 2,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5 Nano - Smallest GPT-5 variant",
+        "id": "gpt-5-nano",
+        "input_cost": 0.05,
+        "name": "GPT-5 Nano",
+        "output_cost": 0.4,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5 Pro - Premium GPT-5 variant",
+        "id": "gpt-5-pro",
+        "input_cost": 15,
+        "name": "GPT-5 Pro",
+        "output_cost": 120,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "GPT-4o - Omni model",
+        "id": "gpt-4o",
+        "input_cost": 2.5,
+        "name": "GPT-4o",
+        "output_cost": 10,
+        "tags": [
+          "vision",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "GPT-4o Mini - Smaller omni model",
+        "id": "gpt-4o-mini",
+        "input_cost": 0.15,
+        "name": "GPT-4o Mini",
+        "output_cost": 0.6,
+        "tags": [
+          "vision",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "GPT-4.1 - Latest GPT-4 model",
+        "id": "gpt-4.1",
+        "input_cost": 2,
+        "name": "GPT-4.1",
+        "output_cost": 8,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "GPT-4.1 Mini - Smaller GPT-4.1",
+        "id": "gpt-4.1-mini",
+        "input_cost": 0.4,
+        "name": "GPT-4.1 Mini",
+        "output_cost": 1.6,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "GPT-4.1 Nano - Smallest GPT-4.1",
+        "id": "gpt-4.1-nano",
+        "input_cost": 0.1,
+        "name": "GPT-4.1 Nano",
+        "output_cost": 0.4,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "o3 - Reasoning model",
+        "id": "o3",
+        "input_cost": 2,
+        "name": "o3",
+        "output_cost": 8,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "o3 Mini - Smaller reasoning model",
+        "id": "o3-mini",
+        "input_cost": 1.1,
+        "name": "o3 Mini",
+        "output_cost": 4.4,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "o4 Mini - Latest reasoning model",
+        "id": "o4-mini",
+        "input_cost": 1.1,
+        "name": "o4 Mini",
+        "output_cost": 4.4,
+        "tags": [
+          "reasoning"
+        ]
       }
     ],
     "model_overrides": {
+      "gpt-4o": 128000,
+      "gpt-4o-mini": 128000,
       "gpt-5": 400000,
       "gpt-5-mini": 400000,
-      "gpt-5-nano": 400000,
-      "gpt-4o": 128000,
-      "gpt-4o-mini": 128000
+      "gpt-5-nano": 400000
     },
     "pattern_overrides": [
       {
-        "pattern": "gpt-5.*",
-        "context_limit": 400000
+        "context_limit": 400000,
+        "pattern": "gpt-5.*"
       },
       {
-        "pattern": "gpt-4o.*",
-        "context_limit": 128000
+        "context_limit": 128000,
+        "pattern": "gpt-4o.*"
       }
     ],
     "supports_vision": true,
-    "vision_model": "gpt-4o",
-    "default_model": "gpt-5-mini",
-    "available_models": [],
-    "model_info": [
-      {"context_length": 400000, "description": "GPT-5 - Flagship model", "id": "gpt-5", "input_cost": 1.25, "output_cost": 10.0, "cached_input_cost": 0.0, "name": "GPT-5", "tags": ["reasoning", "tools"]},
-      {"context_length": 400000, "description": "GPT-5 Mini - Smaller GPT-5 variant", "id": "gpt-5-mini", "input_cost": 0.25, "output_cost": 2.0, "cached_input_cost": 0.0, "name": "GPT-5 Mini", "tags": ["tools"]},
-      {"context_length": 400000, "description": "GPT-5 Nano - Smallest GPT-5 variant", "id": "gpt-5-nano", "input_cost": 0.05, "output_cost": 0.4, "cached_input_cost": 0.0, "name": "GPT-5 Nano", "tags": ["tools"]},
-      {"context_length": 400000, "description": "GPT-5 Pro - Premium GPT-5 variant", "id": "gpt-5-pro", "input_cost": 15.0, "output_cost": 120.0, "cached_input_cost": 0.0, "name": "GPT-5 Pro", "tags": ["reasoning"]},
-      {"context_length": 128000, "description": "GPT-4o - Omni model", "id": "gpt-4o", "input_cost": 2.5, "output_cost": 10.0, "cached_input_cost": 0.0, "name": "GPT-4o", "tags": ["vision", "tools"]},
-      {"context_length": 128000, "description": "GPT-4o Mini - Smaller omni model", "id": "gpt-4o-mini", "input_cost": 0.15, "output_cost": 0.6, "cached_input_cost": 0.0, "name": "GPT-4o Mini", "tags": ["vision", "tools"]},
-      {"context_length": 200000, "description": "GPT-4.1 - Latest GPT-4 model", "id": "gpt-4.1", "input_cost": 2.0, "output_cost": 8.0, "cached_input_cost": 0.0, "name": "GPT-4.1", "tags": ["tools"]},
-      {"context_length": 200000, "description": "GPT-4.1 Mini - Smaller GPT-4.1", "id": "gpt-4.1-mini", "input_cost": 0.4, "output_cost": 1.6, "cached_input_cost": 0.0, "name": "GPT-4.1 Mini", "tags": ["tools"]},
-      {"context_length": 200000, "description": "GPT-4.1 Nano - Smallest GPT-4.1", "id": "gpt-4.1-nano", "input_cost": 0.1, "output_cost": 0.4, "cached_input_cost": 0.0, "name": "GPT-4.1 Nano", "tags": ["tools"]},
-      {"context_length": 200000, "description": "o3 - Reasoning model", "id": "o3", "input_cost": 2.0, "output_cost": 8.0, "cached_input_cost": 0.0, "name": "o3", "tags": ["reasoning"]},
-      {"context_length": 200000, "description": "o3 Mini - Smaller reasoning model", "id": "o3-mini", "input_cost": 1.1, "output_cost": 4.4, "cached_input_cost": 0.0, "name": "o3 Mini", "tags": ["reasoning"]},
-      {"context_length": 200000, "description": "o4 Mini - Latest reasoning model", "id": "o4-mini", "input_cost": 1.1, "output_cost": 4.4, "cached_input_cost": 0.0, "name": "o4 Mini", "tags": ["reasoning"]}
-    ]
+    "vision_model": "gpt-4o"
   },
+  "name": "openai",
   "retry": {
-    "max_attempts": 3,
+    "backoff_multiplier": 2,
     "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
+    "max_attempts": 3,
     "max_delay_ms": 30000,
     "retryable_errors": [
       "rate_limit_exceeded",
@@ -85,10 +209,9 @@
       "timeout"
     ]
   },
-  "cost": {
-    "input_token_cost": 0.25,
-    "output_token_cost": 2.0,
-    "currency": "USD"
-  },
-  "display_name": "OpenAI"
+  "streaming": {
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]",
+    "format": "sse"
+  }
 }

@@ -162,14 +162,22 @@ test-ci: test-unit
 # invoked against a package that has no test files. These packages contribute
 # 0% coverage regardless, so excluding them is a no-op for the coverage number
 # while making the run cross-platform stable.
+#
+# Set TEST_COVER=no to run tests without coverage instrumentation. The CI
+# workflow uses this on Windows, where Go 1.25's coverage merge crashes at
+# the OS level (STATUS_DLL_INIT_FAILED) — an unrecoverable process kill that
+# no shell-level error handling can catch. Coverage is still collected on
+# ubuntu/macos, which is sufficient for the threshold check.
 test-coverage: prepare-grammars
-	@echo "Running unit tests with coverage check (race=$(TEST_RACE))..."
+	@echo "Running unit tests (race=$(TEST_RACE), cover=$(TEST_COVER))..."
 	@bash -lc 'set -o pipefail; \
 	test_pkgs=$$(go list -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... | while read pkg; do \
 		test_files=$$(go list -tags "browser grammar_blobs_external" -f "{{.TestGoFiles}}" "$$pkg"); \
 		[ "$$test_files" = "[]" ] || echo "$$pkg"; \
 	done); \
-	go test $(TEST_RACE) -tags "browser grammar_blobs_external" $$test_pkgs -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-coverage.out > /tmp/sprout-test-coverage.log 2>&1; \
+	cover_flag=""; \
+	[ "$(TEST_COVER)" = "no" ] || cover_flag="-coverprofile=/tmp/sprout-coverage.out"; \
+	go test $(TEST_RACE) -tags "browser grammar_blobs_external" $$test_pkgs -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) $$cover_flag > /tmp/sprout-test-coverage.log 2>&1; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -182,6 +190,11 @@ test-coverage: prepare-grammars
 		echo "This is typically a coverage-tooling crash (e.g. STATUS_DLL_INIT_FAILED on Windows,"; \
 		echo "or \"no such tool covdata\" on some Linux toolchains) that occurs AFTER all tests"; \
 		echo "pass. Proceeding with coverage report generation."; \
+	fi; \
+	if [ "$(TEST_COVER)" = "no" ]; then \
+		echo ""; \
+		echo "Coverage disabled (TEST_COVER=no). Tests completed."; \
+		exit 0; \
 	fi; \
 	echo ""; \
 	echo "Generating coverage report..."; \

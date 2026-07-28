@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // SecurityAnalysis is the structured output of AnalyzeShellCommand. SP-124.

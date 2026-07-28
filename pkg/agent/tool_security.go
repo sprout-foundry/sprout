@@ -530,8 +530,6 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 	return err
 }
 
-
-
 // outputRouter implements io.Writer by routing writes through the agent's
 // PrintLineAsync method. It buffers partial lines and flushes them on newline
 // boundaries, so streaming output from tools appears in the console the same

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 type embeddingIndexHandler struct{}

@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
 

@@ -514,8 +514,9 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	case *OrderedMap:
 		child, exists := typed.Get(token)
 		if !exists {
-					if op != "add" {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", token), nil)}
+			if op != "add" {
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", token), nil)
+			}
 			child = NewOrderedMap()
 		}
 		updatedChild, err := applyMutation(child, segments[1:], value, op)
@@ -527,8 +528,9 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	case map[string]interface{}:
 		child, exists := typed[token]
 		if !exists {
-					if op != "add" {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", token), nil)}
+			if op != "add" {
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", token), nil)
+			}
 			child = map[string]interface{}{}
 		}
 		updatedChild, err := applyMutation(child, segments[1:], value, op)
@@ -657,19 +659,22 @@ func readPointerValue(doc interface{}, segments []string) (interface{}, error) {
 	for _, segment := range segments {
 		switch typed := current.(type) {
 		case *OrderedMap:
-					val, exists := typed.Get(segment)
-		if !exists {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", segment), nil)}
+			val, exists := typed.Get(segment)
+			if !exists {
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", segment), nil)
+			}
 			current = val
 		case map[string]interface{}:
-					value, exists := typed[segment]
-		if !exists {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", segment), nil)}
+			value, exists := typed[segment]
+			if !exists {
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", segment), nil)
+			}
 			current = value
 		case []interface{}:
-					idx, err := strconv.Atoi(segment)
-		if err != nil || idx < 0 || idx >= len(typed) {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("array index out of range at segment '%s'", segment), nil)}
+			idx, err := strconv.Atoi(segment)
+			if err != nil || idx < 0 || idx >= len(typed) {
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("array index out of range at segment '%s'", segment), nil)
+			}
 			current = typed[idx]
 		default:
 			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot traverse non-container at segment '%s'", segment), nil)

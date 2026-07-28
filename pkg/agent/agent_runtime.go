@@ -61,6 +61,7 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 		PromptTokens:     resp.Usage.PromptTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
 		CachedTokens:     resp.Usage.CachedTokens,
+		ImageTokens:      resp.Usage.ImageTokens,
 	}
 	a.state.AddCostEntry(entry)
 
@@ -94,6 +95,9 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 		if n := *resp.Usage.CacheWriteTokens; n > 0 {
 			a.state.SetCacheWriteTokens(a.state.GetCacheWriteTokens() + n)
 		}
+	}
+	if n := resp.Usage.ImageTokens; n > 0 {
+		a.state.SetImageTokens(a.state.GetImageTokens() + n)
 	}
 }
 

@@ -4,9 +4,9 @@ package agent
 
 import (
 	"context"
-	"fmt"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // wireHostOnlyToolFuncs is the WASM (browser) implementation. PR creation
@@ -19,9 +19,9 @@ import (
 // initialized" error or a cryptic syscall failure. See AUDIT-C2.
 func wireHostOnlyToolFuncs(_ *Agent, _ bool) {
 	tools.RunAutomateFunc = func(_ context.Context, _ map[string]any) (string, error) {
-		return "", fmt.Errorf("run_automate is not available in browser mode")
+		return "", agenterrors.NewConfig("run_automate is not available in browser mode", nil)
 	}
 	tools.CreatePullRequestFunc = func(_ context.Context, _ map[string]any) (string, error) {
-		return "", fmt.Errorf("create_pull_request is not available in browser mode")
+		return "", agenterrors.NewConfig("create_pull_request is not available in browser mode", nil)
 	}
 }

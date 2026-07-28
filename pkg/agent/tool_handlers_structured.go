@@ -190,7 +190,7 @@ func serializeStructuredContent(format string, data interface{}) (string, error)
 	case "yaml":
 		return SerializeYAMLOrdered(data)
 	default:
-		return "", fmt.Errorf("unsupported format: %s", format)
+		return "", agenterrors.NewInvalidInputError("unsupported format: "+format, nil)
 	}
 }
 
@@ -201,7 +201,7 @@ func deserializeStructuredContent(format, content string) (interface{}, error) {
 	case "yaml":
 		return ParseYAMLOrdered(content)
 	default:
-		return nil, fmt.Errorf("unsupported format: %s", format)
+		return nil, agenterrors.NewInvalidInputError("unsupported format: "+format, nil)
 	}
 }
 
@@ -358,10 +358,10 @@ func formatStructuredValidationError(toolName string, errs []string, context str
 	}
 
 	if context == "" {
-		return fmt.Errorf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details)
+		return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details), nil)
 	}
 
-	return fmt.Errorf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details)
+	return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details), nil)
 }
 
 func extractValidationPaths(errs []string) []string {
@@ -427,7 +427,7 @@ func parsePatchOperations(v interface{}) ([]jsonPatchOperation, error) {
 	for i, raw := range rawOps {
 		obj, ok := raw.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("patch_ops[%d] must be an object", i)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("patch_ops[%d] must be an object", i), nil)
 		}
 		op := strings.ToLower(strings.TrimSpace(fmt.Sprint(obj["op"])))
 		path := fmt.Sprint(obj["path"])
@@ -437,14 +437,14 @@ func parsePatchOperations(v interface{}) ([]jsonPatchOperation, error) {
 		}
 
 		if op == "" || path == "" {
-			return nil, fmt.Errorf("patch_ops[%d] requires non-empty op and path", i)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("patch_ops[%d] requires non-empty op and path", i), nil)
 		}
 		if !slices.Contains([]string{"add", "replace", "remove", "test"}, op) {
-			return nil, fmt.Errorf("patch_ops[%d] has unsupported op '%s'", i, op)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("patch_ops[%d] has unsupported op '%s'", i, op), nil)
 		}
 		if op == "add" || op == "replace" || op == "test" {
 			if _, exists := obj["value"]; !exists {
-				return nil, fmt.Errorf("patch_ops[%d] requires value for op '%s'", i, op)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("patch_ops[%d] requires value for op '%s'", i, op), nil)
 			}
 		}
 		ops = append(ops, jsonPatchOperation{
@@ -481,11 +481,11 @@ func applyPatchOperation(doc interface{}, op jsonPatchOperation) (interface{}, e
 		// tool args) but actual is an *OrderedMap (from ordered deserialization).
 		comparableActual := convertFromOrderedValue(actual)
 		if !reflect.DeepEqual(comparableActual, op.Value) {
-			return nil, fmt.Errorf("patch test failed at %s", op.Path)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("patch test failed at %s", op.Path), nil)
 		}
 		return doc, nil
 	default:
-		return nil, fmt.Errorf("unsupported patch op: %s", op.Op)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("unsupported patch op: %s", op.Op), nil)
 	}
 }
 
@@ -501,7 +501,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 		case "remove":
 			return nil, nil
 		default:
-			return nil, fmt.Errorf("unsupported op: %s", op)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("unsupported op: %s", op), nil)
 		}
 	}
 
@@ -514,9 +514,8 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	case *OrderedMap:
 		child, exists := typed.Get(token)
 		if !exists {
-			if op != "add" {
-				return nil, fmt.Errorf("path segment '%s' does not exist", token)
-			}
+					if op != "add" {
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", token), nil)}
 			child = NewOrderedMap()
 		}
 		updatedChild, err := applyMutation(child, segments[1:], value, op)
@@ -528,9 +527,8 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	case map[string]interface{}:
 		child, exists := typed[token]
 		if !exists {
-			if op != "add" {
-				return nil, fmt.Errorf("path segment '%s' does not exist", token)
-			}
+					if op != "add" {
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", token), nil)}
 			child = map[string]interface{}{}
 		}
 		updatedChild, err := applyMutation(child, segments[1:], value, op)
@@ -542,7 +540,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	case []interface{}:
 		idx, err := strconv.Atoi(token)
 		if err != nil || idx < 0 || idx >= len(typed) {
-			return nil, fmt.Errorf("array index out of range at segment '%s'", token)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("array index out of range at segment '%s'", token), nil)
 		}
 		updatedChild, err := applyMutation(typed[idx], segments[1:], value, op)
 		if err != nil {
@@ -551,7 +549,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 		typed[idx] = updatedChild
 		return typed, nil
 	default:
-		return nil, fmt.Errorf("cannot traverse into non-container at segment '%s'", token)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot traverse into non-container at segment '%s'", token), nil)
 	}
 }
 
@@ -569,13 +567,13 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 			return typed, nil
 		case "replace":
 			if _, exists := typed.Get(token); !exists {
-				return nil, fmt.Errorf("cannot replace missing key '%s'", token)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot replace missing key '%s'", token), nil)
 			}
 			typed.Set(token, orderedValue)
 			return typed, nil
 		case "remove":
 			if _, exists := typed.Get(token); !exists {
-				return nil, fmt.Errorf("cannot remove missing key '%s'", token)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot remove missing key '%s'", token), nil)
 			}
 			typed.Delete(token)
 			return typed, nil
@@ -587,13 +585,13 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 			return typed, nil
 		case "replace":
 			if _, exists := typed[token]; !exists {
-				return nil, fmt.Errorf("cannot replace missing key '%s'", token)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot replace missing key '%s'", token), nil)
 			}
 			typed[token] = orderedValue
 			return typed, nil
 		case "remove":
 			if _, exists := typed[token]; !exists {
-				return nil, fmt.Errorf("cannot remove missing key '%s'", token)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot remove missing key '%s'", token), nil)
 			}
 			delete(typed, token)
 			return typed, nil
@@ -604,13 +602,13 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 		}
 		idx, err := strconv.Atoi(token)
 		if err != nil {
-			return nil, fmt.Errorf("invalid array index '%s'", token)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("invalid array index '%s'", token), nil)
 		}
 
 		switch op {
 		case "add":
 			if idx < 0 || idx > len(typed) {
-				return nil, fmt.Errorf("array insert index out of range: %d", idx)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("array insert index out of range: %d", idx), nil)
 			}
 			typed = append(typed, nil)
 			copy(typed[idx+1:], typed[idx:])
@@ -618,19 +616,19 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 			return typed, nil
 		case "replace":
 			if idx < 0 || idx >= len(typed) {
-				return nil, fmt.Errorf("array replace index out of range: %d", idx)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("array replace index out of range: %d", idx), nil)
 			}
 			typed[idx] = orderedValue
 			return typed, nil
 		case "remove":
 			if idx < 0 || idx >= len(typed) {
-				return nil, fmt.Errorf("array remove index out of range: %d", idx)
+				return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("array remove index out of range: %d", idx), nil)
 			}
 			return append(typed[:idx], typed[idx+1:]...), nil
 		}
 	}
 
-	return nil, fmt.Errorf("cannot apply %s at token '%s'", op, token)
+	return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot apply %s at token '%s'", op, token), nil)
 }
 
 func parseJSONPointer(path string) ([]string, error) {
@@ -641,7 +639,7 @@ func parseJSONPointer(path string) ([]string, error) {
 		return []string{""}, nil
 	}
 	if path[0] != '/' {
-		return nil, fmt.Errorf("invalid patch path '%s': must start with '/'", path)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("invalid patch path '%s': must start with '/'", path), nil)
 	}
 
 	raw := strings.Split(path[1:], "/")
@@ -659,25 +657,22 @@ func readPointerValue(doc interface{}, segments []string) (interface{}, error) {
 	for _, segment := range segments {
 		switch typed := current.(type) {
 		case *OrderedMap:
-			val, exists := typed.Get(segment)
-			if !exists {
-				return nil, fmt.Errorf("path segment '%s' does not exist", segment)
-			}
+					val, exists := typed.Get(segment)
+		if !exists {
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", segment), nil)}
 			current = val
 		case map[string]interface{}:
-			value, exists := typed[segment]
-			if !exists {
-				return nil, fmt.Errorf("path segment '%s' does not exist", segment)
-			}
+					value, exists := typed[segment]
+		if !exists {
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("path segment '%s' does not exist", segment), nil)}
 			current = value
 		case []interface{}:
-			idx, err := strconv.Atoi(segment)
-			if err != nil || idx < 0 || idx >= len(typed) {
-				return nil, fmt.Errorf("array index out of range at segment '%s'", segment)
-			}
+					idx, err := strconv.Atoi(segment)
+		if err != nil || idx < 0 || idx >= len(typed) {
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("array index out of range at segment '%s'", segment), nil)}
 			current = typed[idx]
 		default:
-			return nil, fmt.Errorf("cannot traverse non-container at segment '%s'", segment)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("cannot traverse non-container at segment '%s'", segment), nil)
 		}
 	}
 	return current, nil

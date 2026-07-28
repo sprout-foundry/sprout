@@ -41,3 +41,109 @@ func TestAccumulateResponseCost(t *testing.T) {
 	sp.accumulateResponseCost(nil)
 	(&sproutProvider{}).accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{Cost: 1}})
 }
+
+// TestAccumulateResponseCost_ImageTokens_SeedProvider verifies that ImageTokens
+// flow into the CostEntry and are accumulated in the agent state when using the
+// seed provider path.
+func TestAccumulateResponseCost_ImageTokens_SeedProvider(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+	sp := &sproutProvider{agent: a}
+
+	// Initial image tokens should be 0
+	if got := a.state.GetImageTokens(); got != 0 {
+		t.Fatalf("initial GetImageTokens: want 0, got %d", got)
+	}
+
+	// Accumulate with ImageTokens=42
+	sp.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		PromptTokens:     50,
+		CompletionTokens: 30,
+		TotalTokens:      80,
+		ImageTokens:      42,
+	}})
+
+	if got := a.state.GetImageTokens(); got != 42 {
+		t.Errorf("after first call: want 42, got %d", got)
+	}
+
+	// Accumulate again with ImageTokens=10 — total should be 52
+	sp.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		PromptTokens:     10,
+		CompletionTokens: 20,
+		TotalTokens:      30,
+		ImageTokens:      10,
+	}})
+
+	if got := a.state.GetImageTokens(); got != 52 {
+		t.Errorf("after second call: want 52, got %d", got)
+	}
+
+	// Accumulate with ImageTokens=0 — total should NOT change
+	sp.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		PromptTokens:     5,
+		CompletionTokens: 5,
+		TotalTokens:      10,
+		ImageTokens:      0,
+	}})
+
+	if got := a.state.GetImageTokens(); got != 52 {
+		t.Errorf("after zero ImageTokens: want 52 (unchanged), got %d", got)
+	}
+}
+
+// TestAccumulateResponseCost_ImageTokens_AgentRuntime verifies that ImageTokens
+// flow into the CostEntry and are accumulated in the agent state when using the
+// Agent.accumulateResponseCost path (agent_runtime.go).
+func TestAccumulateResponseCost_ImageTokens_AgentRuntime(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+
+	// Initial image tokens should be 0
+	if got := a.state.GetImageTokens(); got != 0 {
+		t.Fatalf("initial GetImageTokens: want 0, got %d", got)
+	}
+
+	// Accumulate with ImageTokens=42
+	a.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		PromptTokens:     50,
+		CompletionTokens: 30,
+		TotalTokens:      80,
+		ImageTokens:      42,
+	}})
+
+	if got := a.state.GetImageTokens(); got != 42 {
+		t.Errorf("after first call: want 42, got %d", got)
+	}
+
+	// Accumulate again with ImageTokens=10 — total should be 52
+	a.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		PromptTokens:     10,
+		CompletionTokens: 20,
+		TotalTokens:      30,
+		ImageTokens:      10,
+	}})
+
+	if got := a.state.GetImageTokens(); got != 52 {
+		t.Errorf("after second call: want 52, got %d", got)
+	}
+
+	// Accumulate with ImageTokens=0 — total should NOT change
+	a.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		PromptTokens:     5,
+		CompletionTokens: 5,
+		TotalTokens:      10,
+		ImageTokens:      0,
+	}})
+
+	if got := a.state.GetImageTokens(); got != 52 {
+		t.Errorf("after zero ImageTokens: want 52 (unchanged), got %d", got)
+	}
+
+	// Test nil guard
+	a.accumulateResponseCost(nil)
+	// State should be unchanged after nil call
+	if got := a.state.GetImageTokens(); got != 52 {
+		t.Errorf("after nil call: want 52 (unchanged), got %d", got)
+	}
+}

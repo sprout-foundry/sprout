@@ -391,7 +391,7 @@ func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager,
 	// Get the process info from BPM using public accessors
 	proc, exists := bpm.GetProcess(sessionID)
 	if !exists {
-		return fmt.Errorf("session %s not found in BPM", sessionID)
+		return agenterrors.NewNotFoundCause(sessionID, nil)
 	}
 	pid := proc.GetPID()
 	outputPath := proc.GetOutputPath()

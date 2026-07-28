@@ -7,13 +7,14 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/errors"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 func handleMCPRefresh(ctx context.Context, agent *Agent, args map[string]interface{}) (string, error) {
 	operation, err := getMCPStringArg(args, "operation")
 	if err != nil {
-		return "", fmt.Errorf("operation is required")
+		return "", agenterrors.NewInvalidInputError("operation is required", nil)
 	}
 
 	switch operation {
@@ -26,14 +27,14 @@ func handleMCPRefresh(ctx context.Context, agent *Agent, args map[string]interfa
 	case "remove":
 		return handleMCPRemove(ctx, agent, args)
 	default:
-		return "", fmt.Errorf("unknown operation %q: must be one of: list, refresh, add, remove", operation)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown operation %q: must be one of: list, refresh, add, remove", operation), nil)
 	}
 }
 
 func handleMCPList(agent *Agent) (string, error) {
 	mgr := agent.mcpSub.GetManager()
 	if mgr == nil {
-		return "", fmt.Errorf("MCP manager is not available")
+		return "", agenterrors.NewAgent("mcp", "MCP manager is not available", nil)
 	}
 
 	servers := mgr.ListServers()
@@ -91,7 +92,7 @@ func handleMCPRefreshConfig(ctx context.Context, agent *Agent) (string, error) {
 func handleMCPAdd(ctx context.Context, agent *Agent, args map[string]interface{}) (string, error) {
 	name, err := getMCPStringArg(args, "name")
 	if err != nil {
-		return "", fmt.Errorf("name is required for add operation")
+		return "", agenterrors.NewInvalidInputError("name is required for add operation", nil)
 	}
 
 	serverType, _ := getMCPStringArg(args, "type")
@@ -167,16 +168,16 @@ func handleMCPAdd(ctx context.Context, agent *Agent, args map[string]interface{}
 func handleMCPRemove(ctx context.Context, agent *Agent, args map[string]interface{}) (string, error) {
 	name, err := getMCPStringArg(args, "name")
 	if err != nil {
-		return "", fmt.Errorf("name is required for remove operation")
+		return "", agenterrors.NewInvalidInputError("name is required for remove operation", nil)
 	}
 
 	// Remove from config and persist
 	if err := agent.GetConfigManager().UpdateConfig(func(cfg *configuration.Config) error {
 		if cfg.MCP.Servers == nil {
-			return fmt.Errorf("no MCP servers configured")
+			return agenterrors.NewAgent("mcp", "no MCP servers configured", nil)
 		}
 		if _, exists := cfg.MCP.Servers[name]; !exists {
-			return fmt.Errorf("MCP server %q not found", name)
+			return agenterrors.NewNotFoundCause(fmt.Sprintf("MCP server %q", name), nil)
 		}
 		delete(cfg.MCP.Servers, name)
 		if len(cfg.MCP.Servers) == 0 {
@@ -206,11 +207,11 @@ func handleMCPRemove(ctx context.Context, agent *Agent, args map[string]interfac
 func getMCPStringArg(args map[string]interface{}, key string) (string, error) {
 	v, ok := args[key]
 	if !ok || v == nil {
-		return "", fmt.Errorf("%s is required", key)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("%s is required", key), nil)
 	}
 	s, ok := v.(string)
 	if !ok {
-		return "", fmt.Errorf("%s must be a string", key)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("%s must be a string", key), nil)
 	}
 	return s, nil
 }

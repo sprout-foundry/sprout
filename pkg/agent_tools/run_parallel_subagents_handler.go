@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // RunParallelSubagentsFunc is a function pointer set by pkg/agent at startup.
@@ -63,10 +65,10 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 func (h *runParallelSubagentsHandler) Validate(args map[string]any) error {
 	val, exists := args["subagents"]
 	if !exists || val == nil {
-		return fmt.Errorf("parameter 'subagents' is required")
+		return agenterrors.NewValidation("parameter 'subagents' is required", nil)
 	}
 	if _, ok := val.([]any); !ok {
-		return fmt.Errorf("parameter 'subagents' must be an array, got %T", val)
+		return agenterrors.NewValidation(fmt.Sprintf("parameter 'subagents' must be an array, got %T", val), nil)
 	}
 	return nil
 }

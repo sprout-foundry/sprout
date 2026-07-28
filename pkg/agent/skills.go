@@ -223,11 +223,11 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 func getStringArg(args map[string]interface{}, name string) (string, error) {
 	val, ok := args[name]
 	if !ok {
-		return "", fmt.Errorf("missing required argument: %s", name)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("missing required argument: %s", name), nil)
 	}
 	str, ok := val.(string)
 	if !ok {
-		return "", fmt.Errorf("argument '%s' must be a string", name)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("argument '%s' must be a string", name), nil)
 	}
 	return str, nil
 }

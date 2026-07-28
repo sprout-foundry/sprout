@@ -62,7 +62,7 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	}
 	// Allow exact match or a proper subdirectory (with separator).
 	if absRoot != absWorkspace && !strings.HasPrefix(absRoot, absWorkspace+string(filepath.Separator)) {
-		return "", fmt.Errorf("directory %q is outside workspace root", rootDir)
+		return "", agenterrors.NewValidation(fmt.Sprintf("directory %q is outside workspace root", rootDir), nil)
 	}
 
 	a.Logger().Debug("Generating repo map for directory: %s\n", rootDir)

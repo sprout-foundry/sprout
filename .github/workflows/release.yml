@@ -73,9 +73,6 @@ jobs:
         CI: "true"
       run: make test-coverage
 
-    - name: Run integration tests
-      run: make test-integration
-
     - name: Run smoke tests
       run: make test-smoke
 

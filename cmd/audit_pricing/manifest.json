@@ -1,7 +1,7 @@
 {
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-07-26",
+    "last_verified": "2026-07-29",
     "models": [
       {"id": "deepseek-v4-flash", "input_per_mtok": 0.14, "output_per_mtok": 0.28, "cached_per_mtok": 0.0028},
       {"id": "deepseek-v4-pro", "input_per_mtok": 0.435, "output_per_mtok": 0.87, "cached_per_mtok": 0.003625},
@@ -14,7 +14,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-07-26",
+    "last_verified": "2026-07-29",
     "models": [
       {"id": "MiniMax-M2", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.03},
       {"id": "MiniMax-M2.1", "input_per_mtok": 0.30, "output_per_mtok": 1.20, "cached_per_mtok": 0.03},
@@ -26,18 +26,18 @@
     ]
   },
   "mistral": {
-    "source": "https://docs.mistral.ai/",
-    "last_verified": "2026-07-26",
+    "source": "https://mistral.ai/pricing/api/",
+    "last_verified": "2026-07-29",
     "models": [
-      {"id": "mistral-large-latest", "input_per_mtok": 2.0, "output_per_mtok": 6.0},
-      {"id": "mistral-medium-latest", "input_per_mtok": 0.4, "output_per_mtok": 2.0},
+      {"id": "mistral-large-latest", "input_per_mtok": 0.5, "output_per_mtok": 1.5},
+      {"id": "mistral-medium-latest", "input_per_mtok": 1.5, "output_per_mtok": 7.5},
       {"id": "mistral-small-latest", "input_per_mtok": 0.15, "output_per_mtok": 0.6},
       {"id": "codestral-latest", "input_per_mtok": 0.3, "output_per_mtok": 0.9}
     ]
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-07-26",
+    "last_verified": "2026-07-29",
     "models": [
       {"id": "gpt-5", "input_per_mtok": 1.25, "output_per_mtok": 10.0},
       {"id": "gpt-5-mini", "input_per_mtok": 0.25, "output_per_mtok": 2.0},
@@ -54,8 +54,8 @@
     ]
   },
   "zai": {
-    "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-07-26",
+    "source": "https://docs.z.ai/guides/overview/pricing",
+    "last_verified": "2026-07-29",
     "models": [
       {"id": "GLM-4.5", "input_per_mtok": 0.6, "output_per_mtok": 2.2},
       {"id": "GLM-4.5-air", "input_per_mtok": 0.2, "output_per_mtok": 1.1},

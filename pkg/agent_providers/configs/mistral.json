@@ -76,8 +76,8 @@
         "context_length": 131072,
         "description": "Mistral Large - Flagship model for complex tasks",
         "id": "mistral-large-latest",
-        "input_cost": 2.0,
-        "output_cost": 6.0,
+        "input_cost": 0.5,
+        "output_cost": 1.5,
         "cached_input_cost": 0.0,
         "name": "Mistral Large",
         "tags": ["reasoning", "tools"]
@@ -86,8 +86,8 @@
         "context_length": 32768,
         "description": "Mistral Medium - Balanced model for most tasks",
         "id": "mistral-medium-latest",
-        "input_cost": 0.4,
-        "output_cost": 2.0,
+        "input_cost": 1.5,
+        "output_cost": 7.5,
         "cached_input_cost": 0.0,
         "name": "Mistral Medium",
         "tags": ["tools"]

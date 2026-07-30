@@ -211,9 +211,13 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 
 	isSubagent := a.IsSubagent()
 
-	// WebUI path — interactive only, non-interactive runs skip
-	hasInteractiveSurface := !a.isNonInteractive() && !isSubagent && a.HasActiveWebUIClients()
-	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && hasInteractiveSurface {
+	// WebUI path. When a browser tab is connected, the WebUI IS the
+	// interactive surface — the TTY status of os.Stdin is irrelevant.
+	// A webui-only service has no TTY but still has live users who can
+	// answer approval dialogs. The isNonInteractive() check is only
+	// meaningful for the CLI fallback path below.
+	webUICanAnswer := !isSubagent && a.HasActiveWebUIClients()
+	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && webUICanAnswer {
 		// Suspend CLI spinner and steer reader before blocking on the
 		// webui response — prevents terminal corruption during the wait.
 		clihooks.SuspendIndicator()

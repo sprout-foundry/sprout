@@ -1448,8 +1448,7 @@ export function useWebSocketEventHandler({
                   // query is no longer active. The old length-only heuristic
                   // preferred shorter local state when streaming hadn't
                   // persisted yet, losing the assistant's response.
-                  const useBackendMessages =
-                    backendMessages.length >= prev.messages.length || !backendProcessing;
+                  const useBackendMessages = backendMessages.length >= prev.messages.length || !backendProcessing;
                   return useBackendMessages ? { messages: trimMessages(backendMessages) } : {};
                 });
               })

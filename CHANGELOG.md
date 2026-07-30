@@ -2,6 +2,11 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.11] - 2026-07-30
+
+- fix(config): custom providers always resolve to global home directory (0a0e468dc)
+- docs: Update changelog for v0.17.10 (b85d116d1)
+
 ## [v0.17.10] - 2026-07-28
 
 - Initial release

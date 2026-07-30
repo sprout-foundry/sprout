@@ -16,6 +16,7 @@ import type {
   FileEdit,
   ToolRef,
 } from '@sprout/ui';
+import type { WsEvent } from '@sprout/events';
 import type { OnboardingEnvironment, OnboardingProviderOption } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 
@@ -72,6 +73,7 @@ export interface PerChatState {
   model: string;
   worktreePath?: string;
   queryCount: number;
+  pendingEvents?: WsEvent[];
 }
 
 /** All navigable views in the editor (chat, editor, platform pages, detail pages). */

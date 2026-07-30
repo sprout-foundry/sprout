@@ -127,6 +127,8 @@ export function useChatSessionManager({
                 provider: prev.provider,
                 model: prev.model,
                 queryCount: prev.queryCount,
+                // Preserve pendingEvents accumulated while this chat was
+                // away. Events for non-active chats are queued here.
               },
             }
           : prev.perChatCache;
@@ -165,13 +167,30 @@ export function useChatSessionManager({
         const backendIsActive = response.chat_session.active_query;
 
         setState((prev) => {
-          const useBackendMessages = backendMessages.length >= prev.messages.length;
+          // Backend is authoritative when it has at least as many messages,
+          // OR the query is not active (backend has finalised and persisted
+          // everything), OR the cache had pending events (stale signal).
+          // Previously this used a naive length comparison that could prefer
+          // shorter local state when streaming hadn't been persisted yet.
+          const cached = prev.perChatCache[id];
+          const hadPendingEvents = !!(cached?.pendingEvents?.length);
+          const useBackendMessages =
+            backendMessages.length >= prev.messages.length ||
+            !backendIsActive ||
+            hadPendingEvents;
+          // Drain pending events — the backend fetch is authoritative now.
+          const newPerChatCache = { ...prev.perChatCache };
+          if (cached && cached.pendingEvents) {
+            newPerChatCache[id] = { ...cached };
+            delete newPerChatCache[id].pendingEvents;
+          }
           const finalIsProcessing = backendIsActive;
           activeRequestsRef.current = finalIsProcessing ? 1 : 0;
           return {
             activeChatId: response.active_chat_id,
             messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
             isProcessing: finalIsProcessing,
+            perChatCache: newPerChatCache,
           };
         });
 

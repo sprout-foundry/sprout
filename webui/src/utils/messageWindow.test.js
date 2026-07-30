@@ -11,8 +11,8 @@ const makeMessages = (count) =>
   Array.from({ length: count }, (_, i) => makeMsg(i));
 
 describe('DEFAULT_MAX_MESSAGES', () => {
-  it('equals 200', () => {
-    expect(DEFAULT_MAX_MESSAGES).toBe(200);
+  it('equals 500', () => {
+    expect(DEFAULT_MAX_MESSAGES).toBe(500);
   });
 });
 
@@ -41,7 +41,7 @@ describe('trimMessages', () => {
       expect(result).toBe(messages);
     });
 
-    it('returns the same array reference when length equals default maxSize (200)', () => {
+    it('returns the same array reference when length equals default maxSize (500)', () => {
       const messages = makeMessages(DEFAULT_MAX_MESSAGES);
       const result = trimMessages(messages);
 
@@ -67,12 +67,12 @@ describe('trimMessages', () => {
     });
 
     it('trims to default maxSize when maxSize is not provided', () => {
-      const messages = makeMessages(300);
+      const messages = makeMessages(600);
       const result = trimMessages(messages);
 
       expect(result).toHaveLength(DEFAULT_MAX_MESSAGES);
       expect(result[0].id).toBe('100');
-      expect(result[199].id).toBe('299');
+      expect(result[499].id).toBe('599');
     });
 
     it('preserves message order after trimming', () => {

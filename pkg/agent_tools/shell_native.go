@@ -125,17 +125,21 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 		return finalOutput, nil
 	}
 
+	// If a password prompter is registered, use the password-aware path
+	// that can detect prompts on stdout and route them to the prompter.
+	// This MUST be checked before the BPM path — in CLI mode a BPM is
+	// always injected, so the BPM check below would otherwise make this
+	// path unreachable and sudo would hang on its password prompt until
+	// the tool deadline, then get adopted as a background session.
+	if pp := PasswordPrompterFromContext(ctx); pp != nil {
+		return runShellCommandWithPasswordSupport(ctx, command, pp)
+	}
+
 	// SILENT MODE: Capture output without streaming (for LLM tool calls)
 	// Check if we can promote to background on timeout (CLI mode with BPM)
 	if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
 		// Use adoptable execution — can promote to background on timeout
 		return runShellCommandAdoptable(ctx, command, bpm)
-	}
-
-	// If a password prompter is registered, use the password-aware path
-	// that can detect prompts on stdout and route them to the prompter.
-	if pp := PasswordPrompterFromContext(ctx); pp != nil {
-		return runShellCommandWithPasswordSupport(ctx, command, pp)
 	}
 
 	// Fallback: no BPM available, use standard CommandContext (kills on cancel)

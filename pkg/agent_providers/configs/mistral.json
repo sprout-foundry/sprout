@@ -2,133 +2,142 @@
   "name": "mistral",
   "endpoint": "https://api.mistral.ai/v1/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "MISTRAL_API_KEY"
-  },
+  "type": "bearer",
+  "env_var": "MISTRAL_API_KEY"
+},
   "headers": {},
   "defaults": {
-    "model": "devstral-2512",
-    "temperature": 0.7,
-    "max_tokens": -1,
-    "top_p": 1.0
-  },
+  "model": "devstral-2512",
+  "temperature": 0.7,
+  "max_tokens": -1,
+  "top_p": 1.0
+},
   "message_conversion": {
-    "include_tool_call_id": true,
-    "convert_tool_role_to_user": false,
-    "reasoning_content_field": "",
-    "force_tool_call_type": "function"
-  },
+  "include_tool_call_id": true,
+  "convert_tool_role_to_user": false,
+  "reasoning_content_field": "",
+  "force_tool_call_type": "function"
+},
   "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 120000,
-    "done_marker": "[DONE]"
-  },
+  "format": "sse",
+  "chunk_timeout_ms": 120000,
+  "done_marker": "[DONE]"
+},
   "models": {
-    "default_context_limit": 32768,
-    "model_overrides": {
-      "mistral-large-latest": 131072,
-      "mistral-large-2411": 131072,
-      "mistral-large-2407": 131072,
-      "mistral-medium-latest": 32768,
-      "mistral-medium-2312": 32768,
-      "mistral-small-latest": 32768,
-      "mistral-small-2409": 32768,
-      "mistral-tiny-latest": 32768,
-      "open-mistral-nemo": 131072,
-      "open-mistral-7b": 32768,
-      "codestral-latest": 32768,
-      "devstral-2512": 32768,
-      "codestral-2405": 32768,
-      "mistral-embed": 32768
-    },
-    "pattern_overrides": [
-      {
-        "pattern": "mistral-large.*",
-        "context_limit": 131072
-      },
-      {
-        "pattern": "mistral-medium.*",
-        "context_limit": 32768
-      },
-      {
-        "pattern": "mistral-small.*",
-        "context_limit": 32768
-      },
-      {
-        "pattern": "mistral-tiny.*",
-        "context_limit": 32768
-      },
-      {
-        "pattern": "open-mistral.*",
-        "context_limit": 32768
-      },
-      {
-        "pattern": "codestral.*",
-        "context_limit": 32768
-      }
-    ],
-    "supports_vision": true,
-    "vision_model": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
-    "default_model": "devstral-2512",
-    "available_models": [],
-    "model_info": [
-      {
-        "context_length": 131072,
-        "description": "Mistral Large - Flagship model for complex tasks",
-        "id": "mistral-large-latest",
-        "input_cost": 2.0,
-        "output_cost": 6.0,
-        "cached_input_cost": 0.0,
-        "name": "Mistral Large",
-        "tags": ["reasoning", "tools"]
-      },
-      {
-        "context_length": 32768,
-        "description": "Mistral Medium - Balanced model for most tasks",
-        "id": "mistral-medium-latest",
-        "input_cost": 0.4,
-        "output_cost": 2.0,
-        "cached_input_cost": 0.0,
-        "name": "Mistral Medium",
-        "tags": ["tools"]
-      },
-      {
-        "context_length": 32768,
-        "description": "Mistral Small - Cost-effective model for simple tasks",
-        "id": "mistral-small-latest",
-        "input_cost": 0.15,
-        "output_cost": 0.6,
-        "cached_input_cost": 0.0,
-        "name": "Mistral Small",
-        "tags": ["tools"]
-      },
-      {
-        "context_length": 32768,
-        "description": "Codestral - Coding specialized model",
-        "id": "codestral-latest",
-        "input_cost": 0.3,
-        "output_cost": 0.9,
-        "cached_input_cost": 0.0,
-        "name": "Codestral",
-        "tags": ["coding"]
-      }
-    ]
-  },
+  "default_context_limit": 32768,
+  "model_overrides": {
+  "mistral-large-latest": 131072,
+  "mistral-large-2411": 131072,
+  "mistral-large-2407": 131072,
+  "mistral-medium-latest": 32768,
+  "mistral-medium-2312": 32768,
+  "mistral-small-latest": 32768,
+  "mistral-small-2409": 32768,
+  "mistral-tiny-latest": 32768,
+  "open-mistral-nemo": 131072,
+  "open-mistral-7b": 32768,
+  "codestral-latest": 32768,
+  "devstral-2512": 32768,
+  "codestral-2405": 32768,
+  "mistral-embed": 32768
+},
+  "pattern_overrides": [
+  {
+  "pattern": "mistral-large.*",
+  "context_limit": 131072
+},
+  {
+  "pattern": "mistral-medium.*",
+  "context_limit": 32768
+},
+  {
+  "pattern": "mistral-small.*",
+  "context_limit": 32768
+},
+  {
+  "pattern": "mistral-tiny.*",
+  "context_limit": 32768
+},
+  {
+  "pattern": "open-mistral.*",
+  "context_limit": 32768
+},
+  {
+  "pattern": "codestral.*",
+  "context_limit": 32768
+}
+],
+  "supports_vision": true,
+  "vision_model": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+  "default_model": "devstral-2512",
+  "available_models": [],
+  "model_info": [
+  {
+  "context_length": 131072,
+  "description": "Mistral Large - Flagship model for complex tasks",
+  "id": "mistral-large-latest",
+  "input_cost": 0.5,
+  "output_cost": 1.5,
+  "cached_input_cost": 0.0,
+  "name": "Mistral Large",
+  "tags": [
+  "reasoning",
+  "tools"
+]
+},
+  {
+  "context_length": 32768,
+  "description": "Mistral Medium - Balanced model for most tasks",
+  "id": "mistral-medium-latest",
+  "input_cost": 1.5,
+  "output_cost": 7.5,
+  "cached_input_cost": 0.0,
+  "name": "Mistral Medium",
+  "tags": [
+  "tools"
+]
+},
+  {
+  "context_length": 32768,
+  "description": "Mistral Small - Cost-effective model for simple tasks",
+  "id": "mistral-small-latest",
+  "input_cost": 0.15,
+  "output_cost": 0.6,
+  "cached_input_cost": 0.0,
+  "name": "Mistral Small",
+  "tags": [
+  "tools"
+]
+},
+  {
+  "context_length": 32768,
+  "description": "Codestral - Coding specialized model",
+  "id": "codestral-latest",
+  "input_cost": 0.3,
+  "output_cost": 0.9,
+  "cached_input_cost": 0.0,
+  "name": "Codestral",
+  "tags": [
+  "coding"
+]
+}
+]
+},
   "retry": {
-    "max_attempts": 3,
-    "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
-    "max_delay_ms": 10000,
-    "retryable_errors": [
-      "rate_limit_exceeded",
-      "temporary_error",
-      "timeout"
-    ]
-  },
+  "max_attempts": 3,
+  "base_delay_ms": 1000,
+  "backoff_multiplier": 2.0,
+  "max_delay_ms": 10000,
+  "retryable_errors": [
+  "rate_limit_exceeded",
+  "temporary_error",
+  "timeout"
+]
+},
   "cost": {
-    "input_token_cost": 0.3,
-    "output_token_cost": 0.9,
-    "currency": "USD"
-  },
+  "input_token_cost": 0.3,
+  "output_token_cost": 0.9,
+  "currency": "USD"
+},
   "display_name": "Mistral"
 }

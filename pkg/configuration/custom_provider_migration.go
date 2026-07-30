@@ -51,8 +51,9 @@ func MigrateLegacyCustomProviders(cfg *Config) (map[string]CustomProviderConfig,
 // into the unified credential store, then strips the key from the file.
 // Called on every Load() but exits immediately if the migration marker exists.
 func MigrateEmbeddedAPIKeys(providers map[string]CustomProviderConfig) error {
-	// Check if migration has already been completed
-	providersDir, err := GetProvidersDir()
+	// Check if migration has already been completed. Use the global dir
+	// since custom providers are stored globally.
+	providersDir, err := GetGlobalProvidersDir()
 	if err != nil {
 		return err
 	}

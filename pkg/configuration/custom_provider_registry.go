@@ -25,10 +25,19 @@ type ProviderDiscoveryModel struct {
 	Tags          []string `json:"tags,omitempty"`
 }
 
-func GetProvidersDir() (string, error) {
-	configDir, err := GetConfigDir()
+// GetGlobalProvidersDir returns the global providers directory
+// (~/.config/sprout/providers/). Custom providers are always stored here
+// regardless of SPROUT_CONFIG — they are user-global resources, not
+// project-scoped. This prevents a split-brain where a provider saved from
+// a scoped session is invisible to another scope and can't be deleted
+// from a different scope.
+//
+// Uses getDefaultConfigDir (HOME-based, ignores SPROUT_CONFIG) so the
+// location is stable across all sessions.
+func GetGlobalProvidersDir() (string, error) {
+	configDir, err := getDefaultConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get config directory: %w", err)
+		return "", fmt.Errorf("failed to get global config directory: %w", err)
 	}
 	providersDir := filepath.Join(configDir, ProvidersDirName)
 	if err := os.MkdirAll(providersDir, 0700); err != nil {
@@ -37,13 +46,19 @@ func GetProvidersDir() (string, error) {
 	return providersDir, nil
 }
 
+// GetProvidersDir returns the global providers directory. Kept as an alias
+// for GetGlobalProvidersDir for backward compatibility with callers that
+// display or reference the providers directory (e.g. cmd/diag.go).
+func GetProvidersDir() (string, error) {
+	return GetGlobalProvidersDir()
+}
+
 // GetCustomProviderPath returns the path where a custom provider JSON
-// file is stored. Resolves the providers directory via GetProvidersDir,
-// which honors SPROUT_CONFIG (falling back to the home directory).
-// This ensures tests that set SPROUT_CONFIG write to the temp dir
-// rather than polluting the real ~/.config/sprout/providers/.
+// file is stored. Always resolves to the global providers directory
+// (~/.config/sprout/providers/) so that save, load, and delete all
+// agree on the same location regardless of SPROUT_CONFIG.
 func GetCustomProviderPath(name string) (string, error) {
-	providersDir, err := GetProvidersDir()
+	providersDir, err := GetGlobalProvidersDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get providers directory: %w", err)
 	}
@@ -52,6 +67,25 @@ func GetCustomProviderPath(name string) (string, error) {
 		return "", fmt.Errorf("failed to normalize provider name: %w", err)
 	}
 	return filepath.Join(providersDir, normalized+".json"), nil
+}
+
+// getScopedProvidersDir returns the SPROUT_CONFIG-resolved providers
+// directory, if SPROUT_CONFIG is set. Returns ("", nil) when it is not
+// set or differs from the global dir. Used by DeleteCustomProvider to
+// clean up stale copies from before the global-only fix.
+func getScopedProvidersDir() (string, error) {
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	globalDir, err := getDefaultConfigDir()
+	if err != nil {
+		return "", err
+	}
+	if configDir == globalDir {
+		return "", nil
+	}
+	return filepath.Join(configDir, ProvidersDirName), nil
 }
 
 // LoadCustomProviders loads all custom provider configs. It merges
@@ -69,12 +103,14 @@ func GetCustomProviderPath(name string) (string, error) {
 // which would otherwise only see the SPROUT_CONFIG-resolved dir).
 func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 	// Read from both the SPROUT_CONFIG-resolved dir and the global home
-	// dir. Custom providers saved in the home dir (from non-scoped sessions
-	// or prior to this fix) remain visible to scoped sessions.
-	scopedDir, err := GetProvidersDir()
+	// dir. Custom providers are always saved to the global dir now, but
+	// stale copies may still exist in the scoped dir from before the fix.
+	// Global wins on name conflicts.
+	scopedDir, err := GetConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("get providers directory: %w", err)
+		return nil, fmt.Errorf("get scoped config directory: %w", err)
 	}
+	scopedProvidersDir := filepath.Join(scopedDir, ProvidersDirName)
 	globalDir, err := getDefaultConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("get default config directory: %w", err)
@@ -86,8 +122,8 @@ func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 	// Read the SPROUT_CONFIG-scoped dir first so the global home dir
 	// can override on conflict (matching the layered manager: global
 	// is the source of truth for custom providers).
-	if scopedProviders, scopedErr := LoadCustomProvidersFromDir(scopedDir); scopedErr != nil {
-		log.Printf("[config] warning: failed to read scoped custom providers from %s: %v", scopedDir, scopedErr)
+	if scopedProviders, scopedErr := LoadCustomProvidersFromDir(scopedProvidersDir); scopedErr != nil {
+		log.Printf("[config] warning: failed to read scoped custom providers from %s: %v", scopedProvidersDir, scopedErr)
 	} else {
 		for name, provider := range scopedProviders {
 			merged[name] = provider
@@ -162,14 +198,32 @@ func SaveCustomProvider(cfg CustomProviderConfig) error {
 }
 
 func DeleteCustomProvider(name string) error {
-	path, err := GetCustomProviderPath(name)
+	normalized, err := CanonicalizeCustomProviderName(name)
 	if err != nil {
-		return fmt.Errorf("get custom provider path: %w", err)
+		return fmt.Errorf("normalize provider name: %w", err)
 	}
 
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	// Delete from the global dir (the canonical location after the
+	// split-brain fix). This is where GetCustomProviderPath resolves to.
+	globalPath, err := GetGlobalProvidersDir()
+	if err != nil {
+		return fmt.Errorf("get global providers directory: %w", err)
+	}
+	globalFile := filepath.Join(globalPath, normalized+".json")
+	if err := os.Remove(globalFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove custom provider %s: %w", name, err)
 	}
+
+	// Also clean up any stale copy in the scoped dir (SPROUT_CONFIG-resolved).
+	// Providers saved before this fix may still live there. A missing file
+	// is expected and not an error.
+	if scopedDir, scopedErr := getScopedProvidersDir(); scopedErr == nil {
+		scopedFile := filepath.Join(scopedDir, normalized+".json")
+		if err := os.Remove(scopedFile); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove scoped custom provider %s: %w", name, err)
+		}
+	}
+
 	return nil
 }
 

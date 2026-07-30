@@ -51,20 +51,22 @@ func TestSettingsProvidersDeleteLoadsProviderFromDisk(t *testing.T) {
 }
 
 func TestSettingsProvidersPutPersistenceFailureReturns500(t *testing.T) {
-	// SaveCustomProvider writes to SPROUT_CONFIG-scoped providers dir.
+	// SaveCustomProvider writes to the global (HOME-based) providers dir.
 	// To force a write failure: create the providers dir, write the
 	// existing provider, then make the provider file read-only so the
 	// overwrite WriteFile fails.
-	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("HOME", t.TempDir())
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("SPROUT_CONFIG", t.TempDir()) // scoped dir differs from global
 	t.Setenv("XDG_CONFIG_HOME", "")
 
-	// Write the existing provider so PUT finds it.
-	writeProviderFile(t, configDir, configuration.CustomProviderConfig{Name: "disk-only", Endpoint: "https://old.example.com"})
+	globalConfigDir := filepath.Join(homeDir, ".config", "sprout")
+
+	// Write the existing provider to the global dir so PUT finds it.
+	writeProviderFile(t, globalConfigDir, configuration.CustomProviderConfig{Name: "disk-only", Endpoint: "https://old.example.com"})
 
 	// Make the provider file read-only so SaveCustomProvider's WriteFile fails.
-	providerFile := filepath.Join(configDir, configuration.ProvidersDirName, "disk-only.json")
+	providerFile := filepath.Join(globalConfigDir, configuration.ProvidersDirName, "disk-only.json")
 	if err := os.Chmod(providerFile, 0400); err != nil {
 		t.Fatalf("chmod provider file read-only: %v", err)
 	}

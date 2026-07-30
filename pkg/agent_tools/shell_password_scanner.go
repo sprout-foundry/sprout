@@ -32,8 +32,8 @@ import (
 //     armed via a settle timer that fires after promptSettleDelay of
 //     pipe silence.
 type passwordScanner struct {
-	cmd     *exec.Cmd
-	prompter PasswordPrompter
+	cmd          *exec.Cmd
+	prompter     PasswordPrompter
 	promptReason string
 
 	// stdinPipe is the child process's stdin writer. Closed after the

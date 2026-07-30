@@ -1261,6 +1261,26 @@ export function useWebSocketEventHandler({
         activeChatIdRef.current &&
         String(eventData.chat_id) !== activeChatIdRef.current
       ) {
+        // Queue the event for the non-active chat instead of dropping it.
+        // When the user switches back, the backend fetch provides authoritative
+        // state. But if that fetch fails or hasn't caught up, the pendingEvents
+        // signal that the cache is stale. Pending events also prevent the
+        // stale-cache heuristic (Fix 3) from preferring shorter local state.
+        const eventChatId = String(eventData.chat_id);
+        setState((prev) => {
+          const existingCache = prev.perChatCache[eventChatId];
+          if (!existingCache) return {};
+          const pendingEvents = existingCache.pendingEvents ?? [];
+          return {
+            perChatCache: {
+              ...prev.perChatCache,
+              [eventChatId]: {
+                ...existingCache,
+                pendingEvents: [...pendingEvents, event].slice(-200),
+              },
+            },
+          };
+        });
         return;
       }
 
@@ -1424,7 +1444,12 @@ export function useWebSocketEventHandler({
                     ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
                   }));
                 setState((prev) => {
-                  const useBackendMessages = backendMessages.length >= prev.messages.length;
+                  // Backend is authoritative when it has caught up or the
+                  // query is no longer active. The old length-only heuristic
+                  // preferred shorter local state when streaming hadn't
+                  // persisted yet, losing the assistant's response.
+                  const useBackendMessages =
+                    backendMessages.length >= prev.messages.length || !backendProcessing;
                   return useBackendMessages ? { messages: trimMessages(backendMessages) } : {};
                 });
               })

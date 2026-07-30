@@ -2,6 +2,14 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.12] - 2026-07-30
+
+- style: gofmt shell_password_scanner.go (e66435f50)
+- refactor(shell): merge password detection into adoptable execution path (2e661fbb9)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (610fdc449)
+- fix(shell): password prompter unreachable in CLI mode — sudo hangs (90b8b8126)
+- docs: Update changelog for v0.17.11 (21af5e071)
+
 ## [v0.17.11] - 2026-07-30
 
 - fix(config): custom providers always resolve to global home directory (0a0e468dc)

@@ -38,7 +38,20 @@ export const ensureCompletedAssistantMessage = <T extends ChatMessageLike>(
   }
 
   const assistantMessage = updatedMessages[assistantIndex];
-  if ((assistantMessage.content || '').trim()) {
+  const streamedContent = (assistantMessage.content || '').trim();
+  if (streamedContent) {
+    // Streaming content usually wins (it's the authoritative incremental
+    // build). But if the server's final response is substantially longer
+    // (>20%), streaming was likely interrupted (disconnection, buffer loss)
+    // and the server has the complete text. Replace with the server response
+    // so the user doesn't see a truncated message.
+    if (response.trim().length > streamedContent.length * 1.2) {
+      updatedMessages[assistantIndex] = {
+        ...assistantMessage,
+        content: response,
+      };
+      return updatedMessages;
+    }
     return messages;
   }
 

@@ -79,6 +79,26 @@ export const MessageItem = memo(function MessageItem({
   // header (persona name) always renders even before the first output line.
   const isSubagentRun = !!message.isSubagentRun;
   if (!hasContent && !hasReasoning && !hasToolRefs && !isSubagentRun) {
+    // For assistant messages, don't vanish entirely — render a minimal
+    // "(no response text)" indicator so the user can see a turn happened.
+    // Session restore may produce these when tool_start events were lost
+    // during a reconnect or chat switch, leaving the message with no
+    // toolRefs and empty content. Vanishing silently confuses the user
+    // ("where did the response go?") — a visible placeholder is better.
+    if (message.type === 'assistant') {
+      return (
+        <MessageBubble
+          type={message.type}
+          ariaLabel="assistant message"
+          timestamp={formatTime(message.timestamp)}
+          persona={message.persona}
+          depth={message.subagentDepth}
+          dataMessageIndex={messageIndex}
+        >
+          <span className="empty-assistant-placeholder">(no response text)</span>
+        </MessageBubble>
+      );
+    }
     return null;
   }
 

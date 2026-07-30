@@ -198,7 +198,7 @@ func TestCalculateOutputBudget(t *testing.T) {
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
 			// remaining=22000, base=6400, est=2500, buffer=8900, output=13100
-			maxOutput:    13100,
+			maxOutput: 13100,
 		},
 		{
 			name:         "input exceeds context",
@@ -239,7 +239,7 @@ func TestCalculateOutputBudget(t *testing.T) {
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
 			// defaults to 32K, base=6400, est=250, buffer=6650, remaining=31000, output=24350
-			maxOutput:    24350,
+			maxOutput: 24350,
 		},
 		{
 			// Regression test for the "context window exceeded" error.
@@ -254,7 +254,7 @@ func TestCalculateOutputBudget(t *testing.T) {
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
 			// remaining=84000, base=40000, est=29000, buffer=69000, output=15000
-			maxOutput:    15000,
+			maxOutput: 15000,
 		},
 	}
 

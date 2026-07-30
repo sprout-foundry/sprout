@@ -230,11 +230,11 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			}
 		}
 
-		// WebUI approval path — interactive only.
-		// Non-interactive runs never wait on a browser dialog: even if a
-		// stale WebUI tab is connected, there's no guarantee a human is
-		// watching. Fast-fail to the permissive non-interactive path below.
-		hasInteractiveSurface := !agent.isNonInteractive() && !isSubagent && agent.HasActiveWebUIClients()
+		// WebUI approval path.
+		// The WebUI IS the interactive surface — a webui-only service has
+		// no TTY but still has live users who can answer approval dialogs.
+		// The isNonInteractive() check only governs the CLI fallback below.
+		hasInteractiveSurface := !isSubagent && agent.HasActiveWebUIClients()
 		if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && hasInteractiveSurface {
 			if agent.debug {
 				agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", name, secResult.Risk)

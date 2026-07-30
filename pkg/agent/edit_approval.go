@@ -352,17 +352,11 @@ func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applie
 		return p.Original, fmt.Sprintf("no changes to %s", p.Path), nil
 	}
 
-	// Non-interactive runs (--skip-prompt, automate, daemon) treat the
-	// mode as approve-all (no silent hangs).
-	if a.isNonInteractive() {
-		return a.applyEditDecision(p, EditDecision{
-			Approved:      true,
-			AcceptedHunks: hunkIDs(p.Hunks),
-		})
-	}
-
-	// Try the WebUI path: if the event bus is wired and there are active
-	// browser clients, route the proposal through the diff review panel.
+	// Try the WebUI path first: if the event bus is wired and there are
+	// active browser clients, route the proposal through the diff review
+	// panel. The WebUI IS the interactive surface — a webui-only service
+	// has no TTY but still has live users who can review diffs. The
+	// isNonInteractive() check only governs the CLI fallback below.
 	if a.HasActiveWebUIClients() && a.GetEventBus() != nil {
 		decision, outcome := a.requestWebUIEditApproval(ctx, p)
 		if outcome == approvalOutcomeResponded {
@@ -378,6 +372,15 @@ func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applie
 				AcceptedHunks: hunkIDs(p.Hunks),
 			})
 		}
+	}
+
+	// Non-interactive runs (--skip-prompt, automate, daemon without WebUI)
+	// treat the mode as approve-all (no silent hangs).
+	if a.isNonInteractive() {
+		return a.applyEditDecision(p, EditDecision{
+			Approved:      true,
+			AcceptedHunks: hunkIDs(p.Hunks),
+		})
 	}
 
 	// CLI terminal path: render the diff and prompt per-hunk.

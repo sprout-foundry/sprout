@@ -418,8 +418,11 @@ func (a *Agent) RequestShellApproval(ctx context.Context, p ShellProposal) (map[
 
 	// WebUI surface — publish a shell_approval_request event and block
 	// until the user responds via the per-part dialog (SP-093-3).
+	// The WebUI IS the interactive surface — a webui-only service has no
+	// TTY but still has live users who can answer per-part dialogs. The
+	// isNonInteractive() check only applies to the CLI fallback below.
 	isSubagent := a.IsSubagent()
-	hasWebUI := !a.isNonInteractive() && !isSubagent && a.HasActiveWebUIClients()
+	hasWebUI := !isSubagent && a.HasActiveWebUIClients()
 	if hasWebUI {
 		return a.requestShellApprovalViaWebUI(ctx, p)
 	}

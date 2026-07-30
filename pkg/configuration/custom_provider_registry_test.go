@@ -14,21 +14,22 @@ import (
 
 func TestNormalizeCustomProviderConfigNormalizesEndpoint(t *testing.T) {
 
-	// GetCustomProviderPath must resolve via SPROUT_CONFIG so tests that
-	// set it don't pollute the real ~/.config/sprout/providers/. The
-	// LoadCustomProviders merge still reads from the global home dir for
-	// backwards compatibility with existing provider files.
-	t.Run("GetCustomProviderPath honors SPROUT_CONFIG", func(t *testing.T) {
+	// GetCustomProviderPath always resolves to the global dir
+	// (~/.config/sprout/providers/) regardless of SPROUT_CONFIG.
+	// Custom providers are user-global resources.
+	t.Run("GetCustomProviderPath resolves to global dir regardless of SPROUT_CONFIG", func(t *testing.T) {
+		globalHome := t.TempDir()
 		scopedDir := t.TempDir()
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", globalHome)
 		t.Setenv("SPROUT_CONFIG", scopedDir)
 		t.Setenv("XDG_CONFIG_HOME", "")
 
 		path, err := GetCustomProviderPath("my-provider")
 		require.NoError(t, err)
 
-		// Must be under the SPROUT_CONFIG-scoped dir
-		assert.Contains(t, path, scopedDir)
+		// Must be under the global HOME dir, NOT the SPROUT_CONFIG-scoped dir
+		assert.Contains(t, path, globalHome)
+		assert.NotContains(t, path, scopedDir)
 		assert.Contains(t, path, "providers")
 		assert.Contains(t, path, "my-provider.json")
 	})
@@ -48,11 +49,13 @@ func TestNormalizeCustomProviderConfigNormalizesEndpoint(t *testing.T) {
 }
 
 func TestSaveAndLoadCustomProviders(t *testing.T) {
-	// SaveCustomProvider writes to the SPROUT_CONFIG-resolved providers
-	// directory. LoadCustomProviders merges from both the scoped dir
+	// SaveCustomProvider writes to the global providers directory
+	// (~/.config/sprout/providers/), even when SPROUT_CONFIG points
+	// elsewhere. LoadCustomProviders merges from both the scoped dir
 	// and the global home dir.
+	globalHome := t.TempDir()
 	scopedDir := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", globalHome)
 	t.Setenv("SPROUT_CONFIG", scopedDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -63,6 +66,13 @@ func TestSaveAndLoadCustomProviders(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// File must be in the global dir, not scoped
+	globalProvidersDir := filepath.Join(globalHome, ".config", "sprout", "providers")
+	require.FileExists(t, filepath.Join(globalProvidersDir, "gateway.json"))
+	scopedProvidersDir := filepath.Join(scopedDir, "providers")
+	_, scopedErr := os.Stat(filepath.Join(scopedProvidersDir, "gateway.json"))
+	assert.True(t, os.IsNotExist(scopedErr), "provider file should NOT exist in scoped dir")
+
 	providers, err := LoadCustomProviders()
 	require.NoError(t, err)
 	require.Contains(t, providers, "gateway")
@@ -72,8 +82,11 @@ func TestSaveAndLoadCustomProviders(t *testing.T) {
 }
 
 func TestConfigSaveOmitsInlineCustomProviders(t *testing.T) {
+	globalHome := t.TempDir()
 	configDir := t.TempDir()
+	t.Setenv("HOME", globalHome)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	cfg := NewConfig()
 	cfg.CustomProviders["gateway"] = CustomProviderConfig{
@@ -381,8 +394,10 @@ func TestMigrateConfigFileAPIKeys_NonStringAPIKey(t *testing.T) {
 }
 
 func TestMigrateEmbeddedAPIKeys_MigratesKey(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
+	globalHome := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Create a provider JSON file with an embedded api_key
 	providersDir, err := GetProvidersDir()
@@ -420,8 +435,10 @@ func TestMigrateEmbeddedAPIKeys_MigratesKey(t *testing.T) {
 }
 
 func TestMigrateEmbeddedAPIKeys_SkipsWhenMarkerExists(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
+	globalHome := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -458,8 +475,10 @@ func TestMigrateEmbeddedAPIKeys_SkipsWhenMarkerExists(t *testing.T) {
 }
 
 func TestMigrateEmbeddedAPIKeys_Idempotent(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
+	globalHome := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -493,8 +512,10 @@ func TestMigrateEmbeddedAPIKeys_Idempotent(t *testing.T) {
 }
 
 func TestMigrateEmbeddedAPIKeys_CreatesMarkerWithNoProviders(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
+	globalHome := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -510,8 +531,10 @@ func TestMigrateEmbeddedAPIKeys_CreatesMarkerWithNoProviders(t *testing.T) {
 }
 
 func TestMigrateEmbeddedAPIKeys_SkipsFilesWithoutAPIKey(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
+	globalHome := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -541,8 +564,10 @@ func TestMigrateEmbeddedAPIKeys_SkipsFilesWithoutAPIKey(t *testing.T) {
 }
 
 func TestMigrateEmbeddedAPIKeys_SkipsEmptyAPIKey(t *testing.T) {
-	configDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", configDir)
+	globalHome := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	providersDir, err := GetProvidersDir()
 	require.NoError(t, err)
@@ -834,4 +859,76 @@ func TestLoadCustomProviders_GlobalOverridesScoped(t *testing.T) {
 	require.Contains(t, got, "shared")
 	assert.Equal(t, "global-model", got["shared"].ModelName,
 		"global home dir should win name conflicts, matching layered manager behavior")
+}
+
+// TestDeleteCustomProvider_GlobalScopedSplitBrain is the regression test
+// for the exact bug the user hit: a provider saved to the global dir
+// (~/.config/sprout/providers/) could not be deleted when SPROUT_CONFIG
+// pointed at a different dir, because DeleteCustomProvider resolved the
+// path via SPROUT_CONFIG. After the fix, DeleteCustomProvider always
+// deletes from the global dir (plus cleans up any stale scoped copy).
+func TestDeleteCustomProvider_GlobalScopedSplitBrain(t *testing.T) {
+	globalHome := t.TempDir()
+	scopedDir := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", scopedDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	// Save a provider — goes to the global dir now.
+	err := SaveCustomProvider(CustomProviderConfig{
+		Name:     "ai-worker",
+		Endpoint: "https://example.com/v1",
+		EnvVar:   "AI_WORKER_API_KEY",
+	})
+	require.NoError(t, err)
+
+	// Verify it's in the global dir.
+	globalProvidersDir := filepath.Join(globalHome, ".config", "sprout", "providers")
+	require.FileExists(t, filepath.Join(globalProvidersDir, "ai-worker.json"))
+
+	// Verify it loads.
+	providers, err := LoadCustomProviders()
+	require.NoError(t, err)
+	require.Contains(t, providers, "ai-worker")
+
+	// Delete it — this used to silently no-op because it tried to delete
+	// from the scoped dir, leaving the global file in place.
+	require.NoError(t, DeleteCustomProvider("ai-worker"))
+
+	// File must be gone from global dir.
+	require.NoFileExists(t, filepath.Join(globalProvidersDir, "ai-worker.json"))
+
+	// Must no longer be loadable.
+	providers, err = LoadCustomProviders()
+	require.NoError(t, err)
+	assert.NotContains(t, providers, "ai-worker")
+}
+
+// TestDeleteCustomProvider_CleansScopedStaleCopy verifies that
+// DeleteCustomProvider also removes a stale copy from the scoped dir
+// when one exists (backward compat for providers saved before the
+// global-only fix).
+func TestDeleteCustomProvider_CleansScopedStaleCopy(t *testing.T) {
+	globalHome := t.TempDir()
+	scopedDir := t.TempDir()
+	t.Setenv("HOME", globalHome)
+	t.Setenv("SPROUT_CONFIG", scopedDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	staleJSON := `{"name":"stale-prov","endpoint":"https://example.com/v1/chat/completions","requires_api_key":false}`
+
+	// Place stale copies in both dirs (simulating pre-fix state).
+	globalProvidersDir := filepath.Join(globalHome, ".config", "sprout", "providers")
+	require.NoError(t, os.MkdirAll(globalProvidersDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(globalProvidersDir, "stale-prov.json"), []byte(staleJSON), 0o600))
+
+	scopedProvidersDir := filepath.Join(scopedDir, "providers")
+	require.NoError(t, os.MkdirAll(scopedProvidersDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(scopedProvidersDir, "stale-prov.json"), []byte(staleJSON), 0o600))
+
+	// Delete must remove from BOTH dirs.
+	require.NoError(t, DeleteCustomProvider("stale-prov"))
+
+	require.NoFileExists(t, filepath.Join(globalProvidersDir, "stale-prov.json"))
+	require.NoFileExists(t, filepath.Join(scopedProvidersDir, "stale-prov.json"))
 }

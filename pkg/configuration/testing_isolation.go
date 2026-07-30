@@ -56,6 +56,12 @@ func NewTestManager(t *testing.T) (*Manager, func()) {
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
+	// Custom providers always resolve to the global dir (HOME-based),
+	// so HOME must also be isolated to prevent test provider files from
+	// polluting the real ~/.config/sprout/providers/.
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
+
 	mgr, err := NewManagerWithDir(configDir)
 	if err != nil {
 		t.Fatalf("NewTestManager: NewManagerWithDir(%q): %v", configDir, err)

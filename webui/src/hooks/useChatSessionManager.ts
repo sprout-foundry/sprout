@@ -112,6 +112,15 @@ export function useChatSessionManager({
 
       setState((prev) => {
         const cached = prev.perChatCache[id];
+        // Check pending events for completion signals. If the cache says
+        // isProcessing=true but a query_completed/session_terminated/error
+        // event arrived while viewing another chat, the cached flag is stale.
+        // The backend fetch below will confirm, but this prevents a brief
+        // phantom spinner on switch-back.
+        const hasCompletionInPending = (cached?.pendingEvents ?? []).some(
+          (e) => e.type === 'query_completed' || e.type === 'session_terminated' || e.type === 'error',
+        );
+        const restoredIsProcessing = hasCompletionInPending ? false : (cached?.isProcessing ?? false);
         const newCache = currentId
           ? {
               ...prev.perChatCache,
@@ -127,12 +136,9 @@ export function useChatSessionManager({
                 provider: prev.provider,
                 model: prev.model,
                 queryCount: prev.queryCount,
-                // Preserve pendingEvents accumulated while this chat was
-                // away. Events for non-active chats are queued here.
               },
             }
           : prev.perChatCache;
-        const restoredIsProcessing = cached?.isProcessing ?? false;
         activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
         return {
           activeChatId: id,

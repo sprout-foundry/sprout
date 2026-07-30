@@ -197,7 +197,8 @@ func TestCalculateOutputBudget(t *testing.T) {
 			inputTokens:  10000,
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
-			maxOutput:    15600, // 32K - 10K = 22K remaining, buffer = 20% of 32K = 6400, output = 15600
+			// remaining=22000, base=6400, est=2500, buffer=8900, output=13100
+			maxOutput:    13100,
 		},
 		{
 			name:         "input exceeds context",
@@ -237,7 +238,23 @@ func TestCalculateOutputBudget(t *testing.T) {
 			inputTokens:  1000,
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
-			maxOutput:    24600, // defaults to 32K context, buffer = 6400, remaining = 31K, output = 24600
+			// defaults to 32K, base=6400, est=250, buffer=6650, remaining=31000, output=24350
+			maxOutput:    24350,
+		},
+		{
+			// Regression test for the "context window exceeded" error.
+			// With a 200K context and a ~116K estimate (actual ~156K), the
+			// old flat 20% buffer (40K) left no room for the 40K estimation
+			// gap, so max_tokens was set high enough that input + output
+			// exceeded the limit. The new proportional buffer (25% of input)
+			// absorbs the gap.
+			name:         "large context with heavy input - estimation gap absorbed",
+			contextLimit: 200000,
+			inputTokens:  116000,
+			wantOK:       true,
+			minOutput:    MinOutputTokens,
+			// remaining=84000, base=40000, est=29000, buffer=69000, output=15000
+			maxOutput:    15000,
 		},
 	}
 

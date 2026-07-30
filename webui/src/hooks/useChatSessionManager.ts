@@ -112,6 +112,15 @@ export function useChatSessionManager({
 
       setState((prev) => {
         const cached = prev.perChatCache[id];
+        // Check pending events for completion signals. If the cache says
+        // isProcessing=true but a query_completed/session_terminated/error
+        // event arrived while viewing another chat, the cached flag is stale.
+        // The backend fetch below will confirm, but this prevents a brief
+        // phantom spinner on switch-back.
+        const hasCompletionInPending = (cached?.pendingEvents ?? []).some(
+          (e) => e.type === 'query_completed' || e.type === 'session_terminated' || e.type === 'error',
+        );
+        const restoredIsProcessing = hasCompletionInPending ? false : (cached?.isProcessing ?? false);
         const newCache = currentId
           ? {
               ...prev.perChatCache,
@@ -130,7 +139,6 @@ export function useChatSessionManager({
               },
             }
           : prev.perChatCache;
-        const restoredIsProcessing = cached?.isProcessing ?? false;
         activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
         return {
           activeChatId: id,
@@ -165,13 +173,30 @@ export function useChatSessionManager({
         const backendIsActive = response.chat_session.active_query;
 
         setState((prev) => {
-          const useBackendMessages = backendMessages.length >= prev.messages.length;
+          // Backend is authoritative when it has at least as many messages,
+          // OR the query is not active (backend has finalised and persisted
+          // everything), OR the cache had pending events (stale signal).
+          // Previously this used a naive length comparison that could prefer
+          // shorter local state when streaming hadn't been persisted yet.
+          const cached = prev.perChatCache[id];
+          const hadPendingEvents = !!(cached?.pendingEvents?.length);
+          const useBackendMessages =
+            backendMessages.length >= prev.messages.length ||
+            !backendIsActive ||
+            hadPendingEvents;
+          // Drain pending events — the backend fetch is authoritative now.
+          const newPerChatCache = { ...prev.perChatCache };
+          if (cached && cached.pendingEvents) {
+            newPerChatCache[id] = { ...cached };
+            delete newPerChatCache[id].pendingEvents;
+          }
           const finalIsProcessing = backendIsActive;
           activeRequestsRef.current = finalIsProcessing ? 1 : 0;
           return {
             activeChatId: response.active_chat_id,
             messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
             isProcessing: finalIsProcessing,
+            perChatCache: newPerChatCache,
           };
         });
 

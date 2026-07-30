@@ -31,15 +31,29 @@ describe('ensureCompletedAssistantMessage', () => {
     expect(result[1]).toMatchObject({ type: 'assistant', content: 'final answer', reasoning: 'thinking' });
   });
 
-  it('does not overwrite an assistant message that already has streamed content', () => {
+  it('does not overwrite an assistant message that already has streamed content of similar length', () => {
     const messages = [
       { id: '1', type: 'user', content: 'hello', timestamp: new Date('2026-03-28T00:00:00Z') },
       { id: '2', type: 'assistant', content: 'streamed answer', timestamp: new Date('2026-03-28T00:00:01Z') }
     ];
 
-    const result = ensureCompletedAssistantMessage(messages, 'different completion text', makeAssistant);
+    const result = ensureCompletedAssistantMessage(messages, 'streamed answer X', makeAssistant);
 
     expect(result).toEqual(messages);
+  });
+
+  it('replaces streamed content when the server response is substantially longer (interrupted streaming)', () => {
+    const streamedContent = 'Here is the first part of';
+    const fullResponse = 'Here is the first part of the answer, and here is the second part that was lost during streaming.';
+    const messages = [
+      { id: '1', type: 'user', content: 'hello', timestamp: new Date('2026-03-28T00:00:00Z') },
+      { id: '2', type: 'assistant', content: streamedContent, timestamp: new Date('2026-03-28T00:00:01Z') }
+    ];
+
+    const result = ensureCompletedAssistantMessage(messages, fullResponse, makeAssistant);
+
+    expect(result).toHaveLength(2);
+    expect(result[1]).toMatchObject({ type: 'assistant', content: fullResponse });
   });
 
   it('ignores empty completion responses', () => {

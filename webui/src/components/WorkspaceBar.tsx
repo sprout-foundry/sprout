@@ -79,19 +79,9 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
 
   return (
     <div className={`workspace-bar${bar.isRemote ? ' workspace-bar--remote' : ''}`}>
-      <span className="workspace-bar-host">
-        {bar.isRemote ? (
-          <Server size={11} className="workspace-bar-icon workspace-bar-icon--remote" />
-        ) : (
-          <Monitor size={11} className="workspace-bar-icon" />
-        )}
+      <span className="workspace-bar-host" aria-hidden="true">
+        {bar.isRemote ? <Server size={11} className="workspace-bar-icon workspace-bar-icon--remote" /> : <Monitor size={11} className="workspace-bar-icon" />}
         <span className="workspace-bar-host-name">{bar.hostAlias ?? 'Local'}</span>
-      </span>
-      <span className="workspace-bar-sep" aria-hidden="true">
-        /
-      </span>
-      <span className="workspace-bar-path" title={bar.workspacePath}>
-        {bar.workspacePath || '—'}
       </span>
     </div>
   );

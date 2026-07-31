@@ -862,22 +862,24 @@ const AppContent: React.FC<AppContentProps> = ({
               />
             </ErrorBoundary>
           </div>
-          <ContextSidebar
-            isMobile={isMobile}
-            isTablet={isTablet}
-            showContextSidebar={showContextSidebar}
-            contextPanelRef={contextPanelRef}
-            currentView={state.currentView}
-            toolExecutions={state.toolExecutions}
-            fileEdits={state.fileEdits}
-            logs={state.logs}
-            subagentActivities={state.subagentActivities}
-            currentTodos={currentTodos}
-            messages={state.messages}
-            isProcessing={state.isProcessing}
-            lastError={state.lastError}
-            queryProgress={state.queryProgress}
-          />
+          <div className="context-panel-container">
+            <ContextSidebar
+              isMobile={isMobile}
+              isTablet={isTablet}
+              showContextSidebar={showContextSidebar}
+              contextPanelRef={contextPanelRef}
+              currentView={state.currentView}
+              toolExecutions={state.toolExecutions}
+              fileEdits={state.fileEdits}
+              logs={state.logs}
+              subagentActivities={state.subagentActivities}
+              currentTodos={currentTodos}
+              messages={state.messages}
+              isProcessing={state.isProcessing}
+              lastError={state.lastError}
+              queryProgress={state.queryProgress}
+            />
+          </div>
         </div>
         <Status isConnected={state.isConnected} stats={state.stats} />
         <StatusBar

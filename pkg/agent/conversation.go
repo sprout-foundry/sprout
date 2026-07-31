@@ -176,8 +176,8 @@ var alwaysIncludedTools = []string{
 	"list_skills",
 	"activate_skill",
 	"manage_memory",
-	"TodoWrite",
-	"TodoRead",
+	"todo_write",
+	"todo_read",
 }
 
 func makeAllowedToolSet(toolNames []string) map[string]struct{} {

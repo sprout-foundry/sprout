@@ -322,6 +322,9 @@ func (a *Agent) Recall(ctx context.Context, query string, limit int) ([]Recalled
 // the formatted block (if any) to the pending system supplement.
 // Mirrors InjectProactiveContext — same shape, graceful degradation on
 // every failure mode (no embedding manager, no store, embed failure, etc).
+//
+// For callers that already have the items, use InjectSemanticRecallWithItems
+// instead to avoid a redundant Recall() call (see InstrumentedRecall).
 func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
 	if a == nil {
 		return
@@ -329,6 +332,17 @@ func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
 	items, err := a.Recall(ctx, query, semanticRecallTopK)
 	if err != nil {
 		a.Logger().Debug("[semantic-recall] retrieval failed: %v\n", err)
+		return
+	}
+	a.InjectSemanticRecallWithItems(ctx, query, items)
+}
+
+// InjectSemanticRecallWithItems is like InjectSemanticRecall but accepts
+// pre-retrieved items instead of calling Recall internally. This avoids
+// duplicate recall work when the caller (e.g. InstrumentedRecall) already
+// retrieved the items for its own metrics.
+func (a *Agent) InjectSemanticRecallWithItems(ctx context.Context, query string, items []RecalledItem) {
+	if a == nil {
 		return
 	}
 	if len(items) == 0 {

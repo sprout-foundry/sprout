@@ -37,6 +37,12 @@ type GenericProvider struct {
 	// warmPending prevents goroutine accumulation from rapid warmModelsCache
 	// calls (e.g. multiple SetModel in quick succession).
 	warmPending atomic.Bool
+
+	// maxTokensHint, when > 0, overrides the from-scratch CalculateMaxTokensWithLimits
+	// computation in buildChatRequest. Set by callers (sproutProvider) who have
+	// a more accurate token estimate via the token anchor. See MaxTokensHinter.
+	maxTokensHint   int
+	maxTokensHintMu sync.RWMutex
 }
 
 // HTTP error formatting helpers are in generic_provider_http_errors.go:
@@ -259,6 +265,9 @@ func (p *GenericProvider) SetModel(model string) error {
 	hadCache := p.modelsCached
 	p.modelsCached = false
 	p.mu.Unlock()
+	p.maxTokensHintMu.Lock()
+	p.maxTokensHint = 0
+	p.maxTokensHintMu.Unlock()
 	// If we previously had a warm cache, re-fire the background warm-up so
 	// GetModelContextLimit picks up the new model's context_length from the
 	// endpoint. Without this, the cache stays cold after SetModel and
@@ -676,6 +685,22 @@ func (p *GenericProvider) GetTPSStats() map[string]float64 {
 
 func (p *GenericProvider) ResetTPSStats() {
 	// No-op for now
+}
+
+// MaxTokensHinter is an optional interface that callers (e.g. sproutProvider)
+// can use to pass a pre-computed max_tokens value to the provider. This is
+// useful when the caller has a more accurate token estimate (e.g. from the
+// token anchor) and wants to avoid double-counting estimation error.
+type MaxTokensHinter interface {
+	SetMaxTokensHint(tokens int)
+}
+
+// SetMaxTokensHint sets a pre-computed max_tokens that buildChatRequest will
+// use instead of computing from the raw heuristic. Set to 0 to clear.
+func (p *GenericProvider) SetMaxTokensHint(tokens int) {
+	p.maxTokensHintMu.Lock()
+	p.maxTokensHint = tokens
+	p.maxTokensHintMu.Unlock()
 }
 
 // --- Functions split into separate files ---

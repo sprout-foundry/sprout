@@ -239,15 +239,19 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		injectCancel()
 	}
 
-	// SP-066 Phase 3: semantic recall over the conversation store. Runs
-	// on every user turn — including mid-session — so that summaries
-	// rolled past the substitution window (or wiped by a prior /compact)
-	// can still surface when the current message references them.
-	// Bounded by a tight timeout because this is on the user's critical
-	// path; recall is a nice-to-have and failure must degrade gracefully.
-	recallCtx, recallCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	InstrumentedRecall(a, recallCtx, processedQuery)
-	recallCancel()
+	// SP-066 Phase 3: semantic recall is disabled per-turn. Cross-session
+	// memory is handled by InjectProactiveContext above (fires on first
+	// turn / cold restore). Intra-session recovery of compacted summaries
+	// should be handled by the compaction/summarization pipeline itself,
+	// not by a second injection mechanism that competes for context budget.
+	// The Recall method and instrumentation remain available for the
+	// future /recall CLI command (SP-092-2) and webui endpoint (SP-092-3).
+	// To re-enable per-turn recall, uncomment the block below:
+	//
+	// recallCtx, recallCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// InstrumentedRecall(a, recallCtx, processedQuery)
+	// recallCancel()
+	_ = processedQuery // referenced by the commented recall block above
 
 	// Group extracted images for provider registration. All images from this
 	// query are attached to the first user message by attachPastedImages.

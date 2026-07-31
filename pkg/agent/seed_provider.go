@@ -31,6 +31,12 @@ type sproutProvider struct {
 	client         api.ClientInterface
 	pastedImages   map[string][]api.ImageData // path → image data (for multimodal attachment)
 	pastedImagesMu sync.RWMutex
+	tokenAnchor    tokenAnchor // see seed_provider_token_anchor.go
+	// maxTokensHint is the pre-computed max_tokens from the anchored estimate,
+	// set before each provider call so the GenericProvider doesn't need to
+	// re-derive it from the raw heuristic.
+	maxTokensHint   int
+	maxTokensHintMu sync.RWMutex
 }
 
 // currentClient returns the agent's live client if available, otherwise returns the snapshot.
@@ -216,6 +222,11 @@ func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest)
 	}
 	if err == nil {
 		sp.accumulateResponseCost(resp)
+		// Anchor future EstimateTokens calls to this response's real
+		// prompt-token count, keyed to the exact pre-transform messages/tools
+		// req carried (matching what seed itself passes to EstimateTokens on
+		// later calls — see seed_provider_token_anchor.go).
+		sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	}
 	return resp, err
 }
@@ -362,6 +373,17 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 	messages = sp.stampTurnTimestamp(messages)
 
 	sproutReq := seedRequestToSprout(req)
+
+	// Pre-compute max_tokens using the anchored token breakdown.
+	sp.computeMaxTokensHint(req)
+
+	// If the client supports max_tokens hints (GenericProvider), set the
+	// pre-computed value so buildChatRequest doesn't re-derive it from the
+	// raw heuristic.
+	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
+		h.SetMaxTokensHint(sp.getMaxTokensHint())
+	}
+
 	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
 	if err != nil {
 		return nil, err
@@ -376,6 +398,16 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	messages = sp.stampTurnTimestamp(messages)
 
 	sproutReq := seedRequestToSprout(req)
+
+	// Pre-compute max_tokens using the anchored token breakdown.
+	sp.computeMaxTokensHint(req)
+
+	// If the client supports max_tokens hints (GenericProvider), set the
+	// pre-computed value so buildChatRequest doesn't re-derive it from the
+	// raw heuristic.
+	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
+		h.SetMaxTokensHint(sp.getMaxTokensHint())
+	}
 
 	// Route every chunk through OutputRouter.RouteStreamChunk so it reaches
 	// BOTH paths:
@@ -539,6 +571,16 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	messages := sp.attachPastedImages(req.Messages)
 	messages = sp.stampTurnTimestamp(messages)
 
+	// Pre-compute max_tokens using the anchored token breakdown.
+	sp.computeMaxTokensHint(req)
+
+	// If the client supports max_tokens hints (GenericProvider), set the
+	// pre-computed value so buildChatRequest doesn't re-derive it from the
+	// raw heuristic.
+	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
+		h.SetMaxTokensHint(sp.getMaxTokensHint())
+	}
+
 	// Route through OutputRouter.RouteStreamChunk (same as doChatStream)
 	// and forward to the seed handler so both the EventBus/WebUI and the
 	// seed core's stream handling receive every chunk.
@@ -561,6 +603,11 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		handler.OnError(err)
 		return err
 	}
+	// Anchor future EstimateTokens calls to this response's real prompt-token
+	// count. Uses req.Messages/req.Tools (pre-transform), matching what seed
+	// itself passes to EstimateTokens on later calls — see
+	// seed_provider_token_anchor.go.
+	sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	handler.OnDone(sproutResponseToSeed(resp))
 	return nil
 }
@@ -647,6 +694,18 @@ func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 	if req == nil {
 		return 0
 	}
+	// Anchor to the last real Usage.PromptTokens count when the message
+	// prefix it was measured against still matches (see
+	// seed_provider_token_anchor.go): only the messages appended since that
+	// real measurement go through the heuristic, so heuristic error no
+	// longer compounds across a long conversation. Falls back to a full
+	// from-scratch heuristic estimate on the first call, after a tool-list
+	// change, or once compaction/substitution/masking has edited the
+	// anchored prefix.
+	if total, _, ok := sp.tokenAnchor.estimate(req.Messages, len(req.Tools)); ok {
+		return total
+	}
+
 	// Delegate to sprout's centralized estimator, which accounts for:
 	//   - per-message content + reasoning content (tiktoken-ish word/char hybrid)
 	//   - tool-call payloads (id + name + args + overhead)
@@ -664,4 +723,51 @@ func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 	// core.Message and core.Tool are type aliases for api.Message / api.Tool
 	// (see pkg/agent_api/types.go), so we can pass through directly.
 	return api.EstimateInputTokens(req.Messages, req.Tools)
+}
+
+// setMaxTokensHint stores a pre-computed max_tokens hint for the next request.
+func (sp *sproutProvider) setMaxTokensHint(v int) {
+	sp.maxTokensHintMu.Lock()
+	sp.maxTokensHint = v
+	sp.maxTokensHintMu.Unlock()
+}
+
+// getMaxTokensHint returns the pre-computed max_tokens hint.
+func (sp *sproutProvider) getMaxTokensHint() int {
+	sp.maxTokensHintMu.RLock()
+	v := sp.maxTokensHint
+	sp.maxTokensHintMu.RUnlock()
+	return v
+}
+
+// getContextLimit returns the effective context limit for the current provider.
+func (sp *sproutProvider) getContextLimit() int {
+	info := sp.Info()
+	if info.ContextSize > 0 {
+		return info.ContextSize
+	}
+	return 32000
+}
+
+// computeMaxTokensHint pre-computes max_tokens using the anchored token
+// breakdown when available. This lets the GenericProvider skip its own
+// (raw-heuristic-only) calculation and avoid double-counting estimation
+// error on the anchored portion.
+func (sp *sproutProvider) computeMaxTokensHint(req *core.ChatRequest) {
+	if req == nil {
+		sp.setMaxTokensHint(0)
+		return
+	}
+	total, heuristic, ok := sp.tokenAnchor.estimate(req.Messages, len(req.Tools))
+	if !ok {
+		sp.setMaxTokensHint(0) // no hint — let provider compute from scratch
+		return
+	}
+	contextLimit := sp.getContextLimit()
+	maxOutput, budgetOK := api.CalculateOutputBudgetAnchored(contextLimit, total-heuristic, heuristic)
+	if !budgetOK {
+		sp.setMaxTokensHint(0)
+		return
+	}
+	sp.setMaxTokensHint(maxOutput)
 }

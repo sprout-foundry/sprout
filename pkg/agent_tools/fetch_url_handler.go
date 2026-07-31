@@ -4,6 +4,7 @@ import (
 	"context"
 	"mime"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -152,11 +153,7 @@ func splitURLScheme(rawURL string) (string, string) {
 }
 
 // fileURLExtension returns the file extension from a URL path.
-// Returns an empty string if there is no extension.
+// Uses filepath.Ext which handles query strings correctly (stops at ?).
 func fileURLExtension(path string) string {
-	idx := strings.LastIndex(path, ".")
-	if idx == -1 {
-		return ""
-	}
-	return path[idx:]
+	return filepath.Ext(path)
 }

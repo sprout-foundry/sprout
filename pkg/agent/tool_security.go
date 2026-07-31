@@ -300,6 +300,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		// insertion order from the LLM's original tool call.
 		env.RawArgsJSON = rawArgsJSON
 		env.Notifier = agent
+		env.LifetimeCtx = agent.LifetimeCtx()
 		// Propagate subagent depth for memory gate and other subagent-specific behaviors.
 		env.SubagentDepth = agent.subagentDepth
 		// Propagate Gate 1's auto-approve decision so handler-level gates

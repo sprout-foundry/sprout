@@ -68,6 +68,24 @@ func (a *Agent) invalidateVisionCache() {
 	a.visionProbeMu.Unlock()
 }
 
+// LifetimeCtx returns a process-scoped context that outlives any single
+// turn. It is lazily initialized and cancelled in Shutdown(). Background
+// goroutines that must survive turn boundaries (e.g., wakeup watchers)
+// use this instead of the per-turn ctx so they can fire notifications
+// after the agent's current turn completes.
+func (a *Agent) LifetimeCtx() context.Context {
+	if a == nil {
+		return context.Background()
+	}
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	if !a.lifetimeCtxSet {
+		a.lifetimeCtx, a.lifetimeCancel = context.WithCancel(context.Background())
+		a.lifetimeCtxSet = true
+	}
+	return a.lifetimeCtx
+}
+
 // refreshSystemPrompt re-derives the agent's system prompt for the
 // active provider and context profile. Used by setClient when the
 // config flag RefreshSystemPromptOnModelChange is true. Falls back
@@ -189,6 +207,15 @@ type Agent struct {
 	wakeupResumeCount    int
 	wakeupDisabled       bool
 	wakeupMu             sync.Mutex
+
+	// lifetimeCtx is a process-scoped context for background goroutines
+	// that must outlive a single turn (e.g., wakeup watchers). It is
+	// cancelled in Shutdown(). Without this, watcher goroutines that
+	// used the per-turn runCtx were killed when the turn ended — so
+	// notifications for tasks completing after the turn never fired.
+	lifetimeCtx    context.Context
+	lifetimeCancel context.CancelFunc
+	lifetimeCtxSet bool
 
 	interruptMu     sync.Mutex // protects interruptCtx + interruptCancel
 	interruptCtx    context.Context

@@ -42,7 +42,7 @@ Work directly: read, edit, test, commit. Keep sessions short and focused.
 - **File locations**:
   - **Transient** (screenshots, scratch): `/tmp/sprout/`
   - **Permanent** (code, tests, configs): current working directory
-- **Long-running commands**: use `tmux` or `nohup` (e.g., `nohup npm run dev > /dev/null 2>&1 &`)
+- **Long-running commands**: use `shell_command(background=true)` to run them in the background. You'll be automatically notified when they complete. Check status with `check_background="<session_id>"`.
 
 ## Change Tracking
 You have a per-session ChangeTracker. When the user says "undo that" / "revert what you just did", prefer:

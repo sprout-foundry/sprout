@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync/atomic"
 )
 
 // fetchTempDir is the directory for cached fetch_url content files.
@@ -16,10 +18,21 @@ const fetchTempDir = "/tmp/sprout/fetch"
 // saved to a temp file with a section TOC instead of returned inline.
 const fetchContentThreshold = 5000
 
+// maxFetchFiles caps the number of cached fetch files to prevent unbounded
+// disk usage. When the directory exceeds this count, the oldest files are
+// evicted before writing new ones.
+const maxFetchFiles = 100
+
+// fetchTempCounter provides unique temp filenames to avoid races when
+// multiple goroutines write to the same target path simultaneously.
+var fetchTempCounter atomic.Uint64
+
 // saveFetchContent writes fetched content to a deterministic temp file
-// keyed by URL hash. Returns the file path for the agent to read later.
+// keyed by URL hash. Uses atomic write (tmp + rename) to prevent corruption
+// from concurrent fetches of the same URL. Returns the file path for the
+// agent to read later.
 func saveFetchContent(url string, content string) (string, error) {
-	if err := os.MkdirAll(fetchTempDir, 0755); err != nil {
+	if err := os.MkdirAll(fetchTempDir, 0700); err != nil {
 		return "", fmt.Errorf("create fetch temp dir: %w", err)
 	}
 
@@ -28,16 +41,73 @@ func saveFetchContent(url string, content string) (string, error) {
 	filename := fmt.Sprintf("fetch_%x.txt", hash[:8])
 	path := filepath.Join(fetchTempDir, filename)
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	// Evict oldest files if we're over the cap.
+	evictOldFiles(path)
+
+	// Atomic write: use a unique temp filename so concurrent goroutines
+	// writing to the same target don't stomp each other's temp file.
+	tmpPath := fmt.Sprintf("%s.tmp.%d", path, fetchTempCounter.Add(1))
+	if err := os.WriteFile(tmpPath, []byte(content), 0600); err != nil {
+		os.Remove(tmpPath)
 		return "", fmt.Errorf("write fetch content to %s: %w", path, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("rename fetch content to %s: %w", path, err)
 	}
 
 	return path, nil
 }
 
+// evictOldFiles removes the oldest files in fetchTempDir when the count
+// exceeds maxFetchFiles. Skips the targetPath itself and any .tmp files.
+func evictOldFiles(targetPath string) {
+	entries, err := os.ReadDir(fetchTempDir)
+	if err != nil {
+		return
+	}
+
+	// Collect evictable files (not the target, not temp files).
+	var evictable []os.DirEntry
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		if filepath.Join(fetchTempDir, name) == targetPath {
+			continue
+		}
+		evictable = append(evictable, e)
+	}
+
+	if len(evictable) < maxFetchFiles {
+		return
+	}
+
+	// Sort by modification time (oldest first).
+	sort.Slice(evictable, func(i, j int) bool {
+		iInfo, iErr := evictable[i].Info()
+		jInfo, jErr := evictable[j].Info()
+		if iErr != nil || jErr != nil {
+			return false
+		}
+		return iInfo.ModTime().Before(jInfo.ModTime())
+	})
+
+	// Remove enough to get under the cap.
+	removeCount := len(evictable) - maxFetchFiles
+	for i := 0; i < removeCount; i++ {
+		os.Remove(filepath.Join(fetchTempDir, evictable[i].Name()))
+	}
+}
+
 // buildSectionTOC parses markdown headers from content and builds a
 // table of contents with line number ranges for each section.
 // Returns a formatted TOC string the agent can use with read_file.
+// For content without headers, returns a fallback summary.
 func buildSectionTOC(content string) string {
 	type section struct {
 		level   int
@@ -69,7 +139,10 @@ func buildSectionTOC(content string) string {
 	}
 
 	if len(sections) == 0 {
-		return ""
+		// No headers found — provide a fallback summary so the agent knows
+		// the full content is in the file.
+		return fmt.Sprintf("Content has no section headers. Full content (%d chars, %d lines) saved to file.\n",
+			len(content), len(lines))
 	}
 
 	// Build TOC with line ranges.

@@ -81,24 +81,29 @@ func (a *tokenAnchor) update(messages []core.Message, toolCount int, actualToken
 // the prefix was edited by compaction/substitution/masking since the anchor
 // was recorded. Callers must fall back to a full heuristic estimate in that
 // case.
-func (a *tokenAnchor) estimate(messages []core.Message, toolCount int) (int, bool) {
+//
+// Returns (totalTokens, heuristicTokens, ok). When ok is true, totalTokens
+// is the full estimate and heuristicTokens is the portion that went through
+// the heuristic (subject to EstimationErrorPercent). The anchored portion
+// (totalTokens - heuristicTokens) is a real measurement.
+func (a *tokenAnchor) estimate(messages []core.Message, toolCount int) (totalTokens, heuristicTokens int, ok bool) {
 	a.mu.RLock()
 	messageCount, fingerprint, anchoredToolCount, actualTokens := a.messageCount, a.fingerprint, a.toolCount, a.actualTokens
 	a.mu.RUnlock()
 
 	if actualTokens <= 0 || messageCount == 0 {
-		return 0, false
+		return 0, 0, false
 	}
 	if toolCount != anchoredToolCount {
-		return 0, false
+		return 0, 0, false
 	}
 	if len(messages) < messageCount {
-		return 0, false
+		return 0, 0, false
 	}
 	if fingerprintMessages(messages[:messageCount]) != fingerprint {
-		return 0, false
+		return 0, 0, false
 	}
 
 	delta := api.EstimateMessagesTokens(messages[messageCount:])
-	return actualTokens + delta, true
+	return actualTokens + delta, delta, true
 }

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CheckCircle2, ExternalLink, GitBranch, Plus, RefreshCw } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, GitBranch, GitPullRequest, Plus, RefreshCw } from 'lucide-react';
 import type { GitBranchesState, GitStatusData } from '../../types/git-types';
 
 export interface GitHeaderProps {
@@ -37,12 +37,16 @@ function GitHeader({
   pullRequestDisabled = false,
   unsupportedTooltip,
 }: GitHeaderProps) {
+  const behind = gitStatus?.behind ?? 0;
+  const ahead = gitStatus?.ahead ?? 0;
+
   return (
     <div className="git-sidebar-header">
-      <div className="git-sidebar-toolbar-row">
+      {/* Row 1: Branch selector + create branch — tight, visually connected */}
+      <div className="git-toolbar-branch-row">
         <label className="git-branch-select-wrap" htmlFor="git-branch-select" data-testid="git-remote-url">
           <span className="branch-icon">
-            <GitBranch size={14} />
+            <GitBranch size={13} />
           </span>
           <select
             id="git-branch-select"
@@ -64,7 +68,7 @@ function GitHeader({
         </label>
         <button
           type="button"
-          className="git-header-icon-btn"
+          className="git-toolbar-icon-btn"
           onClick={onCreateBranch}
           disabled={isActing || isLoading}
           title="Create branch"
@@ -73,77 +77,67 @@ function GitHeader({
           <Plus size={14} />
         </button>
       </div>
-      <div className="git-sidebar-toolbar-row git-sidebar-toolbar-row-secondary">
-        <div className="git-sidebar-sync-status">
-          {gitStatus?.clean ? (
-            <span className="clean">
-              <CheckCircle2 size={14} />
-              Clean
-            </span>
-          ) : (
-            <span className="dirty">
-              <RefreshCw size={14} />
-              Changes
+      {/* Row 2: Sync status dot + toolbar actions — compact, IDE-like */}
+      <div className="git-toolbar-action-row">
+        <div className="git-sync-indicator">
+          <span className={`git-sync-dot ${gitStatus?.clean ? 'clean' : 'dirty'}`} />
+          <span className="git-sync-label">{gitStatus?.clean ? 'Clean' : 'Changes'}</span>
+          {(ahead > 0 || behind > 0) && (
+            <span className="git-sync-ahead-behind">
+              {ahead > 0 && <span className="ahead">↑{ahead}</span>}
+              {behind > 0 && <span className="behind">↓{behind}</span>}
             </span>
           )}
         </div>
-        <div className="git-sidebar-toolbar-actions">
+        <div className="git-toolbar-group">
           <button
             type="button"
-            className="git-header-action-btn"
-            onClick={onPull}
-            disabled={isActing || isLoading || pullDisabled}
-            title={
-              pullDisabled
-                ? unsupportedTooltip
-                : gitStatus?.behind && gitStatus.behind > 0
-                  ? `Pull ${gitStatus.behind} commit${gitStatus.behind === 1 ? '' : 's'} from upstream`
-                  : 'Pull from upstream'
-            }
-          >
-            <ArrowDown size={12} />
-            <span>Pull</span>
-            {gitStatus?.behind && gitStatus.behind > 0 ? (
-              <span className="git-header-action-badge">{gitStatus.behind}</span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            className="git-header-action-btn"
-            data-testid="git-push-button"
-            onClick={onPush}
-            disabled={isActing || isLoading}
-            title={
-              gitStatus?.ahead && gitStatus.ahead > 0
-                ? `Push ${gitStatus.ahead} commit${gitStatus.ahead === 1 ? '' : 's'} to upstream`
-                : 'Push to upstream'
-            }
-          >
-            <ArrowUp size={12} />
-            <span>Push</span>
-            {gitStatus?.ahead && gitStatus.ahead > 0 ? (
-              <span className="git-header-action-badge">{gitStatus.ahead}</span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            className="git-header-action-btn"
-            onClick={onOpenPrDialog}
-            disabled={isActing || isLoading || pullRequestDisabled}
-            title={pullRequestDisabled ? unsupportedTooltip : 'Create pull request on GitHub'}
-          >
-            <ExternalLink size={12} />
-            <span>PR</span>
-          </button>
-          <button
-            type="button"
-            className="git-header-icon-btn"
+            className="git-toolbar-icon-btn"
             onClick={onRefresh}
             disabled={isActing || isLoading}
             title="Refresh git status"
             aria-label="Refresh git status"
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={isLoading ? 'git-spin' : undefined} />
+          </button>
+          <button
+            type="button"
+            className="git-toolbar-icon-btn"
+            data-testid="git-push-button"
+            onClick={onPush}
+            disabled={isActing || isLoading}
+            title={ahead > 0 ? `Push ${ahead} commit${ahead === 1 ? '' : 's'} to upstream` : 'Push to upstream'}
+            aria-label="Push"
+          >
+            <ArrowUp size={14} />
+            {ahead > 0 && <span className="git-icon-badge">{ahead}</span>}
+          </button>
+          <button
+            type="button"
+            className="git-toolbar-icon-btn"
+            onClick={onPull}
+            disabled={isActing || isLoading || pullDisabled}
+            title={
+              pullDisabled
+                ? unsupportedTooltip
+                : behind > 0
+                  ? `Pull ${behind} commit${behind === 1 ? '' : 's'} from upstream`
+                  : 'Pull from upstream'
+            }
+            aria-label="Pull"
+          >
+            <ArrowDown size={14} />
+            {behind > 0 && <span className="git-icon-badge">{behind}</span>}
+          </button>
+          <button
+            type="button"
+            className="git-toolbar-icon-btn"
+            onClick={onOpenPrDialog}
+            disabled={isActing || isLoading || pullRequestDisabled}
+            title={pullRequestDisabled ? unsupportedTooltip : 'Create pull request on GitHub'}
+            aria-label="Create pull request"
+          >
+            <GitPullRequest size={14} />
           </button>
         </div>
       </div>

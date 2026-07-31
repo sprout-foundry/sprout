@@ -66,6 +66,9 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 		if !isMergeable {
 			// Emit directly without buffering
 			content := interface{}(msg.Content)
+			if content == "" {
+				content = nil
+			}
 			if len(msg.Images) > 0 {
 				content = p.buildMultiModalContent(msg.Content, msg.Images)
 			}

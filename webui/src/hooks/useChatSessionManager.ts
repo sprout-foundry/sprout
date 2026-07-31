@@ -546,6 +546,14 @@ export function useChatSessionManager({
     return () => window.removeEventListener('sprout:chat-gap-reload', onGapReload);
   }, [reloadActiveChatFromBackend, activeChatIdRef]);
 
+  // Refresh the chat session list sidebar. Triggered after a fork so the
+  // user sees the updated session metadata.
+  useEffect(() => {
+    const onRefresh = () => void loadChatSessions();
+    window.addEventListener('sprout:refresh-sessions', onRefresh);
+    return () => window.removeEventListener('sprout:refresh-sessions', onRefresh);
+  }, [loadChatSessions]);
+
   return {
     loadChatSessions,
     handleActiveChatChange,

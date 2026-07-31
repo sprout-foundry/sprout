@@ -197,8 +197,8 @@ func TestCalculateOutputBudget(t *testing.T) {
 			inputTokens:  10000,
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
-			// remaining=22000, base=6400, est=2500, buffer=8900, output=13100
-			maxOutput: 13100,
+			// worstCaseInput=10000+3000=13000, cushion=max(2000,1600)=2000, output=32000-13000-2000=17000
+			maxOutput: 17000,
 		},
 		{
 			name:         "input exceeds context",
@@ -238,23 +238,24 @@ func TestCalculateOutputBudget(t *testing.T) {
 			inputTokens:  1000,
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
-			// defaults to 32K, base=6400, est=250, buffer=6650, remaining=31000, output=24350
-			maxOutput: 24350,
+			// defaults to 32K, worstCaseInput=1000+300=1300, cushion=max(2000,1600)=2000, output=32000-1300-2000=28700
+			maxOutput: 28700,
 		},
 		{
-			// Regression test for the "context window exceeded" error.
-			// With a 200K context and a ~116K estimate (actual ~156K), the
-			// old flat 20% buffer (40K) left no room for the 40K estimation
-			// gap, so max_tokens was set high enough that input + output
-			// exceeded the limit. The new proportional buffer (25% of input)
-			// absorbs the gap.
+			// Regression test for the original "context window exceeded" error
+			// (see git history: estimated 116145 tokens, actual 156146 — a
+			// 34.4% underestimate — caused input+output to total 200001 with
+			// the old flat 20%-of-context buffer). The worst-case-input model
+			// must still absorb that real gap: 116000*1.3=150800 worst-case,
+			// +10000 cushion = 160800 threshold, comfortably above the actual
+			// 156146 that was observed.
 			name:         "large context with heavy input - estimation gap absorbed",
 			contextLimit: 200000,
 			inputTokens:  116000,
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
-			// remaining=84000, base=40000, est=29000, buffer=69000, output=15000
-			maxOutput: 15000,
+			// worstCaseInput=116000+34800=150800, cushion=max(2000,10000)=10000, output=200000-150800-10000=39200
+			maxOutput: 39200,
 		},
 	}
 
@@ -269,6 +270,48 @@ func TestCalculateOutputBudget(t *testing.T) {
 			}
 			if tt.maxOutput > 0 && result > tt.maxOutput {
 				t.Errorf("CalculateOutputBudget() = %d, want at most %d", result, tt.maxOutput)
+			}
+		})
+	}
+}
+
+// TestCalculateOutputBudgetNoPrematureCollapse is a regression test for a bug
+// where CalculateOutputBudget stacked two additive buffers (20% of context +
+// 25% of input). Once estimated input crossed ~64% of a 200K context, the
+// combined buffer mathematically exceeded the remaining space and the
+// function fell through to a hard-coded 512-token floor — tens of thousands
+// of tokens before the real ceiling. Every model response was then truncated
+// at 512 tokens mid-reasoning/mid-tool-call for the rest of the conversation.
+//
+// The fix inflates the input estimate to a worst-case figure instead of
+// stacking buffers, so the output budget tapers gracefully and the floor is
+// only reached in the final stretch before the actual ceiling.
+func TestCalculateOutputBudgetNoPrematureCollapse(t *testing.T) {
+	contextLimit := 200000
+	tests := []struct {
+		name        string
+		inputTokens int
+		minOutput   int // must stay comfortably above the old 512-token floor
+	}{
+		{name: "50% of context", inputTokens: 100000, minOutput: 20000},
+		{name: "60% of context", inputTokens: 120000, minOutput: 10000},
+		{name: "64% of context - old collapse point", inputTokens: 128000, minOutput: 5000},
+		{name: "70% of context", inputTokens: 140000, minOutput: 2000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := CalculateOutputBudget(contextLimit, tt.inputTokens)
+			if !ok {
+				t.Fatalf("CalculateOutputBudget(%d, %d) not ok", contextLimit, tt.inputTokens)
+			}
+			if result < tt.minOutput {
+				t.Errorf("CalculateOutputBudget(%d, %d) = %d, want at least %d (premature collapse to floor)",
+					contextLimit, tt.inputTokens, result, tt.minOutput)
+			}
+			if result <= MinOutputTokens {
+				t.Errorf("CalculateOutputBudget(%d, %d) = %d, collapsed to/below the emergency floor (%d) far from the real ceiling",
+					contextLimit, tt.inputTokens, result, MinOutputTokens)
 			}
 		})
 	}

@@ -31,6 +31,7 @@ type sproutProvider struct {
 	client         api.ClientInterface
 	pastedImages   map[string][]api.ImageData // path → image data (for multimodal attachment)
 	pastedImagesMu sync.RWMutex
+	tokenAnchor    tokenAnchor // see seed_provider_token_anchor.go
 }
 
 // currentClient returns the agent's live client if available, otherwise returns the snapshot.
@@ -216,6 +217,11 @@ func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest)
 	}
 	if err == nil {
 		sp.accumulateResponseCost(resp)
+		// Anchor future EstimateTokens calls to this response's real
+		// prompt-token count, keyed to the exact pre-transform messages/tools
+		// req carried (matching what seed itself passes to EstimateTokens on
+		// later calls — see seed_provider_token_anchor.go).
+		sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	}
 	return resp, err
 }
@@ -561,6 +567,11 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		handler.OnError(err)
 		return err
 	}
+	// Anchor future EstimateTokens calls to this response's real prompt-token
+	// count. Uses req.Messages/req.Tools (pre-transform), matching what seed
+	// itself passes to EstimateTokens on later calls — see
+	// seed_provider_token_anchor.go.
+	sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	handler.OnDone(sproutResponseToSeed(resp))
 	return nil
 }
@@ -647,6 +658,18 @@ func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 	if req == nil {
 		return 0
 	}
+	// Anchor to the last real Usage.PromptTokens count when the message
+	// prefix it was measured against still matches (see
+	// seed_provider_token_anchor.go): only the messages appended since that
+	// real measurement go through the heuristic, so heuristic error no
+	// longer compounds across a long conversation. Falls back to a full
+	// from-scratch heuristic estimate on the first call, after a tool-list
+	// change, or once compaction/substitution/masking has edited the
+	// anchored prefix.
+	if estimate, ok := sp.tokenAnchor.estimate(req.Messages, len(req.Tools)); ok {
+		return estimate
+	}
+
 	// Delegate to sprout's centralized estimator, which accounts for:
 	//   - per-message content + reasoning content (tiktoken-ish word/char hybrid)
 	//   - tool-call payloads (id + name + args + overhead)

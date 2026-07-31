@@ -640,6 +640,13 @@ body {
     flex-direction: column;
   }
 
+  /* Context panel container collapses to zero width when not shown */
+  .main-view-content > .context-panel-container {
+    width: 0;
+    overflow: hidden;
+    transition: width 200ms var(--ease-out);
+  }
+
   .header-bar {
     padding: 0 8px;
   }

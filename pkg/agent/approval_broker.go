@@ -217,6 +217,10 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 	// answer approval dialogs. The isNonInteractive() check is only
 	// meaningful for the CLI fallback path below.
 	webUICanAnswer := !isSubagent && a.HasActiveWebUIClients()
+	if a.debug {
+		a.debugLog("[APPROVAL] webUICanAnswer=%v (isSubagent=%v, hasWebUIClients=%v, hasMgr=%v, hasEventBus=%v)\n",
+			webUICanAnswer, isSubagent, a.HasActiveWebUIClients(), a.GetSecurityApprovalMgr() != nil, a.GetEventBus() != nil)
+	}
 	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && webUICanAnswer {
 		// Suspend CLI spinner and steer reader before blocking on the
 		// webui response — prevents terminal corruption during the wait.
@@ -312,6 +316,11 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 	cfg := a.GetConfig()
 	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
 	canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+
+	if a.debug {
+		a.debugLog("[APPROVAL] CLI path: canPrompt=%v (logger=%v, isInteractive=%v, isSubagent=%v)\n",
+			canPrompt, logger != nil, logger != nil && logger.IsInteractive(), isSubagent)
+	}
 
 	if canPrompt {
 		// For shell_command: use the 4-option approval picker (AskForApprovalWithOptions)

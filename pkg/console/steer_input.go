@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -328,7 +329,19 @@ func (r *SteerInputReader) Stop() {
 
 	close(stopCh)
 	if doneCh != nil {
-		<-doneCh
+		// Guard against indefinite blocking if the readLoop goroutine
+		// is stuck (e.g. on a raw stdin Read that didn't observe the
+		// VMIN=0/VTIME=0 termios — possible after a PauseSteer/
+		// ResumeSteer cycle corrupted the terminal state). Without this
+		// timeout the whole agent deadlocks: Stop() waits on doneCh,
+		// the main loop waits on Stop(), and the user has to SIGKILL.
+		// The 2s deadline is generous: the readLoop polls every 10ms
+		// so it should observe stopCh within one tick.
+		select {
+		case <-doneCh:
+		case <-time.After(2 * time.Second):
+			fmt.Fprintln(os.Stderr, "[steer] Stop() timed out waiting for readLoop — terminal state may be corrupted")
+		}
 	}
 	// Disable bracketed paste before restoring termios so the
 	// terminal returns to its prior paste mode (some apps run

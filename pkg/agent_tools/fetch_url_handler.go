@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"mime"
 	"net/url"
 	"strings"
@@ -20,13 +21,19 @@ func (h *fetchURLHandler) Name() string {
 func (h *fetchURLHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "fetch_url",
-		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly.",
+		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly. Use max_chars to limit response size for large pages (default: 20000).",
 		Parameters: []ParameterDef{
 			{
 				Name:        "url",
 				Type:        "string",
 				Required:    true,
 				Description: "URL to fetch content from.",
+			},
+			{
+				Name:        "max_chars",
+				Type:        "integer",
+				Required:    false,
+				Description: "Maximum number of characters to return. Default 20000. Use lower values (e.g. 5000) for large pages to avoid context overflow. Set to 0 for unlimited.",
 			},
 		},
 		Required: []string{"url"},
@@ -62,12 +69,29 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	maxChars := 20000 // default limit
+	if mc, ok := args["max_chars"]; ok {
+		switch v := mc.(type) {
+		case int:
+			maxChars = v
+		case int64:
+			maxChars = int(v)
+		case float64:
+			maxChars = int(v)
+		}
+	}
+
 	content, err := FetchURL(urlVal, env.ConfigManager)
 	if err != nil {
 		return ToolResult{
 			Output:  "",
 			IsError: true,
 		}, err
+	}
+
+	// Truncate if max_chars is set and content exceeds it.
+	if maxChars > 0 && len(content) > maxChars {
+		content = content[:maxChars] + "\n\n[CONTENT TRUNCATED: response limited to "+fmt.Sprintf("%d", maxChars)+" characters. The full page may contain additional content.]"
 	}
 
 	result := ToolResult{

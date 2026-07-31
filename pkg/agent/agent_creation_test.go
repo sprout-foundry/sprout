@@ -762,8 +762,9 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	tools := ag.getOptimizedToolDefinitions(nil)
 	lcmTools := map[string]bool{
 		"shell_command": true, "read_file": true, "write_file": true,
-		"edit_file": true, "search_files": true, "commit": true,
-		"list_changes": true, "recover_file": true,
+		"edit_file": true, "search_files": true, "repo_map": true,
+		"web_search": true, "fetch_url": true,
+		"commit": true, "list_changes": true, "recover_file": true,
 		"run_subagent": true,
 	}
 	if len(tools) != len(lcmTools) {
@@ -771,7 +772,7 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 		for _, tool := range tools {
 			names = append(names, tool.Function.Name)
 		}
-		t.Errorf("CLI path should produce LCM 9-tool allowlist at 32K; got %d tools: %v", len(tools), names)
+		t.Errorf("CLI path should produce LCM 12-tool allowlist at 32K; got %d tools: %v", len(tools), names)
 	}
 }
 

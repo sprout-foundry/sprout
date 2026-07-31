@@ -88,19 +88,30 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		tools = filterToolsByName(tools, makeAllowedToolSet(allow))
 	}
 
-	// Filter out run_subagent and run_parallel_subagents when
-	// the agent is not allowed to spawn subagents (depth limit or NO_SUBAGENTS env).
-	if !a.CanSpawnSubagents() {
-		filtered := make([]api.Tool, 0, len(tools))
-		for _, tool := range tools {
-			// Skip run_subagent and run_parallel_subagents
-			if tool.Function.Name == "run_subagent" || tool.Function.Name == "run_parallel_subagents" {
+	// Filter out run_parallel_subagents (not supported in LCM).
+	// For run_subagent, allow it in LCM mode even at depth limit for simple
+	// delegation, but still respect the depth limit in full mode.
+	filtered := make([]api.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if tool.Function.Name == "run_parallel_subagents" {
+			// In LCM mode, block parallel subagents (causes file conflicts)
+			// In full mode, allow if depth permits
+			if a.contextProfile.Mode == configuration.ContextModeLowContext {
 				continue
 			}
-			filtered = append(filtered, tool)
+			if !a.CanSpawnSubagents() {
+				continue
+			}
 		}
-		tools = filtered
+		if tool.Function.Name == "run_subagent" {
+			// Respect depth limit in all modes
+			if !a.CanSpawnSubagents() {
+				continue
+			}
+		}
+		filtered = append(filtered, tool)
 	}
+	tools = filtered
 
 	// Add MCP tools if available
 	mcpTools := a.getMCPTools()

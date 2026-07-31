@@ -137,6 +137,7 @@ var lowContextProfile = ContextProfile{
 		"commit",
 		"list_changes",
 		"recover_file",
+		"run_subagent",
 	},
 	SystemPromptPath:          "prompts/system_prompt.lite.md",
 	SkipProactiveContext:      true,

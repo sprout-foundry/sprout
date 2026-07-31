@@ -64,8 +64,8 @@ func TestCompactionTriggerFractionInRange(t *testing.T) {
 
 // TestSP125_LowContextMode_32K verifies that an agent created against a 32K
 // context model auto-activates Low-Context Mode with the expected levers:
-// the 8-tool allowlist, the lite system prompt, proactive context disabled,
-// and the tighter compaction trigger.
+// the 9-tool allowlist (8 core + run_subagent for delegation), the lite system
+// prompt, proactive context disabled, and the tighter compaction trigger.
 func TestSP125_LowContextMode_32K(t *testing.T) {
 	mgr, cleanup := configuration.NewTestManager(t)
 	defer cleanup()
@@ -82,12 +82,13 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		t.Errorf("expected ContextModeLowContext, got %q", agent.contextProfile.Mode)
 	}
 
-	// (b) Exactly 8 tools registered.
+	// (b) Exactly 9 tools registered (8 original + run_subagent for LCM delegation).
 	tools := agent.getOptimizedToolDefinitions(nil)
 	expectedTools := map[string]bool{
 		"shell_command": true, "read_file": true, "write_file": true,
 		"edit_file": true, "search_files": true, "commit": true,
 		"list_changes": true, "recover_file": true,
+		"run_subagent": true,
 	}
 	if len(tools) != len(expectedTools) {
 		var names []string

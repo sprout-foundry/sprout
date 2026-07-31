@@ -179,11 +179,9 @@ export function useChatSessionManager({
           // Previously this used a naive length comparison that could prefer
           // shorter local state when streaming hadn't been persisted yet.
           const cached = prev.perChatCache[id];
-          const hadPendingEvents = !!(cached?.pendingEvents?.length);
+          const hadPendingEvents = !!cached?.pendingEvents?.length;
           const useBackendMessages =
-            backendMessages.length >= prev.messages.length ||
-            !backendIsActive ||
-            hadPendingEvents;
+            backendMessages.length >= prev.messages.length || !backendIsActive || hadPendingEvents;
           // Drain pending events — the backend fetch is authoritative now.
           const newPerChatCache = { ...prev.perChatCache };
           if (cached && cached.pendingEvents) {

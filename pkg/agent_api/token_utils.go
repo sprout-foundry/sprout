@@ -170,12 +170,18 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	remaining := contextLimit - inputTokens
 
 	// Reserve a safety buffer to absorb token estimation errors.
-	// Use 20% of the total context limit (not remaining) so the buffer
-	// scales with the window size. Large contexts (200K+) can have
-	// estimation errors of thousands of tokens, so the buffer must grow
-	// with them. A floor of 2000 ensures small contexts still get a
-	// meaningful cushion.
-	buffer := (contextLimit * 20) / 100
+	// The buffer has two components:
+	//   1. A base of 20% of the context limit (scales with window size).
+	//   2. A proportional component of 25% of the estimated input tokens.
+	//      EstimateTokens is a heuristic (not a real BPE tokenizer), so
+	//      its error grows with input size — a 150K-token prompt can be
+	//      off by 30K+ tokens, which a flat 20% context buffer can't absorb.
+	//      This prevents the "context window exceeded" error that occurs
+	//      when max_tokens + actual_input > contextLimit.
+	// A floor of 4000 ensures small contexts still get a meaningful cushion.
+	baseBuffer := (contextLimit * 20) / 100
+	estimationBuffer := (inputTokens * 25) / 100
+	buffer := baseBuffer + estimationBuffer
 	if buffer < 4000 {
 		buffer = 4000
 	}
@@ -189,6 +195,14 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	}
 
 	maxOutput := remaining - buffer
+
+	// Hard cap: max_tokens must never cause input + output to exceed
+	// the context limit. This is the last line of defense against
+	// estimation errors that slip past the buffer.
+	hardCap := contextLimit - inputTokens
+	if maxOutput > hardCap {
+		maxOutput = hardCap
+	}
 
 	// Ensure minimum output tokens
 	if maxOutput < MinOutputTokens && remaining >= MinOutputTokens {

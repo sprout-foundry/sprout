@@ -447,7 +447,17 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	go func() {
 		defer close(steerDone)
 		for msg := range injectChan {
+			retries := 0
 			for !seedAgent.InjectInput(msg.content) {
+				retries++
+				if retries > 4000 {
+					// 4000 × 25ms = 100s of continuous retrying means
+					// seedAgent.Run is either not running or has a full
+					// injection channel that won't drain. Log and drop
+					// rather than spinning indefinitely.
+					a.Logger().Debug("[WARN] InjectInput giving up after %d retries (100s) — steering message dropped\n", retries)
+					break
+				}
 				select {
 				case <-runCtx.Done():
 					return

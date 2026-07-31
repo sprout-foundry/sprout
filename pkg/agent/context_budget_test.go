@@ -132,13 +132,13 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 	}
 }
 
-// TestSP125_FullContextMode_128K verifies that a 128K model gets full mode
+// TestSP125_FullContextMode_200K verifies that a 200K model gets full mode
 // with all tools and the default compaction trigger.
-func TestSP125_FullContextMode_128K(t *testing.T) {
+func TestSP125_FullContextMode_200K(t *testing.T) {
 	mgr, cleanup := configuration.NewTestManager(t)
 	defer cleanup()
 
-	client := NewMockLLMProviderWithLimit(128_000)
+	client := NewMockLLMProviderWithLimit(200_000)
 	agent, err := NewAgentWithClient(client, api.TestClientType, mgr)
 	if err != nil {
 		t.Fatalf("NewAgentWithClient failed: %v", err)
@@ -147,17 +147,17 @@ func TestSP125_FullContextMode_128K(t *testing.T) {
 
 	// Profile should be full (zero-value, not low_context).
 	if agent.contextProfile.Mode == configuration.ContextModeLowContext {
-		t.Error("128K model should not activate LCM")
+		t.Error("200K model should not activate LCM")
 	}
 
-	// Tools should not be filtered to 8 (should have many more).
+	// Tools should not be filtered to 9 (should have many more).
 	tools := agent.getOptimizedToolDefinitions(nil)
-	if len(tools) <= 8 {
+	if len(tools) <= 9 {
 		var names []string
 		for _, tool := range tools {
 			names = append(names, tool.Function.Name)
 		}
-		t.Errorf("128K model should have more than 8 tools, got %d: %v", len(tools), names)
+		t.Errorf("200K model should have more than 9 tools, got %d: %v", len(tools), names)
 	}
 
 	// Compaction trigger should be the default (0.70), not 0.85.

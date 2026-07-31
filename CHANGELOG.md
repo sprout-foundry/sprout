@@ -2,6 +2,23 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.13] - 2026-07-30
+
+- style: prettier format useChatSessionManager.ts and useWebSocketEventHandler.ts (ba90a0997)
+- style: gofmt token_utils_test.go (07171e986)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (0b6629c29)
+- fix(agent): prevent context window overflow from token estimation errors (438d7abba)
+- Merge remote-tracking branch 'origin/main' (8119523d7)
+- fix: WebUI approval gates must treat browser as the interactive surface (a9d6eac8a)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (232facec9)
+- fix(webui): prevent stale spinner on switch-back, remove dead code (a59caa5e0)
+- docs: Update changelog for v0.17.12 (26a703d83)
+- style: gofmt shell_password_scanner.go (531e39e79)
+- refactor(shell): merge password detection into adoptable execution path (5c965dc3a)
+- docs: Update changelog for v0.17.11 (4af7ee3af)
+- fix(webui): prevent chat messages from disappearing in 5 scenarios (c6967a76a)
+- docs: Update changelog for v0.17.12 (9b142f060)
+
 ## [v0.17.12] - 2026-07-30
 
 - style: gofmt shell_password_scanner.go (e66435f50)

@@ -35,8 +35,8 @@ type sproutProvider struct {
 	// maxTokensHint is the pre-computed max_tokens from the anchored estimate,
 	// set before each provider call so the GenericProvider doesn't need to
 	// re-derive it from the raw heuristic.
-	maxTokensHint     int
-	maxTokensHintMu   sync.RWMutex
+	maxTokensHint   int
+	maxTokensHintMu sync.RWMutex
 }
 
 // currentClient returns the agent's live client if available, otherwise returns the snapshot.

@@ -344,7 +344,7 @@ type Config struct {
 // WakeupConfig controls auto-resume behavior for background task completions
 // (SP-108). Stored in config.json under the "wakeup" key.
 type WakeupConfig struct {
-	Enabled              bool `json:"enabled"`                 // Master switch; default false
+	Enabled              bool `json:"enabled"`                 // Master switch; default true
 	MaxTokensPerSession  int  `json:"max_tokens_per_session"`  // Hard cap on auto-resume token spend; default 5000
 	MaxResumesPerSession int  `json:"max_resumes_per_session"` // Max auto-resumes before requiring user input; default 10
 }
@@ -352,7 +352,7 @@ type WakeupConfig struct {
 // DefaultWakeupConfig returns conservative defaults.
 func DefaultWakeupConfig() WakeupConfig {
 	return WakeupConfig{
-		Enabled:              false,
+		Enabled:              true,
 		MaxTokensPerSession:  5000,
 		MaxResumesPerSession: 10,
 	}

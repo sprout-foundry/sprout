@@ -375,7 +375,7 @@ If the user asks where to edit memories, point them at `~/.config/sprout/memorie
 - **File locations**:
   - **Transient files** (screenshots, scratch notes, debugging output): use `/tmp/sprout/` (subdirs like `/tmp/sprout-audit/` or `/tmp/sprout_examples/` are fine)
   - **Permanent files** (code, tests, long-term documentation, configs): use current working directory (cwd)
-- **Long-running commands**: If you need to run a dev server or long-running process while continuing other work, use `tmux` or `nohup` inside the bash tool (e.g., `nohup npm run dev > /dev/null 2>&1 &`)
+- **Long-running commands and background tasks**: Use `shell_command(background=true)` to run commands that take more than a few seconds (dev servers, long builds, test suites, file downloads). The command starts immediately and returns a `session_id`. You will be **automatically notified** when the background task completes — you do not need to poll or wait. Use `shell_command(check_background="<session_id>", wait_seconds=N)` to check on a background task (blocks up to 600s), or `shell_command(check_background="<session_id>")` for a non-blocking snapshot. Use `wakeup_timeout` to set a deadline if you need a timeout notification. Example: launch a test suite with `background=true`, continue with other work, and you'll be notified when the tests finish so you can review the results.
 
 ---
 

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"mime"
 	"net/url"
 	"strings"
@@ -21,19 +20,13 @@ func (h *fetchURLHandler) Name() string {
 func (h *fetchURLHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "fetch_url",
-		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly. Use max_chars to limit response size for large pages (default: 20000).",
+		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly. Large pages are saved to a temp file with a section index — use read_file with view_range to read specific sections.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "url",
 				Type:        "string",
 				Required:    true,
 				Description: "URL to fetch content from.",
-			},
-			{
-				Name:        "max_chars",
-				Type:        "integer",
-				Required:    false,
-				Description: "Maximum number of characters to return. Default 20000. Use lower values (e.g. 5000) for large pages to avoid context overflow. Set to 0 for unlimited.",
 			},
 		},
 		Required: []string{"url"},
@@ -69,18 +62,6 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	maxChars := 20000 // default limit
-	if mc, ok := args["max_chars"]; ok {
-		switch v := mc.(type) {
-		case int:
-			maxChars = v
-		case int64:
-			maxChars = int(v)
-		case float64:
-			maxChars = int(v)
-		}
-	}
-
 	content, err := FetchURL(urlVal, env.ConfigManager)
 	if err != nil {
 		return ToolResult{
@@ -89,18 +70,33 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		}, err
 	}
 
-	// Truncate if max_chars is set and content exceeds it.
-	if maxChars > 0 && len(content) > maxChars {
-		content = content[:maxChars] + "\n\n[CONTENT TRUNCATED: response limited to "+fmt.Sprintf("%d", maxChars)+" characters. The full page may contain additional content.]"
+	// For small content, return inline as before.
+	if len(content) <= fetchContentThreshold {
+		result := ToolResult{
+			Output:     content,
+			TokenUsage: int64(estimateTokenUsage(content)),
+		}
+		if imageData := classifyURL(urlVal); imageData != nil {
+			result.Images = []ImageData{*imageData}
+		}
+		return result, nil
 	}
+
+	// Large content: save to temp file and return section TOC.
+	filePath, err := saveFetchContent(urlVal, content)
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
+	toc := buildSectionTOC(content)
+	output := toc + "\nFile path: " + filePath + "\n"
 
 	result := ToolResult{
-		Output:     content,
-		TokenUsage: int64(estimateTokenUsage(content)),
+		Output:     output,
+		TokenUsage: int64(estimateTokenUsage(output)),
 	}
 
-	// Detect image / PDF URLs and attach an ImageData entry so vision-capable
-	// models can render the resource directly.
+	// Still attach image data for vision-capable models.
 	if imageData := classifyURL(urlVal); imageData != nil {
 		result.Images = []ImageData{*imageData}
 	}
@@ -114,7 +110,8 @@ func (h *fetchURLHandler) MaxResultSize() int     { return 0 }
 func (h *fetchURLHandler) SafeForParallel() bool  { return false }
 func (h *fetchURLHandler) Interactive() bool      { return false }
 
-// so, returns a populated ImageData.  Returns nil for non-media URLs.
+// classifyURL checks if the URL points to an image or PDF and, if so,
+// returns a populated ImageData. Returns nil for non-media URLs.
 func classifyURL(rawURL string) *ImageData {
 	_, path := splitURLScheme(rawURL)
 	ext := strings.ToLower(fileURLExtension(path))
@@ -141,7 +138,7 @@ func classifyURL(rawURL string) *ImageData {
 }
 
 // splitURLScheme returns the scheme and the remainder of the URL (after
-// scheme://).  Handles both absolute and relative paths gracefully.
+// scheme://). Handles both absolute and relative paths gracefully.
 func splitURLScheme(rawURL string) (string, string) {
 	if u, err := url.Parse(rawURL); err == nil {
 		return u.Scheme, u.Path

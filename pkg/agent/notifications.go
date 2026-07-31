@@ -160,3 +160,63 @@ func (a *Agent) NotifyCompletion(sessionID, kind, content string) {
 		Kind:      NotificationKind(kind),
 	})
 }
+
+// TryAutoResume checks whether there are pending background-task
+// notifications that warrant an automatic agent resume. If so, it
+// drains them and calls ProcessQueryWithContinuity to re-invoke the
+// agent so it can act on the completed background tasks.
+//
+// This is the shared entry point used by both the WebUI wakeup poller
+// (pkg/webui/wakeup_poller.go) and the CLI interactive loop
+// (cmd/agent_mode_interactive.go). It encapsulates the budget checks
+// (max resumes, max tokens), notification draining, and the actual
+// resume call.
+//
+// Returns true if a resume was performed, false if conditions were not
+// met (no notifications, wakeup disabled, budget exhausted, or a query
+// is already in progress).
+func (a *Agent) TryAutoResume() bool {
+	if a == nil {
+		return false
+	}
+	cfg := a.GetConfig()
+	if cfg == nil || !cfg.Wakeup.Enabled {
+		return false
+	}
+	if !a.HasPendingNotifications() {
+		return false
+	}
+	if a.IsQueryInProgress() {
+		return false
+	}
+	if a.IsWakeupDisabled() {
+		return false
+	}
+	if !a.IncrementWakeupResume(cfg.Wakeup) {
+		return false
+	}
+	notifications := a.DrainNotifications()
+	if len(notifications) == 0 {
+		return false
+	}
+	msg := FormatWakeupBatch(notifications)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				a.Logger().Debug("[wakeup] auto-resume panicked: %v\n", r)
+			}
+		}()
+		tokensBefore := a.GetTotalTokens()
+		_, err := a.ProcessQueryWithContinuity(msg)
+		if err != nil {
+			a.Logger().Debug("[wakeup] auto-resume failed: %v\n", err)
+			return
+		}
+		tokensAfter := a.GetTotalTokens()
+		delta := tokensAfter - tokensBefore
+		if delta > 0 {
+			a.RecordWakeupTokens(delta, cfg.Wakeup)
+		}
+	}()
+	return true
+}

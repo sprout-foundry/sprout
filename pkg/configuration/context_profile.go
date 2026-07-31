@@ -34,12 +34,12 @@ const (
 	// as "use built-in default".
 	ContextModeFull ContextMode = "full"
 
-	// ContextModeLowContext activates the LCM levers (curated 8-tool
+	// ContextModeLowContext activates the LCM levers (curated 9-tool
 	// allowlist, lite prompt, no proactive context, compaction trigger
 	// 0.85, recency 2, repo-map depth 1). AGENTS.md is still injected
 	// (project conventions are mandatory in every mode). Activated
 	// explicitly via config, or auto-detected when the selected model
-	// reports a context window below SubagentMinContext (64K).
+	// reports a context window below 132K.
 	ContextModeLowContext ContextMode = "low_context"
 )
 
@@ -114,8 +114,7 @@ type ContextProfile struct {
 // is its zero value, meaning "use the built-in default" — which is the
 // whole point of the zero-value-is-safe design (the roadmap's lever 5).
 // Returned by ResolveContextProfile whenever the user hasn't opted into
-// LCM and the model's context window is >= SubagentMinContext (64K), or
-// when ContextMode == "".
+// LCM and the model's context window is >= 132K, or when ContextMode == "".
 var fullContextProfile = ContextProfile{
 	Mode: ContextModeFull,
 }
@@ -146,14 +145,10 @@ var lowContextProfile = ContextProfile{
 	RepoMapDefaultDepth:       1,
 }
 
-// subagentContextThreshold mirrors modelcontract.SubagentMinContext (64K)
-// locally so this package does not introduce a cfg→modelcontract import
-// edge. The two constants track each other intentionally; if they ever
-// diverge, the resolution function should be updated to import the
-// canonical modelcontract value. Kept as a private var (not exported)
-// because the threshold is an implementation detail of ResolveContextProfile,
-// not a knob callers need.
-const subagentContextThreshold = 64_000
+// subagentContextThreshold is the context window below which LCM auto-activates.
+// Set at 132K — just above the upper bound of most 128K-class models (128K–131K)
+// so they all get the lite profile. Models ≥ 132K use the full prompt and tool set.
+const subagentContextThreshold = 132_000
 
 // ResolveContextProfile picks the effective profile from the user's
 // config plus the detected model context window. Called once at agent

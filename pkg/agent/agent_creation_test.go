@@ -775,13 +775,13 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	}
 }
 
-// TestCLIPath_FullContextAt128K verifies the negative case: at 128K
+// TestCLIPath_FullContextAt200K verifies the negative case: at 200K
 // the CLI path should NOT activate LCM, the full prompt should be
 // loaded, and the LCM marker should be absent. Same content-based
 // body assertion as the 32K test, anchored against the embedded full
 // prompt's body.
-func TestCLIPath_FullContextAt128K(t *testing.T) {
-	manager, _, cleanup := cliPathTestEnv(t, 128_000)
+func TestCLIPath_FullContextAt200K(t *testing.T) {
+	manager, _, cleanup := cliPathTestEnv(t, 200_000)
 	defer cleanup()
 
 	workspaceRoot := t.TempDir()
@@ -792,7 +792,7 @@ func TestCLIPath_FullContextAt128K(t *testing.T) {
 	defer ag.Shutdown()
 
 	if ag.contextProfile.Mode == configuration.ContextModeLowContext {
-		t.Errorf("128K context should not activate LCM, got %q", ag.contextProfile.Mode)
+		t.Errorf("200K context should not activate LCM, got %q", ag.contextProfile.Mode)
 	}
 
 	assertPromptContainsBody(t, ag.GetSystemPrompt(), ag.contextProfile, "full")

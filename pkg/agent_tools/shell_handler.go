@@ -66,7 +66,7 @@ func (h *shellCommandHandler) Definition() ToolDefinition {
 				Name:        "wakeup_timeout",
 				Type:        "integer",
 				Required:    false,
-				Description: "Optional deadline in seconds for background commands. The agent is always notified on completion; this adds a timeout notification if the process hasn't finished.",
+				Description: "Optional deadline in seconds for background commands. When the background command completes, the agent is automatically notified and resumed so it can check the output. This adds an early timeout notification if the process hasn't finished within the deadline. The watcher survives turn boundaries — the notification will fire even if the agent's current turn has already ended.",
 			},
 		},
 	}
@@ -433,6 +433,15 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 	var done <-chan struct{}
 	var getExitCode func() int
 
+	// Use the agent's lifetime context for the watcher goroutines so they
+	// survive turn boundaries. The per-turn ctx is cancelled when the model
+	// finishes its response, which would kill watchers that are waiting for
+	// long-running background tasks. LifetimeCtx lives until agent Shutdown.
+	watchCtx := env.LifetimeCtx
+	if watchCtx == nil {
+		watchCtx = context.Background()
+	}
+
 	if tm := TerminalManagerFromContext(ctx); tm != nil {
 		doneCh := make(chan struct{})
 		done = doneCh
@@ -457,7 +466,7 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 				}
 				select {
 				case <-ticker.C:
-				case <-ctx.Done():
+				case <-watchCtx.Done():
 					return
 				}
 			}
@@ -487,7 +496,7 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 					fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.",
 						sessionID, exitCode, sessionID))
 			}
-		case <-ctx.Done():
+		case <-watchCtx.Done():
 		}
 	}()
 }

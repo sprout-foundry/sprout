@@ -633,16 +633,25 @@ const AppContent: React.FC<AppContentProps> = ({
       if (!activeChatId || isForking) return;
       setIsForking(true);
       try {
-        const result = await forkChatSession(activeChatId, breakpointIndex);
-        console.warn('[fork] Forked session:', result.session_id);
+        await forkChatSession(activeChatId, breakpointIndex);
+        // Reload the chat from the backend to pick up the truncated
+        // (forked) history. The fork API mutates the agent in-memory and
+        // syncs the state snapshot, so a switchChatSession call returns
+        // the correct messages.
         window.dispatchEvent(new CustomEvent('sprout:chat-gap-reload', { detail: { chatId: activeChatId } }));
+        // Refresh the session list sidebar so the user sees the fork
+        // reflected (new session ID, updated message counts).
+        window.dispatchEvent(new CustomEvent('sprout:refresh-sessions'));
       } catch (e) {
         console.error('[fork] Failed to fork:', e);
+        setAppState((prev) => ({
+          lastError: `Failed to fork session: ${e instanceof Error ? e.message : String(e)}`,
+        }));
       } finally {
         setIsForking(false);
       }
     },
-    [activeChatId, isForking],
+    [activeChatId, isForking, setAppState],
   );
 
   const chatProps = useMemo(

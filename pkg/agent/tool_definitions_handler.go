@@ -198,6 +198,7 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	env.RepoMapDefaultDepth = agent.contextProfile.RepoMapDefaultDepth
 	env.RawArgsJSON = "" // seed registry doesn't have raw JSON args
 	env.Notifier = agent
+	env.LifetimeCtx = agent.LifetimeCtx()
 	env.SubagentDepth = agent.subagentDepth
 	// Propagate Gate 1's auto-approve decision so handler-level gates
 	// (Gate 2) skip their interactive prompt, matching Gate 1. Covers

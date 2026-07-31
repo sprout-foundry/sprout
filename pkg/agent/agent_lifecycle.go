@@ -31,6 +31,11 @@ func (a *Agent) Shutdown() {
 		}
 	}
 
+	// Cancel lifetime context so background watchers (wakeup, etc.) stop.
+	if a.lifetimeCancel != nil {
+		a.lifetimeCancel()
+	}
+
 	// Cancel interrupt context
 	if _, cancel := a.snapshotInterrupt(); cancel != nil {
 		cancel()

@@ -179,6 +179,13 @@ type ToolEnv struct {
 	// (directory tree only) to keep repo_map output under ~800 tokens.
 	RepoMapDefaultDepth int
 	Notifier            BackgroundNotifier
+	// LifetimeCtx is a process-scoped context that outlives any single
+	// turn. Background goroutines (e.g., wakeup watchers for background
+	// shell tasks) must use this instead of the per-turn ctx so they
+	// survive turn boundaries and can fire completion notifications
+	// after the agent's current turn has finished. Cancelled when the
+	// agent shuts down.
+	LifetimeCtx context.Context
 	// Agent is the *pkg/agent.Agent instance. Only set for tools that explicitly
 	// need agent access (e.g., run_subagent, run_parallel_subagents).
 	// For all other tools this is nil. Use with care — it creates a tight

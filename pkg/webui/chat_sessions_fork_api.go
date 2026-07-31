@@ -81,6 +81,16 @@ func (ws *ReactWebServer) handleAPIChatSessionFork(w http.ResponseWriter, r *htt
 	}
 	ws.mutex.Unlock()
 
+	// Sync the agent state snapshot so the next switchChatSession call
+	// returns the truncated (forked) messages instead of the stale
+	// pre-fork snapshot.
+	if syncErr := ws.syncAgentStateForClientWithChat(clientID, chatID); syncErr != nil {
+		ws.log().Warn("failed to sync agent state after fork",
+			slog.String("chat_id", chatID),
+			slog.String("client_id", clientID),
+			slog.Any("err", syncErr))
+	}
+
 	ws.log().Info("forked chat session",
 		slog.String("chat_id", chatID),
 		slog.Int("breakpoint_index", req.BreakpointIndex),

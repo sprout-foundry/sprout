@@ -153,6 +153,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	defer cancelSub()
 	resetSpawnTracking := cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 
+	// SP-108: Start a wakeup poller for CLI mode. This mirrors the WebUI
+	// poller (pkg/webui/wakeup_poller.go), checking for pending background-
+	// task completion notifications every 3s and auto-resuming the agent
+	// so it can act on them. Without this, background tasks launched via
+	// shell_command(background=true) complete silently in CLI mode — the
+	// notification is queued but nothing drains it until the user types
+	// another message.
+	go startCLIWakeupPoller(subCtx, chatAgent, indicator, 3*time.Second)
+
 	// Tracks the time of the last Ctrl+C at the idle prompt so a
 	// second press within 2s exits the REPL (standard convention:
 	// psql, redis-cli, node). Reset to zero on any successful read.

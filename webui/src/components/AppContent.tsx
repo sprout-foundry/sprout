@@ -20,6 +20,7 @@ import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
 import { forkChatSession } from '../services/chatSessions';
+import { notificationBus } from '../services/notificationBus';
 import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
@@ -633,7 +634,7 @@ const AppContent: React.FC<AppContentProps> = ({
       if (!activeChatId || isForking) return;
       setIsForking(true);
       try {
-        await forkChatSession(activeChatId, breakpointIndex);
+        const result = await forkChatSession(activeChatId, breakpointIndex);
         // Reload the chat from the backend to pick up the truncated
         // (forked) history. The fork API mutates the agent in-memory and
         // syncs the state snapshot, so a switchChatSession call returns
@@ -642,6 +643,7 @@ const AppContent: React.FC<AppContentProps> = ({
         // Refresh the session list sidebar so the user sees the fork
         // reflected (new session ID, updated message counts).
         window.dispatchEvent(new CustomEvent('sprout:refresh-sessions'));
+        notificationBus.notify('success', 'Session forked', `New session: ${result.session_id.slice(0, 8)}…`);
       } catch (e) {
         console.error('[fork] Failed to fork:', e);
         setAppState((prev) => ({

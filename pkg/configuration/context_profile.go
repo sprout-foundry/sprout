@@ -34,7 +34,7 @@ const (
 	// as "use built-in default".
 	ContextModeFull ContextMode = "full"
 
-	// ContextModeLowContext activates the LCM levers (curated 9-tool
+	// ContextModeLowContext activates the LCM levers (curated 12-tool
 	// allowlist, lite prompt, no proactive context, compaction trigger
 	// 0.85, recency 2, repo-map depth 1). AGENTS.md is still injected
 	// (project conventions are mandatory in every mode). Activated
@@ -133,6 +133,9 @@ var lowContextProfile = ContextProfile{
 		"write_file",
 		"edit_file",
 		"search_files",
+		"repo_map",
+		"web_search",
+		"fetch_url",
 		"commit",
 		"list_changes",
 		"recover_file",
@@ -169,9 +172,7 @@ const subagentContextThreshold = 132_000
 //     field has overridden any window-based guess.
 //
 //  3. Auto-detect — a known context window below subagentContextThreshold
-//     (64K) flips LCM on with a strong warning (callers can detect the
-//     auto-detect case by comparing the returned Mode to what cfg
-//     requested, or via a future explicit-notice hook).
+//     (132K) flips LCM on.
 //
 //  4. Default — fullContextProfile. Applies when cfg is nil, when
 //     cfg.ContextMode is empty or unrecognized, or when the model

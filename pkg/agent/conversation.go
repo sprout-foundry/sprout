@@ -134,7 +134,10 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	}
 
 	// Apply active persona tool filter (used for direct /persona and subagent persona runs).
-	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 {
+	// In LCM mode, the curated allowlist is final — persona filtering would strip
+	// tools (repo_map, web_search, fetch_url) that the LCM profile intentionally includes.
+	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 &&
+		len(a.contextProfile.ToolAllowlist) == 0 {
 		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
 	}
 

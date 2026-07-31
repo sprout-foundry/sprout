@@ -225,6 +225,47 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	return maxOutput, true
 }
 
+// CalculateOutputBudgetAnchored computes the output budget when part of the
+// input estimate came from a real measurement (Usage.PromptTokens) and only
+// the heuristic portion is subject to estimation error. This prevents
+// double-counting the estimation margin on the anchored portion.
+//
+// anchoredInput is the portion measured from a real API response (no error).
+// heuristicInput is the portion estimated by the heuristic (subject to
+// EstimationErrorPercent underestimation).
+// The total input is anchoredInput + heuristicInput.
+func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput int) (int, bool) {
+	if contextLimit <= 0 {
+		contextLimit = 32000
+	}
+
+	totalInput := anchoredInput + heuristicInput
+	if totalInput >= contextLimit {
+		return 0, false
+	}
+
+	remaining := contextLimit - totalInput
+
+	// Only inflate the heuristic portion — the anchored portion is already
+	// a real measurement with no estimation error.
+	worstCaseHeuristic := heuristicInput + (heuristicInput*EstimationErrorPercent)/100
+	worstCaseInput := anchoredInput + worstCaseHeuristic
+
+	cushion := max((contextLimit*BaseCushionPercent)/100, BaseCushionFloor)
+
+	maxOutput := contextLimit - worstCaseInput - cushion
+	maxOutput = min(maxOutput, remaining)
+
+	if maxOutput < MinOutputTokens {
+		if remaining < MinOutputTokens {
+			return remaining, true
+		}
+		return MinOutputTokens, true
+	}
+
+	return maxOutput, true
+}
+
 func estimateImageTokens(img ImageData) int {
 	tokens := ImageMessageOverheadTokens
 

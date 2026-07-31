@@ -152,10 +152,9 @@ func setRecallSinkForTesting(sink *recallMetricsSink) {
 // fire-and-forget observer. Failures (sink init, file IO, etc) are
 // silent at the agent level.
 //
-// NOTE: InstrumentedRecall calls a.Recall() to capture metrics, then
-// calls a.InjectSemanticRecall() which internally calls a.Recall() again.
-// The duplicate recall work is bounded by the 2-second context timeout
-// at the call site and is acceptable overhead for v1 instrumentation.
+// NOTE: InstrumentedRecall calls a.Recall() once to capture metrics, then
+// passes the items to InjectSemanticRecallWithItems to avoid a second
+// Recall() call (the old path duplicated the work).
 func InstrumentedRecall(a *Agent, ctx context.Context, query string) {
 	if a == nil {
 		return
@@ -167,8 +166,8 @@ func InstrumentedRecall(a *Agent, ctx context.Context, query string) {
 	items, err := a.Recall(ctx, query, semanticRecallTopK)
 	latencyMS := time.Since(start).Milliseconds()
 
-	// Always run the existing injection to preserve behavior.
-	a.InjectSemanticRecall(ctx, query)
+	// Inject using the items we already retrieved — no second Recall().
+	a.InjectSemanticRecallWithItems(ctx, query, items)
 
 	if err != nil || len(items) == 0 {
 		// No items to instrument — skip the record (it'd be noise).

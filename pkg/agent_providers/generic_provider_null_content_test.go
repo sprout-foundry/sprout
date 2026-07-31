@@ -20,8 +20,8 @@ func TestConvertMessages_EmptyContentAssistantWithToolCallsIsNull(t *testing.T) 
 		Auth:     AuthConfig{Type: "bearer", EnvVar: "ZAI_CODING_API_KEY"},
 		Defaults: RequestDefaults{Model: "glm-5.2"},
 		Conversion: MessageConversion{
-			IncludeToolCallID:      true,
-			ReasoningContentField:  "reasoning_content",
+			IncludeToolCallID:     true,
+			ReasoningContentField: "reasoning_content",
 		},
 		Models: ModelConfig{
 			DefaultContextLimit: 200000,
@@ -154,8 +154,8 @@ func TestConvertMessages_AssistantWithContentAndToolCallsPreservesContent(t *tes
 		Auth:     AuthConfig{Type: "bearer", EnvVar: "ZAI_CODING_API_KEY"},
 		Defaults: RequestDefaults{Model: "glm-5.2"},
 		Conversion: MessageConversion{
-			IncludeToolCallID:      true,
-			ReasoningContentField:  "reasoning_content",
+			IncludeToolCallID:     true,
+			ReasoningContentField: "reasoning_content",
 		},
 		Models: ModelConfig{
 			DefaultContextLimit: 200000,
@@ -215,8 +215,8 @@ func TestBuildChatRequest_EmptyContentAssistantSerializesAsNull(t *testing.T) {
 		Auth:     AuthConfig{Type: "bearer", EnvVar: "ZAI_CODING_API_KEY"},
 		Defaults: RequestDefaults{Model: "glm-5.2"},
 		Conversion: MessageConversion{
-			IncludeToolCallID:      true,
-			ReasoningContentField:  "reasoning_content",
+			IncludeToolCallID:     true,
+			ReasoningContentField: "reasoning_content",
 		},
 		Models: ModelConfig{
 			DefaultContextLimit: 200000,

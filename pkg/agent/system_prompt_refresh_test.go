@@ -85,11 +85,12 @@ func TestRefreshSystemPrompt_FlagOn_DifferentProvider(t *testing.T) {
 		t.Fatalf("UpdateConfigNoSave: %v", err)
 	}
 
-	// Start with a 128K-context client → full-context profile → the
+	// Start with a 200K-context client → full-context profile → the
 	// orchestrator prompt (~6.6K tokens, contains "Orchestrator" and
-	// "Persona Selection Guide" markers).
+	// "Persona Selection Guide" markers). 200K is above the 132K
+	// subagentContextThreshold so LCM does not auto-activate.
 	agent, err := NewAgentWithClient(
-		NewMockLLMProviderWithLimit(128_000),
+		NewMockLLMProviderWithLimit(200_000),
 		api.TestClientType,
 		mgr,
 	)
@@ -100,16 +101,16 @@ func TestRefreshSystemPrompt_FlagOn_DifferentProvider(t *testing.T) {
 
 	initialPrompt := agent.GetSystemPrompt()
 	if !strings.Contains(initialPrompt, "Orchestrator") {
-		t.Fatalf("initial 128K prompt should be the full orchestrator prompt (missing 'Orchestrator' marker); got first 200 chars: %q",
+		t.Fatalf("initial 200K prompt should be the full orchestrator prompt (missing 'Orchestrator' marker); got first 200 chars: %q",
 			first200(initialPrompt))
 	}
 	if strings.Contains(initialPrompt, "Low-Context Mode") {
-		t.Fatalf("initial 128K prompt should NOT contain 'Low-Context Mode' (full prompt leaked); got first 200 chars: %q",
+		t.Fatalf("initial 200K prompt should NOT contain 'Low-Context Mode' (full prompt leaked); got first 200 chars: %q",
 			first200(initialPrompt))
 	}
 
-	// Swap to a 32K-context client. The 32K window is below
-	// subagentContextThreshold (64K), so ResolveContextProfile will
+	// Swap to a 32K-context client. The 32K window is well below
+	// subagentContextThreshold (132K), so ResolveContextProfile will
 	// auto-detect LCM. setClient triggers refreshSystemPrompt through
 	// the new wiring in agent_accessors.go; the assertion below
 	// validates that the refresh actually fired and produced the
@@ -118,14 +119,14 @@ func TestRefreshSystemPrompt_FlagOn_DifferentProvider(t *testing.T) {
 
 	refreshedPrompt := agent.GetSystemPrompt()
 	if refreshedPrompt == initialPrompt {
-		t.Fatal("setClient should have re-derived the system prompt when flag is on, but prompt is byte-identical to the initial 128K prompt")
+		t.Fatal("setClient should have re-derived the system prompt when flag is on, but prompt is byte-identical to the initial 200K prompt")
 	}
-	if !strings.Contains(refreshedPrompt, "Low-Context Mode") {
-		t.Errorf("32K should produce the lite prompt (missing 'Low-Context Mode' marker); got first 200 chars: %q",
+	if strings.Contains(refreshedPrompt, "Orchestrator") {
+		t.Errorf("32K should produce the lite prompt (missing 'Orchestrator' absence); got first 200 chars: %q",
 			first200(refreshedPrompt))
 	}
-	if strings.Contains(refreshedPrompt, "Persona Selection Guide") {
-		t.Errorf("32K should NOT contain 'Persona Selection Guide' (lite prompt leaked full-prompt content); got first 200 chars: %q",
+	if !strings.Contains(refreshedPrompt, "edit-test-commit loop") {
+		t.Errorf("32K should contain lite prompt marker 'edit-test-commit loop'; got first 200 chars: %q",
 			first200(refreshedPrompt))
 	}
 
@@ -138,18 +139,18 @@ func TestRefreshSystemPrompt_FlagOn_DifferentProvider(t *testing.T) {
 			first120(agent.baseSystemPrompt), first120(refreshedPrompt))
 	}
 
-	// Round-trip back to 128K and assert the full prompt returns. This
+	// Round-trip back to 200K and assert the full prompt returns. This
 	// catches a regression where refreshSystemPrompt only updates on the
 	// first call (e.g., it shorts out after a successful refresh).
-	agent.setClient(NewMockLLMProviderWithLimit(128_000), api.TestClientType)
+	agent.setClient(NewMockLLMProviderWithLimit(200_000), api.TestClientType)
 
 	roundTripPrompt := agent.GetSystemPrompt()
 	if !strings.Contains(roundTripPrompt, "Orchestrator") {
-		t.Errorf("back-to-128K should restore the full orchestrator prompt (missing 'Orchestrator' marker); got first 200 chars: %q",
+		t.Errorf("back-to-200K should restore the full orchestrator prompt (missing 'Orchestrator' marker); got first 200 chars: %q",
 			first200(roundTripPrompt))
 	}
 	if strings.Contains(roundTripPrompt, "Low-Context Mode") {
-		t.Errorf("back-to-128K should NOT contain 'Low-Context Mode'; got first 200 chars: %q",
+		t.Errorf("back-to-200K should NOT contain 'Low-Context Mode'; got first 200 chars: %q",
 			first200(roundTripPrompt))
 	}
 }

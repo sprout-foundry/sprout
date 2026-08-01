@@ -42,8 +42,8 @@ function WorkspaceGateModal({
           <div>
             <h2 className="workspace-gate-title">Select a workspace</h2>
             <p className="workspace-gate-subtitle">
-              Sprout is running in your home directory, which gives the agent access to all your files.
-              Select a project folder to limit its scope.
+              Sprout is running in your home directory, which gives the agent access to all your files. Select a project
+              folder to limit its scope.
             </p>
           </div>
         </div>
@@ -62,8 +62,8 @@ function WorkspaceGateModal({
             Use my home directory anyway
           </button>
           <p className="workspace-gate-home-warning">
-            Running in your home directory gives the agent unrestricted access to all files and may
-            trigger macOS permission prompts for protected folders like Music and Photos.
+            Running in your home directory gives the agent unrestricted access to all files and may trigger macOS
+            permission prompts for protected folders like Music and Photos.
           </p>
         </div>
       </div>

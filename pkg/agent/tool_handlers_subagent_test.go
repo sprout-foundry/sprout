@@ -660,3 +660,40 @@ func TestSubagentManifestEndToEnd(t *testing.T) {
 		t.Errorf("original stdout should still be present after the header; got:\n%s", ret.Output)
 	}
 }
+
+// TestCollectParallelResults_AggregatesStructuredCost tracks the SP fix that
+// migrated the parallel-subagent cost rollup off regex-scraping
+// SUBAGENT_METRICS: lines out of stdout. That line is no longer emitted and
+// its parse branch has been removed entirely, so the scrape would have
+// silently aggregated $0. collectParallelResults now reads the structured
+// SubagentResult.Cost / TokensUsed fields — the same source the single-
+// subagent path uses — and rolls them into the parent agent's totals.
+func TestCollectParallelResults_AggregatesStructuredCost(t *testing.T) {
+	a := newMetricsTestAgent(t)
+
+	results := []*SubagentResult{
+		{ID: "task-1", TokensUsed: 1000, Cost: 0.0125},
+		{ID: "task-2", TokensUsed: 2000, Cost: 0.0250},
+		{ID: "task-3", TokensUsed: 0, Cost: 0}, // zero-cost task must be ignored
+	}
+	tasks := []SubagentTask{
+		{ID: "task-1"}, {ID: "task-2"}, {ID: "task-3"},
+	}
+
+	_, failed := collectParallelResults(results, tasks, a)
+	if failed != 0 {
+		t.Fatalf("expected 0 failures, got %d", failed)
+	}
+
+	// Parent totals must reflect only the nonzero results.
+	if got := a.GetTotalTokens(); got != 3000 {
+		t.Errorf("expected parent total tokens to include subagents (3000), got %d", got)
+	}
+	const wantCost = 0.0375
+	if got := a.GetTotalCost(); !floatEq(got, wantCost, 1e-9) {
+		t.Errorf("expected parent total cost to include subagents ($%.4f), got %.6f", wantCost, got)
+	}
+	if got := a.GetChargedCostTotal(); !floatEq(got, wantCost, 1e-9) {
+		t.Errorf("expected parent charged cost to include subagents ($%.4f), got %.6f", wantCost, got)
+	}
+}

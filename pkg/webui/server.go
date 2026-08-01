@@ -186,7 +186,25 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 
 	webuiLogger.Info("web UI startup configuration resolved", slog.String("workspace_root", workspaceRoot), slog.String("daemon_root", daemonRoot), slog.Bool("service_mode", serviceMode), slog.String("daemon_root_source", rootSource))
 	if serviceMode {
-		workspaceRoot = daemonRoot
+		// SP-130: in service mode the daemon's CWD is typically $HOME (baked
+		// into the plist/unit), so blindly defaulting the workspace to the
+		// CWD/daemonRoot means the agent runs with the entire home directory
+		// in scope. Instead, try to restore the most recent valid workspace.
+		// If it exists and is within daemonRoot, use it; otherwise leave
+		// workspaceRoot as the CWD-derived default (home) and let the
+		// frontend gate force explicit selection.
+		if recent := GetMostRecentWorkspace(); recent != "" {
+			if info, err := os.Stat(recent); err == nil && info.IsDir() {
+				if abs, err := filepath.Abs(recent); err == nil {
+					if isWithinWorkspace(abs, daemonRoot) {
+						workspaceRoot = abs
+					}
+				}
+			}
+		}
+		// If no valid recent workspace was found, workspaceRoot stays as the
+		// CWD-derived default — the frontend gate catches home and forces
+		// explicit selection rather than silently running scoped to ~.
 	}
 
 	// Initialize recent workspace tracking.

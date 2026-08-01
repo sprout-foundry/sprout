@@ -1,0 +1,90 @@
+/* WorkspaceGateModal — full-screen blocking overlay (SP-130).
+ * All colors/sizes use design tokens from App.css (no raw hex). */
+
+.workspace-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Scrim: tint the primary background and blur the app behind it. */
+  background: color-mix(in srgb, var(--bg-primary) 90%, transparent);
+  backdrop-filter: blur(4px);
+  overflow-y: auto;
+  padding: var(--space-12);
+}
+
+.workspace-gate-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elevated);
+  max-width: 560px;
+  width: 100%;
+  padding: var(--space-12);
+}
+
+.workspace-gate-header {
+  display: flex;
+  gap: var(--space-6);
+  margin-bottom: var(--space-10);
+}
+
+.workspace-gate-header-icon {
+  color: var(--accent-warning);
+  flex-shrink: 0;
+}
+
+.workspace-gate-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.workspace-gate-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Home-consent (the discouraged path) ──────────────────────────── */
+
+.workspace-gate-home-consent {
+  margin-top: var(--space-10);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+.workspace-gate-home-btn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  /* Transition only the properties we animate — never `transition: all`. */
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.workspace-gate-home-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.workspace-gate-home-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.workspace-gate-home-warning {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin: var(--space-4) 0 0 0;
+  line-height: 1.4;
+}

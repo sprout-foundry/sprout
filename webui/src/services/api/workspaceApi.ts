@@ -63,6 +63,9 @@ function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
     is_project: parseBool(data.is_project),
     project_markers: parseStrArray(data.project_markers),
     needs_workspace_selection: parseBool(data.needs_workspace_selection),
+    // SP-130: home-directory gate fields
+    workspace_is_home: parseBool(data.workspace_is_home),
+    home_dir: String(data.home_dir ?? ''),
     suggested_projects,
     recent_workspaces,
     ...(data.ssh_context != null && typeof data.ssh_context === 'object'
@@ -116,11 +119,12 @@ export async function getWorkspace(fetchFn: typeof fetch): Promise<WorkspaceResp
 export async function setWorkspace(
   fetchFn: typeof fetch,
   path: string,
+  consentHome?: boolean,
 ): Promise<WorkspaceResponse & { message: string }> {
   const response = await fetchFn('/api/workspace', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
+    body: JSON.stringify({ path, consent_home: consentHome ?? false }),
   });
 
   const text = await response.text();
@@ -135,7 +139,12 @@ export async function setWorkspace(
   })();
 
   if (!response.ok) {
-    throw new Error(String(data.error ?? data.message ?? 'Failed to update workspace'));
+    const err = new Error(String(data.error ?? data.message ?? 'Failed to update workspace'));
+    // Attach a structured code so callers can distinguish the home-consent
+    // flow (backend rejects with code: "home_workspace_requires_consent")
+    // from a generic failure. SP-130.
+    if (data.code) (err as Error & { code?: string }).code = String(data.code);
+    throw err;
   }
 
   const isHTML =

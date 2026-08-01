@@ -181,6 +181,11 @@ func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 	// ExecStart executable can be quoted for paths with spaces.
 	// WorkingDirectory, Environment HOME, and EnvironmentFile take literal
 	// unquoted paths — systemd treats quotes as part of the value.
+	//
+	// SPROUT_DAEMON_ROOT scopes daemon storage (sessions, config, workspace
+	// browser) to the user's home. It does NOT set the agent workspace —
+	// since SP-130 the webui gates on explicit workspace selection instead
+	// of silently inheriting home.
 	unit := fmt.Sprintf(`[Unit]
 Description=sprout daemon - AI coding assistant web UI
 After=default.target

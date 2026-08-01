@@ -51,11 +51,13 @@ jobs:
           # from the live API that aren't in configs yet.
           # --update auto-populates new models with pricing + metadata from
           # the provider API, so the agent only needs to verify and correct.
+          set +e
           go run ./cmd/audit_pricing --discover --update --fail-on-drift \
             --configs-dir=pkg/agent_providers/configs \
             --manifest-path=cmd/audit_pricing/manifest.json \
             > /tmp/audit.txt 2>&1
           AUDIT_EXIT=$?
+          set -e
           cat /tmp/audit.txt
 
           if [ "$AUDIT_EXIT" -eq 0 ]; then

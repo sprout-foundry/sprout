@@ -34,12 +34,12 @@ const (
 	// as "use built-in default".
 	ContextModeFull ContextMode = "full"
 
-	// ContextModeLowContext activates the LCM levers (curated 8-tool
+	// ContextModeLowContext activates the LCM levers (curated 12-tool
 	// allowlist, lite prompt, no proactive context, compaction trigger
 	// 0.85, recency 2, repo-map depth 1). AGENTS.md is still injected
 	// (project conventions are mandatory in every mode). Activated
 	// explicitly via config, or auto-detected when the selected model
-	// reports a context window below SubagentMinContext (64K).
+	// reports a context window below 132K.
 	ContextModeLowContext ContextMode = "low_context"
 )
 
@@ -114,8 +114,7 @@ type ContextProfile struct {
 // is its zero value, meaning "use the built-in default" — which is the
 // whole point of the zero-value-is-safe design (the roadmap's lever 5).
 // Returned by ResolveContextProfile whenever the user hasn't opted into
-// LCM and the model's context window is >= SubagentMinContext (64K), or
-// when ContextMode == "".
+// LCM and the model's context window is >= 132K, or when ContextMode == "".
 var fullContextProfile = ContextProfile{
 	Mode: ContextModeFull,
 }
@@ -134,9 +133,13 @@ var lowContextProfile = ContextProfile{
 		"write_file",
 		"edit_file",
 		"search_files",
+		"repo_map",
+		"web_search",
+		"fetch_url",
 		"commit",
 		"list_changes",
 		"recover_file",
+		"run_subagent",
 	},
 	SystemPromptPath:          "prompts/system_prompt.lite.md",
 	SkipProactiveContext:      true,
@@ -145,14 +148,10 @@ var lowContextProfile = ContextProfile{
 	RepoMapDefaultDepth:       1,
 }
 
-// subagentContextThreshold mirrors modelcontract.SubagentMinContext (64K)
-// locally so this package does not introduce a cfg→modelcontract import
-// edge. The two constants track each other intentionally; if they ever
-// diverge, the resolution function should be updated to import the
-// canonical modelcontract value. Kept as a private var (not exported)
-// because the threshold is an implementation detail of ResolveContextProfile,
-// not a knob callers need.
-const subagentContextThreshold = 64_000
+// subagentContextThreshold is the context window below which LCM auto-activates.
+// Set at 132K — just above the upper bound of most 128K-class models (128K–131K)
+// so they all get the lite profile. Models ≥ 132K use the full prompt and tool set.
+const subagentContextThreshold = 132_000
 
 // ResolveContextProfile picks the effective profile from the user's
 // config plus the detected model context window. Called once at agent
@@ -173,9 +172,7 @@ const subagentContextThreshold = 64_000
 //     field has overridden any window-based guess.
 //
 //  3. Auto-detect — a known context window below subagentContextThreshold
-//     (64K) flips LCM on with a strong warning (callers can detect the
-//     auto-detect case by comparing the returned Mode to what cfg
-//     requested, or via a future explicit-notice hook).
+//     (132K) flips LCM on.
 //
 //  4. Default — fullContextProfile. Applies when cfg is nil, when
 //     cfg.ContextMode is empty or unrecognized, or when the model

@@ -762,25 +762,27 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	tools := ag.getOptimizedToolDefinitions(nil)
 	lcmTools := map[string]bool{
 		"shell_command": true, "read_file": true, "write_file": true,
-		"edit_file": true, "search_files": true, "commit": true,
-		"list_changes": true, "recover_file": true,
+		"edit_file": true, "search_files": true, "repo_map": true,
+		"web_search": true, "fetch_url": true,
+		"commit": true, "list_changes": true, "recover_file": true,
+		"run_subagent": true,
 	}
 	if len(tools) != len(lcmTools) {
 		var names []string
 		for _, tool := range tools {
 			names = append(names, tool.Function.Name)
 		}
-		t.Errorf("CLI path should produce LCM 8-tool allowlist at 32K; got %d tools: %v", len(tools), names)
+		t.Errorf("CLI path should produce LCM 12-tool allowlist at 32K; got %d tools: %v", len(tools), names)
 	}
 }
 
-// TestCLIPath_FullContextAt128K verifies the negative case: at 128K
+// TestCLIPath_FullContextAt200K verifies the negative case: at 200K
 // the CLI path should NOT activate LCM, the full prompt should be
 // loaded, and the LCM marker should be absent. Same content-based
 // body assertion as the 32K test, anchored against the embedded full
 // prompt's body.
-func TestCLIPath_FullContextAt128K(t *testing.T) {
-	manager, _, cleanup := cliPathTestEnv(t, 128_000)
+func TestCLIPath_FullContextAt200K(t *testing.T) {
+	manager, _, cleanup := cliPathTestEnv(t, 200_000)
 	defer cleanup()
 
 	workspaceRoot := t.TempDir()
@@ -791,7 +793,7 @@ func TestCLIPath_FullContextAt128K(t *testing.T) {
 	defer ag.Shutdown()
 
 	if ag.contextProfile.Mode == configuration.ContextModeLowContext {
-		t.Errorf("128K context should not activate LCM, got %q", ag.contextProfile.Mode)
+		t.Errorf("200K context should not activate LCM, got %q", ag.contextProfile.Mode)
 	}
 
 	assertPromptContainsBody(t, ag.GetSystemPrompt(), ag.contextProfile, "full")

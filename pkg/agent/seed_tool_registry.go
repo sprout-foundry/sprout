@@ -8,6 +8,7 @@ import (
 
 	core "github.com/sprout-foundry/seed/core"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // NewSeedToolRegistry creates a seed core.ToolRegistry with all 30 sprout tools
@@ -53,8 +54,23 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 
 	// Register all tools from the handler-based tool registry.
 	for _, h := range tools.GetNewToolRegistry().All() {
-		if agent != nil && !agent.CanSpawnSubagents() && (h.Name() == "run_subagent" || h.Name() == "run_parallel_subagents") {
-			continue
+		if agent != nil {
+			// Filter run_parallel_subagents in LCM mode (causes file conflicts)
+			// In full mode, allow if depth permits
+			if h.Name() == "run_parallel_subagents" {
+				if agent.contextProfile.Mode == configuration.ContextModeLowContext {
+					continue
+				}
+				if !agent.CanSpawnSubagents() {
+					continue
+				}
+			}
+			// For run_subagent, respect depth limit in all modes
+			if h.Name() == "run_subagent" {
+				if !agent.CanSpawnSubagents() {
+					continue
+				}
+			}
 		}
 		if err := registry.Register(convertHandlerToSeedToolConfig(h, agent)); err != nil {
 			panic(fmt.Sprintf("seed registry: failed to register %q: %v", h.Name(), err))

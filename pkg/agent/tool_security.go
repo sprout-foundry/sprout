@@ -54,14 +54,33 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 	// (e.g., EA (depth=0) → orchestrator (depth=1) → coder/tester (depth=2)).
 	// ask_user is NOT blocked for subagents — they share the event bus and questions
 	// are routed through the same WebUI/CLI prompt mechanism as the primary agent.
-	if agent != nil && !agent.CanSpawnSubagents() {
-		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
+	if agent != nil {
+		// In LCM mode, block parallel subagents (causes file conflicts)
+		// In full mode, allow if depth permits
+		if toolName == "run_parallel_subagents" {
+			if agent.contextProfile.Mode == configuration.ContextModeLowContext {
+				return nil, "", agenterrors.NewSecurityError("parallel subagents not supported in low-context mode", nil)
+			}
+			if !agent.CanSpawnSubagents() {
+				errMsg := fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
+					"This restriction prevents runaway agent chains and ensures proper task delegation. "+
+					"If you need additional work done, please complete your current task and return "+
+					"your results to the parent agent for further delegation.",
+					agent.SubagentDepth(), agent.MaxSubagentDepth())
+				if agent != nil && agent.debug {
+					agent.debugLog("[NO] Blocked subagent tool '%s' at depth %d (max: %d)\n", toolName, agent.SubagentDepth(), agent.MaxSubagentDepth())
+				}
+				return nil, "", agenterrors.NewSecurityError(errMsg, nil)
+			}
+		}
+		// For run_subagent, respect depth limit in all modes
+		if toolName == "run_subagent" && !agent.CanSpawnSubagents() {
 			errMsg := fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 				"This restriction prevents runaway agent chains and ensures proper task delegation. "+
 				"If you need additional work done, please complete your current task and return "+
 				"your results to the parent agent for further delegation.",
 				agent.SubagentDepth(), agent.MaxSubagentDepth())
-			if agent != nil && agent.debug {
+			if agent.debug {
 				agent.debugLog("[NO] Blocked subagent tool '%s' at depth %d (max: %d)\n", toolName, agent.SubagentDepth(), agent.MaxSubagentDepth())
 			}
 			return nil, "", agenterrors.NewSecurityError(errMsg, nil)

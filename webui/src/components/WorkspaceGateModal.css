@@ -68,7 +68,10 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   /* Transition only the properties we animate — never `transition: all`. */
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .workspace-gate-home-btn:hover {

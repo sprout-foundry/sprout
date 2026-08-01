@@ -185,6 +185,16 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	}
 
 	webuiLogger.Info("web UI startup configuration resolved", slog.String("workspace_root", workspaceRoot), slog.String("daemon_root", daemonRoot), slog.Bool("service_mode", serviceMode), slog.String("daemon_root_source", rootSource))
+
+	// Resolve daemonRoot symlinks early so the recent-workspace check below
+	// compares canonical paths (recent-workspace paths are stored after
+	// filepathAbsEval → EvalSymlinks). Without this, /var/folders vs
+	// /private/var/folders on macOS produces false negatives.
+	resolvedDaemonRoot := daemonRoot
+	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
+		resolvedDaemonRoot = evaled
+	}
+
 	if serviceMode {
 		// SP-130: in service mode the daemon's CWD is typically $HOME (baked
 		// into the plist/unit), so blindly defaulting the workspace to the
@@ -196,7 +206,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		if recent := GetMostRecentWorkspace(); recent != "" {
 			if info, err := os.Stat(recent); err == nil && info.IsDir() {
 				if abs, err := filepath.Abs(recent); err == nil {
-					if isWithinWorkspace(abs, daemonRoot) {
+					if isWithinWorkspace(abs, resolvedDaemonRoot) {
 						workspaceRoot = abs
 					}
 				}

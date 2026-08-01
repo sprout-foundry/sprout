@@ -35,9 +35,13 @@ type ProviderConfig struct {
 	Defaults    RequestDefaults   `json:"defaults"`
 	Conversion  MessageConversion `json:"message_conversion"`
 	Streaming   StreamingConfig   `json:"streaming"`
-	Models      ModelConfig       `json:"models"`
-	Retry       RetryConfig       `json:"retry"`
-	Cost        CostConfig        `json:"cost"`
+	// Backend identifies the serving backend type. When set to "auto"
+	// (default), the provider probes the endpoint to detect the backend.
+	// Explicit values ("openai", "vllm", "llamacpp") skip detection.
+	Backend string      `json:"backend,omitempty"`
+	Models  ModelConfig `json:"models"`
+	Retry   RetryConfig `json:"retry"`
+	Cost    CostConfig  `json:"cost"`
 }
 
 // AuthConfig defines authentication configuration
@@ -235,6 +239,14 @@ func (c *ProviderConfig) BillingTypeResolved() string {
 	return BillingPayPerToken
 }
 
+// BackendResolved returns the effective backend type, defaulting to "auto".
+func (c *ProviderConfig) BackendResolved() BackendType {
+	if c.Backend == "" {
+		return BackendAuto
+	}
+	return BackendType(c.Backend)
+}
+
 // Validate validates the provider configuration
 func (c *ProviderConfig) Validate() error {
 	if c.Name == "" {
@@ -256,9 +268,13 @@ func (c *ProviderConfig) Validate() error {
 
 // validateModelConfig validates the model configuration
 func (c *ProviderConfig) validateModelConfig() error {
-	// At least one of default_context_limit or context_limit should be set
-	if c.Models.DefaultContextLimit == 0 && c.Models.ContextLimit == 0 {
-		return errors.New("either default_context_limit or context_limit must be set")
+	// When a backend is explicitly configured (including "auto"), the context
+	// limit can be inferred from the endpoint at runtime — skip the requirement.
+	// Only enforce for legacy configs that don't set a backend at all.
+	if c.Backend == "" {
+		if c.Models.DefaultContextLimit == 0 && c.Models.ContextLimit == 0 {
+			return errors.New("either default_context_limit or context_limit must be set (or set backend to \"auto\" for endpoint inference)")
+		}
 	}
 
 	// Validate model overrides are positive

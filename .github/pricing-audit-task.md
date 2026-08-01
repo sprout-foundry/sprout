@@ -16,8 +16,10 @@ go run ./cmd/audit_pricing --discover --update \
 
 This calls each provider's live `/models` endpoint, compares against the
 embedded configs, and auto-adds new models with pricing + context + capabilities
-from the API (or OpenRouter as a reference). It also adds pricing entries to
-the manifest for each new model.
+from the API. When a provider's API is unreachable (no API key, 403, etc.),
+discovery falls back to OpenRouter's public model list, which aggregates all
+major providers with pricing and capabilities — no key needed. Models from
+the fallback are marked `[estimated]` because OpenRouter prices include markup.
 
 **Review what was auto-populated.** API-returned pricing is usually correct
 for OpenRouter, DeepInfra, and Chutes (they expose it directly). For other
@@ -53,9 +55,16 @@ models (flagship, commonly used), enrich:
 - `tags` — capabilities like `["tools"]`, `["vision"]`, `["reasoning"]`
 - `context_length` — if the API returned 0, look up the correct value
 - `name` — display name if the API only returned the ID
+- `model ID case` — some providers (ZAI) use mixed case in config but lowercase
+  in the API/OpenRouter. Reconcile by updating config IDs to match the provider's
+  official naming (check the provider's docs for canonical case)
 
 Don't spend time on obscure/little-used models — focus on flagship and
 recently-released models that users would select.
+
+**Estimated pricing:** Models discovered via OpenRouter fallback have prices
+marked `[estimated]` because OpenRouter adds markup. Always cross-check these
+against the provider's official pricing page and update with real prices.
 
 ### Step 4 — Flag stale models
 

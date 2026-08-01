@@ -19,29 +19,86 @@ import (
 // provider's config file. It drives both the report and the auto-update logic.
 type DiscoverResult struct {
 	ProviderID  string
-	APIError    string                         // non-empty if the live API call failed
+	Source      string                         // "native", "openrouter-fallback" (empty = native)
+	APIError    string                         // non-empty if both native and fallback failed
 	NewModels   []modelcontract.CanonicalModel // in live API but NOT in config
 	StaleModels []string                       // in config but NOT in live API
+}
+
+// providerToOpenRouterOrg maps sprout provider IDs to OpenRouter's org prefix
+// (the part before the / in "org/model"). Used for fallback discovery when
+// the native provider API is unreachable (no API key, 403, etc.).
+var providerToOpenRouterOrg = map[string]string{
+	"openai":       "openai",
+	"deepseek":     "deepseek",
+	"mistral":      "mistralai",
+	"zai":          "z-ai",
+	"zai-coding":   "z-ai",
+	"minimax":      "minimax",
+	"deepinfra":    "", // DeepInfra uses its own org/model IDs natively
+	"openrouter":   "", // OpenRouter IS the source
+	"cerebras":     "", // no OpenRouter mirror
+	"chutes":       "", // Chutes uses suffixed IDs on OpenRouter
+	"ollama-cloud": "",
+}
+
+// discoverFromOpenRouter fetches OpenRouter's public model list and filters
+// to models matching the provider's org prefix. Returns canonical models with
+// pricing, context, and capabilities from OpenRouter. No API key needed.
+func discoverFromOpenRouter(ctx context.Context, providerID string) ([]modelcontract.CanonicalModel, error) {
+	org, ok := providerToOpenRouterOrg[providerID]
+	if !ok || org == "" {
+		return nil, fmt.Errorf("no OpenRouter org mapping for %s", providerID)
+	}
+
+	canon, err := modelcontract.OpenRouterAdapter{}.ListModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("openrouter fallback: %w", err)
+	}
+
+	prefix := org + "/"
+	out := make([]modelcontract.CanonicalModel, 0)
+	for _, m := range canon {
+		if !strings.HasPrefix(m.ID, prefix) {
+			continue
+		}
+		// Strip the org/ prefix to get the native model ID (e.g.
+		// "openai/gpt-5.4" → "gpt-5.4", "z-ai/glm-5" → "glm-5").
+		m.ID = strings.TrimPrefix(m.ID, prefix)
+		m.Provider = providerID
+		// Mark pricing as estimated since OpenRouter prices include markup.
+		if m.Pricing != nil {
+			m.Pricing.Estimated = true
+			m.Pricing.Source = "openrouter-fallback"
+		}
+		out = append(out, m)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("openrouter fallback: no models found for %s", providerID)
+	}
+	return out, nil
 }
 
 // discoverProvider calls the live provider API to list models and compares
 // the result against the provider's config file. Returns the set of models
 // that exist in the live API but not in the embedded config (new) and vice
-// versa (stale). If the API call fails, APIError is set and no comparison
-// is performed.
+// versa (stale). If the native API call fails, it falls back to OpenRouter's
+// public model list as a discovery source.
 func discoverProvider(ctx context.Context, providerID, configPath string) DiscoverResult {
 	dr := DiscoverResult{ProviderID: providerID}
 
-	clientType, err := api.ParseProviderName(providerID)
-	if err != nil {
-		dr.APIError = err.Error()
-		return dr
-	}
-
-	canon, err := api.GetCanonicalModelsForProvider(ctx, clientType)
-	if err != nil {
-		dr.APIError = err.Error()
-		return dr
+	canon, apiErr := discoverFromNativeAPI(ctx, providerID)
+	if apiErr != "" {
+		// Fall back to OpenRouter's public model list.
+		orCanon, orErr := discoverFromOpenRouter(ctx, providerID)
+		if orErr != nil {
+			dr.APIError = fmt.Sprintf("native: %s; openrouter fallback: %v", apiErr, orErr)
+			return dr
+		}
+		canon = orCanon
+		dr.Source = "openrouter-fallback"
+	} else {
+		dr.Source = "native"
 	}
 
 	// Build a set of config model IDs for comparison.
@@ -71,6 +128,20 @@ func discoverProvider(ctx context.Context, providerID, configPath string) Discov
 	})
 	sort.Strings(dr.StaleModels)
 	return dr
+}
+
+// discoverFromNativeAPI calls the provider's own /models endpoint via the
+// canonical adapter. Returns the error string (empty on success).
+func discoverFromNativeAPI(ctx context.Context, providerID string) ([]modelcontract.CanonicalModel, string) {
+	clientType, err := api.ParseProviderName(providerID)
+	if err != nil {
+		return nil, err.Error()
+	}
+	canon, err := api.GetCanonicalModelsForProvider(ctx, clientType)
+	if err != nil {
+		return nil, err.Error()
+	}
+	return canon, ""
 }
 
 // canonicalToConfigEntry converts a discovered canonical model into a JSON
@@ -250,7 +321,11 @@ func formatDiscoverReport(results []DiscoverResult) string {
 		if len(dr.NewModels) == 0 && len(dr.StaleModels) == 0 {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("\n%s\n", dr.ProviderID))
+		sourceTag := ""
+		if dr.Source != "" {
+			sourceTag = fmt.Sprintf("  (via %s)", dr.Source)
+		}
+		sb.WriteString(fmt.Sprintf("\n%s%s\n", dr.ProviderID, sourceTag))
 		for _, m := range dr.NewModels {
 			in, out := 0.0, 0.0
 			if m.Pricing != nil {

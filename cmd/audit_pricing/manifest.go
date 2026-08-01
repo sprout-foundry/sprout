@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"os"
 )
 
 // PricingEntry is the verified pricing for a single model.
@@ -28,7 +29,7 @@ var manifestJSON []byte
 
 // manifests is the authoritative pricing truth keyed by provider ID.
 // Loaded from the embedded manifest.json file. When providers change pricing,
-// a human or the --fetch mode updates this file and the audit catches config drift.
+// a human or the --discover mode updates this file and the audit catches config drift.
 var manifests = loadManifest()
 
 func loadManifest() map[string]ProviderManifest {
@@ -40,4 +41,16 @@ func loadManifest() map[string]ProviderManifest {
 		m = make(map[string]ProviderManifest)
 	}
 	return m
+}
+
+// saveManifest writes the full manifest map back to disk as indented JSON.
+func saveManifest(path string, m map[string]ProviderManifest) error {
+	out, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal manifest: %w", err)
+	}
+	if err := os.WriteFile(path, append(out, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write manifest: %w", err)
+	}
+	return nil
 }

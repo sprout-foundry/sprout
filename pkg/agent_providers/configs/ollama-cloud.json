@@ -1,50 +1,255 @@
 {
   "auth": {
-  "env_var": "OLLAMA_API_KEY",
-  "type": "bearer"
-},
+    "env_var": "OLLAMA_API_KEY",
+    "type": "bearer"
+  },
   "cost": {
-  "currency": "USD",
-  "input_token_cost": 0,
-  "output_token_cost": 0
-},
+    "currency": "USD",
+    "input_token_cost": 0,
+    "output_token_cost": 0
+  },
   "defaults": {
-  "max_tokens": -1,
-  "model": "deepseek-v3.1:671b",
-  "temperature": 0.7,
-  "top_p": 1
-},
+    "max_tokens": -1,
+    "model": "deepseek-v3.1:671b",
+    "temperature": 0.7,
+    "top_p": 1
+  },
+  "display_name": "Ollama (Cloud)",
   "endpoint": "https://ollama.com/v1/chat/completions",
   "headers": {},
   "message_conversion": {
-  "convert_tool_role_to_user": false,
-  "include_tool_call_id": true,
-  "reasoning_content_field": "reasoning_content"
-},
+    "convert_tool_role_to_user": false,
+    "include_tool_call_id": true,
+    "reasoning_content_field": "reasoning_content"
+  },
   "models": {
-  "available_models": [],
-  "default_context_limit": 131072,
-  "default_model": "deepseek-v3.1:671b",
-  "default_model_patterns": [
-  "gpt-oss:20b"
-]
-},
+    "available_models": [],
+    "default_context_limit": 131072,
+    "default_model": "deepseek-v3.1:671b",
+    "default_model_patterns": [
+      "gpt-oss:20b"
+    ],
+    "model_info": [
+      {
+        "context_length": 1048576,
+        "description": "DeepSeek-V4-Flash - efficient MoE reasoning model (284B total / 13B active) with 1M context",
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "tags": [
+          "tools",
+          "reasoning",
+          "thinking"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "DeepSeek-V4-Flash (July 31 snapshot) - efficient MoE reasoning model with 1M context",
+        "id": "deepseek-v4-flash:0731",
+        "name": "DeepSeek V4 Flash (0731)",
+        "tags": [
+          "tools",
+          "reasoning",
+          "thinking"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "DeepSeek-V4-Pro - flagship frontier MoE model (1.6T total / 49B active) with 1M context",
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "tags": [
+          "tools",
+          "reasoning",
+          "thinking",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Gemma 4 31B - Google's open multimodal model with strong reasoning and tool use",
+        "id": "gemma4:31b",
+        "name": "Gemma 4 31B",
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 202752,
+        "description": "GLM-5.1 - Z.ai's flagship agentic model with strong coding and tool use",
+        "id": "glm-5.1",
+        "name": "GLM-5.1",
+        "tags": [
+          "tools",
+          "coding",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "GLM-5.2 - Z.ai's latest flagship with 1M context and frontier agentic performance",
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "tags": [
+          "tools",
+          "coding",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "GPT-OSS 120B - OpenAI's open-weight MoE model for coding and reasoning",
+        "id": "gpt-oss:120b",
+        "name": "GPT-OSS 120B",
+        "tags": [
+          "tools",
+          "reasoning",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "GPT-OSS 20B - OpenAI's efficient open-weight model for everyday tasks",
+        "id": "gpt-oss:20b",
+        "name": "GPT-OSS 20B",
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Kimi K2.6 - Moonshot's flagship agentic model for complex tool use and long-horizon tasks",
+        "id": "kimi-k2.6",
+        "name": "Kimi K2.6",
+        "tags": [
+          "tools",
+          "coding",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Kimi K2.7 Code - Moonshot's coding-focused agentic model with improved long-horizon task completion",
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "tags": [
+          "tools",
+          "coding",
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Kimi K3 - Moonshot's frontier model with 1M context and advanced agentic capabilities",
+        "id": "kimi-k3",
+        "name": "Kimi K3",
+        "tags": [
+          "tools",
+          "coding",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 196608,
+        "description": "MiniMax M2.7 - enhanced M2.5 with improved reasoning and coding capabilities",
+        "id": "minimax-m2.7",
+        "name": "MiniMax M2.7",
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "MiniMax M3 - frontier multimodal model with 1M context, native vision, and strong coding/agentic capabilities",
+        "id": "minimax-m3",
+        "name": "MiniMax M3",
+        "tags": [
+          "coding",
+          "tools",
+          "vision",
+          "multimodal",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Mistral Large 3 - general-purpose multimodal MoE model for enterprise workloads",
+        "id": "mistral-large-3:675b",
+        "name": "Mistral Large 3",
+        "tags": [
+          "tools",
+          "vision",
+          "multimodal"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "Nemotron 3 Nano 30B - NVIDIA's compact multimodal omni model for low-latency assistant tasks",
+        "id": "nemotron-3-nano:30b",
+        "name": "Nemotron 3 Nano 30B",
+        "tags": [
+          "tools",
+          "vision",
+          "multimodal"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Nemotron 3 Super - NVIDIA's 120B MoE model (12B active) for multi-agent applications",
+        "id": "nemotron-3-super",
+        "name": "Nemotron 3 Super",
+        "tags": [
+          "tools",
+          "reasoning",
+          "thinking"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Nemotron 3 Ultra - NVIDIA's 550B MoE model (55B active) for long-running agentic workflows",
+        "id": "nemotron-3-ultra",
+        "name": "Nemotron 3 Ultra",
+        "tags": [
+          "tools",
+          "reasoning",
+          "thinking",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.5 397B A17B - Alibaba's flagship MoE model with frontier reasoning and coding",
+        "id": "qwen3.5:397b",
+        "name": "Qwen3.5 397B",
+        "tags": [
+          "tools",
+          "reasoning",
+          "coding",
+          "vision"
+        ]
+      }
+    ]
+  },
   "name": "ollama-cloud",
   "retry": {
-  "backoff_multiplier": 2,
-  "base_delay_ms": 1000,
-  "max_attempts": 3,
-  "max_delay_ms": 30000,
-  "retryable_errors": [
-  "rate_limit_exceeded",
-  "temporary_error",
-  "timeout"
-]
-},
+    "backoff_multiplier": 2,
+    "base_delay_ms": 1000,
+    "max_attempts": 3,
+    "max_delay_ms": 30000,
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
+    ]
+  },
   "streaming": {
-  "chunk_timeout_ms": 300000,
-  "done_marker": "[DONE]",
-  "format": "sse"
-},
-  "display_name": "Ollama (Cloud)"
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]",
+    "format": "sse"
+  }
 }

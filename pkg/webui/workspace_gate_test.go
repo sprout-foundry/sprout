@@ -123,3 +123,65 @@ func TestSetClientWorkspaceRootRejectsHome(t *testing.T) {
 		t.Fatalf("expected workspace root %q, got %q", resolvedHome, got)
 	}
 }
+
+// TestHasHomeWorkspaceConsent_MalformedFile verifies that hasHomeWorkspaceConsent
+// fails closed on every form of malformed consent file: invalid JSON, a null
+// timestamp, an empty timestamp, and a missing timestamp field. Only a valid
+// timestamp should result in true. This guards against a corrupt or
+// hand-edited file silently granting consent.
+//
+// Test isolation is achieved by pointing HOME at a temp directory so the
+// consent file lives under the temp home, not the real ~/.sprout/.
+func TestHasHomeWorkspaceConsent_MalformedFile(t *testing.T) {
+	// Each subtest gets its own temp HOME so consent state never leaks between
+	// cases (writeConsentFile always writes to the *current* HOME).
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "invalid JSON",
+			content: "{this is not valid json",
+			want:    false,
+		},
+		{
+			name:    "null consented_at",
+			content: `{"home_workspace":{"consented_at":null}}`,
+			want:    false,
+		},
+		{
+			name:    "empty consented_at",
+			content: `{"home_workspace":{"consented_at":""}}`,
+			want:    false,
+		},
+		{
+			name:    "valid timestamp",
+			content: `{"home_workspace":{"consented_at":"2025-01-02T15:04:05Z"}}`,
+			want:    true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpHome := t.TempDir()
+			t.Setenv("HOME", tmpHome)
+
+			consentPath := homeConsentPath()
+			if !strings.HasPrefix(consentPath, tmpHome) {
+				t.Fatalf("consent path %q is not under temp home %q", consentPath, tmpHome)
+			}
+			if err := os.MkdirAll(filepath.Dir(consentPath), 0700); err != nil {
+				t.Fatalf("mkdir consent dir: %v", err)
+			}
+			if err := os.WriteFile(consentPath, []byte(tc.content), 0600); err != nil {
+				t.Fatalf("write consent file: %v", err)
+			}
+
+			got := hasHomeWorkspaceConsent()
+			if got != tc.want {
+				t.Errorf("hasHomeWorkspaceConsent() with %s = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}

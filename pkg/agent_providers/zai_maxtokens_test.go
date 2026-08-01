@@ -12,7 +12,7 @@ import (
 // with stricter limits (e.g., ZAI's 131072 limit).
 func TestMaxTokensGlobalCap(t *testing.T) {
 	providers := []struct {
-		name string
+		name   string
 		config *ProviderConfig
 	}{
 		{

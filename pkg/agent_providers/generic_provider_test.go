@@ -156,7 +156,7 @@ func TestProviderFactoryValidation(t *testing.T) {
 	}{
 		{"openrouter", "openai/gpt-5", true},
 		{"deepinfra", "meta-llama/Llama-3.3-70B-Instruct", true},
-		{"zai", "GLM-4.6", true},
+		{"zai", "glm-4.6", true},
 		{"nonexistent", "any-model", false},
 		{"openrouter", "nonexistent-model", true}, // Won't fail since available models is empty
 	}

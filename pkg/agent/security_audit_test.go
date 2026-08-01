@@ -435,10 +435,10 @@ func TestAuditLogger_RealLoggerCatchesFilesystemEntry(t *testing.T) {
 	}
 	defer logger.Close()
 
-	// Create a test workspace in /var/tmp (not /tmp, so audit is emitted).
-	workspace := filepath.Join("/var/tmp", "fs-real-logger-test-"+t.Name())
-	os.MkdirAll(workspace, 0755)
-	defer os.RemoveAll(workspace)
+	// Create a test workspace using t.TempDir (guaranteed to exist on all
+	// platforms). The workspace location doesn't affect the test — only the
+	// target path (/etc/passwd) matters for triggering the filesystem gate.
+	workspace := t.TempDir()
 
 	// Build a filesystem context with the real logger.
 	ctx := context.Background()

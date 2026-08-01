@@ -335,32 +335,19 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 		}
 	}
 
-	// Track costs from all parallel subagents
-	for taskID, result := range resultMap {
-		if stdout, ok := result["stdout"]; ok {
-			summary := extractSubagentSummary(stdout)
-
-			// Track subagent costs in parent agent's totals
-			if totalTokensStr, ok := summary["subagent_total_tokens"]; ok {
-				if totalCostStr, ok := summary["subagent_total_cost"]; ok {
-					promptTokensStr := summary["subagent_prompt_tokens"]
-					completionTokensStr := summary["subagent_completion_tokens"]
-					cachedTokensStr := summary["subagent_cached_tokens"]
-
-					// Parse the values
-					var totalTokens, promptTokens, completionTokens, cachedTokens int
-					var totalCost float64
-					fmt.Sscanf(totalTokensStr, "%d", &totalTokens)
-					fmt.Sscanf(promptTokensStr, "%d", &promptTokens)
-					fmt.Sscanf(completionTokensStr, "%d", &completionTokens)
-					fmt.Sscanf(cachedTokensStr, "%d", &cachedTokens)
-					fmt.Sscanf(totalCostStr, "%f", &totalCost)
-
-					// Add to parent agent's totals using TrackMetricsFromResponse
-					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens, 0, 0)
-					a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", taskID, totalTokens, totalCost)
-				}
-			}
+	// Track costs from all parallel subagents using the structured
+	// SubagentResult fields. This mirrors the single-subagent path
+	// (extractAndTrackSubagentSummary), which switched away from regex-
+	// scraping SUBAGENT_METRICS: lines out of stdout because nothing
+	// emits that line anymore (PrintConciseSummary is dead code) — the
+	// scrape silently tracked $0. Prompt/completion/cached splits are
+	// not exposed by SubagentResult today, so they're left at zero;
+	// TrackMetricsFromResponse treats them as "unknown split" and still
+	// applies the totals correctly.
+	for _, r := range results {
+		if r.TokensUsed > 0 || r.Cost > 0 {
+			a.TrackMetricsFromResponse(0, 0, int(r.TokensUsed), r.Cost, 0, 0, 0)
+			a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", r.ID, r.TokensUsed, r.Cost)
 		}
 	}
 

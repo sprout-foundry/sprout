@@ -91,6 +91,7 @@ You may modify:
 - `cmd/audit_pricing/manifest.json` — pricing manifest
 - `cmd/audit_pricing/manifest.go` — if structural changes are needed
 - `cmd/audit_pricing/*.go` — audit tool source code if you find bugs
+- `pkg/agent_providers/*.go` — provider code if a newly discovered model requires a fix
 
 ### Rules
 - Prices are USD per 1M tokens

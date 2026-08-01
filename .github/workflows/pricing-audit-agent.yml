@@ -119,7 +119,7 @@ jobs:
           fi
           for f in $CHANGED; do
             case "$f" in
-              pkg/agent_providers/configs/*.json|cmd/audit_pricing/*.json|cmd/audit_pricing/*.go) ;;
+              pkg/agent_providers/configs/*.json|cmd/audit_pricing/*.json|cmd/audit_pricing/*.go|pkg/agent_providers/*.go) ;;
               *) echo "ERROR: unexpected file changed: $f"; exit 1 ;;
             esac
           done

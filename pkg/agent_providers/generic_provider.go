@@ -38,6 +38,11 @@ type GenericProvider struct {
 	// calls (e.g. multiple SetModel in quick succession).
 	warmPending atomic.Bool
 
+	// detectedBackend caches the auto-detected backend type. Set once
+	// during ListModels and reused for subsequent calls. Guarded by mu.
+	detectedBackend BackendType
+	backendDetected bool
+
 	// maxTokensHint, when > 0, overrides the from-scratch CalculateMaxTokensWithLimits
 	// computation in buildChatRequest. Set by callers (sproutProvider) who have
 	// a more accurate token estimate via the token anchor. See MaxTokensHinter.
@@ -395,12 +400,17 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 // GetModelContextLimit so a slow network can't stall the agent loop.
 const modelregistryFetchTimeout = 2 * time.Second
 
-// ListModels returns available models
-// Priority:
-// 1. Fetch from provider API models endpoint (primary source of truth)
-// 2. Enrich endpoint data with config (context_length, tags, name)
-// 3. Fall back to config model_info if endpoint fails
-// 4. Final fallback: return just current model
+// ListModels returns available models.
+//
+// Dispatches to a backend-specific fetcher based on the configured or
+// auto-detected backend type:
+//   - openai: standard OpenAI-compatible /models endpoint (default)
+//   - vllm: vLLM /get_model_info + /models merge
+//   - llamacpp: llama.cpp /props + /models merge
+//   - auto: probe endpoint once, cache result, dispatch accordingly
+//
+// Results are cached; subsequent calls return the cached list without
+// re-fetching.
 func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	p.mu.RLock()
 	if p.modelsCached && len(p.models) > 0 {
@@ -410,23 +420,77 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 	}
 	p.mu.RUnlock()
 
+	backend := p.effectiveBackend()
+	if backend == BackendAuto {
+		backend = p.detectAndCacheBackend(ctx)
+	}
+
+	switch backend {
+	case BackendVLLM:
+		return p.listModelsVLLM(ctx)
+	case BackendLlamaCPP:
+		return p.listModelsLlamaCPP(ctx)
+	default:
+		return p.listModelsOpenAI(ctx)
+	}
+}
+
+// effectiveBackend returns the backend type to use for model discovery.
+// If the config explicitly sets a backend, that is used directly.
+// Otherwise (auto), detection runs during ListModels and the cached
+// result is returned on subsequent calls.
+func (p *GenericProvider) effectiveBackend() BackendType {
+	if b := p.config.BackendResolved(); b != BackendAuto {
+		return b
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.backendDetected {
+		return p.detectedBackend
+	}
+	return BackendAuto
+}
+
+// detectAndCacheBackend probes the endpoint once, caches the result, and
+// returns the detected BackendType.
+func (p *GenericProvider) detectAndCacheBackend(ctx context.Context) BackendType {
+	p.mu.RLock()
+	if p.backendDetected {
+		detected := p.detectedBackend
+		p.mu.RUnlock()
+		return detected
+	}
+	client := p.httpClient
+	endpoint := p.config.Endpoint
+	p.mu.RUnlock()
+
+	detected := detectBackend(ctx, client, endpoint)
+
+	p.mu.Lock()
+	p.detectedBackend = detected
+	p.backendDetected = true
+	p.mu.Unlock()
+
+	return detected
+}
+
+// listModelsOpenAI fetches models from the standard OpenAI-compatible
+// /models endpoint. This is the original ListModels logic and the default
+// path for all providers.
+func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo, error) {
 	var models []api.ModelInfo
 
-	// Try to fetch models from provider API (OpenAI-compatible endpoint)
 	modelsEndpoint := strings.TrimSuffix(p.config.Endpoint, "/chat/completions") + "/models"
 	req, err := http.NewRequestWithContext(ctx, "GET", modelsEndpoint, nil)
 	if err != nil {
-		// Endpoint construction failed, skip to fallback
 		return p.fallbackToConfigOrCurrent()
 	}
 
 	token, err := p.config.GetAuthToken()
 	if err != nil {
-		// For local instances like LM Studio, skip auth if no token is configured
 		if strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost") {
 			// No auth needed for local instances
 		} else {
-			// Auth failed and not local, skip to fallback
 			return p.fallbackToConfigOrCurrent()
 		}
 	} else {
@@ -434,25 +498,21 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Add custom headers
 	for key, value := range p.config.Headers {
 		req.Header.Set(key, value)
 	}
 
-	// Read httpClient under lock, then release before the network call.
 	p.mu.RLock()
 	client := p.httpClient
 	p.mu.RUnlock()
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// Request failed, skip to fallback
 		return p.fallbackToConfigOrCurrent()
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Models endpoint not available or failed, use fallback
 		return p.fallbackToConfigOrCurrent()
 	}
 
@@ -463,6 +523,7 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 			Created       int64  `json:"created"`
 			OwnedBy       string `json:"owned_by"`
 			ContextLength int    `json:"context_length,omitempty"`
+			MaxModelLen   int    `json:"max_model_len,omitempty"`
 			Pricing       *struct {
 				Prompt     string `json:"prompt,omitempty"`
 				Completion string `json:"completion,omitempty"`
@@ -474,7 +535,6 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 		return nil, agenterrors.NewNetwork("failed to decode models response", err)
 	}
 
-	// Build model list from endpoint data, enriched with config
 	models = make([]api.ModelInfo, 0, len(modelsResponse.Data))
 	for _, model := range modelsResponse.Data {
 		modelInfo := api.ModelInfo{
@@ -483,12 +543,12 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 			Provider: p.config.Name,
 		}
 
-		// Use context_length from endpoint if available
 		if model.ContextLength > 0 {
 			modelInfo.ContextLength = model.ContextLength
+		} else if model.MaxModelLen > 0 {
+			modelInfo.ContextLength = model.MaxModelLen
 		}
 
-		// Enrich with pricing info if available from endpoint
 		if model.Pricing != nil {
 			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
 				modelInfo.InputCost = promptCost
@@ -498,26 +558,21 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 			}
 		}
 
-		// Enrich with config model_info data (context_length, tags, name, description)
 		if configModelInfo := p.config.GetModelInfo(model.ID); configModelInfo != nil {
-			// Only override if endpoint didn't provide context_length
 			if modelInfo.ContextLength <= 0 && configModelInfo.ContextLength > 0 {
 				modelInfo.ContextLength = configModelInfo.ContextLength
 			}
-			// Override name/description from config
 			if configModelInfo.Name != "" {
 				modelInfo.Name = configModelInfo.Name
 			}
 			if configModelInfo.Description != "" {
 				modelInfo.Description = configModelInfo.Description
 			}
-			// Add tags from config
 			if len(configModelInfo.Tags) > 0 {
 				modelInfo.Tags = configModelInfo.Tags
 			}
 		}
 
-		// If still no context_length, use config fallback
 		if modelInfo.ContextLength <= 0 {
 			modelInfo.ContextLength = p.config.GetContextLimit(model.ID)
 		}
@@ -525,7 +580,133 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 		models = append(models, modelInfo)
 	}
 
-	// If we got no models from endpoint, use fallback
+	if len(models) == 0 {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	p.setCachedModels(models)
+	return models, nil
+}
+
+// listModelsVLLM fetches the model list from the OpenAI-compatible /models
+// endpoint and enriches it with context length from vLLM's /get_model_info.
+// If /models fails but /get_model_info succeeds, a single-entry list is
+// built from the current model ID.
+func (p *GenericProvider) listModelsVLLM(ctx context.Context) ([]api.ModelInfo, error) {
+	p.mu.RLock()
+	endpoint := p.config.Endpoint
+	client := p.httpClient
+	currentModel := p.model
+	p.mu.RUnlock()
+
+	token, _ := p.config.GetAuthToken()
+
+	// Fetch context limit from vLLM-specific endpoint
+	vllmCtx, hasVLLMCtx := fetchVLLMContextLimit(ctx, client, endpoint, token)
+
+	// Fetch model list from OpenAI-compat /models
+	rawModels, hasModels := fetchRawModelList(ctx, client, endpoint, token)
+
+	if !hasVLLMCtx && !hasModels {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	var models []api.ModelInfo
+
+	if hasModels {
+		models = make([]api.ModelInfo, 0, len(rawModels))
+		for _, raw := range rawModels {
+			mi := api.ModelInfo{
+				ID:       raw.ID,
+				Name:     raw.ID,
+				Provider: p.config.Name,
+			}
+			// Prefer vLLM's get_model_info, then endpoint fields, then config
+			if hasVLLMCtx {
+				mi.ContextLength = vllmCtx
+			} else if ctxLen := parseContextLengthFromRaw(raw); ctxLen > 0 {
+				mi.ContextLength = ctxLen
+			} else {
+				mi.ContextLength = p.config.GetContextLimit(raw.ID)
+			}
+			models = append(models, mi)
+		}
+	} else if currentModel != "" {
+		ctxLen := vllmCtx
+		if ctxLen == 0 {
+			ctxLen = p.config.GetContextLimit(currentModel)
+		}
+		models = []api.ModelInfo{{
+			ID:            currentModel,
+			Name:          currentModel,
+			Provider:      p.config.Name,
+			ContextLength: ctxLen,
+		}}
+	}
+
+	if len(models) == 0 {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	p.setCachedModels(models)
+	return models, nil
+}
+
+// listModelsLlamaCPP fetches the model list from the OpenAI-compatible
+// /models endpoint and enriches it with context length from llama.cpp's
+// /props endpoint. If /models fails but /props succeeds, a single-entry
+// list is built from the current model ID.
+func (p *GenericProvider) listModelsLlamaCPP(ctx context.Context) ([]api.ModelInfo, error) {
+	p.mu.RLock()
+	endpoint := p.config.Endpoint
+	client := p.httpClient
+	currentModel := p.model
+	p.mu.RUnlock()
+
+	token, _ := p.config.GetAuthToken()
+
+	// Fetch context limit from llama.cpp-specific endpoint
+	llamaCtx, hasLlamaCtx := fetchLlamaCPPContextLimit(ctx, client, endpoint, token)
+
+	// Fetch model list from OpenAI-compat /models
+	rawModels, hasModels := fetchRawModelList(ctx, client, endpoint, token)
+
+	if !hasLlamaCtx && !hasModels {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	var models []api.ModelInfo
+
+	if hasModels {
+		models = make([]api.ModelInfo, 0, len(rawModels))
+		for _, raw := range rawModels {
+			mi := api.ModelInfo{
+				ID:       raw.ID,
+				Name:     raw.ID,
+				Provider: p.config.Name,
+			}
+			if hasLlamaCtx {
+				mi.ContextLength = llamaCtx
+			} else if ctxLen := parseContextLengthFromRaw(raw); ctxLen > 0 {
+				mi.ContextLength = ctxLen
+			} else {
+				mi.ContextLength = p.config.GetContextLimit(raw.ID)
+			}
+			models = append(models, mi)
+		}
+	} else if currentModel != "" {
+		ctxLen := llamaCtx
+		if ctxLen == 0 {
+			ctxLen = p.config.GetContextLimit(currentModel)
+		}
+		models = []api.ModelInfo{{
+			ID:            currentModel,
+			Name:          currentModel,
+			Provider:      p.config.Name,
+			ContextLength: ctxLen,
+		}}
+	}
+
 	if len(models) == 0 {
 		return p.fallbackToConfigOrCurrent()
 	}

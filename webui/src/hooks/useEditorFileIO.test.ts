@@ -702,8 +702,11 @@ describe('handleSave', () => {
     });
 
     expect(setup.fetchDiagnosticsRef.current).toHaveBeenCalled();
-    const callArgs = setup.fetchDiagnosticsRef.current.mock.calls[0];
-    expect(callArgs[2]).toBe('save');
+    // The buffer-load effect fetches diagnostics on mount (no trigger), so
+    // find the save call specifically rather than assuming it is calls[0].
+    const saveCall = setup.fetchDiagnosticsRef.current.mock.calls.find((c) => c[2] === 'save');
+    expect(saveCall).toBeDefined();
+    expect(saveCall?.[2]).toBe('save');
   });
 
   it('handles save error gracefully', async () => {

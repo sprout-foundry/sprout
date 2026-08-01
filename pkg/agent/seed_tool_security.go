@@ -156,8 +156,25 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// This prevents runaway agent chains while allowing configurable multi-level nesting.
 		// ask_user is allowed for subagents because they share the event bus with the
 		// primary agent and questions are routed through the same WebUI/CLI prompt mechanism.
-		if !agent.CanSpawnSubagents() {
-			if name == "run_subagent" || name == "run_parallel_subagents" {
+		if agent != nil {
+			// In LCM mode, block parallel subagents (causes file conflicts)
+			// In full mode, allow if depth permits
+			if name == "run_parallel_subagents" {
+				if agent.contextProfile.Mode == configuration.ContextModeLowContext {
+					return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(
+						"parallel subagents not supported in low-context mode", nil), name, args)
+				}
+				if !agent.CanSpawnSubagents() {
+					return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(
+						fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
+							"This restriction prevents runaway agent chains and ensures proper task delegation. "+
+							"If you need additional work done, please complete your current task and return "+
+							"your results to the parent agent for further delegation.",
+							agent.SubagentDepth(), agent.MaxSubagentDepth()), nil), name, args)
+				}
+			}
+			// For run_subagent, respect depth limit in all modes
+			if name == "run_subagent" && !agent.CanSpawnSubagents() {
 				return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(
 					fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 						"This restriction prevents runaway agent chains and ensures proper task delegation. "+

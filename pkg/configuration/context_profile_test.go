@@ -23,7 +23,7 @@ func TestContextProfileZeroValueHasFullModeLeverDefaults(t *testing.T) {
 func TestResolveContextProfileReturnsExactLowContextPreset(t *testing.T) {
 	profile, err := ResolveContextProfile(
 		&Config{ContextMode: ContextModeLowContext},
-		128_000,
+		200_000,
 	)
 	require.NoError(t, err)
 
@@ -35,9 +35,13 @@ func TestResolveContextProfileReturnsExactLowContextPreset(t *testing.T) {
 			"write_file",
 			"edit_file",
 			"search_files",
+			"repo_map",
+			"web_search",
+			"fetch_url",
 			"commit",
 			"list_changes",
 			"recover_file",
+			"run_subagent",
 		},
 		SystemPromptPath:          "prompts/system_prompt.lite.md",
 		SkipProactiveContext:      true,
@@ -66,12 +70,12 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 		},
 		{
 			name:               "nil config and threshold window use full",
-			modelContextWindow: 64_000,
+			modelContextWindow: 132_000,
 			wantMode:           ContextModeFull,
 		},
 		{
 			name:               "nil config and representative high window use full",
-			modelContextWindow: 128_000,
+			modelContextWindow: 200_000,
 			wantMode:           ContextModeFull,
 		},
 		{
@@ -91,13 +95,13 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 		},
 		{
 			name:               "one below full threshold auto-detects low context",
-			modelContextWindow: 63_999,
+			modelContextWindow: 131_999,
 			wantMode:           ContextModeLowContext,
 		},
 		{
 			name:               "explicit low overrides high window",
 			cfg:                &Config{ContextMode: ContextModeLowContext},
-			modelContextWindow: 128_000,
+			modelContextWindow: 200_000,
 			wantMode:           ContextModeLowContext,
 		},
 		{
@@ -139,7 +143,7 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 		{
 			name:               "empty mode falls through to full default",
 			cfg:                &Config{ContextMode: ""},
-			modelContextWindow: 128_000,
+			modelContextWindow: 200_000,
 			wantMode:           ContextModeFull,
 		},
 		{
@@ -151,7 +155,7 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 		{
 			name:               "unknown mode falls through to full default",
 			cfg:                &Config{ContextMode: ContextMode("typo")},
-			modelContextWindow: 128_000,
+			modelContextWindow: 200_000,
 			wantMode:           ContextModeFull,
 		},
 	}
@@ -231,9 +235,13 @@ func assertLowContextProfile(t *testing.T, profile ContextProfile) {
 			"write_file",
 			"edit_file",
 			"search_files",
+			"repo_map",
+			"web_search",
+			"fetch_url",
 			"commit",
 			"list_changes",
 			"recover_file",
+			"run_subagent",
 		},
 		SystemPromptPath:          "prompts/system_prompt.lite.md",
 		SkipProactiveContext:      true,

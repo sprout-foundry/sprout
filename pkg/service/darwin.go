@@ -49,9 +49,10 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	}
 	addEnvEntry("SPROUT_SERVICE", "1")
 	addEnvEntry("HOME", homeDir)
-	// Authoritative daemon root, baked in at install time when $HOME is
-	// reliable. The runtime reads this first so the workspace browser is
-	// scoped to the user's home even if launchd doesn't propagate $HOME.
+	// SPROUT_DAEMON_ROOT scopes daemon storage (sessions, config, workspace
+	// browser) to the user's home. It does NOT set the agent workspace —
+	// since SP-130 the webui gates on explicit workspace selection instead
+	// of silently inheriting home. SP-130.
 	addEnvEntry("SPROUT_DAEMON_ROOT", homeDir)
 	// Include the user's PATH so the daemon can locate developer tools.
 	if path := os.Getenv("PATH"); path != "" {
@@ -372,7 +373,9 @@ func (m *launchdManager) Diagnose() error {
 		fmt.Printf("     Size: %d bytes\n", len(plistContent))
 		// Flag a stale plist that predates the SPROUT_DAEMON_ROOT fix —
 		// without it, the daemon falls back to $HOME (which launchd may have
-		// set wrong) and the workspace browser starts in the wrong directory.
+		// set wrong). Since SP-130, the webui forces explicit workspace
+		// selection rather than silently inheriting home, so a stale plist
+		// means the browser root is wrong, not just the workspace.
 		if !strings.Contains(string(plistContent), "SPROUT_DAEMON_ROOT") {
 			console.GlyphWarning.Fprintln(os.Stdout, "  STALE plist: missing SPROUT_DAEMON_ROOT — workspace browser may start in the wrong directory.")
 			fmt.Println("      Reinstall to regenerate: sprout service uninstall && sprout service install")

@@ -316,6 +316,15 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
 	}
 
+	// Defense-in-depth: reject the home directory as a workspace without
+	// explicit consent. The API handler (handleAPIWorkspaceSet) is the
+	// primary gate and surfaces a structured consent error to the frontend;
+	// this prevents any other internal caller from silently setting home as
+	// the workspace root. SP-130.
+	if isHomeWorkspace(workspaceRoot) && !hasHomeWorkspaceConsent() {
+		return "", fmt.Errorf("workspace root must not be the home directory without explicit consent")
+	}
+
 	if ws.clientContexts == nil {
 		ws.clientContexts = make(map[string]*webClientContext)
 	}

@@ -24,13 +24,6 @@ func extractSubagentSummary(stdout string) map[string]string {
 	todoRe := regexp.MustCompile(`(Added|Marked|Created|Updated|Completed|Removed)\s+(\d+)\s+todos?`)
 	cmdRe := regexp.MustCompile(`(?:command|Running):\s+([^\n]+)`)
 
-	// Compile metrics regex patterns once
-	totalTokensRe := regexp.MustCompile(`total_tokens=(\d+)`)
-	promptTokensRe := regexp.MustCompile(`prompt_tokens=(\d+)`)
-	completionTokensRe := regexp.MustCompile(`completion_tokens=(\d+)`)
-	totalCostRe := regexp.MustCompile(`total_cost=([\d.]+)`)
-	cachedTokensRe := regexp.MustCompile(`cached_tokens=(\d+)`)
-
 	lines := strings.Split(stdout, "\n")
 
 	var fileChanges []string
@@ -93,26 +86,6 @@ func extractSubagentSummary(stdout string) map[string]string {
 			case 'E', 'e':
 				if strings.HasPrefix(trimmedLine, "Error:") || strings.HasPrefix(trimmedLine, "error:") {
 					errors = append(errors, trimmedLine)
-				}
-			case 'S', 's':
-				if strings.HasPrefix(trimmedLine, "SUBAGENT_METRICS:") {
-					// Parse the metrics using pre-compiled regex
-					if matches := totalTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
-						summary["subagent_total_tokens"] = matches[1]
-					}
-					if matches := promptTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
-						summary["subagent_prompt_tokens"] = matches[1]
-					}
-					if matches := completionTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
-						summary["subagent_completion_tokens"] = matches[1]
-					}
-					if matches := totalCostRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
-						summary["subagent_total_cost"] = matches[1]
-					}
-					if matches := cachedTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
-						summary["subagent_cached_tokens"] = matches[1]
-					}
-					continue // Skip further processing for metrics lines
 				}
 			}
 

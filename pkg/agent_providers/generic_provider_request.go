@@ -92,6 +92,15 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 			budgetedMax = *p.config.Defaults.MaxTokens
 		}
 	}
+
+	// Apply a global 64K cap to max_tokens for safety across all providers.
+	// Most providers support up to 64K output tokens; capping here prevents
+	// errors from providers with stricter limits (e.g., ZAI's 131072 limit).
+	const maxRequestCompletionTokens = 64000
+	if budgetedMax > maxRequestCompletionTokens {
+		budgetedMax = maxRequestCompletionTokens
+	}
+
 	request["max_tokens"] = budgetedMax
 
 	if p.config.Defaults.TopP != nil {

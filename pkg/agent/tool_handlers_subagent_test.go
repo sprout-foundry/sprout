@@ -663,8 +663,8 @@ func TestSubagentManifestEndToEnd(t *testing.T) {
 
 // TestCollectParallelResults_AggregatesStructuredCost tracks the SP fix that
 // migrated the parallel-subagent cost rollup off regex-scraping
-// SUBAGENT_METRICS: lines out of stdout. That line is emitted only by
-// PrintConciseSummary, which has no callers (dead code), so the scrape
+// SUBAGENT_METRICS: lines out of stdout. That line is no longer emitted and
+// its parse branch has been removed entirely, so the scrape would have
 // silently aggregated $0. collectParallelResults now reads the structured
 // SubagentResult.Cost / TokensUsed fields — the same source the single-
 // subagent path uses — and rolls them into the parent agent's totals.

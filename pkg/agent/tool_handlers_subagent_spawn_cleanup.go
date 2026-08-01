@@ -230,7 +230,7 @@ func handleSubagentSecurityError(a *Agent, resultMap map[string]string) string {
 // handleSubagentBudgetExceeded checks if the subagent exceeded its token
 // budget and returns a formatted error string when it did. Returns ""
 // when the budget was not exceeded.
-func handleSubagentBudgetExceeded(a *Agent, resultMap map[string]string) string {
+func handleSubagentBudgetExceeded(a *Agent, resultMap map[string]string, result *SubagentResult) string {
 	budgetExceeded := false
 	if be, ok := resultMap["budget_exceeded"]; ok {
 		budgetExceeded = be == "true"
@@ -242,21 +242,12 @@ func handleSubagentBudgetExceeded(a *Agent, resultMap map[string]string) string 
 
 	stdout := resultMap["stdout"]
 
-	// Get token usage from summary if available
+	// Token usage comes from the structured SubagentResult, not the
+	// (removed) SUBAGENT_METRICS stdout scraping. Fall back to "unknown"
+	// when the result is nil or TokensUsed is not positive.
 	tokensUsed := "unknown"
-	if summary, ok := resultMap["summary"]; ok {
-		// Try to extract token count from summary
-		if strings.Contains(summary, "subagent_total_tokens") {
-			parts := strings.Split(summary, ":")
-			for i, part := range parts {
-				if strings.Contains(part, "subagent_total_tokens") && i+1 < len(parts) {
-					tokenStr := strings.TrimSpace(strings.Split(parts[i+1], ",")[0])
-					tokenStr = strings.TrimSuffix(tokenStr, "\"")
-					tokensUsed = tokenStr
-					break
-				}
-			}
-		}
+	if result != nil && result.TokensUsed > 0 {
+		tokensUsed = fmt.Sprintf("%d", result.TokensUsed)
 	}
 
 	errorMsg := fmt.Sprintf("SUBAGENT_TOKEN_BUDGET_EXCEEDED: The subagent consumed its entire token budget and was terminated to control costs.\n\n"+

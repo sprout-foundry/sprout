@@ -188,19 +188,31 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	// the workspace is an intentional, high-blast-radius choice (the agent
 	// gains access to all files under ~). Require explicit consent on the
 	// request and persist it so it is not re-prompted on every launch.
-	if isHomeWorkspace(req.Path) && !hasHomeWorkspaceConsent() {
-		if req.ConsentHome {
-			if err := recordHomeWorkspaceConsent(); err != nil {
-				ws.log().Warn("failed to record home-workspace consent", slog.Any("err", err))
+	//
+	// Skipped for SSH proxy requests — the remote home is not the local home,
+	// and SSH workspaces are explicitly selected via the remote picker.
+	// Canonicalize the path before checking so that ~ / $HOME / relative
+	// paths are resolved to their real target (otherwise a raw "~" bypasses
+	// this gate and only gets caught by the defense-in-depth check in
+	// setClientWorkspaceRoot, which returns a generic error instead of the
+	// structured consent error the frontend expects).
+	if !ws.isSSHProxyRequest(r) {
+		if canonicalPath, cerr := filepathAbsEval(req.Path); cerr == nil {
+			if isHomeWorkspace(canonicalPath) && !hasHomeWorkspaceConsent() {
+				if req.ConsentHome {
+					if err := recordHomeWorkspaceConsent(); err != nil {
+						ws.log().Warn("failed to record home-workspace consent", slog.Any("err", err))
+					}
+				} else {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusForbidden)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": "Selecting the home directory as workspace requires explicit consent. The agent will have access to all files under your home directory.",
+						"code":  "home_workspace_requires_consent",
+					})
+					return
+				}
 			}
-		} else {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Selecting the home directory as workspace requires explicit consent. The agent will have access to all files under your home directory.",
-				"code":  "home_workspace_requires_consent",
-			})
-			return
 		}
 	}
 

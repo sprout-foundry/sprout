@@ -9,19 +9,27 @@ import (
 	"os/user"
 	"path/filepath"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// resolveHomeDir resolves the user's home directory using the same resolution
-// chain as server.go's daemonRoot logic. os.UserHomeDir() is tried FIRST so
-// that it reflects the current process environment ($HOME) at call time —
-// this matters both for service-mode freshness and for test isolation
-// (t.Setenv("HOME", ...) is honored only by os.UserHomeDir(), not by
-// user.Current(), which may cache its result).
+// resolveHomeDir resolves the user's home directory. In service mode
+// (SPROUT_SERVICE=1), $HOME may be stale (e.g. a launchd cache from a
+// pre-SPROUT_DAEMON_ROOT install), so we reconcile against user.Current()
+// just like server.go's daemonRoot logic. In normal interactive mode,
+// os.UserHomeDir() ($HOME) is authoritative and returned directly.
 //
-//   1. os.UserHomeDir() ($HOME)
-//   2. user.Current().HomeDir (fallback for service mode when $HOME is stale)
-//   3. "" if both fail
+//  1. SPROUT_SERVICE=1 → user.Current().HomeDir first (reconciled), then
+//     os.UserHomeDir() as fallback.
+//  2. Otherwise → os.UserHomeDir() first ($HOME), then user.Current() as
+//     fallback (honors t.Setenv("HOME", ...) in tests).
+//  3. "" if both fail.
 func resolveHomeDir() string {
+	if configuration.GetEnvSimple("SERVICE") == "1" {
+		if u, err := user.Current(); err == nil && u.HomeDir != "" {
+			return u.HomeDir
+		}
+	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		return home
 	}

@@ -132,7 +132,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	flushAllSubagentBuffers(a)
 
 	// Check if subagent exceeded token budget
-	if budgetMsg := handleSubagentBudgetExceeded(a, resultMap); budgetMsg != "" {
+	if budgetMsg := handleSubagentBudgetExceeded(a, resultMap, result); budgetMsg != "" {
 		return budgetMsg, nil
 	}
 
@@ -339,11 +339,10 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 	// SubagentResult fields. This mirrors the single-subagent path
 	// (extractAndTrackSubagentSummary), which switched away from regex-
 	// scraping SUBAGENT_METRICS: lines out of stdout because nothing
-	// emits that line anymore (PrintConciseSummary is dead code) — the
-	// scrape silently tracked $0. Prompt/completion/cached splits are
-	// not exposed by SubagentResult today, so they're left at zero;
-	// TrackMetricsFromResponse treats them as "unknown split" and still
-	// applies the totals correctly.
+	// emits that line anymore — the parse branch has been fully removed.
+	// Prompt/completion/cached splits are not exposed by SubagentResult
+	// today, so they're left at zero; TrackMetricsFromResponse treats
+	// them as "unknown split" and still applies the totals correctly.
 	for _, r := range results {
 		if r.TokensUsed > 0 || r.Cost > 0 {
 			a.TrackMetricsFromResponse(0, 0, int(r.TokensUsed), r.Cost, 0, 0, 0)

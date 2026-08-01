@@ -258,6 +258,18 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
         } else addRecentWorkspace(nextWS);
         window.setTimeout(() => window.location.reload(), 300);
       } catch (error) {
+        // SP-130: the backend rejects selecting the home directory without
+        // consent with a structured code. Surface a friendly message and let
+        // the user pick a project folder via the workspace picker instead.
+        const err = error as Error & { code?: string };
+        if (err.code === 'home_workspace_requires_consent') {
+          setSwitchingState({
+            isSwitching: false,
+            error: 'Selecting your home directory requires consent. Use the workspace picker to confirm.',
+            status: null,
+          });
+          return;
+        }
         const msg = error instanceof Error ? error.message : 'Failed to switch to this folder';
         if (msg.includes('HTML response')) {
           setSwitchingState({

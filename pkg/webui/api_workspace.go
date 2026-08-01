@@ -5,6 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -83,17 +84,34 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 	workspaceRoot := clientCtx.WorkspaceRoot
 	isProject, markers := IsProjectDirectory(workspaceRoot)
 
+	// Home-workspace gate (SP-130): a workspace that resolves to the user's
+	// home directory must force explicit selection unless the user has
+	// previously consented. This catches the service-mode case where the
+	// daemon starts with CWD=$HOME and IsProjectDirectory returns a false
+	// positive (install creates ~/.sprout, a weight-90 marker).
+	workspaceIsHome := isHomeWorkspace(workspaceRoot)
+	homeConsented := hasHomeWorkspaceConsent()
+	// Selection is needed when the dir is not a project, OR when it is home
+	// and the user has not yet consented to running in home. A consented home
+	// workspace is an intentional choice → needsSelection is false.
+	needsSelection := !isProject || (workspaceIsHome && !homeConsented)
+
 	response := map[string]interface{}{
 		"daemon_root":               ws.GetDaemonRoot(),
 		"workspace_root":            workspaceRoot,
 		"is_project":                isProject,
 		"project_markers":           markers,
-		"needs_workspace_selection": !isProject,
+		"needs_workspace_selection": needsSelection,
 		"recent_workspaces":         GetRecentWorkspaces(),
+		"workspace_is_home":         workspaceIsHome,
+		"home_dir":                  resolveHomeDir(),
 	}
 
-	// If workspace is not a project, suggest nearby projects
-	if !isProject {
+	// Suggest nearby projects only when selection is actually needed. Moving
+	// this out of the unconditional !isProject path means we no longer perform
+	// the recursive home-directory walk on every page load once a real project
+	// is selected — that walk was tripping macOS TCC media-library prompts.
+	if needsSelection {
 		suggested := FindProjectsInDirectory(ws.GetDaemonRoot(), 2)
 		response["suggested_projects"] = suggested
 	}
@@ -121,7 +139,8 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 
 	var req struct {
-		Path string `json:"path"`
+		Path        string `json:"path"`
+		ConsentHome bool   `json:"consent_home"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -163,6 +182,26 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 			"active_queries": 1,
 		})
 		return
+	}
+
+	// Home-workspace consent gate (SP-130): selecting the home directory as
+	// the workspace is an intentional, high-blast-radius choice (the agent
+	// gains access to all files under ~). Require explicit consent on the
+	// request and persist it so it is not re-prompted on every launch.
+	if isHomeWorkspace(req.Path) && !hasHomeWorkspaceConsent() {
+		if req.ConsentHome {
+			if err := recordHomeWorkspaceConsent(); err != nil {
+				ws.log().Warn("failed to record home-workspace consent", slog.Any("err", err))
+			}
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Selecting the home directory as workspace requires explicit consent. The agent will have access to all files under your home directory.",
+				"code":  "home_workspace_requires_consent",
+			})
+			return
+		}
 	}
 
 	// Capture the previous workspace root before setting the new one

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -69,6 +70,25 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	console.GlyphInfo.Printf("sprout · %s · %s",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
+
+	// SP-130: warn when the interactive session is running from the home
+	// directory. The agent's workspace root is home, so every path under ~
+	// is PathTierWorkspace (no approval prompts). This is the CLI analog of
+	// the webui home-workspace gate — a warning, not a hard block, since
+	// the user explicitly started sprout from ~.
+	if cwd := chatAgent.GetWorkspaceRoot(); cwd != "" {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			if abs, err := filepath.Abs(cwd); err == nil {
+				if evaled, err := filepath.EvalSymlinks(abs); err == nil {
+					if homeEvaled, err := filepath.EvalSymlinks(home); err == nil && evaled == homeEvaled {
+						console.GlyphWarning.Printf(
+							"Running in your home directory (%s) — the agent has access to all files under ~. Consider cd-ing into a project first.",
+							home)
+					}
+				}
+			}
+		}
+	}
 
 	// SP-048-5a: surface recent sessions (last 7d) with inline numeric
 	// selection. Up/down arrows stay reserved for command history; a

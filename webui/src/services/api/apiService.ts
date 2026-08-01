@@ -76,8 +76,8 @@ class ApiService {
     return workspaceApi.getWorkspace(clientFetch);
   }
 
-  async setWorkspace(path: string): Promise<WorkspaceResponse & { message: string }> {
-    return workspaceApi.setWorkspace(clientFetch, path);
+  async setWorkspace(path: string, consentHome?: boolean): Promise<WorkspaceResponse & { message: string }> {
+    return workspaceApi.setWorkspace(clientFetch, path, consentHome);
   }
 
   // ── Terminal ───────────────────────────────────────────────────────

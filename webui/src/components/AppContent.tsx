@@ -16,6 +16,7 @@ import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
@@ -37,6 +38,7 @@ import Sidebar from './Sidebar';
 import Status from './Status';
 import StatusBar from './StatusBar';
 import Terminal from './Terminal';
+import WorkspaceGateModal from './WorkspaceGateModal';
 
 interface AppContentProps {
   state: AppState;
@@ -148,6 +150,16 @@ const AppContent: React.FC<AppContentProps> = ({
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
   const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
+  // SP-130: home-directory gate. `useWorkspace` fetches workspace metadata
+  // (is_project, needs_workspace_selection, workspace_is_home, …). When the
+  // resolved workspace is the user's home directory without consent, a
+  // blocking overlay renders on top of the normal UI until the user either
+  // selects a project folder or explicitly consents to running in home.
+  const { workspaceInfo, setWorkspace: setWorkspaceViaHook } = useWorkspace();
+  const handleConsentHome = useCallback(async () => {
+    await setWorkspaceViaHook(workspaceInfo.workspace_root, true);
+    // setWorkspace triggers a reload, so the modal closes implicitly.
+  }, [setWorkspaceViaHook, workspaceInfo.workspace_root]);
   // Swipe-left/right gesture to toggle the sidebar on mobile viewports.
   useSwipeGesture({
     onSwipeLeft: onCloseSidebar,
@@ -740,6 +752,18 @@ const AppContent: React.FC<AppContentProps> = ({
 
   return (
     <div className="app">
+      {/* SP-130: blocking home-workspace gate. Renders as a full-screen
+       * overlay on top of the normal UI when the workspace resolves to the
+       * user's home directory without consent. The component itself also
+       * short-circuits in cloud mode (supportsWorkspaceSwitching = false). */}
+      {workspaceInfo.needs_workspace_selection && workspaceInfo.workspace_is_home && (
+        <WorkspaceGateModal
+          workspaceInfo={workspaceInfo}
+          onSelectWorkspace={(path) => setWorkspaceViaHook(path)}
+          onConsentHome={handleConsentHome}
+          onBrowse={() => window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'))}
+        />
+      )}
       {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}
       <ErrorBoundary panelName="Sidebar">
         <Sidebar

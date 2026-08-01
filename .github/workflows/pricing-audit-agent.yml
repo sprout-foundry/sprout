@@ -11,7 +11,7 @@ concurrency:
 jobs:
   pricing-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # most days: <1 min (no drift). Drift days: up to 40 min for agent.
+    timeout-minutes: 45
     permissions:
       contents: write
       pull-requests: write
@@ -24,52 +24,91 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for pricing drift (skip agent if clean)
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check for drift OR new models (skip agent if clean)
+        # --discover --fail-on-drift exits 1 when there is pricing drift OR
+        # new models from the live API that aren't in configs yet.
+        # --update auto-populates new models with pricing + metadata from
+        # the provider API, so the agent only needs to verify and correct.
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CODING_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
-          go run ./cmd/audit_pricing --configs-dir=pkg/agent_providers/configs > /tmp/audit.txt 2>&1
+          # --fail-on-drift exits 1 when there is pricing drift OR new models
+          # from the live API that aren't in configs yet.
+          # --update auto-populates new models with pricing + metadata from
+          # the provider API, so the agent only needs to verify and correct.
+          go run ./cmd/audit_pricing --discover --update --fail-on-drift \
+            --configs-dir=pkg/agent_providers/configs \
+            --manifest-path=cmd/audit_pricing/manifest.json \
+            > /tmp/audit.txt 2>&1
+          AUDIT_EXIT=$?
           cat /tmp/audit.txt
-          DRIFT=$(grep -c "drift\|missing" /tmp/audit.txt || true)
-          if [ "$DRIFT" -eq 0 ]; then
-            echo "NO_DRIFT=true" >> $GITHUB_ENV
-            echo "No pricing drift detected — skipping agent run"
+
+          if [ "$AUDIT_EXIT" -eq 0 ]; then
+            echo "NO_ACTION=true" >> $GITHUB_ENV
+            echo "No drift or new models — skipping agent run"
           else
-            echo "NO_DRIFT=false" >> $GITHUB_ENV
-            echo "Pricing drift detected — agent will investigate"
+            echo "NO_ACTION=false" >> $GITHUB_ENV
+            echo "Action needed — agent will investigate"
           fi
 
       - name: Create tracking issue
-        if: env.NO_DRIFT != 'true'
+        if: env.NO_ACTION != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ISSUE_URL=$(gh issue create \
-            --title "Pricing Audit $(date -u +%Y-%m-%d)" \
-            --body "Automated pricing audit run. Agent will verify provider pricing against official docs and create a PR with corrections.")
+            --title "Pricing & Model Audit $(date -u +%Y-%m-%d)" \
+            --body "Automated pricing + model audit. Discovery found new models or pricing drift. Agent will verify against official docs and create a PR.")
           ISSUE_NUM=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
           echo "ISSUE_NUM=$ISSUE_NUM" >> $GITHUB_ENV
           echo "Created issue #$ISSUE_NUM"
 
       - name: Install sprout
-        if: env.NO_DRIFT != 'true'
+        if: env.NO_ACTION != 'true'
         run: |
           curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | bash
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Run pricing audit agent
-        if: env.NO_DRIFT != 'true'
+        if: env.NO_ACTION != 'true'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CODING_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           git checkout -b "$BRANCH"
 
-          sprout agent "Read the task in .github/pricing-audit-task.md and execute it. Run go build ./cmd/audit_pricing/... and go test ./cmd/audit_pricing/... when done. Commit your changes." \
+          sprout agent "Read the task in .github/pricing-audit-task.md and execute it. The audit tool has already been run with --discover --update, so new models are already added to configs with API-sourced pricing. Your job is to verify pricing accuracy against official docs, fix any $0 or estimated prices, enrich metadata for important models, and commit your changes. Run go build ./cmd/audit_pricing/... and go test ./cmd/audit_pricing/... when done. Commit your changes." \
             --provider deepseek \
             --model deepseek-v4-flash \
             --risk-profile permissive \
-            --budget-usd 3.00
+            --budget-usd 8.00
 
-      - name: Validate only pricing files changed
-        if: env.NO_DRIFT != 'true'
+      - name: Validate changed files
+        if: env.NO_ACTION != 'true'
         run: |
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only --cached)
           if [ -z "$CHANGED" ]; then
@@ -78,34 +117,36 @@ jobs:
           fi
           for f in $CHANGED; do
             case "$f" in
-              pkg/agent_providers/configs/*.json|cmd/audit_pricing/manifest.json|cmd/audit_pricing/manifest.go) ;;
+              pkg/agent_providers/configs/*.json|cmd/audit_pricing/*.json|cmd/audit_pricing/*.go) ;;
               *) echo "ERROR: unexpected file changed: $f"; exit 1 ;;
             esac
           done
           echo "All changed files are within allowed paths"
 
       - name: Push and create PR
-        if: env.NO_DRIFT != 'true'
+        if: env.NO_ACTION != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git diff --quiet HEAD~1 HEAD 2>/dev/null; then
-            echo "No changes — agent found no drift"
+            echo "No changes — agent found nothing to fix"
             if [ -n "$ISSUE_NUM" ]; then
-              gh issue close "$ISSUE_NUM" --comment "No pricing drift found. All configs match official docs."
+              gh issue close "$ISSUE_NUM" --comment "No changes needed. All pricing and models are current."
             fi
             exit 0
           fi
 
           git push origin "$BRANCH"
           PR_URL=$(gh pr create \
-            --title "fix(pricing): automated pricing audit $(date -u +%Y-%m-%d)" \
-            --body "Automated pricing audit corrections from issue #$ISSUE_NUM.
+            --title "fix(pricing): pricing + model audit $(date -u +%Y-%m-%d)" \
+            --body "Automated pricing + model audit from issue #$ISSUE_NUM.
+
+          Includes new model discovery, pricing verification, and metadata enrichment.
 
           Closes #$ISSUE_NUM." \
             --base main \
             --head "$BRANCH")
 
           if [ -n "$ISSUE_NUM" ]; then
-            gh issue comment "$ISSUE_NUM" --body "Pricing audit complete: $PR_URL"
+            gh issue comment "$ISSUE_NUM" --body "Audit complete: $PR_URL"
           fi

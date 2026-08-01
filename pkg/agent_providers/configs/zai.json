@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0,
-    "output_token_cost": 0
+    "input_token_cost": 1.0,
+    "output_token_cost": 3.2
   },
   "defaults": {
     "model": "glm-5",

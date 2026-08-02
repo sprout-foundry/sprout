@@ -72,9 +72,7 @@ const MOCK_FILES: any[] = [
   { name: 'src', path: '/src', type: 'dir', size: 0 },
 ];
 
-const MOCK_DIR_CHILDREN: any[] = [
-  { name: 'index.ts', path: '/src/index.ts', type: 'file', size: 500 },
-];
+const MOCK_DIR_CHILDREN: any[] = [{ name: 'index.ts', path: '/src/index.ts', type: 'file', size: 500 }];
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -150,9 +148,7 @@ describe('RepoFileTree', () => {
 
   it('expands directory and lazy-loads children on click', async () => {
     // Root listing returns a dir; second listDir call returns children
-    mockListDir
-      .mockResolvedValueOnce(MOCK_FILES)
-      .mockResolvedValueOnce(MOCK_DIR_CHILDREN);
+    mockListDir.mockResolvedValueOnce(MOCK_FILES).mockResolvedValueOnce(MOCK_DIR_CHILDREN);
     renderSync({});
     await flushAsync();
 
@@ -179,9 +175,7 @@ describe('RepoFileTree', () => {
   });
 
   it('shows error for files exceeding MAX_FILE_SIZE (1MB)', async () => {
-    mockListDir.mockResolvedValue([
-      { name: 'huge.bin', path: '/huge.bin', type: 'file', size: 2_000_000 },
-    ]);
+    mockListDir.mockResolvedValue([{ name: 'huge.bin', path: '/huge.bin', type: 'file', size: 2_000_000 }]);
     renderSync({});
     await flushAsync();
 
@@ -238,8 +232,8 @@ describe('RepoFileTree', () => {
     });
 
     // Click "Create" button
-    const createBtn = Array.from(container.querySelectorAll('button')).find((b) =>
-      (b as HTMLElement).textContent?.trim() === 'Create',
+    const createBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => (b as HTMLElement).textContent?.trim() === 'Create',
     ) as HTMLElement;
     expect(createBtn).toBeTruthy();
     await act(async () => {

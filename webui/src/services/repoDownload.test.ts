@@ -79,9 +79,7 @@ import { downloadRepoAsZip } from './repoDownload';
 
 describe('downloadRepoAsZip', () => {
   it('calls gitClient.listAllFiles with the repoDir', async () => {
-    mockListAllFiles.mockResolvedValue([
-      { name: 'a.txt', path: '/a.txt', type: 'file', size: 100 },
-    ]);
+    mockListAllFiles.mockResolvedValue([{ name: 'a.txt', path: '/a.txt', type: 'file', size: 100 }]);
     mockReadFileBinary.mockResolvedValue(new Uint8Array([72, 101, 108]));
 
     await downloadRepoAsZip('/repos/owner/repo', 'test-repo');
@@ -136,9 +134,7 @@ describe('downloadRepoAsZip', () => {
   });
 
   it('triggers browser download via anchor element click', async () => {
-    mockListAllFiles.mockResolvedValue([
-      { name: 'a.txt', path: '/a.txt', type: 'file', size: 100 },
-    ]);
+    mockListAllFiles.mockResolvedValue([{ name: 'a.txt', path: '/a.txt', type: 'file', size: 100 }]);
     mockReadFileBinary.mockResolvedValue(new Uint8Array([1]));
 
     await downloadRepoAsZip('/repos/owner/repo', 'test-repo');
@@ -149,9 +145,7 @@ describe('downloadRepoAsZip', () => {
   });
 
   it('sets the download filename from repoName with safe characters', async () => {
-    mockListAllFiles.mockResolvedValue([
-      { name: 'a.txt', path: '/a.txt', type: 'file', size: 100 },
-    ]);
+    mockListAllFiles.mockResolvedValue([{ name: 'a.txt', path: '/a.txt', type: 'file', size: 100 }]);
     mockReadFileBinary.mockResolvedValue(new Uint8Array([1]));
 
     await downloadRepoAsZip('/repos/owner/repo', 'owner/my-repo!');
@@ -184,9 +178,7 @@ describe('downloadRepoAsZip', () => {
   });
 
   it('uses DEFLATE compression with level 6', async () => {
-    mockListAllFiles.mockResolvedValue([
-      { name: 'a.txt', path: '/a.txt', type: 'file', size: 100 },
-    ]);
+    mockListAllFiles.mockResolvedValue([{ name: 'a.txt', path: '/a.txt', type: 'file', size: 100 }]);
     mockReadFileBinary.mockResolvedValue(new Uint8Array([1]));
 
     await downloadRepoAsZip('/repos/owner/repo', 'test-repo');

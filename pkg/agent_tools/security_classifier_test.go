@@ -711,7 +711,9 @@ func TestClassifyChainedCommand(t *testing.T) {
 		{"&& safe rm -rf then safe", "rm -rf dist/ && mkdir -p dist && echo rebuilt", SecuritySafe},
 
 		// ── || chains ──────────────────────────────────────────────
-		{"|| two safe", "ls /tmp || mkdir /tmp", SecurityCaution},
+		// Both ls and mkdir are safe workspace operations. Under the
+		// behavior-based classifier (default-SAFE), the full chain is SAFE.
+		{"|| two safe", "ls /tmp || mkdir /tmp", SecuritySafe},
 		{"|| safe then caution", "ls || rm -rf src/", SecurityCaution},
 
 		// ── ; chains ───────────────────────────────────────────────
@@ -778,9 +780,9 @@ func TestClassifyXargsInvocation(t *testing.T) {
 		{"xargs -I REPL grep p REPL", "xargs -I REPL grep p REPL", SecuritySafe},
 		// xargs -i grep p: GNU xargs treats `grep` as REPL (optional),
 		// running `p {}` per line. Our stripper also consumes `grep`
-		// as REPL, leaving inner `p` — unknown command → CAUTION.
-		// This is a conservative false negative; see flag map comment.
-		{"xargs -i grep p", "xargs -i grep p", SecurityCaution},
+		// as REPL, leaving inner `p` — unknown command with no risky
+		// patterns → SAFE under the default-SAFE classifier.
+		{"xargs -i grep p", "xargs -i grep p", SecuritySafe},
 		{"xargs -e EOF wc -l", "xargs -e EOF wc -l", SecuritySafe},
 		{"xargs -L 1 du -sh", "xargs -L 1 du -sh", SecuritySafe},
 

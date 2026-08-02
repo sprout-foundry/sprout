@@ -33,6 +33,14 @@ type SkillInfo struct {
 // or is explicitly disabled cannot be activated, even if its content
 // happens to be embedded.
 func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error) {
+	return LoadSkillInWorkspace(skillID, config, "")
+}
+
+// LoadSkillInWorkspace is the workspace-aware variant of LoadSkill.
+// Project-level skills (e.g., .sprout/skills/) are resolved relative to
+// workspaceRoot instead of os.Getwd(). This is critical in daemon mode
+// where the process CWD differs from the workspace being served.
+func LoadSkillInWorkspace(skillID string, config *configuration.Config, workspaceRoot string) (*SkillInfo, error) {
 	skill := config.GetSkill(skillID)
 	if skill == nil {
 		return nil, agenterrors.NewNotFound(fmt.Sprintf("skill %q", skillID))
@@ -50,7 +58,7 @@ func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error)
 	}
 
 	// Fall back to filesystem for project/user skills
-	skillPath := resolveSkillPath(skill.Path)
+	skillPath := resolveSkillPathInWorkspace(skill.Path, workspaceRoot)
 	skillFile := filepath.Join(skillPath, SkillFileName)
 
 	content, err := os.ReadFile(skillFile)
@@ -129,16 +137,26 @@ func GetSkillManifest(content string) (map[string]string, string, error) {
 // resolveSkillPath resolves a skill path for filesystem-based skills (project/user).
 // Builtin skills are served from the embedded filesystem and don't use this.
 func resolveSkillPath(relativePath string) string {
+	return resolveSkillPathInWorkspace(relativePath, "")
+}
+
+// resolveSkillPathInWorkspace resolves a skill path relative to the given
+// workspace root. If workspaceRoot is empty, falls back to os.Getwd().
+func resolveSkillPathInWorkspace(relativePath, workspaceRoot string) string {
 	if filepath.IsAbs(relativePath) {
 		return relativePath
 	}
 
-	// Project skills (e.g., .sprout/skills/...) are relative to CWD.
-	wd, err := os.Getwd()
-	if err != nil {
-		return relativePath
+	// Project skills (e.g., .sprout/skills/...) are relative to the workspace root.
+	base := strings.TrimSpace(workspaceRoot)
+	if base == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return relativePath
+		}
+		base = wd
 	}
-	return filepath.Join(wd, relativePath)
+	return filepath.Join(base, relativePath)
 }
 
 func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -192,7 +210,7 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	}
 
 	// Load the skill
-	skillInfo, err := LoadSkill(skillID, config)
+	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
 	if err != nil {
 		return "", agenterrors.NewTool("skills", "failed to activate skill", err)
 	}

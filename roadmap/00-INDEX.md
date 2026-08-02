@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-07-27):** 99 shipped · 13 pending · 2 parked in `future/`.
+**Counts (as of 2026-08-02):** 101 shipped · 11 pending · 2 parked in `future/`.
 
 ## Shipped
 
@@ -118,8 +118,8 @@ the root directory._
 | SP-124 | [LLM-Augmented Security Analysis](./SP-124-llm-security-analysis.md) | 🟢 Phase 1, 2, 3 shipped (2026-07-19) — backend `AnalyzeShellCommand` + cache + broker plumbing; WebUI dialog renders analysis panel with risk-tone badge (`SecurityApprovalDialog.tsx`); CLI picker renders analysis + Elevate option via `pkg/utils.SecurityAnalysisView` shared helper. |
 | SP-121 | Unified Product Experience | ✅ All 6 phases shipped — editor is now the unified product surface. (Spec body deleted; see git log.) |
 | SP-121-7 | [Repo Click → GitHub Content Flow](./_active/SP-121-7-repo-content-flow.md) | ✅ Browser-side GitHub clone via isomorphic-git + lightning-fs. Multi-repo gitClient service (clone/status/log/branch/checkout/read/diff/add/commit/push). File tree with VFS bridge to WASM shell. Phase 7 (agent integration) shipped — agentGitTools.ts + agentGitToolBridge.ts (Go↔JS bridge for 13 git tools). Playwright E2E tests deferred. |
-| SP-121-8 | [Git UI Polish](./SP-121-8-git-ui-polish.md) | ⚠️ Partial (3/5) — README preview (ReactMarkdown), Push/Pull buttons, branch chip ✅; file/folder creation, ZIP download ❌. |
-| SP-121-9 | [First-Run UX + Onboarding](./SP-121-9-first-run-ux.md) | ⚠️ Partial (1/3) — Onboarding screen ✅; URL import, create-repo dialog ❌. |
+| SP-121-8 | [Git UI Polish](./SP-121-8-git-ui-polish.md) | ✅ Implemented (audited 2026-08-02) — All 5 items shipped: README preview (ReactMarkdown + `isReadmeFile`), Push/Pull buttons with git-op feedback, branch chip checkout with VFS re-bridge, file/folder creation (`handleCreateFile`/`handleCreateFolder` wired to `RepoFileTree`), ZIP download (`downloadRepoAsZip` + button). 12 tests in `RepoFileTree.test.tsx`, 16 tests in `RepoDetailPage.test.tsx`. Only remaining spec item ("Open in File Browser" desktop) blocked by SP-080-desktop suspension. |
+| SP-121-9 | [First-Run UX + Onboarding](./SP-121-9-first-run-ux.md) | ✅ Implemented (audited 2026-08-02) — All 3 items shipped: Onboarding screen with 3 tabs (Import URL, Select Repo, New Repo), GitHub URL import (`parseGitHubUrl` handles https/SSH/shorthand), Create new repo dialog (local git init + optional README). `RepoOnboarding.tsx` renders when `currentView === 'repodetail' && !selectedRepo`. 21 tests in `RepoOnboarding.test.tsx`, 10 tests in `repoDownload.test.ts`. |
 | SP-121-11 | [Git Provider OAuth + Multi-Repo](./SP-121-11-github-oauth-and-multi-repo.md) | 🟡 Draft — not implemented. Index previously listed as shipped; audit (2026-07-27) found zero OAuth, multi-repo, or Integrations UI components. |
 | SP-CLOUD | Cloud-First WebUI | ✅ All 8 sub-specs verified. (Spec body deleted; see git log.) |
 | SP-124b | [Batch Security Analysis for Chained Commands](./SP-124b-batch-analysis.md) | 🟢 Phase 1 + Phase 2 shipped (2026-07-19 / 2026-07-20, `ad0c20d0` + `bb2464c6`) — `Chain` type + `ParseChain` (delegates to SP-122 `SplitChainedCommand`), `ChainedClassification` + `ClassifyChainedCommand`, `AnalyzeChain` with chain-aware prompt when `len(Subcommands) > 1`, normalized cache key under `sp-124b:v1:` namespace (collapses whitespace, preserves operators, separates `&&`/`||`/`;`/`|`). Phase 2: 10-subcommand cap → per-subcommand fallback, chain stepper in `SecurityApprovalDialog.tsx` with per-subcommand risk dots, CLI per-subcommand badge rendering. 1300-line test footprint across `pkg/agent/security_analyzer_sp124b_*_test.go`, `pkg/console/security_prompt_test.go`, `pkg/utils/security_analysis_view_test.go`, `webui/src/components/SecurityApprovalDialog.test.tsx`. |

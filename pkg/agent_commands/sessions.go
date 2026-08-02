@@ -39,7 +39,11 @@ func (c *SessionsCommand) Usage() string {
 
 func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// List sessions immediately in reverse order (newest first)
-	sessions, err := agent.ListSessionsWithTimestamps()
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}

@@ -468,13 +468,17 @@ Examples:
 			return errors.New("flag --session-id and --last-session are mutually exclusive")
 		}
 		if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
-			workingDir, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to resolve current working directory for session restore: %w", err)
+			workingDir := chatAgent.GetWorkspaceRoot()
+			if workingDir == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return fmt.Errorf("failed to resolve current working directory for session restore: %w", err)
+				}
+				workingDir = wd
 			}
 			targetSessionID := strings.TrimSpace(agentSessionID)
 			if agentLastSession {
-				sessions, err := agent.ListSessionsWithTimestamps()
+				sessions, err := agent.ListSessionsWithTimestampsScoped(workingDir)
 				if err != nil {
 					return fmt.Errorf("failed to list sessions: %w", err)
 				}

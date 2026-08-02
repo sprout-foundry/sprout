@@ -121,7 +121,62 @@ Before every `git push`:
 
 Shell commands are classified by a heuristic (`pkg/agent_tools/security_classifier.go` + `shell_patterns.go`) on a Safe / Caution / Dangerous / Critical scale, folded onto Low/Medium/High/Critical by `pkg/agent/risk_assessment.go`. This gate decides auto-approve vs. prompt vs. block.
 
-**Do NOT attempt an embedding-based classifier.** Tried and removed — embeddings conflate `rm -rf node_modules` and `rm -rf /etc` (nearly identical vectors, opposite risk). A tokenizing command parser is the correct tool. The classifier is **behavior-based with a default-SAFE fallback**: `classifySingleCommand` checks for risky patterns (rm, sudo, kill, eval, pipe-to-shell, command substitution, heredoc, interpreter escapes, output redirection, system-dir targeting, process/service/container state changes, file destruction, git rebase/history-rewrite, critical operations) and returns `SecuritySafe` for any command that matches none of them. **Do NOT reintroduce a name-based whitelist or default-CAUTION fallback** — that was the original fragile architecture. When adding coverage for a new risky behavior, add an explicit pattern to `isCautionPattern` / `isDangerousPattern` / `isCriticalSystemOperation`, not a command name to `safeListCommands`.
+### Architecture: behavior-based, default-SAFE
+
+The classifier detects risky **behavior** (finite set of patterns), not risky **command names** (infinite set). Any command that matches no risky pattern defaults to `SecuritySafe`. This replaces the original fragile architecture — a ~150-entry hardcoded name whitelist where unknown commands fell through to `SecurityCaution`.
+
+**Do NOT reintroduce a name-based whitelist or default-CAUTION fallback.** Every read-only tool in existence (`nvidia-smi`, `rocm-smi`, `smartctl`, `lsof`, `tcpdump`, etc.) should not need manual registration to avoid false-positive prompts.
+
+**Do NOT attempt an embedding-based classifier.** Tried and removed — embeddings conflate `rm -rf node_modules` and `rm -rf /etc` (nearly identical vectors, opposite risk). A tokenizing command parser is the correct tool.
+
+### Classification flow (`classifySingleCommand`)
+
+`classifySingleCommand` in `security_classifier_shell_patterns.go` checks patterns in order, returning at the first match:
+
+1. **Command substitution** (`$()`, backticks) → CAUTION (opaque inner command)
+2. **Heredoc** (`<<`) → CAUTION (opaque body)
+3. **Redirection to system dirs** (`> /etc/`, `> /dev/sda`, etc.) → DANGEROUS
+4. **Privileged package install** (`sudo apt install`, `sudo brew install`) → CAUTION
+5. **`isDangerousPattern`** — rm/chmod/cp to system dirs, mkfs, dd to block devices, fdisk, reboot/shutdown → DANGEROUS
+6. **`isSafeRmRfPrefix`** — rm -rf of whitelisted build dirs (node_modules/, dist/, etc.) → SAFE
+7. **`isDestructiveFind`** — `find -delete`, `find -exec rm/chmod/chown` → DANGEROUS
+8. **`isCautionPattern`** → CAUTION (see below)
+9. **`isInterpreterCommandEscape`** — `bash -c`, `python -c`, `node -e`, etc. → CAUTION (opaque inline code)
+10. **`isSafeShellCommand`** — remaining name whitelist (legacy, still large but no longer the gate) → SAFE
+11. **`classifyXargsInvocation`** — strips xargs flags, recursively classifies inner command
+12. **Default** → SAFE
+
+### `isCautionPattern` — explicit risky-behavior patterns
+
+This function in `shell_patterns.go` is where most risky-but-recoverable behaviors are caught. Each returns CAUTION (prompts the user, doesn't hard-block):
+
+| Pattern | Examples | Risk type |
+|---|---|---|
+| `sudo` (non-install) | `sudo systemctl restart`, `sudo cat /etc/shadow` | `privilege_escalation` |
+| `kill`/`pkill`/`killall` (non-9) | `kill 1234`, `pkill firefox` | `process_termination` |
+| Service/container state change | `systemctl stop`, `docker stop`, `docker rmi` | `state_change` |
+| File content destruction | `truncate`, `shred` | `file_destruction` |
+| Output redirection (non-system) | `echo x > file.txt` | `output_redirection` |
+| `eval` | `eval 'rm -rf /'` | `arbitrary_code_execution` |
+| `chmod 777`/`666` | `chmod 777 file` | `insecure_permissions` |
+| Pipe to shell interpreter | `curl url \| bash` | `remote_code_execution` |
+| `rm` (single file) / `rm -rf` (non-whitelisted) | `rm test.txt`, `rm -rf src/` | `directory_deletion` |
+| Git history rewrite | `git rebase`, `git push --force`, `git branch -D` | `destructive_git_operation` |
+
+### Adding coverage for a new risky behavior
+
+When a genuinely risky command is found that defaults to SAFE:
+
+1. Identify the **behavior**, not the command name. `systemctl stop` is risky because it changes service state, not because "systemctl" is a scary word.
+2. Add the pattern to the appropriate function:
+   - Recoverable risk (prompts user) → `isCautionPattern` in `shell_patterns.go`
+   - Irreversible system damage → `isDangerousPattern` in `shell_patterns.go`
+   - Permanently destructive, never allowed → `configuration.IsCriticalOperation` in `config_subagent_type.go`
+3. Add the matching risk type string to `getShellCommandRiskType` in `shell_utils.go` (used for user-facing reasoning).
+4. Add the matching reasoning text to `getCautionReasoning` or `getDangerousReasoning` in `shell_utils.go`.
+5. Add test cases to `security_test.go` (`TestNewCautionPatterns` pattern).
+
+**Do NOT** add the command name to `safeListCommands` — that list is legacy and should shrink over time, not grow.
 
 ## Design System
 

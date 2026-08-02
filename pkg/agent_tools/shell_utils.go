@@ -233,6 +233,14 @@ func getCautionReasoning(cmd string) string {
 		return "Force-removes untracked files and directories. These files are not in git and cannot be recovered after deletion."
 	case "privilege_escalation":
 		return "Runs with elevated (sudo) privileges. Review the command before approving."
+	case "process_termination":
+		return "Terminates a running process. Verify you are targeting the correct process before approving."
+	case "output_redirection":
+		return "Redirects output to a file, overwriting or appending its contents. Verify the target path before approving."
+	case "state_change":
+		return "Stops, restarts, or removes a running service or container. This disrupts running state — verify before approving."
+	case "file_destruction":
+		return "Destroys or overwrites file contents. The data cannot be recovered — verify the target file before approving."
 	default:
 		return "This operation modifies files or state. Review the command before approving."
 	}
@@ -347,6 +355,39 @@ func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) str
 	// Fall back to generic critical system operation for anything caught by isCriticalSystemOperation
 	if isCritical {
 		return "critical_system_operation"
+	}
+
+	// Process termination by PID or name (kill/pkill/killall without -9).
+	// killall -9 is caught as system_instability above.
+	for _, prefix := range []string{"kill ", "pkill ", "killall "} {
+		if strings.HasPrefix(cmdLower, prefix) || cmdLower == strings.TrimSpace(prefix) {
+			return "process_termination"
+		}
+	}
+
+	// Service/container state changes — stop/restart/remove resources.
+	for _, prefix := range []string{
+		"systemctl stop ", "systemctl restart ", "systemctl disable ",
+		"service ",
+		"docker stop ", "docker kill ", "docker rm ",
+		"docker rmi ", "docker volume rm ", "docker network rm ",
+	} {
+		if strings.HasPrefix(cmdLower, prefix) {
+			return "state_change"
+		}
+	}
+
+	// File content destruction (truncate, shred).
+	for _, prefix := range []string{"truncate ", "shred "} {
+		if strings.HasPrefix(cmdLower, prefix) || cmdLower == strings.TrimSpace(prefix) {
+			return "file_destruction"
+		}
+	}
+
+	// Output redirection to non-system, non-benign paths — shell file write
+	// that bypasses the write_file/edit_file tools.
+	if containsRedirection(cmdLower) && !isBenignRedirection(cmdLower) {
+		return "output_redirection"
 	}
 
 	return ""

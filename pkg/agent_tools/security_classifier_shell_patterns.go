@@ -281,7 +281,15 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return risk
 	}
 
-	return SecurityCaution
+	// Default: SAFE. The classifier is behavior-based, not name-based.
+	// All known risky patterns (rm, chmod 777, sudo, kill, eval, pipe to
+	// shell, command substitution, heredoc, interpreter escapes, output
+	// redirection, system-dir targeting, critical operations) are checked
+	// above. An unrecognized command that matches none of those patterns
+	// has no detectable risky behavior and should not prompt the user.
+	// This eliminates the need to maintain an ever-growing whitelist of
+	// safe command names.
+	return SecuritySafe
 }
 
 func classifyReadOnlyForLoop(cmd string) (SecurityRisk, bool) {

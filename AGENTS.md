@@ -121,7 +121,7 @@ Before every `git push`:
 
 Shell commands are classified by a heuristic (`pkg/agent_tools/security_classifier.go` + `shell_patterns.go`) on a Safe / Caution / Dangerous / Critical scale, folded onto Low/Medium/High/Critical by `pkg/agent/risk_assessment.go`. This gate decides auto-approve vs. prompt vs. block.
 
-**Do NOT attempt an embedding-based classifier.** Tried and removed — embeddings conflate `rm -rf node_modules` and `rm -rf /etc` (nearly identical vectors, opposite risk). A tokenizing command parser is the correct tool; if revisiting accuracy, fix the catch-all CAUTION default, not the classifier architecture.
+**Do NOT attempt an embedding-based classifier.** Tried and removed — embeddings conflate `rm -rf node_modules` and `rm -rf /etc` (nearly identical vectors, opposite risk). A tokenizing command parser is the correct tool. The classifier is **behavior-based with a default-SAFE fallback**: `classifySingleCommand` checks for risky patterns (rm, sudo, kill, eval, pipe-to-shell, command substitution, heredoc, interpreter escapes, output redirection, system-dir targeting, process/service/container state changes, file destruction, git rebase/history-rewrite, critical operations) and returns `SecuritySafe` for any command that matches none of them. **Do NOT reintroduce a name-based whitelist or default-CAUTION fallback** — that was the original fragile architecture. When adding coverage for a new risky behavior, add an explicit pattern to `isCautionPattern` / `isDangerousPattern` / `isCriticalSystemOperation`, not a command name to `safeListCommands`.
 
 ## Design System
 

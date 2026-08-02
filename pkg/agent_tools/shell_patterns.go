@@ -333,6 +333,56 @@ func isDangerousPattern(cmd string) bool {
 func isCautionPattern(cmd string) bool {
 	cmdLower := strings.ToLower(cmd)
 
+	// sudo (non-install) — privilege escalation. Privileged package
+	// installs are caught earlier by isPrivilegedPackageInstall in
+	// classifySingleCommand; this catches all other sudo usage
+	// (sudo systemctl, sudo rm, sudo cat /etc/shadow, etc.).
+	if isSudoCommand(cmdLower) {
+		return true
+	}
+
+	// Process termination — kills running processes by PID or name.
+	// killall -9 is caught as DANGEROUS by isCriticalSystemOperation
+	// earlier; this catches non-9 variants and kill/pkill.
+	for _, prefix := range []string{"kill ", "pkill ", "killall "} {
+		if strings.HasPrefix(cmdLower, prefix) || cmdLower == strings.TrimSpace(prefix) {
+			return true
+		}
+	}
+
+	// Service/container state changes — stop, restart, kill, or remove
+	// running resources. These are stateful operations that can disrupt
+	// running services or destroy container resources.
+	stateChangePrefixes := []string{
+		"systemctl stop ", "systemctl restart ", "systemctl disable ",
+		"service ", // SysV init: "service nginx stop"
+		"docker stop ", "docker kill ", "docker rm ",
+		"docker rmi ", "docker volume rm ", "docker network rm ",
+	}
+	for _, prefix := range stateChangePrefixes {
+		if strings.HasPrefix(cmdLower, prefix) {
+			return true
+		}
+	}
+
+	// File content destruction — truncates or overwrites file contents
+	// without removing the file itself.
+	for _, prefix := range []string{"truncate ", "shred "} {
+		if strings.HasPrefix(cmdLower, prefix) || cmdLower == strings.TrimSpace(prefix) {
+			return true
+		}
+	}
+
+	// Output redirection to non-system paths — shell file write.
+	// System directory redirections (> /etc/, > /dev/sda, etc.) are
+	// caught as DANGEROUS earlier in classifySingleCommand. Benign
+	// redirections (/tmp/, /dev/null, /dev/stdout) are excluded by
+	// isBenignRedirection. This catches `echo x > file.txt` style
+	// writes that bypass the write_file/edit_file tools.
+	if containsRedirection(cmdLower) && !isBenignRedirection(cmdLower) {
+		return true
+	}
+
 	// eval — executes a dynamically-constructed string
 	if strings.HasPrefix(cmdLower, "eval ") || cmdLower == "eval" {
 		return true
@@ -353,6 +403,7 @@ func isCautionPattern(cmd string) bool {
 		"git push --force", "git push -f",
 		"git branch -d", "git branch -D",
 		"git clean -ff", "git clean -fd", "git clean -ffd",
+		"git rebase", // history-rewriting — never safe to run unattended
 	}
 	for _, op := range dangerousGit {
 		if strings.HasPrefix(cmdLower, op) {
@@ -467,7 +518,13 @@ func classifyXargsInvocation(cmdLower string) (SecurityRisk, bool) {
 
 	// Shell-interpreter carve-out. xargs sh -c "...", xargs bash -c "...",
 	// etc. The script body is opaque to a static classifier.
-	head := strings.Fields(inner)[0]
+	// Strip a leading "--" (end-of-options separator) so that
+	// "xargs -- sh -c ..." is still caught.
+	interpreterCmd := inner
+	if strings.HasPrefix(interpreterCmd, "-- ") {
+		interpreterCmd = interpreterCmd[3:]
+	}
+	head := strings.Fields(interpreterCmd)[0]
 	switch head {
 	case "sh", "bash", "zsh", "dash", "fish", "ksh", "csh", "tcsh":
 		return SecurityCaution, true

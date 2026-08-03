@@ -132,3 +132,111 @@ Add a test that creates agents through each public creation path and asserts:
 - `EventBus` is wired
 - `WorkspaceRoot` is set
 - Events published via the agent carry `client_id` / `chat_id` metadata
+
+---
+
+## Additional Duplication Targets (Audit 2026-08-03)
+
+Beyond the agent-creation and event-publishing patterns above, a systematic
+audit found the following high-impact duplication areas. These are scoped as
+follow-up phases under this spec since they share the same root cause
+(copy-paste expansion without extraction).
+
+### Phase 4: Goroutine panic-recovery helper
+
+**Scope:** 31 `defer func() { if r := recover(); r != nil { ... } }()` blocks
+across `pkg/webui/` and `pkg/agent/`. Each copy-pastes the same 5-8 line
+pattern: recover, log the panic with `slog`, optionally send an error event.
+
+**Locations (representative):**
+- `pkg/webui/search_semantic_api.go:229`
+- `pkg/webui/instances_api.go:280`
+- `pkg/webui/terminal_websocket.go:56, 195`
+- `pkg/webui/ssh_proxy.go:307`
+- `pkg/webui/api_query.go:546`
+- `pkg/webui/safe_conn.go:81`
+- `pkg/webui/api_query_shared.go` (goroutine + activeQueries cleanup)
+
+**Proposed fix:** A `SafeGo(name string, fn func())` helper in a shared
+package (`pkg/utils/` or `pkg/webui/`) that wraps goroutine launches with
+panic recovery and structured logging. No such helper exists today.
+
+```go
+// SafeGo launches a goroutine with panic recovery and structured logging.
+func SafeGo(logger *slog.Logger, name string, fn func()) {
+    go func() {
+        defer func() {
+            if r := recover(); r != nil {
+                logger.Error("goroutine panicked",
+                    slog.String("name", name),
+                    slog.Any("panic", r))
+            }
+        }()
+        fn()
+    }()
+}
+```
+
+**Impact:** 31 copy-paste sites → 1-line calls. Eliminates inconsistency in
+recovery behavior (some log, some send events, some silently swallow).
+
+### Phase 5: Output pipe capture helper
+
+**Scope:** The `os.Pipe() + goroutine io.Copy + SetOutput + Close + drain`
+pattern is duplicated in 2 locations for capturing slash-command output in
+the webui:
+- `pkg/webui/api_query.go:521-560` (`executeSafeSteerCommandStreaming`)
+- `pkg/webui/api_query_shared.go:366-395` (`runChatQuery` slash dispatch)
+
+Both do: create pipe → SetOutput(writeEnd) → goroutine reads pipe →
+Execute command → SetOutput(nil) → Close pipe → drain reader.
+
+**Proposed fix:** Extract a `CaptureCommandOutput(registry, agent, query) (string, error)`
+helper in `pkg/webui/` that encapsulates the pipe lifecycle. Both call sites
+shrink to one line.
+
+### Phase 6: WebUI client-context lock boilerplate
+
+**Scope:** 103 mutex lock/unlock sites in `pkg/webui/`, most following the
+same `ws.mutex.Lock()` → lookup client → operate → `ws.mutex.Unlock()` pattern.
+The `getOrCreateClientContext` / `getOrCreateClientContextLocked` pair
+(`client_context.go:185-196`) already centralizes the lookup, but 15+
+call sites reimplement the lock-guarded access around it.
+
+**Proposed fix:** Expand the existing helper to accept a closure:
+```go
+func (ws *ReactWebServer) withClientContext(clientID string, fn func(*webClientContext)) {
+    ws.mutex.Lock()
+    defer ws.mutex.Unlock()
+    ctx := ws.getOrCreateClientContextLocked(clientID)
+    fn(ctx)
+}
+```
+
+**Impact:** Medium — reduces 103 lock sites to closures, but each has slightly
+different error handling. Lower priority than Phases 4-5.
+
+### Phase 7: `SetWorkspaceRoot` call consolidation
+
+**Scope:** `SetWorkspaceRoot` is called from 11 sites across `pkg/webui/`
+(client_context.go ×4, chat_sessions.go ×3, git_api_review.go ×1,
+sessions_api.go ×1, api_query_shared.go ×2). Several of these are in the
+same agent's lifecycle (create → then immediately SetWorkspaceRoot).
+
+**Proposed fix:** Folded into Phase 1's `ConfigureAgent` helper — the
+workspace root is set at creation time, eliminating the need for later
+re-setting. The 2 sites in `api_query_shared.go` that re-set it per-query
+are the exception (workspace switch mid-session) and stay as-is.
+
+### Lower-Priority Candidates (documented, not scoped)
+
+These patterns were identified but are either too deeply embedded or low-risk
+to justify a dedicated phase:
+
+| Pattern | Count | Notes |
+|---------|-------|-------|
+| `context.WithTimeout` boilerplate | 15+ in webui | Each API handler creates its own timeout; could use middleware but each has different durations |
+| Direct `exec.Command` / shell execution | 44 sites | Already partially centralized via `execShellCmd` in agent_tools; remaining sites have different cwd/env needs |
+| Provider config JSON loading | 14 sites | Already centralized through `ProviderFactory`; the 14 count includes the factory's own methods |
+| `slog.With("handler", ...)` logging | 1 site | Already centralized — `webuiLogger` is a single var |
+| Git command string construction | 20+ sites | Spread across `git.go`, `git_handler.go`, `commit_handler.go`; consolidation tracked under existing tool-handler refactoring |

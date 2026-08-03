@@ -6,8 +6,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// agentSetupConfig holds the parameters for configuring a newly created agent
-// in the webui context. EventBus and UserID are skipped when empty.
+// agentSetupConfig holds the parameters for configuring an agent in the webui
+// context. EventBus and UserID are skipped when empty.
 type agentSetupConfig struct {
 	EventBus      *events.EventBus
 	WorkspaceRoot string
@@ -30,7 +30,28 @@ func setupWebUIAgent(a *agent.Agent, cfg agentSetupConfig) {
 	}
 	a.SetSlashCommands(agent_commands.NewCommandRegistry())
 	a.SetWorkspaceRoot(cfg.WorkspaceRoot)
+	applyWebUIAgentMetadata(a, cfg)
+	a.EnableStreaming(func(string) {})
+}
 
+// rearmWebUIAgent re-applies the per-request state to an existing agent being
+// reused from a prior query. Unlike setupWebUIAgent, it does NOT reset
+// SlashCommands or EventBus — those are set once at creation and should not
+// be re-applied to a live agent. If ws is nil, server-level wiring
+// (HasActiveWebUIClients, InjectWebUIManagers) is skipped.
+func rearmWebUIAgent(a *agent.Agent, ws *ReactWebServer, cfg agentSetupConfig) {
+	a.SetWorkspaceRoot(cfg.WorkspaceRoot)
+	applyWebUIAgentMetadata(a, cfg)
+	a.EnableStreaming(func(string) {})
+	if ws != nil {
+		a.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+		a.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
+	}
+}
+
+// applyWebUIAgentMetadata sets the event routing metadata (client_id, chat_id,
+// user_id) on the agent. Shared between setup and rearm paths.
+func applyWebUIAgentMetadata(a *agent.Agent, cfg agentSetupConfig) {
 	meta := map[string]interface{}{
 		"client_id": cfg.ClientID,
 		"chat_id":   cfg.ChatID,
@@ -39,5 +60,4 @@ func setupWebUIAgent(a *agent.Agent, cfg agentSetupConfig) {
 		meta["user_id"] = cfg.UserID
 	}
 	a.SetEventMetadata(meta)
-	a.EnableStreaming(func(string) {})
 }

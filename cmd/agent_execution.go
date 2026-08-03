@@ -37,7 +37,7 @@ func init() {
 
 // Ensure imports are used
 var (
-	_ = commands.NewCommandRegistry
+	_ = commands.DefaultRegistry
 	_ = console.NewCIOutputHandler
 	_ = events.NewEventBus
 	_ = utils.GetLogger

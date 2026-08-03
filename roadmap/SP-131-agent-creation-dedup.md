@@ -195,26 +195,17 @@ Execute command → SetOutput(nil) → Close pipe → drain reader.
 helper in `pkg/webui/` that encapsulates the pipe lifecycle. Both call sites
 shrink to one line.
 
-### Phase 6: WebUI client-context lock boilerplate
+### Phase 6: WebUI client-context lock boilerplate — DEFERRED
 
-**Scope:** 103 mutex lock/unlock sites in `pkg/webui/`, most following the
-same `ws.mutex.Lock()` → lookup client → operate → `ws.mutex.Unlock()` pattern.
-The `getOrCreateClientContext` / `getOrCreateClientContextLocked` pair
-(`client_context.go:185-196`) already centralizes the lookup, but 15+
-call sites reimplement the lock-guarded access around it.
+**Investigated 2026-08-03.** The 8 sites using the `ws.mutex.Lock → getOrCreateClientContextLocked → operate → Unlock` pattern have too much variation for a clean closure abstraction:
+- Some unlock immediately (agent creation paths)
+- Some write HTTP errors inside the lock
+- Some do nested chat-session operations
+- Some hold the lock for the entire function body
 
-**Proposed fix:** Expand the existing helper to accept a closure:
-```go
-func (ws *ReactWebServer) withClientContext(clientID string, fn func(*webClientContext)) {
-    ws.mutex.Lock()
-    defer ws.mutex.Unlock()
-    ctx := ws.getOrCreateClientContextLocked(clientID)
-    fn(ctx)
-}
-```
+The existing `getOrCreateClientContext` / `getOrCreateClientContextLocked` pair already centralizes the lookup. The boilerplate around them is genuinely different per call site. A `withClientContext(closure)` helper would need to handle HTTP responses, error returns, and context escapes — more complex than the code it replaces.
 
-**Impact:** Medium — reduces 103 lock sites to closures, but each has slightly
-different error handling. Lower priority than Phases 4-5.
+**Decision:** Deferred indefinitely. The lookup is already centralized; the lock scope variation is inherent to each handler's logic.
 
 ### Phase 7: `SetWorkspaceRoot` call consolidation
 

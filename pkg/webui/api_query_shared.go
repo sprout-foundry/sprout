@@ -3,12 +3,9 @@
 package webui
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -363,41 +360,10 @@ func (ws *ReactWebServer) runChatQuery(
 			// Route command output through an invocation-local pipe. This avoids
 			// mutating process-global os.Stdout and allows slash commands from
 			// different clients to execute concurrently.
+			capturedOutput, err := captureCommandOutput(
+				ws.log(), logTag, registry, query, clientAgent, nil, false,
+			)
 			trimmed := strings.TrimSpace(query)
-			pipeR, pipeW, pipeErr := os.Pipe()
-			var captured bytes.Buffer
-			var readerDone chan struct{}
-			if pipeErr == nil {
-				registry.SetOutput(pipeW)
-				readerDone = make(chan struct{})
-				go func() {
-					defer close(readerDone)
-					if _, copyErr := io.Copy(&captured, pipeR); copyErr != nil {
-						ws.log().Error("command output pipe read failed",
-							slog.String("handler", logTag),
-							slog.Any("err", copyErr),
-						)
-					}
-				}()
-			} else {
-				// Pipe creation failed (rare: FD exhaustion). Fall back to
-				// io.Discard so commands implementing OutputCommand don't
-				// block on a nil writer. Output is lost but the command runs.
-				ws.log().Warn("command output pipe creation failed; output will be lost",
-					slog.String("handler", logTag),
-					slog.Any("err", pipeErr),
-				)
-				registry.SetOutput(io.Discard)
-			}
-
-			err := registry.Execute(query, clientAgent)
-			registry.SetOutput(nil)
-			if pipeErr == nil {
-				_ = pipeW.Close()
-				<-readerDone
-				_ = pipeR.Close()
-			}
-			capturedOutput := captured.String()
 
 			// Sync state asynchronously so the query goroutine can proceed
 			// to publish events without waiting for the state export.

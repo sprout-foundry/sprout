@@ -2,6 +2,40 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.16] - 2026-08-02
+
+- fix: thread workspace context through session and skill callsites (SP-091) (560307d5e)
+- style: prettier-format test files to fix CI lint gate (976f359d4)
+- test: add test coverage for SP-121-8/9 platform components (a12162c9b)
+- docs: trim security classifier AGENTS.md to essential guardrails (180659643)
+- docs: expand AGENTS.md security classifier section with full architecture reference (fb1ec7d7b)
+- fix: flip shell classifier from default-CAUTION to default-SAFE (7a558d31d)
+- fix(pricing): allow agent to modify provider Go files (9cb0ce48b)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (83bb47c5d)
+- feat(pricing): add OpenRouter fallback discovery for providers without API keys (3a7eff9f7)
+- refactor(agent): remove dead SUBAGENT_METRICS pipeline (1a6f00cfb)
+- chore(automate): switch workflows to qwen3.6-27b/ai-worker + deepseek coordinator (7907a3110)
+- fix(agent): aggregate parallel subagent costs from structured results (1cbecad8f)
+- fix(pricing): use set +e to capture non-zero exit from --fail-on-drift (e1a154ed8)
+- feat(pricing): expand audit pipeline with model discovery and auto-population (91d0d6af6)
+- fix: resolve CI failures — tool name casing, test thresholds, prettier format (b30df7463)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (c9643084d)
+- fix: SP-130 code review fixes — symlink resolution, SSH skip, path canonicalization, tests (c35498ce8)
+- feat: SP-130 — Home-Directory Workspace Gate (Phases 1-4) (28ad60fa8)
+- style: gofmt alignment fix in zai_maxtokens_test.go (9856e7ec7)
+- feat: auto-infer context size from vLLM, llama.cpp, and OpenAI-compat endpoints (78fb876fe)
+- docs(roadmap): add SP-130 — Home-Directory Workspace Gate (79e0c259b)
+- merge: integrate origin/main (a2915d29f)
+- fix: cap max_tokens at 64K for all providers (b968fae98)
+- merge: integrate origin/main (7 commits) (68e92c96b)
+- perf(lsp): fix TypeScript semantic pool deadlock and debounce frontend diagnostics (e1c6b0dac)
+- fix(fetch_url): address review findings — atomic writes, eviction, permissions, fallback TOC (bd5718171)
+- feat(fetch_url): progressive disclosure for large pages via temp file + section TOC (74c0fcb61)
+- feat(fetch_url): add max_chars parameter to control response size (a95c5764e)
+- feat(lcm): add repo_map, web_search, fetch_url to lite allowlist; skip persona filter in LCM (ae8cb2c1f)
+- refactor(lcm): raise auto-detect threshold to 132K, fix depth-limit hole, de-brand prompt (4152b7bf9)
+- feat(lcm): add run_subagent to low-context mode tool allowlist (09b4cbf04)
+
 ## [v0.17.13] - 2026-07-30
 
 - style: prettier format useChatSessionManager.ts and useWebSocketEventHandler.ts (ba90a0997)

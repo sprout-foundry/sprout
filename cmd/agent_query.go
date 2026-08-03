@@ -115,8 +115,10 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 // it to simulate ProcessQuery behavior without spinning up an LLM.
 var processQueryFn = ProcessQuery
 
-// ProcessQuery processes a single query
-func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
+// ProcessQuery processes a single query. The eventBus parameter is retained
+// for the workflow.QueryExecutor signature contract; events now publish via
+// chatAgent.PublishEvent which auto-decorates with client_id/chat_id metadata.
+func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBus, query string) error {
 	setQueryInProgress(true)
 	defer setQueryInProgress(false)
 
@@ -137,19 +139,11 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	}
 
 	// Publish query started event
-	startedEvent := events.QueryStartedEvent(
+	chatAgent.PublishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(
 		query,
 		chatAgent.GetProvider(),
 		chatAgent.GetModel(),
-	)
-	// Decorate with agent metadata for event routing
-	if clientID := chatAgent.GetEventClientID(); clientID != "" {
-		startedEvent["client_id"] = clientID
-	}
-	if chatID := chatAgent.GetEventChatID(); chatID != "" {
-		startedEvent["chat_id"] = chatID
-	}
-	eventBus.Publish(events.EventTypeQueryStarted, startedEvent)
+	))
 
 	startTime := time.Now()
 
@@ -158,22 +152,13 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	// The OutputRouter's RouteStreamChunk handles both event publishing and terminal output.
 	// StatsUpdateCallback is set once; subsequent calls overwrite which is fine.
 	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
-		// Publish metrics to event bus for WebUI
-		metricsEvent := events.MetricsUpdateEvent(
+		chatAgent.PublishEvent(events.EventTypeMetricsUpdate, events.MetricsUpdateEvent(
 			totalTokens,
 			chatAgent.GetCurrentContextTokens(),
 			chatAgent.GetMaxContextTokens(),
 			chatAgent.GetCurrentIteration(),
 			totalCost,
-		)
-		// Decorate with agent metadata for event routing
-		if clientID := chatAgent.GetEventClientID(); clientID != "" {
-			metricsEvent["client_id"] = clientID
-		}
-		if chatID := chatAgent.GetEventChatID(); chatID != "" {
-			metricsEvent["chat_id"] = chatID
-		}
-		eventBus.Publish(events.EventTypeMetricsUpdate, metricsEvent)
+		))
 	})
 
 	// Run agent processing in a goroutine to support cancellation
@@ -213,17 +198,9 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				console.GlyphError.Fprintln(os.Stderr, res.response)
 				reported = true
 			}
-			errorEvent := events.ErrorEvent(
+			chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
 				fmt.Sprintf("Failed to process query: %s", query), res.err,
-			)
-			// Decorate with agent metadata for event routing
-			if clientID := chatAgent.GetEventClientID(); clientID != "" {
-				errorEvent["client_id"] = clientID
-			}
-			if chatID := chatAgent.GetEventChatID(); chatID != "" {
-				errorEvent["chat_id"] = chatID
-			}
-			eventBus.Publish(events.EventTypeError, errorEvent)
+			))
 			if reported {
 				return markReported(res.err)
 			}
@@ -289,17 +266,9 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		case <-time.After(3 * time.Second):
 		}
 
-		errorEvent := events.ErrorEvent(
+		chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
 			fmt.Sprintf("Query interrupted: %s", query), ctx.Err(),
-		)
-		// Decorate with agent metadata for event routing
-		if clientID := chatAgent.GetEventClientID(); clientID != "" {
-			errorEvent["client_id"] = clientID
-		}
-		if chatID := chatAgent.GetEventChatID(); chatID != "" {
-			errorEvent["chat_id"] = chatID
-		}
-		eventBus.Publish(events.EventTypeError, errorEvent)
+		))
 		return fmt.Errorf("query interrupted: %w", ctx.Err())
 	}
 }

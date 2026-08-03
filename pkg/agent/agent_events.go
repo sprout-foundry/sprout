@@ -206,9 +206,11 @@ func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider s
 	}
 }
 
-// PublishBudgetUpdate publishes a budget update event for automate sessions.
-// This goes through decorateEventPayload to include client_id/chat_id metadata.
-func (a *Agent) PublishBudgetUpdate(eventType string, data interface{}) {
+// PublishEvent publishes an event through the agent's event bus, automatically
+// decorating it with client_id/chat_id metadata. This is the canonical way for
+// external callers (cmd/, webui) to publish events — use it instead of calling
+// eventBus.Publish directly, which skips metadata decoration.
+func (a *Agent) PublishEvent(eventType string, data interface{}) {
 	a.publishEvent(eventType, data)
 }
 

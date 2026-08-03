@@ -309,8 +309,7 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 	stats["provider"] = agentInst.GetProvider()
 	stats["model"] = agentInst.GetModel()
 	stats["persona"] = agentInst.GetActivePersona()
-	stats["client_id"] = clientID
-	ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
+	agentInst.PublishEvent(events.EventTypeMetricsUpdate, stats)
 }
 
 // handleGetModels handles GET /api/providers/models?provider=<provider_type>

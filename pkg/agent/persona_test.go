@@ -396,6 +396,48 @@ func TestEvaluateOperationRisk_NilConfigReturnsLow(t *testing.T) {
 	}
 }
 
+func TestEvaluateOperationRisk_UserDefinedProfileFromConfig(t *testing.T) {
+	// Primary regression for config-driven user-defined risk profiles:
+	// when cfg.RiskProfile names a profile that only exists in
+	// cfg.RiskProfiles, GetActiveRiskProfile must surface that name and
+	// EvaluateOperationRisk must apply the custom rules (not fall back
+	// to the baked-in default profile).
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("coder") // rules-less; falls through to profile
+
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.RiskProfiles == nil {
+			cfg.RiskProfiles = make(map[string]configuration.AutoApproveRules)
+		}
+		cfg.RiskProfile = "my_strict"
+		cfg.RiskProfiles["my_strict"] = configuration.AutoApproveRules{
+			LowRiskOps:  []string{"git_status"},
+			DefaultRisk: configuration.RiskLevelHigh,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	if got := agent.GetActiveRiskProfile(); got != configuration.RiskProfile("my_strict") {
+		t.Errorf("GetActiveRiskProfile() = %q, want %q", got, configuration.RiskProfile("my_strict"))
+	}
+
+	// The one explicitly allowed op stays Low under the custom rules.
+	if got := agent.EvaluateOperationRisk("git status"); got != configuration.RiskLevelLow {
+		t.Errorf("EvaluateOperationRisk(\"git status\") = %q, want %q", got, configuration.RiskLevelLow)
+	}
+
+	// Everything else hits the custom profile's High default
+	// (shell_command is not listed in LowRiskOps).
+	if got := agent.EvaluateOperationRisk("echo hello"); got != configuration.RiskLevelHigh {
+		t.Errorf("EvaluateOperationRisk(\"echo hello\") = %q, want %q", got, configuration.RiskLevelHigh)
+	}
+}
+
 // =============================================================================
 // isGitWriteAllowed — capability-driven authorization
 // =============================================================================

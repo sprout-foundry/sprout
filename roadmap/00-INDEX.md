@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-08-02):** 101 shipped · 11 pending · 2 parked in `future/`.
+**Counts (as of 2026-08-03):** 101 shipped · 12 pending · 2 parked in `future/`.
 
 ## Shipped
 
@@ -128,6 +128,7 @@ the root directory._
 | SP-127 | [Promote Filesystem Gate to Gate-1](./SP-127-filesystem-gate-promotion.md) | 🟢 Shipped M1–M4 (`a06a3f8a` M1, `1acff1cb`–`ac969831` M2, `91853ec0` M3 audit/docs, `779999e1` M4 cleanup). Path-tier classification unified into Gate 1 (`classifyFileAccess`); all 6 file-touching handlers migrated to `PrecheckFileAccess`; old `withFilesystemApproval`/`FilesystemGate` machinery removed. Audit trail, docs, conformance tests, and integration tests all updated. Follow-on: SP-068 path-tier `RiskCategory` exposed for UnifiedRiskResolver (`868822e5`); Phase 2.7 `AllowedPathHit` audit event (`7869287d`). |
 
 | SP-130 | [Home-Directory Workspace Gate](./SP-130-home-workspace-gate.md) | 🟢 Implemented (2026-07-31) — Phases 1–4 shipped. Backend: `workspace_gate.go` (home detection + consent store), `handleAPIWorkspaceGet` gates `needs_workspace_selection` on home-without-consent, `FindProjectsInDirectory` removed from the hot path (kills the recursive home walk that triggered macOS TCC "access Apple Music" prompts), `setClientWorkspaceRoot` defense-in-depth, server startup restores most-recent workspace. Frontend: `WorkspaceGateModal` blocking overlay with explicit home-consent flow, broken `extractHomeDir` heuristic replaced with backend `home_dir`. Service plist/unit comments updated. CLI interactive mode warns when CWD is home. |
+| SP-131 | [Agent Creation & Event Publishing Dedup](./SP-131-agent-creation-dedup.md) | 🟡 Draft — Phase 0 shipped (`4ae74bcc1`, `e0eb0c7f4`, `38984fd99`). Phases 1–3 pending. |
 
 ## Future / On Hold
 

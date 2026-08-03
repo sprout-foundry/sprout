@@ -14,6 +14,7 @@ import (
 
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // chatQueryOptions bundles the per-request overrides that flow into the
@@ -400,16 +401,7 @@ func (ws *ReactWebServer) runChatQuery(
 
 			// Sync state asynchronously so the query goroutine can proceed
 			// to publish events without waiting for the state export.
-			go func() {
-				defer func() {
-					if recovered := recover(); recovered != nil {
-						ws.log().Error("panic in slash-command state sync",
-							slog.String("handler", logTag),
-							slog.String("chat_id", chatID),
-							slog.Any("panic", recovered),
-						)
-					}
-				}()
+			utils.SafeGo(ws.log(), "slash-command state sync", func() {
 				if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
 					ws.log().Error("async state sync failed",
 						slog.String("handler", logTag),
@@ -417,7 +409,7 @@ func (ws *ReactWebServer) runChatQuery(
 						slog.Any("err", err),
 					)
 				}
-			}() // Send any captured output as a stream chunk before reporting
+			}, slog.String("handler", logTag), slog.String("chat_id", chatID)) // Send any captured output as a stream chunk before reporting
 			// success or error, so the user sees what the command printed.
 			if capturedOutput != "" {
 				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
@@ -493,16 +485,7 @@ func (ws *ReactWebServer) runChatQuery(
 		// Sync state asynchronously so the query goroutine returns
 		// immediately. ExportState can take seconds for large conversations,
 		// and the deferred active-query cleanup must not wait for it.
-		go func() {
-			defer func() {
-				if recovered := recover(); recovered != nil {
-					ws.log().Error("panic in state sync",
-						slog.String("handler", logTag),
-						slog.String("chat_id", chatID),
-						slog.Any("panic", recovered),
-					)
-				}
-			}()
+		utils.SafeGo(ws.log(), "state sync", func() {
 			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
 				ws.log().Error("async state sync failed",
 					slog.String("handler", logTag),
@@ -510,7 +493,7 @@ func (ws *ReactWebServer) runChatQuery(
 					slog.Any("err", err),
 				)
 			}
-		}()
+		}, slog.String("handler", logTag), slog.String("chat_id", chatID))
 
 		if err != nil {
 			ws.log().Error("query failed",

@@ -16,6 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // SemanticSearchResult represents a single semantic search match.
@@ -225,12 +226,7 @@ func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.
 	}
 
 	// Start build in background goroutine
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				ws.log().Error("panic in background embedding build", slog.Any("panic", r))
-			}
-		}()
+	utils.SafeGo(ws.log(), "background embedding build", func() {
 		ctx := context.Background()
 		stats, err := em.BuildIndex(ctx)
 		if err != nil {
@@ -238,7 +234,7 @@ func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.
 			return
 		}
 		ws.log().Info("background embedding build completed", slog.Int("units_indexed", stats.UnitsExtracted))
-	}()
+	})
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "build started"})
 }

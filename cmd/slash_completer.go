@@ -45,7 +45,7 @@ func (c *slashCommandCache) getRegistry() *agent_commands.CommandRegistry {
 	defer c.mu.Unlock()
 
 	if c.registry == nil {
-		c.registry = agent_commands.NewCommandRegistry()
+		c.registry = agent_commands.DefaultRegistry()
 	}
 	return c.registry
 }

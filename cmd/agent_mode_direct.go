@@ -20,7 +20,7 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 	}
 
 	// Slash/bang commands should bypass command-detection fast paths.
-	registry := agent_commands.NewCommandRegistry()
+	registry := agent_commands.DefaultRegistry()
 	if registry.IsSlashCommand(query) {
 		return ProcessQuery(ctx, chatAgent, eventBus, query)
 	}

@@ -68,8 +68,15 @@ func (c *RiskProfileCommand) Execute(args []string, chatAgent *agent.Agent) erro
 		return c.show(chatAgent)
 	}
 
-	if !configuration.IsValidRiskProfile(first) {
-		return fmt.Errorf("unknown risk profile %q (valid: %s)", args[0], strings.Join(builtinProfileNames(), ", "))
+	if !configuration.IsValidRiskProfileWithConfig(first, chatAgent.GetConfig()) {
+		cfg := chatAgent.GetConfig()
+		valid := builtinProfileNames()
+		if cfg != nil {
+			for k := range cfg.RiskProfiles {
+				valid = append(valid, k)
+			}
+		}
+		return fmt.Errorf("unknown risk profile %q (valid: %s)", args[0], strings.Join(valid, ", "))
 	}
 
 	chatAgent.SetRiskProfileOverride(configuration.RiskProfile(first))

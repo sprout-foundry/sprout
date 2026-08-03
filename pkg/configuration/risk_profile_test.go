@@ -413,3 +413,62 @@ func keys(m map[string]AutoApproveRules) []string {
 	}
 	return out
 }
+
+// TestIsValidRiskProfileWithConfig_Builtin verifies that the five
+// baked-in names pass regardless of config context (nil config, empty
+// config, or a config that also carries user-defined entries).
+func TestIsValidRiskProfileWithConfig_Builtin(t *testing.T) {
+	builtins := []string{
+		"readonly", "cautious", "default", "permissive", "unrestricted",
+	}
+	cfg := &Config{RiskProfiles: map[string]AutoApproveRules{"custom": {DefaultRisk: RiskLevelLow}}}
+	for _, name := range builtins {
+		if !IsValidRiskProfileWithConfig(name, nil) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, nil) = false, want true", name)
+		}
+		if !IsValidRiskProfileWithConfig(name, &Config{}) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, empty config) = false, want true", name)
+		}
+		if !IsValidRiskProfileWithConfig(name, cfg) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, config with user entries) = false, want true", name)
+		}
+	}
+}
+
+// TestIsValidRiskProfileWithConfig_UserDefined verifies that a name
+// present in cfg.RiskProfiles is accepted, absent names are rejected,
+// and the built-in-only predicate remains unchanged.
+func TestIsValidRiskProfileWithConfig_UserDefined(t *testing.T) {
+	cfg := &Config{
+		RiskProfiles: map[string]AutoApproveRules{
+			"my_strict": {DefaultRisk: RiskLevelHigh},
+		},
+	}
+	if !IsValidRiskProfileWithConfig("my_strict", cfg) {
+		t.Error("user-defined profile in cfg.RiskProfiles should be accepted")
+	}
+	for _, name := range []string{"my_other", "sandbox", ""} {
+		if IsValidRiskProfileWithConfig(name, cfg) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, cfg) = true, want false", name)
+		}
+	}
+	// The built-in-only predicate is intentionally unchanged.
+	if IsValidRiskProfile("my_strict") {
+		t.Error("IsValidRiskProfile should still reject user-defined names")
+	}
+}
+
+// TestIsValidRiskProfileWithConfig_NilConfig verifies that nil config
+// only accepts the built-in names.
+func TestIsValidRiskProfileWithConfig_NilConfig(t *testing.T) {
+	for _, name := range []string{"readonly", "cautious", "default", "permissive", "unrestricted"} {
+		if !IsValidRiskProfileWithConfig(name, nil) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, nil) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"my_strict", "custom", ""} {
+		if IsValidRiskProfileWithConfig(name, nil) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, nil) = true, want false", name)
+		}
+	}
+}

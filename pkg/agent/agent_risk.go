@@ -51,12 +51,14 @@ func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
 
 // activeRiskProfile returns the risk profile that should apply for
 // the next operation. Resolution: per-agent override (set by CLI
-// flag / workflow step) → config.RiskProfile → "default".
+// flag / workflow step) → config.RiskProfile (built-in or user-defined
+// in config.RiskProfiles) → "default".
 func (a *Agent) activeRiskProfile() configuration.RiskProfile {
 	if a.riskProfileOverride != "" {
 		return a.riskProfileOverride
 	}
-	if cfg := a.GetConfig(); cfg != nil && cfg.RiskProfile != "" && configuration.IsValidRiskProfile(cfg.RiskProfile) {
+	cfg := a.GetConfig()
+	if cfg != nil && cfg.RiskProfile != "" && configuration.IsValidRiskProfileWithConfig(cfg.RiskProfile, cfg) {
 		return configuration.RiskProfile(cfg.RiskProfile)
 	}
 	return configuration.RiskProfileDefault

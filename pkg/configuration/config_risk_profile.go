@@ -15,6 +15,22 @@ func IsValidRiskProfile(s string) bool {
 	return false
 }
 
+// IsValidRiskProfileWithConfig reports whether s names a profile that
+// is usable in the given config context: a baked-in profile name OR a
+// user-defined name present in cfg.RiskProfiles. cfg may be nil, in
+// which case only the built-in names are accepted.
+func IsValidRiskProfileWithConfig(s string, cfg *Config) bool {
+	if IsValidRiskProfile(s) {
+		return true
+	}
+	if cfg != nil {
+		if _, ok := cfg.RiskProfiles[s]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // ResolveRiskProfileRules returns the AutoApproveRules that should
 // apply for the given profile name, honoring user overrides in
 // Config.RiskProfiles before falling back to the baked-in defaults.

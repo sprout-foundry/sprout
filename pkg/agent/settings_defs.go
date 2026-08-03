@@ -537,16 +537,18 @@ var settingDefs = []settingDef{
 	{
 		Key:         "risk_profile",
 		Description: "Shell-command risk cascade profile",
-		ValidValues: "readonly, cautious, default, permissive, unrestricted",
+		ValidValues: "readonly, cautious, default, permissive, unrestricted, or any user-defined name in risk_profiles",
 		GetValue:    func(cfg *configuration.Config) string { return cfg.RiskProfile },
 		SetValue: func(cfg *configuration.Config, value string) error {
-			switch strings.ToLower(value) {
-			case "readonly", "cautious", "default", "permissive", "unrestricted", "":
-				cfg.RiskProfile = strings.ToLower(value)
+			v := strings.ToLower(value)
+			// Accept the five built-in names plus any user-defined
+			// profile present in cfg.RiskProfiles (checked via the
+			// config-aware predicate so custom profiles resolve).
+			if configuration.IsValidRiskProfileWithConfig(v, cfg) {
+				cfg.RiskProfile = v
 				return nil
-			default:
-				return agenterrors.NewValidation(fmt.Sprintf("risk_profile must be readonly, cautious, default, permissive, or unrestricted, got %q", value), nil)
 			}
+			return agenterrors.NewValidation(fmt.Sprintf("risk_profile must be readonly, cautious, default, permissive, unrestricted, or a user-defined name in risk_profiles, got %q", value), nil)
 		},
 		EnumValues: []string{"readonly", "cautious", "default", "permissive", "unrestricted"},
 	},

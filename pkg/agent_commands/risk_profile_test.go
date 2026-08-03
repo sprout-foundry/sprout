@@ -92,3 +92,43 @@ func TestBuiltinProfileNamesAreValid(t *testing.T) {
 		}
 	}
 }
+
+func TestRiskProfileCommand_UserDefinedProfile(t *testing.T) {
+	chatAgent, err := agent.NewAgentWithModel("")
+	if err != nil {
+		t.Fatalf("NewAgentWithModel failed: %v", err)
+	}
+	t.Cleanup(func() { chatAgent.Shutdown() })
+
+	// Register a user-defined profile in the agent's config so the
+	// command can resolve its name.
+	if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.RiskProfiles == nil {
+			cfg.RiskProfiles = make(map[string]configuration.AutoApproveRules)
+		}
+		cfg.RiskProfiles["my_strict"] = configuration.AutoApproveRules{
+			LowRiskOps:  []string{"git_status"},
+			DefaultRisk: configuration.RiskLevelHigh,
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	cmd := &RiskProfileCommand{}
+
+	// Setting a user-defined profile should succeed.
+	if err := cmd.Execute([]string{"my_strict"}, chatAgent); err != nil {
+		t.Fatalf("set user-defined profile failed: %v", err)
+	}
+	if got := chatAgent.GetActiveRiskProfile(); got != configuration.RiskProfile("my_strict") {
+		t.Errorf("after set: active = %q, want %q", got, "my_strict")
+	}
+
+	// Unknown names (not built-in, not in cfg.RiskProfiles) still error.
+	if err := cmd.Execute([]string{"not-a-real-profile"}, chatAgent); err == nil {
+		t.Fatal("expected error for unknown profile")
+	} else if !strings.Contains(err.Error(), "unknown risk profile") {
+		t.Errorf("error message should mention 'unknown risk profile', got %q", err.Error())
+	}
+}

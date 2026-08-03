@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -227,6 +228,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	if eventBus != nil {
 		created.SetEventBus(eventBus)
 	}
+	created.SetSlashCommands(agent_commands.NewCommandRegistry())
 	created.SetWorkspaceRoot(agentWorkspace)
 	meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
 	if userID != "" {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -548,6 +549,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	}
 
 	created.SetEventBus(ws.eventBus)
+	created.SetSlashCommands(agent_commands.NewCommandRegistry())
 	created.SetWorkspaceRoot(workspaceRoot)
 	// Get chat_id while holding the lock
 	ws.mutex.RLock()

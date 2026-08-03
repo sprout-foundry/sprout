@@ -5,7 +5,6 @@ package webui
 import (
 	"bufio"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 )
 
@@ -276,14 +276,9 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 
 	// Fire-and-forget: the launch runs in the background.  The caller polls
 	// /api/instances/ssh-launch-status for progress and the final proxy URL.
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				ws.log().Error("panic in fire-and-forget SSH launch", slog.Any("panic", r))
-			}
-		}()
+	utils.SafeGo(ws.log(), "fire-and-forget SSH launch", func() {
 		_, _ = ws.launchSSHWorkspace(req)
-	}()
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)

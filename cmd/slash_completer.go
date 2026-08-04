@@ -14,8 +14,11 @@ import (
 
 // completionCacheTTL is how long argument-completion results are cached
 // before re-querying. Short enough that newly registered MCP servers or
-// config changes appear within a second, long enough to prevent
-// repeated network calls or config reads during rapid typing.
+// config changes appear within a second of the user pausing, long enough
+// to prevent repeated network calls or config reads during rapid typing.
+// The TTL is refreshed on every cache hit (sliding window), so a user
+// typing continuously never re-queries — the recompute only fires after
+// ~TTL of inactivity on a given command context.
 const completionCacheTTL = 500 * time.Millisecond
 
 // slashCommandCache caches the command registry and argument-completion
@@ -30,7 +33,11 @@ type slashCommandCache struct {
 
 type argCacheEntry struct {
 	candidates []string
-	expiresAt  time.Time
+	// computedPrefix is the last-argument prefix the candidates were
+	// computed with. While the user's current prefix extends it, the
+	// cached list is a valid superset and can be filtered in memory.
+	computedPrefix string
+	expiresAt      time.Time
 }
 
 var globalSlashCache = &slashCommandCache{
@@ -51,16 +58,65 @@ func (c *slashCommandCache) getRegistry() *agent_commands.CommandRegistry {
 }
 
 // getArgCompletions returns cached argument completions for a command,
-// or calls the completion function and caches the result for completionCacheTTL.
+// filtered to the last-argument prefix currently being typed.
+//
+// The cache is keyed on the command name plus all args EXCEPT the last
+// one — the "context". The last arg is the prefix the user is actively
+// typing, so excluding it from the key means progressive keystrokes
+// ("/model d", "/model de") reuse ONE computed candidate list instead
+// of re-running the command's Complete() for every new prefix. Without
+// this, every keystroke after a space misses the cache and re-executes
+// Complete — which for commands like /model makes a network call to the
+// provider API, stalling the input loop (the "laggy after a space"
+// report).
+//
+// On a hit, if the current prefix extends the prefix the candidates were
+// computed with, the cached list is filtered in memory (no recompute).
+// A recompute happens only when the prefix doesn't extend it (backspace,
+// unrelated edit), when filtering yields nothing (path completions
+// crossing a directory boundary, e.g. "/review src/ma" needs a fresh
+// walk of src/), or after the sliding TTL expires.
 func (c *slashCommandCache) getArgCompletions(cmdName string, args []string, chatAgent *agent.Agent, cmd agent_commands.Command) []string {
-	// Build a cache key from the command name and args using NUL delimiter
-	// to avoid collisions (args are whitespace-split so can't contain NUL).
-	cacheKey := cmdName + "\x00" + strings.Join(args, "\x00")
+	// The argument path is only reached when the line contains a space or
+	// tab, but a trailing tab can leave args empty (Fields drops it).
+	if len(args) == 0 {
+		args = []string{""}
+	}
+	context := args[:len(args)-1]
+	prefix := args[len(args)-1]
+
+	// Build a cache key from the command name and context using NUL
+	// delimiter to avoid collisions (args are whitespace-split so can't
+	// contain NUL).
+	cacheKey := cmdName + "\x00" + strings.Join(context, "\x00")
 
 	c.mu.Lock()
-	if entry, ok := c.argCache[cacheKey]; ok && time.Now().Before(entry.expiresAt) {
-		c.mu.Unlock()
-		return append([]string(nil), entry.candidates...)
+	entry, ok := c.argCache[cacheKey]
+	valid := ok && time.Now().Before(entry.expiresAt)
+	// A prefix ending in a path separator ("/review src/") always needs a
+	// fresh walk of the directory — the cached listing of the parent can
+	// only ever match the directory entry itself, not its contents.
+	dirBoundary := strings.HasSuffix(prefix, "/") || strings.HasSuffix(prefix, `\`)
+	if valid && !dirBoundary && strings.HasPrefix(strings.ToLower(prefix), strings.ToLower(entry.computedPrefix)) {
+		if filtered := filterPrefix(entry.candidates, prefix); len(filtered) > 0 {
+			// Sliding TTL: keep the entry alive while the user keeps
+			// typing on this context so pauses don't re-trigger the
+			// expensive Complete() call.
+			entry.expiresAt = time.Now().Add(completionCacheTTL)
+			c.argCache[cacheKey] = entry
+			c.mu.Unlock()
+			return filtered
+		}
+		// No candidates match. For word completions the cached list is
+		// authoritative, so return empty without recomputing — this keeps
+		// a failed or empty fetch (e.g. /model with a flaky registry)
+		// from blocking every subsequent keystroke. Only a directory
+		// crossing (prefix contains a path separator) falls through to
+		// recompute, because path completions must walk the new directory.
+		if !strings.ContainsAny(prefix, `/\`) {
+			c.mu.Unlock()
+			return nil
+		}
 	}
 	c.mu.Unlock()
 
@@ -72,8 +128,9 @@ func (c *slashCommandCache) getArgCompletions(cmdName string, args []string, cha
 
 	c.mu.Lock()
 	c.argCache[cacheKey] = argCacheEntry{
-		candidates: candidates,
-		expiresAt:  time.Now().Add(completionCacheTTL),
+		candidates:     candidates,
+		computedPrefix: prefix,
+		expiresAt:      time.Now().Add(completionCacheTTL),
 	}
 	// Prune expired entries to prevent unbounded growth
 	now := time.Now()
@@ -85,6 +142,23 @@ func (c *slashCommandCache) getArgCompletions(cmdName string, args []string, cha
 	c.mu.Unlock()
 
 	return candidates
+}
+
+// filterPrefix returns the candidates that start with prefix, matching
+// the case-insensitive prefix semantics the CompletableCommand
+// implementations use. An empty prefix returns all candidates.
+func filterPrefix(candidates []string, prefix string) []string {
+	if prefix == "" {
+		return candidates
+	}
+	lower := strings.ToLower(prefix)
+	out := make([]string, 0, len(candidates))
+	for _, cand := range candidates {
+		if strings.HasPrefix(strings.ToLower(cand), lower) {
+			out = append(out, cand)
+		}
+	}
+	return out
 }
 
 // buildSlashCommandCompleter returns a CompletionProvider that completes

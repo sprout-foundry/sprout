@@ -330,6 +330,15 @@ func (tm *TerminalManager) createFallbackUnixSession(sessionID, shellOverride st
 
 	// Reader goroutine — reads from stdout pipe (not from session.Pty which is stdin).
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				webuiLogger.Error("fallback terminal reader panicked", slog.String("session_id", session.ID), slog.Any("panic", r))
+				session.mutex.Lock()
+				session.Active = false
+				session.mutex.Unlock()
+				session.closeAllSubs()
+			}
+		}()
 		buf := make([]byte, 32768)
 		for {
 			n, readErr := stdout.Read(buf)

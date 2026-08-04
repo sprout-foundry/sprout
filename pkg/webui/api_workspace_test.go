@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -356,4 +358,73 @@ func keysOf(m map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// A single page load calls GET /api/workspace from ~10 places. Re-walking the
+// home directory on each one is what made the privacy prompts repeat.
+func TestCachedProjectsInReusesScan(t *testing.T) {
+	projectsCacheMu.Lock()
+	projectsCache, projectsCacheRoot, projectsCacheTime = nil, "", time.Time{}
+	projectsCacheMu.Unlock()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "proj", ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	first, cached := cachedProjectsIn(root)
+	if cached {
+		t.Error("first call should be a cache miss")
+	}
+	if len(first) != 1 {
+		t.Fatalf("expected 1 project, got %v", first)
+	}
+
+	second, cached := cachedProjectsIn(root)
+	if !cached {
+		t.Error("second call should hit the cache")
+	}
+	if len(second) != len(first) {
+		t.Errorf("cached result differs: %v vs %v", second, first)
+	}
+
+	// A different root must not be served the previous root's scan.
+	other := t.TempDir()
+	otherResults, cached := cachedProjectsIn(other)
+	if cached {
+		t.Error("a different root must miss the cache")
+	}
+	if len(otherResults) != 0 {
+		t.Errorf("expected no projects under an empty root, got %v", otherResults)
+	}
+}
+
+// handleAPIWorkspaceProjects prepends the daemon root to the scan. That
+// decoration must not leak into the shared cache that /api/workspace reads.
+func TestProjectsCacheNotPollutedByRootPrepend(t *testing.T) {
+	projectsCacheMu.Lock()
+	projectsCache, projectsCacheRoot, projectsCacheTime = nil, "", time.Time{}
+	projectsCacheMu.Unlock()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "child", ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	scanned, _ := cachedProjectsIn(root)
+	before := len(scanned)
+
+	// Simulate the prepend the projects endpoint performs.
+	decorated := append([]ProjectInfo{{Path: root, Name: "root"}}, scanned...)
+	if len(decorated) != before+1 {
+		t.Fatalf("decoration failed: %v", decorated)
+	}
+
+	again, _ := cachedProjectsIn(root)
+	if len(again) != before {
+		t.Errorf("cache was polluted by the prepend: %d -> %d", before, len(again))
+	}
 }

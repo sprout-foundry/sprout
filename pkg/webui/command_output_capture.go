@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 )
 
 // captureCommandOutput runs a slash command through the registry, capturing

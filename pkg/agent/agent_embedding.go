@@ -110,6 +110,18 @@ func (a *Agent) RestoreEmbeddingIndex() {
 		return
 	}
 
+	// $HOME is never a legitimate index target, and its "workspace config" is a
+	// mirage: GetWorkspaceConfigPath($HOME) resolves to ~/.sprout/config.json,
+	// which is the daemon's own per-user state directory that sprout itself
+	// creates — not a config the user authored for a workspace. Reading it as a
+	// per-workspace opt-in made the installed service (launchd sets
+	// WorkingDirectory=$HOME) start indexing the user's entire home directory at
+	// startup, before any client connected. Enabling for home stays possible as
+	// an explicit runtime action; it just must not happen automatically.
+	if isHomeDirPath(workspaceRoot) {
+		return
+	}
+
 	// Default (no explicit per-workspace preference): enable only if the user
 	// opted into default-on embeddings globally.
 	autoOptIn := os.Getenv("SPROUT_ENABLE_EMBEDDING_AUTOINDEX") == "1"

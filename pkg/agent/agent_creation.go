@@ -760,6 +760,27 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 // being the user's home directory. This is a no-op if a persona is already
 // set, if the Coordinator persona is unavailable, or if the user has opted
 // out via DisableCoordinatorAutoActivate in their config.
+// isHomeDirPath reports whether dir resolves to the user's home directory.
+// Both sides go through EvalSymlinks so macOS /Users → /private/Users (or a
+// symlinked home) doesn't produce a false negative; on resolution failure it
+// falls back to a direct comparison.
+func isHomeDirPath(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	resolvedDir, dirErr := filepath.EvalSymlinks(dir)
+	resolvedHome, homeErr := filepath.EvalSymlinks(homeDir)
+	if dirErr != nil || homeErr != nil {
+		resolvedDir = dir
+		resolvedHome = homeDir
+	}
+	return resolvedDir == resolvedHome
+}
+
 func (a *Agent) autoActivateCoordinatorPersona() {
 	// Don't override an already-set persona
 	if a.state.GetActivePersona() != "" {
@@ -772,20 +793,7 @@ func (a *Agent) autoActivateCoordinatorPersona() {
 	}
 
 	// Only activate when workspace is home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	// Resolve symlinks on both paths to avoid mismatch
-	// (e.g., macOS /Users → /private/Users, or custom symlinked home)
-	resolvedWorkspace, wsErr := filepath.EvalSymlinks(a.GetWorkspaceRoot())
-	resolvedHome, homeErr := filepath.EvalSymlinks(homeDir)
-	if wsErr != nil || homeErr != nil {
-		// Fall back to direct comparison if symlink resolution fails
-		resolvedWorkspace = a.GetWorkspaceRoot()
-		resolvedHome = homeDir
-	}
-	if resolvedWorkspace != resolvedHome {
+	if !isHomeDirPath(a.GetWorkspaceRoot()) {
 		return
 	}
 

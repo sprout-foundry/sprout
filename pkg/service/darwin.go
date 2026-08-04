@@ -178,12 +178,8 @@ func (m *launchdManager) Install() error {
 	if err != nil {
 		return fmt.Errorf("failed to determine plist path: %w", err)
 	}
-	tmpPath := pPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write plist: %w", err)
-	}
-	if err := os.Rename(tmpPath, pPath); err != nil {
-		return fmt.Errorf("failed to rename plist: %w", err)
+	if err := writePlistFile(pPath, data); err != nil {
+		return err
 	}
 
 	domain := launchdDomain()
@@ -493,4 +489,42 @@ func (m *launchdManager) Diagnose() error {
 func isServiceLoaded(servicePath string) bool {
 	_, err := runLaunchctl("print", servicePath)
 	return err == nil
+}
+
+// plistFileMode is the permission the launchd plist must carry.
+//
+// launchd has no EnvironmentFile equivalent, so every API key captured by
+// GenerateServiceEnvFile is inlined into the plist's EnvironmentVariables dict
+// in plaintext. Writing that 0644 published a world-readable copy of every
+// provider key and token on the machine — strictly worse than service.env,
+// which is already 0600. launchd reads LaunchAgents plists as the owning user,
+// so 0600 is sufficient.
+//
+// (systemd does not have this problem: the unit references service.env via
+// EnvironmentFile= and inlines no secrets.)
+const plistFileMode = 0600
+
+// writePlistFile atomically writes the launchd plist with restricted
+// permissions, repairing the mode on installs that predate plistFileMode.
+func writePlistFile(pPath string, data []byte) error {
+	tmpPath := pPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, plistFileMode); err != nil {
+		return fmt.Errorf("failed to write plist: %w", err)
+	}
+	// WriteFile does not chmod a pre-existing file, so be explicit — a stale
+	// 0644 tmp file left by an older build must not survive the rename.
+	if err := os.Chmod(tmpPath, plistFileMode); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to restrict plist permissions: %w", err)
+	}
+	if err := os.Rename(tmpPath, pPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename plist: %w", err)
+	}
+	// Defensive: the rename replaces the inode, but this also repairs a plist
+	// that some other code path wrote in place.
+	if err := os.Chmod(pPath, plistFileMode); err != nil {
+		return fmt.Errorf("failed to restrict plist permissions: %w", err)
+	}
+	return nil
 }

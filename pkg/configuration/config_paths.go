@@ -81,9 +81,23 @@ func GetConfigLocalPath() (string, error) {
 	return filepath.Join(configDir, ConfigLocalFileName), nil
 }
 
-// WorkspaceConfigDir returns the .sprout directory for a workspace root.
+// WorkspaceConfigDir returns the .sprout directory for a workspace root, or
+// "" when the workspace root is the user's home directory.
+//
+// $HOME never gets a workspace layer. It is not a project, and the global
+// config already *is* the config for a user working out of their home — a
+// second layer there adds no expressiveness and one large footgun:
+// NewManagerWithLayers makes the workspace dir the SAVE target, so a daemon
+// running with workspace=$HOME (which is exactly what `sprout service install`
+// produces) writes the full merged config to ~/.sprout/workspace.json on the
+// first settings save. On the next start that machine-written file is read
+// back as a deliberate per-workspace opt-in — which is how a global
+// "embeddings: on" preference turned into indexing the entire home directory.
+//
+// Returning "" here makes every caller degrade to "no workspace layer", which
+// NewManagerWithLayers already handles by saving to the global dir instead.
 func WorkspaceConfigDir(workspaceRoot string) string {
-	if workspaceRoot == "" {
+	if workspaceRoot == "" || isHomeDir(workspaceRoot) {
 		return ""
 	}
 	return filepath.Join(workspaceRoot, ConfigDirName)
@@ -120,25 +134,30 @@ func EnsureWorkspaceConfigDir(workspaceRoot string) error {
 	return os.WriteFile(gitignorePath, []byte(workspaceGitignoreContent), 0644)
 }
 
-// WorkspaceConfigWritePath returns where workspace-level config is written.
-// Always the new filename — legacy files are read but never written back to.
+// WorkspaceConfigWritePath returns where workspace-level config is written,
+// or "" when there is no workspace layer (empty root, or $HOME — see
+// WorkspaceConfigDir). Always the new filename — legacy files are read but
+// never written back to.
 func WorkspaceConfigWritePath(workspaceRoot string) string {
-	if workspaceRoot == "" {
+	dir := WorkspaceConfigDir(workspaceRoot)
+	if dir == "" {
 		return ""
 	}
-	return filepath.Join(workspaceRoot, ConfigDirName, WorkspaceConfigFileName)
+	return filepath.Join(dir, WorkspaceConfigFileName)
 }
 
-// GetWorkspaceConfigPath returns the workspace-level config file to READ.
+// GetWorkspaceConfigPath returns the workspace-level config file to READ, or
+// "" when there is no workspace layer (empty root, or $HOME).
 //
 // Resolution: workspace.json if present, else the legacy config.json, else the
 // workspace.json path (so callers can stat it and find nothing). Existing
 // workspaces keep working untouched; nothing is moved or rewritten.
 func GetWorkspaceConfigPath(workspaceRoot string) string {
-	if workspaceRoot == "" {
+	dir := WorkspaceConfigDir(workspaceRoot)
+	if dir == "" {
 		return ""
 	}
-	return ResolveWorkspaceConfigFile(WorkspaceConfigDir(workspaceRoot), isHomeDir(workspaceRoot))
+	return ResolveWorkspaceConfigFile(dir, false)
 }
 
 // ResolveWorkspaceConfigFile picks the workspace config file inside dir.

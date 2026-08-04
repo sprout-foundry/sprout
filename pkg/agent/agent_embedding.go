@@ -110,10 +110,20 @@ func (a *Agent) RestoreEmbeddingIndex() {
 		return
 	}
 
-	// No home special-case here on purpose. The workspace layer resolves to
-	// .sprout/workspace.json, which at $HOME does not collide with the user's
-	// global ~/.sprout/config.json — so this reads a genuine per-workspace
-	// opt-in or nothing at all. See configuration.WorkspaceConfigFileName.
+	// Never auto-index the home directory. WorkspaceConfigDir already returns
+	// "" at $HOME so there is no config here to opt in, but this stays as a
+	// second gate because the blast radius is the whole home directory and the
+	// failure is silent: the daemon walks and AST-parses every file under ~,
+	// which on macOS also trips TCC prompts for Documents/Desktop/Photos.
+	//
+	// An earlier revision removed this guard on the reasoning that the config
+	// split made the collision impossible. That was wrong — the daemon writes
+	// its own workspace layer, so "an explicit workspace.json exists" was not
+	// evidence of user intent. Enabling for home remains possible as a
+	// deliberate runtime action; it just must never happen automatically.
+	if isHomeDirPath(workspaceRoot) {
+		return
+	}
 
 	// Default (no explicit per-workspace preference): enable only if the user
 	// opted into default-on embeddings globally.

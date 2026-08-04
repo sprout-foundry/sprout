@@ -48,37 +48,20 @@ func TestWorkspaceConfigResolution(t *testing.T) {
 	})
 }
 
-// The whole point of the split: at $HOME the workspace layer and the user-level
-// state directory are the same folder, so a legacy config.json there is the
-// user's GLOBAL config. Falling back to it would re-create the aliasing that
-// turned a global "embeddings on" preference into indexing the entire home
-// directory — and every existing install has that file.
+// At $HOME the workspace layer and the user-level state directory are the same
+// folder, so a legacy config.json there is the user's GLOBAL config. Reading it
+// as a workspace layer is the aliasing that turned a global "embeddings on"
+// preference into indexing the entire home directory — and every existing
+// install has that file. $HOME resolves to no workspace layer at all.
 func TestWorkspaceConfigNeverFallsBackToGlobalAtHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
 	writeFile(t, filepath.Join(home, ".sprout", "config.json"), `{"embedding_index":{"enabled":true}}`)
 
-	got := GetWorkspaceConfigPath(home)
-	assert.Equal(t, filepath.Join(home, ".sprout", "workspace.json"), got,
+	assert.Equal(t, "", GetWorkspaceConfigPath(home),
 		"home must not resolve its workspace layer to the user-level config.json")
-
-	_, err := os.Stat(got)
-	assert.True(t, os.IsNotExist(err), "there should be no workspace layer at home by default")
 	assert.False(t, IsWorkspaceConfigPresent(home))
-}
-
-// A user who deliberately runs with $HOME as the workspace still gets a real
-// workspace layer — it just has to be an explicit workspace.json.
-func TestWorkspaceConfigHonorsExplicitHomeWorkspaceFile(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	explicit := filepath.Join(home, ".sprout", "workspace.json")
-	writeFile(t, explicit, `{}`)
-
-	assert.Equal(t, explicit, GetWorkspaceConfigPath(home))
-	assert.True(t, IsWorkspaceConfigPresent(home))
 }
 
 // A directory merely named like home, or nested under it, is a normal workspace.
@@ -123,4 +106,66 @@ func TestLayeredManagerWritesWorkspaceFile(t *testing.T) {
 	globalAfter, err := os.ReadFile(globalCfg)
 	require.NoError(t, err)
 	assert.Equal(t, string(globalBefore), string(globalAfter), "global config must be untouched")
+}
+
+// $HOME has no workspace layer at all — not for reads, and critically not for
+// writes. NewManagerWithLayers uses the workspace dir as the SAVE target, so a
+// daemon running with workspace=$HOME (what `sprout service install` produces)
+// would otherwise write its full merged config to ~/.sprout/workspace.json on
+// the first settings save, and read it back next start as a deliberate
+// per-workspace opt-in.
+func TestHomeHasNoWorkspaceLayer(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	if got := WorkspaceConfigDir(home); got != "" {
+		t.Errorf("WorkspaceConfigDir($HOME) = %q, want \"\"", got)
+	}
+	if got := WorkspaceConfigWritePath(home); got != "" {
+		t.Errorf("WorkspaceConfigWritePath($HOME) = %q, want \"\"", got)
+	}
+	if got := GetWorkspaceConfigPath(home); got != "" {
+		t.Errorf("GetWorkspaceConfigPath($HOME) = %q, want \"\"", got)
+	}
+	if IsWorkspaceConfigPresent(home) {
+		t.Error("IsWorkspaceConfigPresent($HOME) = true, want false")
+	}
+}
+
+// Even when a workspace.json already exists at $HOME — which is exactly the
+// state a previous daemon left behind — it must not be picked up.
+func TestHomeIgnoresPreexistingWorkspaceFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeFile(t, filepath.Join(home, ".sprout", WorkspaceConfigFileName),
+		`{"embedding_index":{"enabled":true,"auto_index":true}}`)
+
+	if got := GetWorkspaceConfigPath(home); got != "" {
+		t.Errorf("a machine-written workspace.json at $HOME must be ignored, got %q", got)
+	}
+	if IsWorkspaceConfigPresent(home) {
+		t.Error("IsWorkspaceConfigPresent($HOME) = true despite no workspace layer")
+	}
+}
+
+// A layered manager rooted at $HOME must save to the GLOBAL config, never
+// create ~/.sprout/workspace.json.
+func TestLayeredManagerAtHomeSavesGlobally(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	globalDir := filepath.Join(home, ".config", "sprout")
+	require.NoError(t, os.MkdirAll(globalDir, 0700))
+	writeFile(t, filepath.Join(globalDir, ConfigFileName), `{"version":"2.0"}`)
+
+	mgr, err := NewManagerWithLayers(globalDir, WorkspaceConfigDir(home))
+	require.NoError(t, err)
+	require.NoError(t, mgr.SaveConfig())
+
+	_, err = os.Stat(filepath.Join(home, ".sprout", WorkspaceConfigFileName))
+	assert.True(t, os.IsNotExist(err),
+		"saving with workspace=$HOME must not create ~/.sprout/workspace.json")
+
+	_, err = os.Stat(filepath.Join(globalDir, ConfigFileName))
+	assert.NoError(t, err, "the save should have landed in the global config")
 }

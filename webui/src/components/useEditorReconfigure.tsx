@@ -12,6 +12,7 @@
  */
 
 import { indentUnit } from '@codemirror/language';
+import { LSPPlugin } from '@codemirror/lsp-client';
 import { EditorState } from '@codemirror/state';
 import type { Compartment, Extension } from '@codemirror/state';
 import { EditorView as CMEditorView, lineNumbers } from '@codemirror/view';
@@ -135,6 +136,54 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
       })();
     }
   }, [buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+
+  // ---------------------------------------------------------------------------
+  // LSP reconnect re-wire
+  // ---------------------------------------------------------------------------
+  // The editor keeps the plugin of the client it was wired with. When the
+  // LSP WebSocket drops (idle keepalive timeout, network blip) the service
+  // creates a fresh client, but the old plugin's transport is dead — LSP
+  // features (diagnostics, references, hover) silently stop until the buffer
+  // changes. Subscribe to connection-state changes and re-install the
+  // compartment with the new client when one appears.
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !buffer?.file?.path) return;
+
+    const languageId = resolveLanguageId(
+      buffer.languageOverride,
+      buffer.file?.ext?.replace(/^\./, ''),
+      buffer.file?.name,
+    ).languageId;
+    if (!languageId || !LSP_SUPPORTED_LANGUAGES.has(languageId)) return;
+
+    const filePath = buffer.file.path;
+    const lspService = getLSPClientService();
+
+    const unsubscribe = lspService.onStateChange((langId, state) => {
+      if (langId !== languageId || state !== 'connected') return;
+      void (async () => {
+        try {
+          const client = await lspService.getClientForLanguage(languageId);
+          if (!client || viewRef.current !== view || !view.dom?.isConnected) return;
+          // Skip if this view is already wired to this exact client (initial
+          // connect races bootstrapLSP / the language-reconfigure effect).
+          const current = LSPPlugin.get(view);
+          if (current?.client === client) return;
+          view.dispatch({
+            effects: compartments.lsp.reconfigure(buildLSPPluginExtensions(client, filePath, languageId)),
+          });
+          debugLog('[useEditorReconfigure] Re-wired LSP plugin for', languageId);
+        } catch (err) {
+          debugLog('[useEditorReconfigure] Failed to re-wire LSP:', err);
+        }
+      })();
+    });
+
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 
   // ---------------------------------------------------------------------------
   // Hotkey compartment reconfiguration

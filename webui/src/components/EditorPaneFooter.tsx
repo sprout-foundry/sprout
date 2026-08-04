@@ -25,6 +25,9 @@ const FONT_SIZE_DEFAULT = 14;
 export interface EditorPaneFooterProps {
   buffer: EditorBuffer | null | undefined;
   selectionInfo: { selectionCount?: number; charCount?: number } | null;
+  /** Live cursor position — updates on every cursor move/keystroke, unlike
+   *  `buffer.cursorPosition` which is mutated in place and does not re-render. */
+  cursorPosition: { line: number; column: number };
   whitespaceRenderingMode: WhitespaceRenderingMode;
   settings: {
     editorFontSize: number;
@@ -59,6 +62,7 @@ export interface EditorPaneFooterProps {
 export function areEditorPaneFooterPropsEqual(prev: EditorPaneFooterProps, next: EditorPaneFooterProps): boolean {
   if (prev.buffer !== next.buffer) return false;
   if (prev.selectionInfo !== next.selectionInfo) return false;
+  if (prev.cursorPosition !== next.cursorPosition) return false;
   if (prev.whitespaceRenderingMode !== next.whitespaceRenderingMode) return false;
   if (prev.setWhitespaceRenderingMode !== next.setWhitespaceRenderingMode) return false;
 
@@ -101,6 +105,7 @@ export function areEditorPaneFooterPropsEqual(prev: EditorPaneFooterProps, next:
 const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
   buffer,
   selectionInfo,
+  cursorPosition,
   whitespaceRenderingMode,
   settings,
   lsp,
@@ -141,8 +146,7 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
         <span className="line-count">Lines: {lineCount}</span>
         <span className="char-count">Chars: {charCount}</span>
         <span className="cursor-position">
-          Ln {buffer?.cursorPosition?.line !== undefined ? buffer.cursorPosition.line : 0}, Col{' '}
-          {buffer?.cursorPosition?.column !== undefined ? buffer.cursorPosition.column + 1 : 0}
+          Ln {cursorPosition.line}, Col {cursorPosition.column + 1}
           {selectionInfo &&
             selectionInfo.selectionCount !== undefined &&
             selectionInfo.selectionCount > 1 &&

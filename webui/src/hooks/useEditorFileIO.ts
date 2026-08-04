@@ -89,6 +89,11 @@ export interface UseEditorFileIOReturn {
   handleSave: () => Promise<void>;
   /** Ref mirror for handleSave. */
   saveRef: React.MutableRefObject<() => Promise<void>>;
+  /** Buffers already synced from disk in this pane; switch-backs restore
+   *  from memory instead of re-reading (see the load effect). */
+  loadedBufferIdsRef: React.MutableRefObject<Set<string>>;
+  /** True while a disk read is in flight (gates keystroke attribution). */
+  isLoadingRef: React.MutableRefObject<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +172,20 @@ export function useEditorFileIO(
   // stale in-flight loads from rapid file-switching are discarded.
   const loadSeqRef = useRef(0);
 
+  // File buffers this pane has already read from disk. Once a buffer's
+  // on-disk content is in the view, the in-memory `buffer.content` is
+  // authoritative — switching back to a previously-opened tab must restore
+  // from memory, NOT re-read the file (a re-read silently destroys unsaved
+  // edits, which was the "edits go to the wrong place" bug).
+  const loadedBufferIdsRef = useRef<Set<string>>(new Set());
+
+  // True while a disk read for this pane is in flight. useEditorUpdate
+  // checks this to ignore keystrokes that land between a tab switch and
+  // the new buffer's content dispatch — at that point the view still shows
+  // the previous buffer, so the keystrokes would be attributed to the
+  // wrong buffer (and clobbered by the dispatch anyway).
+  const isLoadingRef = useRef(false);
+
   // ── Indentation detection helper ───────────────────────────────
   // Shared between loadFile and the auto-reload handler to avoid
   // duplicating ~35 lines of indent-detection + compartment dispatch.
@@ -215,6 +234,7 @@ export function useEditorFileIO(
     async (filePath: string) => {
       // Bump sequence counter to cancel any in-flight loads.
       const seq = ++loadSeqRef.current;
+      isLoadingRef.current = true;
 
       setError(null);
 
@@ -266,6 +286,11 @@ export function useEditorFileIO(
         if (buf) {
           updateBufferContent(buf.id, content);
           setBufferOriginalContent(buf.id, content);
+          // Mark this buffer as loaded from disk by this pane. A later tab
+          // switch-back restores content from memory (buffer.content)
+          // instead of re-reading the file — a re-read would destroy any
+          // unsaved edits made since the last save.
+          loadedBufferIdsRef.current.add(buf.id);
         }
 
         // Update editor view
@@ -348,6 +373,7 @@ export function useEditorFileIO(
       } finally {
         // Only clear loading state if this is still the active load.
         if (loadSeqRef.current === seq) {
+          isLoadingRef.current = false;
           setLoading(false);
         }
       }
@@ -575,6 +601,73 @@ export function useEditorFileIO(
       return;
     }
 
+    // ── Restore previously-loaded buffer from memory ───────────────
+    // If this pane already loaded this buffer from disk, its in-memory
+    // `buffer.content` is authoritative — the user may have unsaved edits.
+    // Re-reading the file would silently destroy them (the original
+    // "edits go to the wrong place" bug: every tab switch-back re-read from
+    // disk and clobbered the buffer). `buffer.contentLoaded` is the global
+    // counterpart to the per-pane `loadedBufferIdsRef`: it is set by
+    // setBufferOriginalContent whenever ANY pane read the on-disk content
+    // into memory, so a buffer moved to a different pane (drag/drop via
+    // moveBufferToPane) restores from memory instead of re-reading disk.
+    // Bump the load sequence so any in-flight load for the previous buffer
+    // is discarded, then push the in-memory content into the view exactly
+    // as loadFile does for a fresh read.
+    if (loadedBufferIdsRef.current.has(buffer.id) || buffer.contentLoaded) {
+      loadSeqRef.current++; // cancel in-flight load for the previous buffer
+      isLoadingRef.current = false;
+      setLoading(false);
+      const nextContent = buffer.content || '';
+      setLocalContent(nextContent);
+      setSelectionInfo(null);
+      setError(null);
+      if (cmViewApiRef.current?.view) {
+        cmViewApiRef.current?.withExternalUpdate(() => {
+          cmViewApiRef.current?.dispatch({
+            changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: nextContent },
+            annotations: suppressHistoryAnnotations,
+            effects: setOriginalContent.of(nextContent),
+          });
+        });
+        clearDiffGutter(cmViewApiRef.current?.view);
+        clearDiagnostics(cmViewApiRef.current?.view);
+
+        // Restore cursor position from buffer state (layout persistence).
+        if (buffer.cursorPosition.line > 0 || buffer.cursorPosition.column > 0) {
+          const { line, column } = buffer.cursorPosition;
+          const doc = cmViewApiRef.current?.view.state.doc;
+          if (doc.lines > 0) {
+            const targetLine = Math.max(1, Math.min(line, doc.lines));
+            const lineInfo = doc.line(targetLine);
+            const pos = lineInfo.from + Math.max(0, Math.min(column, lineInfo.length));
+            cmViewApiRef.current?.withExternalUpdate(() => {
+              cmViewApiRef.current?.dispatch({
+                selection: { anchor: pos },
+                annotations: suppressHistoryAnnotations,
+              });
+            });
+          }
+        }
+
+        // Restore scroll position from buffer state.
+        if (buffer.scrollPosition.top > 0 || buffer.scrollPosition.left > 0) {
+          const { top, left } = buffer.scrollPosition;
+          const viewAtRestoreTime = cmViewApiRef.current?.view;
+          // Use setTimeout with 0 to ensure this runs after the current
+          // render cycle and after CodeMirror has finished layout. Verify
+          // the view hasn't been swapped before applying the scroll.
+          setTimeout(() => {
+            if (viewAtRestoreTime && viewAtRestoreTime.scrollDOM && cmViewApiRef.current?.view === viewAtRestoreTime) {
+              viewAtRestoreTime.scrollDOM.scrollTop = top;
+              viewAtRestoreTime.scrollDOM.scrollLeft = left;
+            }
+          }, 0);
+        }
+      }
+      return;
+    }
+
     if (loadFileRef.current) {
       loadFileRef.current(buffer.file.path);
     }
@@ -790,5 +883,9 @@ export function useEditorFileIO(
     loadFileRef,
     handleSave,
     saveRef,
+    // Exposed for tests: loadedBufferIdsRef drives the restore-from-memory
+    // branch, isLoadingRef gates keystroke attribution during loads.
+    loadedBufferIdsRef,
+    isLoadingRef,
   };
 }

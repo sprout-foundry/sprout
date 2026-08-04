@@ -226,6 +226,7 @@ function createBuffer(opts = {}) {
     content: o.content,
     originalContent: o.originalContent,
     isModified: o.isModified,
+    contentLoaded: o.contentLoaded,
     cursorPosition: o.cursorPosition,
     scrollPosition: o.scrollPosition,
   };
@@ -771,6 +772,112 @@ describe('handleSave', () => {
     });
 
     expect(mockSaveBuffer).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: buffer switch-back restore (BUG: re-reading disk clobbered unsaved edits)
+// ---------------------------------------------------------------------------
+
+describe('buffer switch-back restore', () => {
+  it('restores a previously loaded buffer from memory instead of re-reading from disk', async () => {
+    const setup = setupHook({
+      bufferOptions: { id: 'buf-a', filePath: '/test/a.ts', fileName: 'a.ts', content: 'content A' },
+    });
+    let currentBuffer = setup.buffer;
+    let hookReturn: ReturnType<typeof useEditorFileIO> | null = null;
+
+    function Wrapper() {
+      hookReturn = useEditorFileIO(
+        setup.cmViewApiRef,
+        currentBuffer,
+        { current: currentBuffer },
+        setup.compartments,
+        setup.indentManuallySetRef,
+        setup.fetchDiagnosticsRef,
+        setup.paneId,
+        setup.setters,
+      );
+      return null;
+    }
+
+    // Initial render: effect loads buffer A from disk.
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(mockReadFileWithConsent).toHaveBeenCalledTimes(1);
+    expect(mockReadFileWithConsent).toHaveBeenCalledWith('/test/a.ts');
+    expect(hookReturn?.loadedBufferIdsRef.current.has('buf-a')).toBe(true);
+
+    // Switch to buffer B — loads from disk (new buffer).
+    currentBuffer = createBuffer({ id: 'buf-b', filePath: '/test/b.ts', fileName: 'b.ts', content: 'content B' });
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(mockReadFileWithConsent).toHaveBeenCalledTimes(2);
+
+    // Switch back to buffer A with unsaved edits in memory. The restore
+    // branch must push the in-memory content into the view WITHOUT calling
+    // readFileWithConsent again.
+    currentBuffer = createBuffer({ id: 'buf-a', filePath: '/test/a.ts', fileName: 'a.ts', content: 'content A EDITED' });
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // No third disk read — the buffer was restored from memory.
+    expect(mockReadFileWithConsent).toHaveBeenCalledTimes(2);
+    // The view received the in-memory content, not the disk content.
+    expect(setup.setters.setLocalContent).toHaveBeenLastCalledWith('content A EDITED');
+    expect(hookReturn?.loadedBufferIdsRef.current.has('buf-b')).toBe(true);
+  });
+
+  it('restores a buffer moved from another pane (contentLoaded) without re-reading disk', async () => {
+    const setup = setupHook({
+      bufferOptions: { id: 'buf-a', filePath: '/test/a.ts', fileName: 'a.ts', content: 'content A' },
+    });
+    let currentBuffer = setup.buffer;
+    let hookReturn: ReturnType<typeof useEditorFileIO> | null = null;
+
+    function Wrapper() {
+      hookReturn = useEditorFileIO(
+        setup.cmViewApiRef,
+        currentBuffer,
+        { current: currentBuffer },
+        setup.compartments,
+        setup.indentManuallySetRef,
+        setup.fetchDiagnosticsRef,
+        setup.paneId,
+        setup.setters,
+      );
+      return null;
+    }
+
+    // Simulate a buffer that was ALREADY loaded by another pane and then
+    // moved here (drag/drop via moveBufferToPane). It carries
+    // `contentLoaded: true` (set by setBufferOriginalContent on the pane
+    // that read it from disk), but THIS pane's loadedBufferIdsRef is empty
+    // — a fresh pane created after the move. Before the fix, the restore
+    // branch only checked the per-pane loadedBufferIdsRef, so the moved
+    // buffer re-read the disk and clobbered the in-memory edits.
+    currentBuffer = createBuffer({
+      id: 'buf-a',
+      filePath: '/test/a.ts',
+      fileName: 'a.ts',
+      content: 'content A EDITED',
+      contentLoaded: true,
+    });
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // No disk read at all — the moved buffer restores from memory.
+    expect(mockReadFileWithConsent).not.toHaveBeenCalled();
+    expect(setup.setters.setLocalContent).toHaveBeenLastCalledWith('content A EDITED');
+    expect(hookReturn?.loadedBufferIdsRef.current.has('buf-a')).toBe(false);
   });
 });
 

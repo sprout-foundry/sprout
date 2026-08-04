@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 )
 
@@ -65,6 +64,5 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		BuildVersion: "dev",
 		SharedMode:   ws.IsSharedMode(),
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	writeJSON(w, http.StatusOK, config)
 }

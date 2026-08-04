@@ -51,15 +51,15 @@ func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	result := ag.ApplySyncOp(op, workspaceRoot)
 
-	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
 	if !result.Accepted {
 		if result.ConflictPath != "" {
-			w.WriteHeader(http.StatusConflict)
+			status = http.StatusConflict
 		} else {
-			w.WriteHeader(http.StatusBadRequest)
+			status = http.StatusBadRequest
 		}
 	}
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, status, result)
 }
 
 // handleAPISyncBatch handles POST /api/sync/batch — apply a batch of SyncOps.
@@ -101,8 +101,7 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	results := ag.ApplySyncOpBatch(req.Ops, workspaceRoot)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"results": results,
 	})
 }
@@ -122,8 +121,7 @@ func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Req
 		ag = ws.getActiveAgentForRequest(r)
 	}
 	if ag == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"files": interface{}(nil),
 		})
 		return
@@ -131,8 +129,7 @@ func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Req
 
 	files := ag.GetSyncStatus()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"files": files,
 	})
 }

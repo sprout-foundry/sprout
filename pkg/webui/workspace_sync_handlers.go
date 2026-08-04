@@ -94,20 +94,16 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 	metadata, err := workspaceSyncState.ApplyBrowserOp(req.Path, req.Content)
 	if err != nil {
 		ws.log().Warn("workspace sync conflict", slog.String("path", req.Path), slog.Any("err", err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
 		// On conflict, suggest a .theirs path for the browser to surface.
 		theirsPath := req.Path + ".theirs"
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error":       err.Error(),
 			"theirs_path": theirsPath,
 		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(metadata)
+	writeJSON(w, http.StatusOK, metadata)
 }
 
 // takeoverRequest is the JSON body shape for POST /api/workspace/takeover.
@@ -154,8 +150,6 @@ func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *h
 	// Atomically swap the active device.
 	oldDevice := activeSessionRegistry.RequestTakeover(req.SessionID, req.DeviceID)
 
-	w.Header().Set("Content-Type", "application/json")
-
 	if oldDevice != "" {
 		// Publish session_moved event so the displaced browser can show the overlay.
 		ws.eventBus.Publish(events.EventTypeWorkspaceSessionMoved, map[string]interface{}{
@@ -164,14 +158,12 @@ func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *h
 			"new_device":      req.DeviceID,
 		})
 
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"taken_over":      true,
 			"previous_device": oldDevice,
 		})
 	} else {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"taken_over": false,
 		})
 	}

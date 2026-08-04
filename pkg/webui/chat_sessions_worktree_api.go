@@ -49,8 +49,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeGet(w http.ResponseWriter,
 	worktreePath := ctx.getChatSessionWorktree(chatID)
 	ws.mutex.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":       "success",
 		"chat_id":       chatID,
 		"worktree_path": worktreePath,
@@ -154,8 +153,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":       "Worktree set successfully",
 		"chat_id":       chatID,
 		"worktree_path": req.WorktreePath,
@@ -261,8 +259,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 
 	ws.log().Info("switched chat session worktree", slog.String("chat_id", chatID), slog.String("worktree_path", absPath))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":       "Switched to worktree successfully",
 		"chat_id":       chatID,
 		"worktree_path": absPath,
@@ -378,9 +375,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 
 	// Check if the worktree path already exists on disk (path collision)
 	if _, statErr := os.Stat(worktreePath); statErr == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error":         "A worktree already exists at the computed path. Use a different branch name or manually remove the existing worktree first.",
 			"code":          "worktree_path_conflict",
 			"worktree_path": worktreePath,
@@ -407,9 +402,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 				// Also try to remove the directory if git worktree remove failed
 				_ = os.RemoveAll(worktreePath)
 			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
 				"error":         fmt.Sprintf("Branch '%s' already exists", req.Branch),
 				"code":          "branch_exists",
 				"worktree_path": worktreePath,
@@ -441,9 +434,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		if removeErr := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
 			ws.log().Warn("failed to clean up orphan worktree", slog.String("worktree_path", worktreePath), slog.Any("err", removeErr))
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error": "Chat session with this ID already exists",
 			"code":  "chat_session_exists",
 			"id":    chatID,
@@ -491,8 +482,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		slog.String("worktree_path", worktreePath),
 		slog.String("client_id", clientID))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "Chat session created in worktree",
 		"chat_session":   chatSession,
 		"worktree_path":  worktreePath,
@@ -527,8 +517,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeList(w http.ResponseWriter
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":  "success",
 		"mappings": mappings,
 	})

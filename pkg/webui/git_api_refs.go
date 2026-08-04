@@ -56,8 +56,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_commit", req.Message))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Commit created successfully",
 		"commit":  strings.TrimSpace(string(output)),
@@ -170,8 +169,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "Commit message generated",
 		"commit_message": commitMessage,
 		"provider":       agentInst.GetProvider(),
@@ -204,8 +202,7 @@ func (ws *ReactWebServer) handleAPIGitRevert(w http.ResponseWriter, r *http.Requ
 		http.Error(w, fmt.Sprintf("Failed to revert commit: %v", err), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Commit reverted successfully",
 		"commit":  req.Commit,
 	})

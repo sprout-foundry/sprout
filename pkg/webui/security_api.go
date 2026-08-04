@@ -52,8 +52,7 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 				"response":   decision.Approved(),
 				"action":     decision.String(),
 			})
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"success": true,
 				"message": "Security approval response recorded",
 			})
@@ -70,8 +69,7 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 			"request_id": payload.RequestID,
 			"response":   payload.Response,
 		})
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"message": "Security prompt response recorded",
 		})

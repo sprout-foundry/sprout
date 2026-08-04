@@ -64,8 +64,7 @@ func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Req
 	if out == nil {
 		out = []skillJSON{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // GET /api/skills/registry — list registry entries (starter skills).
@@ -78,8 +77,7 @@ func (ws *ReactWebServer) handleAPIListRegistry(w http.ResponseWriter, r *http.R
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(reg.Skills)
+	writeJSON(w, http.StatusOK, reg.Skills)
 }
 
 // POST /api/skills/install
@@ -133,8 +131,7 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 			ws.log().Warn("skill installed but reload failed", slog.Any("err", refreshErr))
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(results)
+	writeJSON(w, http.StatusOK, results)
 }
 
 // POST /api/skills/update
@@ -168,8 +165,7 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 			ws.log().Warn("skill updated but reload failed", slog.Any("err", refreshErr))
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(results)
+	writeJSON(w, http.StatusOK, results)
 }
 
 // POST /api/skills/remove
@@ -201,8 +197,7 @@ func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Re
 			ws.log().Warn("skill removed but reload failed", slog.Any("err", refreshErr))
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "removed", "id": req.ID})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "id": req.ID})
 }
 
 // Dispatcher: /api/skills/<sub>

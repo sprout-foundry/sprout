@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -106,8 +105,7 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"sessions": sessions,
 		"count":    len(sessions),
 	})
@@ -238,9 +236,7 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 	if !isHidden {
 		// Already visible — return idempotent success without mutation.
 		session.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"id":     sessionID,
 			"status": "attached",
 		})
@@ -252,9 +248,7 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 	session.mutex.Unlock()
 
 	// Return success
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"id":     sessionID,
 		"status": "attached",
 	})
@@ -296,8 +290,7 @@ func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"id":     sessionID,
 		"status": "killed",
 	})

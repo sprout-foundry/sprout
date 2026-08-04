@@ -38,8 +38,7 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	writeJSON(w, http.StatusOK, config)
 }
 
 // handleTerminalHistory handles API requests for terminal history
@@ -62,8 +61,7 @@ func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *htt
 
 	// If no session ID provided, return empty history
 	if sessionID == "" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"history":    []string{},
 			"session_id": "",
 			"count":      0,
@@ -84,8 +82,7 @@ func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *htt
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"history":    history,
 		"session_id": sessionID,
 		"count":      len(history),
@@ -111,8 +108,7 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 	}
 
 	if req.SessionID == "" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"message":    "Command accepted without active terminal session",
 			"command":    command,
 			"session_id": "",
@@ -132,8 +128,7 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":    "History updated",
 		"command":    command,
 		"session_id": req.SessionID,
@@ -168,8 +163,7 @@ func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *ht
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"sessions":     sessions,
 		"count":        len(sessions),
 		"active_count": activeCount,
@@ -254,8 +248,7 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 
 	filename := filepath.Base(savedPath)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"path":     absolutePath,
 		"filename": filename,
 	})

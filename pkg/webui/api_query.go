@@ -319,8 +319,6 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		cmd, output, cmdErr := ws.executeSafeSteerCommand(query.Query, clientAgent)
 		if cmd != nil {
 			// Command was found and executed (success or error)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
 			resp := map[string]interface{}{
 				"accepted": cmdErr == nil,
 				"mode":     "steer",
@@ -333,7 +331,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 			if cmdErr != nil {
 				resp["error"] = cmdErr.Error()
 			}
-			json.NewEncoder(w).Encode(resp)
+			writeJSON(w, http.StatusOK, resp)
 			return
 		}
 
@@ -398,8 +396,6 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
 	resp := map[string]interface{}{
 		"accepted":  true,
 		"mode":      "steer",
@@ -416,7 +412,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		slog.String("client_id", clientID),
 		slog.String("target", target),
 	)
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
 // handleAPIQueryStop interrupts the currently running query loop. Thin

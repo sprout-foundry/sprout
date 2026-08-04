@@ -275,8 +275,6 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 	resp := map[string]interface{}{
 		"command":  resolvedCmd.Name(),
 		"output":   output,
@@ -286,7 +284,7 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 	if cmdErr != nil {
 		resp["error"] = cmdErr.Error()
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 
 	// Emit the final WS marker AFTER the HTTP response is queued so a
 	// synchronous HTTP caller that doesn't have a WS open still gets

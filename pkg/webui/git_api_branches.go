@@ -21,8 +21,7 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 	// instead of a 500, to avoid spurious console errors in the client.
 	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"message":         "not_git_repo",
 			"current":         "",
 			"branches":        []string{},
@@ -96,8 +95,7 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":         "success",
 		"current":         currentBranch,
 		"branches":        allBranches,
@@ -134,8 +132,7 @@ func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Branch checked out successfully",
 		"branch":  req.Branch,
 	})
@@ -172,8 +169,7 @@ func (ws *ReactWebServer) handleAPIGitCreateBranch(w http.ResponseWriter, r *htt
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Branch created successfully",
 		"branch":  req.Name,
@@ -191,8 +187,7 @@ func (ws *ReactWebServer) handleAPIGitPull(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Pull completed",
 		"output":  output,
 	})
@@ -209,8 +204,7 @@ func (ws *ReactWebServer) handleAPIGitPush(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Push completed",
 		"output":  output,
 	})

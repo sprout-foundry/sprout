@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -20,8 +19,7 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":     "success",
 		"status":      status,
 		"files":       getAllGitFiles(status), // Backward compatibility

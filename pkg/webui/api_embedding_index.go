@@ -48,8 +48,7 @@ func (ws *ReactWebServer) writeEmbeddingIndexStatus(w http.ResponseWriter, agent
 		response["building"] = false
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (ws *ReactWebServer) handleSetEmbeddingIndex(w http.ResponseWriter, r *http.Request, agentInst *agent.Agent) {

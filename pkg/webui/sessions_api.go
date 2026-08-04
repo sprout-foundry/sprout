@@ -58,8 +58,7 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 	// Get current session ID
 	currentSessionID := ws.getCurrentSessionIDForRequest(r)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":            "success",
 		"sessions":           sessions,
 		"current_session_id": currentSessionID,
@@ -187,8 +186,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	})
 
 	// Return success response including messages so the frontend can populate the chat
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":           "Session restored",
 		"session_id":        state.SessionID,
 		"message_count":     len(state.Messages),

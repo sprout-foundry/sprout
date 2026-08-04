@@ -4,7 +4,6 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"runtime/pprof"
 	"time"
@@ -51,7 +50,6 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/logo-mark.svg", ws.handleLogoMark)
 	mux.HandleFunc("/favicon.ico", ws.handleFavicon)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		resp := map[string]interface{}{
 			"status": "ok",
 			"port":   ws.port,
@@ -69,7 +67,7 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 		ws.mutex.RLock()
 		resp["active_queries"] = ws.activeQueries
 		ws.mutex.RUnlock()
-		json.NewEncoder(w).Encode(resp)
+		writeJSON(w, http.StatusOK, resp)
 	})
 	mux.HandleFunc("/api/bootstrap", ws.handleAPIBootstrap)
 

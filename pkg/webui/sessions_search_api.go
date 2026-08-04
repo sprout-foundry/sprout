@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -135,8 +134,7 @@ func (ws *ReactWebServer) handleAPISessionsSearch(w http.ResponseWriter, r *http
 	}
 
 	// Return results
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"query":   q,
 		"total":   len(results),
 		"results": results,

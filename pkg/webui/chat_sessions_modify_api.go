@@ -47,9 +47,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsRename(w http.ResponseWriter, r *
 
 	if !ctx.renameChatSession(chatID, name) {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Chat session not found",
 			"code":  "chat_session_not_found",
 			"id":    chatID,
@@ -66,8 +64,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsRename(w http.ResponseWriter, r *
 	summary := cs.chatSessionSummary(false)
 	ws.publishSessionChanged(clientID, chatID, "rename", summary)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":      true,
 		"message":      "Chat session renamed",
 		"chat_session": summary,
@@ -94,9 +91,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsPin(w http.ResponseWriter, r *htt
 
 	chatID := strings.TrimSpace(req.ID)
 	if chatID == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Missing chat id",
 			"code":  "missing_id",
 		})
@@ -116,9 +111,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsPin(w http.ResponseWriter, r *htt
 	cs := ctx.getChatSession(chatID)
 	if cs == nil {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Chat session not found",
 			"code":  "chat_session_not_found",
 			"id":    chatID,
@@ -138,8 +131,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsPin(w http.ResponseWriter, r *htt
 	summary := cs.chatSessionSummary(false)
 	ws.publishSessionChanged(clientID, chatID, "pin", summary)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":      "Chat session pinned",
 		"chat_session": summary,
 		"is_pinned":    pinned,
@@ -166,9 +158,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsUnpin(w http.ResponseWriter, r *h
 
 	chatID := strings.TrimSpace(req.ID)
 	if chatID == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Missing chat id",
 			"code":  "missing_id",
 		})
@@ -188,9 +178,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsUnpin(w http.ResponseWriter, r *h
 	cs := ctx.getChatSession(chatID)
 	if cs == nil {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Chat session not found",
 			"code":  "chat_session_not_found",
 			"id":    chatID,
@@ -210,8 +198,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsUnpin(w http.ResponseWriter, r *h
 	summary := cs.chatSessionSummary(false)
 	ws.publishSessionChanged(clientID, chatID, "unpin", summary)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":      "Chat session unpinned",
 		"chat_session": summary,
 		"is_pinned":    pinned,

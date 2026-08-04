@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -115,9 +114,5 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 		"total":   total,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		// Logging error but can't do much at this point
-		ws.log().Error("failed to encode symbol response", slog.Any("err", err))
-	}
+	writeJSON(w, http.StatusOK, response)
 }

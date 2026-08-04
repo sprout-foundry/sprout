@@ -76,6 +76,8 @@ vi.mock('../config/mode', () => {
     isCloud: false,
     supportsSettings: true,
     supportsLocalTerminal: false,
+    supportsGit: true,
+    supportsWorkspaceSwitching: false,
   };
 });
 

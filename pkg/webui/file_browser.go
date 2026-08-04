@@ -13,6 +13,7 @@ import (
 
 	ignore "github.com/sabhiram/go-gitignore"
 	"github.com/sprout-foundry/sprout/pkg/filediscovery"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // handleAPIBrowse handles API requests for directory browsing
@@ -171,7 +172,7 @@ func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *h
 		return
 	}
 	// Reap the child process to avoid zombies; file browsers detach on their own.
-	go func() { _ = cmd.Wait() }()
+	utils.SafeGo(webuiLogger, "file browser wait", func() { _ = cmd.Wait() })
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"message": "opened"})
 }

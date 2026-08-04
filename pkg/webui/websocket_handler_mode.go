@@ -355,6 +355,11 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 		drainDone := make(chan struct{})
 		go func() {
 			defer close(drainDone)
+			defer func() {
+				if r := recover(); r != nil {
+					ws.log().Error("drain goroutine panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
+				}
+			}()
 			for {
 				select {
 				case <-drainStop:

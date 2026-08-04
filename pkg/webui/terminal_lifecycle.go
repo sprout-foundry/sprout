@@ -158,6 +158,11 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration, backgr
 func (tm *TerminalManager) StartCleanupWorker(ctx context.Context, interval time.Duration, timeout time.Duration, backgroundTimeout ...time.Duration) {
 	tm.cleanupOnce.Do(func() {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					webuiLogger.Error("terminal cleanup worker panicked", slog.Any("panic", r))
+				}
+			}()
 			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 

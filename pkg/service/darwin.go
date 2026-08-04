@@ -37,7 +37,7 @@ func init() {
 // when a struct has both XMLName "dict" and a child field also tagged xml:"dict".
 func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	// Load API keys and other environment variables from service.env.
-	envVars, err := LoadServiceEnvFile(homeDir)
+	envVars, err := LoadServiceEnvFile()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service.env: %w", err)
 	}
@@ -151,7 +151,7 @@ func (m *launchdManager) Install() error {
 
 	// Capture API keys from the current environment and write to service.env
 	// This is done before generating the plist so the environment variables can be inlined
-	if err := GenerateServiceEnvFile(homeDir); err != nil {
+	if err := GenerateServiceEnvFile(); err != nil {
 		fmt.Printf("Warning: failed to generate service.env: %v\n", err)
 		fmt.Println("The service will be installed but may not have access to API keys.")
 	}
@@ -160,7 +160,10 @@ func (m *launchdManager) Install() error {
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create LaunchAgents directory: %w", err)
 	}
-	stateDir, _ := envutil.StateDir()
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve state directory: %w", err)
+	}
 	logDir := filepath.Join(stateDir, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
@@ -261,9 +264,8 @@ func (m *launchdManager) Uninstall() error {
 	}
 
 	// Remove the service.env file if it exists
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		envFile := ServiceEnvPath(homeDir)
+	envFile, envErr := ServiceEnvPath()
+	if envErr == nil {
 		if err := os.Remove(envFile); err != nil && !os.IsNotExist(err) {
 			// Don't fail the whole uninstall if we can't remove service.env
 			fmt.Printf("Warning: failed to remove %s: %v\n", envFile, err)
@@ -421,10 +423,10 @@ func (m *launchdManager) Diagnose() error {
 	fmt.Println()
 
 	// Check log files
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
+	if stateDir, stateErr := envutil.StateDir(); stateErr != nil {
+		console.GlyphWarning.Fprintf(os.Stdout, "  Could not resolve state directory: %v", stateErr)
+	} else {
 		fmt.Println("📝 Checking log files:")
-		stateDir, _ := envutil.StateDir()
 		logDir := filepath.Join(stateDir, "logs")
 		stdoutPath := filepath.Join(logDir, "daemon.stdout.log")
 		stderrPath := filepath.Join(logDir, "daemon.stderr.log")
@@ -442,10 +444,9 @@ func (m *launchdManager) Diagnose() error {
 	}
 
 	// Check service.env
-	if err == nil {
+	if envPath, pathErr := ServiceEnvPath(); pathErr == nil {
 		fmt.Println("🔑 Checking service.env:")
-		envPath := ServiceEnvPath(homeDir)
-		envVars, err := LoadServiceEnvFile(homeDir)
+		envVars, err := LoadServiceEnvFile()
 		if err != nil {
 			console.GlyphWarning.Fprintf(os.Stdout, "  Error loading service.env: %v", err)
 		} else if len(envVars) == 0 {

@@ -152,7 +152,10 @@ func TestGenerateLaunchdPlist_EnvVars(t *testing.T) {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatalf("failed to create state dir: %v", err)
 	}
-	envPath := ServiceEnvPath(homeDir)
+	envPath, err := ServiceEnvPath()
+	if err != nil {
+		t.Fatalf("ServiceEnvPath() error: %v", err)
+	}
 	if err := os.WriteFile(envPath, []byte("MY_API_KEY=secret123\nANOTHER_TOKEN=abc\n"), 0600); err != nil {
 		t.Fatalf("failed to write service.env: %v", err)
 	}

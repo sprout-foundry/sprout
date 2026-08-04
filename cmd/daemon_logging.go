@@ -32,7 +32,10 @@ const (
 // It creates a pair of os.Pipe per stream: the write end replaces
 // os.Stdout/os.Stderr (it is an *os.File), while a background goroutine
 // copies from the read end into the rotating lumberjack.Logger.
-func setupDaemonLogging(homeDir string) {
+// Takes no homeDir: the log directory comes from envutil.StateDir(), which is
+// XDG-based and not necessarily under any given home. Redirect it in tests via
+// $SPROUT_STATE_DIR.
+func setupDaemonLogging() {
 	if os.Getenv("SPROUT_SERVICE") != "1" {
 		return
 	}

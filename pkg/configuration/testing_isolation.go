@@ -50,10 +50,13 @@ func NewTestManager(t *testing.T) (*Manager, func()) {
 		t.Fatalf("NewTestManager: create temp config dir: %v", err)
 	}
 
-	// Scope BOTH env vars (SPROUT_CONFIG canonical, SPROUT_CONFIG legacy
-	// alias) so any indirect Load() that bypasses our Manager still
-	// lands in the temp dir. t.Setenv unwinds at test end.
-	t.Setenv("SPROUT_CONFIG", configDir)
+	// Scope BOTH env vars so any indirect Load() that bypasses our Manager
+	// still lands in the temp dir. t.Setenv unwinds at test end.
+	//
+	// SPROUT_CONFIG_DIR is the canonical name and envutil.ConfigDir() checks
+	// it FIRST — setting only the SPROUT_CONFIG alias left isolation defeatable
+	// by an ambient SPROUT_CONFIG_DIR in the developer's environment.
+	t.Setenv("SPROUT_CONFIG_DIR", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	// Isolate all four category roots so state/cache/data never leak

@@ -111,6 +111,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       },
       content: '',
       originalContent: '',
+      contentLoaded: true,
       cursorPosition: { line: 0, column: 0 },
       scrollPosition: { top: 0, left: 0 },
       isModified: false,
@@ -256,6 +257,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         file: file,
         content: '',
         originalContent: '',
+        contentLoaded: false, // fresh buffer — content not yet read from disk
         cursorPosition: { line: 0, column: 0 },
         scrollPosition: { top: 0, left: 0 },
         isModified: false,
@@ -315,6 +317,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
             },
             content: options.content ?? buffer.content,
             originalContent: options.content ?? buffer.originalContent,
+            contentLoaded: options.content != null ? true : buffer.contentLoaded,
             isPinned: options.isPinned ?? buffer.isPinned,
             isClosable: options.isClosable ?? buffer.isClosable,
             metadata: options.metadata ?? buffer.metadata,
@@ -351,6 +354,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         },
         content: options.content ?? '',
         originalContent: options.content ?? '',
+        contentLoaded: options.content != null, // explicitly provided content is authoritative
         cursorPosition: { line: 0, column: 0 },
         scrollPosition: { top: 0, left: 0 },
         isModified: false,
@@ -497,6 +501,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         next.set(bufferId, {
           ...buffer,
           originalContent,
+          contentLoaded: true, // content is now initialized in memory
           isModified: buffer.content !== originalContent ? buffer.isModified : false,
         });
       }
@@ -588,6 +593,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
           ...buffer,
           content: diskContent,
           originalContent: diskContent,
+          contentLoaded: true, // reloaded content is authoritative
           isModified: false,
           externallyModified: false,
           diskContent: null,

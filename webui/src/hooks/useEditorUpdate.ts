@@ -36,6 +36,12 @@ export interface UseEditorUpdateParams {
   updateBufferContent: (id: string, content: string) => void;
   /** From EditorManagerContext — tracks whether buffer has unsaved changes */
   setBufferModified: (id: string, modified: boolean) => void;
+  /** From useEditorFileIO — true while a disk read is in flight. Keystrokes
+   *  that land between a buffer switch and the new buffer's content dispatch
+   *  are ignored: the view still shows the previous buffer, so attributing
+   *  them would write into the wrong buffer (the load dispatch would clobber
+   *  them anyway). */
+  isLoadingRef: React.MutableRefObject<boolean>;
 }
 
 export interface UseEditorUpdateReturn {
@@ -69,6 +75,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
     handleScrollUpdate,
     updateBufferContent,
     setBufferModified,
+    isLoadingRef,
   } = params;
 
   const localContentRef = useRef<string>(localContent);
@@ -81,6 +88,12 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
 
       // Handle document content changes
       if (update.docChanged && !cmViewApiRef.current?.isExternalUpdate()) {
+        // While a disk load is in flight the view still shows the previous
+        // buffer — attribute nothing to the new buffer yet.
+        if (isLoadingRef.current) {
+          return;
+        }
+
         const newContent = update.state.doc.toString();
 
         // Only update state when content actually changed (prevents unnecessary re-renders)
@@ -116,6 +129,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
       handleScrollUpdate,
       updateBufferContent,
       setBufferModified,
+      isLoadingRef,
     ],
   );
 

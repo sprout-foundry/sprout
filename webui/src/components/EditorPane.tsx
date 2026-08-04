@@ -133,13 +133,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // pre-refactor behavior of an uninitialized flag.
   const cmViewApiRef = useRef<CMViewAPI | null>(null);
 
-  const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({
+  const { selectionInfo, setSelectionInfo, cursorPosition, handleCursorUpdate } = useEditorCursor({
     bufferRef,
     updateBufferCursor,
     cmViewApiRef,
   });
 
-  const { handleSave, saveRef } = useEditorFileIO(
+  const { handleSave, saveRef, loadedBufferIdsRef, isLoadingRef } = useEditorFileIO(
     cmViewApiRef,
     buffer,
     bufferRef,
@@ -184,6 +184,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     handleScrollUpdate,
     updateBufferContent,
     setBufferModified,
+    isLoadingRef,
   });
   onUpdateRef.current = onUpdate;
 
@@ -597,6 +598,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       <EditorPaneFooter
         buffer={buffer}
         selectionInfo={selectionInfo}
+        cursorPosition={cursorPosition}
         whitespaceRenderingMode={whitespaceRenderingMode}
         settings={settings}
         lsp={lsp}

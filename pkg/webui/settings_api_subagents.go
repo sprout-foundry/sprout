@@ -16,7 +16,7 @@ import (
 // remain user-extensible.
 func (ws *ReactWebServer) handleAPISettingsSubagentTypes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed (personas are catalog-fixed; PUT/DELETE removed)", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed (personas are catalog-fixed; PUT/DELETE removed)")
 		return
 	}
 	ws.handleAPISettingsSubagentTypesGet(w, r)

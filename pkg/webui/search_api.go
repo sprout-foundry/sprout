@@ -100,8 +100,7 @@ const maxPatternLength = 1024
 
 // handleAPIQuerySearch handles GET /api/search endpoint
 func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
@@ -397,8 +396,7 @@ func getContextLines(buffer []string, bufferLen, contextLines int, before bool) 
 
 // handleAPIQuerySearchReplace handles POST /api/search/replace endpoint
 func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)

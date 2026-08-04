@@ -16,8 +16,7 @@ import (
 
 // handleAPISessions handles GET /api/sessions - lists all saved sessions with metadata
 func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -98,8 +97,7 @@ func (ws *ReactWebServer) buildSessionList(sessionInfos []agent.SessionInfo) []m
 
 // handleAPIRestoreSession handles POST /api/sessions/restore - restores a specific session
 func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

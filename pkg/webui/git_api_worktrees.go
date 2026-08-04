@@ -23,8 +23,7 @@ type WorktreeInfo struct {
 
 // handleAPIGitWorktrees handles git worktree listing requests
 func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -153,8 +152,7 @@ func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspa
 
 // handleAPIGitWorktreeCreate handles creating a new worktree
 func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -245,8 +243,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 
 // handleAPIGitWorktreeRemove handles removing an existing worktree
 func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -309,8 +306,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 
 // handleAPIGitWorktreeCheckout handles switching to a different worktree
 func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

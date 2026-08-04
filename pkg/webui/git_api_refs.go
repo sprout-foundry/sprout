@@ -15,8 +15,7 @@ import (
 
 // handleAPIGitCommit handles git commit with message
 func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -68,8 +67,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 // handleAPIGitCommitMessage generates an AI commit message from currently staged changes
 // without creating a commit and without publishing chat/query events.
 func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -183,8 +181,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 }
 
 func (ws *ReactWebServer) handleAPIGitRevert(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var req struct {

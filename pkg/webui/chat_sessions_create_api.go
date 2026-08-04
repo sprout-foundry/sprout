@@ -14,8 +14,7 @@ import (
 // handleAPIChatSessionsCreate handles POST /api/chat-sessions/create
 // Body: { "name": "optional name" } or { "id": "optional custom id", "name": "optional name" }
 func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	if ws.rejectIfSharedMode(w) {

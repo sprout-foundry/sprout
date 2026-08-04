@@ -16,8 +16,7 @@ const maxDiffBytes = 200000
 // handleAPIGitDiff handles git diff requests for a specific file
 func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

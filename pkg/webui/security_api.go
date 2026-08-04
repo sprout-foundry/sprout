@@ -13,8 +13,7 @@ import (
 // handleAPIConfirm handles user responses to security prompts (both approval requests and file security prompts)
 // Expected JSON body: {"request_id": "string", "response": boolean}
 func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

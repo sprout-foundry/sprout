@@ -16,8 +16,7 @@ import (
 // Switches the active chat for this client. Returns the switched-to session
 // state (agent_state snapshot, messages, etc.) so the frontend can populate the chat view.
 func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	if ws.rejectIfSharedMode(w) {
@@ -119,8 +118,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 // Body: { "id": "chat-id" }
 // Triggers state compaction for the specified chat session via the agent.
 func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -159,8 +157,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 // Clears the conversation messages for a chat session while keeping the session
 // and its config overrides intact.
 func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

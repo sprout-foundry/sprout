@@ -28,7 +28,7 @@ func (ws *ReactWebServer) handleAPISettingsProviders(w http.ResponseWriter, r *h
 	case http.MethodDelete:
 		ws.handleAPISettingsProvidersDelete(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 

@@ -30,8 +30,7 @@ import (
 //	ok    → { "status": "ok",    "message": "...", "tools": N }
 //	error → { "status": "error", "message": "..." }
 func (ws *ReactWebServer) handleAPISettingsMCPServersTest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

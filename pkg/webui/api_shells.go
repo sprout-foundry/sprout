@@ -10,8 +10,7 @@ import (
 
 // handleAPITerminalShells returns the list of available shells on the system.
 func (ws *ReactWebServer) handleAPITerminalShells(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

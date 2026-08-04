@@ -32,8 +32,7 @@ import (
 //
 // Returns 400 on invalid format, 404 on missing session, 500 on internal errors.
 func (ws *ReactWebServer) handleAPISessionExport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -45,7 +44,7 @@ func (ws *ReactWebServer) handleAPISessionExport(w http.ResponseWriter, r *http.
 		id = extractSessionIDFromExportPath(r.URL.Path)
 	}
 	if id == "" {
-		http.Error(w, "Session ID is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "session_id_required", "Session ID is required")
 		return
 	}
 
@@ -78,7 +77,7 @@ func (ws *ReactWebServer) handleAPISessionExport(w http.ResponseWriter, r *http.
 	}
 	if err != nil {
 		if isSessionNotFoundError(err) {
-			http.Error(w, "Session not found", http.StatusNotFound)
+			writeJSONErr(w, http.StatusNotFound, "session_not_found", "Session not found")
 			return
 		}
 		ws.log().Error("failed to load session for export", slog.String("session_id", id), slog.Any("err", err))

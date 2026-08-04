@@ -82,6 +82,11 @@ func (fw *fileWatcher) start(ctx context.Context) {
 
 	// Drain the fsnotify error channel so it doesn't block.
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				webuiLogger.Error("file watcher error drain panicked", slog.Any("panic", r))
+			}
+		}()
 		for err := range errorsCh {
 			webuiLogger.Error("file watcher reported an error", slog.Any("err", err))
 		}

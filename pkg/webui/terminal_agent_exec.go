@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 const maxCommandLength = 65536 // 64 KB — well below PTY and shell limits
@@ -27,17 +29,12 @@ var (
 // would crash the daemon and leave the PTY reader goroutine and shell process
 // alive (the cleanup that CloseSession performs is what stops both).
 func closeSessionAfterGracePeriod(tm *TerminalManager, sid, reason string) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				webuiLogger.Error("PTY session deferred close panicked", slog.String("session_id", sid), slog.String("reason", reason), slog.Any("panic", r))
-			}
-		}()
+	utils.SafeGo(webuiLogger, "PTY session deferred close", func() {
 		time.Sleep(100 * time.Millisecond)
 		if err := tm.CloseSession(sid); err != nil {
 			webuiLogger.Error("PTY session deferred close failed", slog.String("session_id", sid), slog.String("reason", reason), slog.Any("err", err))
 		}
-	}()
+	}, slog.String("session_id", sid), slog.String("reason", reason))
 }
 
 // ExecuteCommandAndWait executes a command synchronously on a hidden PTY session,

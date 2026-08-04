@@ -3,17 +3,15 @@
 package webui
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // chatQueryOptions bundles the per-request overrides that flow into the
@@ -362,54 +360,14 @@ func (ws *ReactWebServer) runChatQuery(
 			// Route command output through an invocation-local pipe. This avoids
 			// mutating process-global os.Stdout and allows slash commands from
 			// different clients to execute concurrently.
+			capturedOutput, err := captureCommandOutput(
+				ws.log(), logTag, registry, query, clientAgent, nil, false,
+			)
 			trimmed := strings.TrimSpace(query)
-			pipeR, pipeW, pipeErr := os.Pipe()
-			var captured bytes.Buffer
-			var readerDone chan struct{}
-			if pipeErr == nil {
-				registry.SetOutput(pipeW)
-				readerDone = make(chan struct{})
-				go func() {
-					defer close(readerDone)
-					if _, copyErr := io.Copy(&captured, pipeR); copyErr != nil {
-						ws.log().Error("command output pipe read failed",
-							slog.String("handler", logTag),
-							slog.Any("err", copyErr),
-						)
-					}
-				}()
-			} else {
-				// Pipe creation failed (rare: FD exhaustion). Fall back to
-				// io.Discard so commands implementing OutputCommand don't
-				// block on a nil writer. Output is lost but the command runs.
-				ws.log().Warn("command output pipe creation failed; output will be lost",
-					slog.String("handler", logTag),
-					slog.Any("err", pipeErr),
-				)
-				registry.SetOutput(io.Discard)
-			}
-
-			err := registry.Execute(query, clientAgent)
-			registry.SetOutput(nil)
-			if pipeErr == nil {
-				_ = pipeW.Close()
-				<-readerDone
-				_ = pipeR.Close()
-			}
-			capturedOutput := captured.String()
 
 			// Sync state asynchronously so the query goroutine can proceed
 			// to publish events without waiting for the state export.
-			go func() {
-				defer func() {
-					if recovered := recover(); recovered != nil {
-						ws.log().Error("panic in slash-command state sync",
-							slog.String("handler", logTag),
-							slog.String("chat_id", chatID),
-							slog.Any("panic", recovered),
-						)
-					}
-				}()
+			utils.SafeGo(ws.log(), "slash-command state sync", func() {
 				if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
 					ws.log().Error("async state sync failed",
 						slog.String("handler", logTag),
@@ -417,7 +375,7 @@ func (ws *ReactWebServer) runChatQuery(
 						slog.Any("err", err),
 					)
 				}
-			}() // Send any captured output as a stream chunk before reporting
+			}, slog.String("handler", logTag), slog.String("chat_id", chatID)) // Send any captured output as a stream chunk before reporting
 			// success or error, so the user sees what the command printed.
 			if capturedOutput != "" {
 				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
@@ -493,16 +451,7 @@ func (ws *ReactWebServer) runChatQuery(
 		// Sync state asynchronously so the query goroutine returns
 		// immediately. ExportState can take seconds for large conversations,
 		// and the deferred active-query cleanup must not wait for it.
-		go func() {
-			defer func() {
-				if recovered := recover(); recovered != nil {
-					ws.log().Error("panic in state sync",
-						slog.String("handler", logTag),
-						slog.String("chat_id", chatID),
-						slog.Any("panic", recovered),
-					)
-				}
-			}()
+		utils.SafeGo(ws.log(), "state sync", func() {
 			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
 				ws.log().Error("async state sync failed",
 					slog.String("handler", logTag),
@@ -510,7 +459,7 @@ func (ws *ReactWebServer) runChatQuery(
 					slog.Any("err", err),
 				)
 			}
-		}()
+		}, slog.String("handler", logTag), slog.String("chat_id", chatID))
 
 		if err != nil {
 			ws.log().Error("query failed",

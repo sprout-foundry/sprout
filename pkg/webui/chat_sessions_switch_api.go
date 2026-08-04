@@ -16,8 +16,7 @@ import (
 // Switches the active chat for this client. Returns the switched-to session
 // state (agent_state snapshot, messages, etc.) so the frontend can populate the chat view.
 func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	if ws.rejectIfSharedMode(w) {
@@ -30,13 +29,13 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	chatID := strings.TrimSpace(req.ID)
 	if chatID == "" {
-		http.Error(w, "Chat session ID is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "chat_session_id_required", "Chat session ID is required")
 		return
 	}
 
@@ -50,9 +49,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	cs := ctx.getChatSession(chatID)
 	if cs == nil {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Chat session not found",
 			"code":  "chat_session_not_found",
 			"id":    chatID,
@@ -107,8 +104,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	// leave the user looking at the wrong model name for several seconds.
 	ws.publishProviderState(clientID)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "Chat session switched",
 		"active_chat_id": chatID,
 		"chat_session":   cs.chatSessionWithMessages(),
@@ -119,8 +115,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 // Body: { "id": "chat-id" }
 // Triggers state compaction for the specified chat session via the agent.
 func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -130,7 +125,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -143,12 +138,11 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 	// Sync state for this chat session. Each chat has its own agent, so we
 	// can compact any chat (not just the active one).
 	if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to sync chat state: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_sync_chat_state", fmt.Sprintf("Failed to sync chat state: %v", err))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Chat session state compacted",
 		"chat_id": chatID,
 	})
@@ -159,8 +153,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 // Clears the conversation messages for a chat session while keeping the session
 // and its config overrides intact.
 func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -169,7 +162,7 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 		ID string `json:"id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -184,13 +177,13 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 	ws.mutex.RUnlock()
 
 	if ctx == nil {
-		http.Error(w, "Client context not found", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "client_context_not_found", "Client context not found")
 		return
 	}
 
 	cs := ctx.getChatSession(chatID)
 	if cs == nil {
-		http.Error(w, "Chat session not found", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "chat_session_not_found", "Chat session not found")
 		return
 	}
 

@@ -28,8 +28,7 @@ const (
 //
 // The archive is streamed directly to the client.
 func (ws *ReactWebServer) handleAPISupportBundle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

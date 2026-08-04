@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -320,8 +319,6 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		cmd, output, cmdErr := ws.executeSafeSteerCommand(query.Query, clientAgent)
 		if cmd != nil {
 			// Command was found and executed (success or error)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
 			resp := map[string]interface{}{
 				"accepted": cmdErr == nil,
 				"mode":     "steer",
@@ -334,7 +331,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 			if cmdErr != nil {
 				resp["error"] = cmdErr.Error()
 			}
-			json.NewEncoder(w).Encode(resp)
+			writeJSON(w, http.StatusOK, resp)
 			return
 		}
 
@@ -399,8 +396,6 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
 	resp := map[string]interface{}{
 		"accepted":  true,
 		"mode":      "steer",
@@ -417,7 +412,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		slog.String("client_id", clientID),
 		slog.String("target", target),
 	)
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
 // handleAPIQueryStop interrupts the currently running query loop. Thin
@@ -518,45 +513,12 @@ func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAge
 	// Capture command output without redirecting process-global os.Stdout.
 	// The registry wires this invocation-local writer into OutputCommand
 	// implementations, so commands from different clients can run concurrently.
-	readEnd, writeEnd, pipeErr := os.Pipe()
-	if pipeErr != nil {
-		ws.log().Error("command output pipe creation failed",
-			slog.String("handler", "executeSafeSteerCommandStreaming"),
-			slog.Any("err", pipeErr),
-		)
-		return cmd, "", fmt.Errorf("create command output pipe: %w", pipeErr)
-	}
-	registry.SetOutput(writeEnd)
+	output, cmdErr := captureCommandOutput(
+		ws.log(), "executeSafeSteerCommandStreaming",
+		registry, input, chatAgent, onChunk, true,
+	)
 
-	var cmdErr error
-
-	// Always drain concurrently: a command can exceed the OS pipe buffer even
-	// when no streaming callback was requested.
-	buf := new(strings.Builder)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		streamPipeChunks(readEnd, buf, onChunk)
-	}()
-
-	// Execute through the registry so it wires the output writer using the
-	// same path as normal slash-command dispatch. Panic recovery ensures the
-	// pipe and retained command writer are still cleaned up.
-	func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				cmdErr = fmt.Errorf("command panicked: %v", rec)
-			}
-		}()
-		cmdErr = registry.Execute(input, chatAgent)
-	}()
-
-	registry.SetOutput(nil)
-	_ = writeEnd.Close()
-	<-done
-	_ = readEnd.Close()
-
-	return cmd, buf.String(), cmdErr
+	return cmd, output, cmdErr
 }
 
 // streamPipeChunks drains r into buf while invoking onChunk for each

@@ -4,7 +4,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -46,8 +45,7 @@ func (ws *ReactWebServer) rejectIfSharedMode(w http.ResponseWriter) bool {
 // handleAPIChatSessions handles GET /api/chat-sessions - lists all chat sessions
 // for the requesting client with metadata.
 func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -98,8 +96,7 @@ func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.R
 		sessionList = append(sessionList, entry)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "success",
 		"chat_sessions":  sessionList,
 		"active_chat_id": activeChatID,

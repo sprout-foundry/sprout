@@ -80,6 +80,10 @@ class ApiService {
     return workspaceApi.setWorkspace(clientFetch, path, consentHome);
   }
 
+  async browseDirectory(path?: string): Promise<workspaceApi.BrowseResult> {
+    return workspaceApi.browseDirectory(clientFetch, path);
+  }
+
   // ── Terminal ───────────────────────────────────────────────────────
 
   async getTerminalSessionCount(): Promise<number> {

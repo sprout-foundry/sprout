@@ -161,3 +161,60 @@ export async function setWorkspace(
   const workspace = await getWorkspace(fetchFn);
   return { ...workspace, message: String(data.message ?? 'Workspace updated') };
 }
+
+/** A directory entry returned by the workspace browser. */
+export interface BrowseEntry {
+  name: string;
+  path: string;
+}
+
+export interface BrowseResult {
+  /** The canonical directory that was listed. */
+  path: string;
+  /** Daemon root — the browse boundary; nothing above it is reachable. */
+  daemonRoot: string;
+  /** Sub-directories only; files are not selectable as a workspace. */
+  directories: BrowseEntry[];
+}
+
+/**
+ * List the sub-directories of `path` (defaults to the daemon root).
+ *
+ * Used by the workspace gate's inline browser. Only directories are returned —
+ * a workspace root is always a directory, and listing files would just add
+ * noise to the picker.
+ */
+export async function browseDirectory(fetchFn: typeof fetch, path?: string): Promise<BrowseResult> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : '';
+  const response = await fetchFn(`/api/workspace/browse${query}`);
+  const text = await response.text();
+
+  const data = (() => {
+    const trimmed = text.trim();
+    if (!trimmed) return {} as Record<string, unknown>;
+    try {
+      return JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      return { message: trimmed } as Record<string, unknown>;
+    }
+  })();
+
+  if (!response.ok) {
+    throw new Error(String(data.error ?? data.message ?? 'Failed to browse directory'));
+  }
+
+  const directories: BrowseEntry[] = Array.isArray(data.files)
+    ? data.files
+        .filter((f): f is { name: unknown; path: unknown; type: unknown } => typeof f === 'object' && f != null)
+        .filter((f) => f.type === 'directory')
+        .map((f) => ({ name: String(f.name ?? ''), path: String(f.path ?? '') }))
+        .filter((f) => f.name !== '' && !f.name.startsWith('.'))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+
+  return {
+    path: String(data.path ?? ''),
+    daemonRoot: String(data.daemon_root ?? ''),
+    directories,
+  };
+}

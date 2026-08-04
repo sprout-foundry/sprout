@@ -50,7 +50,7 @@ func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.R
 	// Format: worktree path | branch branch-name (HEAD detached at abc123...)
 	worktreesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "worktree", "list", "--porcelain")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to list worktrees: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_worktrees", fmt.Sprintf("Failed to list worktrees: %v", err))
 		return
 	}
 
@@ -162,7 +162,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -170,11 +170,11 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	req.Branch = strings.TrimSpace(req.Branch)
 
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 	if req.Branch == "" {
-		http.Error(w, "Branch name is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "branch_name_required", "Branch name is required")
 		return
 	}
 
@@ -183,7 +183,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	// Resolve path to absolute
 	absPath, err := filepathAbsEval(req.Path)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
@@ -192,14 +192,14 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
 		return
 	}
 
 	// Validate branch name
 	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "check-ref-format", "--branch", req.Branch)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_branch_name", fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))))
 		return
 	}
 
@@ -222,7 +222,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 			})
 			return
 		}
-		http.Error(w, fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, outputStr), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_worktree", fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, outputStr))
 		return
 	}
 
@@ -248,20 +248,20 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	req.Path = strings.TrimSpace(req.Path)
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 
 	// Resolve path to absolute
 	absPath, err := filepathAbsEval(req.Path)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
@@ -269,7 +269,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 
 	// Prevent removing the current worktree
 	if absPath == workspaceRoot {
-		http.Error(w, "Cannot remove the current worktree", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "cannot_remove_current_worktree", "Cannot remove the current worktree")
 		return
 	}
 
@@ -278,14 +278,14 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
 		return
 	}
 
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", absPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to remove worktree: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_remove_worktree", fmt.Sprintf("Failed to remove worktree: %v\nOutput: %s", err, string(output)))
 		return
 	}
 
@@ -310,20 +310,20 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	req.Path = strings.TrimSpace(req.Path)
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 
 	// Resolve path to absolute
 	absPath, err := filepathAbsEval(req.Path)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
@@ -333,7 +333,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "list", "--porcelain")
 	checkOutput, err := checkCmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to list worktrees: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_worktrees", fmt.Sprintf("Failed to list worktrees: %v", err))
 		return
 	}
 
@@ -349,7 +349,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	}
 
 	if !worktreeExists {
-		http.Error(w, "Worktree not found", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "worktree_not_found", "Worktree not found")
 		return
 	}
 

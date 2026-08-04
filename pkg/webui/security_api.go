@@ -28,13 +28,13 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		ws.log().Warn("invalid security confirmation JSON", slog.Any("err", err))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if payload.RequestID == "" {
 		ws.log().Warn("security confirmation request ID is required")
-		http.Error(w, "request_id is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "request_id_required", "request_id is required")
 		return
 	}
 
@@ -77,5 +77,5 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 	}
 
 	ws.log().Warn("security confirmation request not found or already handled", slog.String("request_id", payload.RequestID))
-	http.Error(w, "Request ID not found", http.StatusNotFound)
+	writeJSONErr(w, http.StatusNotFound, "request_id_not_found", "Request ID not found")
 }

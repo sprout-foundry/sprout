@@ -49,7 +49,7 @@ func (ws *ReactWebServer) handleAPIRecall(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if len(query) > recallMaxQueryLen {
-		http.Error(w, "Query too long", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_too_long", "Query too long")
 		return
 	}
 

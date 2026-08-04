@@ -34,25 +34,25 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 	// Get file path from query parameter
 	path := r.URL.Query().Get("path")
 	if path == "" {
-		http.Error(w, "File path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "File path is required")
 		return
 	}
 
 	canonicalPath, err := canonicalizePath(path, workspaceRoot, false)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", fmt.Sprintf("Invalid file path: %v", err))
 		return
 	}
 
 	// Check if file exists and is not a directory
 	info, err := os.Stat(canonicalPath)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("File not found: %v", err), http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("File not found: %v", err))
 		return
 	}
 
 	if info.IsDir() {
-		http.Error(w, "Path is a directory", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_is_directory", "Path is a directory")
 		return
 	}
 
@@ -89,7 +89,7 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 	// Read file content
 	content, err := os.ReadFile(canonicalPath)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read file: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_read_file", fmt.Sprintf("Failed to read file: %v", err))
 		return
 	}
 
@@ -137,13 +137,13 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	// Get file path from query parameter
 	path := r.URL.Query().Get("path")
 	if path == "" {
-		http.Error(w, "File path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "File path is required")
 		return
 	}
 
 	canonicalPath, err := canonicalizePath(path, workspaceRoot, true)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", fmt.Sprintf("Invalid file path: %v", err))
 		return
 	}
 
@@ -166,7 +166,7 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	// Read request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "failed_to_read_request_body", fmt.Sprintf("Failed to read request body: %v", err))
 		return
 	}
 
@@ -175,7 +175,7 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 		Content string `json:"content"`
 	}
 	if err := json.Unmarshal(body, &requestData); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to parse JSON: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "failed_to_parse_json", fmt.Sprintf("Failed to parse JSON: %v", err))
 		return
 	}
 
@@ -184,13 +184,13 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(canonicalPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create directory: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_directory", fmt.Sprintf("Failed to create directory: %v", err))
 		return
 	}
 
 	// Write file
 	if err := os.WriteFile(canonicalPath, content, 0644); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to write file: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_write_file", fmt.Sprintf("Failed to write file: %v", err))
 		return
 	}
 

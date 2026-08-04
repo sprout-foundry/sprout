@@ -25,12 +25,12 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Message == "" {
-		http.Error(w, "Commit message is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "commit_message_required", "Commit message is required")
 		return
 	}
 
@@ -42,7 +42,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 		// Exit code 0 means no differences
 		// We want exit code 1 to proceed
 	} else {
-		http.Error(w, "No staged changes to commit", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "no_staged_changes", "No staged changes to commit")
 		return
 	}
 
@@ -50,7 +50,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	cmd = ws.gitCommandForWorkspace(workspaceRoot, "commit", "-m", req.Message)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create commit: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_commit", fmt.Sprintf("Failed to create commit: %v\nOutput: %s", err, string(output)))
 		return
 	}
 
@@ -73,7 +73,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
-		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
+		writeJSONErr(w, http.StatusServiceUnavailable, "agent_not_available", "Agent is not available")
 		return
 	}
 
@@ -81,38 +81,38 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--quiet", "--exit-code")
 	if err := checkCmd.Run(); err == nil {
-		http.Error(w, "No staged changes to generate commit message", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "no_staged_changes", "No staged changes to generate commit message")
 		return
 	}
 
 	diffCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--staged")
 	diffOutput, err := diffCmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_staged_diff", fmt.Sprintf("Failed to get staged diff: %v", err))
 		return
 	}
 
 	diffText := strings.TrimSpace(string(diffOutput))
 	if diffText == "" {
-		http.Error(w, "No staged changes to generate commit message", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "no_staged_changes", "No staged changes to generate commit message")
 		return
 	}
 
 	configManager := agentInst.GetConfigManager()
 	if configManager == nil {
-		http.Error(w, "Agent configuration is unavailable", http.StatusServiceUnavailable)
+		writeJSONErr(w, http.StatusServiceUnavailable, "agent_configuration_unavailable", "Agent configuration is unavailable")
 		return
 	}
 
 	clientType, err := configManager.GetProvider()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to resolve provider: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_resolve_provider", fmt.Sprintf("Failed to resolve provider: %v", err))
 		return
 	}
 	model := configManager.GetModelForProvider(clientType)
 	client, err := factory.CreateProviderClient(clientType, model)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create provider client: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_provider_client", fmt.Sprintf("Failed to create provider client: %v", err))
 		return
 	}
 
@@ -128,7 +128,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 
 	stagedFilesOutput, err := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--name-status").CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get staged file status: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_staged_file_status", fmt.Sprintf("Failed to get staged file status: %v", err))
 		return
 	}
 
@@ -149,7 +149,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		})
 	}
 	if len(fileChanges) == 0 {
-		http.Error(w, "No staged changes to generate commit message", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "no_staged_changes", "No staged changes to generate commit message")
 		return
 	}
 
@@ -159,13 +159,13 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		FileChanges: fileChanges,
 	})
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to generate commit message: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_generate_commit_message", fmt.Sprintf("Failed to generate commit message: %v", err))
 		return
 	}
 	commitMessage := strings.TrimSpace(result.Message)
 
 	if commitMessage == "" {
-		http.Error(w, "Generated commit message was empty", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "generated_commit_message_empty", "Generated commit message was empty")
 		return
 	}
 
@@ -186,20 +186,20 @@ func (ws *ReactWebServer) handleAPIGitRevert(w http.ResponseWriter, r *http.Requ
 		Commit string `json:"commit"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	req.Commit = strings.TrimSpace(req.Commit)
 	if req.Commit == "" {
-		http.Error(w, "Commit is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "commit_required", "Commit is required")
 		return
 	}
 	if strings.HasPrefix(req.Commit, "-") {
-		http.Error(w, "Invalid commit hash", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_commit_hash", "Invalid commit hash")
 		return
 	}
 	if _, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "revert", "--no-edit", req.Commit); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to revert commit: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_revert_commit", fmt.Sprintf("Failed to revert commit: %v", err))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{

@@ -429,16 +429,11 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		terminal := ctx.Terminal
 		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.RUnlock()
-		agentInst.SetWorkspaceRoot(workspaceRoot)
-		meta := map[string]interface{}{"client_id": clientID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		agentInst.SetEventMetadata(meta)
-		agentInst.EnableStreaming(func(string) {})
-		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
-		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
-		// Wire the TerminalManager from the client context into the agent for WebUI mode.
+		rearmWebUIAgent(agentInst, ws, agentSetupConfig{
+			WorkspaceRoot: workspaceRoot,
+			ClientID:      clientID,
+			UserID:        userID,
+		})
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
 		}
@@ -456,16 +451,11 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 				ctx.Agent = agentInst // cache for next time
 				workspaceRoot := ctx.WorkspaceRoot
 				ws.mutex.RUnlock()
-				agentInst.SetWorkspaceRoot(workspaceRoot)
-				meta := map[string]interface{}{"client_id": clientID}
-				if userID != "" {
-					meta["user_id"] = userID
-				}
-				agentInst.SetEventMetadata(meta)
-				agentInst.EnableStreaming(func(string) {})
-				agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
-				agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
-				// Wire the TerminalManager from the client context into the agent for WebUI mode.
+				rearmWebUIAgent(agentInst, ws, agentSetupConfig{
+					WorkspaceRoot: workspaceRoot,
+					ClientID:      clientID,
+					UserID:        userID,
+				})
 				if terminal != nil {
 					agentInst.SetTerminalManager(terminal)
 				}
@@ -484,16 +474,11 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		terminal := ctx.Terminal
 		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.Unlock()
-		agentInst.SetWorkspaceRoot(workspaceRoot)
-		meta := map[string]interface{}{"client_id": clientID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		agentInst.SetEventMetadata(meta)
-		agentInst.EnableStreaming(func(string) {})
-		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
-		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
-		// Wire the TerminalManager from the client context into the agent for WebUI mode.
+		rearmWebUIAgent(agentInst, ws, agentSetupConfig{
+			WorkspaceRoot: workspaceRoot,
+			ClientID:      clientID,
+			UserID:        userID,
+		})
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
 		}
@@ -548,26 +533,20 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return nil, fmt.Errorf("create agent: %w", createErr)
 	}
 
-	created.SetEventBus(ws.eventBus)
-	created.SetSlashCommands(agent_commands.NewCommandRegistry())
-	created.SetWorkspaceRoot(workspaceRoot)
-	// Get chat_id while holding the lock
 	ws.mutex.RLock()
 	chatID := ""
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		chatID = ctx.getActiveChatID()
 	}
 	ws.mutex.RUnlock()
-	// Build metadata map
-	meta := map[string]interface{}{
-		"client_id": clientID,
-		"chat_id":   chatID,
-	}
-	if userID != "" {
-		meta["user_id"] = userID
-	}
-	created.SetEventMetadata(meta)
-	created.EnableStreaming(func(string) {})
+
+	setupWebUIAgent(created, agentSetupConfig{
+		EventBus:      ws.eventBus,
+		WorkspaceRoot: workspaceRoot,
+		ClientID:      clientID,
+		ChatID:        chatID,
+		UserID:        userID,
+	})
 	created.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 	created.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 

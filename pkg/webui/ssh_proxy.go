@@ -78,7 +78,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 
 	sessionKey, err := url.PathUnescape(encodedKey)
 	if err != nil {
-		http.Error(w, "invalid session key", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_session_key", "invalid session key")
 		return
 	}
 
@@ -91,7 +91,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 	srv.sshSessionsMu.Unlock()
 
 	if session == nil {
-		http.Error(w, "SSH session not found or expired", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "ssh_session_not_found", "SSH session not found or expired")
 		return
 	}
 
@@ -181,7 +181,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace string) {
 	data, err := readStaticFile("index.html")
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", "internal error")
 		return
 	}
 
@@ -215,7 +215,7 @@ func sshProxyHTTP(w http.ResponseWriter, r *http.Request, tunnelPort int, target
 
 	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
 	if err != nil {
-		http.Error(w, "proxy error: "+err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "proxy_error", "proxy error: "+err.Error())
 		return
 	}
 
@@ -228,7 +228,7 @@ func sshProxyHTTP(w http.ResponseWriter, r *http.Request, tunnelPort int, target
 
 	resp, err := sshProxyHTTPClient.Do(proxyReq)
 	if err != nil {
-		http.Error(w, "remote backend unavailable: "+err.Error(), http.StatusBadGateway)
+		writeJSONErr(w, http.StatusBadGateway, "remote_backend_unavailable", "remote backend unavailable: "+err.Error())
 		return
 	}
 	defer resp.Body.Close()
@@ -282,7 +282,7 @@ func sshProxyWebSocket(w http.ResponseWriter, r *http.Request, tunnelPort int, t
 
 	upstream, _, err := websocket.DefaultDialer.Dial(targetURL, forwardHeaders)
 	if err != nil {
-		http.Error(w, "failed to connect to remote backend WebSocket: "+err.Error(), http.StatusBadGateway)
+		writeJSONErr(w, http.StatusBadGateway, "failed_to_connect_to_remote_backend", "failed to connect to remote backend WebSocket: "+err.Error())
 		return
 	}
 	defer upstream.Close()

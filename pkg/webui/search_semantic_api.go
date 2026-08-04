@@ -16,6 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // SemanticSearchResult represents a single semantic search match.
@@ -50,8 +51,7 @@ type SemanticSearchResponse struct {
 
 // handleAPISemanticSearch handles GET /api/search/semantic
 func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -140,8 +140,7 @@ type EmbeddingIndexStatus struct {
 
 // handleAPISemanticStatus handles GET /api/search/semantic/status
 func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -207,8 +206,7 @@ func initErrorMessage(err error) string {
 // handleAPISemanticBuild handles POST /api/search/semantic/build
 // Triggers a full index build. Returns immediately with status while building in background.
 func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -225,12 +223,7 @@ func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.
 	}
 
 	// Start build in background goroutine
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				ws.log().Error("panic in background embedding build", slog.Any("panic", r))
-			}
-		}()
+	utils.SafeGo(ws.log(), "background embedding build", func() {
 		ctx := context.Background()
 		stats, err := em.BuildIndex(ctx)
 		if err != nil {
@@ -238,7 +231,7 @@ func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.
 			return
 		}
 		ws.log().Info("background embedding build completed", slog.Int("units_indexed", stats.UnitsExtracted))
-	}()
+	})
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "build started"})
 }
@@ -277,8 +270,7 @@ type SemanticPreviewResponse struct {
 // Returns a code snippet for the given file and line range.
 // Query params: file (required), start_line (required), context (optional, default 8)
 func (ws *ReactWebServer) handleAPISemanticPreview(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -556,8 +548,7 @@ type SemanticPreviewContextConfig struct {
 // the current user's PersistentContext config, and returns the top results
 // for display in the Memory settings panel. Read-only: no state mutated.
 func (ws *ReactWebServer) handleAPISemanticPreviewContext(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

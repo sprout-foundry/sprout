@@ -21,8 +21,7 @@ import (
 //	enabled  → { "status": "ok",      "message": "Backend ready" }
 //	disabled → { "status": "disabled", "message": "Computer use is not enabled" }
 func (ws *ReactWebServer) handleAPIComputerUseTest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

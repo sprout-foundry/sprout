@@ -100,19 +100,18 @@ const maxPatternLength = 1024
 
 // handleAPIQuerySearch handles GET /api/search endpoint
 func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	query := r.URL.Query().Get("query")
 	if query == "" {
-		http.Error(w, "Query parameter is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_parameter_required", "Query parameter is required")
 		return
 	}
 	if len(query) > maxPatternLength {
-		http.Error(w, "Query too long", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_too_long", "Query too long")
 		return
 	}
 
@@ -158,11 +157,11 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 		includePatterns, excludePatterns, maxResults, contextLines, ignoreRules)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			http.Error(w, "Search timed out", http.StatusRequestTimeout)
+			writeJSONErr(w, http.StatusRequestTimeout, "search_timed_out", "Search timed out")
 			return
 		}
 		ws.log().Error("search failed", slog.Any("err", err))
-		http.Error(w, fmt.Sprintf("Search failed: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "search_failed", fmt.Sprintf("Search failed: %v", err))
 		return
 	}
 
@@ -174,8 +173,7 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 		Query:        query,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // performSearch performs the actual search across workspace files
@@ -397,8 +395,7 @@ func getContextLines(buffer []string, bufferLen, contextLines int, before bool) 
 
 // handleAPIQuerySearchReplace handles POST /api/search/replace endpoint
 func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
@@ -407,20 +404,20 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 
 	var req ReplaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON: "+err.Error())
 		return
 	}
 
 	if req.Search == "" {
-		http.Error(w, "Search parameter is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "search_parameter_required", "Search parameter is required")
 		return
 	}
 	if len(req.Search) > maxPatternLength {
-		http.Error(w, "Search pattern too long", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "search_pattern_too_long", "Search pattern too long")
 		return
 	}
 	if len(req.Replace) > 10000 {
-		http.Error(w, "Replace string too long", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "replace_string_too_long", "Replace string too long")
 		return
 	}
 
@@ -428,7 +425,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	for _, file := range req.Files {
 		canonicalPath, err := canonicalizePath(file, workspaceRoot, false)
 		if err != nil || !isWithinWorkspace(canonicalPath, workspaceRoot) {
-			http.Error(w, fmt.Sprintf("File outside workspace: %s", file), http.StatusBadRequest)
+			writeJSONErr(w, http.StatusBadRequest, "file_outside_workspace", fmt.Sprintf("File outside workspace: %s", file))
 			return
 		}
 	}
@@ -436,7 +433,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	// Compile the search pattern
 	pattern, err := compileSearchPattern(req.Search, req.CaseSensitive, req.WholeWord, req.Regex)
 	if err != nil {
-		http.Error(w, "Invalid search pattern: "+err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_search_pattern", "Invalid search pattern: "+err.Error())
 		return
 	}
 
@@ -444,7 +441,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	changes, err := ws.performReplace(ws.resolveClientID(r), workspaceRoot, req, pattern)
 	if err != nil {
 		ws.log().Error("search replacement failed", slog.Any("err", err))
-		http.Error(w, fmt.Sprintf("Replace failed: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "replace_failed", fmt.Sprintf("Replace failed: %v", err))
 		return
 	}
 
@@ -454,8 +451,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 		Preview:      req.Preview,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // performReplace performs the search and replace operation

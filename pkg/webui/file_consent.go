@@ -13,8 +13,7 @@ import (
 func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	fileConsents := ws.getFileConsentManagerForRequest(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -24,35 +23,34 @@ func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Re
 		Operation string `json:"operation"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	operation := strings.ToLower(strings.TrimSpace(req.Operation))
 	if operation != "read" && operation != "write" {
-		http.Error(w, "operation must be read or write", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "operation_must_be_read_or_write", "operation must be read or write")
 		return
 	}
 
 	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, operation == "write")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", fmt.Sprintf("Invalid file path: %v", err))
 		return
 	}
 
 	if isWithinWorkspace(canonicalPath, workspaceRoot) || isAppConfigPath(canonicalPath) {
-		http.Error(w, "Path does not require external consent", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_does_not_require_external_consent", "Path does not require external consent")
 		return
 	}
 
 	token, expiresAt, err := fileConsents.issue(canonicalPath, operation, defaultConsentTTL)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create consent token: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_consent_token", fmt.Sprintf("Failed to create consent token: %v", err))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"token":      token,
 		"path":       canonicalPath,
 		"operation":  operation,
@@ -61,9 +59,7 @@ func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Re
 }
 
 func (ws *ReactWebServer) writeExternalPathConsentRequired(w http.ResponseWriter, canonicalPath, operation string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusForbidden)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusForbidden, map[string]interface{}{
 		"error":     "external path access requires explicit user consent",
 		"code":      "external_path_consent_required",
 		"path":      canonicalPath,

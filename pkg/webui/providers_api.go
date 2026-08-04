@@ -4,7 +4,6 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -55,8 +54,7 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 		currentModel = strings.TrimSpace(agentInst.GetModel())
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"providers":        providers,
 		"current_provider": currentProvider,
 		"current_model":    currentModel,
@@ -309,8 +307,7 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 	stats["provider"] = agentInst.GetProvider()
 	stats["model"] = agentInst.GetModel()
 	stats["persona"] = agentInst.GetActivePersona()
-	stats["client_id"] = clientID
-	ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
+	agentInst.PublishEvent(events.EventTypeMetricsUpdate, stats)
 }
 
 // handleGetModels handles GET /api/providers/models?provider=<provider_type>

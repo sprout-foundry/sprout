@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"log/slog"
 	"strings"
 )
 
@@ -32,6 +33,11 @@ func (ws *ReactWebServer) startRunBufferSubscriber() {
 	ch := ws.eventBus.Subscribe("run-buffer-subscriber")
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				webuiLogger.Error("run buffer subscriber panicked", slog.Any("panic", r))
+			}
+		}()
 		for ev := range ch {
 			// Skip events that don't need buffering.
 			if _, ok := reattachBufferedEventTypes[ev.Type]; !ok {

@@ -22,7 +22,7 @@ func (ws *ReactWebServer) handleAPISettingsSkills(w http.ResponseWriter, r *http
 	case http.MethodPut:
 		ws.handleAPISettingsSkillsPut(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 

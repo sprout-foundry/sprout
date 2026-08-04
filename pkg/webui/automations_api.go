@@ -56,8 +56,7 @@ func (ws *ReactWebServer) registerAutomateRoutes(mux *http.ServeMux) {
 // directory. Returns an empty array (not an error) if the directory doesn't
 // exist yet.
 func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -94,8 +93,7 @@ func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *h
 // handleAPIAutomateSessionsList returns every automate session from
 // .sprout/automate/, enriched with live process status.
 func (ws *ReactWebServer) handleAPIAutomateSessionsList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -148,8 +146,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionsAll(w http.ResponseWriter, r 
 
 // handleAPIAutomateSessionSingle returns one session by ID.
 func (ws *ReactWebServer) handleAPIAutomateSessionSingle(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -179,8 +176,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionSingle(w http.ResponseWriter, 
 // handleAPIAutomateSessionStop sends escalating signals to stop the
 // tracked process, then removes the session file.
 func (ws *ReactWebServer) handleAPIAutomateSessionStop(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -220,8 +216,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionStop(w http.ResponseWriter, r 
 // handleAPIAutomateSessionOutput reads the output file for a session.
 // Supports a "since" query param for byte-offset resumption.
 func (ws *ReactWebServer) handleAPIAutomateSessionOutput(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -348,8 +343,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionOutput(w http.ResponseWriter, 
 // so the frontend can show a confirmation dialog. On success, returns the
 // session info from the tool layer.
 func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

@@ -17,14 +17,13 @@ func (ws *ReactWebServer) handleAPIHotkeys(w http.ResponseWriter, r *http.Reques
 	case http.MethodPut:
 		ws.handleAPIHotkeysPut(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
 // handleAPIHotkeysValidate handles POST /api/hotkeys/validate
 func (ws *ReactWebServer) handleAPIHotkeysValidate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -101,8 +100,7 @@ type hotkeysPresetsRequest struct {
 // It generates a hotkey configuration from the named preset, validates it,
 // saves it to disk, and returns the result.
 func (ws *ReactWebServer) handleAPIHotkeysPreset(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

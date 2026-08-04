@@ -18,13 +18,12 @@ import (
 
 // GET /api/skills — list installed skills + their origin metadata.
 func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	dir, err := skills.DefaultSkillsDir()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	entries, err := os.ReadDir(dir)
@@ -34,7 +33,7 @@ func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Req
 			_, _ = w.Write([]byte("[]"))
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	type skillJSON struct {
@@ -65,29 +64,25 @@ func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Req
 	if out == nil {
 		out = []skillJSON{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // GET /api/skills/registry — list registry entries (starter skills).
 func (ws *ReactWebServer) handleAPIListRegistry(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	reg, err := skills.LoadRegistry()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(reg.Skills)
+	writeJSON(w, http.StatusOK, reg.Skills)
 }
 
 // POST /api/skills/install
 func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
@@ -97,11 +92,11 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 		Force  bool   `json:"force,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.Source == "" {
-		http.Error(w, "source is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "source_required", "source is required")
 		return
 	}
 	opts := skills.InstallOptions{Force: req.Force}
@@ -126,7 +121,7 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 	}
 	if err != nil {
 		ws.log().Error("failed to install skill", slog.Any("err", err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	// Hot-reload: make the newly installed skill discoverable via list_skills
@@ -136,14 +131,12 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 			ws.log().Warn("skill installed but reload failed", slog.Any("err", refreshErr))
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(results)
+	writeJSON(w, http.StatusOK, results)
 }
 
 // POST /api/skills/update
 func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
@@ -151,11 +144,11 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 		ID string `json:"id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.ID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "id_required", "id is required")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
@@ -163,7 +156,7 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 	results, err := skills.Update(ctx, req.ID, skills.InstallOptions{Force: true})
 	if err != nil {
 		ws.log().Error("failed to update skill", slog.Any("err", err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	// Hot-reload: pick up any frontmatter changes from the updated skill.
@@ -172,14 +165,12 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 			ws.log().Warn("skill updated but reload failed", slog.Any("err", refreshErr))
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(results)
+	writeJSON(w, http.StatusOK, results)
 }
 
 // POST /api/skills/remove
 func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
@@ -187,16 +178,16 @@ func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Re
 		ID string `json:"id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.ID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "id_required", "id is required")
 		return
 	}
 	if err := skills.Uninstall(req.ID); err != nil {
 		ws.log().Error("failed to remove skill", slog.Any("err", err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	// Hot-reload: remove the uninstalled skill from the active config so it
@@ -206,8 +197,7 @@ func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Re
 			ws.log().Warn("skill removed but reload failed", slog.Any("err", refreshErr))
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "removed", "id": req.ID})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "id": req.ID})
 }
 
 // Dispatcher: /api/skills/<sub>

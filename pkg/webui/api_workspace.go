@@ -63,8 +63,7 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	writeJSON(w, http.StatusOK, stats)
 }
 
 // handleAPIWorkspace handles API requests for reading and updating the active workspace root.
@@ -131,8 +130,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 		}
 		response["ssh_context"] = sshContext
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.Request) {
@@ -174,9 +172,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 
 	// Reject workspace changes only for the window that currently owns an active run.
 	if ws.hasActiveQueryForClient(clientID) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
 			"code":           "query_in_progress",
 			"active_queries": 1,
@@ -204,9 +200,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 						ws.log().Warn("failed to record home-workspace consent", slog.Any("err", err))
 					}
 				} else {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusForbidden)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					writeJSON(w, http.StatusForbidden, map[string]interface{}{
 						"error": "Selecting the home directory as workspace requires explicit consent. The agent will have access to all files under your home directory.",
 						"code":  "home_workspace_requires_consent",
 					})
@@ -234,7 +228,6 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		"previous_workspace_root": previousWorkspaceRoot,
 	})
 
-	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
 		"message":        "Workspace updated",
@@ -256,7 +249,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		}
 		response["ssh_context"] = sshContext
 	}
-	_ = json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *http.Request) {
@@ -314,8 +307,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 		files = append(files, fileInfo)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "success",
 		"path":           canonicalDir,
 		"daemon_root":    daemonRoot,
@@ -402,8 +394,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *h
 		projectsCacheMu.Unlock()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"projects":    projects,
 		"daemon_root": ws.GetDaemonRoot(),
 		"cached":      cached,

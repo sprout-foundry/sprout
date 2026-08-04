@@ -23,7 +23,7 @@ func (ws *ReactWebServer) handleAPIShellApprovals(w http.ResponseWriter, r *http
 		ws.handleAPIShellApprovalDecision(w, r)
 		return
 	}
-	http.Error(w, "Not found", http.StatusNotFound)
+	writeJSONErr(w, http.StatusNotFound, "not_found", "Not found")
 }
 
 // handleAPIShellApprovalDecision handles POST /api/shell-approvals/{id}/decision
@@ -31,26 +31,25 @@ func (ws *ReactWebServer) handleAPIShellApprovals(w http.ResponseWriter, r *http
 // SP-093-3: unblocks the broker by delivering the decisions map to the channel
 // returned by RegisterShellApproval.
 func (ws *ReactWebServer) handleAPIShellApprovalDecision(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	id := extractShellApprovalIDFromPath(r.URL.Path)
 	if id == "" {
-		http.Error(w, "Request ID required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "request_id_required", "Request ID required")
 		return
 	}
 	var req events.ShellApprovalResponsePayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		ws.log().Warn("invalid shell approval decision JSON", slog.Any("err", err))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.RequestID == "" {
 		req.RequestID = id
 	}
 	if req.Decisions == nil {
-		http.Error(w, "decisions map required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "decisions_map_required", "decisions map required")
 		return
 	}
 
@@ -61,17 +60,16 @@ func (ws *ReactWebServer) handleAPIShellApprovalDecision(w http.ResponseWriter, 
 	if ag == nil {
 		ws.log().Warn("shell approval decision: no agent available",
 			slog.String("request_id", id))
-		http.Error(w, `{"error":"no agent available to receive decision"}`, http.StatusServiceUnavailable)
+		writeJSONErr(w, http.StatusServiceUnavailable, "no_agent_available", "no agent available to receive decision")
 		return
 	}
 	if !ag.RespondToShellApproval(id, req.Decisions) {
 		ws.log().Warn("shell approval decision not delivered (unknown/expired request ID)",
 			slog.String("request_id", id))
-		http.Error(w, `{"error":"decision not delivered (unknown or expired request)"}`, http.StatusGone)
+		writeJSONErr(w, http.StatusGone, "decision_not_delivered", "decision not delivered (unknown or expired request)")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "request_id": id, "delivered": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "request_id": id, "delivered": true})
 }
 
 // resolveShellApprovalAgent returns an agent instance for delivering shell

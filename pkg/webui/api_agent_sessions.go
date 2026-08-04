@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -32,8 +31,7 @@ import (
 //	  "count": 1
 //	}
 func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -107,8 +105,7 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"sessions": sessions,
 		"count":    len(sessions),
 	})
@@ -136,7 +133,7 @@ func (ws *ReactWebServer) handleAPIAgentSessionActions(w http.ResponseWriter, r 
 	relativePath := strings.TrimPrefix(r.URL.Path, prefix)
 
 	if relativePath == "" || strings.Count(relativePath, "/") != 1 {
-		http.Error(w, "Invalid request path", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_request_path", "Invalid request path")
 		return
 	}
 
@@ -146,13 +143,13 @@ func (ws *ReactWebServer) handleAPIAgentSessionActions(w http.ResponseWriter, r 
 	action := strings.TrimSpace(parts[1])
 
 	if sessionID == "" || action == "" {
-		http.Error(w, "Session ID and action are required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "session_id_and_action_required", "Session ID and action are required")
 		return
 	}
 
 	// Validate session ID length (defense-in-depth against pathological inputs)
 	if len(sessionID) > maxSessionIDLength {
-		http.Error(w, "Session ID too long", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "session_id_too_long", "Session ID too long")
 		return
 	}
 
@@ -165,7 +162,7 @@ func (ws *ReactWebServer) handleAPIAgentSessionActions(w http.ResponseWriter, r 
 	case "kill":
 		ws.handleAgentSessionKill(w, r, sessionID)
 	default:
-		http.Error(w, fmt.Sprintf("Unknown action: %s", action), http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "unknown_action", fmt.Sprintf("Unknown action: %s", action))
 	}
 }
 
@@ -175,8 +172,7 @@ func (ws *ReactWebServer) handleAPIAgentSessionActions(w http.ResponseWriter, r 
 //
 // Response format: plain text output (ANSI stripped)
 func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -186,11 +182,11 @@ func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *htt
 	output, err := terminalManager.GetBackgroundOutput(sessionID)
 	if err != nil {
 		if errors.Is(err, ErrSessionNotFound) || errors.Is(err, ErrNotBackgroundSession) {
-			http.Error(w, "Session not found", http.StatusNotFound)
+			writeJSONErr(w, http.StatusNotFound, "session_not_found", "Session not found")
 			return
 		}
 		ws.log().Error("failed to get background session output", slog.String("session_id", sessionID), slog.Any("err", err))
-		http.Error(w, "Failed to get output", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_output", "Failed to get output")
 		return
 	}
 
@@ -206,8 +202,7 @@ func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *htt
 //
 // Response format: {"id": "...", "status": "attached"}
 func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -216,7 +211,7 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 	// Get the session
 	session, exists := terminalManager.GetSession(sessionID)
 	if !exists {
-		http.Error(w, "Session not found", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "session_not_found", "Session not found")
 		return
 	}
 
@@ -230,20 +225,18 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 
 	if !isBackground {
 		session.mutex.Unlock()
-		http.Error(w, "Session is not a background session", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "session_not_background", "Session is not a background session")
 		return
 	}
 	if !active {
 		session.mutex.Unlock()
-		http.Error(w, "Session is not active", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "session_not_active", "Session is not active")
 		return
 	}
 	if !isHidden {
 		// Already visible — return idempotent success without mutation.
 		session.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"id":     sessionID,
 			"status": "attached",
 		})
@@ -255,9 +248,7 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 	session.mutex.Unlock()
 
 	// Return success
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"id":     sessionID,
 		"status": "attached",
 	})
@@ -266,8 +257,7 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 // handleAgentSessionKill terminates a background agent session.
 // POST /api/terminal/agent-sessions/{id}/kill
 func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -279,14 +269,14 @@ func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.
 	// the CloseSession call.
 	session, exists := terminalManager.GetSession(sessionID)
 	if !exists {
-		http.Error(w, "Session not found", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "session_not_found", "Session not found")
 		return
 	}
 
 	session.mutex.Lock()
 	if !session.IsBackground {
 		session.mutex.Unlock()
-		http.Error(w, "Session is not a background session", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "session_not_background", "Session is not a background session")
 		return
 	}
 	// Mark inactive under the write lock so a concurrent attach sees !Active.
@@ -296,12 +286,11 @@ func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.
 	// Close the session (terminates the PTY process)
 	if err := terminalManager.CloseSession(sessionID); err != nil {
 		ws.log().Error("failed to kill background session", slog.String("session_id", sessionID), slog.Any("err", err))
-		http.Error(w, "Failed to kill session", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_kill_session", "Failed to kill session")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"id":     sessionID,
 		"status": "killed",
 	})

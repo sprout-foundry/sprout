@@ -153,8 +153,7 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 		return instances[i].StartTime.After(instances[j].StartTime)
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"instances":        instances,
 		"current_pid":      os.Getpid(),
 		"active_host_pid":  hostRecord.PID,
@@ -206,8 +205,7 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "instance selection updated",
 		"pid":     req.PID,
 	})
@@ -238,8 +236,7 @@ func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Reque
 		return hosts[i].Alias < hosts[j].Alias
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"hosts": hosts,
 	})
 }
@@ -277,9 +274,7 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 		_, _ = ws.launchSSHWorkspace(req)
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"message":     "ssh workspace launch started",
 		"session_key": sessionKey,
 	})
@@ -309,8 +304,7 @@ func (ws *ReactWebServer) handleAPISSHLaunchStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(sshLaunchStatusDTO{
+	writeJSON(w, http.StatusOK, sshLaunchStatusDTO{
 		Key:        status.Key,
 		Step:       status.Step,
 		Status:     status.Status,
@@ -343,8 +337,7 @@ func (ws *ReactWebServer) handleAPISSHBrowse(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":   "ssh directory entries loaded",
 		"path":      resolvedPath,
 		"home_path": homePath,
@@ -353,9 +346,7 @@ func (ws *ReactWebServer) handleAPISSHBrowse(w http.ResponseWriter, r *http.Requ
 }
 
 func writeSSHJSONError(w http.ResponseWriter, status int, payload sshLaunchErrorDTO) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+	writeJSON(w, status, payload)
 }
 
 func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Request) {
@@ -369,8 +360,7 @@ func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"sessions": sessions,
 	})
 }
@@ -398,8 +388,7 @@ func (ws *ReactWebServer) handleAPISSHSessionDelete(w http.ResponseWriter, r *ht
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "ssh session closed",
 		"key":     req.Key,
 	})

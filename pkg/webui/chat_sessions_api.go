@@ -4,7 +4,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -97,8 +96,7 @@ func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.R
 		sessionList = append(sessionList, entry)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "success",
 		"chat_sessions":  sessionList,
 		"active_chat_id": activeChatID,

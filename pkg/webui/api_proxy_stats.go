@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 )
 
@@ -17,6 +16,5 @@ func (ws *ReactWebServer) handleAPIProxyStats(w http.ResponseWriter, r *http.Req
 
 	stats := ws.gatherStats(r)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	writeJSON(w, http.StatusOK, stats)
 }

@@ -212,7 +212,5 @@ func writeChangesJSON(w http.ResponseWriter, raw string) {
 }
 
 func writeChangesError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": msg})
+	writeJSON(w, status, map[string]interface{}{"error": msg})
 }

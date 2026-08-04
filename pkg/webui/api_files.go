@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -34,18 +33,14 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	}
 	canonicalDir, err := canonicalizePath(dir, workspaceRoot, false)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid directory: %v", err),
 			"code":  "invalid_directory",
 		})
 		return
 	}
 	if !isWithinWorkspace(canonicalDir, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalDir) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{
 			"error": "Directory outside workspace",
 			"code":  "directory_outside_workspace",
 		})
@@ -55,9 +50,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	// Read directory
 	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"error": fmt.Sprintf("Failed to read directory: %v", err),
 			"code":  "failed_to_read_directory",
 		})
@@ -102,8 +95,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		files = append(files, fileInfo)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":   "success",
 		"files":     files,
 		"path":      canonicalDir,

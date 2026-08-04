@@ -173,8 +173,7 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 		Query:        query,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // performSearch performs the actual search across workspace files
@@ -452,8 +451,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 		Preview:      req.Preview,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 // performReplace performs the search and replace operation

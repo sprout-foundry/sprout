@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -113,8 +112,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
 		"commits": commits,
 		"offset":  offset,
@@ -204,8 +202,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 		stats = strings.TrimSpace(string(statOutput))
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":    "success",
 		"hash":       fullHash,
 		"short_hash": shortHash,
@@ -272,8 +269,7 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 	}
 	diff := truncateDiffOutput(string(showOutput), 500000)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
 		"hash":    hash,
 		"path":    reqPath,

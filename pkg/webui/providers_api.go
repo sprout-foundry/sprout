@@ -4,7 +4,6 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -55,8 +54,7 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 		currentModel = strings.TrimSpace(agentInst.GetModel())
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"providers":        providers,
 		"current_provider": currentProvider,
 		"current_model":    currentModel,

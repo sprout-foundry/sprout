@@ -95,6 +95,5 @@ func (ws *ReactWebServer) handleAPIFileCheckModified(w http.ResponseWriter, r *h
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(checkModifiedResponse{Modified: modified})
+	writeJSON(w, http.StatusOK, checkModifiedResponse{Modified: modified})
 }

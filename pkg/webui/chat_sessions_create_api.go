@@ -49,9 +49,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 	// Check if a session with this ID already exists
 	if _, ok := ctx.ChatSessions[chatID]; ok {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error": "Chat session with this ID already exists",
 			"code":  "chat_session_exists",
 			"id":    chatID,
@@ -72,8 +70,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 
 	ws.log().Info("created chat session", slog.String("chat_id", chatID), slog.String("name", name), slog.String("client_id", clientID))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":      true,
 		"id":           chatID,
 		"message":      "Chat session created",

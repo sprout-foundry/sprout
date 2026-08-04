@@ -50,8 +50,7 @@ func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"token":      token,
 		"path":       canonicalPath,
 		"operation":  operation,
@@ -60,9 +59,7 @@ func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Re
 }
 
 func (ws *ReactWebServer) writeExternalPathConsentRequired(w http.ResponseWriter, canonicalPath, operation string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusForbidden)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusForbidden, map[string]interface{}{
 		"error":     "external path access requires explicit user consent",
 		"code":      "external_path_consent_required",
 		"path":      canonicalPath,

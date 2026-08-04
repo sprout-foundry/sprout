@@ -128,8 +128,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 		reviewOutput += fmt.Sprintf("\n\nSuggested New Prompt:\n%s", reviewResponse.NewPrompt)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":              "Deep review completed",
 		"status":               reviewResponse.Status,
 		"feedback":             reviewResponse.Feedback,
@@ -172,8 +171,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *ht
 	for {
 		status, _, _, result, jobErr := job.snapshot(0)
 		if status == "completed" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"message":    "Fix workflow completed",
 				"result":     strings.TrimSpace(result),
 				"session_id": job.SessionID,
@@ -215,8 +213,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":    "Fix workflow started",
 		"job_id":     job.ID,
 		"session_id": job.SessionID,
@@ -262,8 +259,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 
 	status, logs, next, result, jobErr := job.snapshot(since)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":    "success",
 		"job_id":     job.ID,
 		"session_id": job.SessionID,

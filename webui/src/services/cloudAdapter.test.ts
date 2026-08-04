@@ -150,7 +150,7 @@ describe('CloudAdapter', () => {
       wsUrl: 'wss://api.sprout.dev/ws',
       navItems: [
         { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'tasks', order: 1 },
-        { id: 'billing', label: 'Billing', href: '/billing', icon: 'billing', order: 2 },
+        { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'billing', order: 2 },
       ],
     };
 

@@ -24,12 +24,12 @@ func (ws *ReactWebServer) handleAPIGitPullRequest(w http.ResponseWriter, r *http
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Title == "" {
-		http.Error(w, "PR title is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "pr_title_required", "PR title is required")
 		return
 	}
 

@@ -32,17 +32,17 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 	req.Path = normalizeGitPath(req.Path)
 	if req.Path == "" {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
 
@@ -51,18 +51,18 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 
 	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_validate_path", fmt.Sprintf("Failed to validate path: %v", err))
 		return
 	}
 	if !pathExistsInGitStatus(req.Path, status) {
-		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "file_not_staged", "File is not part of git changes")
 		return
 	}
 
 	// Stage the file
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, "add", "--", req.Path)
 	if err := cmd.Run(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to stage file: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_stage_file", fmt.Sprintf("Failed to stage file: %v", err))
 		return
 	}
 
@@ -94,17 +94,17 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 	req.Path = normalizeGitPath(req.Path)
 	if req.Path == "" {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
 
@@ -113,18 +113,18 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 
 	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_validate_path", fmt.Sprintf("Failed to validate path: %v", err))
 		return
 	}
 	if !pathExistsInGitStatus(req.Path, status) {
-		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "file_not_staged", "File is not part of git changes")
 		return
 	}
 
 	// Unstage the file
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, "reset", "HEAD", "--", req.Path)
 	if err := cmd.Run(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to unstage file: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_unstage_file", fmt.Sprintf("Failed to unstage file: %v", err))
 		return
 	}
 
@@ -156,17 +156,17 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 	req.Path = normalizeGitPath(req.Path)
 	if req.Path == "" {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
 
@@ -175,11 +175,11 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 
 	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to validate path: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_validate_path", fmt.Sprintf("Failed to validate path: %v", err))
 		return
 	}
 	if !pathExistsInGitStatus(req.Path, status) {
-		http.Error(w, "File is not part of git changes", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "file_not_staged", "File is not part of git changes")
 		return
 	}
 
@@ -195,7 +195,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		// This matches what `git clean -f -- <path>` would do.
 		abs := filepath.Join(workspaceRoot, req.Path)
 		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
-			http.Error(w, fmt.Sprintf("Failed to delete untracked file: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "failed_to_delete_untracked_file", fmt.Sprintf("Failed to delete untracked file: %v", err))
 			return
 		}
 	default:
@@ -203,7 +203,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		// worktree back to HEAD so partial-stage cases also revert fully.
 		cmd := ws.gitCommandForWorkspace(workspaceRoot, "restore", "--staged", "--worktree", "--", req.Path)
 		if err := cmd.Run(); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to discard changes: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "failed_to_discard_changes", fmt.Sprintf("Failed to discard changes: %v", err))
 			return
 		}
 	}
@@ -235,7 +235,7 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 	// Stage all changes
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, "add", "-A")
 	if err := cmd.Run(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to stage all: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_stage_all", fmt.Sprintf("Failed to stage all: %v", err))
 		return
 	}
 
@@ -265,7 +265,7 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 	// Unstage all changes
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, "reset", "HEAD")
 	if err := cmd.Run(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to unstage all: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_unstage_all", fmt.Sprintf("Failed to unstage all: %v", err))
 		return
 	}
 

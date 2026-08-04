@@ -29,7 +29,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
-		http.Error(w, "Agent is not available", http.StatusServiceUnavailable)
+		writeJSONErr(w, http.StatusServiceUnavailable, "agent_not_available", "Agent is not available")
 		return
 	}
 
@@ -37,27 +37,27 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--quiet", "--exit-code")
 	if err := checkCmd.Run(); err == nil {
-		http.Error(w, "No staged changes found", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "no_staged_changes", "No staged changes found")
 		return
 	}
 
 	diffCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached")
 	stagedDiffBytes, err := diffCmd.Output()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_staged_diff", fmt.Sprintf("Failed to get staged diff: %v", err))
 		return
 	}
 
 	stagedDiff := string(stagedDiffBytes)
 	stagedDiff = truncateDiffOutput(stagedDiff, 200000)
 	if strings.TrimSpace(stagedDiff) == "" {
-		http.Error(w, "No actual diff content found in staged changes", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "no_diff_content_found", "No actual diff content found in staged changes")
 		return
 	}
 
 	cfg, err := configuration.LoadOrInitConfig(true)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_load_config", fmt.Sprintf("Failed to load config: %v", err))
 		return
 	}
 
@@ -78,7 +78,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 	}
 
 	if agentClient == nil {
-		http.Error(w, "Failed to initialize review client", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_initialize_review_client", "Failed to initialize review client")
 		return
 	}
 
@@ -111,7 +111,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 
 	reviewResponse, err := service.PerformAgenticReview(reviewCtx, opts)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Deep review failed: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "deep_review_failed", fmt.Sprintf("Deep review failed: %v", err))
 		return
 	}
 
@@ -153,18 +153,18 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *ht
 		SelectedItems []string `json:"selected_items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	reviewOutput := strings.TrimSpace(req.ReviewOutput)
 	if reviewOutput == "" {
-		http.Error(w, "review_output is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "review_output_required", "review_output is required")
 		return
 	}
 
 	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r), req.FixPrompt, req.SelectedItems)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_start_fix_workflow", fmt.Sprintf("Failed to start fix workflow: %v", err))
 		return
 	}
 
@@ -179,7 +179,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *ht
 			return
 		}
 		if status == "error" {
-			http.Error(w, fmt.Sprintf("Failed to run fix workflow: %s", jobErr), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "failed_to_run_fix_workflow", fmt.Sprintf("Failed to run fix workflow: %s", jobErr))
 			return
 		}
 		time.Sleep(300 * time.Millisecond)
@@ -198,18 +198,18 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, 
 		SelectedItems []string `json:"selected_items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	reviewOutput := strings.TrimSpace(req.ReviewOutput)
 	if reviewOutput == "" {
-		http.Error(w, "review_output is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "review_output_required", "review_output is required")
 		return
 	}
 
 	job, _, err := ws.startFixReviewJob(reviewOutput, ws.resolveClientID(r), req.FixPrompt, req.SelectedItems)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start fix workflow: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_start_fix_workflow", fmt.Sprintf("Failed to start fix workflow: %v", err))
 		return
 	}
 
@@ -228,7 +228,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 
 	jobID := strings.TrimSpace(r.URL.Query().Get("job_id"))
 	if jobID == "" {
-		http.Error(w, "job_id is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "job_id_required", "job_id is required")
 		return
 	}
 
@@ -244,7 +244,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 	job, ok := ws.fixReviewJobs[jobID]
 	ws.fixReviewMu.RUnlock()
 	if !ok {
-		http.Error(w, "job not found", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "job_not_found", "job not found")
 		return
 	}
 
@@ -253,7 +253,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter,
 	// and are accessible by any client. No new jobs should have empty ClientID.
 	requestClientID := ws.resolveClientID(r)
 	if job.ClientID != "" && job.ClientID != requestClientID {
-		http.Error(w, "job not found", http.StatusNotFound)
+		writeJSONErr(w, http.StatusNotFound, "job_not_found", "job not found")
 		return
 	}
 

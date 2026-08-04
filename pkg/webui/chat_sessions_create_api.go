@@ -28,7 +28,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 

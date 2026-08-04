@@ -171,37 +171,37 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		PID int `json:"pid"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.PID <= 0 {
-		http.Error(w, "pid is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "pid_required", "pid is required")
 		return
 	}
 	if !pidalive.IsAlive(req.PID) {
-		http.Error(w, "selected instance is not alive", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "selected_instance_not_alive", "selected instance is not alive")
 		return
 	}
 
 	if err := os.MkdirAll(getSproutConfigDir(), 0755); err != nil {
-		http.Error(w, "Failed to prepare config dir", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_prepare_config_dir", "Failed to prepare config dir")
 		return
 	}
 
 	desired := desiredHostRecordDTO{PID: req.PID, UpdatedAt: time.Now()}
 	data, err := json.MarshalIndent(desired, "", "  ")
 	if err != nil {
-		http.Error(w, "Failed to encode selection", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_encode_selection", "Failed to encode selection")
 		return
 	}
 
 	tmp := filepath.Join(getSproutConfigDir(), "webui_desired_host.json.tmp")
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		http.Error(w, "Failed to write selection", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_write_selection", "Failed to write selection")
 		return
 	}
 	if err := os.Rename(tmp, filepath.Join(getSproutConfigDir(), "webui_desired_host.json")); err != nil {
-		http.Error(w, "Failed to apply selection", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_apply_selection", "Failed to apply selection")
 		return
 	}
 
@@ -218,7 +218,7 @@ func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Reque
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		http.Error(w, "Failed to determine home directory", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_determine_home_directory", "Failed to determine home directory")
 		return
 	}
 
@@ -356,7 +356,7 @@ func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Re
 
 	sessions, err := ws.listSSHSessions()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 
@@ -374,17 +374,17 @@ func (ws *ReactWebServer) handleAPISSHSessionDelete(w http.ResponseWriter, r *ht
 		Key string `json:"key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	req.Key = strings.TrimSpace(req.Key)
 	if req.Key == "" {
-		http.Error(w, "key is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "key_required", "key is required")
 		return
 	}
 
 	if err := ws.closeSSHSession(req.Key); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 

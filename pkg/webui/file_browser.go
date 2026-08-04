@@ -29,11 +29,11 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	}
 	canonicalDir, err := canonicalizePath(dir, workspaceRoot, false)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_directory", fmt.Sprintf("Invalid directory: %v", err))
 		return
 	}
 	if !isWithinWorkspace(canonicalDir, workspaceRoot) {
-		http.Error(w, "Directory outside workspace", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "directory_outside_workspace", "Directory outside workspace")
 		return
 	}
 
@@ -47,7 +47,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	// Read directory
 	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_read_directory", fmt.Sprintf("Failed to read directory: %v", err))
 		return
 	}
 

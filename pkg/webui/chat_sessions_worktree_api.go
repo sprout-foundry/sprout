@@ -37,7 +37,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeGet(w http.ResponseWriter,
 	path := strings.TrimPrefix(r.URL.Path, "/api/chat-session/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 || parts[0] == "" || parts[1] != "worktree" {
-		http.Error(w, "Invalid route", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_route", "Invalid route")
 		return
 	}
 	chatID := parts[0]
@@ -67,7 +67,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	path := strings.TrimPrefix(r.URL.Path, "/api/chat-session/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 || parts[0] == "" || parts[1] != "worktree" {
-		http.Error(w, "Invalid route", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_route", "Invalid route")
 		return
 	}
 	chatID := parts[0]
@@ -78,7 +78,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -86,7 +86,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	if req.WorktreePath != "" {
 		absPath, err := filepathAbsEval(req.WorktreePath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+			writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 			return
 		}
 
@@ -95,13 +95,13 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 		daemonRoot := ws.daemonRoot
 		ws.mutex.RUnlock()
 		if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-			http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
+			writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
 			return
 		}
 
 		// Check if it's a valid git worktree
 		if err := ws.validateGitWorktree(absPath); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid worktree: %v", err), http.StatusBadRequest)
+			writeJSONErr(w, http.StatusBadRequest, "invalid_worktree", fmt.Sprintf("Invalid worktree: %v", err))
 			return
 		}
 		req.WorktreePath = absPath
@@ -118,7 +118,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 
 	if err := ctx.setChatSessionWorktree(chatID, req.WorktreePath); err != nil {
 		ws.mutex.Unlock()
-		http.Error(w, fmt.Sprintf("Failed to set worktree: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "failed_to_set_worktree", fmt.Sprintf("Failed to set worktree: %v", err))
 		return
 	}
 
@@ -172,7 +172,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	path := strings.TrimPrefix(r.URL.Path, "/api/chat-session/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 || parts[0] == "" || parts[1] != "worktree" || parts[2] != "switch" {
-		http.Error(w, "Invalid route", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_route", "Invalid route")
 		return
 	}
 	chatID := parts[0]
@@ -183,19 +183,19 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	// Validate worktree path
 	if req.WorktreePath == "" {
-		http.Error(w, "Worktree path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "worktree_path_required", "Worktree path is required")
 		return
 	}
 
 	absPath, err := filepathAbsEval(req.WorktreePath)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
@@ -204,13 +204,13 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
 		return
 	}
 
 	// Validate it's a valid git worktree
 	if err := ws.validateGitWorktree(absPath); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid worktree: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree", fmt.Sprintf("Invalid worktree: %v", err))
 		return
 	}
 
@@ -223,7 +223,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 
 	if err := ctx.setChatSessionWorktree(chatID, absPath); err != nil {
 		ws.mutex.Unlock()
-		http.Error(w, fmt.Sprintf("Failed to set worktree: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "failed_to_set_worktree", fmt.Sprintf("Failed to set worktree: %v", err))
 		return
 	}
 
@@ -245,7 +245,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	ws.mutex.Unlock()
 
 	if cs == nil {
-		http.Error(w, "Chat session not found after workspace switch", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "chat_session_not_found", "Chat session not found after workspace switch")
 		return
 	}
 
@@ -284,7 +284,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktree(w http.ResponseWriter, r 
 	path := strings.TrimPrefix(r.URL.Path, "/api/chat-session/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 1 || parts[0] == "" {
-		http.Error(w, "Invalid route", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_route", "Invalid route")
 		return
 	}
 	_ = parts[0] // chatID - already extracted
@@ -308,7 +308,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktree(w http.ResponseWriter, r 
 		ws.handleAPIChatSessionWorktreeSet(w, r)
 		return
 	} else {
-		http.Error(w, "Invalid route", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_route", "Invalid route")
 		return
 	}
 }
@@ -330,7 +330,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -338,7 +338,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	req.Name = strings.TrimSpace(req.Name)
 
 	if req.Branch == "" {
-		http.Error(w, "Branch name is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "branch_name_required", "Branch name is required")
 		return
 	}
 
@@ -348,7 +348,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	// Validate branch name using git's own validation
 	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "check-ref-format", "--branch", req.Branch)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_branch_name", fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))))
 		return
 	}
 
@@ -360,7 +360,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	var err error
 	worktreePath, err = filepathAbsEval(worktreePath)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid worktree path: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
@@ -369,7 +369,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinWorkspace(worktreePath, daemonRoot) && worktreePath != daemonRoot {
-		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
 		return
 	}
 
@@ -409,7 +409,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 			})
 			return
 		}
-		http.Error(w, fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, outputStr), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_worktree", fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, outputStr))
 		return
 	}
 

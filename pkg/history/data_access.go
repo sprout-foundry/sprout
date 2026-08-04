@@ -75,46 +75,21 @@ type ChangeLog struct {
 }
 
 // InitializeHistoryPaths configures the history storage paths based on configuration
-// This should be called at application startup to ensure correct path resolution
+// This should be called at application startup to ensure correct path resolution.
+//
+// SP-133: changes/ and revisions/ are now workspace-local only (under
+// <workspace>/.sprout/). The global "HistoryScope" branch is removed —
+// it created a dual-role directory when the workspace was $HOME, causing
+// the user-level state dir to accumulate per-repo snapshots.
 func InitializeHistoryPaths(config *configuration.Config) {
-	var cDir, rDir string
-
-	if config == nil {
-		// Try to load config if not provided
-		cfg, err := configuration.Load()
-		if err != nil {
-			cDir = projectChangesDir
-			rDir = projectRevisionsDir
-			pathMu.Lock()
-			changesDir = cDir
-			revisionsDir = rDir
-			pathMu.Unlock()
-			return
-		}
-		config = cfg
+	// History is always project-scoped: .sprout/changes and .sprout/revisions
+	// under the workspace root. No global branch.
+	if config != nil && config.HistoryScope == "global" {
+		log.Printf("[history] warning: history_scope=\"global\" is no longer supported (SP-133); using project-scoped history")
 	}
-
-	// Determine history path based on configuration scope
-	if config.HistoryScope == "global" {
-		// Use global history in ~/.config/sprout/
-		configDir, err := configuration.GetConfigDir()
-		if err != nil {
-			// Fallback to project-scoped if global config dir fails
-			cDir = projectChangesDir
-			rDir = projectRevisionsDir
-		} else {
-			cDir = filepath.Join(configDir, "changes")
-			rDir = filepath.Join(configDir, "revisions")
-		}
-	} else {
-		// Default to project-scoped history (historyScope == "project" or empty)
-		cDir = projectChangesDir
-		rDir = projectRevisionsDir
-	}
-
 	pathMu.Lock()
-	changesDir = cDir
-	revisionsDir = rDir
+	changesDir = projectChangesDir
+	revisionsDir = projectRevisionsDir
 	pathMu.Unlock()
 }
 

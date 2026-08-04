@@ -28,6 +28,16 @@ const (
 	// Distinct names make that collision impossible by construction.
 	WorkspaceConfigFileName = "workspace.json"
 
+	// ConfigLocalFileName is the user-scope machine-local override file.
+	// Same schema as ConfigFileName, higher precedence, never committed.
+	// Lives in the config dir alongside config.json.
+	ConfigLocalFileName = "config.local.json"
+
+	// WorkspaceLocalFileName is the workspace-scope personal override file.
+	// Same schema as WorkspaceConfigFileName, higher precedence within the
+	// workspace layer, gitignored.
+	WorkspaceLocalFileName = "workspace.local.json"
+
 	APIKeysFileName = "api_keys.json"
 
 	OutputVerbosityCompact = "compact"

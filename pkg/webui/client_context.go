@@ -510,6 +510,11 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	var workspaceDir string
 	if workspaceRoot != "" {
 		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+		// Ensure the workspace .sprout/ dir exists with a .gitignore
+		// covering personal overrides and state directories.
+		if err := configuration.EnsureWorkspaceConfigDir(workspaceRoot); err != nil {
+			ws.log().Warn("failed to ensure workspace config dir", slog.String("workspace_root", workspaceRoot), slog.Any("err", err))
+		}
 		// Auto-bootstrap workspace config when opening a git repo that
 		// doesn't have .sprout/config.json yet. Same logic as
 		// PersistentPreRunE auto-detection, applied at workspace-switch time.

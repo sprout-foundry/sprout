@@ -38,6 +38,7 @@ func setupTestLogger(t *testing.T) (*Logger, string) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpDir, ".local", "state", "sprout"))
 
 	logger, err := NewLogger()
 	if err != nil {
@@ -57,8 +58,8 @@ func TestNewLogger(t *testing.T) {
 		t.Fatal("Expected non-nil logger")
 	}
 
-	// Verify log file was created
-	logPath := filepath.Join(tmpDir, ".sprout", "sprout.log")
+	// Verify log file was created in state dir
+	logPath := filepath.Join(tmpDir, ".local", "state", "sprout", "logs", "sprout.log")
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		t.Errorf("Expected log file to be created at %s", logPath)
 	}
@@ -67,6 +68,7 @@ func TestNewLogger(t *testing.T) {
 func TestLoggerInit(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpDir, ".local", "state", "sprout"))
 
 	logger := &Logger{}
 	err := logger.init()
@@ -74,14 +76,14 @@ func TestLoggerInit(t *testing.T) {
 		t.Fatalf("Unexpected error in init: %v", err)
 	}
 
-	// Verify .sprout directory was created
-	sproutDir := filepath.Join(tmpDir, ".sprout")
-	if _, err := os.Stat(sproutDir); os.IsNotExist(err) {
-		t.Error("Expected .sprout directory to be created")
+	// Verify state dir was created
+	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
+	if _, err := os.Stat(stateDir); os.IsNotExist(err) {
+		t.Error("Expected state directory to be created")
 	}
 
 	// Verify log file exists
-	logPath := filepath.Join(sproutDir, "sprout.log")
+	logPath := filepath.Join(stateDir, "logs", "sprout.log")
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		t.Error("Expected sprout.log to be created")
 	}
@@ -109,7 +111,7 @@ func TestLoggerLog(t *testing.T) {
 	}
 
 	// Verify file was written
-	logPath := filepath.Join(tmpDir, ".sprout", "sprout.log")
+	logPath := filepath.Join(tmpDir, ".local", "state", "sprout", "logs", "sprout.log")
 	content, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("Failed to read log file: %v", err)
@@ -188,17 +190,13 @@ func TestLoggerWithNilFile(t *testing.T) {
 func TestWriteLocalCopy(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
-
-	// Create the .sprout directory first (WriteLocalCopy doesn't create it)
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".sprout"), 0755); err != nil {
-		t.Fatalf("Failed to create .sprout directory: %v", err)
-	}
+	t.Setenv("SPROUT_CACHE_DIR", filepath.Join(tmpDir, "cache", "sprout"))
 
 	content := []byte("test content")
 	WriteLocalCopy("testfile.txt", content)
 
-	// Verify file was written
-	path := filepath.Join(tmpDir, ".sprout", "testfile.txt")
+	// Verify file was written to cache/diagnostics
+	path := filepath.Join(tmpDir, "cache", "sprout", "diagnostics", "testfile.txt")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)
@@ -210,9 +208,10 @@ func TestWriteLocalCopy(t *testing.T) {
 
 func TestGetLogPath(t *testing.T) {
 	t.Setenv("HOME", "/home/testuser")
+	t.Setenv("SPROUT_STATE_DIR", "")
 
 	path := GetLogPath()
-	expected := filepath.Join("/home/testuser", ".sprout", "sprout.log")
+	expected := filepath.Join("/home/testuser", ".local", "state", "sprout", "logs", "sprout.log")
 	if path != expected {
 		t.Errorf("Expected path %q, got %q", expected, path)
 	}
@@ -270,6 +269,8 @@ func setupTestHome(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("SPROUT_CACHE_DIR", filepath.Join(tmpDir, ".sprout"))
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpDir, ".local", "state", "sprout"))
 	return tmpDir
 }
 
@@ -288,8 +289,11 @@ func TestLogRequestPayload(t *testing.T) {
 
 	LogRequestPayload(payloadJSON, "openrouter", "gpt-4", true)
 
+	// Files now land in cache/diagnostics (SPROUT_CACHE_DIR = tmpDir/.sprout)
+	diagDir := filepath.Join(tmpDir, ".sprout", "diagnostics")
+
 	// Verify lastRequest.json was created
-	lastReqPath := filepath.Join(tmpDir, ".sprout", "lastRequest.json")
+	lastReqPath := filepath.Join(diagDir, "lastRequest.json")
 	data, err := os.ReadFile(lastReqPath)
 	if err != nil {
 		t.Fatalf("Failed to read lastRequest.json: %v", err)
@@ -299,16 +303,16 @@ func TestLogRequestPayload(t *testing.T) {
 	}
 
 	// Verify timestamped file was created (check for api_request_*.json)
-	entries, err := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
+	entries, err := os.ReadDir(diagDir)
 	if err != nil {
-		t.Fatalf("Failed to read .sprout directory: %v", err)
+		t.Fatalf("Failed to read diagnostics directory: %v", err)
 	}
 	foundTimestamped := false
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "api_request_") && strings.HasSuffix(entry.Name(), ".json") {
 			foundTimestamped = true
 			// Verify it contains timestamp, provider, model, streaming fields
-			tsData, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
+			tsData, err := os.ReadFile(filepath.Join(diagDir, entry.Name()))
 			if err != nil {
 				t.Errorf("Failed to read timestamped file: %v", err)
 				continue
@@ -354,8 +358,11 @@ func TestLogRequestPayloadOnError(t *testing.T) {
 	testErr := fmt.Errorf("test connection error")
 	LogRequestPayloadOnError(payloadJSON, "openrouter", "gpt-4o", false, "connection", testErr)
 
+	// Files now land in cache/diagnostics (SPROUT_CACHE_DIR = tmpDir/.sprout)
+	diagDir := filepath.Join(tmpDir, ".sprout", "diagnostics")
+
 	// Verify lastRequest.json was created
-	lastReqPath := filepath.Join(tmpDir, ".sprout", "lastRequest.json")
+	lastReqPath := filepath.Join(diagDir, "lastRequest.json")
 	data, err := os.ReadFile(lastReqPath)
 	if err != nil {
 		t.Fatalf("Failed to read lastRequest.json: %v", err)
@@ -365,16 +372,16 @@ func TestLogRequestPayloadOnError(t *testing.T) {
 	}
 
 	// Verify timestamped error file was created
-	entries, err := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
+	entries, err := os.ReadDir(diagDir)
 	if err != nil {
-		t.Fatalf("Failed to read .sprout directory: %v", err)
+		t.Fatalf("Failed to read diagnostics directory: %v", err)
 	}
 	foundErrorFile := false
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "error_request_connection_") && strings.HasSuffix(entry.Name(), ".json") {
 			foundErrorFile = true
 			// Verify it contains error context
-			errData, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
+			errData, err := os.ReadFile(filepath.Join(diagDir, entry.Name()))
 			if err != nil {
 				t.Errorf("Failed to read error file: %v", err)
 				continue
@@ -447,14 +454,16 @@ func TestLogRequestPayloadWithNonStreaming(t *testing.T) {
 	payload := []byte(`{"prompt": "hello"}`)
 	LogRequestPayload(payload, "anthropic", "claude-3", false)
 
+	diagDir := filepath.Join(tmpDir, ".sprout", "diagnostics")
+
 	// Verify timestamped file has streaming=false
-	entries, err := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
+	entries, err := os.ReadDir(diagDir)
 	if err != nil {
-		t.Fatalf("Failed to read .sprout directory: %v", err)
+		t.Fatalf("Failed to read diagnostics directory: %v", err)
 	}
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "api_request_") {
-			data, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
+			data, err := os.ReadFile(filepath.Join(diagDir, entry.Name()))
 			if err != nil {
 				t.Fatalf("Failed to read file: %v", err)
 			}
@@ -475,10 +484,11 @@ func TestLogRequestPayloadJSONFormat(t *testing.T) {
 	payload := []byte(`{"test":"value"}`)
 	LogRequestPayload(payload, "test-provider", "test-model", true)
 
-	entries, _ := os.ReadDir(filepath.Join(tmpDir, ".sprout"))
+	diagDir := filepath.Join(tmpDir, ".sprout", "diagnostics")
+	entries, _ := os.ReadDir(diagDir)
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "api_request_") {
-			data, err := os.ReadFile(filepath.Join(tmpDir, ".sprout", entry.Name()))
+			data, err := os.ReadFile(filepath.Join(diagDir, entry.Name()))
 			if err != nil {
 				t.Fatalf("Failed to read file: %v", err)
 			}

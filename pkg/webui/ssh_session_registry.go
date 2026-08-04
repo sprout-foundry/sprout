@@ -23,7 +23,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func sshSessionRegistryPath() string {
-	return filepath.Join(getSproutConfigDir(), "ssh_sessions.json")
+	return filepath.Join(getSproutStateDir(), "ssh_sessions.json")
 }
 
 func readPersistedSSHSession(sessionKey string) (*persistedSSHWorkspaceSession, error) {
@@ -62,7 +62,7 @@ func readPersistedSSHSessionRegistry() (map[string]persistedSSHWorkspaceSession,
 }
 
 func writePersistedSSHSessionRegistry(registry map[string]persistedSSHWorkspaceSession) error {
-	if err := os.MkdirAll(getSproutConfigDir(), 0755); err != nil {
+	if err := os.MkdirAll(getSproutStateDir(), 0755); err != nil {
 		return fmt.Errorf("create session registry directory: %w", err)
 	}
 	data, err := json.MarshalIndent(registry, "", "  ")

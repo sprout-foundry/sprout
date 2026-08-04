@@ -140,6 +140,10 @@ func Execute() error {
 
 // initializeSystem initializes configuration and API keys with first-run setup
 func initializeSystem() {
+	// Run SP-133 migration if a legacy ~/.sprout directory exists.
+	if configuration.NeedsMigration() {
+		_ = configuration.RunMigration()
+	}
 	// Check if we're in a CI environment or non-interactive mode
 	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 

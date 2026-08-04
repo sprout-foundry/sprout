@@ -13,6 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/personas"
@@ -238,15 +239,13 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 					convoStoreDir = cfg.EmbeddingIndex.IndexDir
 				}
 				if convoStoreDir == "" {
-					configDir := os.Getenv("SPROUT_CONFIG")
-					if configDir == "" {
-						configDir = os.Getenv("SPROUT_CONFIG")
+					dataDir, err := envutil.DataDir()
+					if err == nil {
+						convoStoreDir = filepath.Join(dataDir, "embeddings")
+					} else {
+						home, _ := os.UserHomeDir()
+						convoStoreDir = filepath.Join(home, ".local", "share", "sprout", "embeddings")
 					}
-					if configDir == "" {
-						home, _ := os.UserHomeDir() // Unlikely to fail; fallback below handles it gracefully
-						configDir = filepath.Join(home, ".config", "sprout")
-					}
-					convoStoreDir = filepath.Join(configDir, "embeddings")
 				}
 				convoStorePath := filepath.Join(convoStoreDir, "conversation_turns.hnsw")
 				swept, sweepErr := SweepExpiredEntries(cfg.PersistentContext.RetentionDays, convoStorePath)

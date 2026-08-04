@@ -11,8 +11,7 @@ import (
 
 // handleAPIGitPullRequest creates a pull request via the gh CLI or GitHub API.
 func (ws *ReactWebServer) handleAPIGitPullRequest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

@@ -60,8 +60,7 @@ const maxPerUserInMetrics = 20
 // handleAPIWSMetrics handles GET /api/ws-metrics. Returns a JSON
 // snapshot of current WebSocket session state. SP-118 Phase 5.
 func (ws *ReactWebServer) handleAPIWSMetrics(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

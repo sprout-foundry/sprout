@@ -13,8 +13,7 @@ import (
 func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	fileConsents := ws.getFileConsentManagerForRequest(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

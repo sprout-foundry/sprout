@@ -15,8 +15,7 @@ import (
 // handleAPIGitStage handles staging a file
 func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -81,8 +80,7 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 // handleAPIGitUnstage handles unstaging a file
 func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -147,8 +145,7 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 // handleAPIGitDiscard handles discarding changes to a file
 func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -230,8 +227,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 
 // handleAPIGitStageAll handles staging all changes
 func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -264,8 +260,7 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 
 // handleAPIGitUnstageAll handles unstaging all changes
 func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

@@ -32,8 +32,7 @@ import (
 //
 // Returns 400 on invalid format, 404 on missing session, 500 on internal errors.
 func (ws *ReactWebServer) handleAPISessionExport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

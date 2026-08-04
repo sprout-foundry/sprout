@@ -46,8 +46,7 @@ func (ws *ReactWebServer) rejectIfSharedMode(w http.ResponseWriter) bool {
 // handleAPIChatSessions handles GET /api/chat-sessions - lists all chat sessions
 // for the requesting client with metadata.
 func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

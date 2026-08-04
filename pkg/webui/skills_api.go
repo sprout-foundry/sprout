@@ -18,8 +18,7 @@ import (
 
 // GET /api/skills — list installed skills + their origin metadata.
 func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	dir, err := skills.DefaultSkillsDir()
@@ -71,8 +70,7 @@ func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Req
 
 // GET /api/skills/registry — list registry entries (starter skills).
 func (ws *ReactWebServer) handleAPIListRegistry(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	reg, err := skills.LoadRegistry()
@@ -86,8 +84,7 @@ func (ws *ReactWebServer) handleAPIListRegistry(w http.ResponseWriter, r *http.R
 
 // POST /api/skills/install
 func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
@@ -142,8 +139,7 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 
 // POST /api/skills/update
 func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
@@ -178,8 +174,7 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 
 // POST /api/skills/remove
 func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)

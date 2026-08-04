@@ -17,8 +17,7 @@ import (
 // saving the current session and creating a new one from the truncated
 // history. Returns the new session ID.
 func (ws *ReactWebServer) handleAPIChatSessionFork(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -109,8 +108,7 @@ func (ws *ReactWebServer) handleAPIChatSessionFork(w http.ResponseWriter, r *htt
 // Body: { "chat_id": "string" }
 // Returns the list of forkable breakpoints (user messages) for the chat session.
 func (ws *ReactWebServer) handleAPIChatSessionBreakpoints(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

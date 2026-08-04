@@ -22,8 +22,7 @@ import (
 // handleAPIGitDeepReview performs the same deep staged review flow as /review-deep,
 // but without routing through /api/query so it doesn't pollute chat history.
 func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -145,8 +144,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 
 // handleAPIGitDeepReviewFix runs the fix workflow and blocks until completion (legacy API).
 func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -192,8 +190,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFix(w http.ResponseWriter, r *ht
 
 // handleAPIGitDeepReviewFixStart starts an isolated full-agent fix workflow job.
 func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -228,8 +225,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReviewFixStart(w http.ResponseWriter, 
 
 // handleAPIGitDeepReviewFixStatus returns incremental status/logs for a running fix workflow job.
 func (ws *ReactWebServer) handleAPIGitDeepReviewFixStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

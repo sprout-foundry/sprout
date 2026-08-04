@@ -279,3 +279,71 @@ func TestFindProjectsInDirectory_HiddenDirs(t *testing.T) {
 		t.Errorf("expected only visible-project, got %d results: %v", len(results), results)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Privacy-gated home directories
+// ---------------------------------------------------------------------------
+
+// The daemon's CWD is $HOME, so until a workspace is attached the project scan
+// runs against the home directory. Listing ~/Documents, ~/Desktop and friends
+// is what raises the macOS privacy prompts, so those must never be descended
+// into — even though they can contain project markers.
+func TestFindProjectsInDirectory_SkipsProtectedHomeDirs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// A protected dir that would otherwise register as a project.
+	docs := filepath.Join(home, "Documents", "some-repo")
+	if err := os.MkdirAll(filepath.Join(docs, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	// A protected dir that is itself a project root.
+	desktop := filepath.Join(home, "Desktop")
+	if err := os.MkdirAll(filepath.Join(desktop, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	// A legitimate project that must still be found.
+	ok := filepath.Join(home, "dev", "real-project")
+	if err := os.MkdirAll(ok, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ok, "go.mod"), []byte("module real\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	results := FindProjectsInDirectory(home, 2)
+
+	for _, r := range results {
+		if strings.Contains(r.Path, "Documents") || strings.Contains(r.Path, "Desktop") {
+			t.Errorf("privacy-gated directory was scanned: %s", r.Path)
+		}
+	}
+	found := false
+	for _, r := range results {
+		if r.Name == "real-project" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("legitimate project outside protected dirs should still be found, got %v", results)
+	}
+}
+
+// The skip is scoped to the home directory itself. A project may legitimately
+// contain a "Documents" folder, and scanning a non-home root must be unaffected.
+func TestFindProjectsInDirectory_ProtectedNamesOnlyGatedAtHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Scan root is NOT home, so "Documents" here carries no privacy meaning.
+	root := t.TempDir()
+	nested := filepath.Join(root, "Documents", "proj")
+	if err := os.MkdirAll(filepath.Join(nested, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	results := FindProjectsInDirectory(root, 2)
+	if len(results) != 1 || results[0].Name != "proj" {
+		t.Errorf("expected to find proj under a non-home root, got %v", results)
+	}
+}

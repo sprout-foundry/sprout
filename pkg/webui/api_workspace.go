@@ -20,8 +20,40 @@ import (
 var (
 	projectsCache     []ProjectInfo
 	projectsCacheTime time.Time
+	projectsCacheRoot string
 	projectsCacheMu   sync.RWMutex
 )
+
+// cachedProjectsIn returns the discovered projects under root, reusing a
+// recent scan when one is available.
+//
+// The scan reads every non-hidden directory under root to depth 2, which on a
+// home directory is both slow and privacy-prompt-inducing. A single page load
+// calls GET /api/workspace from ~10 places (useAppInitialization, useWorkspace,
+// WorkspaceBar, useFileIndex, lspClientService, …); without this the walk ran
+// once per call.
+// The cache holds the raw scan only. Callers that decorate the list (e.g.
+// prepending the daemon root) must do so on the returned copy, or the
+// decoration leaks into the next reader.
+func cachedProjectsIn(root string) (projects []ProjectInfo, wasCached bool) {
+	projectsCacheMu.RLock()
+	if projectsCacheRoot == root && time.Since(projectsCacheTime) < projectsCacheTTL {
+		cached := projectsCache
+		projectsCacheMu.RUnlock()
+		return cached, true
+	}
+	projectsCacheMu.RUnlock()
+
+	projects = FindProjectsInDirectory(root, 2)
+
+	projectsCacheMu.Lock()
+	projectsCache = projects
+	projectsCacheRoot = root
+	projectsCacheTime = time.Now()
+	projectsCacheMu.Unlock()
+
+	return projects, false
+}
 
 // handleAPIStats handles API requests for server statistics
 func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +143,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 	// the recursive home-directory walk on every page load once a real project
 	// is selected — that walk was tripping macOS TCC media-library prompts.
 	if needsSelection {
-		suggested := FindProjectsInDirectory(ws.GetDaemonRoot(), 2)
+		suggested, _ := cachedProjectsIn(ws.GetDaemonRoot())
 		response["suggested_projects"] = suggested
 	}
 
@@ -364,34 +396,19 @@ func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *h
 		return
 	}
 
-	var projects []ProjectInfo
-	var cached bool
+	daemonRoot := ws.GetDaemonRoot()
+	scanned, cached := cachedProjectsIn(daemonRoot)
 
-	projectsCacheMu.RLock()
-	if time.Since(projectsCacheTime) < projectsCacheTTL {
-		projects = projectsCache
-		cached = true
-		projectsCacheMu.RUnlock()
-	} else {
-		projectsCacheMu.RUnlock()
-
-		// Cache miss — rebuild
-		projects = FindProjectsInDirectory(ws.GetDaemonRoot(), 2)
-
-		// Check if daemon root itself is a project and prepend it
-		if isProj, markers := IsProjectDirectory(ws.GetDaemonRoot()); isProj {
-			rootInfo := ProjectInfo{
-				Path:    ws.GetDaemonRoot(),
-				Name:    filepath.Base(ws.GetDaemonRoot()),
-				Markers: markers,
-			}
-			projects = append([]ProjectInfo{rootInfo}, projects...)
+	// Check if daemon root itself is a project and prepend it. Built on a copy
+	// so the prepended entry never lands in the shared cache.
+	projects := scanned
+	if isProj, markers := IsProjectDirectory(daemonRoot); isProj {
+		rootInfo := ProjectInfo{
+			Path:    daemonRoot,
+			Name:    filepath.Base(daemonRoot),
+			Markers: markers,
 		}
-
-		projectsCacheMu.Lock()
-		projectsCache = projects
-		projectsCacheTime = time.Now()
-		projectsCacheMu.Unlock()
+		projects = append([]ProjectInfo{rootInfo}, scanned...)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

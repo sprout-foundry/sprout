@@ -21,7 +21,7 @@ func (h *capturingHandler) Handle(_ context.Context, r slog.Record) error {
 	return nil
 }
 func (h *capturingHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
-func (h *capturingHandler) WithGroup(_ string) slog.Handler       { return h }
+func (h *capturingHandler) WithGroup(_ string) slog.Handler      { return h }
 
 func TestSafeGo_ExecutesFn(t *testing.T) {
 	h := &capturingHandler{}

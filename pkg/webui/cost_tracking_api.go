@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,8 +10,7 @@ import (
 
 // handleCostsSummary returns cost summary data
 func (ws *ReactWebServer) handleCostsSummary(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -33,14 +31,12 @@ func (ws *ReactWebServer) handleCostsSummary(w http.ResponseWriter, r *http.Requ
 
 	summary := costStore.GetCostSummary(startDate, endDate)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summary)
+	writeJSON(w, http.StatusOK, summary)
 }
 
 // handleCostsHistory returns historical cost data
 func (ws *ReactWebServer) handleCostsHistory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -56,8 +52,7 @@ func (ws *ReactWebServer) handleCostsHistory(w http.ResponseWriter, r *http.Requ
 
 	dailyCosts := costStore.GetDailyCosts(days)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"daily_costs": dailyCosts,
 		"days":        days,
 	})
@@ -65,8 +60,7 @@ func (ws *ReactWebServer) handleCostsHistory(w http.ResponseWriter, r *http.Requ
 
 // handleCostsDetail returns detailed cost records
 func (ws *ReactWebServer) handleCostsDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -89,8 +83,7 @@ func (ws *ReactWebServer) handleCostsDetail(w http.ResponseWriter, r *http.Reque
 
 	totalCost, byProvider, byModel := costStore.GetSummary(startDate, now)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"total_cost":  totalCost,
 		"by_provider": byProvider,
 		"by_model":    byModel,

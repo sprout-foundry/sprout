@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -25,8 +24,7 @@ type GitCommit struct {
 // handleAPIGitLog returns a paginated list of past commits.
 // Query params: limit (default 30, max 100), offset (default 0).
 func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -35,7 +33,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 	// Verify git repo
 	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
-		http.Error(w, "Not a git repository", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "not_a_git_repository", "Not a git repository")
 		return
 	}
 
@@ -73,7 +71,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get git log: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_git_log", fmt.Sprintf("Failed to get git log: %v", err))
 		return
 	}
 
@@ -114,8 +112,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
 		"commits": commits,
 		"offset":  offset,
@@ -126,8 +123,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 
 // handleAPIGitCommitShow returns the full diff and metadata for a single commit.
 func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -135,17 +131,17 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 
 	hash := strings.TrimSpace(r.URL.Query().Get("hash"))
 	if hash == "" {
-		http.Error(w, "hash is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "hash_required", "hash is required")
 		return
 	}
 
 	// Validate that the hash refers to an actual commit.
 	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "cat-file", "-t", hash)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid commit hash: %s", strings.TrimSpace(string(output))), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_commit_hash", fmt.Sprintf("Invalid commit hash: %s", strings.TrimSpace(string(output))))
 		return
 	} else if strings.TrimSpace(string(output)) != "commit" {
-		http.Error(w, "hash does not refer to a commit", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "hash_not_a_commit", "hash does not refer to a commit")
 		return
 	}
 
@@ -154,13 +150,13 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	metaCmd := ws.gitCommandForWorkspace(workspaceRoot, "log", "-1", fmt.Sprintf("--format=%s", format), hash)
 	metaOutput, err := metaCmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get commit metadata: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_commit_metadata", fmt.Sprintf("Failed to get commit metadata: %v", err))
 		return
 	}
 	metaStr := strings.TrimSpace(string(metaOutput))
 	metaParts := strings.SplitN(metaStr, "\x00", 5)
 	if len(metaParts) < 5 {
-		http.Error(w, "Failed to parse commit metadata", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_parse_commit_metadata", "Failed to parse commit metadata")
 		return
 	}
 
@@ -174,7 +170,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	showCmd := ws.gitCommandForWorkspace(workspaceRoot, "show", "--format=", "--patch", hash)
 	showOutput, err := showCmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get commit diff: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_commit_diff", fmt.Sprintf("Failed to get commit diff: %v", err))
 		return
 	}
 	diff := string(showOutput)
@@ -184,7 +180,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	nameStatusCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff-tree", "--no-commit-id", "--name-status", "-r", hash)
 	nameStatusOutput, err := nameStatusCmd.CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get commit files: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_commit_files", fmt.Sprintf("Failed to get commit files: %v", err))
 		return
 	}
 
@@ -206,8 +202,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 		stats = strings.TrimSpace(string(statOutput))
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":    "success",
 		"hash":       fullHash,
 		"short_hash": shortHash,
@@ -223,8 +218,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 
 // handleAPIGitCommitFileDiff returns the diff for a single file within a specific commit.
 func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -232,13 +226,13 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 
 	hash := strings.TrimSpace(r.URL.Query().Get("hash"))
 	if hash == "" {
-		http.Error(w, "hash is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "hash_required", "hash is required")
 		return
 	}
 
 	reqPath := normalizeGitPath(r.URL.Query().Get("path"))
 	if reqPath == "" {
-		http.Error(w, "path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "path is required")
 		return
 	}
 
@@ -247,17 +241,17 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 
 	// Path traversal protection.
 	if strings.Contains(reqPath, "..") {
-		http.Error(w, "path must not contain '..'", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_must_not_contain", "path must not contain '..'")
 		return
 	}
 
 	// Validate that the hash refers to an actual commit.
 	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "cat-file", "-t", hash)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid commit hash: %s", strings.TrimSpace(string(output))), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_commit_hash", fmt.Sprintf("Invalid commit hash: %s", strings.TrimSpace(string(output))))
 		return
 	} else if strings.TrimSpace(string(output)) != "commit" {
-		http.Error(w, "hash does not refer to a commit", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "hash_not_a_commit", "hash does not refer to a commit")
 		return
 	}
 
@@ -267,16 +261,15 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 	if err != nil {
 		errStr := strings.TrimSpace(string(showOutput))
 		if strings.Contains(errStr, "bad default revision") || strings.Contains(errStr, "did not match any file") {
-			http.Error(w, "File not found in this commit", http.StatusNotFound)
+			writeJSONErr(w, http.StatusNotFound, "file_not_found_in_commit", "File not found in this commit")
 			return
 		}
-		http.Error(w, fmt.Sprintf("Failed to get commit diff: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_commit_diff", fmt.Sprintf("Failed to get commit diff: %v", err))
 		return
 	}
 	diff := truncateDiffOutput(string(showOutput), 500000)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
 		"hash":    hash,
 		"path":    reqPath,

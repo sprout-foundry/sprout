@@ -5,6 +5,7 @@ package webui
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -165,6 +166,11 @@ func init() {
 func startSemanticEviction(ctx context.Context) {
 	const evictInterval = 5 * time.Minute
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				webuiLogger.Error("semantic eviction goroutine panicked", slog.Any("panic", r))
+			}
+		}()
 		ticker := time.NewTicker(evictInterval)
 		defer ticker.Stop()
 		for {
@@ -187,8 +193,7 @@ func semanticAdapterForLanguage(languageID string) (lspsemantic.Adapter, bool) {
 // handleAPISemantic handles POST /api/semantic.
 // It is language-agnostic at the HTTP layer; adapters can be added per language.
 func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -196,7 +201,7 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 
 	var req semanticRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -205,16 +210,16 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 	req.Method = strings.TrimSpace(strings.ToLower(req.Method))
 
 	if req.Path == "" {
-		http.Error(w, "File path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "File path is required")
 		return
 	}
 	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" && req.Method != "code_actions" && req.Method != "inlay_hints" && req.Method != "signature_help" {
-		http.Error(w, "Invalid method", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_method", "Invalid method")
 		return
 	}
 	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" || req.Method == "references" || req.Method == "code_actions" || req.Method == "signature_help" {
 		if req.Position == nil || req.Position.Line <= 0 || req.Position.Column <= 0 {
-			http.Error(w, "Position is required for definition, hover, rename, references, code_actions, and signature_help", http.StatusBadRequest)
+			writeJSONErr(w, http.StatusBadRequest, "position_required", "Position is required for definition, hover, rename, references, code_actions, and signature_help")
 			return
 		}
 	}
@@ -222,11 +227,11 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	canonical, err := canonicalizePath(req.Path, workspaceRoot, true)
 	if err != nil {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
 	if !isWithinWorkspace(canonical, workspaceRoot) {
-		http.Error(w, "Path is outside workspace", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside workspace")
 		return
 	}
 
@@ -395,6 +400,5 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 }
 
 func (ws *ReactWebServer) writeSemanticResponse(w http.ResponseWriter, resp semanticResponse) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }

@@ -42,8 +42,7 @@ func (ws *ReactWebServer) registerChangesRoutes(mux *http.ServeMux) {
 // chat query), it falls back to the persisted history store so the
 // panel still shows cross-session change history rather than a 503.
 func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	clientID := ws.resolveClientID(r)
@@ -88,8 +87,7 @@ func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http
 // not-found envelope rather than a 503 so the panel degrades
 // gracefully.
 func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	path := r.URL.Query().Get("path")
@@ -117,8 +115,7 @@ func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Re
 // Without a live agent, returns an empty disabled response so the
 // panel shows "no changes this session" instead of a 503 error.
 func (ws *ReactWebServer) handleAPIChangesSummary(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	clientID := ws.resolveClientID(r)
@@ -142,8 +139,7 @@ func (ws *ReactWebServer) handleAPIChangesSummary(w http.ResponseWriter, r *http
 // a live agent. When there IS an agent, it merges session-scoped
 // in-memory entries as well.
 func (ws *ReactWebServer) handleAPIChangesTimeline(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	clientID := ws.resolveClientID(r)
@@ -173,8 +169,7 @@ func (ws *ReactWebServer) handleAPIChangesTimeline(w http.ResponseWriter, r *htt
 // handleAPIChangesRevert performs a bulk revert. Body shape mirrors
 // the revert_my_changes tool: { scope?, file?, since? }.
 func (ws *ReactWebServer) handleAPIChangesRevert(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var req struct {
@@ -217,7 +212,5 @@ func writeChangesJSON(w http.ResponseWriter, raw string) {
 }
 
 func writeChangesError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": msg})
+	writeJSON(w, status, map[string]interface{}{"error": msg})
 }

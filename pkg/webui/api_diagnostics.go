@@ -101,8 +101,7 @@ func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Re
 
 // writeDiagnosticsResponse writes a diagnostics API response.
 func (ws *ReactWebServer) writeDiagnosticsResponse(w http.ResponseWriter, path string, diags []frontendDiagnostic) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(diagnosticsResponse{
+	writeJSON(w, http.StatusOK, diagnosticsResponse{
 		Message:     "ok",
 		Path:        path,
 		Diagnostics: diags,

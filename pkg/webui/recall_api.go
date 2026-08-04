@@ -39,8 +39,7 @@ const (
 // returns matching RecallItems. When the agent is nil or has no embedding
 // manager, it returns an empty items array (graceful degradation).
 func (ws *ReactWebServer) handleAPIRecall(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -50,7 +49,7 @@ func (ws *ReactWebServer) handleAPIRecall(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if len(query) > recallMaxQueryLen {
-		http.Error(w, "Query too long", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_too_long", "Query too long")
 		return
 	}
 

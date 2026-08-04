@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -54,9 +53,7 @@ func (ws *ReactWebServer) handleAPISubagentCancel(w http.ResponseWriter, r *http
 	if !runner.CancelSubagent(id) {
 		// Not active — treat as "already done" so the UI can clean up
 		// its row without surfacing a hard error to the user.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"status":            "ok",
 			"already_completed": true,
 			"id":                id,
@@ -65,9 +62,7 @@ func (ws *ReactWebServer) handleAPISubagentCancel(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"accepted":  true,
 		"id":        id,
 		"mode":      "cancel",

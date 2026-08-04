@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 	"sort"
 )
@@ -60,19 +59,17 @@ const maxPerUserInMetrics = 20
 // handleAPIWSMetrics handles GET /api/ws-metrics. Returns a JSON
 // snapshot of current WebSocket session state. SP-118 Phase 5.
 func (ws *ReactWebServer) handleAPIWSMetrics(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
 	resp := ws.computeWSMetrics()
 
-	w.Header().Set("Content-Type", "application/json")
 	// Cache-Control: never cache. Counts can shift between requests;
 	// any intermediary that holds a stale snapshot defeats the
 	// purpose of the endpoint (debugging, capacity planning).
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // computeWSMetrics builds the wsMetricsResponse by walking

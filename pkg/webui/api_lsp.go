@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
@@ -12,8 +11,7 @@ import (
 // handleLSPStatus returns information about available and running LSP servers.
 // GET /api/lsp/status
 func (ws *ReactWebServer) handleLSPStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -54,6 +52,5 @@ func (ws *ReactWebServer) handleLSPStatus(w http.ResponseWriter, r *http.Request
 		Workspace: ws.workspaceRoot,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }

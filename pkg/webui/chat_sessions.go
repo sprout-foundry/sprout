@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -174,20 +173,18 @@ func (cs *chatSession) getWorktreePath() string {
 func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string, workspaceDir string, eventBus *events.EventBus, clientID, userID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
-		// Use chat's worktree path if set, otherwise use provided workspaceRoot
 		agentWorkspace := cs.WorktreePath
 		if agentWorkspace == "" {
 			agentWorkspace = workspaceRoot
 		}
 		agentInst := cs.Agent
-		agentInst.SetWorkspaceRoot(agentWorkspace)
-		meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		agentInst.SetEventMetadata(meta)
-		agentInst.EnableStreaming(func(string) {})
 		cs.mu.Unlock()
+		rearmWebUIAgent(agentInst, nil, agentSetupConfig{
+			WorkspaceRoot: agentWorkspace,
+			ClientID:      clientID,
+			ChatID:        cs.ID,
+			UserID:        userID,
+		})
 		return agentInst, nil
 	}
 	// Capture session-scoped provider/model before releasing the lock
@@ -225,17 +222,13 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		return nil, fmt.Errorf("create chat agent: %w", createErr)
 	}
 
-	if eventBus != nil {
-		created.SetEventBus(eventBus)
-	}
-	created.SetSlashCommands(agent_commands.NewCommandRegistry())
-	created.SetWorkspaceRoot(agentWorkspace)
-	meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
-	if userID != "" {
-		meta["user_id"] = userID
-	}
-	created.SetEventMetadata(meta)
-	created.EnableStreaming(func(string) {})
+	setupWebUIAgent(created, agentSetupConfig{
+		EventBus:      eventBus,
+		WorkspaceRoot: agentWorkspace,
+		ClientID:      clientID,
+		ChatID:        cs.ID,
+		UserID:        userID,
+	})
 
 	// Inject handoff context into system prompt if present (one-time injection)
 	if sessionHandoff != "" {
@@ -307,20 +300,17 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		cs.Agent = created
 		cs.CurrentSessionID = strings.TrimSpace(created.GetSessionID())
 	} else {
-		// Another goroutine beat us — discard ours and return theirs.
 		created = cs.Agent
-		// Use chat's worktree path if set, otherwise use provided workspaceRoot
 		agentWorkspace := cs.WorktreePath
 		if agentWorkspace == "" {
 			agentWorkspace = workspaceRoot
 		}
-		created.SetWorkspaceRoot(agentWorkspace)
-		meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		created.SetEventMetadata(meta)
-		created.EnableStreaming(func(string) {})
+		rearmWebUIAgent(created, nil, agentSetupConfig{
+			WorkspaceRoot: agentWorkspace,
+			ClientID:      clientID,
+			ChatID:        cs.ID,
+			UserID:        userID,
+		})
 	}
 	return created, nil
 }

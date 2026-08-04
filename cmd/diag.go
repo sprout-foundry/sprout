@@ -32,9 +32,10 @@ func runDiag() {
 	fmt.Println("=== Sprout Configuration Diagnostics ===")
 	fmt.Println()
 
-	// Check global config
-	homeDir, _ := os.UserHomeDir()
-	globalConfigPath := filepath.Join(homeDir, configuration.ConfigDirName, configuration.ConfigFileName)
+	// Check global config — report the canonical config dir, not a
+	// hard-coded ~/.sprout path.
+	globalDir, _ := configuration.GetConfigDir()
+	globalConfigPath := filepath.Join(globalDir, configuration.ConfigFileName)
 	// Resolve rather than hard-code the filename: the workspace layer is
 	// workspace.json, with a legacy config.json fallback. Reporting a fixed
 	// name would tell the user "does not exist" about a config that is in fact
@@ -59,7 +60,6 @@ func runDiag() {
 
 	// Check what the code will actually load
 	fmt.Printf("Loaded config path: %s\n", globalConfigPath)
-	fmt.Println("(Note: sprout currently ONLY uses global config, not project-local)")
 	fmt.Println()
 
 	providersDir, _ := configuration.GetProvidersDir()

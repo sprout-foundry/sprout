@@ -21,8 +21,8 @@ import (
 func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 	payload = redact.Apply(payload)
 
-	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir := getDiagnosticLogDir()
+	if dir == "" {
 		return
 	}
 
@@ -58,7 +58,7 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 func LogRequestPayloadOnError(payload []byte, provider, model string, streaming bool, errorType string, err error) {
 	payload = redact.Apply(payload)
 
-	dir := getErrorLogDir()
+	dir := getDiagnosticLogDir()
 	if dir == "" {
 		return
 	}
@@ -97,14 +97,19 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 	cleanupOldErrorLogs(dir)
 }
 
-// getErrorLogDir returns the .sprout directory used for error logs.
+// getDiagnosticLogDir returns the diagnostics directory under the cache root,
+// used for lastRequest.json, lastResponse.json, and error_request_*.json dumps.
 // Returns empty string if it cannot be created.
-func getErrorLogDir() string {
-	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+func getDiagnosticLogDir() string {
+	cacheDir, err := envutil.CacheDir()
+	if err != nil {
 		return ""
 	}
-	return dir
+	diagDir := filepath.Join(cacheDir, "diagnostics")
+	if err := os.MkdirAll(diagDir, 0o755); err != nil {
+		return ""
+	}
+	return diagDir
 }
 
 // formatErrorDetails returns a string with any additional error context.

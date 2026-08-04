@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
@@ -35,7 +36,20 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "TestMain: create temp state dir: %v\n", err)
 		os.Exit(1)
 	}
-	sessionsDir := filepath.Join(tmpDir, "sessions")
+	// Isolate all four category roots so state/cache/data never leak
+	// to the developer's real directories.
+	origStateDir := os.Getenv("SPROUT_STATE_DIR")
+	origCacheDir := os.Getenv("SPROUT_CACHE_DIR")
+	origDataDir := os.Getenv("SPROUT_DATA_DIR")
+	os.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpDir, "state"))
+	os.Setenv("SPROUT_CACHE_DIR", filepath.Join(tmpDir, "cache"))
+	os.Setenv("SPROUT_DATA_DIR", filepath.Join(tmpDir, "data"))
+	defer func() {
+		os.Setenv("SPROUT_STATE_DIR", origStateDir)
+		os.Setenv("SPROUT_CACHE_DIR", origCacheDir)
+		os.Setenv("SPROUT_DATA_DIR", origDataDir)
+	}()
+	sessionsDir := filepath.Join(tmpDir, "state", "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: mkdir sessions: %v\n", err)
 		_ = os.RemoveAll(tmpDir)
@@ -92,11 +106,12 @@ func TestMain(m *testing.M) {
 // file this process would use outside of tests. Must be called before the
 // global is redirected.
 func snapshotRealRecentWorkspaces() (path string, before []byte) {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
+	// Consent now lives in the state dir, not ~/.sprout/
+	stateDir, err := envutil.StateDir()
+	if err != nil {
 		return "", nil
 	}
-	path = filepath.Join(home, ".sprout", "recent_workspaces.json")
+	path = filepath.Join(stateDir, "recent_workspaces.json")
 	before, _ = os.ReadFile(path)
 	return path, before
 }

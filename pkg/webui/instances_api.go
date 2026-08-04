@@ -108,9 +108,9 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	instancesPath := filepath.Join(getSproutConfigDir(), "instances.json")
-	hostPath := filepath.Join(getSproutConfigDir(), "webui_host.json")
-	desiredPath := filepath.Join(getSproutConfigDir(), "webui_desired_host.json")
+	instancesPath := filepath.Join(getSproutStateDir(), "instances.json")
+	hostPath := filepath.Join(getSproutStateDir(), "webui_host.json")
+	desiredPath := filepath.Join(getSproutStateDir(), "webui_desired_host.json")
 
 	instancesMap := map[string]rawInstanceInfo{}
 	if data, err := os.ReadFile(instancesPath); err == nil && len(data) > 0 {
@@ -183,7 +183,7 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err := os.MkdirAll(getSproutConfigDir(), 0755); err != nil {
+	if err := os.MkdirAll(getSproutStateDir(), 0755); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_prepare_config_dir", "Failed to prepare config dir")
 		return
 	}
@@ -195,12 +195,12 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		return
 	}
 
-	tmp := filepath.Join(getSproutConfigDir(), "webui_desired_host.json.tmp")
+	tmp := filepath.Join(getSproutStateDir(), "webui_desired_host.json.tmp")
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_write_selection", "Failed to write selection")
 		return
 	}
-	if err := os.Rename(tmp, filepath.Join(getSproutConfigDir(), "webui_desired_host.json")); err != nil {
+	if err := os.Rename(tmp, filepath.Join(getSproutStateDir(), "webui_desired_host.json")); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_apply_selection", "Failed to apply selection")
 		return
 	}
@@ -493,16 +493,12 @@ func parseSSHConfigFile(filePath string, hostsMap map[string]*sshHostEntryDTO, v
 	}
 }
 
-func getSproutConfigDir() string {
-	if dir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG")); dir != "" {
+func getSproutStateDir() string {
+	// Resolve config dir for instances.json — this is state data, not config.
+	// Use StateDir so it follows the $SPROUT_STATE_DIR → XDG → HOME chain.
+	if dir, err := envutil.StateDir(); err == nil {
 		return dir
 	}
-	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
-		return filepath.Join(xdg, "sprout")
-	}
-	homeDir := strings.TrimSpace(os.Getenv("HOME"))
-	if homeDir == "" {
-		return "/data/data/com.termux/files/home/.sprout"
-	}
-	return filepath.Join(homeDir, ".sprout")
+	// Fallback: Termux home
+	return filepath.Join("/data/data/com.termux/files/home", ".local", "state", "sprout")
 }

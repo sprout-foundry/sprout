@@ -79,7 +79,7 @@ func TestEncryptionStatus(t *testing.T) {
 	assert.False(t, status.MachineKeyExists)
 
 	// Create a plaintext file
-	apiKeysPath := filepath.Join(tmpDir, "api_keys.json")
+	apiKeysPath := filepath.Join(tmpDir, "credentials", "api_keys.json")
 	err = os.WriteFile(apiKeysPath, []byte(`{"test": "value"}`), 0600)
 	require.NoError(t, err)
 
@@ -92,7 +92,7 @@ func TestEncryptionStatus(t *testing.T) {
 	// Create a machine key
 	identity, err := age.GenerateX25519Identity()
 	require.NoError(t, err)
-	keyPath := filepath.Join(tmpDir, "key.age")
+	keyPath := filepath.Join(tmpDir, "credentials", "key.age")
 	err = os.WriteFile(keyPath, []byte(identity.String()), 0600)
 	require.NoError(t, err)
 
@@ -117,7 +117,7 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify file exists and is encrypted
-	apiKeysPath := filepath.Join(tmpDir, "api_keys.json")
+	apiKeysPath := filepath.Join(tmpDir, "credentials", "api_keys.json")
 	data, err := os.ReadFile(apiKeysPath)
 	require.NoError(t, err)
 	assert.False(t, IsPlaintextJSON(data))
@@ -183,7 +183,7 @@ func TestMachineKeyGeneration(t *testing.T) {
 	require.NotNil(t, identity)
 
 	// Verify key file exists
-	keyPath := filepath.Join(tmpDir, "key.age")
+	keyPath := filepath.Join(tmpDir, "credentials", "key.age")
 	_, err = os.Stat(keyPath)
 	assert.NoError(t, err)
 
@@ -218,7 +218,7 @@ func TestConfigDirCreation(t *testing.T) {
 
 	configDir, err := GetConfigDir()
 	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(tmpDir, "nonexistent"), configDir)
+	assert.Equal(t, filepath.Join(tmpDir, "nonexistent", "credentials"), configDir)
 
 	// Verify directory was created
 	_, err = os.Stat(configDir)
@@ -264,7 +264,7 @@ func TestConcurrentMachineKeyGeneration(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Remove any existing key to ensure we're testing generation
-	keyPath := filepath.Join(tmpDir, "key.age")
+	keyPath := filepath.Join(tmpDir, "credentials", "key.age")
 	os.Remove(keyPath)
 
 	type result struct {
@@ -506,7 +506,7 @@ func TestSave_RespectsMachineKeyMode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the file was written and is encrypted
-	apiKeysPath := filepath.Join(tmpDir, "api_keys.json")
+	apiKeysPath := filepath.Join(tmpDir, "credentials", "api_keys.json")
 	data, err := os.ReadFile(apiKeysPath)
 	require.NoError(t, err)
 	assert.False(t, IsPlaintextJSON(data))
@@ -593,7 +593,11 @@ func TestCheckEncryptionStatus_UsesModeFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write encrypted data to the api_keys file
-	apiKeysPath := filepath.Join(tmpDir, "api_keys.json")
+	credDir := filepath.Join(tmpDir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	apiKeysPath := filepath.Join(credDir, "api_keys.json")
 	err = os.WriteFile(apiKeysPath, encrypted, 0600)
 	require.NoError(t, err)
 
@@ -704,7 +708,11 @@ func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
 	require.NoError(t, err)
 	encrypted, err := EncryptWithPassphrase(jsonData, passphrase)
 	require.NoError(t, err)
-	apiKeysPath := filepath.Join(tmpDir, "api_keys.json")
+	credDir := filepath.Join(tmpDir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	apiKeysPath := filepath.Join(credDir, "api_keys.json")
 	err = os.WriteFile(apiKeysPath, encrypted, 0600)
 	require.NoError(t, err)
 

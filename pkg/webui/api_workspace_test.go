@@ -197,6 +197,9 @@ func newHomeWorkspaceServer(t *testing.T) (ws *ReactWebServer, resolvedHome stri
 	t.Helper()
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	// Override TestMain's global SPROUT_STATE_DIR so consent isolation
+	// is scoped to this test's temp home.
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
 
 	home := resolveHomeDir()
 	resolved, err := filepath.EvalSymlinks(home)

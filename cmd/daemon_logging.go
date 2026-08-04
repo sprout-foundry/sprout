@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
@@ -35,9 +37,12 @@ func setupDaemonLogging(homeDir string) {
 		return
 	}
 
-	logDir := filepath.Join(homeDir, ".sprout", "logs")
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return
+	}
+	logDir := filepath.Join(stateDir, "logs")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		// Can't log anything meaningful here; just skip rotation.
 		return
 	}
 

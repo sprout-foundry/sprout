@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -17,11 +18,7 @@ const (
 )
 
 func getHomeSettingsPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
-	}
-	return filepath.Join(home, ".sprout"), nil
+	return envutil.CacheDir()
 }
 
 func getPathWithFallback(folderName string) string {
@@ -29,7 +26,7 @@ func getPathWithFallback(folderName string) string {
 	if err == nil {
 		return filepath.Join(settings, folderName)
 	}
-	// Fallback to current working directory if home directory is not accessible
+	// Fallback to current working directory if cache dir is not accessible
 	cwd, err := os.Getwd()
 	if err != nil {
 		return filepath.Join(".sprout", folderName)

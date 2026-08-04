@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
@@ -52,6 +53,16 @@ func (ws *ReactWebServer) handleAPISupportBundle(w http.ResponseWriter, r *http.
 	if err == nil {
 		writeBundleLogs(zw, configDir)
 	}
+
+	// 3. Log files from the state directory (daemon logs, audit logs, sessions)
+	if stateDir, err := envutil.StateDir(); err == nil {
+		writeBundleLogs(zw, stateDir)
+	}
+
+	// 4. Diagnostic files from the cache directory (lastRequest, error dumps)
+	if cacheDir, err := envutil.CacheDir(); err == nil {
+		writeBundleLogs(zw, cacheDir)
+	}
 }
 
 // writeBundleConfig writes a redacted JSON config snapshot into the zip.
@@ -74,6 +85,7 @@ func writeBundleConfig(zw *zip.Writer, ws *ReactWebServer) error {
 
 // writeBundleLogs walks configDir and adds *.log and *.jsonl files to the zip,
 // capping each file at supportBundleMaxLogBytes and the total count at supportBundleMaxLogFiles.
+// Excludes the credentials/ subdirectory so secrets never appear in a support bundle.
 func writeBundleLogs(zw *zip.Writer, configDir string) {
 	count := 0
 	_ = filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
@@ -82,6 +94,10 @@ func writeBundleLogs(zw *zip.Writer, configDir string) {
 		}
 		if count >= supportBundleMaxLogFiles {
 			return filepath.SkipAll
+		}
+		// Exclude the credentials directory — secrets must never appear in a bundle.
+		if strings.Contains(filepath.ToSlash(path), "/credentials/") {
+			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(info.Name()))
 		if ext != ".log" && ext != ".jsonl" {

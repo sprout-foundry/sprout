@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
@@ -776,9 +777,9 @@ func firstNonEmptyLine(s string) string {
 }
 
 func transcriptSessionDir(sessionID, workingDir string) (string, error) {
-	home, err := os.UserHomeDir()
+	stateDir, err := envutil.StateDir()
 	if err != nil {
-		return "", agenterrors.NewTool("transcript", "failed to resolve home directory", err)
+		return "", agenterrors.NewTool("transcript", "failed to resolve state directory", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
@@ -789,7 +790,7 @@ func transcriptSessionDir(sessionID, workingDir string) (string, error) {
 	if sid == "" {
 		sid = "unknown-session"
 	}
-	return filepath.Join(home, ".sprout", "transcripts", scope, sid), nil
+	return filepath.Join(stateDir, "transcripts", scope, sid), nil
 }
 
 func sanitizeLabel(label string) string {

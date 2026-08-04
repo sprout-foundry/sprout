@@ -13,18 +13,19 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // defaultAuditLogPath returns the default path for the shell audit log file
-// (~/.sprout/shell-audit.jsonl).
+// in the state directory.
 func defaultAuditLogPath() string {
-	dir, err := configuration.GetConfigDir()
+	stateDir, err := envutil.StateDir()
 	if err != nil {
-		// Fallback: use home directory directly.
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, configuration.ConfigDirName, "shell-audit.jsonl")
+		// Fallback: use config dir directly.
+		dir, _ := configuration.GetConfigDir()
+		return filepath.Join(dir, "shell-audit.jsonl")
 	}
-	return filepath.Join(dir, "shell-audit.jsonl")
+	return filepath.Join(stateDir, "shell-audit.jsonl")
 }
 
 var auditCmd = &cobra.Command{
@@ -32,7 +33,7 @@ var auditCmd = &cobra.Command{
 	Short: "View or clear the security audit log",
 	Long: `Inspect and manage the shell security audit log.
 
-The audit log (~/.sprout/shell-audit.jsonl) records every non-SAFE shell
+The audit log (~/.local/state/sprout/shell-audit.jsonl) records every non-SAFE shell
 classification decision, including the command (with secrets redacted),
 risk level, outcome (blocked/approved/prompted), and source annotation.
 
@@ -79,7 +80,7 @@ var auditClearCmd = &cobra.Command{
 	Short: "Wipe the security audit log file",
 	Long: `Delete all entries from the security audit log.
 
-This removes ~/.sprout/shell-audit.jsonl and any rotated file (.jsonl.1).
+This removes ~/.local/state/sprout/shell-audit.jsonl and any rotated file (.jsonl.1).
 This action cannot be undone.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")

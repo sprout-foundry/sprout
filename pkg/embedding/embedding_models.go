@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // EmbeddingManager manages the embedding index lifecycle.
@@ -187,19 +188,16 @@ func resolveIndexDirFromConfig(cfg *configuration.EmbeddingIndexConfig) string {
 	return indexDir
 }
 
-// resolveIndexDir resolves the embedding index directory from the SPROUT_CONFIG
-// or SPROUT_CONFIG environment variables, falling back to the user's default
-// config directory. Used by both initLocked and SetForTesting.
+// resolveIndexDir resolves the embedding index directory from the
+// $SPROUT_DATA_DIR → XDG → HOME chain. Used by both initLocked and
+// SetForTesting.
 func resolveIndexDir() string {
-	configDir := os.Getenv("SPROUT_CONFIG")
-	if configDir == "" {
-		configDir = os.Getenv("XDG_CONFIG_HOME")
-	}
-	if configDir == "" {
+	dataDir, err := envutil.DataDir()
+	if err != nil {
 		home, _ := os.UserHomeDir()
-		configDir = filepath.Join(home, ".config", "sprout")
+		return filepath.Join(home, ".local", "share", "sprout", "embeddings")
 	}
-	return filepath.Join(configDir, "embeddings")
+	return filepath.Join(dataDir, "embeddings")
 }
 
 // createONNXProvider returns the process-wide shared ONNX embedding provider

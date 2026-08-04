@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // resolveHomeDir resolves the user's home directory. In service mode
@@ -75,14 +76,14 @@ type homeWorkspaceConsentFile struct {
 }
 
 // homeConsentPath returns the path to the home-workspace consent file
-// (~/.sprout/workspace_consent.json). Returns "" if the home directory cannot
-// be resolved, in which case consent functions degrade to "no consent".
+// in the state directory. Returns "" if the state directory cannot be
+// resolved, in which case consent functions degrade to "no consent".
 func homeConsentPath() string {
-	home := resolveHomeDir()
-	if home == "" {
+	stateDir, err := envutil.StateDir()
+	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".sprout", "workspace_consent.json")
+	return filepath.Join(stateDir, "workspace_consent.json")
 }
 
 // hasHomeWorkspaceConsent reports whether the user has previously granted

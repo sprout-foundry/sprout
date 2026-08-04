@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -172,11 +173,11 @@ var errNoReleaseTagForArtifact = errors.New("no release tag available for curren
 // ---------------------------------------------------------------------------
 
 func workspaceLogPath() string {
-	home := os.Getenv("HOME")
-	if strings.TrimSpace(home) == "" {
-		return ".sprout/workspace.log"
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return "workspace.log"
 	}
-	return filepath.Join(home, ".sprout", "workspace.log")
+	return filepath.Join(stateDir, "workspace.log")
 }
 
 func newSSHLaunchFailure(step, message, details string, logger *sshLaunchLogger) error {
@@ -251,11 +252,8 @@ func localSSHCacheRoot() string {
 
 	home := strings.TrimSpace(os.Getenv("HOME"))
 	if home != "" {
-		for _, base := range []string{
-			filepath.Join(home, ".cache"),
-			filepath.Join(home, ".sprout", "cache"),
-		} {
-			candidate := filepath.Join(base, "sprout-ssh-cache")
+		if cacheDir, err := envutil.CacheDir(); err == nil {
+			candidate := filepath.Join(cacheDir, "sprout-ssh-cache")
 			if err := os.MkdirAll(candidate, 0755); err == nil {
 				return candidate
 			}

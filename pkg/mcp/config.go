@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
@@ -77,17 +76,9 @@ func DefaultMCPConfig() MCPConfig {
 	}
 }
 
-// getConfigDir returns the user's config directory
+// getConfigDir returns the user's config directory for MCP configuration.
 func getConfigDir() (string, error) {
-	configDir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
-	if configDir != "" {
-		return configDir, nil
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
-	}
-	return filepath.Join(homeDir, ".sprout"), nil
+	return envutil.ConfigDir()
 }
 
 // LoadMCPConfig loads MCP configuration from file

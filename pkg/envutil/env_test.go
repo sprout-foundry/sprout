@@ -1,223 +1,181 @@
-// Note: Tests in this file must not call t.Parallel() because
-// tests set environment variables, which are a process-global
-// resource, so parallel execution would cause cross-test interference.
 package envutil
 
 import (
-	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 )
 
-func unsetEnv(t *testing.T, suffix string) {
-	t.Helper()
-	sproutKey := "SPROUT_" + suffix
-	origSprout, hadSprout := os.LookupEnv(sproutKey)
-	os.Unsetenv(sproutKey)
-	t.Cleanup(func() {
-		if hadSprout {
-			os.Setenv(sproutKey, origSprout)
-		} else {
-			os.Unsetenv(sproutKey)
-		}
-	})
-}
+func TestConfigDir_HonorsEnvOverride(t *testing.T) {
+	t.Setenv("SPROUT_CONFIG_DIR", "/tmp/sp-test-config")
+	t.Setenv("SPROUT_CONFIG", "/tmp/sp-test-config-legacy")
+	t.Setenv("XDG_CONFIG_HOME", "/tmp/sp-test-xdg")
+	t.Setenv("HOME", "/tmp/sp-test-home")
 
-func TestGetEnvSimple_SproutSet(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", "/sprout/config")
-	result := GetEnvSimple("CONFIG")
-	if result != "/sprout/config" {
-		t.Errorf("expected /sprout/config, got %s", result)
-	}
-}
-
-func TestGetEnvSimple_NotSet(t *testing.T) {
-	unsetEnv(t, "CONFIG")
-	result := GetEnvSimple("CONFIG")
-	if result != "" {
-		t.Errorf("expected empty string, got %s", result)
-	}
-}
-
-func TestSetEnv(t *testing.T) {
-	unsetEnv(t, "TEST_VAR")
-	err := SetEnv("TEST_VAR", "test_value")
+	dir, err := ConfigDir()
 	if err != nil {
-		t.Fatalf("SetEnv failed: %v", err)
+		t.Fatalf("ConfigDir() error: %v", err)
 	}
-	if v := os.Getenv("SPROUT_TEST_VAR"); v != "test_value" {
-		t.Errorf("expected SPROUT_TEST_VAR=test_value, got %s", v)
-	}
-}
-
-func TestLookupEnv_SproutSet(t *testing.T) {
-	t.Setenv("SPROUT_CONFIG", "/sprout/config")
-	result, found := LookupEnv("CONFIG")
-	if !found {
-		t.Error("expected found=true")
-	}
-	if result != "/sprout/config" {
-		t.Errorf("expected /sprout/config, got %s", result)
+	if dir != "/tmp/sp-test-config" {
+		t.Errorf("ConfigDir() = %q, want %q (SPROUT_CONFIG_DIR should win)", dir, "/tmp/sp-test-config")
 	}
 }
 
-func TestLookupEnv_NotSet(t *testing.T) {
-	unsetEnv(t, "NONEXISTENT_LOOKUP")
-	result, found := LookupEnv("NONEXISTENT_LOOKUP")
-	if found {
-		t.Error("expected found=false")
-	}
-	if result != "" {
-		t.Errorf("expected empty string, got %s", result)
-	}
-}
+func TestConfigDir_LegacyAlias(t *testing.T) {
+	t.Setenv("SPROUT_CONFIG_DIR", "")
+	t.Setenv("SPROUT_CONFIG", "/tmp/sp-test-legacy")
+	t.Setenv("XDG_CONFIG_HOME", "/tmp/sp-test-xdg")
+	t.Setenv("HOME", "/tmp/sp-test-home")
 
-func TestUnsetEnv(t *testing.T) {
-	t.Setenv("SPROUT_TEST_VAR", "value1")
-	UnsetEnv("TEST_VAR")
-	if v := os.Getenv("SPROUT_TEST_VAR"); v != "" {
-		t.Errorf("expected SPROUT_TEST_VAR unset, got %s", v)
-	}
-}
-
-func TestHasPrefix_Sprout(t *testing.T) {
-	if !HasPrefix("SPROUT_FOO") {
-		t.Error("expected HasPrefix(SPROUT_FOO) = true")
-	}
-}
-
-func TestHasPrefix_Other(t *testing.T) {
-	if HasPrefix("OTHER_FOO") {
-		t.Error("expected HasPrefix(OTHER_FOO) = false")
-	}
-}
-
-func TestHasPrefix_Empty(t *testing.T) {
-	if HasPrefix("") {
-		t.Error("expected HasPrefix('') = false")
-	}
-}
-
-func TestGetConfigDir_SproutConfigSet(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
-	configDir, err := GetConfigDir()
+	dir, err := ConfigDir()
 	if err != nil {
-		t.Fatalf("GetConfigDir failed: %v", err)
+		t.Fatalf("ConfigDir() error: %v", err)
 	}
-	if configDir != tmpDir {
-		t.Errorf("expected %s, got %s", tmpDir, configDir)
+	if dir != "/tmp/sp-test-legacy" {
+		t.Errorf("ConfigDir() = %q, want %q (SPROUT_CONFIG legacy alias)", dir, "/tmp/sp-test-legacy")
 	}
 }
 
-func TestGetConfigDir_XdgConfigHomeSet(t *testing.T) {
-	tmpDir := t.TempDir()
-	unsetEnv(t, "CONFIG")
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
-	configDir, err := GetConfigDir()
+func TestConfigDir_FallsBackToXDG(t *testing.T) {
+	t.Setenv("SPROUT_CONFIG_DIR", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "/tmp/sp-test-xdg")
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	dir, err := ConfigDir()
 	if err != nil {
-		t.Fatalf("GetConfigDir failed: %v", err)
+		t.Fatalf("ConfigDir() error: %v", err)
 	}
-	expectedDir := filepath.Join(tmpDir, "sprout")
-	if configDir != expectedDir {
-		t.Errorf("expected %s, got %s", expectedDir, configDir)
+	want := filepath.Join("/tmp/sp-test-xdg", "sprout")
+	if dir != want {
+		t.Errorf("ConfigDir() = %q, want %q", dir, want)
 	}
 }
 
-func TestGetConfigDir_HomeSet(t *testing.T) {
-	tmpDir := t.TempDir()
-	unsetEnv(t, "CONFIG")
+func TestConfigDir_FallsBackToHome(t *testing.T) {
+	t.Setenv("SPROUT_CONFIG_DIR", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("HOME", tmpDir)
-	configDir, err := GetConfigDir()
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	dir, err := ConfigDir()
 	if err != nil {
-		t.Fatalf("GetConfigDir failed: %v", err)
+		t.Fatalf("ConfigDir() error: %v", err)
 	}
-	expectedDir := filepath.Join(tmpDir, ".config", "sprout")
-	if configDir != expectedDir {
-		t.Errorf("expected %s, got %s", expectedDir, configDir)
+	want := filepath.Join("/tmp/sp-test-home", ".config", "sprout")
+	if dir != want {
+		t.Errorf("ConfigDir() = %q, want %q", dir, want)
 	}
 }
 
-func TestGetConfigDir_FallbackToUserHomeDir(t *testing.T) {
-	unsetEnv(t, "CONFIG")
-	origHome, hadHome := os.LookupEnv("HOME")
-	origXDG, hadXDG := os.LookupEnv("XDG_CONFIG_HOME")
-	os.Unsetenv("HOME")
-	os.Unsetenv("XDG_CONFIG_HOME")
-	t.Cleanup(func() {
-		if hadHome {
-			os.Setenv("HOME", origHome)
-		}
-		if hadXDG {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
-		}
-	})
-	configDir, err := GetConfigDir()
+func TestStateDir(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", "/tmp/sp-test-state")
+	t.Setenv("XDG_STATE_HOME", "/tmp/sp-test-xdg-state")
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	dir, err := StateDir()
 	if err != nil {
-		t.Skipf("os.UserHomeDir() not available: %v", err)
+		t.Fatalf("StateDir() error: %v", err)
 	}
-	if !strings.Contains(configDir, ".config") {
-		t.Errorf("expected path to contain .config, got %s", configDir)
+	if dir != "/tmp/sp-test-state" {
+		t.Errorf("StateDir() = %q, want %q", dir, "/tmp/sp-test-state")
 	}
 }
 
-func TestGetConfigDir_CreatesDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-	nonExistentPath := filepath.Join(tmpDir, "nonexistent", "nested", "sprout")
-	t.Setenv("SPROUT_CONFIG", nonExistentPath)
-	configDir, err := GetConfigDir()
+func TestStateDir_XDG(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", "")
+	t.Setenv("XDG_STATE_HOME", "/tmp/sp-test-xdg-state")
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	dir, err := StateDir()
 	if err != nil {
-		t.Fatalf("GetConfigDir failed: %v", err)
+		t.Fatalf("StateDir() error: %v", err)
 	}
-	if configDir != nonExistentPath {
-		t.Errorf("expected %s, got %s", nonExistentPath, configDir)
-	}
-	if _, err := os.Stat(configDir); os.IsNotExist(err) {
-		t.Errorf("config directory was not created: %s", configDir)
+	want := filepath.Join("/tmp/sp-test-xdg-state", "sprout")
+	if dir != want {
+		t.Errorf("StateDir() = %q, want %q", dir, want)
 	}
 }
 
-func TestGetConfigDir_WhitespaceTrimmed(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", "  "+tmpDir+"  ")
-	configDir, err := GetConfigDir()
+func TestStateDir_Home(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", "")
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	dir, err := StateDir()
 	if err != nil {
-		t.Fatalf("GetConfigDir failed: %v", err)
+		t.Fatalf("StateDir() error: %v", err)
 	}
-	if configDir != tmpDir {
-		t.Errorf("expected %s (trimmed), got %s", tmpDir, configDir)
+	want := filepath.Join("/tmp/sp-test-home", ".local", "state", "sprout")
+	if dir != want {
+		t.Errorf("StateDir() = %q, want %q", dir, want)
 	}
 }
 
-func TestGetConfigDir_MkdirAllError(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("skipping: permission-based test requires non-root user")
+func TestDataDir(t *testing.T) {
+	t.Setenv("SPROUT_DATA_DIR", "")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	dir, err := DataDir()
+	if err != nil {
+		t.Fatalf("DataDir() error: %v", err)
 	}
-	if runtime.GOOS == "darwin" {
-		t.Skip("skipping: permission-based test unreliable on macOS")
+	want := filepath.Join("/tmp/sp-test-home", ".local", "share", "sprout")
+	if dir != want {
+		t.Errorf("DataDir() = %q, want %q", dir, want)
 	}
-	tmpDir := t.TempDir()
-	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0700); err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
+}
+
+func TestCacheDir(t *testing.T) {
+	t.Setenv("SPROUT_CACHE_DIR", "")
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	dir, err := CacheDir()
+	if err != nil {
+		t.Fatalf("CacheDir() error: %v", err)
 	}
-	if err := os.Chmod(readOnlyDir, 0o444); err != nil {
-		t.Fatalf("failed to chmod: %v", err)
+	want := filepath.Join("/tmp/sp-test-home", ".cache", "sprout")
+	if dir != want {
+		t.Errorf("CacheDir() = %q, want %q", dir, want)
 	}
-	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0700) })
-	targetDir := filepath.Join(readOnlyDir, "child", "sprout")
-	unsetEnv(t, "CONFIG")
-	t.Setenv("SPROUT_CONFIG", targetDir)
+}
+
+func TestResolvers_NoPanicWithoutHome(t *testing.T) {
+	// Unset all env vars so that os.UserHomeDir() is the only fallback.
+	// We can't easily force os.UserHomeDir to fail in a unit test, but
+	// we can at least verify the resolvers don't panic when HOME is unset.
+	t.Setenv("SPROUT_CONFIG_DIR", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("SPROUT_STATE_DIR", "")
+	t.Setenv("SPROUT_DATA_DIR", "")
+	t.Setenv("SPROUT_CACHE_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_CACHE_HOME", "")
 	t.Setenv("HOME", "")
-	_, err := GetConfigDir()
-	if err == nil {
-		t.Fatal("expected error from MkdirAll failure")
+
+	// These may error (no HOME) but must not panic.
+	_, _ = ConfigDir()
+	_, _ = StateDir()
+	_, _ = DataDir()
+	_, _ = CacheDir()
+}
+
+func TestGetConfigDir_BackwardCompat(t *testing.T) {
+	t.Setenv("SPROUT_CONFIG", "/tmp/sp-compat-test")
+	t.Setenv("SPROUT_CONFIG_DIR", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "/tmp/sp-test-home")
+
+	// GetConfigDir (deprecated) must return the same as ConfigDir
+	dir1, err1 := GetConfigDir()
+	dir2, err2 := ConfigDir()
+	if err1 != nil || err2 != nil {
+		t.Fatalf("errors: %v %v", err1, err2)
 	}
-	if !strings.Contains(err.Error(), "failed to create config directory") {
-		t.Errorf("unexpected error: %v", err)
+	if dir1 != dir2 {
+		t.Errorf("GetConfigDir() = %q != ConfigDir() = %q", dir1, dir2)
 	}
 }

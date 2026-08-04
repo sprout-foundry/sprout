@@ -705,7 +705,6 @@ const AppContent: React.FC<AppContentProps> = ({
           workspaceInfo={workspaceInfo}
           onSelectWorkspace={(path) => setWorkspaceViaHook(path)}
           onConsentHome={handleConsentHome}
-          onBrowse={() => window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'))}
         />
       )}
       {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}

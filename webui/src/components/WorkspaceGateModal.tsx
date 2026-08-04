@@ -1,6 +1,8 @@
 import { AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
 import { supportsWorkspaceSwitching } from '../config/mode';
 import type { WorkspaceInfo } from '../hooks/useWorkspace';
+import WorkspaceBrowser from './WorkspaceBrowser';
 import WorkspacePicker from './WorkspacePicker';
 import './WorkspaceGateModal.css';
 
@@ -20,15 +22,19 @@ interface WorkspaceGateModalProps {
   workspaceInfo: WorkspaceInfo;
   onSelectWorkspace: (path: string) => void;
   onConsentHome: () => void;
-  onBrowse: () => void;
 }
 
 function WorkspaceGateModal({
   workspaceInfo,
   onSelectWorkspace,
   onConsentHome,
-  onBrowse,
 }: WorkspaceGateModalProps): JSX.Element | null {
+  // Browsing happens inside the modal. Delegating to the chrome's location
+  // switcher (as this used to) opened that popover *behind* the gate — it sits
+  // far below this overlay in the stacking order, anchored to a trigger the
+  // scrim has already covered.
+  const [browsing, setBrowsing] = useState(false);
+
   // Cloud mode (and any mode without workspace switching) is never gated.
   if (!supportsWorkspaceSwitching) return null;
 
@@ -48,14 +54,22 @@ function WorkspaceGateModal({
           </div>
         </div>
 
-        <WorkspacePicker
-          daemonRoot={workspaceInfo.daemon_root}
-          currentWorkspace={workspaceInfo.workspace_root}
-          suggestedProjects={workspaceInfo.suggested_projects}
-          recentWorkspaces={workspaceInfo.recent_workspaces}
-          onSelect={onSelectWorkspace}
-          onBrowse={onBrowse}
-        />
+        {browsing ? (
+          <WorkspaceBrowser
+            initialPath={workspaceInfo.workspace_root || workspaceInfo.daemon_root}
+            onSelect={onSelectWorkspace}
+            onCancel={() => setBrowsing(false)}
+          />
+        ) : (
+          <WorkspacePicker
+            daemonRoot={workspaceInfo.daemon_root}
+            currentWorkspace={workspaceInfo.workspace_root}
+            suggestedProjects={workspaceInfo.suggested_projects}
+            recentWorkspaces={workspaceInfo.recent_workspaces}
+            onSelect={onSelectWorkspace}
+            onBrowse={() => setBrowsing(true)}
+          />
+        )}
 
         <div className="workspace-gate-home-consent">
           <button className="workspace-gate-home-btn" type="button" onClick={onConsentHome}>

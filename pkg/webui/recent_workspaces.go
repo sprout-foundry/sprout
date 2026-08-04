@@ -32,16 +32,34 @@ var recentWorkspaces = &recentWorkspacesState{}
 
 // initRecentWorkspaces loads recent workspaces from disk.
 // Call this once during server startup.
+//
+// An already-configured path is left alone. Every ReactWebServer construction
+// calls this, so unconditionally re-deriving the path from os.UserHomeDir()
+// stomped the temp file that tests point the global at — which is how test
+// workspace paths ended up in the user's real recent-workspaces file and
+// evicted their actual projects from the picker.
 func initRecentWorkspaces() {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return
+	recentWorkspaces.mu.Lock()
+	if recentWorkspaces.filePath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			recentWorkspaces.mu.Unlock()
+			return
+		}
+		recentWorkspaces.filePath = filepath.Join(homeDir, ".sprout", "recent_workspaces.json")
 	}
-	recentWorkspaces.filePath = filepath.Join(homeDir, ".sprout", "recent_workspaces.json")
+	recentWorkspaces.mu.Unlock()
+
 	recentWorkspaces.load()
 }
 
+// load reads the recent-workspace list from disk. It takes the lock itself —
+// callers must not hold it. (save, by contrast, is only ever reached from
+// RecordWorkspace with the lock already held.)
 func (s *recentWorkspacesState) load() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.filePath == "" {
 		return
 	}
@@ -109,14 +127,24 @@ func RecordWorkspace(path string) {
 	s.save()
 }
 
-// GetRecentWorkspaces returns up to 10 recently used workspaces.
+// GetRecentWorkspaces returns up to 10 recently used workspaces that still
+// exist on disk.
+//
+// Entries are dropped rather than shown as dead links: a workspace can be
+// renamed, deleted, or (as happened in practice) recorded against a temp
+// directory that no longer exists, and offering those in the picker gives the
+// user a list they cannot act on and cannot distinguish from real projects.
 func GetRecentWorkspaces() []RecentWorkspace {
 	s := recentWorkspaces
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make([]RecentWorkspace, len(s.workspaces))
-	copy(result, s.workspaces)
+	result := make([]RecentWorkspace, 0, len(s.workspaces))
+	for _, w := range s.workspaces {
+		if info, err := os.Stat(w.Path); err == nil && info.IsDir() {
+			result = append(result, w)
+		}
+	}
 	return result
 }
 

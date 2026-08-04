@@ -19,7 +19,7 @@ import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-rel
 import { useEffect, useRef } from 'react';
 import { inlayHintsExtension } from '../extensions/inlayHints';
 import { resolveLanguageId, getLanguageExtensions } from '../extensions/languageRegistry';
-import { buildLSPPluginExtensions, lspSyncOnDocChange } from '../extensions/lspExtensions';
+import { buildLSPPluginExtensions } from '../extensions/lspExtensions';
 import { minimapExtension } from '../extensions/minimap';
 import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { setSnippetLanguage } from '../extensions/snippets';
@@ -126,10 +126,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
           const client = await lspService.getClientForLanguage(languageId);
           if (client && viewRef.current === view && view.dom?.isConnected && token === lspConfigTokenRef.current) {
             view.dispatch({
-              effects: compartments.lsp.reconfigure([
-                ...buildLSPPluginExtensions(client, filePath, languageId),
-                ...lspSyncOnDocChange(languageId),
-              ]),
+              effects: compartments.lsp.reconfigure(buildLSPPluginExtensions(client, filePath, languageId)),
             });
           }
         } catch (err) {

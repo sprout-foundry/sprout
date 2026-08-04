@@ -21,7 +21,6 @@ import { useLivePreview } from '../hooks/useLivePreview';
 import { resolveLanguageId } from '../extensions/languageRegistry';
 import {
   buildLSPPluginExtensions,
-  lspSyncOnDocChange,
   registerEditorView,
   unregisterEditorView,
   setGlobalDisplayFileCallback,
@@ -274,7 +273,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
     const client = await lspService.getClientForLanguage(langId);
     if (!client) return [];
-    return [...buildLSPPluginExtensions(client, filePath, langId), ...lspSyncOnDocChange(langId)];
+    // client.plugin() bundles languageServerExtensions(), which includes
+    // serverDiagnostics() → autoSync (500ms doc-change sync). The legacy
+    // lspSyncOnDocChange plugin was removed — it duplicated that sync at
+    // 200ms and dispatched from a plugin constructor, which CM6 forbids.
+    return buildLSPPluginExtensions(client, filePath, langId);
   }, []);
 
   // Per-view mount hook. Registers the view with the LSP service so

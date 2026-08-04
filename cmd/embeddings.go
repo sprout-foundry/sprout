@@ -164,16 +164,10 @@ func resolveEmbeddingIndexDir() (string, error) {
 		return cfg.EmbeddingIndex.IndexDir, nil
 	}
 
-	// Fall back to default, matching manager.go resolution order
-	configDir := os.Getenv("SPROUT_CONFIG")
-	if configDir == "" {
-		configDir = os.Getenv("SPROUT_CONFIG")
-	}
-	if configDir == "" {
-		configDir, err = configuration.GetConfigDir()
-		if err != nil {
-			return "", fmt.Errorf("get config directory: %w", err)
-		}
-	}
-	return filepath.Join(configDir, "embeddings"), nil
+	// SP-133: the index is regenerable data, so it lives under the data root
+	// ($SPROUT_DATA_DIR → $XDG_DATA_HOME/sprout → ~/.local/share/sprout) — NOT
+	// the config root. Deriving it from $SPROUT_CONFIG here made this CLI read
+	// a different, stale index than the daemon writes. DefaultIndexDir is the
+	// single resolver the manager also uses.
+	return embedding.DefaultIndexDir(), nil
 }

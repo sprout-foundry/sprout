@@ -188,6 +188,15 @@ func resolveIndexDirFromConfig(cfg *configuration.EmbeddingIndexConfig) string {
 	return indexDir
 }
 
+// DefaultIndexDir returns the directory the embedding index lives in when no
+// explicit IndexDir is configured. Exported so callers outside this package
+// (the embedding_index tool, the `sprout embeddings` CLI) resolve the same
+// location the manager writes to — resolving it independently off the config
+// root produced a second, stale index.
+func DefaultIndexDir() string {
+	return resolveIndexDir()
+}
+
 // resolveIndexDir resolves the embedding index directory from the
 // $SPROUT_DATA_DIR → XDG → HOME chain. Used by both initLocked and
 // SetForTesting.

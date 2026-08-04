@@ -16,7 +16,14 @@ import (
 // workerReadTimeout bounds how long Run waits for a response line from the
 // worker. A worker that stalls (e.g. a wedged LanguageService) is killed and
 // recycled instead of blocking every subsequent request for that workspace.
-const workerReadTimeout = 30 * time.Second
+//
+// 30s was too tight for the FIRST request on a large TypeScript workspace:
+// the initial LanguageService program build routinely exceeds it, the worker
+// gets killed mid-build, and every retry restarts the build and dies again —
+// the "diagnostics never finish" symptom. 120s still bounds a truly wedged
+// worker while letting a slow-but-progressing first build complete; the
+// per-workspace session cache makes the cost one-time.
+const workerReadTimeout = 120 * time.Second
 
 // workerReadResult is the outcome of a single line-based read from the
 // worker's stdout. It is delivered on a buffered channel so the reader

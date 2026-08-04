@@ -289,7 +289,7 @@ describe('loadPersistedAppState', () => {
     });
 
     it('accepts valid currentView values', () => {
-      for (const view of ['chat', 'editor', 'git', 'tasks', 'billing', 'team']) {
+      for (const view of ['chat', 'editor', 'git', 'costs']) {
         ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
         const data = { provider: '', model: '', sessionId: null, queryCount: 0, currentView: view };
         ls.setItem(`sprout:webui:state:v2:100:local`, JSON.stringify(data));

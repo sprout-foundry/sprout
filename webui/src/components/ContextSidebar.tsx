@@ -5,7 +5,6 @@ import type { QueryProgress, ViewType } from '../types/app';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ErrorBoundary from './ErrorBoundary';
 
-const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs']);
 const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 
 export interface ContextSidebarProps {
@@ -98,7 +97,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
     return () => window.removeEventListener('toggle-context-panel', handleToggleEvent);
   }, [handleToggleContextPanel]);
 
-  if (!showContextSidebar || PLATFORM_VIEWS.has(currentView)) {
+  if (!showContextSidebar || currentView === 'costs') {
     return null;
   }
 

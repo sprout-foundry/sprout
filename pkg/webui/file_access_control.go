@@ -261,5 +261,5 @@ func resolveConfigDir() (string, error) {
 		return filepath.Join(abs, "sprout"), nil
 	}
 
-	return filepath.Join(homeDir, ".sprout"), nil
+	return filepath.Join(homeDir, ".config", "sprout"), nil
 }

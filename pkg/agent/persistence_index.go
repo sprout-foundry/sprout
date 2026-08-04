@@ -10,6 +10,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
@@ -84,17 +85,16 @@ func GetStateDir() (string, error) {
 
 // defaultGetStateDir is the actual implementation of GetStateDir
 func defaultGetStateDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	stateDir, err := envutil.StateDir()
 	if err != nil {
-		return "", agenterrors.NewAgent("persistence", "failed to get home directory", err)
+		return "", agenterrors.NewAgent("persistence", "failed to resolve state directory", err)
+	}
+	sessionsDir := filepath.Join(stateDir, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0700); err != nil {
+		return "", agenterrors.NewAgent("persistence", "failed to create sessions directory", err)
 	}
 
-	stateDir := filepath.Join(homeDir, ".sprout", "sessions")
-	if err := os.MkdirAll(stateDir, 0700); err != nil {
-		return "", agenterrors.NewAgent("persistence", "failed to create state directory", err)
-	}
-
-	return stateDir, nil
+	return sessionsDir, nil
 }
 
 // GenerateSessionSummary creates a summary of previous actions for continuity

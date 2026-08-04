@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
@@ -159,7 +160,8 @@ func (m *launchdManager) Install() error {
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create LaunchAgents directory: %w", err)
 	}
-	logDir := filepath.Join(homeDir, ".sprout/logs")
+	stateDir, _ := envutil.StateDir()
+	logDir := filepath.Join(stateDir, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
@@ -422,7 +424,8 @@ func (m *launchdManager) Diagnose() error {
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		fmt.Println("📝 Checking log files:")
-		logDir := filepath.Join(homeDir, ".sprout/logs")
+		stateDir, _ := envutil.StateDir()
+		logDir := filepath.Join(stateDir, "logs")
 		stdoutPath := filepath.Join(logDir, "daemon.stdout.log")
 		stderrPath := filepath.Join(logDir, "daemon.stderr.log")
 
@@ -476,7 +479,7 @@ func (m *launchdManager) Diagnose() error {
 		fmt.Println("  • Service not loaded: Try 'sprout service start'")
 	} else {
 		fmt.Println("  • Service loaded but may not be running: Try 'sprout service start'")
-		fmt.Println("  • Check logs in ~/.sprout/logs/ for errors")
+		fmt.Println("  • Check logs in ~/.local/state/sprout/logs/ for errors")
 	}
 	fmt.Println("  • If problems persist, try: 'sprout service uninstall && sprout service install'")
 	fmt.Println("  • Rebuild launchd database: 'launchctl reboot 2>/dev/null || sudo killall launchd'")

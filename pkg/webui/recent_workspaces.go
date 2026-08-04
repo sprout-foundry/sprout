@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // RecentWorkspace tracks a workspace that was recently used.
@@ -41,12 +43,10 @@ var recentWorkspaces = &recentWorkspacesState{}
 func initRecentWorkspaces() {
 	recentWorkspaces.mu.Lock()
 	if recentWorkspaces.filePath == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			recentWorkspaces.mu.Unlock()
-			return
+		stateDir, err := envutil.StateDir()
+		if err == nil {
+			recentWorkspaces.filePath = filepath.Join(stateDir, "recent_workspaces.json")
 		}
-		recentWorkspaces.filePath = filepath.Join(homeDir, ".sprout", "recent_workspaces.json")
 	}
 	recentWorkspaces.mu.Unlock()
 

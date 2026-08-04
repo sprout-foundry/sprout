@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // APIEnvKeyPatterns defines the suffixes and prefixes for API keys and related credentials.
@@ -57,18 +59,21 @@ func CaptureAPIKeysFromEnv() []string {
 	return matches
 }
 
-// serviceEnvPath returns the path to the service.env file.
+// ServiceEnvPath returns the path to the service.env file in the state dir.
 func ServiceEnvPath(homeDir string) string {
-	return filepath.Join(homeDir, ".sprout", "service.env")
+	if stateDir, err := envutil.StateDir(); err == nil {
+		return filepath.Join(stateDir, "service.env")
+	}
+	// Fallback to legacy path if state dir can't be resolved
+	return filepath.Join(homeDir, ".local", "state", "sprout", "service.env")
 }
 
 // generateServiceEnvFile captures API keys from the current environment and writes them
-// to ~/.sprout/service.env with restricted permissions (0600).
+// to the state directory's service.env with restricted permissions (0600).
 func GenerateServiceEnvFile(homeDir string) error {
-	// Ensure the .sprout directory exists
-	sproutDir := filepath.Join(homeDir, ".sprout")
-	if err := os.MkdirAll(sproutDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .sprout directory: %w", err)
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve state directory: %w", err)
 	}
 
 	// Capture API keys from current environment
@@ -76,7 +81,7 @@ func GenerateServiceEnvFile(homeDir string) error {
 	envPath := ServiceEnvPath(homeDir)
 
 	// Write to a random temp file first, then rename for atomicity.
-	tmpFile, err := os.CreateTemp(sproutDir, ".service.env.*.tmp")
+	tmpFile, err := os.CreateTemp(stateDir, ".service.env.*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}

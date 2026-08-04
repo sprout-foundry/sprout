@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // SessionIndex is the top-level search index structure.
@@ -54,16 +56,14 @@ type messageRef struct {
 // Public API
 // ---------------------------------------------------------------------------
 
-// DefaultIndexPath returns the default location for the search index file.
-// It returns ~/.sprout/sessions/search-index.json.  If $HOME cannot be
-// determined the function returns an empty string and the caller should
-// handle the error appropriately.
+// DefaultIndexPath returns the default location for the search index file
+// in the state directory. Returns "" if the state dir cannot be resolved.
 func DefaultIndexPath() string {
-	home, err := os.UserHomeDir()
+	stateDir, err := envutil.StateDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".sprout", "sessions", "search-index.json")
+	return filepath.Join(stateDir, "sessions", "search-index.json")
 }
 
 // LoadIndex reads and parses the search index from the given path.

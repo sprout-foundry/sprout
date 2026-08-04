@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // TestIsHomeWorkspace verifies the home-detection predicate for the home,
@@ -61,6 +63,7 @@ func TestIsHomeWorkspace(t *testing.T) {
 func TestHomeWorkspaceConsentRoundTrip(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
 
 	if hasHomeWorkspaceConsent() {
 		t.Fatal("expected no consent initially")
@@ -88,6 +91,7 @@ func TestHomeWorkspaceConsentRoundTrip(t *testing.T) {
 func TestSetClientWorkspaceRootRejectsHome(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
 
 	home := resolveHomeDir()
 	resolvedHome, err := filepath.EvalSymlinks(home)
@@ -166,6 +170,9 @@ func TestHasHomeWorkspaceConsent_MalformedFile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tmpHome := t.TempDir()
 			t.Setenv("HOME", tmpHome)
+			// Override the global SPROUT_STATE_DIR from TestMain so
+			// homeConsentPath resolves under this test's temp home.
+			t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
 
 			consentPath := homeConsentPath()
 			if !strings.HasPrefix(consentPath, tmpHome) {
@@ -204,6 +211,7 @@ func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("SPROUT_STATE_DIR", filepath.Join(home, ".local", "state", "sprout"))
 			useTestWorkspaceConsent(t, home, tc.consented)
 
 			// Give home strong project markers; they must not affect the gate.
@@ -238,7 +246,12 @@ func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
 // useTestWorkspaceConsent writes (or removes) the home-consent file for a test.
 func useTestWorkspaceConsent(t *testing.T, home string, consented bool) {
 	t.Helper()
-	path := filepath.Join(home, ".sprout", "workspace_consent.json")
+	// Consent now lives in the state dir, not ~/.sprout
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		t.Fatalf("resolve state dir: %v", err)
+	}
+	path := filepath.Join(stateDir, "workspace_consent.json")
 	if !consented {
 		_ = os.Remove(path)
 		return

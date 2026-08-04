@@ -146,12 +146,13 @@ func TestGenerateLaunchdPlist_NoLogPathsInPlist(t *testing.T) {
 // in the generated plist.
 func TestGenerateLaunchdPlist_EnvVars(t *testing.T) {
 	homeDir := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(homeDir, ".local", "state", "sprout"))
 
-	sproutDir := filepath.Join(homeDir, ".sprout")
-	if err := os.MkdirAll(sproutDir, 0755); err != nil {
-		t.Fatalf("failed to create .sprout dir: %v", err)
+	stateDir := filepath.Join(homeDir, ".local", "state", "sprout")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("failed to create state dir: %v", err)
 	}
-	envPath := filepath.Join(sproutDir, "service.env")
+	envPath := ServiceEnvPath(homeDir)
 	if err := os.WriteFile(envPath, []byte("MY_API_KEY=secret123\nANOTHER_TOKEN=abc\n"), 0600); err != nil {
 		t.Fatalf("failed to write service.env: %v", err)
 	}

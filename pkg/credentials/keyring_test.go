@@ -143,7 +143,7 @@ func TestGetStorageBackend_AutoDetect(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear any persisted mode
-	os.Remove(filepath.Join(tmpDir, "backend.mode"))
+	os.Remove(filepath.Join(tmpDir, "credentials", "backend.mode"))
 
 	// Mock keyring is available
 	keyring.MockInit()

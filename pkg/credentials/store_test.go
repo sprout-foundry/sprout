@@ -17,8 +17,9 @@ func TestGetConfigDir_CustomEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != dir {
-		t.Fatalf("expected %q, got %q", dir, got)
+	expected := filepath.Join(dir, "credentials")
+	if got != expected {
+		t.Fatalf("expected %q, got %q", expected, got)
 	}
 }
 
@@ -32,7 +33,7 @@ func TestGetConfigDir_XDGEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(xdgDir, "sprout")
+	expected := filepath.Join(xdgDir, "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -49,7 +50,7 @@ func TestGetConfigDir_Default(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -63,7 +64,7 @@ func TestGetAPIKeysPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(dir, "api_keys.json")
+	expected := filepath.Join(dir, "credentials", "api_keys.json")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -90,7 +91,11 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte("not-json{{{"), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -110,7 +115,11 @@ func TestLoad_NilStoreJSON(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte("null"), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -136,7 +145,7 @@ func TestSave_NilStore(t *testing.T) {
 	}
 
 	// Verify it wrote encrypted data (starts with age magic)
-	data, err := os.ReadFile(filepath.Join(dir, "api_keys.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "credentials", "api_keys.json"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -155,7 +164,7 @@ func TestSave_ValidStore(t *testing.T) {
 	}
 
 	// Verify file is encrypted (not plaintext)
-	data, err := os.ReadFile(filepath.Join(dir, "api_keys.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "credentials", "api_keys.json"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -164,7 +173,7 @@ func TestSave_ValidStore(t *testing.T) {
 	}
 
 	// Verify file permissions (0600)
-	info, err := os.Stat(filepath.Join(dir, "api_keys.json"))
+	info, err := os.Stat(filepath.Join(dir, "credentials", "api_keys.json"))
 	if err != nil {
 		t.Fatalf("stat file: %v", err)
 	}
@@ -303,7 +312,7 @@ func TestGetConfigDir_WhitespaceConfig(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -319,7 +328,7 @@ func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q (fallthrough to home), got %q", expected, got)
 	}
@@ -346,9 +355,9 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when GetConfigDir fails, got nil")
 	}
-	// The error is about failing to create the config directory
-	if !strings.Contains(err.Error(), "failed to create config directory") {
-		t.Fatalf("expected config dir creation error, got: %v", err)
+	// The error is about failing to create the config/credentials directory
+	if !strings.Contains(err.Error(), "failed to create directory") {
+		t.Fatalf("expected directory creation error, got: %v", err)
 	}
 }
 
@@ -356,7 +365,11 @@ func TestLoad_ReadError(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir credentials: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte(`{"key":"val"}`), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -391,11 +404,8 @@ func TestSave_WriteError(t *testing.T) {
 
 	store := Store{"test": "value"}
 	err := Save(store)
-	// The directory exists and GetConfigDir succeeds. WriteFile may fail
-	// because the directory is read-only (0500).
-	// Error can be either from WriteFile (permission denied) or succeed if owner can write.
+	// The credentials subdirectory can't be created in the read-only dir.
 	if err != nil {
-		// Either permission denied from WriteFile or config dir error
 		t.Logf("Got expected write error: %v", err)
 	}
 	// If err is nil, the owner was able to write despite 0500 mode — acceptable on some systems.
@@ -577,17 +587,14 @@ func TestSave_WriteFileError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0500); err != nil {
+	if err := os.MkdirAll(readOnlyDir, 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	// Point SPROUT_CONFIG to a sub-path inside the read-only directory.
-	// GetConfigDir will MkdirAll (which works because owner can create dirs with 0500),
-	// but the configDir itself may be writable by owner. To force WriteFile failure,
-	// remove write permission after the directory is created.
+	// Point SPROUT_CONFIG to the directory.
+	// Pre-create the credentials dir so GetConfigDir's MkdirAll succeeds,
+	// then make it read-only for files.
 	t.Setenv("SPROUT_CONFIG", readOnlyDir)
-	// Pre-create the directory so GetConfigDir's MkdirAll succeeds
-	// then make it read-only for files
 	configDir, err := GetConfigDir()
 	if err != nil {
 		t.Fatalf("GetConfigDir: %v", err)

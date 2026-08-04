@@ -56,6 +56,13 @@ func NewTestManager(t *testing.T) (*Manager, func()) {
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
+	// Isolate all four category roots so state/cache/data never leak
+	// to the developer's real directories. Each gets a subdirectory
+	// under the same temp HOME so they share the lifecycle.
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpDir, ".local", "state", "sprout"))
+	t.Setenv("SPROUT_CACHE_DIR", filepath.Join(tmpDir, ".cache", "sprout"))
+	t.Setenv("SPROUT_DATA_DIR", filepath.Join(tmpDir, ".local", "share", "sprout"))
+
 	// Custom providers always resolve to the global dir (HOME-based),
 	// so HOME must also be isolated to prevent test provider files from
 	// polluting the real ~/.config/sprout/providers/.

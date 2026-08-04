@@ -67,7 +67,11 @@ func TestLoad_UnicodeKeysAndValues(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	unicodeJSON := `{
 		"日本語プロバイダー": "sk-にほんご-αβγ",
 		"provider-🚀": "key-with-é-ñ-ü-ö-ß",
@@ -137,7 +141,7 @@ func TestGetConfigDir_WhitespaceOnlyXDG(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected fallthrough to home %q, got %q", expected, got)
 	}
@@ -192,7 +196,11 @@ func TestLoad_EmptyJSONObject(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte(`{}`), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}

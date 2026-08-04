@@ -14,6 +14,7 @@ import (
 
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // CostRecord represents a single cost entry for an API request
@@ -54,15 +55,14 @@ var (
 // GetCostStore returns the singleton cost store instance
 func GetCostStore() *CostStore {
 	costStoreOnce.Do(func() {
-		configDir, err := configuration.GetConfigDir()
+		stateDir, err := envutil.StateDir()
 		if err != nil {
-			webuiLogger.Error("cost store config directory lookup failed", slog.Any("err", err))
-			// Fallback to home directory
-			homeDir, _ := os.UserHomeDir()
-			configDir = filepath.Join(homeDir, ".sprout")
+			webuiLogger.Error("cost store state directory lookup failed", slog.Any("err", err))
+			// Fallback: use config dir
+			stateDir, _ = configuration.GetConfigDir()
 		}
 		costStore = &CostStore{
-			filePath: filepath.Join(configDir, "cost_history.json"),
+			filePath: filepath.Join(stateDir, "cost_history.json"),
 		}
 		if err := costStore.load(); err != nil {
 			webuiLogger.Error("cost store existing record load failed", slog.Any("err", err))

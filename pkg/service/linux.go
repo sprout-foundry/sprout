@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 )
@@ -364,7 +365,7 @@ func fallbackCommand(homeDir string) string {
 			homeDir = "$HOME"
 		}
 	}
-	return "nohup sprout agent -d &\nView logs with: tail -f ~/.sprout/logs/daemon.stdout.log"
+	return "nohup sprout agent -d &\nView logs with: tail -f ~/.local/state/sprout/logs/daemon.stdout.log"
 }
 
 // runSystemctl executes a systemctl command at user scope and returns its stdout.
@@ -382,14 +383,18 @@ func runSystemctl(args ...string) (string, error) {
 // PID-file based service manager (non-systemd environments)
 // -----------------------------------------------------------------------
 
-// pidFileManager manages the daemon via a PID file (~/.sprout/daemon.pid).
+// pidFileManager manages the daemon via a PID file (~/.local/state/sprout/daemon.pid).
 // It implements the same serviceManager interface as systemdManager.
 type pidFileManager struct {
 	homeDir string
 }
 
 func (m *pidFileManager) pidPath() string {
-	return filepath.Join(m.homeDir, ".sprout", "daemon.pid")
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return filepath.Join(m.homeDir, ".local", "state", "sprout", "daemon.pid")
+	}
+	return filepath.Join(stateDir, "daemon.pid")
 }
 
 func (m *pidFileManager) readPID() (int, error) {
@@ -401,8 +406,11 @@ func (m *pidFileManager) readPID() (int, error) {
 }
 
 func (m *pidFileManager) writePID(pid int) error {
-	sproutDir := filepath.Join(m.homeDir, ".sprout")
-	if err := os.MkdirAll(sproutDir, 0755); err != nil {
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return err
 	}
 	tmpFile := m.pidPath() + ".tmp"
@@ -416,7 +424,7 @@ func (m *pidFileManager) writePID(pid int) error {
 func (m *pidFileManager) Install() error {
 	fmt.Println("No systemd detected — no service installation needed.")
 	fmt.Println("Use 'sprout service start' to run the daemon directly.")
-	fmt.Println("The daemon will persist via PID file at ~/.sprout/daemon.pid")
+	fmt.Println("The daemon will persist via PID file at ~/.local/state/sprout/daemon.pid")
 	return nil
 }
 
@@ -472,7 +480,11 @@ func (m *pidFileManager) Start() error {
 	}
 
 	// Redirect stdout/stderr to log files
-	logDir := filepath.Join(m.homeDir, ".sprout", "logs")
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve state directory: %w", err)
+	}
+	logDir := filepath.Join(stateDir, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
@@ -517,11 +529,11 @@ func (m *pidFileManager) Start() error {
 	time.Sleep(200 * time.Millisecond)
 	if !pidalive.IsAlive(cmd.Process.Pid) {
 		os.Remove(m.pidPath())
-		return fmt.Errorf("daemon exited immediately; check ~/.sprout/logs/daemon.stderr.log")
+		return fmt.Errorf("daemon exited immediately; check ~/.local/state/sprout/logs/daemon.stderr.log")
 	}
 
 	fmt.Printf("Daemon started (PID %d)\n", cmd.Process.Pid)
-	fmt.Printf("Logs: ~/.sprout/logs/daemon.stdout.log\n")
+	fmt.Printf("Logs: ~/.local/state/sprout/logs/daemon.stdout.log\n")
 	return nil
 }
 

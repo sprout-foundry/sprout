@@ -20,10 +20,10 @@ import (
 // Test helpers
 // ---------------------------------------------------------------------------
 
-// testSearchIndexPath returns the search index path for the given temp root.
-// It mirrors search.DefaultIndexPath() but relative to root instead of $HOME.
+// testSearchIndexPath returns the search index path for the given state dir.
+// It mirrors search.DefaultIndexPath() relative to the state dir.
 func testSearchIndexPath(root string) string {
-	return filepath.Join(root, ".sprout", "sessions", "search-index.json")
+	return filepath.Join(root, "sessions", "search-index.json")
 }
 
 // makeTestIndex builds a SessionIndex with three entries for testing.
@@ -74,9 +74,11 @@ func setupSearchTest(t *testing.T) (*ReactWebServer, string) {
 	t.Helper()
 	root := t.TempDir()
 
-	// Set HOME BEFORE creating the web server so that any initialization
-	// that resolves search.DefaultIndexPath() uses the temp directory.
+	// Set HOME and SPROUT_STATE_DIR BEFORE creating the web server so that
+	// any initialization that resolves search.DefaultIndexPath() uses the
+	// temp directory. SPROUT_STATE_DIR overrides the TestMain global.
 	t.Setenv("HOME", root)
+	t.Setenv("SPROUT_STATE_DIR", root)
 
 	// Write the test index before creating the server (server init may read it).
 	idx := makeTestIndex()
@@ -580,9 +582,10 @@ func TestParseSearchDateWebUI_Invalid(t *testing.T) {
 func TestHandleAPISessionsSearch_CorruptIndex(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("HOME", root)
+	t.Setenv("SPROUT_STATE_DIR", root)
 
 	// Create session files on disk so BuildIndex can rebuild from them.
-	scopedDir := filepath.Join(root, ".sprout", "sessions", "scoped")
+	scopedDir := filepath.Join(root, "sessions", "scoped")
 	os.MkdirAll(scopedDir, 0755) //nolint:errcheck
 
 	// Write a session file using raw JSON (sessionJSON/messageRef are unexported).

@@ -35,6 +35,12 @@ func (m *Manager) GetConfigDir() string {
 // globalPath -> workspacePath -> sessionPath (each overrides previous)
 // Each layer is optional; missing layers are skipped.
 // globalDir is the directory for global providers (used when globalPath is empty but custom providers need loading).
+//
+// Local override files (config.local.json / workspace.local.json) are
+// automatically loaded as a higher-precedence sibling within their
+// scope: global config.json is overridden by global config.local.json,
+// workspace workspace.json by workspace.local.json. The session layer
+// (highest) remains unchanged.
 func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir string) (*Config, error) {
 	var result *Config
 
@@ -46,6 +52,21 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 				log.Printf("[config] warning: failed to parse global config %s: %v", globalPath, err)
 			} else {
 				result = &cfg
+			}
+		}
+		// 1b. Merge global-local override (config.local.json) if present
+		localPath := filepath.Join(filepath.Dir(globalPath), ConfigLocalFileName)
+		if localPath != globalPath {
+			if data, err := os.ReadFile(localPath); err == nil {
+				var localCfg Config
+				if err := json.Unmarshal(data, &localCfg); err != nil {
+					log.Printf("[config] warning: failed to parse global-local config %s: %v", localPath, err)
+				} else {
+					if result == nil {
+						result = NewConfig()
+					}
+					result = MergeConfig(result, &localCfg)
+				}
 			}
 		}
 	}
@@ -62,6 +83,18 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 				log.Printf("[config] warning: failed to parse workspace config %s: %v", workspacePath, err)
 			} else {
 				result = MergeConfig(result, &workspaceCfg)
+			}
+		}
+		// 2b. Merge workspace-local override (workspace.local.json) if present
+		localWsPath := filepath.Join(filepath.Dir(workspacePath), WorkspaceLocalFileName)
+		if localWsPath != workspacePath {
+			if data, err := os.ReadFile(localWsPath); err == nil {
+				var localWsCfg Config
+				if err := json.Unmarshal(data, &localWsCfg); err != nil {
+					log.Printf("[config] warning: failed to parse workspace-local config %s: %v", localWsPath, err)
+				} else {
+					result = MergeConfig(result, &localWsCfg)
+				}
 			}
 		}
 	}

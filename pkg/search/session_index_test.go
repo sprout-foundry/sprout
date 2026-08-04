@@ -482,8 +482,8 @@ func TestSessionIndex_DefaultIndexPath(t *testing.T) {
 	if !strings.Contains(path, "search-index.json") {
 		t.Errorf("path should contain 'search-index.json': %q", path)
 	}
-	if !strings.Contains(path, ".sprout/sessions/") {
-		t.Errorf("path should contain '.sprout/sessions/': %q", path)
+	if !strings.Contains(path, "/sessions/") {
+		t.Errorf("path should contain '/sessions/': %q", path)
 	}
 }
 

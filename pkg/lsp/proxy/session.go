@@ -20,7 +20,12 @@ import (
 // delivered only to the client that asked, and the handshake is performed once
 // and replayed to everyone else.
 
-const sessionChanBuffer = 256
+// sessionChanBuffer bounds each client's outbound message queue. It needs to
+// hold a burst of publishDiagnostics (a single server flush can emit hundreds
+// of notifications), so keep it generous — a full buffer means the browser
+// isn't consuming fast enough, and dropping diagnostics there is what made
+// LSP results look stale/inaccurate.
+const sessionChanBuffer = 4096
 
 type handshakeState int
 

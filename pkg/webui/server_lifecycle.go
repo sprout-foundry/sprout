@@ -121,6 +121,11 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Start server in goroutine
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				ws.log().Error("web server goroutine panicked", slog.Any("panic", r))
+			}
+		}()
 		if ws.socketPath != "" {
 			ws.log().Info("web UI starting on Unix socket", slog.String("socket_path", ws.socketPath))
 		} else {
@@ -162,6 +167,11 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Wait for context cancellation
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				ws.log().Error("shutdown watcher goroutine panicked", slog.Any("panic", r))
+			}
+		}()
 		<-ctx.Done()
 		ws.Shutdown()
 	}()

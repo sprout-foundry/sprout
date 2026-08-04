@@ -5,6 +5,7 @@ package webui
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -165,6 +166,11 @@ func init() {
 func startSemanticEviction(ctx context.Context) {
 	const evictInterval = 5 * time.Minute
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				webuiLogger.Error("semantic eviction goroutine panicked", slog.Any("panic", r))
+			}
+		}()
 		ticker := time.NewTicker(evictInterval)
 		defer ticker.Stop()
 		for {

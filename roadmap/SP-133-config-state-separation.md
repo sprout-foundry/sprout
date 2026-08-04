@@ -7,9 +7,14 @@ different lifecycles, portability requirements, and blast radii:
 
 | Category | Examples in `~/.sprout` today |
 |---|---|
-| **Config** (user-authored, portable, shareable) | `config.json` (20K), `mcp_config.json`, `providers/`, `roles/` |
-| **State** (machine-generated, per-install, not portable) | `changes/` (5,080 entries), `revisions/` (71), `sessions/`, `runlogs/`, `transcripts/`, `logs/`, `instances.json`, `recent_workspaces.json`, `state.json`, `webui_host.json`, `ssh_sessions.json`, `shell_outputs/`, `workspace.log` (1.4M) |
-| **Cache** (disposable, regenerable) | `search_cache/` (255), `url_cache/` (448), `lastRequest.json` (496K), `lastResponse.json`, 20 × `error_request_*.json` (4.4M) |
+| **Config** (user-authored, portable, shareable) | `config.json`, `mcp_config.json`, `providers/`, `roles/` |
+| **State** (machine-generated, per-install, not portable) | `changes/`, `revisions/`, `sessions/`, `runlogs/`, `transcripts/`, `logs/`, `instances.json`, `recent_workspaces.json`, `state.json`, `webui_host.json`, `ssh_sessions.json`, `shell_outputs/`, `workspace.log` |
+| **Cache** (disposable, regenerable) | `search_cache/`, `url_cache/`, `lastRequest.json`, `lastResponse.json`, `error_request_*.json` dumps |
+
+Several of these grow without bound — `changes/`, `url_cache/`, `search_cache/`,
+and the `error_request_*.json` dumps have no eviction policy, so on a
+long-running install the directory is dominated by regenerable data sitting
+beside the credential files.
 | **Secrets** (sensitive, never synced/logged/backed-up casually) | `api_keys.json`, `key.age`, `keyring_providers.json`, `api_keys.mode`, `backend.mode` |
 
 Four consequences follow:
@@ -24,8 +29,8 @@ Four consequences follow:
 2. **Two directories both claim to be "global config."**
    `configuration.GetConfigDir()` resolves to `~/.config/sprout` (XDG), while
    `cmd/diag.go:37` prints `~/.sprout/config.json` as `globalConfigPath`. Both
-   files exist on a real install, both carry an `embedding_index` block, and
-   nothing reconciles them.
+   files can exist simultaneously, both carrying an `embedding_index` block,
+   and nothing reconciles them.
 
 3. **Dual-role directories.** `changes/` and `revisions/` resolve from
    `configDir` in `pkg/history/data_access.go:107` and from
@@ -33,8 +38,8 @@ Four consequences follow:
    and `pkg/training/file_changes.go:169`. At home these are the same path.
 
 4. **Secrets sit beside disposable junk.** `key.age` and `api_keys.json` share a
-   directory with 4.4M of debug dumps and a 1.4M log. "Never sync this, never
-   ship this in a support bundle" is not enforceable by path.
+   directory with debug dumps, request/response captures, and logs. "Never sync
+   this, never ship this in a support bundle" is not enforceable by path.
 
 ## Prior art in this repo
 
@@ -125,8 +130,9 @@ breaking change and would surprise the CLI audience.
 
 **`changes/` and `revisions/` become workspace-local only.** They are per-repo
 artifacts; users expect `rm -rf project` to take its history with it, and
-keeping them out of the user dir stops `~/.sprout/changes` growing to 5,000
-entries. This resolves the dual-role ambiguity in favour of the workspace, and
+keeping them out of the user dir stops `~/.sprout/changes` accumulating
+snapshots from every workspace ever opened. This resolves the dual-role
+ambiguity in favour of the workspace, and
 `pkg/history/data_access.go:107` loses its `configDir` branch.
 
 **Credentials get their own directory** rather than staying loose in the config
@@ -162,9 +168,10 @@ real config file is untouched. `pkg/webui`'s `TestMain` similarly redirects
 recent-workspaces and session state.
 
 **Risk**: new roots (`SPROUT_STATE_DIR`, `SPROUT_CACHE_DIR`,
-`SPROUT_DATA_DIR`) that ignore the test env would leak into the developer's
-real directories — the exact failure that filled the user's
-`recent_workspaces.json` with ten test temp paths.
+`SPROUT_DATA_DIR`) that ignore the test env would write to the developer's
+real directories. This is not hypothetical — it is the failure mode that
+`recent_workspaces.json` hit before `initRecentWorkspaces` stopped
+re-deriving its path on every server construction.
 
 **Mitigation**: every new resolver honours its env override *and* falls back
 through `HOME`, so `t.Setenv("HOME", tmp)` isolates all four. `NewTestManager`
@@ -212,9 +219,9 @@ asserting no bundle entry has that path prefix.
 
 ### G. Cache growth is currently invisible
 
-`url_cache/` (448 entries) and the 4.4M of `error_request_*.json` dumps
-accumulate with no eviction. Moving them to `~/.cache/sprout` makes them
-*look* disposable without making them *be* bounded.
+`url_cache/` and the `error_request_*.json` dumps accumulate with no eviction.
+Moving them to `~/.cache/sprout` makes them *look* disposable without making
+them *be* bounded.
 
 **Mitigation**: out of scope for this spec, but Phase 3 adds a TODO and a
 `sprout diag --disk` line item so the growth is at least observable.

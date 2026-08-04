@@ -358,9 +358,11 @@ func TestLSPProcessHealthyWhileRunning(t *testing.T) {
 		require.NoError(t, err)
 		defer proc.Close()
 
-		// We can't reliably test Healthy() == true on all platforms because
-		// cmd.Process.Signal(nil) may return errors even for running processes.
-		// Instead, verify that the process has a PID and isn't in the closed state.
+		// Liveness comes from the stdout-EOF signal, not a signal probe, so a
+		// running process reports healthy on every platform. Manager.GetOrCreate
+		// depends on this: a false negative here makes it kill and respawn the
+		// server on every incoming connection.
+		assert.True(t, proc.Healthy(), "a running process must report healthy")
 		assert.NotNil(t, proc.Process())
 		assert.NotNil(t, proc.Process().Process)
 		assert.Greater(t, proc.Process().Process.Pid, 0)

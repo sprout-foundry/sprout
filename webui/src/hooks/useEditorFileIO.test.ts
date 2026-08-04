@@ -821,7 +821,12 @@ describe('buffer switch-back restore', () => {
     // Switch back to buffer A with unsaved edits in memory. The restore
     // branch must push the in-memory content into the view WITHOUT calling
     // readFileWithConsent again.
-    currentBuffer = createBuffer({ id: 'buf-a', filePath: '/test/a.ts', fileName: 'a.ts', content: 'content A EDITED' });
+    currentBuffer = createBuffer({
+      id: 'buf-a',
+      filePath: '/test/a.ts',
+      fileName: 'a.ts',
+      content: 'content A EDITED',
+    });
     act(() => root.render(createElement(Wrapper)));
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));

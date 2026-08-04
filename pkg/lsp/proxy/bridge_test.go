@@ -108,9 +108,9 @@ func TestBridgeClose(t *testing.T) {
 		bridge := NewBridge(nil, proc)
 		bridge.Close()
 
-		// Verify fields are cleaned up
+		// Close before Run means no session was ever opened; it must not panic.
 		assert.Nil(t, bridge.wsConn)
-		assert.Nil(t, bridge.unsubscribe)
+		assert.Nil(t, bridge.session)
 	})
 
 	t.Run("close without websocket", func(t *testing.T) {
@@ -141,15 +141,15 @@ func TestBridgeClose(t *testing.T) {
 		// Should not panic even after unsubscribe was called
 	})
 
-	t.Run("close with real subscribe and websocket closes both", func(t *testing.T) {
+	t.Run("close with real session and websocket closes both", func(t *testing.T) {
 		ctx := context.Background()
 		proc, err := StartLSPProcess(ctx, "/", "cat", []string{})
 		require.NoError(t, err)
 		defer proc.Close()
 
-		// Subscribe to the process
-		ch, unsubscribe, err := proc.Subscribe()
+		session, err := proc.NewSession()
 		require.NoError(t, err)
+		ch := session.Out()
 
 		// Create a test websocket connection via httptest
 		upgrader := websocket.Upgrader{
@@ -172,10 +172,9 @@ func TestBridgeClose(t *testing.T) {
 		require.NoError(t, err)
 
 		bridge := NewBridge(wsConn, proc)
-		bridge.lspCh = ch
-		bridge.unsubscribe = unsubscribe
+		bridge.session = session
 
-		// Close the bridge - should unsubscribe and close wsConn
+		// Close the bridge - should close the session and wsConn
 		bridge.Close()
 
 		// Verify behavior, not implementation: the previous version of
@@ -185,9 +184,9 @@ func TestBridgeClose(t *testing.T) {
 		// just closes the resources without nilling — verify the
 		// behavior we actually care about.
 
-		// Verify the channel was closed by unsubscribe
+		// Verify the channel was closed by the session teardown
 		_, ok := <-ch
-		assert.False(t, ok, "channel should be closed after unsubscribe")
+		assert.False(t, ok, "channel should be closed after session close")
 
 		// Verify wsConn was closed — writing should now fail.
 		writeErr := bridge.wsConn.WriteMessage(websocket.TextMessage, []byte("ping"))

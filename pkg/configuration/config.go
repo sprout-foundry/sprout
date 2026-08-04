@@ -13,9 +13,21 @@ import (
 var personaDefaultsWarningOnce sync.Once
 
 const (
-	ConfigVersion   = "2.0"
-	ConfigDirName   = ".sprout"
-	ConfigFileName  = "config.json"
+	ConfigVersion  = "2.0"
+	ConfigDirName  = ".sprout"
+	ConfigFileName = "config.json"
+
+	// WorkspaceConfigFileName is the per-workspace config file.
+	//
+	// It is deliberately NOT ConfigFileName. `.sprout` is the per-directory
+	// sprout folder, and $HOME is a directory — so when the workspace root is
+	// the home directory, the workspace layer and the user-level state
+	// directory are literally the same path. Sharing a filename there made the
+	// user's global config.json get read as a per-workspace opt-in, which is
+	// how "enable embeddings" turned into "index the entire home directory".
+	// Distinct names make that collision impossible by construction.
+	WorkspaceConfigFileName = "workspace.json"
+
 	APIKeysFileName = "api_keys.json"
 
 	OutputVerbosityCompact = "compact"

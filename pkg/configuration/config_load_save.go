@@ -212,7 +212,15 @@ func (c *Config) Save() error {
 // GetConfigPath() (which reads the SPROUT_CONFIG/SPROUT_CONFIG env vars).
 // Use this when a Manager has an explicit configDir so that saves go to
 // the correct location even after the env var has been restored.
+// SaveToDir writes the config as ConfigFileName inside dir.
 func (c *Config) SaveToDir(dir string) error {
+	return c.SaveToDirAs(dir, ConfigFileName)
+}
+
+// SaveToDirAs writes the config to dir under an explicit filename. Workspace
+// layers use WorkspaceConfigFileName so they can never collide with the
+// user-level config.json when the workspace root is $HOME.
+func (c *Config) SaveToDirAs(dir, fileName string) error {
 	// Same defense as Save() — refuse to persist the test sentinel even
 	// when callers bypass GetConfigPath() and target an explicit dir.
 	// See sanitizeTestProvider for context.
@@ -234,7 +242,10 @@ func (c *Config) SaveToDir(dir string) error {
 		return fmt.Errorf("create config directory %q: %w", dir, err)
 	}
 
-	configPath := filepath.Join(dir, ConfigFileName)
+	if fileName == "" {
+		fileName = ConfigFileName
+	}
+	configPath := filepath.Join(dir, fileName)
 	c.Version = ConfigVersion
 	persisted := *c
 	persisted.Version = ConfigVersion

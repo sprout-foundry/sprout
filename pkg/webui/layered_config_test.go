@@ -310,7 +310,7 @@ func TestHandlePutWorkspaceSettings(t *testing.T) {
 	}
 
 	// Verify workspace config file was created
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
 	data, err := os.ReadFile(workspaceConfigPath)
 	if err != nil {
 		t.Fatalf("workspace config file should exist: %v", err)
@@ -470,7 +470,7 @@ func TestHandlePutWorkspaceSettings_ProviderModel(t *testing.T) {
 	}
 
 	// Verify workspace config file contains mapped values
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
 	data, err := os.ReadFile(workspaceConfigPath)
 	if err != nil {
 		t.Fatalf("workspace config file should exist: %v", err)
@@ -576,7 +576,7 @@ func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
 	}
 
 	// Verify workspace config file
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
 	data, err := os.ReadFile(workspaceConfigPath)
 	if err != nil {
 		t.Fatalf("workspace config file should exist: %v", err)
@@ -608,7 +608,7 @@ func TestHandlePutWorkspaceSettings_ModelWithoutProvider(t *testing.T) {
 	ctx.WorkspaceRoot = workspaceRoot
 
 	// Pre-populate workspace config with last_used_provider so model mapping has context
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
 	os.MkdirAll(filepath.Dir(workspaceConfigPath), 0700)
 	existingCfg := configuration.Config{
 		LastUsedProvider: "openai",

@@ -186,7 +186,7 @@ func (m *Manager) saveConfigLocked() error {
 // saveConfigDirectLocked performs the actual config write without retry logic.
 func (m *Manager) saveConfigDirectLocked() error {
 	if m.configDir != "" {
-		if err := m.config.SaveToDir(m.configDir); err != nil {
+		if err := m.config.SaveToDirAs(m.configDir, m.configFileName); err != nil {
 			return fmt.Errorf("save config: %w", err)
 		}
 	} else {
@@ -208,7 +208,13 @@ func (m *Manager) reloadAndMergeLocked() error {
 	var reloaded *Config
 	var err error
 	if m.configDir != "" {
-		configPath := filepath.Join(m.configDir, ConfigFileName)
+		// Must match the file saveConfigDirectLocked writes, or the
+		// conflict-merge path reloads a different file than it persists.
+		fileName := m.configFileName
+		if fileName == "" {
+			fileName = ConfigFileName
+		}
+		configPath := filepath.Join(m.configDir, fileName)
 		reloaded, err = LoadConfigWithLayers(configPath, "", "", m.configDir)
 	} else {
 		reloaded, err = Load()

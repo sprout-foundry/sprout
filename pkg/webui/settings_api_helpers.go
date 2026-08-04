@@ -194,11 +194,10 @@ func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-// writeJSONError writes a JSON-formatted error response.
+// writeJSONError writes a JSON-formatted error response. Deprecated: use
+// writeJSONErr with an explicit code for better client-side error handling.
 func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]interface{}{
-		"error": message,
-	})
+	writeJSONErr(w, status, "error", message)
 }
 
 // writeJSONErr writes a JSON error message with both a code string and a message.

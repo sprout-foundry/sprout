@@ -15,6 +15,14 @@ vi.mock('../config/mode', () => ({
 }));
 // CSS import is a no-op under vitest.
 vi.mock('./WorkspaceGateModal.css', () => ({}));
+vi.mock('./WorkspaceBrowser.css', () => ({}));
+
+// The inline browser talks to /api/workspace/browse; stub the service so the
+// modal tests stay offline.
+const browseMock = vi.hoisted(() => vi.fn());
+vi.mock('../services/api', () => ({
+  ApiService: { getInstance: () => ({ browseDirectory: browseMock }) },
+}));
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -72,7 +80,6 @@ function renderModal(overrides: Record<string, unknown> = {}) {
     workspaceInfo: baseWorkspaceInfo,
     onSelectWorkspace: vi.fn(),
     onConsentHome: vi.fn(),
-    onBrowse: vi.fn(),
     ...overrides,
   };
   act(() => {
@@ -134,6 +141,63 @@ describe('WorkspaceGateModal', () => {
     });
     expect(props.onSelectWorkspace).toHaveBeenCalledTimes(1);
     expect(props.onSelectWorkspace).toHaveBeenCalledWith('/home/alice/dev/myapp');
+  });
+
+  // Browse used to dispatch a global event that opened the chrome's location
+  // switcher — which renders below this overlay in the stacking order, so the
+  // tree appeared *behind* the gate and could not be used.
+  it('opens the directory browser inside the modal when Browse is clicked', async () => {
+    browseMock.mockResolvedValue({
+      path: '/home/alice',
+      daemonRoot: '/home/alice',
+      directories: [{ name: 'dev', path: '/home/alice/dev' }],
+    });
+
+    renderModal();
+    expect(container!.querySelector('[data-testid="workspace-browser"]')).toBeNull();
+
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('.workspace-picker-browse-btn')!.click();
+    });
+
+    const browser = container!.querySelector('[data-testid="workspace-browser"]');
+    expect(browser).not.toBeNull();
+    // It must live inside the gate content, not somewhere behind the overlay.
+    expect(container!.querySelector('.workspace-gate-content')!.contains(browser)).toBe(true);
+    expect(browseMock).toHaveBeenCalled();
+  });
+
+  it('selects the directory the browser is showing', async () => {
+    browseMock.mockResolvedValue({
+      path: '/home/alice/dev',
+      daemonRoot: '/home/alice',
+      directories: [],
+    });
+
+    const props = renderModal();
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('.workspace-picker-browse-btn')!.click();
+    });
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-browser-confirm"]')!.click();
+    });
+
+    expect(props.onSelectWorkspace).toHaveBeenCalledWith('/home/alice/dev');
+  });
+
+  it('returns to the picker when the browser is cancelled', async () => {
+    browseMock.mockResolvedValue({ path: '/home/alice', daemonRoot: '/home/alice', directories: [] });
+
+    renderModal();
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('.workspace-picker-browse-btn')!.click();
+    });
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('.workspace-browser-cancel')!.click();
+    });
+
+    expect(container!.querySelector('[data-testid="workspace-browser"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="workspace-picker"]')).not.toBeNull();
   });
 
   it('does NOT render in cloud mode (supportsWorkspaceSwitching = false)', () => {

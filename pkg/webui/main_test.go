@@ -57,15 +57,62 @@ func TestMain(m *testing.M) {
 	indexPath := filepath.Join(sessionsDir, "search-index.json")
 	search.InitGlobalUpdater(indexPath, sessionsDir)
 
+	// Recent-workspace tracking is a package global whose path comes from
+	// os.UserHomeDir(), so any test that sets a workspace root writes into the
+	// developer's real ~/.sprout/recent_workspaces.json. Individual tests were
+	// meant to opt in via setupRecentWorkspaces, but the ones that reached
+	// RecordWorkspace indirectly (through handleAPIWorkspaceSet) did not — and
+	// their temp paths filled all ten slots, evicting every real project from
+	// the user's workspace picker. Redirect it for the whole package so no test
+	// can leak, whether or not its author remembers.
+	realRecentPath, realRecentBefore := snapshotRealRecentWorkspaces()
+	recentWorkspaces.mu.Lock()
+	recentWorkspaces.filePath = filepath.Join(tmpDir, "recent_workspaces.json")
+	recentWorkspaces.workspaces = nil
+	recentWorkspaces.mu.Unlock()
+
 	restore := agent.SetTestStateDirHook(sessionsDir)
 	code := m.Run()
 	restore()
 
 	leakCode := agent.AssertNoStateLeak(realDir, beforeSnapshot)
+	recentLeakCode := assertNoRecentWorkspacesLeak(realRecentPath, realRecentBefore)
 	_ = os.RemoveAll(tmpDir)
 
 	if code == 0 {
 		code = leakCode
 	}
+	if code == 0 {
+		code = recentLeakCode
+	}
 	os.Exit(code)
+}
+
+// snapshotRealRecentWorkspaces records the contents of the recent-workspaces
+// file this process would use outside of tests. Must be called before the
+// global is redirected.
+func snapshotRealRecentWorkspaces() (path string, before []byte) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "", nil
+	}
+	path = filepath.Join(home, ".sprout", "recent_workspaces.json")
+	before, _ = os.ReadFile(path)
+	return path, before
+}
+
+// assertNoRecentWorkspacesLeak reports a non-zero exit code if the real
+// recent-workspaces file changed during the run.
+func assertNoRecentWorkspacesLeak(path string, before []byte) int {
+	if path == "" {
+		return 0
+	}
+	after, _ := os.ReadFile(path)
+	if string(after) == string(before) {
+		return 0
+	}
+	fmt.Fprintf(os.Stderr,
+		"STATE LEAK: %s was modified during the test run — a RecordWorkspace "+
+			"bypassed the TestMain redirect and wrote to the real user file.\n", path)
+	return 1
 }

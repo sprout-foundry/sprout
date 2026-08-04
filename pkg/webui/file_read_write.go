@@ -57,9 +57,7 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 	}
 
 	if info.Size() > maxFileReadSize {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusRequestEntityTooLarge)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]interface{}{
 			"error":    "file too large to open in editor",
 			"size":     info.Size(),
 			"max_size": maxFileReadSize,
@@ -205,8 +203,7 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 		modTime = info.ModTime().Unix()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
 		"message":  "File saved successfully",
 		"path":     canonicalPath,

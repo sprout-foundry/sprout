@@ -32,8 +32,7 @@ func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.R
 	// Return an empty success response when the workspace isn't a git repository
 	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"message":   "not_git_repo",
 			"worktrees": []WorktreeInfo{},
 			"current":   "",
@@ -57,8 +56,7 @@ func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.R
 
 	worktrees := ws.parseWorktreeListOutput(worktreesOutput, strings.TrimSpace(currentBranch), workspaceRoot)
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":   "success",
 		"worktrees": worktrees,
 		"current":   currentBranch,
@@ -218,9 +216,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	if err != nil {
 		outputStr := string(output)
 		if strings.Contains(outputStr, "already exists") {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
 				"error": fmt.Sprintf("Branch '%s' already exists", req.Branch),
 				"code":  "branch_exists",
 			})
@@ -232,8 +228,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_create", absPath))
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Worktree created successfully",
 		"path":    absPath,
 		"branch":  req.Branch,
@@ -296,8 +291,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_remove", absPath))
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Worktree removed successfully",
 		"path":    absPath,
 		"output":  strings.TrimSpace(string(output)),
@@ -403,8 +397,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		"source":                  "checkout",
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":   "Switched to worktree successfully",
 		"path":      absPath,
 		"workspace": absPath,

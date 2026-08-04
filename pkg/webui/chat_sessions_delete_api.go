@@ -49,9 +49,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 
 	if chatID == defaultChatID {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Cannot delete the default chat session",
 			"code":  "cannot_delete_default",
 		})
@@ -60,9 +58,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 
 	if chatID == ctx.DefaultChatID {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Cannot delete the currently active chat session. Switch to another chat first.",
 			"code":  "cannot_delete_active",
 		})
@@ -72,9 +68,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	cs, exists := ctx.ChatSessions[chatID]
 	if !exists {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Chat session not found",
 			"code":  "chat_session_not_found",
 			"id":    chatID,
@@ -106,9 +100,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	cs.mu.Unlock()
 	if isActive {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Cannot delete a chat session with an active query",
 			"code":  "chat_session_active_query",
 			"id":    chatID,
@@ -202,8 +194,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleAPIChatSessionsDeleteAll handles POST /api/chat-sessions/delete-all
@@ -281,8 +272,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 
 	ws.log().Info("deleted chat sessions and switched to default", slog.Int("deleted_count", deletedCount), slog.String("client_id", clientID), slog.String("default_chat_id", defaultChatID))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "Chat sessions deleted",
 		"deleted_count":  deletedCount,
 		"active_chat_id": defaultChatID,

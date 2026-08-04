@@ -69,8 +69,7 @@ func (ws *ReactWebServer) handleAPIShellApprovalDecision(w http.ResponseWriter, 
 		http.Error(w, `{"error":"decision not delivered (unknown or expired request)"}`, http.StatusGone)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "request_id": id, "delivered": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "request_id": id, "delivered": true})
 }
 
 // resolveShellApprovalAgent returns an agent instance for delivering shell

@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
@@ -53,6 +52,5 @@ func (ws *ReactWebServer) handleLSPStatus(w http.ResponseWriter, r *http.Request
 		Workspace: ws.workspaceRoot,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }

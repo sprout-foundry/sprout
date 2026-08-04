@@ -3,8 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
@@ -17,8 +15,5 @@ func (ws *ReactWebServer) handleAPITerminalShells(w http.ResponseWriter, r *http
 	terminalManager := ws.getTerminalManagerForRequest(r)
 	shells := terminalManager.AvailableShells()
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{"shells": shells}); err != nil {
-		fmt.Printf("handleAPITerminalShells: encode error: %v\n", err)
-	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"shells": shells})
 }

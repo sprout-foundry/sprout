@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 	"sort"
 )
@@ -66,12 +65,11 @@ func (ws *ReactWebServer) handleAPIWSMetrics(w http.ResponseWriter, r *http.Requ
 
 	resp := ws.computeWSMetrics()
 
-	w.Header().Set("Content-Type", "application/json")
 	// Cache-Control: never cache. Counts can shift between requests;
 	// any intermediary that holds a stale snapshot defeats the
 	// purpose of the endpoint (debugging, capacity planning).
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // computeWSMetrics builds the wsMetricsResponse by walking

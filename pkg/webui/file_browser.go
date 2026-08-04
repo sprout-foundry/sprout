@@ -94,8 +94,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 		files = append(files, fileInfo)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
 		"path":    canonicalDir,
 		"files":   files,
@@ -107,9 +106,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if r.Method != http.MethodPost {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"error": "Method not allowed"})
 		return
 	}
 
@@ -117,17 +114,13 @@ func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *h
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "path is required"})
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "path is required"})
 		return
 	}
 
 	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, false)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": fmt.Sprintf("invalid path: %v", err)})
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": fmt.Sprintf("invalid path: %v", err)})
 		return
 	}
 
@@ -169,21 +162,16 @@ func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *h
 	case shellExists("nautilus"):
 		cmd = exec.Command("nautilus", "--select", canonicalPath)
 	default:
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotImplemented)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "no file browser command available"})
+		writeJSON(w, http.StatusNotImplemented, map[string]interface{}{"error": "no file browser command available"})
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": fmt.Sprintf("failed to open file browser: %v", err)})
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("failed to open file browser: %v", err)})
 		return
 	}
 	// Reap the child process to avoid zombies; file browsers detach on their own.
 	go func() { _ = cmd.Wait() }()
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "opened"})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"message": "opened"})
 }

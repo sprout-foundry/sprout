@@ -49,9 +49,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	cs := ctx.getChatSession(chatID)
 	if cs == nil {
 		ws.mutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Chat session not found",
 			"code":  "chat_session_not_found",
 			"id":    chatID,
@@ -106,8 +104,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	// leave the user looking at the wrong model name for several seconds.
 	ws.publishProviderState(clientID)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "Chat session switched",
 		"active_chat_id": chatID,
 		"chat_session":   cs.chatSessionWithMessages(),
@@ -145,8 +142,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Chat session state compacted",
 		"chat_id": chatID,
 	})

@@ -394,6 +394,5 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 }
 
 func (ws *ReactWebServer) writeSemanticResponse(w http.ResponseWriter, resp semanticResponse) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }

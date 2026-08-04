@@ -110,7 +110,7 @@ describe('PlatformNavProvider', () => {
 
   it('provides the adapter nav items when adapter has platformNavItems', () => {
     const navItems = [
-      { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 1 },
+      { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 1 },
       { id: 'tasks', label: 'Tasks', href: '/tasks', order: 2 },
     ];
 
@@ -126,7 +126,7 @@ describe('PlatformNavProvider', () => {
     expect(ctx().platformNavItems[0]).toEqual({
       id: 'billing',
       label: 'Billing',
-      href: '/billing',
+      href: '/account/billing',
       icon: 'credit-card',
       order: 1,
     });
@@ -157,7 +157,7 @@ describe('PlatformNavProvider', () => {
   });
 
   it('provides a single nav item correctly', () => {
-    const navItems = [{ id: 'dashboard', label: 'Dashboard', href: '/dashboard', order: 0 }];
+    const navItems = [{ id: 'dashboard', label: 'Dashboard', href: '/', order: 0 }];
 
     getAdapter.mockReturnValue({
       name: 'SingleItemAdapter',
@@ -199,7 +199,7 @@ describe('PlatformNavProvider', () => {
 describe('usePlatformNav inside provider', () => {
   it('returns the platformNavItems from the context', () => {
     const navItems = [
-      { id: 'billing', label: 'Billing', href: '/billing' },
+      { id: 'billing', label: 'Billing', href: '/account/billing' },
       { id: 'tasks', label: 'Tasks', href: '/tasks' },
       { id: 'audit-log', label: 'Audit Log', href: '/audit', icon: 'list', order: 3 },
     ];

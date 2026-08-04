@@ -19,7 +19,7 @@ import type { PlatformNavItem } from '../services/apiAdapter';
 // Create a mock adapter that has the 3 cloud nav items
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
-  { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 2 },
+  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2 },
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
 ];
 
@@ -122,7 +122,7 @@ describe('PlatformNav Integration: CloudAdapter with platform nav items', () => 
     const items = latestContext.platformNavItems;
     expect(items[1].id).toBe('billing');
     expect(items[1].label).toBe('Billing');
-    expect(items[1].href).toBe('/billing');
+    expect(items[1].href).toBe('/account/billing');
     expect(items[1].icon).toBe('credit-card');
     expect(items[1].order).toBe(2);
   });

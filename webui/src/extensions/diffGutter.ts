@@ -1,12 +1,15 @@
 import { StateField, StateEffect, RangeSetBuilder } from '@codemirror/state';
 import { gutter, GutterMarker } from '@codemirror/view';
-import { Decoration, type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
+import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
 import { type DiffLineChange, parseGitDiff } from '../services/gitDiffParser';
 
 // State effect to update diff info
 const setDiffEffect = StateEffect.define<DiffLineChange[]>();
 
-// State field storing per-line diff types
+// State field storing per-line diff types. Provided directly to the
+// EditorView.decorations facet — block decorations (Decoration.line)
+// may NOT be provided via a ViewPlugin's `decorations` option, which
+// throws "Block decorations may not be specified via plugins".
 const diffState = StateField.define<DecorationSet>({
   create() {
     return Decoration.none;
@@ -32,6 +35,7 @@ const diffState = StateField.define<DecorationSet>({
     }
     return tr.changes.empty ? decorations : decorations.map(tr.changes);
   },
+  provide: (f) => EditorView.decorations.from(f),
 });
 
 // Gutter marker class for diff indicators
@@ -81,23 +85,9 @@ const diffGutterExtension = gutter({
   },
 });
 
-// View plugin to handle diff updates
-const diffUpdatePlugin = ViewPlugin.fromClass(
-  class {
-    constructor(public view: EditorView) {}
-
-    update(_update: ViewUpdate) {
-      // Diff state is managed by StateField, no need for manual updates
-    }
-  },
-  {
-    decorations: (pluginInstance) => pluginInstance.view.state.field(diffState),
-  },
-);
-
 // Create the gutter extension
 export function diffGutter() {
-  return [diffState, diffUpdatePlugin, diffGutterExtension];
+  return [diffState, diffGutterExtension];
 }
 
 // Function to update the diff gutter with new diff text

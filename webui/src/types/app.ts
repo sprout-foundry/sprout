@@ -76,22 +76,8 @@ export interface PerChatState {
   pendingEvents?: WsEvent[];
 }
 
-/** All navigable views in the editor (chat, editor, platform pages, detail pages). */
-export type ViewType =
-  | 'chat'
-  | 'editor'
-  | 'git'
-  | 'tasks'
-  | 'taskdetail'
-  | 'billing'
-  | 'team'
-  | 'costs'
-  | 'runners'
-  | 'dashboard'
-  | 'repodetail'
-  | 'admin'
-  | 'workspaces'
-  | 'integrations';
+/** All navigable views in the editor (chat, editor, git, costs). */
+export type ViewType = 'chat' | 'editor' | 'git' | 'costs';
 
 export interface AppState {
   isConnected: boolean;
@@ -104,15 +90,6 @@ export interface AppState {
   isProcessing: boolean;
   lastError: string | null;
   currentView: ViewType;
-  /** ID of the selected task for TaskDetailPage. */
-  selectedTaskId?: string | null;
-  /** Selected repo in "owner/name" format for RepoDetailPage. */
-  selectedRepo?: { owner: string; name: string } | null;
-  /**
-   * Multi-repo workspace — all repos attached to the current session.
-   * The active repo is the one matching selectedRepo.
-   */
-  attachedRepos?: Array<{ owner: string; name: string; id: string }>;
   toolExecutions: ToolExecution[];
   queryProgress: QueryProgress | null;
   stats: Record<string, unknown>; // Enhanced stats from API

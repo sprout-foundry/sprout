@@ -165,21 +165,6 @@ describe('PlatformNav Integration: CloudAdapter with platform nav items', () => 
     expect(sorted[1].id).toBe('billing');
     expect(sorted[2].id).toBe('team');
   });
-
-  it('all nav item IDs match the VALID_PLATFORM_VIEWS set used by Sidebar', () => {
-    renderProvider();
-
-    // Mirrors webui/src/components/Sidebar.tsx VALID_PLATFORM_VIEWS — keep in
-    // sync. The mock adapter at the top of this file defines only 3 items
-    // (tasks/billing/team); if a future PR adds a 4th cloud nav item, both
-    // the mock and this set need to be updated together.
-    const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'runners']);
-    const itemIds = latestContext.platformNavItems.map((item: PlatformNavItem) => item.id);
-
-    for (const id of itemIds) {
-      expect(VALID_PLATFORM_VIEWS.has(id)).toBe(true);
-    }
-  });
 });
 
 describe('PlatformNav Integration: Local mode (no adapter)', () => {

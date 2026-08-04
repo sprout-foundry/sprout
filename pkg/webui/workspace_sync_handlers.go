@@ -65,28 +65,28 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "failed_to_read_request_body", "Failed to read request body")
 		return
 	}
 	if len(body) == 0 {
-		http.Error(w, "request body is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "request_body_required", "request body is required")
 		return
 	}
 
 	var req syncRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		ws.log().Warn("invalid workspace sync request", slog.Any("err", err))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Op != "patch" {
-		http.Error(w, fmt.Sprintf("unsupported op %q, only 'patch' is supported", req.Op), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "unsupported_op", fmt.Sprintf("unsupported op %q, only 'patch' is supported", req.Op))
 		return
 	}
 
 	if req.Path == "" {
-		http.Error(w, "path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "path is required")
 		return
 	}
 
@@ -127,23 +127,23 @@ func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *h
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "failed_to_read_request_body", "Failed to read request body")
 		return
 	}
 	if len(body) == 0 {
-		http.Error(w, "request body is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "request_body_required", "request body is required")
 		return
 	}
 
 	var req takeoverRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		ws.log().Warn("invalid workspace takeover request", slog.Any("err", err))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.SessionID == "" || req.DeviceID == "" {
-		http.Error(w, "session_id and device_id are required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "session_id_and_device_id_required", "session_id and device_id are required")
 		return
 	}
 

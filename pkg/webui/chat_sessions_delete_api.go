@@ -31,13 +31,13 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	chatID := strings.TrimSpace(req.ID)
 	if chatID == "" {
-		http.Error(w, "Chat session ID is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "chat_session_id_required", "Chat session ID is required")
 		return
 	}
 

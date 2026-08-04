@@ -23,7 +23,7 @@ func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Req
 	}
 	dir, err := skills.DefaultSkillsDir()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	entries, err := os.ReadDir(dir)
@@ -33,7 +33,7 @@ func (ws *ReactWebServer) handleAPIListSkills(w http.ResponseWriter, r *http.Req
 			_, _ = w.Write([]byte("[]"))
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	type skillJSON struct {
@@ -74,7 +74,7 @@ func (ws *ReactWebServer) handleAPIListRegistry(w http.ResponseWriter, r *http.R
 	}
 	reg, err := skills.LoadRegistry()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, reg.Skills)
@@ -92,11 +92,11 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 		Force  bool   `json:"force,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.Source == "" {
-		http.Error(w, "source is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "source_required", "source is required")
 		return
 	}
 	opts := skills.InstallOptions{Force: req.Force}
@@ -121,7 +121,7 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 	}
 	if err != nil {
 		ws.log().Error("failed to install skill", slog.Any("err", err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	// Hot-reload: make the newly installed skill discoverable via list_skills
@@ -144,11 +144,11 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 		ID string `json:"id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.ID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "id_required", "id is required")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
@@ -156,7 +156,7 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 	results, err := skills.Update(ctx, req.ID, skills.InstallOptions{Force: true})
 	if err != nil {
 		ws.log().Error("failed to update skill", slog.Any("err", err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	// Hot-reload: pick up any frontmatter changes from the updated skill.
@@ -178,16 +178,16 @@ func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Re
 		ID string `json:"id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.ID == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "id_required", "id is required")
 		return
 	}
 	if err := skills.Uninstall(req.ID); err != nil {
 		ws.log().Error("failed to remove skill", slog.Any("err", err))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	// Hot-reload: remove the uninstalled skill from the active config so it

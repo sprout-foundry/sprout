@@ -27,7 +27,7 @@ func (ws *ReactWebServer) handleAPIChatSessionFork(w http.ResponseWriter, r *htt
 		BreakpointIndex int    `json:"breakpoint_index"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.BreakpointIndex < 1 {
@@ -117,7 +117,7 @@ func (ws *ReactWebServer) handleAPIChatSessionBreakpoints(w http.ResponseWriter,
 		ChatID string `json:"chat_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 

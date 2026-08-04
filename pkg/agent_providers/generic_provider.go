@@ -559,9 +559,6 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 		}
 
 		if configModelInfo := p.config.GetModelInfo(model.ID); configModelInfo != nil {
-			if modelInfo.ContextLength <= 0 && configModelInfo.ContextLength > 0 {
-				modelInfo.ContextLength = configModelInfo.ContextLength
-			}
 			if configModelInfo.Name != "" {
 				modelInfo.Name = configModelInfo.Name
 			}
@@ -573,6 +570,12 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 			}
 		}
 
+		// Always resolve context_length through GetContextLimit when the API
+		// didn't provide one — it respects the full priority chain
+		// (model_overrides → pattern_overrides → model_info → default),
+		// whereas GetModelInfo only reads model_info and can disagree with
+		// a model_overrides entry (e.g. glm-4.5: model_info=131072,
+		// model_overrides=128000).
 		if modelInfo.ContextLength <= 0 {
 			modelInfo.ContextLength = p.config.GetContextLimit(model.ID)
 		}

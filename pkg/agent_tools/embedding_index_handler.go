@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -109,18 +108,11 @@ func pickEmbeddingMgr(env ToolEnv, cfg *configuration.EmbeddingIndexConfig, work
 func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string, mgr *embedding.EmbeddingManager) (ToolResult, error) {
 	indexDir := cfg.IndexDir
 	if indexDir == "" {
-		configDir := os.Getenv("SPROUT_CONFIG")
-		if configDir == "" {
-			configDir = os.Getenv("SPROUT_CONFIG")
-		}
-		if configDir == "" {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				home = ""
-			}
-			configDir = filepath.Join(home, ".config", "sprout")
-		}
-		indexDir = filepath.Join(configDir, "embeddings")
+		// SP-133: the index is regenerable data, so it lives under the data
+		// root — the same place embedding.DefaultIndexDir writes it. Resolving
+		// it off the config root here made this tool report on a different
+		// (stale) index than the daemon actually builds.
+		indexDir = embedding.DefaultIndexDir()
 	}
 
 	enabled := cfg.Enabled

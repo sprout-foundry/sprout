@@ -177,7 +177,10 @@ func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 	}
 
 	// Build absolute path to service.env file for EnvironmentFile directive
-	envFile := ServiceEnvPath(homeDir)
+	envFile, err := ServiceEnvPath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve service.env path: %w", err)
+	}
 
 	// ExecStart executable can be quoted for paths with spaces.
 	// WorkingDirectory, Environment HOME, and EnvironmentFile take literal
@@ -230,7 +233,7 @@ func (m *systemdManager) Install() error {
 
 	// Capture API keys from the current environment and write to service.env
 	// This is done before writing the unit file so the EnvironmentFile can reference it
-	if err := GenerateServiceEnvFile(homeDir); err != nil {
+	if err := GenerateServiceEnvFile(); err != nil {
 		fmt.Printf("Warning: failed to generate service.env: %v\n", err)
 		fmt.Println("The service will be installed but may not have access to API keys.")
 	}
@@ -308,10 +311,11 @@ func (m *systemdManager) Uninstall() error {
 	}
 
 	// Remove the service.env file if it exists
-	envFile := ServiceEnvPath(homeDir)
-	if err := os.Remove(envFile); err != nil && !os.IsNotExist(err) {
-		// Don't fail the whole uninstall if we can't remove service.env
-		fmt.Printf("Warning: failed to remove %s: %v\n", envFile, err)
+	if envFile, envErr := ServiceEnvPath(); envErr == nil {
+		if err := os.Remove(envFile); err != nil && !os.IsNotExist(err) {
+			// Don't fail the whole uninstall if we can't remove service.env
+			fmt.Printf("Warning: failed to remove %s: %v\n", envFile, err)
+		}
 	}
 
 	if _, err := runSystemctl("daemon-reload"); err != nil {
@@ -463,7 +467,7 @@ func (m *pidFileManager) Start() error {
 	}
 
 	// Load service.env into env vars
-	envMap, err := LoadServiceEnvFile(m.homeDir)
+	envMap, err := LoadServiceEnvFile()
 	if err != nil {
 		fmt.Printf("Warning: failed to load service.env: %v\n", err)
 		envMap = make(map[string]string)

@@ -60,17 +60,29 @@ func CaptureAPIKeysFromEnv() []string {
 }
 
 // ServiceEnvPath returns the path to the service.env file in the state dir.
-func ServiceEnvPath(homeDir string) string {
-	if stateDir, err := envutil.StateDir(); err == nil {
-		return filepath.Join(stateDir, "service.env")
+//
+// It deliberately takes no homeDir argument. The state root is resolved by
+// envutil.StateDir() ($SPROUT_STATE_DIR → $XDG_STATE_HOME/sprout →
+// $HOME/.local/state/sprout), so it is not necessarily under any particular
+// home directory. The previous signature accepted a homeDir that was silently
+// ignored whenever StateDir() succeeded — callers that passed an isolated
+// directory (notably tests) still read and wrote the real user's file, which
+// caused live API keys to be loaded into test output. Redirect via
+// $SPROUT_STATE_DIR instead.
+func ServiceEnvPath() (string, error) {
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve state directory: %w", err)
 	}
-	// Fallback to legacy path if state dir can't be resolved
-	return filepath.Join(homeDir, ".local", "state", "sprout", "service.env")
+	return filepath.Join(stateDir, "service.env"), nil
 }
 
-// generateServiceEnvFile captures API keys from the current environment and writes them
+// GenerateServiceEnvFile captures API keys from the current environment and writes them
 // to the state directory's service.env with restricted permissions (0600).
-func GenerateServiceEnvFile(homeDir string) error {
+//
+// Takes no homeDir: the destination comes from envutil.StateDir(). See
+// ServiceEnvPath for why.
+func GenerateServiceEnvFile() error {
 	stateDir, err := envutil.StateDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve state directory: %w", err)
@@ -78,7 +90,10 @@ func GenerateServiceEnvFile(homeDir string) error {
 
 	// Capture API keys from current environment
 	envVars := CaptureAPIKeysFromEnv()
-	envPath := ServiceEnvPath(homeDir)
+	envPath, err := ServiceEnvPath()
+	if err != nil {
+		return err
+	}
 
 	// Write to a random temp file first, then rename for atomicity.
 	tmpFile, err := os.CreateTemp(stateDir, ".service.env.*.tmp")
@@ -146,10 +161,16 @@ func GenerateServiceEnvFile(homeDir string) error {
 	return nil
 }
 
-// loadServiceEnvFile reads ~/.sprout/service.env and returns a map of key-value pairs.
-// If the file doesn't exist or is empty, returns an empty map.
-func LoadServiceEnvFile(homeDir string) (map[string]string, error) {
-	envPath := ServiceEnvPath(homeDir)
+// LoadServiceEnvFile reads the state directory's service.env and returns a map
+// of key-value pairs. If the file doesn't exist or is empty, returns an empty map.
+//
+// Takes no homeDir: the source comes from envutil.StateDir(). See
+// ServiceEnvPath for why.
+func LoadServiceEnvFile() (map[string]string, error) {
+	envPath, err := ServiceEnvPath()
+	if err != nil {
+		return nil, err
+	}
 
 	file, err := os.Open(envPath)
 	if err != nil {

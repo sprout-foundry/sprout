@@ -70,9 +70,13 @@ func setupCLISearchIndex(t *testing.T) string {
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	// SP-133: sessions live under the state root. Bind it explicitly so an
+	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
+	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
 
-	// Create directory structure: ~/.sprout/sessions/scoped/<hash>/
-	sessionsDir := filepath.Join(tmpDir, ".sprout", "sessions", "scoped", "hash1")
+	// Create directory structure: <state>/sessions/scoped/<hash>/
+	sessionsDir := filepath.Join(stateDir, "sessions", "scoped", "hash1")
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o700))
 
 	// Write fixture session files.
@@ -335,9 +339,13 @@ func TestGetCLISessionsDir(t *testing.T) {
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	// SP-133: sessions live under the state root. Bind it explicitly so an
+	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
+	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
 
 	dir := getCLISessionsDir()
-	expected := filepath.Join(tmpDir, ".sprout", "sessions", "scoped")
+	expected := filepath.Join(stateDir, "sessions", "scoped")
 	assert.Equal(t, expected, dir)
 }
 
@@ -377,9 +385,13 @@ func TestSearchCmd_ReindexEmptyIndex(t *testing.T) {
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	// SP-133: sessions live under the state root. Bind it explicitly so an
+	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
+	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
 
 	// Create sessions dir with files but DON'T pre-build the index
-	sessionsDir := filepath.Join(tmpDir, ".sprout", "sessions", "scoped", "hash1")
+	sessionsDir := filepath.Join(stateDir, "sessions", "scoped", "hash1")
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(sessionsDir, "session_cli-embed.json"), []byte(cliSession1JSON), 0o644))
 
@@ -398,9 +410,13 @@ func TestSearchCmd_AutoBuildEmptyIndex(t *testing.T) {
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	// SP-133: sessions live under the state root. Bind it explicitly so an
+	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
+	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
 
 	// Create sessions dir with files but DON'T pre-build the index
-	sessionsDir := filepath.Join(tmpDir, ".sprout", "sessions", "scoped", "hash1")
+	sessionsDir := filepath.Join(stateDir, "sessions", "scoped", "hash1")
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(sessionsDir, "session_cli-embed.json"), []byte(cliSession1JSON), 0o644))
 

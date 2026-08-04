@@ -31,11 +31,22 @@ export interface UseEditorCursorOptions {
   cmViewApiRef: React.MutableRefObject<CMViewAPI | null>;
 }
 
+export interface CursorPosition {
+  line: number;
+  column: number;
+}
+
 export interface UseEditorCursorReturn {
   /** Current selection info (null when no text is selected) */
   selectionInfo: SelectionInfo | null;
   /** Setter for selection info — used by file load to reset selection state */
   setSelectionInfo: React.Dispatch<React.SetStateAction<SelectionInfo | null>>;
+  /** Live cursor position (line/column), 1-based line / 0-based column. Updates
+   *  on every real cursor move so the footer can render a fresh value — unlike
+   *  `buffer.cursorPosition`, which is mutated in place on the buffer object
+   *  for tab-switch persistence and intentionally does NOT trigger a re-render
+   *  (see BufferManagerContext.updateBufferCursor). */
+  cursorPosition: CursorPosition;
   /** Handle a CodeMirror editor update — extracts cursor position and selection info */
   handleCursorUpdate: (update: ViewUpdate) => void;
 }
@@ -51,6 +62,7 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
   const { bufferRef, updateBufferCursor, cmViewApiRef } = options;
 
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
+  const [cursorPosition, setCursorPosition] = useState<CursorPosition>({ line: 1, column: 0 });
 
   const handleCursorUpdate = useCallback(
     (update: ViewUpdate) => {
@@ -65,19 +77,23 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
 
       // Update cursor position on ANY selection change (cursor moves, clicks, typing)
       if (update.selectionSet) {
-        const buf = bufferRef.current;
-        if (buf) {
-          try {
-            const selection = update.state.selection.main;
-            if (selection) {
-              const lineObj = update.state.doc.lineAt(selection.head);
-              const line = lineObj.number; // 1-based line number
-              const column = selection.head - lineObj.from; // 0-based column offset within line
+        try {
+          const selection = update.state.selection.main;
+          if (selection) {
+            const lineObj = update.state.doc.lineAt(selection.head);
+            const line = lineObj.number; // 1-based line number
+            const column = selection.head - lineObj.from; // 0-based column offset within line
+            // Always a fresh object so React never bails out on this update —
+            // this is the only place the footer's live Ln/Col reads from.
+            setCursorPosition({ line, column });
+
+            const buf = bufferRef.current;
+            if (buf) {
               updateBufferCursor(buf.id, { line, column });
             }
-          } catch (err) {
-            debugLog('Cursor position update skipped:', err);
           }
+        } catch (err) {
+          debugLog('Cursor position update skipped:', err);
         }
 
         // Update selection info on selection change
@@ -100,5 +116,5 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
     [bufferRef, updateBufferCursor, cmViewApiRef],
   );
 
-  return { selectionInfo, setSelectionInfo, handleCursorUpdate };
+  return { selectionInfo, setSelectionInfo, cursorPosition, handleCursorUpdate };
 }

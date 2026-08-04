@@ -205,6 +205,117 @@ describe('initial state', () => {
 
     expect(getReturn().selectionInfo).toBeNull();
   });
+
+  it('cursorPosition defaults to line 1, column 0 on mount', () => {
+    const { getReturn } = renderTestHook();
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: cursorPosition — live, reference-fresh state for the footer
+// ---------------------------------------------------------------------------
+//
+// Regression coverage: buffer.cursorPosition (in BufferManagerContext) is
+// mutated in place and intentionally does NOT change identity, so React
+// bails out of re-rendering consumers keyed on it. `cursorPosition` here is
+// the fix — a dedicated piece of state that gets a fresh object on every
+// real cursor move, independent of whether a buffer is attached.
+
+describe('cursorPosition — updates on every real cursor move', () => {
+  it('updates on a plain cursor move with no buffer content change', () => {
+    const { getReturn, docLines } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 12, ranges: [{ from: 12, to: 12, empty: true }], docLines }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 12 });
+  });
+
+  it('produces a new object reference on each update (so React never bails out)', () => {
+    const { getReturn, docLines } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 1, ranges: [{ from: 1, to: 1, empty: true }], docLines }),
+      );
+    });
+    const first = getReturn().cursorPosition;
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 2, ranges: [{ from: 2, to: 2, empty: true }], docLines }),
+      );
+    });
+    const second = getReturn().cursorPosition;
+
+    expect(first).not.toBe(second);
+    expect(second).toEqual({ line: 1, column: 2 });
+  });
+
+  it('updates even when bufferRef.current is null (not gated on a buffer)', () => {
+    const { getReturn, bufferRef, docLines } = renderTestHook();
+    bufferRef.current = null;
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 7, ranges: [{ from: 7, to: 7, empty: true }], docLines }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 7 });
+  });
+
+  it('does NOT update when selectionSet is false', () => {
+    const { getReturn, docLines } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ selectionSet: false, head: 9, ranges: [{ from: 9, to: 9, empty: true }], docLines }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 0 });
+  });
+
+  it('does NOT update when lineAt throws', () => {
+    const { getReturn } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 10, ranges: [{ from: 10, to: 10, empty: true }], throwOnLineAt: true }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 0 });
+  });
+
+  it('does NOT update when the CM view reports an external update in flight', () => {
+    const updateBufferCursor = vi.fn();
+    const bufferRef = { current: { id: 'buf-1', file: { path: '/test/file.ts' } } };
+    const cmViewApiRef = { current: { isExternalUpdate: () => true } };
+
+    let hookReturn: any = null;
+    function HookWrapper() {
+      hookReturn = useEditorCursor({ bufferRef, updateBufferCursor, cmViewApiRef });
+      return null;
+    }
+
+    act(() => {
+      root.render(createElement(HookWrapper));
+    });
+
+    act(() => {
+      hookReturn.handleCursorUpdate(createMockUpdate({ head: 20, ranges: [{ from: 20, to: 20, empty: true }] }));
+    });
+
+    expect(hookReturn.cursorPosition).toEqual({ line: 1, column: 0 });
+    expect(updateBufferCursor).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

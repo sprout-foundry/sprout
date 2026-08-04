@@ -296,3 +296,65 @@ func TestLaunchdDomain(t *testing.T) {
 		t.Errorf("launchdDomain() = %q, want %q", domain, expected)
 	}
 }
+
+// The launchd plist inlines every API key from service.env (launchd has no
+// EnvironmentFile equivalent), so it must never be world-readable. It shipped
+// as 0644, publishing a readable copy of every provider key and token.
+func TestWritePlistFileIsNotWorldReadable(t *testing.T) {
+	pPath := filepath.Join(t.TempDir(), "com.sprout.daemon.plist")
+
+	if err := writePlistFile(pPath, []byte("<plist/>")); err != nil {
+		t.Fatalf("writePlistFile: %v", err)
+	}
+
+	info, err := os.Stat(pPath)
+	if err != nil {
+		t.Fatalf("stat plist: %v", err)
+	}
+	if got := info.Mode().Perm(); got != plistFileMode {
+		t.Errorf("plist mode = %04o, want %04o", got, plistFileMode)
+	}
+	if info.Mode().Perm()&0077 != 0 {
+		t.Errorf("plist is group/world accessible (%04o) — it contains API keys", info.Mode().Perm())
+	}
+}
+
+// Reinstalling over a plist left 0644 by an older build must repair the mode.
+func TestWritePlistFileRepairsLegacyPermissions(t *testing.T) {
+	pPath := filepath.Join(t.TempDir(), "com.sprout.daemon.plist")
+	if err := os.WriteFile(pPath, []byte("<old/>"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writePlistFile(pPath, []byte("<plist/>")); err != nil {
+		t.Fatalf("writePlistFile: %v", err)
+	}
+
+	info, err := os.Stat(pPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != plistFileMode {
+		t.Errorf("legacy 0644 plist not repaired: mode = %04o, want %04o", got, plistFileMode)
+	}
+}
+
+// A stale 0644 .tmp left by an older build must not survive the rename.
+func TestWritePlistFileOverwritesStaleTempMode(t *testing.T) {
+	pPath := filepath.Join(t.TempDir(), "com.sprout.daemon.plist")
+	if err := os.WriteFile(pPath+".tmp", []byte("stale"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writePlistFile(pPath, []byte("<plist/>")); err != nil {
+		t.Fatalf("writePlistFile: %v", err)
+	}
+
+	info, err := os.Stat(pPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != plistFileMode {
+		t.Errorf("stale tmp mode leaked through: mode = %04o, want %04o", got, plistFileMode)
+	}
+}

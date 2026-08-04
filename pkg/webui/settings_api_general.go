@@ -25,7 +25,7 @@ func (ws *ReactWebServer) handleAPISettings(w http.ResponseWriter, r *http.Reque
 	case http.MethodPut:
 		ws.handleAPISettingsPut(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 

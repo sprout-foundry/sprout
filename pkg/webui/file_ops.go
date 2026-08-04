@@ -18,8 +18,7 @@ import (
 // handleAPICreateFile handles API requests for creating new files
 func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -138,13 +137,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 // Accepts both POST (browser fetch default) and DELETE.
 func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Method not allowed",
-			"code":  "method_not_allowed",
-		})
+	if !requireMethods(w, r, http.MethodPost, http.MethodDelete) {
 		return
 	}
 
@@ -217,13 +210,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 // handleAPIRenameItem handles API requests for renaming files or directories.
 func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Method not allowed",
-			"code":  "method_not_allowed",
-		})
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -340,8 +327,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 
 // handleAPIGetPrettierConfig handles API requests for Prettier config discovery.
 func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

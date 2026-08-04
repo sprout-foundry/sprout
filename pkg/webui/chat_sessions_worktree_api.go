@@ -29,8 +29,7 @@ func sanitizePathComponent(s string) string {
 // handleAPIChatSessionWorktreeGet handles GET /api/chat-session/{chatID}/worktree
 // Returns the worktree path for a specific chat session.
 func (ws *ReactWebServer) handleAPIChatSessionWorktreeGet(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -61,8 +60,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeGet(w http.ResponseWriter,
 // handleAPIChatSessionWorktreeSet handles POST /api/chat-session/{chatID}/worktree
 // Sets the worktree path for a specific chat session.
 func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -168,8 +166,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 // handleAPIChatSessionWorktreeSwitch handles POST /api/chat-session/{chatID}/worktree/switch
 // Switches the active workspace to the specified worktree path for the current client.
 func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -304,16 +301,15 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktree(w http.ResponseWriter, r 
 			return
 		}
 		// Check if GET or POST
+		if !requireMethods(w, r, http.MethodGet, http.MethodPost) {
+			return
+		}
 		if r.Method == http.MethodGet {
 			ws.handleAPIChatSessionWorktreeGet(w, r)
 			return
-		} else if r.Method == http.MethodPost {
-			ws.handleAPIChatSessionWorktreeSet(w, r)
-			return
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
 		}
+		ws.handleAPIChatSessionWorktreeSet(w, r)
+		return
 	} else {
 		http.Error(w, "Invalid route", http.StatusBadRequest)
 		return
@@ -324,8 +320,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktree(w http.ResponseWriter, r 
 // Creates a git worktree, creates a new chat session, associates the worktree with the chat,
 // and optionally switches the workspace to the worktree.
 func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -510,8 +505,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 // Returns all chat sessions that have worktree paths, so the UI can display
 // which chats are associated with which worktrees.
 func (ws *ReactWebServer) handleAPIChatSessionWorktreeList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

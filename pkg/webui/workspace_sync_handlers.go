@@ -57,8 +57,7 @@ type syncRequest struct {
 // On conflict (409), returns an error with the path to the ".theirs" file.
 // On bad request (400), returns an error describing what was wrong.
 func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -124,8 +123,7 @@ type takeoverRequest struct {
 // workspace.session_moved event is published so the displaced browser can
 // surface the overlay.
 func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

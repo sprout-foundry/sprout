@@ -104,8 +104,7 @@ type sshLaunchStatusDTO struct {
 }
 
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -165,8 +164,7 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 }
 
 func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -216,8 +214,7 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 }
 
 func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -362,8 +359,7 @@ func writeSSHJSONError(w http.ResponseWriter, status int, payload sshLaunchError
 }
 
 func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -380,8 +376,7 @@ func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Re
 }
 
 func (ws *ReactWebServer) handleAPISSHSessionDelete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

@@ -44,7 +44,7 @@ func (ws *ReactWebServer) handleAPISettingsCredentials(w http.ResponseWriter, r 
 		} else if strings.HasSuffix(r.URL.Path, "/test") {
 			ws.handleAPISettingsCredentialsTest(w, r)
 		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		}
 	case http.MethodDelete:
 		if strings.HasSuffix(r.URL.Path, "/pool") {
@@ -53,7 +53,7 @@ func (ws *ReactWebServer) handleAPISettingsCredentials(w http.ResponseWriter, r 
 			ws.handleAPISettingsCredentialsDelete(w, r)
 		}
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 

@@ -27,7 +27,7 @@ func (ws *ReactWebServer) handleAPISettingsMCP(w http.ResponseWriter, r *http.Re
 	case http.MethodPut:
 		ws.handleAPISettingsMCPPut(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
@@ -55,7 +55,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServers(w http.ResponseWriter, r *
 	case http.MethodDelete:
 		ws.handleAPISettingsMCPServersDelete(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 

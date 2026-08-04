@@ -25,8 +25,7 @@ type GitCommit struct {
 // handleAPIGitLog returns a paginated list of past commits.
 // Query params: limit (default 30, max 100), offset (default 0).
 func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -126,8 +125,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 
 // handleAPIGitCommitShow returns the full diff and metadata for a single commit.
 func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -223,8 +221,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 
 // handleAPIGitCommitFileDiff returns the diff for a single file within a specific commit.
 func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

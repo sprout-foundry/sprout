@@ -32,8 +32,7 @@ import (
 //	  "count": 1
 //	}
 func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -175,8 +174,7 @@ func (ws *ReactWebServer) handleAPIAgentSessionActions(w http.ResponseWriter, r 
 //
 // Response format: plain text output (ANSI stripped)
 func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -206,8 +204,7 @@ func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *htt
 //
 // Response format: {"id": "...", "status": "attached"}
 func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -266,8 +263,7 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 // handleAgentSessionKill terminates a background agent session.
 // POST /api/terminal/agent-sessions/{id}/kill
 func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

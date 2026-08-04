@@ -17,8 +17,7 @@ import (
 // handleAPIChatSessionsDelete handles POST /api/chat-sessions/delete
 // Body: { "id": "chat-id" }
 func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	if ws.rejectIfSharedMode(w) {
@@ -210,8 +209,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 // handleAPIChatSessionsDeleteAll handles POST /api/chat-sessions/delete-all
 // Deletes all chat sessions except the default one, then sets the default session as active.
 func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	if ws.rejectIfSharedMode(w) {

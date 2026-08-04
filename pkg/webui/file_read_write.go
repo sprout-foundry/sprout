@@ -23,7 +23,7 @@ func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) 
 	case http.MethodPost:
 		ws.handleFileWrite(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 

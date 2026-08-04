@@ -11,8 +11,7 @@ import (
 )
 
 func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -108,8 +107,7 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 }
 
 func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -144,8 +142,7 @@ func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Re
 }
 
 func (ws *ReactWebServer) handleAPIGitCreateBranch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -184,8 +181,7 @@ func (ws *ReactWebServer) handleAPIGitCreateBranch(w http.ResponseWriter, r *htt
 }
 
 func (ws *ReactWebServer) handleAPIGitPull(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -203,8 +199,7 @@ func (ws *ReactWebServer) handleAPIGitPull(w http.ResponseWriter, r *http.Reques
 }
 
 func (ws *ReactWebServer) handleAPIGitPush(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

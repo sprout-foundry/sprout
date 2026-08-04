@@ -12,8 +12,7 @@ import (
 // handleLSPStatus returns information about available and running LSP servers.
 // GET /api/lsp/status
 func (ws *ReactWebServer) handleLSPStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

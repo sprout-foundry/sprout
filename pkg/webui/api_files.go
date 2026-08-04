@@ -17,13 +17,7 @@ import (
 // handleAPIFiles handles API requests for file listing
 func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodGet {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Method not allowed",
-			"code":  "method_not_allowed",
-		})
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

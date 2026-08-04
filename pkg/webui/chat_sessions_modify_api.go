@@ -13,8 +13,7 @@ import (
 // handleAPIChatSessionsRename handles POST /api/chat-sessions/rename
 // Body: { "id": "chat-id", "name": "new name" }
 func (ws *ReactWebServer) handleAPIChatSessionsRename(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -79,8 +78,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsRename(w http.ResponseWriter, r *
 // Body: { "id": "chat-id" }
 // Pins a chat session so it stays visible at the top of the tab bar.
 func (ws *ReactWebServer) handleAPIChatSessionsPin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -152,8 +150,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsPin(w http.ResponseWriter, r *htt
 // Body: { "id": "chat-id" }
 // Unpins a chat session so it can auto-close with other tabs.
 func (ws *ReactWebServer) handleAPIChatSessionsUnpin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

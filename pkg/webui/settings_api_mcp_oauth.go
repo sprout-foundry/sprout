@@ -31,7 +31,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPServerCredentials(w http.ResponseW
 	case http.MethodDelete:
 		ws.handleDeleteServerCredentials(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 

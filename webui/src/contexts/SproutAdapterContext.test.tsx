@@ -446,7 +446,7 @@ describe('SproutAdapterProvider', () => {
   });
 
   it('handles adapter with all optional fields', () => {
-    const navItems = [{ id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 1 }];
+    const navItems = [{ id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 1 }];
 
     const adapter = createMockAdapter({
       name: 'FullFieldsAdapter',

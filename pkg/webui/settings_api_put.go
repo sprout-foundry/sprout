@@ -389,9 +389,20 @@ func (ws *ReactWebServer) handlePutWorkspaceSettings(w http.ResponseWriter, r *h
 		return
 	}
 	// Write path, not the read path: a legacy config.json is read but never
-	// written back to, and at $HOME the read path must never resolve to the
-	// user's global config.
-	ws.putConfigToFile(w, r, configuration.WorkspaceConfigWritePath(workspaceRoot))
+	// written back to.
+	//
+	// Empty means this workspace has no config layer — currently only $HOME,
+	// which deliberately has none (see configuration.WorkspaceConfigDir).
+	// Writing there would create ~/.sprout/workspace.json, which the next
+	// startup reads back as a per-workspace opt-in. Direct the caller at the
+	// global scope instead of silently writing nothing.
+	writePath := configuration.WorkspaceConfigWritePath(workspaceRoot)
+	if writePath == "" {
+		writeJSONError(w, http.StatusBadRequest,
+			"This workspace has no per-workspace settings layer (the home directory uses global settings). Save to global settings instead.")
+		return
+	}
+	ws.putConfigToFile(w, r, writePath)
 }
 
 // handlePutGlobalSettings writes settings to the global config file.

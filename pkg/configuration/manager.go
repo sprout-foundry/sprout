@@ -18,6 +18,10 @@ type Manager struct {
 	lastSaved *Config // Track last saved state, not initial snapshot
 	loaded    bool    // Track if config has been loaded
 	configDir string  // Explicit config directory for saves (empty = use env/default)
+	// configFileName is the file written inside configDir. Workspace-layer
+	// managers write WorkspaceConfigFileName; everything else writes
+	// ConfigFileName. Empty means ConfigFileName.
+	configFileName string
 }
 
 // loadConfigSilently loads configuration without showing welcome messages
@@ -200,13 +204,17 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		}
 	}
 
-	// Compute file paths
+	// Compute file paths. The workspace layer reads workspace.json (falling
+	// back to a legacy config.json), never the same filename the global layer
+	// uses — see WorkspaceConfigFileName.
 	var globalPath, workspacePath string
 	if globalDir != "" {
 		globalPath = filepath.Join(globalDir, ConfigFileName)
 	}
+	saveFileName := ConfigFileName
 	if workspaceDir != "" {
-		workspacePath = filepath.Join(workspaceDir, ConfigFileName)
+		workspacePath = ResolveWorkspaceConfigFile(workspaceDir, isHomeDir(filepath.Dir(workspaceDir)))
+		saveFileName = WorkspaceConfigFileName
 	}
 
 	// Load merged config (global + workspace, no session layer)
@@ -233,10 +241,11 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 	}
 
 	return &Manager{
-		config:    config,
-		apiKeys:   apiKeys,
-		lastSaved: cloneConfig(config),
-		loaded:    true,
-		configDir: saveDir, // Store explicit dir for saves
+		config:         config,
+		apiKeys:        apiKeys,
+		lastSaved:      cloneConfig(config),
+		loaded:         true,
+		configDir:      saveDir, // Store explicit dir for saves
+		configFileName: saveFileName,
 	}, nil
 }

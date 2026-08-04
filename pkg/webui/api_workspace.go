@@ -115,17 +115,24 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 	workspaceRoot := clientCtx.WorkspaceRoot
 	isProject, markers := IsProjectDirectory(workspaceRoot)
 
-	// Home-workspace gate (SP-130): a workspace that resolves to the user's
-	// home directory must force explicit selection unless the user has
-	// previously consented. This catches the service-mode case where the
-	// daemon starts with CWD=$HOME and IsProjectDirectory returns a false
-	// positive (install creates ~/.sprout, a weight-90 marker).
+	// Home-workspace gate (SP-130). The two cases are decided by different
+	// evidence and must not be mixed:
+	//
+	//   home     → consent decides, full stop. Project markers are meaningless
+	//              here; `.sprout` exists in $HOME on every install because
+	//              sprout put it there.
+	//   non-home → project markers decide, as before.
+	//
+	// The old form (`!isProject || (isHome && !consented)`) leaned on $HOME
+	// scoring as a project via that `.sprout` marker, so down-weighting the
+	// marker would otherwise have kept re-prompting users who had already
+	// consented.
 	workspaceIsHome := isHomeWorkspace(workspaceRoot)
 	homeConsented := hasHomeWorkspaceConsent()
-	// Selection is needed when the dir is not a project, OR when it is home
-	// and the user has not yet consented to running in home. A consented home
-	// workspace is an intentional choice → needsSelection is false.
-	needsSelection := !isProject || (workspaceIsHome && !homeConsented)
+	needsSelection := !isProject
+	if workspaceIsHome {
+		needsSelection = !homeConsented
+	}
 
 	response := map[string]interface{}{
 		"daemon_root":               ws.GetDaemonRoot(),

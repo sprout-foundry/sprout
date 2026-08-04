@@ -347,3 +347,45 @@ func TestFindProjectsInDirectory_ProtectedNamesOnlyGatedAtHome(t *testing.T) {
 		t.Errorf("expected to find proj under a non-home root, got %v", results)
 	}
 }
+
+// Sprout creates .sprout in every directory it runs in — including $HOME, and
+// including a bare directory the user just happened to open once. On its own it
+// means "sprout has been here", not "this is a project". At weight 90 it made
+// the home directory self-certify, letting the workspace gate be bypassed.
+func TestSproutDirAloneIsNotAProject(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".sprout"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	isProject, markers := IsProjectDirectory(dir)
+	if isProject {
+		t.Errorf(".sprout alone must not qualify a directory as a project (markers=%v)", markers)
+	}
+}
+
+// It is still useful corroborating evidence next to a real marker.
+func TestSproutDirCountsAlongsideAnotherMarker(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".sprout"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if isProject, markers := IsProjectDirectory(dir); !isProject {
+		t.Errorf(".sprout + README.md should qualify (markers=%v)", markers)
+	}
+}
+
+// A real project is unaffected by the down-weighting.
+func TestGitRepoStillQualifiesAlone(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if isProject, markers := IsProjectDirectory(dir); !isProject {
+		t.Errorf(".git alone must still qualify (markers=%v)", markers)
+	}
+}

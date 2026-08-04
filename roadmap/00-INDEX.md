@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-08-04):** 101 shipped · 13 pending · 2 parked in `future/`.
+**Counts (as of 2026-08-04):** 101 shipped · 14 pending · 2 parked in `future/`.
 
 ## Shipped
 
@@ -106,8 +106,8 @@ _Specs whose core work has shipped but whose bodies remain at the root as
 living reference (per the policy established in `212044d8`). When a
 retained spec's body is no longer needed, it can be deleted from the
 root and the historical record is the git log. As of 2026-07-21, every
-spec at the root has shipped — there is no actively in-flight work in
-the root directory._
+spec at the root had shipped; SP-133 (added 2026-08-04) is the first
+specified-but-unstarted entry since._
 
 | Spec | Title | Status |
 |------|-------|--------|
@@ -130,6 +130,7 @@ the root directory._
 | SP-130 | [Home-Directory Workspace Gate](./SP-130-home-workspace-gate.md) | 🟢 Implemented (2026-07-31) — Phases 1–4 shipped. Backend: `workspace_gate.go` (home detection + consent store), `handleAPIWorkspaceGet` gates `needs_workspace_selection` on home-without-consent, `FindProjectsInDirectory` removed from the hot path (kills the recursive home walk that triggered macOS TCC "access Apple Music" prompts), `setClientWorkspaceRoot` defense-in-depth, server startup restores most-recent workspace. Frontend: `WorkspaceGateModal` blocking overlay with explicit home-consent flow, broken `extractHomeDir` heuristic replaced with backend `home_dir`. Service plist/unit comments updated. CLI interactive mode warns when CWD is home. |
 | SP-131 | [Agent Creation & Event Publishing Dedup](./SP-131-agent-creation-dedup.md) | 🟢 Phases 0–5, 7 shipped — `setupWebUIAgent`/`rearmWebUIAgent` helpers (P1, P7), `PublishEvent` dedup (P2), regression tests (P3), `SafeGo` helper (P4), `captureCommandOutput` helper (P5). Phase 6 (webui lock boilerplate) investigated and deferred — patterns too varied for clean abstraction. |
 | SP-132 | [WebUI API Consistency & Boilerplate Elimination](./SP-132-webui-api-consistency.md) | 🟢 Phases 1–4, 6–7 shipped — `requireMethod` (P1, 105 sites), `writeJSONError` consolidated (P2), bare `json.NewEncoder` migrated (P3, 165 sites), `http.Error`→`writeJSONErr` (P4, 259 sites), `cs.Agent` locking audit clean (P6), 9 goroutines recovered (P7). Phase 5 (file splitting) deferred. |
+| SP-133 | [Config / State / Cache / Secret Separation](./SP-133-config-state-separation.md) | 📋 Specified (2026-08-04), not started — splits `~/.sprout` into four category roots (config / state / data+cache / credentials). Closes the `$HOME`-is-a-workspace aliasing class that made a global `embedding_index.enabled` read as a per-workspace opt-in and index the whole home directory at daemon startup. Builds on the shipped `workspace.json` filename split and the `.sprout` project-marker down-weight. 6 phases; credentials move last, isolated, behind a marker file. |
 
 ## Future / On Hold
 

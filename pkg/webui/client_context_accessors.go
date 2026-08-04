@@ -43,7 +43,7 @@ func (ws *ReactWebServer) getLayeredConfigManager(clientID string) (*configurati
 
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
 	}
 
 	return configuration.NewManagerWithLayers(configBase, workspaceDir)

@@ -16,9 +16,16 @@ type ProjectMarker struct {
 }
 
 // projectMarkers defines the markers we look for, ordered by weight (highest first).
+//
+// `.sprout` is deliberately weighted below the 50-point single-marker
+// threshold. Sprout creates it in every directory it runs in — including
+// $HOME — so on its own it means "sprout has been here", not "this is a
+// project". At weight 90 it made the home directory self-certify as a
+// project, which is what let the workspace gate be bypassed. It still counts
+// as corroborating evidence alongside a real marker.
 var projectMarkers = []ProjectMarker{
 	{".git", 100, true},
-	{".sprout", 90, true},
+	{".sprout", 40, true},
 	{"go.mod", 80, false},
 	{"package.json", 80, false},
 	{"Cargo.toml", 80, false},

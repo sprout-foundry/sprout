@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -245,7 +244,7 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
 	}
 
 	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)
@@ -280,7 +279,7 @@ func (ws *ReactWebServer) resolveConfigManagerQuietly(r *http.Request) *configur
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
 	}
 
 	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)

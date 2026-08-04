@@ -509,7 +509,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	// Workspace config is in {workspaceRoot}/.sprout/ (if workspace exists)
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
 		// Auto-bootstrap workspace config when opening a git repo that
 		// doesn't have .sprout/config.json yet. Same logic as
 		// PersistentPreRunE auto-detection, applied at workspace-switch time.
@@ -643,7 +643,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	}
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
 	}
 
 	// In shared mode (CLI + WebUI in the same process), seed the default

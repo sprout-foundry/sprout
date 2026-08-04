@@ -35,7 +35,11 @@ func runDiag() {
 	// Check global config
 	homeDir, _ := os.UserHomeDir()
 	globalConfigPath := filepath.Join(homeDir, configuration.ConfigDirName, configuration.ConfigFileName)
-	projectConfigPath := filepath.Join(".", configuration.ConfigDirName, configuration.ConfigFileName)
+	// Resolve rather than hard-code the filename: the workspace layer is
+	// workspace.json, with a legacy config.json fallback. Reporting a fixed
+	// name would tell the user "does not exist" about a config that is in fact
+	// being loaded.
+	projectConfigPath := configuration.GetWorkspaceConfigPath(".")
 
 	fmt.Printf("Global config: %s\n", globalConfigPath)
 	if info, err := os.Stat(globalConfigPath); err == nil {

@@ -388,7 +388,10 @@ func (ws *ReactWebServer) handlePutWorkspaceSettings(w http.ResponseWriter, r *h
 		writeJSONError(w, http.StatusBadRequest, "No workspace configured")
 		return
 	}
-	ws.putConfigToFile(w, r, configuration.GetWorkspaceConfigPath(workspaceRoot))
+	// Write path, not the read path: a legacy config.json is read but never
+	// written back to, and at $HOME the read path must never resolve to the
+	// user's global config.
+	ws.putConfigToFile(w, r, configuration.WorkspaceConfigWritePath(workspaceRoot))
 }
 
 // handlePutGlobalSettings writes settings to the global config file.

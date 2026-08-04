@@ -185,3 +185,69 @@ func TestHasHomeWorkspaceConsent_MalformedFile(t *testing.T) {
 		})
 	}
 }
+
+// The home gate is decided by consent alone, never by project markers.
+//
+// $HOME contains .sprout on every install because sprout put it there, so
+// marker-based detection says "project" for reasons that have nothing to do
+// with the user's intent. Mixing the two signals meant down-weighting the
+// .sprout marker re-prompted users who had already consented.
+func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		consented     bool
+		wantSelection bool
+	}{
+		{"home without consent is gated", false, true},
+		{"home with consent is not gated", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			useTestWorkspaceConsent(t, home, tc.consented)
+
+			// Give home strong project markers; they must not affect the gate.
+			if err := os.MkdirAll(filepath.Join(home, ".git"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(home, ".sprout"), 0755); err != nil {
+				t.Fatal(err)
+			}
+
+			isProject, _ := IsProjectDirectory(home)
+			if !isProject {
+				t.Fatal("precondition: home should look like a project here")
+			}
+
+			workspaceIsHome := isHomeWorkspace(home)
+			if !workspaceIsHome {
+				t.Fatal("precondition: workspace should resolve to home")
+			}
+			needsSelection := !isProject
+			if workspaceIsHome {
+				needsSelection = !hasHomeWorkspaceConsent()
+			}
+
+			if needsSelection != tc.wantSelection {
+				t.Errorf("needsSelection = %v, want %v", needsSelection, tc.wantSelection)
+			}
+		})
+	}
+}
+
+// useTestWorkspaceConsent writes (or removes) the home-consent file for a test.
+func useTestWorkspaceConsent(t *testing.T, home string, consented bool) {
+	t.Helper()
+	path := filepath.Join(home, ".sprout", "workspace_consent.json")
+	if !consented {
+		_ = os.Remove(path)
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"home_workspace":{"consented_at":"2026-01-01T00:00:00Z"}}`
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+}

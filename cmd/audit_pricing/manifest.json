@@ -1,7 +1,7 @@
 {
   "chutes": {
     "source": "https://api.chutes.com/v1/models",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-04",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -62,12 +62,17 @@
         "id": "zai-org/GLM-5.2-TEE",
         "input_per_mtok": 1.25,
         "output_per_mtok": 3.95
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
+        "input_per_mtok": 0.14,
+        "output_per_mtok": 0.28
       }
     ]
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-04",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -307,12 +312,14 @@
       {
         "id": "deepseek-ai/DeepSeek-V4-Flash",
         "input_per_mtok": 0.09,
-        "output_per_mtok": 0.18
+        "output_per_mtok": 0.18,
+        "cached_per_mtok": 0.018
       },
       {
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
         "input_per_mtok": 0.09,
-        "output_per_mtok": 0.18
+        "output_per_mtok": 0.18,
+        "cached_per_mtok": 0.018
       },
       {
         "id": "deepseek-ai/DeepSeek-V4-Pro",
@@ -538,6 +545,12 @@
         "id": "zai-org/GLM-5.2",
         "input_per_mtok": 0.75,
         "output_per_mtok": 2.4
+      },
+      {
+        "id": "Qwen/Qwen3.8-Max",
+        "input_per_mtok": 1.65,
+        "output_per_mtok": 4.951,
+        "cached_per_mtok": 0.206
       }
     ]
   },
@@ -1227,7 +1240,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-04",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -1530,9 +1543,9 @@
       },
       {
         "id": "deepseek/deepseek-v4-flash-0731",
-        "input_per_mtok": 0.14,
-        "output_per_mtok": 0.28,
-        "cached_per_mtok": 0.0028
+        "input_per_mtok": 0.09,
+        "output_per_mtok": 0.18,
+        "cached_per_mtok": 0.018
       },
       {
         "id": "deepseek/deepseek-v4-pro",
@@ -3090,6 +3103,18 @@
         "input_per_mtok": 2,
         "output_per_mtok": 6,
         "cached_per_mtok": 0.3
+      },
+      {
+        "id": "qwen/qwen3.8-max",
+        "input_per_mtok": 2,
+        "output_per_mtok": 6,
+        "cached_per_mtok": 0.25
+      },
+      {
+        "id": "~deepseek/deepseek-v4-flash-latest",
+        "input_per_mtok": 0.09,
+        "output_per_mtok": 0.18,
+        "cached_per_mtok": 0.018
       }
     ]
   },

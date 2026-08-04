@@ -639,6 +639,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.018,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-focused MoE model with 284B total parameters (13B active) and a 1M-token context window. It's tuned for fast inference and high-throughput use cases while still holding up on reasoning and coding tasks.",
         "id": "deepseek-ai/DeepSeek-V4-Flash",
@@ -652,6 +653,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.018,
         "context_length": 1048576,
         "description": "DeepSeek-V4-Flash-0731 is the official release of DeepSeek-V4-Flash, superseding the preview version, with substantially enhanced agentic capabilities. DeepSeek-V4-Flash-0731 outperforms DeepSeek-V4-Pro (Preview) on benchmarks listed below despite its far smaller activated parameter count, and is broadly competitive with the strongest proprietary models available.",
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
@@ -1239,6 +1241,21 @@
         "output_cost": 2.4,
         "tags": [
           "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.206,
+        "context_length": 256000,
+        "description": "Qwen's latest 2.4-trillion-parameter MoE flagship model delivering a comprehensive leap in coding and professional work. Multimodal with native visual understanding and long-horizon autonomous task execution.",
+        "id": "Qwen/Qwen3.8-Max",
+        "input_cost": 1.65,
+        "name": "Qwen/Qwen3.8-Max",
+        "output_cost": 4.951,
+        "tags": [
+          "tools",
+          "vision",
           "reasoning",
           "structured_output"
         ]

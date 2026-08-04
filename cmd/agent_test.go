@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -2439,19 +2440,23 @@ func TestPidaliveIsAlive_Coverage(t *testing.T) {
 // =============================================================================
 
 func TestGenerateServiceEnvFile_NoKeys_Coverage(t *testing.T) {
-	tmpDir := t.TempDir()
-	// Ensure no matching env vars are set
-	os.Unsetenv("MY_API_KEY")
-	os.Unsetenv("GITHUB_TOKEN")
+	// Redirect the state root before generating. This writes a file derived
+	// from the ambient environment: without isolation it targets the real
+	// user's service.env, and in an environment with no API keys exported it
+	// would replace their captured keys with an empty file.
+	stateDir := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
 
-	err := service.GenerateServiceEnvFile(tmpDir)
-	if err != nil {
+	// Ensure no matching env vars are set
+	t.Setenv("MY_API_KEY", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	if err := service.GenerateServiceEnvFile(); err != nil {
 		t.Fatalf("service.GenerateServiceEnvFile() error: %v", err)
 	}
 
-	// Should create an empty file
-	path := tmpDir + "/.sprout/service.env"
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	// Should create the file even when nothing was captured
+	if _, err := os.Stat(filepath.Join(stateDir, "service.env")); os.IsNotExist(err) {
 		t.Error("expected service.env to be created even with no keys")
 	}
 }
@@ -2790,24 +2795,19 @@ func TestMatchesAPIKeyPattern(t *testing.T) {
 // service_env.go — service.ServiceEnvPath
 // =============================================================================
 
+// service.env lives in the state root, redirected by $SPROUT_STATE_DIR.
+// It intentionally takes no homeDir argument — see service.ServiceEnvPath.
 func TestServiceEnvPath(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		homeDir string
-		want    string
-	}{
-		{"simple", "/home/user", "/home/user/.sprout/service.env"},
-		{"nested", "/Users/alanp/dev", "/Users/alanp/dev/.sprout/service.env"},
+	stateDir := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
+
+	got, err := service.ServiceEnvPath()
+	if err != nil {
+		t.Fatalf("service.ServiceEnvPath() error: %v", err)
 	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := service.ServiceEnvPath(tt.homeDir); got != tt.want {
-				t.Errorf("service.ServiceEnvPath(%q) = %q, want %q", tt.homeDir, got, tt.want)
-			}
-		})
+	want := filepath.Join(stateDir, "service.env")
+	if got != want {
+		t.Errorf("service.ServiceEnvPath() = %q, want %q", got, want)
 	}
 }
 
@@ -2816,8 +2816,8 @@ func TestServiceEnvPath(t *testing.T) {
 // =============================================================================
 
 func TestLoadServiceEnvFile_Missing(t *testing.T) {
-	t.Parallel()
-	m, err := service.LoadServiceEnvFile("/tmp/nonexistent_sprout_dir_" + t.Name())
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	m, err := service.LoadServiceEnvFile()
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got: %v", err)
 	}
@@ -2827,22 +2827,29 @@ func TestLoadServiceEnvFile_Missing(t *testing.T) {
 }
 
 func TestLoadServiceEnvFile_WithContent(t *testing.T) {
-	dir := t.TempDir()
+	// Redirect the state root. Before ServiceEnvPath dropped its ignored
+	// homeDir parameter, this test read the developer's REAL service.env and
+	// then printed every captured API key via the failure message below.
+	stateDir := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
+
 	content := "# comment line\nMY_API_KEY=secret123\nSPROUT_PROVIDER=openai\n\nBADLINE_WITHOUT_EQUALS\n"
-	path := dir + "/.sprout"
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path+"/service.env", []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(stateDir, "service.env"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	m, err := service.LoadServiceEnvFile(dir)
+	m, err := service.LoadServiceEnvFile()
 	if err != nil {
 		t.Fatalf("service.LoadServiceEnvFile() error: %v", err)
 	}
+	// Report only the count and key names on failure — never the values.
 	if len(m) != 2 {
-		t.Fatalf("expected 2 entries, got %d: %v", len(m), m)
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		t.Fatalf("expected 2 entries, got %d (keys: %v)", len(m), keys)
 	}
 	if m["MY_API_KEY"] != "secret123" {
 		t.Errorf("MY_API_KEY = %q, want %q", m["MY_API_KEY"], "secret123")

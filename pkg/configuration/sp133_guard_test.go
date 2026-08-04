@@ -14,10 +14,31 @@ import (
 // This catches regressions where a new file resolves a user-level path
 // to the old ~/.sprout location instead of the SP-133 category roots.
 func TestNoLegacyHomeDotSprout(t *testing.T) {
+	// Anchor to the repo root. Go runs tests with the working directory set to
+	// the package directory, so walking a bare "pkg" here would target
+	// pkg/configuration/pkg — which does not exist. filepath.Walk hands that
+	// error to the walk func, the walk func returns nil, and the whole guard
+	// passes vacuously no matter how many violations exist.
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	for _, sentinel := range []string{"go.mod", "pkg", "cmd"} {
+		if _, err := os.Stat(filepath.Join(repoRoot, sentinel)); err != nil {
+			t.Fatalf("repo root %q does not look like the sprout root (missing %s): %v", repoRoot, sentinel, err)
+		}
+	}
+
+	scanned := 0
+
 	// Walk all .go files in pkg/ and cmd/, excluding test files.
 	checkDir := func(dir string) {
-		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
+		root := filepath.Join(repoRoot, dir)
+		if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
 				return nil
 			}
 			if !strings.HasSuffix(path, ".go") {
@@ -30,9 +51,11 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 				return nil
 			}
 
+			scanned++
+
 			data, err := os.ReadFile(path)
 			if err != nil {
-				return nil
+				return err
 			}
 			content := string(data)
 
@@ -57,9 +80,17 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 				}
 			}
 			return nil
-		})
+		}); err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
 	}
 
 	checkDir("pkg")
 	checkDir("cmd")
+
+	// Fail loudly if the walk found nothing — that means the guard is not
+	// actually inspecting the tree and would pass regardless of violations.
+	if scanned < 100 {
+		t.Fatalf("guard only scanned %d files; it is not covering the tree", scanned)
+	}
 }

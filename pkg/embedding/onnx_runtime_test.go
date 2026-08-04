@@ -29,15 +29,13 @@ func TestDefaultModelDir(t *testing.T) {
 }
 
 func TestDefaultModelDir_Fallback(t *testing.T) {
-	// When no env vars are set, should fall back to ~/.config/sprout/models
+	// SP-133: models are regenerable data, so they live under the data root
+	// ($SPROUT_DATA_DIR → $XDG_DATA_HOME/sprout → ~/.local/share/sprout),
+	// not the config root.
 	os.Unsetenv("SPROUT_MODELS_DIR")
-	os.Unsetenv("SPROUT_CONFIG")
-	os.Unsetenv("SPROUT_CONFIG")
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("no home dir")
-	}
-	expected := filepath.Join(home, ".config", "sprout", "models")
+	dataDir := t.TempDir()
+	t.Setenv("SPROUT_DATA_DIR", dataDir)
+	expected := filepath.Join(dataDir, "models")
 	got := DefaultModelDir()
 	if got != expected {
 		t.Errorf("expected %s, got %s", expected, got)

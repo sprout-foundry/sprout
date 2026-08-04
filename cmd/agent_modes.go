@@ -74,12 +74,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// Set up log rotation for managed daemon services (SPROUT_SERVICE=1).
 		// This must happen early, before any stdout/stderr writes, so that
 		// all subsequent output is captured by the rotating log files.
-		homeDir, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			console.GlyphWarning.Fprintf(os.Stderr, "Could not determine home directory, skipping daemon log rotation: %v", homeErr)
-		} else {
-			setupDaemonLogging(homeDir)
-		}
+		setupDaemonLogging()
 	}
 
 	// Create event bus

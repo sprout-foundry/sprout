@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )

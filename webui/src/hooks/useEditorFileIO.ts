@@ -337,22 +337,28 @@ export function useEditorFileIO(
           }, 0);
         }
 
-        // Fetch git diff after loading file
-        if (filePath && cmViewApiRef.current?.view) {
-          try {
-            const diffResponse = await apiService.getGitDiff(filePath);
-            // Discard if a newer load has been initiated while we awaited.
-            if (loadSeqRef.current !== seq) return;
-            if (diffResponse.diff && diffResponse.diff.trim()) {
-              updateDiffGutter(cmViewApiRef.current?.view, diffResponse.diff);
-            } else {
-              clearDiffGutter(cmViewApiRef.current?.view);
+        // Fetch git diff after loading file — fire-and-forget so the loading
+        // indicator clears as soon as the content is visible. Awaiting it here
+        // kept the spinner up (and keystroke attribution gated) for the whole
+        // git round-trip on every file open, which made loads feel blocking.
+        const viewForDiff = cmViewApiRef.current?.view ?? null;
+        if (filePath && viewForDiff) {
+          void (async () => {
+            try {
+              const diffResponse = await apiService.getGitDiff(filePath);
+              // Discard if a newer load has been initiated while we awaited.
+              if (loadSeqRef.current !== seq) return;
+              if (diffResponse.diff && diffResponse.diff.trim()) {
+                updateDiffGutter(viewForDiff, diffResponse.diff);
+              } else {
+                clearDiffGutter(viewForDiff);
+              }
+            } catch (err) {
+              debugLog('[useEditorFileIO] Failed to fetch git diff:', err);
+              notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff');
+              clearDiffGutter(viewForDiff);
             }
-          } catch (err) {
-            debugLog('[useEditorFileIO] Failed to fetch git diff:', err);
-            notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff');
-            if (cmViewApiRef.current?.view) clearDiffGutter(cmViewApiRef.current?.view);
-          }
+          })();
         }
 
         // Auto-detect indentation

@@ -362,17 +362,32 @@ func (ws *ReactWebServer) searchFile(path string, pattern *regexp.Regexp, contex
 		return nil, 0, fmt.Errorf("scan file %q: %w", path, err)
 	}
 
-	// If context is requested, do a second pass to collect after-context
+	// If context is requested, do a second pass to collect after-context.
+	// Matches are in ascending line order, so a sliding window over the
+	// match list makes this O(lines + matches) — the naive per-match line
+	// scan was O(lines × matches) and dominated search time for files with
+	// many matches. The window also fixes a correctness bug: the previous
+	// loop ranged over copies of match structs, so the appended context was
+	// discarded.
 	if contextLines > 0 && len(matches) > 0 {
 		file.Seek(0, 0)
 		scanner = bufio.NewScanner(file)
 		lineNumber = 0
+		// A match at line L wants lines L+1..L+contextLines. nextIdx is the
+		// first match whose window has opened (L < current line); expiredIdx
+		// is the first match whose window has closed (L+contextLines < line).
+		nextIdx := 0
+		expiredIdx := 0
 		for scanner.Scan() {
 			lineNumber++
-			for _, match := range matches {
-				if lineNumber > match.LineNumber && lineNumber <= match.LineNumber+contextLines {
-					match.ContextAfter = append(match.ContextAfter, scanner.Text())
-				}
+			for nextIdx < len(matches) && matches[nextIdx].LineNumber < lineNumber {
+				nextIdx++
+			}
+			for expiredIdx < len(matches) && matches[expiredIdx].LineNumber+contextLines < lineNumber {
+				expiredIdx++
+			}
+			for i := expiredIdx; i < nextIdx; i++ {
+				matches[i].ContextAfter = append(matches[i].ContextAfter, scanner.Text())
 			}
 		}
 	}

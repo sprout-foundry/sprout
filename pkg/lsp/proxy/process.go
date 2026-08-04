@@ -2,11 +2,16 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"os/exec"
 	"sync"
 )
+
+// ErrProcessClosed is returned when attaching to a language server that has
+// already exited and left no more specific exit error behind.
+var ErrProcessClosed = errors.New("LSP process is closed")
 
 // LSPProcess represents a running language server process.
 type LSPProcess struct {
@@ -21,6 +26,47 @@ type LSPProcess struct {
 
 	subMu       sync.RWMutex // protects subscribers
 	subscribers map[chan string]struct{}
+
+	// exited is closed by readLoop when stdout reaches EOF, which is the
+	// observable moment the server went away. Liveness is derived from this
+	// rather than from a signal probe: os.Process.Signal(nil) rejects the nil
+	// signal outright ("unsupported signal type"), so the old Signal(nil) check
+	// reported every process — running or not — as unhealthy, and the manager
+	// killed and respawned a perfectly good server on every connection.
+	exited   chan struct{}
+	exitOnce sync.Once
+
+	// registry routes messages to per-client Sessions. Subscribe() still hands
+	// out an unfiltered firehose; sessions are the id-isolated view used by the
+	// WebSocket bridge.
+	registry *sessionRegistry
+}
+
+func (p *LSPProcess) markExited() {
+	p.exitOnce.Do(func() { close(p.exited) })
+}
+
+// NewSession creates an isolated client view of this process. The caller must
+// Close it when the client goes away. Returns an error if the process has
+// already exited, so callers don't attach to a server that can never answer.
+func (p *LSPProcess) NewSession() (*Session, error) {
+	p.closeMu.Lock()
+	closed, exitErr := p.closed, p.err
+	p.closeMu.Unlock()
+
+	if closed {
+		if exitErr == nil {
+			exitErr = ErrProcessClosed
+		}
+		return nil, exitErr
+	}
+
+	s := &Session{
+		proc: p,
+		out:  make(chan string, sessionChanBuffer),
+	}
+	p.registry.add(s)
+	return s, nil
 }
 
 // StartLSPProcess starts a language server process with the given binary and args.
@@ -56,6 +102,8 @@ func StartLSPProcess(ctx context.Context, workspacePath, binary string, args []s
 		stdinPipe:   stdinPipe,
 		stdoutPipe:  stdoutPipe,
 		subscribers: make(map[chan string]struct{}),
+		registry:    newSessionRegistry(),
+		exited:      make(chan struct{}),
 	}
 
 	// Start a goroutine to read from stdout and broadcast to subscribers
@@ -77,7 +125,9 @@ func (p *LSPProcess) readLoop() {
 			p.err = err
 			p.closeMu.Unlock()
 
+			p.markExited()
 			p.closeAllSubscribers()
+			p.registry.closeAll()
 			return
 		}
 
@@ -91,6 +141,8 @@ func (p *LSPProcess) readLoop() {
 			}
 		}
 		p.subMu.RUnlock()
+
+		p.registry.route(msg)
 	}
 }
 
@@ -155,18 +207,19 @@ func (p *LSPProcess) Subscribe() (<-chan string, func(), error) {
 // Healthy returns true if the process is still running.
 func (p *LSPProcess) Healthy() bool {
 	p.closeMu.Lock()
-	defer p.closeMu.Unlock()
+	closed := p.closed
+	p.closeMu.Unlock()
 
-	if p.closed {
+	if closed || p.cmd.Process == nil {
 		return false
 	}
 
-	// Send signal 0 to check if process is alive without killing it.
-	// If the process has exited, this will return an error.
-	if p.cmd.Process == nil {
+	select {
+	case <-p.exited:
 		return false
+	default:
+		return true
 	}
-	return p.cmd.Process.Signal(nil) == nil
 }
 
 // Wait blocks until the process exits and returns the error.
@@ -185,10 +238,12 @@ func (p *LSPProcess) Close() error {
 	}
 
 	p.closed = true
+	p.markExited()
 
 	// Close all subscribers via the shared helper to prevent
 	// double-close races with readLoop.
 	p.closeAllSubscribers()
+	p.registry.closeAll()
 
 	// Close stdin first (this signals the LSP to shut down gracefully)
 	if p.stdinPipe != nil {

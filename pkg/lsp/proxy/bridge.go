@@ -21,9 +21,8 @@ import (
 type Bridge struct {
 	wsConn *websocket.Conn
 
-	lspProcess  *LSPProcess
-	lspCh       <-chan string
-	unsubscribe func()
+	lspProcess *LSPProcess
+	session    *Session
 
 	doneCh    chan struct{}
 	doneOnce  sync.Once // guards close(doneCh) — both goroutines race to signal it
@@ -46,13 +45,13 @@ func NewBridge(wsConn *websocket.Conn, process *LSPProcess) *Bridge {
 // 4. Handle graceful shutdown when either side closes
 // 5. Use two goroutines (ws→lsp and lsp→ws)
 func (b *Bridge) Run(ctx context.Context) error {
-	// Subscribe to LSP process messages
-	ch, unsubscribe, err := b.lspProcess.Subscribe()
+	// Open an isolated session on the (possibly shared) LSP process so this
+	// client's request ids can't collide with another connected client's.
+	session, err := b.lspProcess.NewSession()
 	if err != nil {
 		return err
 	}
-	b.lspCh = ch
-	b.unsubscribe = unsubscribe
+	b.session = session
 
 	// Set up WebSocket read deadline (for heartbeat)
 	b.wsConn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -119,8 +118,8 @@ func (b *Bridge) runWSToLSP(ctx context.Context) {
 			continue
 		}
 
-		// Write to LSP process (with Content-Length framing)
-		if err := b.lspProcess.Send(string(msg)); err != nil {
+		// Hand to the session, which translates ids before framing to stdin
+		if err := b.session.Send(string(msg)); err != nil {
 			log.Printf("LSP bridge: Failed to send to LSP: %v", err)
 			return
 		}
@@ -141,7 +140,7 @@ func (b *Bridge) runLSPToWS(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
-		case msg, ok := <-b.lspCh:
+		case msg, ok := <-b.session.Out():
 			if !ok {
 				// Channel closed — LSP process exited. Close() (deferred)
 				// will close the WS conn; no direct field access here so
@@ -167,8 +166,8 @@ func (b *Bridge) runLSPToWS(ctx context.Context) {
 // which raced with the still-running runLSPToWS reading wsConn.
 func (b *Bridge) Close() {
 	b.closeOnce.Do(func() {
-		if b.unsubscribe != nil {
-			b.unsubscribe()
+		if b.session != nil {
+			b.session.Close()
 		}
 		if b.wsConn != nil {
 			b.wsConn.Close()

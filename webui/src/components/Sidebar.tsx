@@ -140,18 +140,6 @@ const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = 
   { id: 'automations', icon: Zap, label: 'Automations' },
 ];
 
-/** Valid platform view IDs for type-safe navigation */
-const VALID_PLATFORM_VIEWS = new Set([
-  'tasks',
-  'billing',
-  'team',
-  'costs',
-  'runners',
-  'dashboard',
-  'admin',
-  'workspaces',
-]);
-
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   'credit-card': CreditCard,
@@ -487,9 +475,7 @@ function Sidebar({
                         aria-selected={isActive}
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
-                          if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(item.id as ViewType);
-                          }
+                          window.location.href = item.href;
                         }}
                         title={item.label}
                         aria-label={item.label}

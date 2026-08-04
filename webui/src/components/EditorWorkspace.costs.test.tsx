@@ -80,13 +80,6 @@ vi.mock('./CostsPage', () => {
   return { default: CostsPage };
 });
 
-// Mock platform pages (lazy-loaded)
-vi.mock('./platform', () => ({
-  TasksPage: () => <div data-testid="tasks-page">TasksPage</div>,
-  BillingPage: () => <div data-testid="billing-page">BillingPage</div>,
-  TeamPage: () => <div data-testid="team-page">TeamPage</div>,
-}));
-
 // Mock @sprout/ui
 vi.mock('@sprout/ui', () => ({
   SkeletonText: () => <div className="mock-skeleton" />,

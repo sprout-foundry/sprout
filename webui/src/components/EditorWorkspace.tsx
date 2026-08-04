@@ -12,17 +12,6 @@ import WorkspacePane from './WorkspacePane';
 // Route-level lazy-loaded panels — split out of the main bundle so the
 // initial chat-mode load doesn't pay for code paths the user may never
 // open. Each render site below wraps the component in <Suspense>.
-const TasksPage = lazy(() => import('./platform').then((m) => ({ default: m.TasksPage })));
-const TeamPage = lazy(() => import('./platform').then((m) => ({ default: m.TeamPage })));
-const BillingPage = lazy(() => import('./platform').then((m) => ({ default: m.BillingPage })));
-const RunnersPage = lazy(() => import('./platform').then((m) => ({ default: m.RunnersPage })));
-const DashboardPage = lazy(() => import('./platform').then((m) => ({ default: m.DashboardPage })));
-const WorkspacesPage = lazy(() => import('./platform').then((m) => ({ default: m.WorkspacesPage })));
-const TaskDetailPage = lazy(() => import('./platform').then((m) => ({ default: m.TaskDetailPage })));
-const RepoDetailPage = lazy(() => import('./platform').then((m) => ({ default: m.RepoDetailPage })));
-const AdminBillingPage = lazy(() => import('./platform').then((m) => ({ default: m.AdminBillingPage })));
-const RepoOnboarding = lazy(() => import('./platform/RepoOnboarding'));
-const IntegrationsView = lazy(() => import('./platform/IntegrationsView'));
 const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
@@ -44,20 +33,6 @@ export interface EditorWorkspaceProps {
   onSessionRestore?: (sessionId: string) => void;
   /** Called when the user clicks Back from a non-chat view (e.g. costs). */
   onViewChange?: (view: ViewType) => void;
-  /** ID of the selected task for TaskDetailPage. */
-  selectedTaskId?: string | null;
-  /** Selected repo in owner/name format for RepoDetailPage. */
-  selectedRepo?: { owner: string; name: string } | null;
-  /** All repos attached to the current workspace. */
-  attachedRepos?: Array<{ owner: string; name: string; id: string }>;
-  /** Called when a repo is selected from the onboarding screen. */
-  onRepoSelected?: (owner: string, name: string) => void;
-  /** Called when the user switches to a different repo in the tab bar. */
-  onRepoSwitch?: (id: string) => void;
-  /** Called when the user detaches a repo from the workspace. */
-  onRepoDetach?: (id: string) => void;
-  /** Called when the user clicks "+" to add a new repo. */
-  onRepoAdd?: () => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -142,13 +117,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   handleOutlineNavigateToSymbol,
   onSessionRestore,
   onViewChange,
-  selectedTaskId,
-  selectedRepo,
-  attachedRepos,
-  onRepoSelected,
-  onRepoSwitch,
-  onRepoDetach,
-  onRepoAdd,
 }) => {
   const {
     panes,
@@ -579,106 +547,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     window.addEventListener('sprout:hotkey', handleHotkey);
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [handleFocusPaneIndex]);
-
-  if (currentView === 'tasks') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <TasksPage />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'billing') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <BillingPage />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'team') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <TeamPage />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'runners') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <RunnersPage />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'dashboard') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <DashboardPage />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'workspaces') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <WorkspacesPage />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'integrations') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <IntegrationsView />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'taskdetail' && selectedTaskId) {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <TaskDetailPage taskId={selectedTaskId} onBack={() => onViewChange?.('tasks')} />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'repodetail' && selectedRepo) {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <RepoDetailPage
-          repoOwner={selectedRepo.owner}
-          repoName={selectedRepo.name}
-          onBack={() => onViewChange?.('dashboard')}
-          attachedRepos={attachedRepos}
-          onRepoSwitch={onRepoSwitch}
-          onRepoDetach={onRepoDetach}
-          onRepoAdd={onRepoAdd}
-        />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'repodetail' && !selectedRepo) {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <RepoOnboarding
-          onRepoSelected={(owner, name) => {
-            onRepoSelected?.(owner, name);
-          }}
-        />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'admin') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <AdminBillingPage />
-      </Suspense>
-    );
-  }
 
   if (currentView === 'costs') {
     return (

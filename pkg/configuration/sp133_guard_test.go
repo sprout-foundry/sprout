@@ -88,6 +88,55 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 	checkDir("pkg")
 	checkDir("cmd")
 
+	// Second guard: state/data/cache artifacts resolved off the CONFIG root.
+	// The legacy-.sprout check above misses this entirely — a path built from
+	// configDir looks modern but still lands in the wrong category root. This
+	// is how two divergent embedding indexes appeared: the manager wrote
+	// <data>/embeddings while the tool and CLI read <config>/embeddings.
+	misrouted := map[string]string{
+		"embeddings": "envutil.DataDir()",
+		"sessions":   "envutil.StateDir()",
+		"logs":       "envutil.StateDir()",
+		"changes":    "the workspace root",
+		"revisions":  "the workspace root",
+		"runlogs":    "the workspace root",
+	}
+	checkConfigRootMisrouting := func(dir string) {
+		root := filepath.Join(repoRoot, dir)
+		if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for i, line := range strings.Split(string(data), "\n") {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "/*") {
+					continue
+				}
+				if !strings.Contains(line, "filepath.Join(") || !strings.Contains(line, "onfigDir") {
+					continue
+				}
+				for name, want := range misrouted {
+					if strings.Contains(line, `"`+name+`"`) {
+						t.Errorf("%s:%d: %q resolved off the config root — use %s instead: %s",
+							path, i+1, name, want, trimmed)
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	checkConfigRootMisrouting("pkg")
+	checkConfigRootMisrouting("cmd")
+
 	// Fail loudly if the walk found nothing — that means the guard is not
 	// actually inspecting the tree and would pass regardless of violations.
 	if scanned < 100 {

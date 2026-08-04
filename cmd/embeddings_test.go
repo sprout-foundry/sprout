@@ -393,9 +393,12 @@ func TestEmbeddingsClear_UseDefaultConfigDir(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	// No config.json — should fall back to $SPROUT_CONFIG/embeddings
+	// SP-133: with no config.json the index resolves to the DATA root, not the
+	// config root — the index is regenerable data. Bind the data root so this
+	// asserts the same location the embedding manager writes to.
+	t.Setenv("SPROUT_DATA_DIR", filepath.Join(tmpDir, "data"))
 
-	indexDir := filepath.Join(tmpDir, "embeddings")
+	indexDir := filepath.Join(tmpDir, "data", "embeddings")
 	if err := os.MkdirAll(indexDir, 0755); err != nil {
 		t.Fatalf("failed to create index dir: %v", err)
 	}

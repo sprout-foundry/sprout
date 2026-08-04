@@ -125,7 +125,7 @@
       },
       {
         "cached_input_cost": 0.11,
-        "context_length": 131072,
+        "context_length": 128000,
         "description": "GLM-4.5 - Z.AI flagship MoE model with 128K context, strong reasoning and agent capabilities",
         "id": "glm-4.5",
         "input_cost": 0.6,
@@ -139,7 +139,7 @@
       },
       {
         "cached_input_cost": 0.03,
-        "context_length": 131072,
+        "context_length": 128000,
         "description": "GLM-4.5 Air - lightweight MoE variant with 128K context, cost-effective reasoning and tools",
         "id": "glm-4.5-air",
         "input_cost": 0.2,
@@ -153,7 +153,7 @@
       },
       {
         "cached_input_cost": 0.11,
-        "context_length": 204800,
+        "context_length": 200000,
         "description": "GLM-4.6 - coding optimized model with 200K context window",
         "id": "glm-4.6",
         "input_cost": 0.6,

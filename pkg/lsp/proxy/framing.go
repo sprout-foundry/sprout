@@ -38,29 +38,20 @@ func ReadMessage(r io.Reader) (string, error) {
 			return "", err
 		}
 
-		// Trim the trailing \n
-		line = line[:len(line)-len("\n")]
+		// Strip the line terminator. Real language servers frame with CRLF, so
+		// the \r must go before the blank-line check — treating "\r" as a
+		// non-terminator made the reader consume the body as another header
+		// line and block until EOF, so no message was ever delivered.
+		line = strings.TrimSuffix(line, "\n")
+		line = strings.TrimSuffix(line, "\r")
 
-		// Check for end of headers
+		// Blank line ends the header block
 		if line == "" {
 			break
 		}
 
-		// Also handle if we get just \r\n (blank line without \r)
-		if line == "\r" {
-			// Need to check if next char is \n or if we've already consumed it
-			// This is a bit tricky with ReadString - let's handle explicitly
-			continue
-		}
-
-		// Remove \r if present (for Windows line endings)
-		line = strings.TrimSuffix(line, "\r")
-
-		_, err = headerBuf.WriteString(line)
-		_, err = headerBuf.WriteString("\n")
-		if err != nil {
-			return "", err
-		}
+		headerBuf.WriteString(line)
+		headerBuf.WriteString("\n")
 	}
 
 	headerStr := headerBuf.String()

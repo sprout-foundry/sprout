@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 

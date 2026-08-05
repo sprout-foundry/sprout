@@ -4,9 +4,12 @@ package embedding
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -53,6 +56,17 @@ type EmbeddingManager struct {
 	// cachedProvider wraps the raw provider with an LRU content-hash cache.
 	// This is the provider exposed via GetConversationStore().Provider().
 	cachedProvider *cachedProvider
+
+	// sharedKey identifies this manager in the process-wide registry when it
+	// came from AcquireManager. Empty for directly-constructed managers, which
+	// ReleaseManager then closes outright. Written once at acquisition, before
+	// the manager is published to any other goroutine.
+	sharedKey string
+
+	// autoBuildOnce keeps AutoBuildWhenReady to one build per manager. A shared
+	// manager is handed to every agent on the workspace and each would
+	// otherwise kick off its own startup build of the same files.
+	autoBuildOnce sync.Once
 }
 
 // BuildResult carries the result of a background index build.
@@ -88,7 +102,7 @@ func (m *EmbeddingManager) SetForTesting(provider EmbeddingProvider, store Vecto
 
 	// Resolve indexDir using the same logic as initLocked so that
 	// GetConversationStore can create the conversation store in the right place.
-	m.indexDir = resolveIndexDirFromConfig(m.config)
+	m.indexDir = resolveIndexDirFromConfig(m.config, m.workspaceRoot)
 }
 
 // IsInitialized returns whether the manager has been initialized.
@@ -176,39 +190,128 @@ func (m *EmbeddingManager) snapshotQueryParams() (threshold float32, topK int) {
 
 // resolveIndexDirFromConfig resolves the embedding index directory using the
 // same precedence as initLocked: explicit config value first, then the
-// SPROUT_CONFIG / SPROUT_CONFIG env vars, then the user's default config dir.
-func resolveIndexDirFromConfig(cfg *configuration.EmbeddingIndexConfig) string {
+// workspace-scoped default under the data root.
+//
+// An explicit config IndexDir is honored verbatim — it is per-workspace
+// overridable (see configuration.Config merge layering), so scoping it again
+// here would move an index the user deliberately placed.
+func resolveIndexDirFromConfig(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) string {
 	indexDir := ""
 	if cfg != nil {
 		indexDir = cfg.IndexDir
 	}
 	if indexDir == "" {
-		indexDir = resolveIndexDir()
+		indexDir = resolveIndexDir(workspaceRoot)
 	}
 	return indexDir
 }
 
-// DefaultIndexDir returns the directory the embedding index lives in when no
-// explicit IndexDir is configured. Exported so callers outside this package
-// (the embedding_index tool, the `sprout embeddings` CLI) resolve the same
-// location the manager writes to — resolving it independently off the config
-// root produced a second, stale index.
-func DefaultIndexDir() string {
-	return resolveIndexDir()
+// DefaultIndexDir returns the directory the embedding index for workspaceRoot
+// lives in when no explicit IndexDir is configured. Exported so callers outside
+// this package (the embedding_index tool, the `sprout embeddings` CLI) resolve
+// the same location the manager writes to — resolving it independently off the
+// config root produced a second, stale index.
+func DefaultIndexDir(workspaceRoot string) string {
+	return resolveIndexDir(workspaceRoot)
 }
 
 // resolveIndexDir resolves the embedding index directory from the
-// $SPROUT_DATA_DIR → XDG → HOME chain. Used by both initLocked and
-// SetForTesting.
-func resolveIndexDir() string {
+// $SPROUT_DATA_DIR → XDG → HOME chain, scoped to workspaceRoot.
+//
+// The per-workspace segment is load-bearing, not cosmetic. envutil.DataDir()
+// reads process-global env vars, so without it every EmbeddingManager in a
+// process shares one index.hnsw — and the daemon builds one manager per agent,
+// per chat session, across every workspace the user opens. Sharing the file
+// makes each build treat the other workspaces' records as stale (see the
+// staleIDs sweep in IndexManager.BuildIndex) and clobber the shared manifest,
+// so every build re-embeds its whole workspace from scratch and deletes its
+// neighbor's work. Observed as an index that pinned at a few hundred records
+// and never converged, with multi-GB inference spikes from the concurrent
+// rebuilds. CLI runs were immune only because SP-116 already points
+// SPROUT_DATA_DIR at the workspace's own .sprout/.
+//
+// An empty workspaceRoot returns the unscoped base, preserving the previous
+// layout for callers that genuinely have no workspace.
+func resolveIndexDir(workspaceRoot string) string {
 	dataDir, err := envutil.DataDir()
 	if err != nil {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", "sprout", "embeddings")
+		dataDir = filepath.Join(home, ".local", "share", "sprout")
 	}
-	return filepath.Join(dataDir, "embeddings")
+	base := filepath.Join(dataDir, "embeddings")
+	if slug := workspaceSlug(workspaceRoot); slug != "" {
+		return filepath.Join(base, slug)
+	}
+	return base
 }
 
+// workspaceSlug builds a filesystem-safe, collision-free directory name for a
+// workspace root: a readable basename plus a hash of the full resolved path, so
+// two checkouts of the same-named repo never share an index. Returns "" for an
+// empty root.
+func workspaceSlug(workspaceRoot string) string {
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if workspaceRoot == "" {
+		return ""
+	}
+
+	// Resolve symlinks so /var/folders vs /private/var/folders (macOS) and
+	// similar aliases map to one index rather than two.
+	resolved := workspaceRoot
+	if abs, err := filepath.Abs(resolved); err == nil {
+		resolved = abs
+	}
+	if evaled, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = evaled
+	}
+	resolved = filepath.Clean(resolved)
+
+	sum := sha256.Sum256([]byte(resolved))
+	name := sanitizeSlugName(filepath.Base(resolved))
+	return name + "-" + hex.EncodeToString(sum[:4])
+}
+
+// sanitizeSlugName reduces a path basename to [A-Za-z0-9._-], bounded in
+// length, so it is safe as a single path segment on every supported platform.
+func sanitizeSlugName(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	out := strings.Trim(b.String(), "-.")
+	if out == "" {
+		return "workspace"
+	}
+	if len(out) > 48 {
+		out = out[:48]
+	}
+	return out
+}
+
+// Measured alternatives to the shipped q4f16 export, on this repository's own
+// code units (M1 Pro, 4 intra-op threads, after length-sorted batching):
+//
+//	model_q4f16 (shipped)  ~4.4-5.3 units/s
+//	model_q4               ~6.5 units/s   (~25% faster; fp32 activations suit
+//	                                       the ORT CPU backend, which has no
+//	                                       native fp16 kernels)
+//	model_quantized (int8) ~1.8 units/s
+//	model_fp16             ~3.9 units/s
+//
+// Switching the default to model_q4 is a free ~25%, at the cost of a one-time
+// 196MB re-download and a full index rebuild (the model hash keys the store).
+//
+// CoreML is NOT a shortcut here despite being available in the Go binding
+// (AppendExecutionProviderCoreMLV2). The export uses dynamic sequence length,
+// which MIL cannot bound, so the EP shatters the graph — 291 partitions out of
+// 1767 nodes — and compiling them exhausted memory before producing a single
+// embedding. GPU/ANE would need a fixed-shape (seq-length-bucketed) export.
+//
 // createONNXProvider returns the process-wide shared ONNX embedding provider
 // and its runtime, creating (and downloading the model, if needed) on first
 // use. The returned instances are owned by the shared cache — the manager must

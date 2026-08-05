@@ -212,6 +212,10 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	ws.shutdownSSHSessions()
 
+	// Let any agent released during this session finish flushing history and
+	// its embedding store before the process goes away.
+	ws.waitForAgentTeardown()
+
 	// Close all terminal sessions to clean up PTY processes.
 	if err := ws.terminalManager.CloseAllSessions(); err != nil {
 		ws.log().Warn("terminal session shutdown failed", slog.Any("err", err))

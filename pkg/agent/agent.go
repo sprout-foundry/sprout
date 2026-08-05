@@ -317,6 +317,12 @@ type Agent struct {
 	// resources. Shutdown() waits for these before closing resources.
 	backgroundWg sync.WaitGroup
 
+	// shutdown records that Shutdown() has run, making it observable (the
+	// daemon releases agents asynchronously and needs to know when teardown
+	// completed) and the teardown itself genuinely once-only.
+	shutdown     atomic.Bool
+	shutdownOnce sync.Once
+
 	// SubagentRunner manages in-process subagent execution.
 	subagentRunner *SubagentRunner
 

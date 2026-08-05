@@ -78,13 +78,13 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 	case "build":
 		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
 		if ownsMgr {
-			defer mgr.Close()
+			defer embedding.ReleaseManager(mgr)
 		}
 		return h.handleBuild(ctx, mgr, !ownsMgr)
 	case "update":
 		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
 		if ownsMgr {
-			defer mgr.Close()
+			defer embedding.ReleaseManager(mgr)
 		}
 		return h.handleUpdate(ctx, mgr, !ownsMgr)
 	default:
@@ -96,13 +96,18 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 }
 
 // pickEmbeddingMgr returns the agent-owned manager when available, otherwise
-// constructs a transient one (the caller is responsible for closing it; the
-// second return value is true when the caller owns the lifecycle).
+// acquires the shared one for this workspace (the caller is responsible for
+// releasing it; the second return value is true when the caller owns the
+// lifecycle).
+//
+// Acquiring rather than constructing matters: a directly-built manager would be
+// a second writer to an index another agent is already building, which is the
+// duplicate-store problem this tool would otherwise reintroduce from the side.
 func pickEmbeddingMgr(env ToolEnv, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (*embedding.EmbeddingManager, bool) {
 	if env.EmbeddingMgr != nil {
 		return env.EmbeddingMgr, false
 	}
-	return embedding.NewEmbeddingManager(cfg, workspaceRoot), true
+	return embedding.AcquireManager(cfg, workspaceRoot), true
 }
 
 func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string, mgr *embedding.EmbeddingManager) (ToolResult, error) {
@@ -112,7 +117,7 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 		// root — the same place embedding.DefaultIndexDir writes it. Resolving
 		// it off the config root here made this tool report on a different
 		// (stale) index than the daemon actually builds.
-		indexDir = embedding.DefaultIndexDir()
+		indexDir = embedding.DefaultIndexDir(workspaceRoot)
 	}
 
 	enabled := cfg.IsEnabled()

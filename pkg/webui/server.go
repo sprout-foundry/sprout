@@ -78,6 +78,11 @@ type ReactWebServer struct {
 	sshLaunchStatusMu   sync.RWMutex
 	workspaceExecMu     sync.Mutex
 
+	// agentTeardownWg tracks in-flight releaseAgents goroutines so Shutdown
+	// (and tests) can wait for agent teardown — which writes history and
+	// flushes the embedding store — to finish rather than racing it.
+	agentTeardownWg sync.WaitGroup
+
 	lastClientContextCleanupAt      time.Time
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int

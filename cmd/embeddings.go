@@ -169,5 +169,13 @@ func resolveEmbeddingIndexDir() (string, error) {
 	// the config root. Deriving it from $SPROUT_CONFIG here made this CLI read
 	// a different, stale index than the daemon writes. DefaultIndexDir is the
 	// single resolver the manager also uses.
-	return embedding.DefaultIndexDir(), nil
+	//
+	// The index is scoped per workspace, and the CLI's workspace is its working
+	// directory — the same root agent.NewAgent resolves — so pass that through
+	// rather than the unscoped base, which holds no index.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve working directory: %w", err)
+	}
+	return embedding.DefaultIndexDir(cwd), nil
 }

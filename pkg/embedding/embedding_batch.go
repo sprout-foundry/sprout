@@ -40,7 +40,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	}
 
 	// Resolve index directory
-	m.indexDir = resolveIndexDirFromConfig(m.config)
+	m.indexDir = resolveIndexDirFromConfig(m.config, m.workspaceRoot)
 
 	// Store resolved threshold and maxResults as fields (SHOULD_FIX #7).
 	m.threshold = m.config.SimilarityThreshold
@@ -224,6 +224,10 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 // DeleteByIDs/Save return ErrStoreClosed instead of panicking on a nil
 // records map if the goroutine still loses the race.
 func (m *EmbeddingManager) AutoBuildWhenReady() {
+	m.autoBuildOnce.Do(m.autoBuildWhenReady)
+}
+
+func (m *EmbeddingManager) autoBuildWhenReady() {
 	// Wait a few seconds so we don't compete with startup I/O.
 	// Use a select-based timer so Close() can wake us early.
 	select {

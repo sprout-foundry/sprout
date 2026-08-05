@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
@@ -398,7 +399,14 @@ func TestEmbeddingsClear_UseDefaultConfigDir(t *testing.T) {
 	// asserts the same location the embedding manager writes to.
 	t.Setenv("SPROUT_DATA_DIR", filepath.Join(tmpDir, "data"))
 
-	indexDir := filepath.Join(tmpDir, "data", "embeddings")
+	// The index is scoped per workspace under the data root, and the CLI's
+	// workspace is its working directory. Resolve through the same helper the
+	// command uses rather than hardcoding the layout.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	indexDir := embedding.DefaultIndexDir(cwd)
 	if err := os.MkdirAll(indexDir, 0755); err != nil {
 		t.Fatalf("failed to create index dir: %v", err)
 	}

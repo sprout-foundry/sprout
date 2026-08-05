@@ -168,7 +168,7 @@ func (p *ONNXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float
 	}
 
 	// Run inference.
-	vec, err := p.runInference(inputIDs, attentionMask)
+	vec, err := p.runInference(ctx, inputIDs, attentionMask)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,7 @@ func (p *ONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text, prefi
 	}
 
 	// Run inference.
-	vec, err := p.runInference(inputIDs, attentionMask)
+	vec, err := p.runInference(ctx, inputIDs, attentionMask)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +362,7 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 			}
 		}
 
-		batchVecs, err := p.runInferenceBatch(inputIDs, attnMask, batchSize, seqLen)
+		batchVecs, err := p.runInferenceBatch(ctx, inputIDs, attnMask, batchSize, seqLen)
 		if err != nil {
 			return nil, fmt.Errorf("batch embed[rows %d:%d, seq %d]: %w", s, e, seqLen, err)
 		}
@@ -381,7 +381,13 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 // representation learning truncation, then L2-normalize.
 //
 // Must be called with p.mu.RLock held.
-func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []int64) ([]float32, error) {
+func (p *ONNXEmbeddingProvider) runInference(ctx context.Context, inputIDs []int64, attentionMask []int64) ([]float32, error) {
+	release, err := acquireInference(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	batchSize := int64(1)
 	seqLen := int64(len(inputIDs))
 	fullDim := int64(p.fullDims)
@@ -440,7 +446,15 @@ func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []i
 // per-row output matches what unpadded inference would have produced.
 //
 // Must be called with p.mu.RLock held.
-func (p *ONNXEmbeddingProvider) runInferenceBatch(inputIDs []int64, attentionMask []int64, batchSize, seqLen int64) ([][]float32, error) {
+func (p *ONNXEmbeddingProvider) runInferenceBatch(ctx context.Context, inputIDs []int64, attentionMask []int64, batchSize, seqLen int64) ([][]float32, error) {
+	// Gate before allocating: the tensors and the Run's activations are the
+	// memory this bounds, so the permit has to cover both.
+	release, err := acquireInference(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	fullDim := int64(p.fullDims)
 
 	inputIDsTensor, err := onnxruntime.NewTensor(onnxruntime.NewShape(batchSize, seqLen), inputIDs)

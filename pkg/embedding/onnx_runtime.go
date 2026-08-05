@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	onnxruntime "github.com/yalue/onnxruntime_go"
 )
 
@@ -49,19 +48,7 @@ type ONNXRuntime struct {
 // counterpart returns false.
 func onnxRequiresModelFiles() bool { return true }
 
-// DefaultModelDir returns the default model directory path.
-// Priority: SPROUT_MODELS_DIR env > $SPROUT_DATA_DIR/models > XDG > HOME
-func DefaultModelDir() string {
-	if dir := os.Getenv("SPROUT_MODELS_DIR"); dir != "" {
-		return dir
-	}
-	dataDir, err := envutil.DataDir()
-	if err != nil {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", "sprout", "models")
-	}
-	return filepath.Join(dataDir, "models")
-}
+// DefaultModelDir lives in model_dir.go — one definition for every build.
 
 // NewONNXRuntime creates a new ONNX runtime with the default model directory.
 // The ONNX environment is initialized globally on first creation.

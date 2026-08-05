@@ -1242,6 +1242,19 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 256000,
+        "description": "Qwen's latest 2.4-trillion-parameter MoE flagship model delivering a comprehensive leap in coding and professional work.",
+        "id": "Qwen/Qwen3.8-Max",
+        "input_cost": 1.65,
+        "name": "Qwen/Qwen3.8-Max",
+        "output_cost": 4.951,
+        "cached_input_cost": 0.206,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

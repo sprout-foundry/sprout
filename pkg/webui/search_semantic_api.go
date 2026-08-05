@@ -68,7 +68,9 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 		}
 	}
 
-	threshold := float32(0.75)
+	// Measured default: correct results for natural-language code search score
+	// ~0.50-0.61, so the previous 0.75 returned nothing for any real query.
+	threshold := float32(embedding.DefaultSemanticSearchThreshold)
 	if t := r.URL.Query().Get("threshold"); t != "" {
 		if v, err := strconv.ParseFloat(t, 32); err == nil {
 			th := float32(v)

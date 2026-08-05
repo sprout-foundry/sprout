@@ -296,15 +296,15 @@ func sanitizeSlugName(name string) string {
 // Measured alternatives to the shipped q4f16 export, on this repository's own
 // code units (M1 Pro, 4 intra-op threads, after length-sorted batching):
 //
-//	model_q4f16 (shipped)  ~4.4-5.3 units/s
-//	model_q4               ~6.5 units/s   (~25% faster; fp32 activations suit
-//	                                       the ORT CPU backend, which has no
-//	                                       native fp16 kernels)
-//	model_quantized (int8) ~1.8 units/s
+//	model_q4 (shipped)     ~6.5 units/s   (fp32 activations suit the ORT CPU
+//	                                       backend, which has no native fp16
+//	                                       kernels)
+//	model_q4f16            ~4.4-5.3 units/s
 //	model_fp16             ~3.9 units/s
+//	model_quantized (int8) ~1.8 units/s
 //
-// Switching the default to model_q4 is a free ~25%, at the cost of a one-time
-// 196MB re-download and a full index rebuild (the model hash keys the store).
+// Changing this is not free for users: ModelHash keys the vector store, so a
+// swap clears every index and forces a full rebuild, plus a fresh download.
 //
 // CoreML is NOT a shortcut here despite being available in the Go binding
 // (AppendExecutionProviderCoreMLV2). The export uses dynamic sequence length,

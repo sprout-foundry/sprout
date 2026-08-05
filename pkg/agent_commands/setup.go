@@ -97,7 +97,7 @@ func (s *SetupCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Embedding
 	if cfg.EmbeddingIndex != nil {
 		s.printSection("Embedding Index", []keyValue{
-			{"Enabled", fmt.Sprintf("%v", cfg.EmbeddingIndex.Enabled)},
+			{"Enabled", fmt.Sprintf("%v", cfg.EmbeddingIndex.IsEnabled())},
 		})
 	}
 

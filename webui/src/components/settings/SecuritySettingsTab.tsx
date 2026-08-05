@@ -7,7 +7,6 @@ import type { FieldRenderers } from './useSettingsFieldRenderers';
 interface SecuritySettingsTabProps {
   settings: SproutSettings | null;
   renderToggle: FieldRenderers['renderToggle'];
-  renderNumberInput: FieldRenderers['renderNumberInput'];
   renderSelect: FieldRenderers['renderSelect'];
   updateSetting: (keyOrPath: string, value: unknown) => Promise<void>;
 }
@@ -15,14 +14,12 @@ interface SecuritySettingsTabProps {
 export default function SecuritySettingsTab({
   settings,
   renderToggle,
-  renderNumberInput,
   renderSelect,
   updateSetting,
 }: SecuritySettingsTabProps) {
   return (
     <div className="section">
       <h4>Security</h4>
-      {renderNumberInput('security_validation.threshold', 'Validation threshold (0-2)', 0, 2)}
       <div className="settings-section-spaced">
         <h4>Shell Command Detection</h4>
         {renderToggle(

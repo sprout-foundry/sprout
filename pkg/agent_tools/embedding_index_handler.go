@@ -115,7 +115,7 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 		indexDir = embedding.DefaultIndexDir()
 	}
 
-	enabled := cfg.Enabled
+	enabled := cfg.IsEnabled()
 
 	var sb strings.Builder
 	sb.WriteString("Embedding Index Status:\n\n")

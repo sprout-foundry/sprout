@@ -16,9 +16,16 @@ type Skill struct {
 }
 
 // EmbeddingIndexConfig configures the embedding-based duplicate detection and semantic search.
+//
+// Enabled and AutoIndex are *bool rather than bool so a config layer can say
+// "off" as distinct from "unspecified". With a plain bool plus omitempty, false
+// is indistinguishable from absent both on disk and in the merge, which made
+// these flags one-way: a narrower layer could switch indexing on but never back
+// off. Read them through IsEnabled/IsAutoIndex, which treat nil as false.
 type EmbeddingIndexConfig struct {
 	// Enabled controls whether the embedding index is active.
-	Enabled bool `json:"enabled,omitempty"`
+	// nil means "not specified at this layer" — inherit from a broader layer.
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// IndexDir is the directory where the embedding index JSONL files are stored.
 	// If empty, uses ~/.config/sprout/embeddings/
@@ -33,12 +40,29 @@ type EmbeddingIndexConfig struct {
 	MaxResults int `json:"max_results,omitempty"`
 
 	// AutoIndex controls whether the index is built automatically on first use.
-	// Default: true
-	AutoIndex bool `json:"auto_index,omitempty"`
+	// nil means "not specified at this layer" — inherit from a broader layer.
+	AutoIndex *bool `json:"auto_index,omitempty"`
 
 	// ExcludePaths is a list of additional paths to exclude from indexing.
 	ExcludePaths []string `json:"exclude_paths,omitempty"`
 }
+
+// IsEnabled reports whether the embedding index is on. Unspecified is off —
+// indexing is opt-in, and defaulting it on is what previously had the daemon
+// indexing whatever directory it happened to start in.
+func (e *EmbeddingIndexConfig) IsEnabled() bool {
+	return e != nil && e.Enabled != nil && *e.Enabled
+}
+
+// IsAutoIndex reports whether the index builds automatically. Unspecified is off.
+func (e *EmbeddingIndexConfig) IsAutoIndex() bool {
+	return e != nil && e.AutoIndex != nil && *e.AutoIndex
+}
+
+// SetEnabled and SetAutoIndex record an explicit value, which is what makes a
+// layer able to assert "off" against a broader layer's "on".
+func (e *EmbeddingIndexConfig) SetEnabled(v bool)   { e.Enabled = &v }
+func (e *EmbeddingIndexConfig) SetAutoIndex(v bool) { e.AutoIndex = &v }
 
 // ComputerUseConfig gates the computer_user persona's desktop-control tools
 // (SP-063). The feature is categorically more dangerous than file edits — a

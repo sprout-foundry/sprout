@@ -39,11 +39,11 @@ func getEmbeddingManager() (*embedding.EmbeddingManager, error) {
 		// Use a relaxed default config — auto-build off, since the host page
 		// drives indexing explicitly via buildSemanticIndex.
 		cfg := &configuration.EmbeddingIndexConfig{
-			Enabled:             true,
-			AutoIndex:           false,
 			SimilarityThreshold: 0.5,
 			MaxResults:          10,
 		}
+		cfg.SetEnabled(true)
+		cfg.SetAutoIndex(false)
 		embedMgr = embedding.NewEmbeddingManager(cfg, cwd)
 		// Eagerly Init so the JSONL store on MEMFS is created.
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

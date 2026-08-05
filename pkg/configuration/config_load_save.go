@@ -68,6 +68,7 @@ func Load() (*Config, error) {
 	if err := json.Unmarshal(data, config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
+	config.recordExplicitKeys(rawConfig)
 
 	// Defensive nil-checks for map fields (migration ensures these exist in raw JSON,
 	// but these checks provide Go-level safety for edge cases).

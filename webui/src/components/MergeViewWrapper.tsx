@@ -56,6 +56,8 @@ export interface MergeViewWrapperProps {
   bLabel?: string;
   /** Called when the user saves (Cmd+S) in an editable side-by-side pane */
   onSave?: (content: string) => void;
+  /** Called whenever the editable pane B content changes (typing or revert) */
+  onModifiedChange?: (content: string) => void;
 }
 
 /**
@@ -87,6 +89,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   aLabel = 'Original',
   bLabel = 'Modified',
   onSave,
+  onModifiedChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mergeViewRef = useRef<MergeView | null>(null);
@@ -95,6 +98,10 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const sideBySideCreatedRef = useRef(false);
   // Track the last prop content we synced, so we don't overwrite user edits
   const lastSyncedContentRef = useRef<{ original: string; modified: string }>({ original: '', modified: '' });
+  // Keep the latest onModifiedChange in a ref so the pane-B update listener
+  // (created once per MergeView mount) never causes the view to be recreated.
+  const onModifiedChangeRef = useRef(onModifiedChange);
+  onModifiedChangeRef.current = onModifiedChange;
   const [hunkInfo, setHunkInfo] = useState<{ current: number; total: number } | null>(null);
 
   const { theme } = useTheme();
@@ -146,6 +153,19 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
         ]),
       );
     }
+    // Report pane-B content changes (reverts, typing) up to the parent so
+    // edits survive re-renders / view toggles instead of living only inside
+    // the CodeMirror instance. Also mark the content as "synced" so the
+    // prop-sync effect below never clobbers an in-flight user edit when the
+    // parent echoes the same content back.
+    extensions.push(
+      EditorView.updateListener.of((update) => {
+        if (!update.docChanged) return;
+        const content = update.state.doc.toString();
+        lastSyncedContentRef.current = { ...lastSyncedContentRef.current, modified: content };
+        onModifiedChangeRef.current?.(content);
+      }),
+    );
     return extensions;
   }, [buildBaseExtensions, onSave]);
 

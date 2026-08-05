@@ -107,7 +107,7 @@ func saveConversationTurnFunc(_ js.Value, args []js.Value) interface{} {
 func searchConversationsFunc(_ js.Value, args []js.Value) interface{} {
 	query := argString(args, 0, "")
 	topK := argInt(args, 1, 5)
-	threshold := argFloat32(args, 2, 0.5)
+	threshold := argFloat32(args, 2, embedding.DefaultConversationSearchThreshold)
 	sessionID := argString(args, 3, "")
 	return asPromise(func(ctx context.Context) (interface{}, error) {
 		if query == "" {

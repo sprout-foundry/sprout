@@ -28,10 +28,17 @@ const (
 	//	related (same domain, different job) : 0.421
 	//	unrelated                            : 0.368
 	//
-	// 0.60 sits in the wide gap, nearer the duplicate end: it fires on real
+	// Both sides are embedded with documentPrefix — code compared against code.
+	// Re-measured through the production path on that prefix:
+	//
+	//	near-duplicate (renamed identifiers) : 0.767
+	//	related (same domain, different job) : 0.492
+	//	unrelated                            : 0.355
+	//
+	// 0.65 sits in the wide gap, nearer the duplicate end: it fires on real
 	// near-duplicates with margin to spare while leaving merely-related code
 	// well clear, so a write is not interrupted by a false positive.
-	DefaultDuplicateThreshold = 0.60
+	DefaultDuplicateThreshold = 0.65
 
 	// DefaultRelatedCodeThreshold gates "related code" injection into read_file
 	// results — the same symmetric comparison, wanting the band below
@@ -56,6 +63,18 @@ const (
 	// benchmark while still trimming noise — ranking plus top-K does the real
 	// filtering here.
 	DefaultSemanticSearchThreshold = 0.40
+
+	// DefaultConversationSearchThreshold gates search over the CONVERSATION
+	// store (turns, rollups, memories) rather than the code index.
+	//
+	// That store is a different embedding space: it is written and queried
+	// with no task prefix at all, so its scores are not comparable to the code
+	// index's and thresholds must not be copied between the two. Measured
+	// pairwise over real stored turns and memories: p25 0.40, median 0.50,
+	// p75 0.61, max 0.81. A 0.75 gate — inherited from the code-search side —
+	// admits only the top 4% of pairs, which for a *search* is effectively off.
+	// 0.45 matches what semantic recall already uses against the same store.
+	DefaultConversationSearchThreshold = 0.45
 )
 
 // WalkTimeout is the absolute maximum time allowed for WalkCodeFiles to

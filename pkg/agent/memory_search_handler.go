@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -28,7 +29,9 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		}
 	}
 
-	threshold := float32(0.75)
+	// Memories live in the conversation store, whose unprefixed embedding space
+	// scores far lower than the code index. 0.75 there admits ~4% of pairs.
+	threshold := float32(embedding.DefaultConversationSearchThreshold)
 	if t, ok := args["threshold"]; ok {
 		switch v := t.(type) {
 		case float64:

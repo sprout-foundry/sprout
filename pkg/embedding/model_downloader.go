@@ -344,12 +344,20 @@ func EmbeddingGemma300MConfig() ModelConfig {
 	return ModelConfig{
 		Name: "embeddinggemma-300m",
 
-		ModelURL:          base + "/onnx/model_q4f16.onnx",
-		ModelHash:         "4df4a2a44253865800b8882a497badf67c2707a487267460813f78da339c753f",
-		ModelFilename:     "model_q4f16.onnx",
-		ModelDataURL:      base + "/onnx/model_q4f16.onnx_data",
-		ModelDataHash:     "c9cc456a345e6aa9bc5fb75b54c10b3e0edbb4f80708f749dc4c45dbed5b6edf",
-		ModelDataFilename: "model_q4f16.onnx_data",
+		// q4 (fp32 activations), not q4f16. The ORT CPU backend has no native
+		// fp16 kernels, so the f16 variant is ~25% slower for identical output
+		// dimensions — measured 6.5 vs 4.4-5.3 units/s indexing this repository.
+		// See the variant table above createONNXProvider in embedding_models.go.
+		//
+		// Note for future updates: HuggingFace's ETag on these URLs is NOT the
+		// content sha256 (verified — it disagrees with the bytes it serves).
+		// Download the file and hash it, as the doc comment above says.
+		ModelURL:          base + "/onnx/model_q4.onnx",
+		ModelHash:         "ad1dfee81a70f7944b9b9d1cc6e48075b832881cf33fab2f2b248be78f3f0043",
+		ModelFilename:     "model_q4.onnx",
+		ModelDataURL:      base + "/onnx/model_q4.onnx_data",
+		ModelDataHash:     "599962c3143b040de2dd05e5975be3e9091dd067cacc6a8f7186e3203bab9e02",
+		ModelDataFilename: "model_q4.onnx_data",
 
 		TokenizerURL:  base + "/tokenizer.json",
 		TokenizerHash: "4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47",

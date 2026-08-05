@@ -45,7 +45,9 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	// Store resolved threshold and maxResults as fields (SHOULD_FIX #7).
 	m.threshold = m.config.SimilarityThreshold
 	if m.threshold == 0 {
-		m.threshold = 0.90
+		// Duplicate detection is what this threshold gates (see CheckDuplicates
+		// below); it is not a search threshold.
+		m.threshold = DefaultDuplicateThreshold
 	}
 
 	m.maxResults = m.config.MaxResults
@@ -349,7 +351,11 @@ func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string,
 	return CheckFileForDuplicates(ctx, idx, filePath, content, m.workspaceRoot, threshold, topK)
 }
 
-// QuerySimilar searches for code similar to the given query text.
+// QuerySimilar searches the index with a natural-language query.
+//
+// Use QuerySimilarCode when the input is source code — the two take different
+// task prefixes and produce similarity scores on different scales, so they are
+// not interchangeable even though both search the same records.
 func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
@@ -359,6 +365,24 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 		return nil, err
 	}
 	return idx.QuerySimilar(ctx, query, topK, threshold)
+}
+
+// QuerySimilarCode searches the index using source code as the input, for
+// "what else looks like this" rather than "what answers this question".
+//
+// Both sides are embedded as documents, which is what makes the score
+// comparable to the duplicate/related thresholds. Passing code to QuerySimilar
+// instead embeds it as a question and lands ~0.10 lower, which is how the
+// related-code injection ended up gated at a level it could never reach.
+func (m *EmbeddingManager) QuerySimilarCode(ctx context.Context, codeText string, topK int, threshold float32) ([]QueryResult, error) {
+	if err := m.Init(ctx); err != nil {
+		return nil, err
+	}
+	idx, err := m.snapshotIndexMgr()
+	if err != nil {
+		return nil, err
+	}
+	return idx.queryWithPrefix(ctx, codeText, documentPrefix, topK, threshold)
 }
 
 // GetConversationStore returns the conversation store, creating it lazily on first use.

@@ -14,8 +14,8 @@
         "scroll",
         "wait",
         "ask_user",
-        "TodoWrite",
-        "TodoRead"
+        "todo_write",
+        "todo_read"
       ],
       "capabilities": [
         "computer_use"

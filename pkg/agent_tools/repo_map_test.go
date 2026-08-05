@@ -986,7 +986,7 @@ func TestFilterByQuery(t *testing.T) {
 		{relPath: "main.go"},
 	}
 
-	result := filterByQuery(files, "server")
+	result := filterByQuery(files, "server", nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result))
 	}
@@ -995,13 +995,13 @@ func TestFilterByQuery(t *testing.T) {
 	}
 
 	// Case-insensitive.
-	result = filterByQuery(files, "SERVER")
+	result = filterByQuery(files, "SERVER", nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 case-insensitive result, got %d", len(result))
 	}
 
 	// Match in path.
-	result = filterByQuery(files, "api")
+	result = filterByQuery(files, "api", nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 result for 'api', got %d", len(result))
 	}
@@ -1010,7 +1010,7 @@ func TestFilterByQuery(t *testing.T) {
 	}
 
 	// No match.
-	result = filterByQuery(files, "nonexistent")
+	result = filterByQuery(files, "nonexistent", nil)
 	if len(result) != 0 {
 		t.Errorf("expected 0 results for nonexistent query, got %d", len(result))
 	}

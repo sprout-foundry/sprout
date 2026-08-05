@@ -1,3 +1,5 @@
+//go:build !js
+
 // Package webui provides the React web server with embedded assets.
 //
 // UserConnections (SP-118 Phase 1) tracks multiple concurrent WebSocket

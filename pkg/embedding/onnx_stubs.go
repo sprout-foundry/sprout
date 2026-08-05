@@ -13,9 +13,6 @@ package embedding
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/user"
-	"path/filepath"
 )
 
 // onnxAvailable is false — no ONNX backend is available in this build.
@@ -45,19 +42,7 @@ func onnxRequiresModelFiles() bool {
 	return true
 }
 
-// DefaultModelDir returns the default model directory path.
-// Used by manager.go even in non-CGO builds for path resolution.
-func DefaultModelDir() string {
-	dir := os.Getenv("SPROUT_MODEL_DIR")
-	if dir != "" {
-		return dir
-	}
-	u, err := user.Current()
-	if err == nil && u.HomeDir != "" {
-		return filepath.Join(u.HomeDir, ".cache", "sprout")
-	}
-	return filepath.Join(os.TempDir(), "sprout-models")
-}
+// DefaultModelDir lives in model_dir.go — one definition for every build.
 
 // ONNXRuntime is a stub type when CGO is disabled.
 type ONNXRuntime struct{}

@@ -27,15 +27,38 @@ func extractSymbolsViaTreeSitter(path string, ext string, content []byte) ([]Sym
 	}
 	defer result.Release()
 
-	var entries []SymbolEntry
-	for _, sym := range result.Symbols {
-		prefix := symbolDisplayPrefix(sym.Kind, ext)
+	return scopedSymbolEntries(result, ext), nil
+}
+
+// scopedSymbolEntries converts a parsed file's symbols into repo-map entries
+// using the SAME extractor the embedding index uses.
+//
+// This previously read result.Symbols, which parser.go populates by walking
+// only the top-level children of the root. ast.ExtractSymbols walks nested
+// scopes as well — methods inside classes, class methods in Python, nested
+// functions. Two consumers of one parser were therefore disagreeing about what
+// a file contains: the semantic index knew about methods that the repo map,
+// which the agent reads to decide what to open, silently omitted. repo_map's
+// own `depth: 3` is documented as "full symbols", so the old behaviour did not
+// match its contract either.
+//
+// Nested symbols are qualified with their scope ("Class.method") so the map
+// stays unambiguous when several classes define the same method name.
+func scopedSymbolEntries(result *astp.ASTResult, ext string) []SymbolEntry {
+	scoped := astp.ExtractSymbols(result.Root, result.Bound, result.Language)
+
+	entries := make([]SymbolEntry, 0, len(scoped))
+	for _, sym := range scoped {
+		name := sym.Name
+		if sym.Scope != "" {
+			name = sym.Scope + "." + name
+		}
 		entries = append(entries, SymbolEntry{
-			Name: prefix + " " + sym.Name,
+			Name: symbolDisplayPrefix(sym.Kind, ext) + " " + name,
 			Line: sym.StartLine,
 		})
 	}
-	return entries, nil
+	return entries
 }
 
 // symbolDisplayPrefix maps an AST symbol kind to the display prefix used in
@@ -250,14 +273,9 @@ func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte
 	}
 	defer result.Release()
 
-	var entries []SymbolEntry
-	for _, sym := range result.Symbols {
-		prefix := symbolDisplayPrefix(sym.Kind, ext)
-		entries = append(entries, SymbolEntry{
-			Name: prefix + " " + sym.Name,
-			Line: sym.StartLine,
-		})
-	}
+	// Same scoped extractor as the symbol-only path above, so the two never
+	// disagree about what a file contains.
+	entries := scopedSymbolEntries(result, ext)
 
 	// Resolve call edges using the import map built from source content.
 	// This handles cross-file module resolution for TS/JS/Python so that

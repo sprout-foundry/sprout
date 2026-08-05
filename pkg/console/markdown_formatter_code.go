@@ -100,15 +100,26 @@ func (f *MarkdownFormatter) highlightBash(line string) string {
 }
 
 func (f *MarkdownFormatter) highlightJSON(line string) string {
-	// Strings (keys and values)
-	stringRegex := regexp.MustCompile(`"(.*?)"`)
-	line = stringRegex.ReplaceAllString(line, ColorGreen+"\"$1\""+ColorReset)
+	// Step 1: Highlight key-value pairs where value is a scalar or string.
+	// "key": "value" → green key, cyan string value / yellow number
+	pairRegex := regexp.MustCompile(`"([^"]*)":\s*("[^"]*"|true|false|null|-?\d+\.?\d*)`)
+	line = pairRegex.ReplaceAllStringFunc(line, func(match string) string {
+		parts := pairRegex.FindStringSubmatch(match)
+		if len(parts) < 3 {
+			return match
+		}
+		key, val := parts[1], parts[2]
+		if strings.HasPrefix(val, "\"") {
+			val = ColorCyan + val + ColorReset
+		} else {
+			val = ColorYellow + val + ColorReset
+		}
+		return ColorGreen + "\"" + key + "\": " + ColorReset + val
+	})
 
-	// Brackets and braces
-	line = strings.ReplaceAll(line, "{", ColorBold+"{"+ColorReset)
-	line = strings.ReplaceAll(line, "}", ColorBold+"}"+ColorReset)
-	line = strings.ReplaceAll(line, "[", ColorBold+"["+ColorReset)
-	line = strings.ReplaceAll(line, "]", ColorBold+"]"+ColorReset)
+	// Step 2: Highlight keys whose value is an object/array (e.g. "key": {)
+	keyObjRegex := regexp.MustCompile(`"([^"]*)":(\s*[{\[])`)
+	line = keyObjRegex.ReplaceAllString(line, ColorGreen+"\"$1\":"+"$2"+ColorReset)
 
 	return line
 }

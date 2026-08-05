@@ -5,6 +5,59 @@ import "time"
 // Performance protection constants for the embedding index pipeline.
 // These limits prevent UI hangs and runaway CPU usage on large workspaces.
 
+// Similarity thresholds. These gate every consumer of the index, and they are
+// only meaningful against the score distribution the model actually produces —
+// which depends on the task prefixes used on each side of the comparison.
+// Both values below are derived from measurements in retrieval_quality_test.go
+// and prefix_symmetry_test.go, not from intuition.
+//
+// The previous values (0.90 for duplicates, 0.85 for the write-time file check,
+// 0.75 for the semantic_search tool) were unreachable: a textbook near-duplicate
+// tops out around 0.84 symmetric, and correct search hits land near 0.5. Every
+// one of those consumers retrieved the right record and then discarded it, so
+// the features silently did nothing.
+const (
+	// DefaultDuplicateThreshold gates code-vs-code duplicate detection.
+	//
+	// Measured end-to-end through CheckFileForDuplicates itself — not through
+	// an isolated embed of two snippets, which sits ~0.13 higher and is what
+	// made an earlier revision of this constant too strict again. Bands from
+	// TestDuplicateDetectionFiresOnRealNearDuplicate:
+	//
+	//	near-duplicate (renamed identifiers) : 0.715
+	//	related (same domain, different job) : 0.421
+	//	unrelated                            : 0.368
+	//
+	// 0.60 sits in the wide gap, nearer the duplicate end: it fires on real
+	// near-duplicates with margin to spare while leaving merely-related code
+	// well clear, so a write is not interrupted by a false positive.
+	DefaultDuplicateThreshold = 0.60
+
+	// DefaultRelatedCodeThreshold gates "related code" injection into read_file
+	// results — the same symmetric comparison, wanting the band below
+	// duplicates.
+	//
+	// Caveat worth knowing before trusting this one: in the measurements above,
+	// related code (0.421) barely separates from unrelated (0.368). The model
+	// does not give this feature much signal to work with, so no threshold
+	// makes it reliably precise. 0.55 keeps injected context closer to genuine
+	// near-duplicates, on the reasoning that a wrong injection costs
+	// context-window budget on every read_file. If this feature is ever
+	// evaluated on its merits, that 0.05 gap — not the threshold — is the
+	// thing to argue about.
+	DefaultRelatedCodeThreshold = 0.55
+
+	// DefaultSemanticSearchThreshold gates natural-language search over code.
+	// Query and document embeddings are deliberately asymmetric, so correct
+	// hits score far lower than duplicate pairs. Measured with codeQueryPrefix
+	// on the benchmark in retrieval_quality_test.go: correct top-1 results run
+	// 0.499-0.613 (10/10 recall@3), and wrong answers sit near 0.32. 0.40
+	// leaves margin below the observed floor for queries harder than the
+	// benchmark while still trimming noise — ranking plus top-K does the real
+	// filtering here.
+	DefaultSemanticSearchThreshold = 0.40
+)
+
 // WalkTimeout is the absolute maximum time allowed for WalkCodeFiles to
 // enumerate files across the workspace. After this duration the walk is
 // cancelled and a partial result is returned.

@@ -44,7 +44,8 @@
       "moonshotai/Kimi-K3-TEE",
       "unsloth/Mistral-Nemo-Instruct-2407-TEE",
       "zai-org/GLM-5.1-TEE",
-      "zai-org/GLM-5.2-TEE"
+      "zai-org/GLM-5.2-TEE",
+      "deepseek-ai/DeepSeek-V4-Flash-0731-TEE"
     ],
     "default_context_limit": 64000,
     "default_model": "deepseek-ai/DeepSeek-R1-0528",
@@ -188,6 +189,18 @@
         "input_cost": 1.25,
         "name": "GLM-5.2 (TEE)",
         "output_cost": 3.95,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "DeepSeek V4 Flash 0731 on confidential TEE compute",
+        "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
+        "input_cost": 0.14,
+        "name": "DeepSeek V4 Flash 0731 (TEE)",
+        "output_cost": 0.28,
         "tags": [
           "tools",
           "reasoning"

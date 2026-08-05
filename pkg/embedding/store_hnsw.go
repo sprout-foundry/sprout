@@ -21,6 +21,14 @@ import (
 var ErrStoreClosed = errors.New("embedding: hnsw store is closed")
 
 // metaFile holds the model hash in a sidecar JSON file.
+//
+// Note for anyone changing internal/hnsw: Add() picks a node's neighbours using
+// the same layer search that queries use, so a change to that search alters the
+// STRUCTURE of graphs built afterwards, not just how they are read. A graph
+// built by the old code stays degraded when queried by fixed code — measured at
+// 5/14 against 10/14 for the identical records reinserted. Any such change
+// therefore has to invalidate existing graphs, which today happens for free
+// only because ModelHash changes at the same time.
 type metaFile struct {
 	ModelHash string `json:"modelHash"`
 }

@@ -76,6 +76,24 @@ func (s searchCandidate[K]) Less(o searchCandidate[K]) bool {
 	return s.dist < o.dist
 }
 
+// farthestFirst orders candidates by DEescending distance, so a Heap of these
+// keeps the worst element at the root.
+//
+// The working set of a layer search has to answer "what is the furthest thing
+// I am currently holding?" in order to decide whether a new neighbour is worth
+// keeping and when the walk can stop. Heap.Max()/PopLast() cannot answer it:
+// they read data[len-1], which on a binary min-heap is an arbitrary leaf, not
+// the maximum. Using them made the result set evict arbitrary members and
+// compare against an arbitrary member.
+type farthestFirst[K cmp.Ordered] struct {
+	node *layerNode[K]
+	dist float32
+}
+
+func (f farthestFirst[K]) Less(o farthestFirst[K]) bool {
+	return f.dist > o.dist
+}
+
 // search returns the layer node closest to the target node
 // within the same layer.
 func (n *layerNode[K]) search(
@@ -87,65 +105,89 @@ func (n *layerNode[K]) search(
 ) []searchCandidate[K] {
 	// This is a basic greedy algorithm to find the entry point at the given level
 	// that is closest to the target node.
-	candidates := heap.Heap[searchCandidate[K]]{}
-	candidates.Init(make([]searchCandidate[K], 0, efSearch))
-	candidates.Push(
-		searchCandidate[K]{
-			node: n,
-			dist: distance(n.Value, target),
-		},
-	)
-	var (
-		result  = heap.Heap[searchCandidate[K]]{}
-		visited = make(map[K]bool)
-	)
-	result.Init(make([]searchCandidate[K], 0, k))
+	// Working-set size. The standard algorithm explores with a beam of ef and
+	// only narrows to k at the end; sizing the beam at k would make efSearch
+	// unable to improve anything.
+	ef := efSearch
+	if ef < k {
+		ef = k
+	}
 
-	// Begin with the entry node in the result set.
-	result.Push(candidates.Min())
+	entryDist := distance(n.Value, target)
+
+	// candidates is a min-heap: Pop yields the nearest unexplored node.
+	candidates := heap.Heap[searchCandidate[K]]{}
+	candidates.Init(make([]searchCandidate[K], 0, ef))
+	candidates.Push(searchCandidate[K]{node: n, dist: entryDist})
+
+	// result is a max-heap: Min() yields the FURTHEST node currently held,
+	// which is what both the keep/evict decision and the stop condition need.
+	result := heap.Heap[farthestFirst[K]]{}
+	result.Init(make([]farthestFirst[K], 0, ef))
+	result.Push(farthestFirst[K]{node: n, dist: entryDist})
+
+	visited := make(map[K]bool, ef)
 	visited[n.Key] = true
 
 	for candidates.Len() > 0 {
-		var (
-			current  = candidates.Pop().node
-			improved = false
-		)
+		current := candidates.Pop()
+
+		// Stop when the closest thing left to explore is further away than the
+		// worst result already held — nothing reachable from here can improve
+		// the set. The previous condition compared against the BEST result
+		// instead, which halted the walk as soon as a single round failed to
+		// beat the top hit. That is greedy hill-climbing, not a beam search,
+		// and it made efSearch inert and recall collapse to single digits.
+		if result.Len() >= ef && current.dist > result.Min().dist {
+			break
+		}
 
 		// We iterate the map in a sorted, deterministic fashion for
 		// tests.
-		neighborKeys := maps.Keys(current.neighbors)
+		neighborKeys := maps.Keys(current.node.neighbors)
 		slices.Sort(neighborKeys)
 		for _, neighborID := range neighborKeys {
-			neighbor := current.neighbors[neighborID]
+			neighbor := current.node.neighbors[neighborID]
 			if visited[neighborID] {
 				continue
 			}
 			visited[neighborID] = true
 
 			dist := distance(neighbor.Value, target)
-			improved = improved || dist < result.Min().dist
-			if result.Len() < k {
-				result.Push(searchCandidate[K]{node: neighbor, dist: dist})
-			} else if dist < result.Max().dist {
-				result.PopLast()
-				result.Push(searchCandidate[K]{node: neighbor, dist: dist})
-			}
 
-			candidates.Push(searchCandidate[K]{node: neighbor, dist: dist})
-			// Always store candidates if we haven't reached the limit.
-			if candidates.Len() > efSearch {
-				candidates.PopLast()
+			// Keep the neighbour when the set is not yet full, or when it beats
+			// the current worst member.
+			if result.Len() < ef || dist < result.Min().dist {
+				candidates.Push(searchCandidate[K]{node: neighbor, dist: dist})
+				result.Push(farthestFirst[K]{node: neighbor, dist: dist})
+				if result.Len() > ef {
+					result.Pop() // evict the furthest
+				}
 			}
-		}
-
-		// Termination condition: no improvement in distance and at least
-		// kMin candidates in the result set.
-		if !improved && result.Len() >= k {
-			break
 		}
 	}
 
-	return result.Slice()
+	// Return nearest-first. Callers depend on the ordering: the layer-descent
+	// step takes element 0 as the elevator, and sprout's vector store surfaces
+	// this order to users as the ranking. Heap array order satisfies neither.
+	out := make([]searchCandidate[K], 0, result.Len())
+	for _, c := range result.Slice() {
+		out = append(out, searchCandidate[K]{node: c.node, dist: c.dist})
+	}
+	slices.SortFunc(out, func(a, b searchCandidate[K]) int {
+		switch {
+		case a.dist < b.dist:
+			return -1
+		case a.dist > b.dist:
+			return 1
+		default:
+			return 0
+		}
+	})
+	if len(out) > k {
+		out = out[:k]
+	}
+	return out
 }
 
 func (n *layerNode[K]) replenish(m int, dist DistanceFunc) {

@@ -67,9 +67,17 @@ func (ws *ReactWebServer) handleAPIRecall(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), recallTimeout)
 	defer cancel()
 
+	// Resolve the agent the way every other daemon endpoint does. Reading
+	// ws.agent directly only works in shared mode (CLI and webui in one
+	// process); in daemon mode it is nil, so this endpoint silently returned an
+	// empty result for every request — SP-092-3 looked wired but never ran.
 	items := []RecallItem{}
-	if ws.agent != nil {
-		raw, err := ws.agent.Recall(ctx, query, limit)
+	agentInst, agentErr := ws.getClientAgent(ws.resolveClientID(r))
+	if agentErr != nil || agentInst == nil {
+		agentInst = ws.agent // shared mode fallback
+	}
+	if agentInst != nil {
+		raw, err := agentInst.Recall(ctx, query, limit)
 		if err == nil {
 			for _, it := range raw {
 				preview := it.Summary

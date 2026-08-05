@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // handleAPIEmbeddingIndex handles GET/POST /api/embedding-index
@@ -35,6 +36,11 @@ func (ws *ReactWebServer) writeEmbeddingIndexStatus(w http.ResponseWriter, agent
 	enabled := agentInst.IsEmbeddingIndexEnabled()
 	response := map[string]interface{}{
 		"enabled": enabled,
+		// Reported from the same ModelConfig the provider is built from, so
+		// the settings panel cannot drift from what is actually loaded. It is
+		// static config, so it is returned even when the manager is nil (index
+		// disabled or not yet initialized).
+		"model": embedding.ActiveModelInfo(),
 	}
 
 	em := agentInst.GetEmbeddingManager()

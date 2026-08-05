@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -363,4 +364,47 @@ func EmbeddingGemma300MConfig() ModelConfig {
 func DownloadModel(ctx context.Context, modelDir string, cfg ModelConfig) error {
 	d := NewModelDownloaderWithDir(modelDir)
 	return d.Download(ctx, cfg, nil)
+}
+
+// ModelInfo describes the embedding model this build actually loads. It is
+// derived from the same ModelConfig the provider is constructed from, so a UI
+// rendering it can never drift from what is running.
+//
+// The webui settings panel previously hardcoded these strings and reported a
+// model that had not been in use for some time (wrong name, wrong
+// quantization, and 256 dims against an actual 768) — which made the panel
+// actively misleading when reasoning about index size and memory.
+type ModelInfo struct {
+	Name         string `json:"name"`
+	Quantization string `json:"quantization"`
+	Dims         int    `json:"dims"`      // emitted vector width (after MRL truncation)
+	FullDims     int    `json:"full_dims"` // model's native output width
+	Truncated    bool   `json:"truncated"` // Dims < FullDims (Matryoshka truncation active)
+}
+
+// ActiveModelInfo returns the ModelInfo for the model this build uses.
+func ActiveModelInfo() ModelInfo {
+	return modelInfoFor(EmbeddingGemma300MConfig())
+}
+
+func modelInfoFor(cfg ModelConfig) ModelInfo {
+	return ModelInfo{
+		Name:         cfg.Name,
+		Quantization: quantizationFromFilename(cfg.ModelFilename),
+		Dims:         cfg.Dims,
+		FullDims:     cfg.FullDims,
+		Truncated:    cfg.Dims > 0 && cfg.FullDims > 0 && cfg.Dims < cfg.FullDims,
+	}
+}
+
+// quantizationFromFilename extracts the quantization variant from an ONNX
+// filename such as "model_q4f16.onnx" → "Q4F16". Returns "unknown" when the
+// name carries no variant suffix.
+func quantizationFromFilename(name string) string {
+	base := strings.TrimSuffix(name, ".onnx")
+	_, variant, found := strings.Cut(base, "_")
+	if !found || variant == "" {
+		return "unknown"
+	}
+	return strings.ToUpper(variant)
 }

@@ -22,7 +22,7 @@ func (h *semanticSearchHandler) Definition() ToolDefinition {
 		Required:    []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Required: true, Description: "Natural language description of what you're looking for"},
-			{Name: "threshold", Type: "number", Description: "Minimum similarity score 0.0-1.0 (default: 0.75)"},
+			{Name: "threshold", Type: "number", Description: "Minimum similarity score 0.0-1.0 (default: 0.4)"},
 			{Name: "top_k", Type: "integer", Description: "Maximum results to return (default: 5)"},
 		},
 	}
@@ -58,8 +58,10 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		topK = 1
 	}
 
-	// Extract optional threshold (default: 0.75)
-	threshold := 0.75
+	// Extract optional threshold. The default is measured, not guessed:
+	// correct results for natural-language code search score ~0.50-0.61, so a
+	// 0.75 default returned nothing for any realistic query.
+	threshold := float64(embedding.DefaultSemanticSearchThreshold)
 	if tRaw, exists := args["threshold"]; exists && tRaw != nil {
 		switch v := tRaw.(type) {
 		case float64:

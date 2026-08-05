@@ -54,7 +54,7 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 
 	// If threshold is not specified, use the default.
 	if threshold == 0 {
-		threshold = 0.90
+		threshold = DefaultDuplicateThreshold
 	}
 	if topK <= 0 {
 		topK = 3

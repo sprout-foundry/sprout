@@ -413,9 +413,16 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 	return nil
 }
 
-// QuerySimilar embeds query text and returns the top-K most similar records above threshold.
-func (m *IndexManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
-	vec, err := m.provider.EmbedWithPrefix(ctx, query, queryPrefix)
+// queryWithPrefix embeds text under the given EmbeddingGemma task prefix and
+// returns the top-K records above threshold.
+//
+// The prefix is not decoration: EmbeddingGemma embeds queries and documents
+// into deliberately different subspaces, so the same pair of texts scores very
+// differently depending on which prefix each side carried. Picking the wrong
+// one silently shifts the whole similarity distribution out from under
+// whatever threshold the caller applies.
+func (m *IndexManager) queryWithPrefix(ctx context.Context, text, prefix string, topK int, threshold float32) ([]QueryResult, error) {
+	vec, err := m.provider.EmbedWithPrefix(ctx, text, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("index: embed query: %w", err)
 	}
@@ -426,12 +433,26 @@ func (m *IndexManager) QuerySimilar(ctx context.Context, query string, topK int,
 	return results, nil
 }
 
-// CheckDuplicates is like QuerySimilar but uses a default threshold of 0.90.
+// QuerySimilar embeds a natural-language query and returns the top-K most
+// similar records above threshold. Use CheckDuplicates when the input is code
+// rather than a question.
+func (m *IndexManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
+	return m.queryWithPrefix(ctx, query, codeQueryPrefix, topK, threshold)
+}
+
+// CheckDuplicates finds indexed code similar to codeText.
+//
+// It embeds with documentPrefix, NOT the query prefix: this compares code
+// against code, and the index stores code as documents. Routing this through
+// QuerySimilar (which is for natural-language questions) put the two sides in
+// different subspaces and cost roughly 0.10 of similarity — enough that, on
+// top of an already unreachable 0.90 gate, duplicate detection could not fire
+// at all. See TestPrefixSymmetryAffectsDuplicateThresholds.
 func (m *IndexManager) CheckDuplicates(ctx context.Context, codeText string, topK int, threshold float32) ([]QueryResult, error) {
 	if threshold == 0 {
-		threshold = 0.90
+		threshold = DefaultDuplicateThreshold
 	}
-	return m.QuerySimilar(ctx, codeText, topK, threshold)
+	return m.queryWithPrefix(ctx, codeText, documentPrefix, topK, threshold)
 }
 
 // embedUnits converts CodeUnits to text, batch-embeds, and returns VectorRecords.

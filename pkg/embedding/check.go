@@ -90,7 +90,12 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 		// Build the embedding text the same way as the index pipeline.
 		queryText := u.Signature + "\n" + u.Body
 
-		matches, err := mgr.QuerySimilar(ctx, queryText, topK, threshold)
+		// CheckDuplicates, not QuerySimilar: this compares code against code,
+		// so both sides need documentPrefix. QuerySimilar embeds its input as a
+		// natural-language question, which put the two duplicate paths on
+		// different prefixes while sharing one threshold constant — the exact
+		// shape of the original defect.
+		matches, err := mgr.CheckDuplicates(ctx, queryText, topK, threshold)
 		if err != nil {
 			// Log but continue — a single unit failure shouldn't block the whole check.
 			continue

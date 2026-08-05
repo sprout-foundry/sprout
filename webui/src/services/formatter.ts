@@ -1,5 +1,49 @@
-import { format } from 'prettier';
-import type { BuiltInParserName } from 'prettier';
+import { format } from 'prettier/standalone';
+import type { BuiltInParserName, Plugin } from 'prettier';
+import * as prettierPluginBabel from 'prettier/plugins/babel';
+import * as prettierPluginEstree from 'prettier/plugins/estree';
+import * as prettierPluginTypescript from 'prettier/plugins/typescript';
+import * as prettierPluginPostcss from 'prettier/plugins/postcss';
+import * as prettierPluginHtml from 'prettier/plugins/html';
+import * as prettierPluginMarkdown from 'prettier/plugins/markdown';
+import * as prettierPluginYaml from 'prettier/plugins/yaml';
+import * as prettierPluginGraphql from 'prettier/plugins/graphql';
+
+/**
+ * Plugins required by the browser standalone bundle.
+ *
+ * The `prettier` package's `browser` field maps `prettier` → `prettier/standalone`,
+ * which Vite resolves via the browser condition. The standalone bundle ships NO
+ * built-in parsers — every parser must be provided explicitly via `plugins`.
+ * Without this, `format()` throws:
+ *   Couldn't resolve parser "json". Plugins must be explicitly added to the standalone bundle.
+ *
+ * Parser coverage (Prettier 3.x):
+ *   - babel plugin:       babel, babel-ts, json, json5, jsonc
+ *   - estree plugin:      shared printer dependency for babel/typescript
+ *   - typescript plugin:  typescript (requires estree)
+ *   - postcss plugin:     css, scss, less
+ *   - html plugin:        html, vue
+ *   - markdown plugin:    markdown, mdx
+ *   - yaml plugin:        yaml
+ *   - graphql plugin:     graphql
+ */
+const PLUGINS: Plugin[] = [
+  prettierPluginBabel,
+  prettierPluginEstree,
+  prettierPluginTypescript,
+  prettierPluginPostcss,
+  prettierPluginHtml,
+  prettierPluginMarkdown,
+  prettierPluginYaml,
+  prettierPluginGraphql,
+];
+
+/** Merge any user-provided plugins from config with the required standalone plugins. */
+function resolvePlugins(formatOptions: Record<string, unknown>): Plugin[] {
+  const userPlugins = Array.isArray(formatOptions.plugins) ? (formatOptions.plugins as Plugin[]) : [];
+  return [...PLUGINS, ...userPlugins];
+}
 
 /** Supported Prettier parsers mapped from file extensions */
 const EXTENSION_TO_PARSER: Partial<Record<string, BuiltInParserName>> = {
@@ -124,6 +168,7 @@ export async function formatCode(
     const formatted = await format(content, {
       parser,
       ...formatOptions,
+      plugins: resolvePlugins(formatOptions),
     });
     return { formatted: formatted ?? content };
   } catch (err: unknown) {

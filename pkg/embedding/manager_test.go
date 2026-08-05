@@ -26,7 +26,7 @@ func TestNewEmbeddingManager_NilConfig(t *testing.T) {
 
 func TestNewEmbeddingManager_WithConfig(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{
-		Enabled:             true,
+		Enabled:             boolPtrTest(true),
 		SimilarityThreshold: 0.85,
 		MaxResults:          5,
 	}
@@ -519,3 +519,5 @@ func TestEmbeddingManager_AutoBuildWhenReady_AbortsOnClose(t *testing.T) {
 		t.Fatal("AutoBuildWhenReady did not return after Close() within 1s")
 	}
 }
+
+func boolPtrTest(v bool) *bool { return &v }

@@ -21,11 +21,13 @@ func (a *Agent) EnableEmbeddingIndex() error {
 
 	ei := cfg.EmbeddingIndex
 	if ei == nil {
-		ei = &configuration.EmbeddingIndexConfig{Enabled: true, AutoIndex: true}
+		ei = &configuration.EmbeddingIndexConfig{}
+		ei.SetEnabled(true)
+		ei.SetAutoIndex(true)
 		cfg.EmbeddingIndex = ei
 	}
-	ei.Enabled = true
-	ei.AutoIndex = true
+	ei.SetEnabled(true)
+	ei.SetAutoIndex(true)
 
 	workspaceRoot := a.GetWorkspaceRoot()
 	if workspaceRoot == "" {
@@ -188,8 +190,8 @@ func (a *Agent) persistEmbeddingIndexPreference(workspaceRoot string, enabled bo
 		if cfg.EmbeddingIndex == nil {
 			cfg.EmbeddingIndex = &configuration.EmbeddingIndexConfig{}
 		}
-		cfg.EmbeddingIndex.Enabled = enabled
-		cfg.EmbeddingIndex.AutoIndex = enabled
+		cfg.EmbeddingIndex.SetEnabled(enabled)
+		cfg.EmbeddingIndex.SetAutoIndex(enabled)
 		return nil
 	})
 	if err != nil {

@@ -155,13 +155,11 @@ func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http
 		if cm := ws.resolveConfigManagerQuietly(r); cm != nil {
 			cfg := cm.GetConfig()
 			if cfg != nil {
-				ei := cfg.EmbeddingIndex
-				if ei == nil {
-					// Nil means defaults apply: embedding is enabled by default
-					embeddingEnabled = true
-				} else {
-					embeddingEnabled = ei.Enabled
-				}
+				// Unset means off, matching the tool call sites
+				// (tool_duplicates, tool_handlers_file). This previously
+				// reported an absent config as enabled, so the panel claimed
+				// the index was available on installs that had never opted in.
+				embeddingEnabled = cfg.EmbeddingIndex.IsEnabled()
 			}
 		}
 		if embeddingEnabled {

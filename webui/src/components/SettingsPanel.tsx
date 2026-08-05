@@ -338,7 +338,6 @@ function SettingsPanel({
           <SecuritySettingsTab
             settings={activeSettings ?? settings}
             renderToggle={fieldRenderers.renderToggle}
-            renderNumberInput={fieldRenderers.renderNumberInput}
             renderSelect={fieldRenderers.renderSelect}
             updateSetting={mutations.updateSetting}
           />

@@ -3,7 +3,6 @@ package configuration
 // Package configuration: config loading, reload, and save-locking (split from manager.go)
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -48,7 +47,7 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 	if globalPath != "" {
 		if data, err := os.ReadFile(globalPath); err == nil {
 			var cfg Config
-			if err := json.Unmarshal(data, &cfg); err != nil {
+			if err := unmarshalLayer(data, &cfg); err != nil {
 				log.Printf("[config] warning: failed to parse global config %s: %v", globalPath, err)
 			} else {
 				result = &cfg
@@ -59,7 +58,7 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 		if localPath != globalPath {
 			if data, err := os.ReadFile(localPath); err == nil {
 				var localCfg Config
-				if err := json.Unmarshal(data, &localCfg); err != nil {
+				if err := unmarshalLayer(data, &localCfg); err != nil {
 					log.Printf("[config] warning: failed to parse global-local config %s: %v", localPath, err)
 				} else {
 					if result == nil {
@@ -79,7 +78,7 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 	if workspacePath != "" {
 		if data, err := os.ReadFile(workspacePath); err == nil {
 			var workspaceCfg Config
-			if err := json.Unmarshal(data, &workspaceCfg); err != nil {
+			if err := unmarshalLayer(data, &workspaceCfg); err != nil {
 				log.Printf("[config] warning: failed to parse workspace config %s: %v", workspacePath, err)
 			} else {
 				result = MergeConfig(result, &workspaceCfg)
@@ -90,7 +89,7 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 		if localWsPath != workspacePath {
 			if data, err := os.ReadFile(localWsPath); err == nil {
 				var localWsCfg Config
-				if err := json.Unmarshal(data, &localWsCfg); err != nil {
+				if err := unmarshalLayer(data, &localWsCfg); err != nil {
 					log.Printf("[config] warning: failed to parse workspace-local config %s: %v", localWsPath, err)
 				} else {
 					result = MergeConfig(result, &localWsCfg)
@@ -103,7 +102,7 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 	if sessionPath != "" {
 		if data, err := os.ReadFile(sessionPath); err == nil {
 			var sessionCfg Config
-			if err := json.Unmarshal(data, &sessionCfg); err != nil {
+			if err := unmarshalLayer(data, &sessionCfg); err != nil {
 				log.Printf("[config] warning: failed to parse session config %s: %v", sessionPath, err)
 			} else {
 				result = MergeConfig(result, &sessionCfg)

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/search"
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 	"github.com/stretchr/testify/assert"
@@ -54,6 +55,20 @@ const (
 	}`
 )
 
+// scopedSessionsDir returns the scoped sessions directory under the state root
+// that the search code resolves for the test's HOME, and clears the env vars
+// that would otherwise redirect StateDir elsewhere (SPROUT_STATE_DIR,
+// XDG_STATE_HOME). Mirrors getSessionsDir()/DefaultIndexPath() so fixtures land
+// where the code actually looks. Callers must set HOME (via t.Setenv) first.
+func scopedSessionsDir(t *testing.T, tmpDir string) string {
+	t.Helper()
+	t.Setenv("SPROUT_STATE_DIR", "")
+	t.Setenv("XDG_STATE_HOME", "")
+	stateDir, err := envutil.StateDir()
+	require.NoError(t, err)
+	return filepath.Join(stateDir, "sessions", "scoped", "hash1")
+}
+
 // ---------------------------------------------------------------------------
 // setupTestSearchIndex isolates the search index into a temp directory.
 //
@@ -73,8 +88,10 @@ func setupTestSearchIndex(t *testing.T) string {
 	// Also restore HOME immediately at cleanup so sibling tests don't collide.
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
-	// Create directory structure: ~/.sprout/sessions/scoped/<hash>/
-	sessionsDir := filepath.Join(tmpDir, ".sprout", "sessions", "scoped", "hash1")
+	// Create directory structure: <state-dir>/sessions/scoped/<hash>/ —
+	// the same layout search.DefaultIndexPath()/getSessionsDir() resolve,
+	// not the legacy ~/.sprout path.
+	sessionsDir := scopedSessionsDir(t, tmpDir)
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o700))
 
 	// Write fixture session files.
@@ -527,7 +544,7 @@ func TestGetSessionsDir(t *testing.T) {
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
 	dir := getSessionsDir()
-	expected := filepath.Join(tmpDir, ".sprout", "sessions", "scoped")
+	expected := filepath.Dir(scopedSessionsDir(t, tmpDir))
 	assert.Equal(t, expected, dir)
 }
 
@@ -570,7 +587,7 @@ func TestSearchCommand_ReindexOnEmpty(t *testing.T) {
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
 	// Create sessions dir with files but DON'T pre-build the index
-	sessionsDir := filepath.Join(tmpDir, ".sprout", "sessions", "scoped", "hash1")
+	sessionsDir := scopedSessionsDir(t, tmpDir)
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(sessionsDir, "session_test-embed.json"), []byte(session1JSON), 0o644))
 
@@ -596,7 +613,7 @@ func TestSearchCommand_AutoBuildEmptyIndex(t *testing.T) {
 	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
 	// Create sessions dir with files but DON'T pre-build the index
-	sessionsDir := filepath.Join(tmpDir, ".sprout", "sessions", "scoped", "hash1")
+	sessionsDir := scopedSessionsDir(t, tmpDir)
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(sessionsDir, "session_test-embed.json"), []byte(session1JSON), 0o644))
 

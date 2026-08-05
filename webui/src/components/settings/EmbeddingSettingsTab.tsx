@@ -4,12 +4,23 @@ import { ApiService, type SproutSettings } from '../../services/api';
 import { getNestedValue } from './settingsHelpers';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 
+/** Reported by the backend from the same ModelConfig the provider is built
+ *  from, so this panel cannot drift from the model actually loaded. */
+interface EmbeddingModelInfo {
+  name: string;
+  quantization: string;
+  dims: number;
+  full_dims: number;
+  truncated: boolean;
+}
+
 interface EmbeddingStatus {
   available: boolean;
   initialized: boolean;
   building: boolean;
   record_count: number;
   init_error?: string;
+  model?: EmbeddingModelInfo;
 }
 
 interface EmbeddingSettingsTabProps {
@@ -167,17 +178,26 @@ export default function EmbeddingSettingsTab({
         )}
       </div>
 
-      {/* Model Info */}
+      {/* Model Info — read from the backend, never hardcoded. */}
       <div className="settings-card embedding-model-card">
-        <div className="embedding-model-row">
-          <span className="embedding-model-label">Provider:</span> bge-base-en-v1.5-256d
-        </div>
-        <div className="embedding-model-row">
-          <span className="embedding-model-label">Model:</span> bge-base-en-v1.5 (INT8 quantized)
-        </div>
-        <div className="embedding-model-row">
-          <span className="embedding-model-label">Dimensions:</span> 256
-        </div>
+        {status?.model ? (
+          <>
+            <div className="embedding-model-row">
+              <span className="embedding-model-label">Model:</span> {status.model.name}
+            </div>
+            <div className="embedding-model-row">
+              <span className="embedding-model-label">Quantization:</span> {status.model.quantization}
+            </div>
+            <div className="embedding-model-row">
+              <span className="embedding-model-label">Dimensions:</span> {status.model.dims}
+              {status.model.truncated && ` (truncated from ${status.model.full_dims})`}
+            </div>
+          </>
+        ) : (
+          <div className="embedding-model-row">
+            <span className="embedding-model-label">Model:</span> unavailable
+          </div>
+        )}
       </div>
 
       {/* Configuration */}

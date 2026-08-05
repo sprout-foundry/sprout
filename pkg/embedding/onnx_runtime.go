@@ -381,6 +381,10 @@ type SessionOption struct {
 	// InterOpNumThreads sets the number of threads for inter-op parallelism.
 	// 0 means use default.
 	InterOpNumThreads int
+	// CPUMemArena and MemPattern override the ORT allocator defaults. nil
+	// leaves the package default in place; see newSessionOptions.
+	CPUMemArena *bool
+	MemPattern  *bool
 }
 
 // newSessionOptions creates a SessionOptions with the given options applied.
@@ -389,20 +393,6 @@ func (r *ONNXRuntime) newSessionOptions(opts []SessionOption) (*onnxruntime.Sess
 	so, err := onnxruntime.NewSessionOptions()
 	if err != nil {
 		return nil, fmt.Errorf("onnx: create session options: %w", err)
-	}
-
-	// Disable the CPU memory arena and memory pattern planner. Both trade RAM
-	// for speed; for sprout's embedding workload (single small batch per call,
-	// fixed shapes) the arena grows to hundreds of MB of unreturned slabs and
-	// the pattern cache rarely hits. Disabling them roughly halves the
-	// per-session resident footprint with negligible latency impact.
-	if err := so.SetCpuMemArena(false); err != nil {
-		so.Destroy()
-		return nil, fmt.Errorf("onnx: disable cpu mem arena: %w", err)
-	}
-	if err := so.SetMemPattern(false); err != nil {
-		so.Destroy()
-		return nil, fmt.Errorf("onnx: disable mem pattern: %w", err)
 	}
 
 	// Merge options (last wins).
@@ -414,6 +404,37 @@ func (r *ONNXRuntime) newSessionOptions(opts []SessionOption) (*onnxruntime.Sess
 		if o.InterOpNumThreads != 0 {
 			option.InterOpNumThreads = o.InterOpNumThreads
 		}
+		if o.CPUMemArena != nil {
+			option.CPUMemArena = o.CPUMemArena
+		}
+		if o.MemPattern != nil {
+			option.MemPattern = o.MemPattern
+		}
+	}
+
+	// The CPU memory arena and memory pattern planner are OFF by default. Both
+	// trade RAM for speed; for sprout's embedding workload (single small batch
+	// per call, fixed shapes) the arena grows to hundreds of MB of unreturned
+	// slabs and the pattern cache rarely hits.
+	//
+	// "Negligible latency impact" is measured, not assumed: TestSessionTuningProbe
+	// on this repository's own code units shows 2.2 units/s both with and without
+	// the arena. Indexing is slow for an unrelated reason (see the probe), so do
+	// not re-enable these expecting a speedup — it buys memory back for nothing.
+	arena, memPattern := false, false
+	if option.CPUMemArena != nil {
+		arena = *option.CPUMemArena
+	}
+	if option.MemPattern != nil {
+		memPattern = *option.MemPattern
+	}
+	if err := so.SetCpuMemArena(arena); err != nil {
+		so.Destroy()
+		return nil, fmt.Errorf("onnx: set cpu mem arena: %w", err)
+	}
+	if err := so.SetMemPattern(memPattern); err != nil {
+		so.Destroy()
+		return nil, fmt.Errorf("onnx: set mem pattern: %w", err)
 	}
 
 	if option.IntraOpNumThreads > 0 {

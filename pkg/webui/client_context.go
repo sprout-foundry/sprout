@@ -350,6 +350,11 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.SSHHomePath = ""
 	ctx.Terminal = NewTerminalManager(workspaceRoot)
 	ws.startTerminalCleanupIfNeeded(ctx.Terminal)
+	// Collect the outgoing agents before clearing the fields below. They are
+	// bound to the OLD workspace root, and without an explicit Shutdown their
+	// embedding managers keep building — and writing — that workspace's index
+	// for the rest of the daemon's life. Released after ws.mutex is dropped.
+	releasing := chatSessionAgents(ctx)
 	ctx.Agent = nil
 	ctx.AgentState = emptyAgentStateSnapshot()
 	ctx.CurrentSessionID = ""
@@ -375,6 +380,10 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		ws.terminalManager = ctx.Terminal
 		ws.fileConsents = ctx.FileConsents
 	}
+
+	// Non-blocking: hands each agent to its own goroutine, so this is safe
+	// under the deferred ws.mutex unlock.
+	ws.releaseAgents("workspace_switch", releasing...)
 
 	return workspaceRoot, nil
 }
@@ -571,6 +580,12 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 	ctx = ws.getOrCreateClientContextLocked(clientID)
+	if ctx.Agent != nil {
+		// Lost the creation race. `created` is fully constructed — its
+		// embedding manager is already building the workspace index — so it
+		// must be shut down, not just dropped on the floor.
+		ws.releaseAgents("agent_creation_race", created)
+	}
 	if ctx.Agent == nil {
 		ctx.Agent = created
 		ctx.CurrentSessionID = strings.TrimSpace(created.GetSessionID())

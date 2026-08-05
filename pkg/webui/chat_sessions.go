@@ -19,6 +19,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 const (
@@ -300,7 +301,14 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		cs.Agent = created
 		cs.CurrentSessionID = strings.TrimSpace(created.GetSessionID())
 	} else {
+		// Lost the creation race. Shut our agent down rather than dropping the
+		// reference — it already spawned an embedding-index build and MCP
+		// servers, which would otherwise outlive the daemon's knowledge of it.
+		orphan := created
 		created = cs.Agent
+		utils.SafeGo(slog.Default(), "agent-shutdown", func() {
+			orphan.Shutdown()
+		}, slog.String("reason", "chat_agent_creation_race"))
 		agentWorkspace := cs.WorktreePath
 		if agentWorkspace == "" {
 			agentWorkspace = workspaceRoot

@@ -281,6 +281,10 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 	if _, err := ws.setClientWorkspaceRoot(clientID, nextWorkspace); err != nil {
 		t.Fatalf("set next workspace: %v", err)
 	}
+	// Switching workspaces shuts the outgoing agent down asynchronously, and
+	// that shutdown writes history back under the old workspace. Wait for it
+	// so those writes land before t.TempDir cleanup, not after.
+	ws.waitForAgentTeardown()
 
 	ws.mutex.RLock()
 	ctx := ws.clientContexts[clientID]

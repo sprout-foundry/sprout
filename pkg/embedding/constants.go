@@ -29,7 +29,15 @@ const ProgressInterval = 500
 // used by BuildIndexBackground so a background build on a large workspace
 // does not get killed after WalkTimeout (30s), which only covers the
 // directory-walk phase.
-const BuildTimeout = 10 * time.Minute
+//
+// Sized against measurement, not intuition: this repository extracts ~12k
+// units and embeds at ~5.3 units/s (TestIndexThroughputProbe), so a cold full
+// build is ~40 minutes. At the previous 10 minutes a first build could not
+// finish on any real repository. Overrunning is no longer destructive — an
+// interrupted build now records only the files it finished and resumes — but
+// finishing in one pass is the difference between an index that is usable
+// today and one that is usable in three days.
+const BuildTimeout = 45 * time.Minute
 
 // EmbedBatchSize is the number of code units embedded per ONNX inference
 // call during a full index build. The batch is what flows through
@@ -37,20 +45,25 @@ const BuildTimeout = 10 * time.Minute
 const EmbedBatchSize = 32
 
 // autoBuildTimeout calculates an adaptive timeout for the background index
-// build based on the number of files to process. Each batch of
-// EmbedBatchSize units takes roughly 50ms of ONNX inference on a desktop
-// CPU; on a constrained mobile device that can be 5–10x slower. The formula
-// budgets generously (perEmbedBudget per unit) plus a fixed base for model
-// loading and file I/O.
+// build based on the number of files to process.
 //
-// The result is clamped to [2min, 15min] so tiny workspaces don't get an
-// absurdly short budget and large ones don't run indefinitely.
+// perEmbedBudget is measured, not estimated. TestIndexThroughputProbe on this
+// repository records ~189ms per unit end-to-end (5.3 units/s) on an M1 Pro
+// after length-sorted batching; the previous 100ms figure was derived from an
+// assumed "50ms per 32-unit batch" that is off by two orders of magnitude, so
+// every non-trivial workspace silently overran its budget. 250ms leaves
+// headroom for slower CPUs without being unbounded.
+//
+// The result is clamped to [2min, 45min] so tiny workspaces don't get an
+// absurdly short budget and large ones don't run indefinitely. Overrun is
+// survivable — BuildIndex records only the files it finished, so the next
+// build resumes rather than freezing the index at a partial count.
 func autoBuildTimeout(fileCount int) time.Duration {
 	const (
-		perEmbedBudget = 100 * time.Millisecond // generous per-unit budget
+		perEmbedBudget = 250 * time.Millisecond // measured ~189ms/unit + headroom
 		baseOverhead   = 30 * time.Second       // model load + walk + I/O
 		minTimeout     = 2 * time.Minute
-		maxTimeout     = 15 * time.Minute
+		maxTimeout     = 45 * time.Minute
 	)
 	// fileCount maps roughly to fileCount * 4 code units (avg symbols/file).
 	// Use perEmbedBudget on the estimated unit count.

@@ -34,10 +34,22 @@ func (a *Agent) EnableEmbeddingIndex() error {
 		return agenterrors.NewConfig("no workspace root available", nil)
 	}
 
-	mgr := embedding.NewEmbeddingManager(ei, workspaceRoot)
+	// Shared per (index dir, workspace): the daemon builds an agent per chat
+	// session and per workspace switch, and a manager per agent means a full
+	// duplicate of the workspace's vectors plus a competing writer to the same
+	// index. AutoBuildWhenReady is idempotent per manager, so the second and
+	// later agents on a workspace attach to the in-flight build rather than
+	// starting another.
+	mgr := embedding.AcquireManager(ei, workspaceRoot)
 	a.embeddingMu.Lock()
+	previous := a.embeddingMgr
 	a.embeddingMgr = mgr
 	a.embeddingMu.Unlock()
+	// Re-enabling over an existing manager would otherwise strand its
+	// reference and leak the store it pins.
+	if previous != nil && previous != mgr {
+		embedding.ReleaseManager(previous)
+	}
 	go mgr.AutoBuildWhenReady()
 
 	// Snapshot the interrupt ctx before launching the goroutine so the field
@@ -63,9 +75,9 @@ func (a *Agent) DisableEmbeddingIndex() {
 	mgr := a.embeddingMgr
 	a.embeddingMgr = nil
 	a.embeddingMu.Unlock()
-	if mgr != nil {
-		_ = mgr.Close()
-	}
+	// Release rather than Close: other agents on this workspace may still hold
+	// the manager, and the last releaser closes it.
+	embedding.ReleaseManager(mgr)
 
 	// Persist the preference to workspace config
 	workspaceRoot := a.GetWorkspaceRoot()

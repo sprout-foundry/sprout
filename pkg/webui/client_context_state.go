@@ -76,6 +76,7 @@ func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) i
 	type staleContext struct {
 		id       string
 		terminal *TerminalManager
+		agents   []*agent.Agent
 	}
 
 	stale := make([]staleContext, 0)
@@ -95,7 +96,11 @@ func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) i
 			continue
 		}
 		delete(ws.clientContexts, clientID)
-		stale = append(stale, staleContext{id: clientID, terminal: ctx.Terminal})
+		stale = append(stale, staleContext{
+			id:       clientID,
+			terminal: ctx.Terminal,
+			agents:   chatSessionAgents(ctx),
+		})
 	}
 	ws.lastClientContextCleanupAt = now
 	ws.lastClientContextCleanupRemoved = len(stale)
@@ -106,6 +111,9 @@ func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) i
 		if clientCtx.terminal != nil {
 			_ = clientCtx.terminal.CloseAllSessions()
 		}
+		// Evicting the map entry does not stop the agent — its own background
+		// goroutines keep it (and its embedding index build) alive.
+		ws.releaseAgents("client_context_idle", clientCtx.agents...)
 	}
 
 	return len(stale)

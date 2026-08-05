@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // handleAPIChatSessionsDelete handles POST /api/chat-sessions/delete
@@ -97,6 +99,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	cs.mu.Lock()
 	isActive := cs.ActiveQuery
 	worktreePath := cs.WorktreePath
+	deletedAgent := cs.Agent
 	cs.mu.Unlock()
 	if isActive {
 		ws.mutex.Unlock()
@@ -141,6 +144,12 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 		}
 	}
 	ws.mutex.Unlock()
+
+	// The deleted session's agent is unreachable from the server now, but its
+	// own goroutines keep it running until it is shut down explicitly.
+	// releaseAgents skips the shared-mode CLI agent, which the server does not
+	// own even when a chat session references it.
+	ws.releaseAgents("chat_session_deleted", deletedAgent)
 
 	ws.log().Info("deleted chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
 
@@ -228,9 +237,19 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 		chatIDsToDelete = append(chatIDsToDelete, chatID)
 	}
 
-	// Delete all collected sessions
+	// Delete all collected sessions, capturing their agents so they can be
+	// shut down after the lock is released — removing the map entry alone
+	// leaves each agent running its own background work indefinitely.
 	deletedCount := 0
+	var releasing []*agent.Agent
 	for _, chatID := range chatIDsToDelete {
+		if cs := ctx.ChatSessions[chatID]; cs != nil {
+			cs.mu.Lock()
+			if cs.Agent != nil {
+				releasing = append(releasing, cs.Agent)
+			}
+			cs.mu.Unlock()
+		}
 		delete(ctx.ChatSessions, chatID)
 		deletedCount++
 	}
@@ -269,6 +288,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 	}
 
 	ws.mutex.Unlock()
+
+	ws.releaseAgents("chat_sessions_deleted_all", releasing...)
 
 	ws.log().Info("deleted chat sessions and switched to default", slog.Int("deleted_count", deletedCount), slog.String("client_id", clientID), slog.String("default_chat_id", defaultChatID))
 

@@ -4517,6 +4517,35 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Max is the flagship model in Alibaba's Qwen3.8 series, the general-availability successor to the Qwen3.8 Max Preview. It is a multimodal reasoning model intended for complex reasoning, visual understanding,...",
+        "id": "qwen/qwen3.8-max",
+        "input_cost": 2,
+        "name": "Qwen: Qwen3.8 Max",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.018,
+        "context_length": 1048576,
+        "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
+        "id": "~deepseek/deepseek-v4-flash-latest",
+        "input_cost": 0.09,
+        "name": "DeepSeek V4 Flash Latest",
+        "output_cost": 0.18,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

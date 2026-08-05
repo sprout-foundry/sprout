@@ -237,6 +237,11 @@ type Config struct {
 	// customization is intentionally not supported. Use DisabledPersonas to
 	// hide specific personas from /persona list and from subagent spawning.
 	SubagentTypes map[string]SubagentType `json:"-"`
+	// explicitKeys records the dotted JSON paths this layer actually contained
+	// on disk, letting MergeConfig tell "set to false" from "not set". It is
+	// layer provenance rather than configuration, so it is unexported and never
+	// serialized. See config_explicit_keys.go.
+	explicitKeys map[string]bool
 	// DisabledPersonas holds canonical persona IDs the user has hidden via
 	// `/persona <id> disable`. The catalog entries themselves are never
 	// mutated; resolution checks this list and treats disabled IDs as absent.
@@ -451,8 +456,8 @@ func NewConfig() *Config {
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(), // Default to enabling parallel subagents
 		EmbeddingIndex: &EmbeddingIndexConfig{
-			Enabled:             false,
-			AutoIndex:           false,
+			Enabled:             boolPtr(false),
+			AutoIndex:           boolPtr(false),
 			SimilarityThreshold: 0.90,
 			MaxResults:          3,
 		},

@@ -30,7 +30,7 @@ func shouldCheckDuplicates(toolName string, agent *Agent) bool {
 		return false
 	}
 	cfg := agent.GetConfig()
-	if cfg == nil || cfg.EmbeddingIndex == nil || !cfg.EmbeddingIndex.Enabled {
+	if cfg == nil || !cfg.EmbeddingIndex.IsEnabled() {
 		return false
 	}
 	if agent.GetEmbeddingManager() == nil {

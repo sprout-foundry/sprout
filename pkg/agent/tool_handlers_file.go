@@ -157,7 +157,7 @@ func shouldInjectContext(a *Agent) bool {
 		return false
 	}
 	cfg := a.GetConfig()
-	if cfg == nil || cfg.EmbeddingIndex == nil || !cfg.EmbeddingIndex.Enabled {
+	if cfg == nil || !cfg.EmbeddingIndex.IsEnabled() {
 		return false
 	}
 	return a.GetEmbeddingManager() != nil

@@ -18,6 +18,7 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	result := cloneConfig(base)
+	result.mergeExplicitKeys(override)
 
 	// Override simple string fields if non-empty
 	if override.LastUsedProvider != "" {
@@ -40,7 +41,7 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Merge MCP config
-	if override.MCP.Enabled {
+	if override.overrides("mcp.enabled", override.MCP.Enabled) {
 		result.MCP.Enabled = override.MCP.Enabled
 	}
 	if override.MCP.Timeout > 0 {
@@ -72,13 +73,13 @@ func MergeConfig(base, override *Config) *Config {
 	if override.ReasoningEffort != "" {
 		result.ReasoningEffort = override.ReasoningEffort
 	}
-	if override.DisableThinking {
+	if override.overrides("disable_thinking", override.DisableThinking) {
 		result.DisableThinking = override.DisableThinking
 	}
 	if override.SystemPromptText != "" {
 		result.SystemPromptText = override.SystemPromptText
 	}
-	if override.SkipPrompt {
+	if override.overrides("skip_prompt", override.SkipPrompt) {
 		result.SkipPrompt = override.SkipPrompt
 	}
 
@@ -185,7 +186,7 @@ func MergeConfig(base, override *Config) *Config {
 		if result.EmbeddingIndex == nil {
 			result.EmbeddingIndex = &EmbeddingIndexConfig{}
 		}
-		if override.EmbeddingIndex.Enabled {
+		if override.EmbeddingIndex.Enabled != nil {
 			result.EmbeddingIndex.Enabled = override.EmbeddingIndex.Enabled
 		}
 		if override.EmbeddingIndex.IndexDir != "" {
@@ -197,7 +198,7 @@ func MergeConfig(base, override *Config) *Config {
 		if override.EmbeddingIndex.MaxResults > 0 {
 			result.EmbeddingIndex.MaxResults = override.EmbeddingIndex.MaxResults
 		}
-		if override.EmbeddingIndex.AutoIndex {
+		if override.EmbeddingIndex.AutoIndex != nil {
 			result.EmbeddingIndex.AutoIndex = override.EmbeddingIndex.AutoIndex
 		}
 		if len(override.EmbeddingIndex.ExcludePaths) > 0 {
@@ -272,7 +273,7 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Override PDF OCR settings
-	if override.PDFOCREnabled {
+	if override.overrides("pdf_ocr_enabled", override.PDFOCREnabled) {
 		result.PDFOCREnabled = override.PDFOCREnabled
 	}
 	if override.PDFOCRProvider != "" {
@@ -281,7 +282,7 @@ func MergeConfig(base, override *Config) *Config {
 	if override.PDFOCRModel != "" {
 		result.PDFOCRModel = override.PDFOCRModel
 	}
-	if override.VisionFallbackToOCR {
+	if override.overrides("vision_fallback_to_ocr", override.VisionFallbackToOCR) {
 		result.VisionFallbackToOCR = override.VisionFallbackToOCR
 	}
 
@@ -302,10 +303,10 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Override zsh settings
-	if override.EnableZshCommandDetection {
+	if override.overrides("enable_zsh_command_detection", override.EnableZshCommandDetection) {
 		result.EnableZshCommandDetection = override.EnableZshCommandDetection
 	}
-	if override.AutoExecuteDetectedCommands {
+	if override.overrides("auto_execute_detected_commands", override.AutoExecuteDetectedCommands) {
 		result.AutoExecuteDetectedCommands = override.AutoExecuteDetectedCommands
 	}
 
@@ -322,7 +323,7 @@ func MergeConfig(base, override *Config) *Config {
 
 	// Merge Training configuration — override wins when Enabled is true
 	// or an Endpoint is provided. ExcludePaths are appended (deduped).
-	if override.Training.Enabled {
+	if override.overrides("training.enabled", override.Training.Enabled) {
 		result.Training.Enabled = true
 	}
 	if override.Training.Endpoint != "" {
@@ -348,6 +349,8 @@ func cloneConfig(cfg *Config) *Config {
 	if err := json.Unmarshal(data, &out); err != nil {
 		return nil
 	}
+	// Unexported — the roundtrip above drops it, same as SubagentTypes below.
+	out.explicitKeys = cfg.copyExplicitKeys()
 	// SubagentTypes is intentionally tagged json:"-" (personas are catalog-fixed
 	// and not persisted to disk). The JSON roundtrip strips it, so we copy it
 	// directly from the source — preserving any in-memory mutations (e.g. test

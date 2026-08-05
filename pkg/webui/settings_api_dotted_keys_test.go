@@ -28,12 +28,12 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 		verify func(*testing.T, *configuration.Config)
 	}{
 		{`{"embedding_index.enabled":true}`, func(t *testing.T, c *configuration.Config) {
-			if c.EmbeddingIndex == nil || !c.EmbeddingIndex.Enabled {
+			if !c.EmbeddingIndex.IsEnabled() {
 				t.Errorf("embedding_index.enabled did not persist: %+v", c.EmbeddingIndex)
 			}
 		}},
 		{`{"embedding_index.auto_index":true}`, func(t *testing.T, c *configuration.Config) {
-			if c.EmbeddingIndex == nil || !c.EmbeddingIndex.AutoIndex {
+			if !c.EmbeddingIndex.IsAutoIndex() {
 				t.Errorf("embedding_index.auto_index did not persist: %+v", c.EmbeddingIndex)
 			}
 		}},
@@ -80,8 +80,8 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	cfg := &configuration.Config{
 		EmbeddingIndex: &configuration.EmbeddingIndexConfig{
-			Enabled:             true,
-			AutoIndex:           true,
+			Enabled:             ptrTo(true),
+			AutoIndex:           ptrTo(true),
 			SimilarityThreshold: 0.87,
 			MaxResults:          5,
 			ExcludePaths:        []string{"node_modules", ".git"},
@@ -97,8 +97,8 @@ func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	if got.MaxResults != 9 {
 		t.Errorf("MaxResults = %d, want 9", got.MaxResults)
 	}
-	if !got.Enabled || !got.AutoIndex {
-		t.Errorf("booleans clobbered: enabled=%v auto_index=%v", got.Enabled, got.AutoIndex)
+	if !got.IsEnabled() || !got.IsAutoIndex() {
+		t.Errorf("booleans clobbered: enabled=%v auto_index=%v", got.IsEnabled(), got.IsAutoIndex())
 	}
 	if got.SimilarityThreshold != 0.87 {
 		t.Errorf("SimilarityThreshold = %v, want 0.87", got.SimilarityThreshold)
@@ -138,3 +138,5 @@ func TestDottedKeyWithoutApplierIsReportedUnknown(t *testing.T) {
 		t.Error("a section with no applier should be reported unknown")
 	}
 }
+
+func ptrTo[T any](v T) *T { return &v }

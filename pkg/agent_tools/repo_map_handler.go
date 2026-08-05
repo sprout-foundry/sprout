@@ -89,7 +89,11 @@ func (h *repoMapHandler) Interactive() bool      { return false }
 // should still get its substring matches. Every failure mode here — no index,
 // index disabled, query error — degrades to plain substring behaviour.
 func semanticMatchesForQuery(ctx context.Context, env ToolEnv, directory, query string) map[string]bool {
-	if query == "" || env.EmbeddingMgr == nil || !env.EmbeddingMgr.IsInitialized() {
+	// An index with no records cannot contribute matches, and querying it costs
+	// a ~145ms embed for a guaranteed-empty result. Degrading to the substring
+	// filter is correct here — unlike semantic_search, repo_map still returns a
+	// usable map, so this needs no user-facing warning.
+	if query == "" || env.EmbeddingMgr == nil || !env.EmbeddingMgr.Readiness().CanAnswerQueries() {
 		return nil
 	}
 

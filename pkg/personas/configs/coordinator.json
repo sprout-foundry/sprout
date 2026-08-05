@@ -28,9 +28,10 @@
         "rollback_changes",
         "list_skills",
         "activate_skill",
-        "TodoWrite",
-        "TodoRead",
-        "manage_memory"
+        "todo_write",
+        "todo_read",
+        "manage_memory",
+        "repo_map"
       ],
       "capabilities": [
         "git_write"

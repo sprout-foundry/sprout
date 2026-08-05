@@ -40,8 +40,15 @@ func TestPersonaToolsCatalogIsAuthoritative(t *testing.T) {
 		"rollback_changes",
 		"list_skills",
 		"activate_skill",
-		"TodoWrite",
-		"TodoRead",
+		// Registry names, not the display names used in the system prompt and
+		// /help. The allowlist is matched against tool.Function.Name with an
+		// exact string compare (filterToolsByName), and the handlers register
+		// as todo_write / todo_read with no aliases — so the previous
+		// "TodoWrite" / "TodoRead" entries matched nothing and filtered the
+		// todo tools out of every persona, including the default orchestrator.
+		// Verified: an allowlist of ["TodoWrite","TodoRead"] admits zero tools.
+		"todo_write",
+		"todo_read",
 		"manage_memory",
 	}
 	for _, tool := range expectedTools {

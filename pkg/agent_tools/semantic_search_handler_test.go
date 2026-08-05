@@ -121,8 +121,15 @@ func TestSemanticSearchHandler_Execute_DefaultArgs(t *testing.T) {
 		require.Contains(t, res.Output, "Semantic search unavailable",
 			"error output should explain the issue")
 	} else {
-		// No error — either found results or returned empty results (not an error)
-		require.Contains(t, res.Output, "result", "should return some output even with no index")
+		// No error. Assert the intent — the handler explains itself — rather
+		// than a substring of one particular message. This previously required
+		// the word "result", which only passed because an unbuilt index fell
+		// through to "No results found matching ...": a verdict about the
+		// codebase produced without searching anything. That message is now
+		// gated, so matching on its wording would pin the bug it replaced.
+		require.NotEmpty(t, res.Output, "handler should explain itself even with no index")
+		require.Regexp(t, `(?i)result|index`, res.Output,
+			"output should either report results or say why it cannot")
 	}
 }
 

@@ -8,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"syscall/js"
 	"time"
 )
@@ -43,24 +41,10 @@ var errWASMNotSupported = errors.New("onnx: native ONNX runtime not available on
 // when this is false.
 func onnxRequiresModelFiles() bool { return false }
 
-// DefaultModelDir mirrors the non-wasm resolver: SPROUT_MODELS_DIR env var
-// takes precedence; otherwise we anchor under SPROUT_CONFIG or the user's
-// home directory. On WASM this points at the IndexedDB-backed MEMFS path
-// that cmd/wasm sets up.
-func DefaultModelDir() string {
-	if dir := os.Getenv("SPROUT_MODELS_DIR"); dir != "" {
-		return dir
-	}
-	configDir := os.Getenv("SPROUT_CONFIG")
-	if configDir == "" {
-		configDir = os.Getenv("SPROUT_CONFIG")
-	}
-	if configDir == "" {
-		home, _ := os.UserHomeDir()
-		configDir = filepath.Join(home, ".config", "sprout")
-	}
-	return filepath.Join(configDir, "models")
-}
+// DefaultModelDir lives in model_dir.go — one definition for every build.
+// This file used to carry its own copy that anchored under SPROUT_CONFIG,
+// which --isolated-config points at <workspace>/.sprout; that is what gave
+// every workspace a private copy of the model weights.
 
 // ─── ONNXRuntime (no-op on WASM) ─────────────────────────────────
 //

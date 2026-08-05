@@ -576,6 +576,8 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 // walks the appliers in order and collects any patch keys that none of
 // them recognized.
 func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{}) ([]string, error) {
+	patch = expandDottedKeys(cfg, patch)
+
 	knownKeys := make(map[string]bool, len(patch))
 	for _, apply := range partialSettingsAppliers {
 		if err := apply(cfg, patch, knownKeys); err != nil {
@@ -589,4 +591,88 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		}
 	}
 	return unknown, nil
+}
+
+// expandDottedKeys rewrites "section.field" patch keys into a whole "section"
+// object seeded from the config's current values.
+//
+// Two constraints meet here. The webui saves one field at a time
+// (updateSetting('embedding_index.enabled', v) puts {"embedding_index.enabled":true}
+// on the wire), but every section applier rebuilds its struct wholesale from
+// patch["embedding_index"]. So a dotted key matched no applier and the write was
+// dropped — surfaced only in a "warnings" field the client never reads, behind a
+// 200 and a green "Saved" toast. Seeding from the current values is what keeps
+// the expansion from trading that silent no-op for a silent wipe of the field's
+// siblings.
+func expandDottedKeys(cfg *configuration.Config, patch map[string]interface{}) map[string]interface{} {
+	sections := map[string]map[string]interface{}{}
+	var current map[string]interface{}
+
+	for key, value := range patch {
+		section, path, dotted := strings.Cut(key, ".")
+		if !dotted {
+			continue
+		}
+		if _, seeded := sections[section]; !seeded {
+			if current == nil {
+				current = configAsMap(cfg)
+			}
+			seed, _ := current[section].(map[string]interface{})
+			sections[section] = cloneStringMap(seed)
+		}
+		setNestedKey(sections[section], path, value)
+	}
+
+	if len(sections) == 0 {
+		return patch
+	}
+
+	expanded := make(map[string]interface{}, len(patch))
+	for key, value := range patch {
+		if !strings.Contains(key, ".") {
+			expanded[key] = value
+		}
+	}
+	for section, fields := range sections {
+		expanded[section] = fields
+	}
+	return expanded
+}
+
+func configAsMap(cfg *configuration.Config) map[string]interface{} {
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return map[string]interface{}{}
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return map[string]interface{}{}
+	}
+	return out
+}
+
+func cloneStringMap(src map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(src)+1)
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+// setNestedKey assigns value at a dotted path, creating intermediate maps and
+// replacing any non-map value blocking the way.
+func setNestedKey(target map[string]interface{}, path string, value interface{}) {
+	field, rest, nested := strings.Cut(path, ".")
+	if !nested {
+		target[field] = value
+		return
+	}
+	child, ok := target[field].(map[string]interface{})
+	if !ok {
+		child = map[string]interface{}{}
+	} else {
+		child = cloneStringMap(child)
+	}
+	setNestedKey(child, rest, value)
+	target[field] = child
 }

@@ -243,19 +243,31 @@ func (p *ONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts 
 	return p.embedBatchInternal(ctx, texts, prefix)
 }
 
-// defaultBatchChunkSize bounds memory per ORT call. With 32 rows at
-// the 2048-token max seq, the input tensors are ~512 KB each (int64 ×
-// 32 × 2048) and the output is ~96 KB (float32 × 32 × 768). The
-// embedding model itself (~168 MB Q4f16 weights) stays loaded once;
-// per-call allocations are negligible. Throughput scales near-linearly
-// up to ~16–32 rows, after which memory bandwidth dominates and bigger
-// chunks stop helping.
+// defaultBatchChunkSize caps the ROW count per ORT call. Throughput scales
+// near-linearly up to ~16–32 rows, after which memory bandwidth dominates.
 const defaultBatchChunkSize = 32
 
+// defaultBatchAttentionBudget caps the ATTENTION cost per ORT call, measured
+// in rows × seqLen² "score cells".
+//
+// Row count alone is not a memory bound. The input tensors are small — 32 rows
+// × 2048 tokens of int64 is ~512 KB — but transformer self-attention
+// materializes a [batch, heads, seq, seq] score tensor, so working memory
+// grows with rows × seqLen², not rows × seqLen. Because every row in a chunk
+// is padded up to the chunk's longest row, ONE long unit in a 32-row chunk
+// makes all 32 rows pay 2048², and a routine project index was observed
+// holding ~18 GB of ORT allocations in a single Run().
+//
+// At ~48 bytes per score cell (12 heads × float32) this budget keeps a call
+// near ~400 MB. Short units still batch the full 32 rows (a 256-token chunk
+// costs 32 × 256² ≈ 2.1M cells, well under budget); only long units drop the
+// row count, down to a floor of 1 so a single maxSeqLen unit always proceeds.
+const defaultBatchAttentionBudget = 8 << 20 // 8M cells ≈ 400 MB
+
 // embedBatchInternal is the shared body for EmbedBatch and
-// EmbedBatchWithPrefix. Tokenizes every input up front, partitions
-// into fixed-size chunks, and runs each chunk through ORT as a single
-// padded [batch, seq_len] tensor.
+// EmbedBatchWithPrefix. Tokenizes every input up front, partitions into
+// chunks bounded by both row count and attention cost, and runs each chunk
+// through ORT as a single padded [batch, seq_len] tensor.
 //
 // Empty-string inputs (tokenize to zero tokens) get a zero embedding
 // without an ORT call — matches the prior per-text behavior and keeps
@@ -295,32 +307,43 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 		}
 	}
 
-	for start := 0; start < len(texts); start += defaultBatchChunkSize {
+	// Rows that actually need inference. Empty inputs already hold a zero
+	// vector, and excluding them here keeps chunks packed with real work so a
+	// run of empties can't shrink an otherwise full batch.
+	work := make([]int, 0, len(texts))
+	for i := range tokIDs {
+		if len(tokIDs[i]) > 0 {
+			work = append(work, i)
+		}
+	}
+
+	for s := 0; s < len(work); {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		end := start + defaultBatchChunkSize
-		if end > len(texts) {
-			end = len(texts)
-		}
 
-		// Collect indices of rows in this chunk that actually need
-		// inference (skip ones we already filled with the zero vector).
-		nonEmptyIdx := make([]int, 0, end-start)
+		// Grow the chunk while it stays within BOTH the row cap and the
+		// attention budget. Every row pads up to the chunk's longest row, so
+		// admitting a long row re-prices every row already in the chunk —
+		// hence the budget is re-checked against the candidate maxLen, not the
+		// incoming row alone. At least one row is always admitted so a single
+		// maxSeqLen unit still makes progress.
 		maxLen := 0
-		for i := start; i < end; i++ {
-			if len(tokIDs[i]) == 0 {
-				continue
+		e := s
+		for e < len(work) && e-s < defaultBatchChunkSize {
+			candLen := maxLen
+			if n := len(tokIDs[work[e]]); n > candLen {
+				candLen = n
 			}
-			nonEmptyIdx = append(nonEmptyIdx, i)
-			if len(tokIDs[i]) > maxLen {
-				maxLen = len(tokIDs[i])
+			rows := int64(e - s + 1)
+			if rows > 1 && rows*int64(candLen)*int64(candLen) > defaultBatchAttentionBudget {
+				break
 			}
-		}
-		if len(nonEmptyIdx) == 0 {
-			continue
+			maxLen = candLen
+			e++
 		}
 
+		nonEmptyIdx := work[s:e]
 		batchSize := int64(len(nonEmptyIdx))
 		seqLen := int64(maxLen)
 
@@ -341,11 +364,13 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 
 		batchVecs, err := p.runInferenceBatch(inputIDs, attnMask, batchSize, seqLen)
 		if err != nil {
-			return nil, fmt.Errorf("batch embed[%d:%d]: %w", start, end, err)
+			return nil, fmt.Errorf("batch embed[rows %d:%d, seq %d]: %w", s, e, seqLen, err)
 		}
 		for bi, idx := range nonEmptyIdx {
 			results[idx] = batchVecs[bi]
 		}
+
+		s = e
 	}
 	return results, nil
 }

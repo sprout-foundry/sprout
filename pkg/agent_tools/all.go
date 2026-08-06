@@ -120,5 +120,6 @@ func AllTools() []ToolHandler {
 	// from the WASM roster rather than advertised as a tool that always
 	// returns "not available". SP-112-8.
 	tools = append(tools, registerRunAutomateTool()...)
-	return append(tools, registerCodegraphTools()...)
+	tools = append(tools, registerCodegraphTools()...)
+	return append(tools, registerSearchTool()...)
 }

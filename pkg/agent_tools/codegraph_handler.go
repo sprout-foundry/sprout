@@ -75,6 +75,61 @@ func triggerCodegraphBuild() {
 	}()
 }
 
+// codegraphRefreshMu guards a single in-flight incremental refresh, and
+// codegraphRefreshAt rate-limits how often one is started. The graph is
+// consulted by several tools that an agent may call repeatedly within one turn;
+// without the interval every one of those calls would kick off another walk.
+var (
+	codegraphRefreshMu      sync.Mutex
+	codegraphRefreshRunning bool
+	codegraphRefreshAt      time.Time
+)
+
+// codegraphRefreshInterval is how long a refresh is considered fresh enough.
+// Short, because the agent edits files between its own tool calls and a graph
+// that lags its edits is worse than useless — it reports confident, wrong
+// call relationships.
+const codegraphRefreshInterval = 30 * time.Second
+
+// triggerCodegraphRefresh re-indexes files whose mtime is newer than their
+// last_indexed timestamp, in the background.
+//
+// Incremental by construction (IndexChangedFiles → GetStaleFiles), so the cost
+// is a stat sweep when nothing changed. Failures are logged and the flag is
+// cleared so the next call retries; a stale graph is degraded, not broken, so a
+// failed refresh must never block the query the caller actually asked for.
+func triggerCodegraphRefresh() {
+	codegraphRefreshMu.Lock()
+	if codegraphRefreshRunning || time.Since(codegraphRefreshAt) < codegraphRefreshInterval {
+		codegraphRefreshMu.Unlock()
+		return
+	}
+	codegraphRefreshRunning = true
+	codegraphRefreshAt = time.Now()
+	codegraphRefreshMu.Unlock()
+
+	go func() {
+		defer func() {
+			codegraphRefreshMu.Lock()
+			codegraphRefreshRunning = false
+			codegraphRefreshMu.Unlock()
+		}()
+
+		store, err := codegraph.NewStore("")
+		if err != nil {
+			return
+		}
+		defer store.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		if err := store.IndexChangedFiles(ctx, codegraphFileParser); err != nil {
+			fmt.Fprintf(os.Stderr, "codegraph refresh failed: %v (queries will use the previous graph)\n", err)
+		}
+	}()
+}
+
 // allowCodegraphRetry clears the attempted flag so the next query tool call
 // can trigger a fresh background build. Called when a build fails to start
 // or completes with an error.
@@ -253,6 +308,14 @@ func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
 		triggerCodegraphBuild()
 		return nil, nil
 	}
+	// The store exists, but existing is not the same as current. Nothing else
+	// refreshes it: IndexChangedFiles is reachable only from the /codegraph CLI
+	// command and from embedding_index(update) — a tool named for a different
+	// subsystem, which no persona is granted. Without this, get_callers,
+	// get_callees, find_dead_code and repo_map's warm path answer from whatever
+	// the tree looked like the first time the graph was ever built, and report
+	// it with no indication that it is stale.
+	triggerCodegraphRefresh()
 	return codegraph.NewStore("")
 }
 

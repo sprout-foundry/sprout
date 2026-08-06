@@ -121,7 +121,7 @@ func TestOllamaAPIKeyDetection(t *testing.T) {
 
 func TestFilterToolsByName(t *testing.T) {
 	allTools := BuildToolDefinitions()
-	allowed := makeAllowedToolSet([]string{"read_file", "search_files", "missing_tool"})
+	allowed := makeAllowedToolSet([]string{"read_file", "search", "missing_tool"})
 
 	filtered := filterToolsByName(allTools, allowed)
 	if len(filtered) == 0 {
@@ -136,8 +136,8 @@ func TestFilterToolsByName(t *testing.T) {
 	if !found["read_file"] {
 		t.Fatalf("expected read_file to be included")
 	}
-	if !found["search_files"] {
-		t.Fatalf("expected search_files to be included")
+	if !found["search"] {
+		t.Fatalf("expected search to be included")
 	}
 	if found["write_file"] {
 		t.Fatalf("expected write_file to be excluded")

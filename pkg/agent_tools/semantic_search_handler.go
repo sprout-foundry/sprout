@@ -19,6 +19,7 @@ func (h *semanticSearchHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "semantic_search",
 		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
+		Hidden:      true, // superseded by `search`; still callable by name
 		Required:    []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Required: true, Description: "Natural language description of what you're looking for"},
@@ -111,11 +112,14 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 			embeddingCfg = &configuration.EmbeddingIndexConfig{}
 		}
 
-		mgr = embedding.NewEmbeddingManager(embeddingCfg, workspaceRoot)
+		// Acquire from the process-wide registry rather than constructing one:
+		// a directly-built manager is a second in-memory store over the same
+		// index files, competing with whatever the agent already has open.
+		mgr = embedding.AcquireManager(embeddingCfg, workspaceRoot)
 		ownsMgr = true
 	}
 	if ownsMgr {
-		defer mgr.Close()
+		defer embedding.ReleaseManager(mgr)
 	}
 
 	if err := mgr.Init(ctx); err != nil {
@@ -123,6 +127,26 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 			Output:  fmt.Sprintf("Semantic search unavailable: %v\n\nThe embedding index could not be initialized. This is usually because the ONNX runtime is not available in this build, or the model has not been downloaded yet. Run `embedding_index operation=status` to check the current state.", err),
 			IsError: true,
 		}, nil
+	}
+
+	// Gate on the index actually holding data. Without this, an unbuilt or
+	// still-building index returns zero hits and the formatter reports "No
+	// results found ... try broadening your search" — a statement about the
+	// codebase, when the truth is that nothing has been searched. The agent
+	// acts on that as evidence the code does not exist.
+	if r := mgr.Readiness(); !r.CanAnswerQueries() {
+		switch {
+		case r.Building:
+			return ToolResult{
+				Output: fmt.Sprintf("The embedding index is still building (%d records so far), so semantic search cannot answer yet.\n\n"+
+					"This is not a statement about the codebase — nothing has been searched. Retry shortly, or use search_files for a literal match in the meantime.", r.Records),
+			}, nil
+		default:
+			return ToolResult{
+				Output: "The embedding index has not been built for this workspace, so semantic search cannot answer.\n\n" +
+					"This is not a statement about the codebase — nothing has been searched. Enable indexing with the /index command, or use search_files for a literal match.",
+			}, nil
+		}
 	}
 
 	results, err := mgr.QuerySimilar(ctx, query, topK, float32(threshold))
@@ -134,6 +158,9 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}
 
 	output := formatEmbeddingSearchResults(query, results, threshold)
+	if r := mgr.Readiness(); r.Building {
+		output = fmt.Sprintf("Note: the embedding index is still building (%d records indexed so far); these results are incomplete.\n\n%s", r.Records, output)
+	}
 
 	if env.OutputWriter != nil {
 		_, _ = env.OutputWriter.Write([]byte(output))

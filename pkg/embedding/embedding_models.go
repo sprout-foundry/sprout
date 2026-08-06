@@ -112,6 +112,42 @@ func (m *EmbeddingManager) IsInitialized() bool {
 	return m.initialized.Load()
 }
 
+// IndexReadiness is a consistent snapshot of whether the index can answer a
+// query, and how completely.
+//
+// Taken under one lock acquisition on purpose. Composing IsInitialized() +
+// IsBuilding() + IndexSize() reads three separate snapshots, so a caller can
+// observe "not building" and "0 records" from different instants and conclude
+// the index is empty and idle while a build is in fact running.
+type IndexReadiness struct {
+	Initialized bool
+	Building    bool
+	Records     int
+}
+
+// CanAnswerQueries reports whether a search against this index is meaningful.
+// An index with no records cannot distinguish "no such code exists" from
+// "nothing has been indexed", and reporting the former is a false negative the
+// caller will act on.
+func (r IndexReadiness) CanAnswerQueries() bool {
+	return r.Initialized && r.Records > 0
+}
+
+// Readiness returns a consistent snapshot of the index's ability to serve
+// queries.
+func (m *EmbeddingManager) Readiness() IndexReadiness {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := IndexReadiness{
+		Initialized: m.initialized.Load(),
+		Building:    m.building,
+	}
+	if m.store != nil {
+		r.Records = m.store.Size()
+	}
+	return r
+}
+
 // IsBuilding returns true if an index build is currently in progress.
 func (m *EmbeddingManager) IsBuilding() bool {
 	m.mu.Lock()

@@ -224,6 +224,19 @@ The **conversation store** (vector embeddings via `pkg/agent/turn_embedding.go` 
 - Don't treat the embedding store as ephemeral — it survives `/compact` and rollups by design.
 - Don't let rollups consume the recency window — `recentTurnsToPreserve` per-turn checkpoints stay at full fidelity.
 
+## Embedding index build (slow-device profile)
+
+The codebase index build (`pkg/embedding/IndexManager.BuildIndex`) is the path that walks the workspace, runs symbol extraction per file, embeds each unit via the ONNX provider, and persists vectors to the HNSW store. Two things to know when touching it:
+
+**1. Partial builds must persist progress.** `BuildIndex`'s 45-minute `BuildTimeout` (`pkg/embedding/constants.go`) is shorter than a full build on phones / ARM SBCs — EmbeddingGemma-300M on a Snapdragon-class 8-core CPU does ~4 rec/s, so a 12K-unit repo takes ~50 minutes. The build is expected to be interrupted. Three commits together make that survivable:
+- **Per-file checkpointing** (`index_checkpoint.go`, `recordBatcher`): every 50 completed files flush to the store + manifest. An interrupted build persists whatever it finished instead of nothing.
+- **Manifest resume**: next `BuildIndex` skips files whose mtime matches the manifest, so progress accumulates across sessions.
+- **ctx-aware ORT Run** (`runWithOptions` in `onnx_embedding_provider.go`): `session.Run` ignores Go contexts, so the BuildTimeout's ctx cancellation does nothing on its own. `runWithOptions` spawns a watchdog goroutine that calls `RunOptions.Terminate()` when ctx fires; ORT's kernel loop checks the flag between operations and returns promptly. Without this, a Run that hangs (degenerate input shape, intra-op contention, etc.) holds the inference gate permit forever and the `building` flag stays true until the process is killed.
+
+**2. A model swap is in flight.** The current model (EmbeddingGemma-300M, q4 quantization) was benchmarked against M1 Pro and is the default for everything; on phones it's painfully slow. A lighter transformer or a different on-device model will land shortly from another machine, replacing the model config in `pkg/embedding/model_downloader.go` and likely the tokenizer (currently `GemmaTokenizer`, which is SentencePiece-specific — a switch to a BERT/WordPiece tokenizer will be required if the new model isn't Gemma-family). When that lands, re-baseline `pkg/embedding/retrieval_quality_test.go` against the new model's quality numbers. The `manifestInvalidated` path in `BuildIndex` already handles model-hash-change by wiping and re-indexing atomically via `ReplaceAll`, so the swap is safe from a store-consistency standpoint.
+
+**Don't re-introduce either of these.** A "build that hangs forever on slow devices" or a "model swap that loses the index" both look like silent corruption to the user.
+
 ## Change Tracking
 
 The `ChangeTracker` (in `pkg/agent/change_tracking*.go`) records every file mutation an agent (primary or subagent) performs during a session. It powers `list_changes`, `recover_file`, and `SubagentReturn.FilesModified` — the authoritative manifest of what a subagent edited.

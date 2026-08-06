@@ -18,6 +18,13 @@ import "context"
 // prompt) is not stuck behind a long background build batch, and rather than
 // NumCPU because ORT already fans each matmul across IntraOpNumThreads (up to
 // 4) — more concurrent sessions add memory, not throughput.
+//
+// If overlapping Runs ever wedges on a platform, the watchdog in
+// runWithOptions (onnx_embedding_provider.go) terminates the in-flight Run
+// via RunOptions.Terminate on ctx cancellation, so a hang recovers instead
+// of bricking the daemon. Lowering this to 1 is not needed for safety; it
+// just serializes ops and hurts latency on devices that handle concurrency
+// fine.
 const maxConcurrentInference = 2
 
 // inferenceGate is the process-wide inference permit pool. Buffered channel

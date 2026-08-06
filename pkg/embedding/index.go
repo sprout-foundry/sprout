@@ -244,15 +244,53 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		}
 	}
 
-	// Embed only changed units.
+	// Embed only changed units, checkpointing each file as it completes so an
+	// interrupted build persists whatever it finished instead of discarding
+	// everything accumulated up to the timeout.
+	//
+	// Store writes are batched because HNSWStore.Store rewrites the whole
+	// records JSON plus HNSW graph on every call: flushing per file made a
+	// build O(N²) in store I/O. The recordBatcher flushes every
+	// manifestCheckpointInterval files plus a final flush after embedUnits
+	// returns (including on cancellation, so the timeout path loses nothing).
+	// A hard process death between flushes loses at most the in-memory batch;
+	// Store is an upsert by ID, so the next build simply re-embeds those
+	// files. The 50× write-amplification reduction is worth that trade.
 	var newRecords []VectorRecord
 	if len(unitsToEmbed) > 0 {
 		debugLogf("index: re-embedding %d units...", len(unitsToEmbed))
 		embedStart := time.Now()
-		newRecords, err = m.embedUnits(ctx, unitsToEmbed)
+
+		var checkpoint *checkpointManifest
+		if m.opts.ManifestPath != "" {
+			checkpoint, err = newCheckpointManifest(m.opts.ManifestPath, m.provider.ModelHash())
+			if err != nil {
+				debugLogf("index: manifest checkpoint disabled (continuing without): %v", err)
+				checkpoint = nil
+			}
+		}
+
+		batcher := newRecordBatcher(m.store, checkpoint, manifestCheckpointInterval)
+
+		newRecords, err = m.embedUnits(ctx, unitsToEmbed, batcher.add)
+		// Flush whatever the callback left pending even when embedding
+		// aborted, so the store on disk matches the records embedUnits
+		// reports (and the manifest matches the store).
+		flushErr := batcher.flush()
+		if checkpoint != nil {
+			// Persist whatever the manifest checkpoint left pending even when
+			// embedding aborted, so the manifest on disk matches the store.
+			if cerr := checkpoint.flush(); cerr != nil {
+				debugLogf("index: manifest checkpoint flush failed (non-fatal): %v", cerr)
+			}
+		}
 		if err != nil {
 			stats.Duration = time.Since(start)
 			return stats, fmt.Errorf("index: embed units: %w", err)
+		}
+		if flushErr != nil {
+			stats.Duration = time.Since(start)
+			return stats, fmt.Errorf("index: flush pending records: %w", flushErr)
 		}
 		debugLogf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
 	}
@@ -301,14 +339,11 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			}
 		}
 
+		stats.UnitsEmbedded = len(newRecords)
 		if len(newRecords) > 0 {
-			debugLogf("index: storing %d new records...", len(newRecords))
-			storeStart := time.Now()
-			if err := m.store.Store(newRecords); err != nil {
-				return stats, fmt.Errorf("index: store: %w", err)
-			}
-			debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
-			stats.UnitsEmbedded = len(newRecords)
+			// Records were already persisted per-file by the checkpoint
+			// callback during embedding; there is no end-of-build flush.
+			debugLogf("index: stored %d records via per-file checkpoints", len(newRecords))
 		} else if len(staleIDs) == 0 {
 			debugLogf("index: no changes detected, skipping store")
 		}
@@ -401,7 +436,7 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 		return nil
 	}
 
-	records, err := m.embedUnits(ctx, units)
+	records, err := m.embedUnits(ctx, units, nil)
 	if err != nil {
 		return fmt.Errorf("index: embed %s: %w", filePath, err)
 	}
@@ -460,7 +495,14 @@ func (m *IndexManager) CheckDuplicates(ctx context.Context, codeText string, top
 // so that the caller can store whatever was processed so far.
 // Detects file-level units (ID == file path) vs code units (ID == file:path) and
 // uses the appropriate converter to set the Type field correctly.
-func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]VectorRecord, error) {
+//
+// When onFileComplete is non-nil, it is invoked the moment every unit belonging
+// to a file has been embedded — in batch completion order, not input order —
+// with that file's records. BuildIndex feeds these to a recordBatcher that
+// persists completed files in batches, so an interrupted build keeps the files
+// it finished instead of discarding them (the single end-of-build Store call
+// never ran on devices where the timeout fired mid-embed).
+func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileComplete func(file string, records []VectorRecord) error) ([]VectorRecord, error) {
 	now := time.Now()
 	var records []VectorRecord
 	var embedded int
@@ -489,11 +531,63 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 	// reports which specific units completed.
 	vecByIndex := make([][]float32, len(units))
 
+	// Group unit indices by file so a file's completion can be detected the
+	// moment its last unit embeds, no matter which batch that lands in.
+	unitsByFile := make(map[string][]int, len(units))
+	for i, u := range units {
+		unitsByFile[u.File] = append(unitsByFile[u.File], i)
+	}
+	embeddedByFile := make(map[string]int, len(unitsByFile))
+	completedFiles := make(map[string]bool, len(unitsByFile))
+
+	// recordsForFile assembles one file's records from the vectors that have
+	// landed. Only called once every unit of the file has embedded, so every
+	// index is non-nil.
+	recordsForFile := func(file string) []VectorRecord {
+		idxs := unitsByFile[file]
+		out := make([]VectorRecord, 0, len(idxs))
+		for _, idx := range idxs {
+			u := units[idx]
+			if u.ID == u.File {
+				out = append(out, fileCodeUnitToRecord(u, vecByIndex[idx], now))
+			} else {
+				out = append(out, codeUnitToRecord(u, vecByIndex[idx], now))
+			}
+		}
+		return out
+	}
+
+	// markEmbedded advances per-file progress for one batch and fires
+	// onFileComplete for any file whose last unit just landed.
+	markEmbedded := func(idxs []int) error {
+		if onFileComplete == nil {
+			return nil
+		}
+		for _, idx := range idxs {
+			file := units[idx].File
+			if completedFiles[file] {
+				continue
+			}
+			embeddedByFile[file]++
+			if embeddedByFile[file] < len(unitsByFile[file]) {
+				continue
+			}
+			completedFiles[file] = true
+			if err := onFileComplete(file, recordsForFile(file)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	for i := 0; i < len(order); i += m.opts.BatchSize {
 		if err := ctx.Err(); err != nil {
 			// Graceful degradation: return partial results on timeout/cancellation.
-			log.Printf("index: embedding interrupted after %d records (%d total units): %v",
-				len(records), len(units), err)
+			// Completed files were already handed to onFileComplete (and the
+			// caller flushes them), so `embedded` is the honest progress figure —
+			// len(records) is still empty here.
+			log.Printf("index: embedding interrupted after %d/%d units: %v",
+				embedded, len(units), err)
 			break
 		}
 
@@ -517,6 +611,10 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 			vecByIndex[idx] = vecs[j]
 		}
 		embedded += len(idxs)
+
+		if err := markEmbedded(idxs); err != nil {
+			return records, err
+		}
 
 		// Log progress every ProgressInterval records embedded.
 		if embedded%ProgressInterval < m.opts.BatchSize {

@@ -456,9 +456,9 @@ func NewConfig() *Config {
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(), // Default to enabling parallel subagents
 		EmbeddingIndex: &EmbeddingIndexConfig{
-			Enabled:   boolPtr(false),
-			AutoIndex: boolPtr(false),
-			MaxResults:          3,
+			Enabled:    boolPtr(false),
+			AutoIndex:  boolPtr(false),
+			MaxResults: 3,
 		},
 	}
 }

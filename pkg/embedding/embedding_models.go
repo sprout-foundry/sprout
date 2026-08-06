@@ -156,6 +156,14 @@ func (m *EmbeddingManager) Readiness() IndexReadiness {
 	if m.store != nil {
 		r.Records = m.store.Size()
 	}
+	// When the dual-model code provider is active, report the max of both
+	// stores so CanAnswerQueries() is true if EITHER index has records.
+	// A code-only build (Gemma store empty) should still answer code queries.
+	if m.codeStore != nil {
+		if codeSize := m.codeStore.Size(); codeSize > r.Records {
+			r.Records = codeSize
+		}
+	}
 	return r
 }
 
@@ -176,13 +184,21 @@ func (m *EmbeddingManager) InitError() error {
 
 // IndexSize returns the number of records in the vector store.
 // Returns 0 and a nil error if the manager is not yet initialized.
+// Reports the max of the Gemma and code stores so the status reflects whichever
+// index has data (SP-135 dual-model).
 func (m *EmbeddingManager) IndexSize() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.store == nil {
-		return 0
+	size := 0
+	if m.store != nil {
+		size = m.store.Size()
 	}
-	return m.store.Size()
+	if m.codeStore != nil {
+		if codeSize := m.codeStore.Size(); codeSize > size {
+			size = codeSize
+		}
+	}
+	return size
 }
 
 // ModelHash returns the active embedding provider's model hash, or "" if no

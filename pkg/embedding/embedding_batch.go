@@ -355,7 +355,19 @@ func (m *EmbeddingManager) UpdateFile(ctx context.Context, filePath string) erro
 	if err != nil {
 		return err
 	}
-	return idx.UpdateFile(ctx, filePath)
+	if err := idx.UpdateFile(ctx, filePath); err != nil {
+		return err
+	}
+	// Keep the code-specific index in sync (SP-135 dual-model).
+	m.mu.Lock()
+	codeIdx := m.codeIndexMgr
+	m.mu.Unlock()
+	if codeIdx != nil {
+		if err := codeIdx.UpdateFile(ctx, filePath); err != nil {
+			debugLogf("embedding: code index update failed for %s (non-fatal): %v", filePath, err)
+		}
+	}
+	return nil
 }
 
 // UpdateFromGitDiff incrementally updates the index by examining git-tracked
@@ -368,7 +380,23 @@ func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, 
 	if err != nil {
 		return nil, err
 	}
-	return idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
+	stats, err := idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
+	if err != nil {
+		return stats, err
+	}
+	// Keep the code-specific index in sync (SP-135 dual-model).
+	m.mu.Lock()
+	codeIdx := m.codeIndexMgr
+	m.mu.Unlock()
+	if codeIdx != nil {
+		codeStats, codeErr := codeIdx.UpdateFromGitDiff(ctx, m.workspaceRoot)
+		if codeErr != nil {
+			debugLogf("embedding: code index diff update failed (non-fatal): %v", codeErr)
+		} else if codeStats != nil {
+			debugLogf("embedding: code index updated: %d files, %d units", codeStats.FilesProcessed, codeStats.UnitsEmbedded)
+		}
+	}
+	return stats, nil
 }
 
 // UpdateFromGitDiffBackground starts an incremental index update in a
@@ -631,6 +659,11 @@ func clearCodeEmbeddingFiles(indexDir string) (int, error) {
 		filepath.Join(indexDir, "index.hnsw"),
 		filepath.Join(indexDir, "index.hnsw.meta"),
 		filepath.Join(indexDir, "index.hnsw.records.json"),
+		// Code-specific index (SP-135 dual-model: Jina Code v2)
+		filepath.Join(indexDir, "code_index.hnsw"),
+		filepath.Join(indexDir, "code_index.hnsw.meta"),
+		filepath.Join(indexDir, "code_index.hnsw.records.json"),
+		filepath.Join(indexDir, ".code_index.hnsw.manifest.json"),
 	}
 	return removeFilesSilently(files)
 }

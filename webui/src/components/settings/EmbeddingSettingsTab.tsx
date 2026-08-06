@@ -203,7 +203,6 @@ export default function EmbeddingSettingsTab({
       {/* Configuration */}
       {renderToggle('embedding_index.enabled', 'Enable embedding index')}
       {renderToggle('embedding_index.auto_index', 'Auto-build on startup')}
-      {renderTextInput('embedding_index.similarity_threshold', 'Similarity threshold', '0.0 – 1.0')}
       {renderTextInput('embedding_index.max_results', 'Max duplicate results', '1 – 10')}
 
       <div className="config-item">

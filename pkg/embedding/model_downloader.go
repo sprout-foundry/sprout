@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -84,7 +85,7 @@ type ModelDownloader struct {
 func NewModelDownloader() *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: DefaultModelDir(),
-		client:   &http.Client{Timeout: defaultDownloadTimeout},
+		client:   newModelDownloadClient(),
 	}
 }
 
@@ -92,7 +93,34 @@ func NewModelDownloader() *ModelDownloader {
 func NewModelDownloaderWithDir(modelDir string) *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: modelDir,
-		client:   &http.Client{Timeout: defaultDownloadTimeout},
+		client:   newModelDownloadClient(),
+	}
+}
+
+// newModelDownloadClient creates an HTTP client tuned for large model downloads
+// from HuggingFace's CDN. Go's default HTTP/2 implementation stalls on certain
+// CDN redirect chains (HF resolves to xet-bridge → us.aws.cdn.hf.co), where a
+// curl download completes in 14s but the Go client hangs until the 5-minute
+// total timeout. The fix layers explicit per-phase timeouts onto an HTTP/1.1
+// transport: ResponseHeaderTimeout catches a stalled server response, and
+// disabling HTTP/2 avoids the multiplexed-stream stall entirely.
+func newModelDownloadClient() *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+	}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   defaultDownloadTimeout,
 	}
 }
 

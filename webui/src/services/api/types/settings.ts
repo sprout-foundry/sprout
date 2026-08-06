@@ -44,7 +44,6 @@ export interface SproutSettings {
     ort_library_path: string;
     model_dir: string;
     auto_index: boolean;
-    similarity_threshold: number;
     max_results: number;
     exclude_paths: string[];
   };

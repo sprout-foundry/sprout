@@ -91,6 +91,13 @@ type ToolDefinition struct {
 	Description string         `json:"description"`
 	Parameters  []ParameterDef `json:"parameters"`
 	Required    []string       `json:"required,omitempty"` // Required parameter names
+
+	// Hidden keeps the tool callable but omits it from the roster advertised to
+	// the model. Use it for a tool that has been superseded: the schema no
+	// longer costs context on every turn, but existing callers — replayed
+	// sessions, saved automations, subagent configs naming it directly — keep
+	// working instead of failing on an unknown tool.
+	Hidden bool `json:"-"`
 }
 
 // ParameterDef defines a single tool parameter's schema.

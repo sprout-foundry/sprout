@@ -184,3 +184,43 @@ func (p *ONNXEmbeddingProvider) EmbedText(ctx context.Context, text string) ([]f
 func (p *ONNXEmbeddingProvider) EmbedBatchText(ctx context.Context, texts []string) ([][]float32, error) {
 	return nil, fmt.Errorf("CGO is disabled; ONNX embedding not available")
 }
+
+// JinaONNXEmbeddingProvider is a stub type when CGO is disabled.
+type JinaONNXEmbeddingProvider struct{}
+
+// NewJinaONNXEmbeddingProvider returns an error when CGO is disabled.
+func NewJinaONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string) (*JinaONNXEmbeddingProvider, error) {
+	return nil, fmt.Errorf("CGO is disabled; Jina embedding provider cannot be used")
+}
+
+// Embed implements EmbeddingProvider (stub).
+func (p *JinaONNXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+	return nil, fmt.Errorf("CGO is disabled; Jina embedding not available")
+}
+
+// EmbedBatch implements EmbeddingProvider (stub).
+func (p *JinaONNXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	return nil, fmt.Errorf("CGO is disabled; Jina embedding not available")
+}
+
+// EmbedWithPrefix implements EmbeddingProvider (stub).
+func (p *JinaONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text string, prefix string) ([]float32, error) {
+	return nil, fmt.Errorf("CGO is disabled; Jina embedding not available")
+}
+
+// EmbedBatchWithPrefix implements EmbeddingProvider (stub).
+func (p *JinaONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
+	return nil, fmt.Errorf("CGO is disabled; Jina embedding not available")
+}
+
+// Dimensions returns 0 in no-CGO builds.
+func (p *JinaONNXEmbeddingProvider) Dimensions() int { return 0 }
+
+// Name returns the stub name.
+func (p *JinaONNXEmbeddingProvider) Name() string { return "jina-stub" }
+
+// ModelHash returns empty in no-CGO builds.
+func (p *JinaONNXEmbeddingProvider) ModelHash() string { return "" }
+
+// Close is a no-op in no-CGO builds.
+func (p *JinaONNXEmbeddingProvider) Close() error { return nil }

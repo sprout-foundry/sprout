@@ -57,6 +57,17 @@ type EmbeddingManager struct {
 	// This is the provider exposed via GetConversationStore().Provider().
 	cachedProvider *cachedProvider
 
+	// Code-specific provider (Jina Code v2) for the dual-model architecture
+	// (SP-135). When available, QuerySimilarCode and CheckDuplicates route
+	// here instead of the Gemma-backed indexMgr. Both stores are separate:
+	// the code index uses the code provider's ModelHash, the Gemma index
+	// keeps its own. Falls back to indexMgr (Gemma) when the code model is
+	// unavailable or not initialized.
+	codeProvider   EmbeddingProvider
+	codeStore      VectorStore
+	codeIndexMgr   *IndexManager
+	codeAvailable  bool
+
 	// sharedKey identifies this manager in the process-wide registry when it
 	// came from AcquireManager. Empty for directly-constructed managers, which
 	// ReleaseManager then closes outright. Written once at acquisition, before
@@ -213,6 +224,22 @@ func (m *EmbeddingManager) snapshotIndexMgr() (*IndexManager, error) {
 	defer m.mu.Unlock()
 	if !m.initialized.Load() {
 		return nil, fmt.Errorf("embedding: manager not initialized")
+	}
+	return m.indexMgr, nil
+}
+
+// snapshotCodeIndexMgr returns the code-specific IndexManager when the dual-
+// model architecture is active (codeProvider available), or falls back to the
+// Gemma-backed indexMgr otherwise. The caller (QuerySimilarCode /
+// CheckDuplicates) routes to whichever provider is ready.
+func (m *EmbeddingManager) snapshotCodeIndexMgr() (*IndexManager, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.initialized.Load() {
+		return nil, fmt.Errorf("embedding: manager not initialized")
+	}
+	if m.codeAvailable && m.codeIndexMgr != nil {
+		return m.codeIndexMgr, nil
 	}
 	return m.indexMgr, nil
 }

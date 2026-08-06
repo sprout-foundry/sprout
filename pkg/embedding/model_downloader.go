@@ -366,6 +366,36 @@ func EmbeddingGemma300MConfig() ModelConfig {
 	}
 }
 
+// JinaCodeV2Config returns the config for Jina AI's jina-embeddings-v2-base-code
+// — a 137M parameter BERT encoder purpose-built for code retrieval (trained on
+// The Stack v2 code corpus, Apache-2.0). Used as the code-specific provider in
+// the dual-model architecture (SP-135): code retrieval + duplicate detection
+// routes here; Gemma handles conversation/NL semantics.
+//
+// Ships the quantized (int8) ONNX export (~162 MB). Jina's ONNX graph uses
+// standard ops (MatMulInteger, LayerNormalization, GELU — no com.microsoft
+// custom ops), making it CoreML-EP-friendly (unlike Gemma's export — see SP-134).
+// The model outputs last_hidden_state [batch, seq, 768]; mean pooling is done
+// in Go (JinaProvider.runInference), not by the graph.
+//
+// Source: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
+func JinaCodeV2Config() ModelConfig {
+	const base = "https://huggingface.co/jinaai/jina-embeddings-v2-base-code/resolve/main"
+	return ModelConfig{
+		Name:              "jina-code-v2",
+		ModelURL:          base + "/onnx/model_quantized.onnx",
+		ModelHash:         "",
+		ModelFilename:     "model_quantized.onnx",
+		ModelDataURL:      "", // quantized model is self-contained (no external data)
+		ModelDataHash:     "",
+		ModelDataFilename: "",
+		TokenizerURL:      base + "/tokenizer.json",
+		TokenizerHash:     "",
+		FullDims:          768,
+		Dims:              768,
+	}
+}
+
 // DownloadModel ensures the model and tokenizer files exist in modelDir for the
 // given ModelConfig. If files already exist with matching checksums, download is skipped.
 // Progress is reported via the callback (0.0 to 1.0).

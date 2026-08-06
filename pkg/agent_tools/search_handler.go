@@ -82,15 +82,15 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	// additive to it, which is what makes degradation graceful rather than a
 	// mode switch.
 	fileGlob, _ := extractString(args, "file_glob")
-	literalHits, literalErr := runLiteralSearch(ctx, literalSearchOpts{
+	literalRes, literalErr := runLiteralSearch(ctx, literalSearchOpts{
 		Directory:     directory,
 		Pattern:       literalPatternFor(query),
 		FileGlob:      fileGlob,
 		CaseSensitive: getBoolArg(args, "case_sensitive"),
-		MaxResults:    3,          // per-file line cap
-		MaxFiles:      limit * 5,  // walk far enough to cover the repo
-		MaxBytes:      512 * 1024, // the fused list is capped separately
+		MaxFiles:      limit * 5, // room to backfill behind the semantic list
+		MaxPerFile:    3,
 	})
+	literalHits := literalRes.Hits
 
 	// --- semantic pass: only when the index can actually answer ---
 	var semanticHits []embedding.QueryResult

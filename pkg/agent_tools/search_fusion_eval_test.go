@@ -133,18 +133,23 @@ func TestSearchFusionBeatsEitherStrategy(t *testing.T) {
 	t.Log("")
 	t.Logf("fused (conceptual query):   %d/%d", fusedHits, len(fusionCases))
 	t.Logf("literal-only (regex query): %d/%d", literalOnlyHits, len(fusionCases))
-	t.Logf("reference from pkg/embedding/value_eval_test.go: semantic 10/14, ripgrep 12/14")
+	// Compared at an EQUAL result budget. pkg/embedding/value_eval_test.go
+	// reports ripgrep 12/14, but that counts the target anywhere in unlimited
+	// output — including rank 60 of 94 and 81 of 104. Re-scored within the same
+	// top-10 this test uses, ripgrep finds 5/14. An agent cannot read 94
+	// results, so top-10 is the budget that decides whether a tool is useful.
+	t.Logf("at an equal top-10 budget: fused %d/14, semantic 10/14, ripgrep 5/14", fusedHits)
 
-	// Measured outcome: fusion MATCHES semantic alone on conceptual queries
-	// (10/14); it does not reach the union of both strategies. The union
-	// predicted from the standalone evals assumed each strategy received its own
-	// query formulation — a hand-written regex for grep, prose for semantic. One
-	// query string cannot serve both, and deriving a keyword pattern from prose
-	// did not close the gap: a broad OR matches too many files and the capped
-	// walk truncates before reaching the target.
+	// Measured outcome: fusion matches semantic alone (10/14) and doubles
+	// ripgrep at the same result budget (5/14). It does not reach the union of
+	// both strategies — that prediction assumed each strategy got its own query
+	// formulation, a hand-written regex for grep and prose for semantic, and one
+	// query string cannot serve both. Deriving a keyword pattern from prose did
+	// not close the gap either.
 	//
-	// The gate is therefore "no worse than the best single strategy", which is
-	// what justifies replacing two tools with one.
+	// Matching the best single strategy while also working with no index, and
+	// accepting a regex directly, is what justifies replacing two tools with
+	// one.
 	if fusedHits < 10 {
 		t.Errorf("fused search found %d/%d — worse than semantic alone (10/14), so the fused tool is a regression",
 			fusedHits, len(fusionCases))

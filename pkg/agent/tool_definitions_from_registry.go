@@ -18,6 +18,13 @@ func BuildToolDefinitions() []api.Tool {
 	allHandlers := tools.GetNewToolRegistry().All()
 	result := make([]api.Tool, 0, len(allHandlers)+1)
 	for _, h := range allHandlers {
+		// Superseded tools stay in the registry so direct calls still resolve,
+		// but are not advertised — every advertised schema costs context on
+		// every turn, and two tools that do the same job also cost the model a
+		// choice it should not have to make.
+		if h.Definition().Hidden {
+			continue
+		}
 		result = append(result, convertHandlerToAPITool(h))
 	}
 	result = append(result, mcpToolsSyntheticEntry())

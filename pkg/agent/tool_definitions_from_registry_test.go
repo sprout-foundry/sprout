@@ -21,7 +21,9 @@ func TestBuildToolDefinitions(t *testing.T) {
 		nameSet[d.Function.Name] = true
 	}
 
-	essential := []string{"read_file", "shell_command", "write_file", "search_files"}
+	// "search", not "search_files": the latter is Hidden (superseded) and so is
+	// deliberately absent from the advertised roster.
+	essential := []string{"read_file", "shell_command", "write_file", "search"}
 	for _, name := range essential {
 		if !nameSet[name] {
 			t.Errorf("BuildToolDefinitions missing essential tool: %s", name)

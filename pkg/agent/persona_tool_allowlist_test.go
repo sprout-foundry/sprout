@@ -30,7 +30,7 @@ func TestPersonaToolsCatalogIsAuthoritative(t *testing.T) {
 		"edit_file",
 		"write_structured_file",
 		"patch_structured_file",
-		"search_files",
+		"search",
 		"browse_url",
 		"web_search",
 		"fetch_url",

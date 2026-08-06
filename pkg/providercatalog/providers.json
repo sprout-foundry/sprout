@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-03T12:38:15Z",
+  "updated_at": "2026-08-05T11:32:09Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -293,7 +293,14 @@
         },
         {
           "id": "MiniMax-M2.1-highspeed",
-          "name": "MiniMax-M2.1-highspeed"
+          "name": "MiniMax-M2.1-highspeed",
+          "description": "MiniMax-M2.1 Highspeed - same performance as M2.1 with significantly faster inference",
+          "context_length": 196608,
+          "tags": [
+            "tools"
+          ],
+          "input_cost": 0.6,
+          "output_cost": 2.4
         },
         {
           "id": "MiniMax-M2.5",
@@ -309,7 +316,14 @@
         },
         {
           "id": "MiniMax-M2.5-highspeed",
-          "name": "MiniMax-M2.5-highspeed"
+          "name": "MiniMax-M2.5-highspeed",
+          "description": "MiniMax-M2.5 Highspeed - same performance as M2.5 with significantly faster inference",
+          "context_length": 196608,
+          "tags": [
+            "tools"
+          ],
+          "input_cost": 0.6,
+          "output_cost": 2.4
         },
         {
           "id": "MiniMax-M2.5-Lightning",
@@ -334,11 +348,26 @@
         },
         {
           "id": "MiniMax-M2.7-highspeed",
-          "name": "MiniMax-M2.7-highspeed"
+          "name": "MiniMax-M2.7-highspeed",
+          "description": "MiniMax-M2.7 Highspeed - same performance as M2.7 with significantly faster inference",
+          "context_length": 196608,
+          "tags": [
+            "tools"
+          ],
+          "input_cost": 0.6,
+          "output_cost": 2.4
         },
         {
           "id": "MiniMax-M3",
-          "name": "MiniMax-M3"
+          "name": "MiniMax-M3",
+          "description": "MiniMax-M3 - frontier multimodal coding model with 1M context window",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 0.6,
+          "output_cost": 2.4
         },
         {
           "id": "MiniMax-VL-01",
@@ -466,92 +495,195 @@
         {
           "id": "deepseek-v4-flash",
           "name": "deepseek-v4-flash",
+          "description": "DeepSeek V4 Flash - efficient MoE model (284B total, 13B active) with 1M context",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
           "input_cost": 0.14,
           "output_cost": 0.28
         },
         {
           "id": "deepseek-v4-flash:0731",
-          "name": "deepseek-v4-flash:0731"
+          "name": "deepseek-v4-flash:0731",
+          "description": "DeepSeek V4 Flash 0731 - official V4-Flash release with enhanced agentic capabilities",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
         },
         {
           "id": "deepseek-v4-pro",
           "name": "deepseek-v4-pro",
+          "description": "DeepSeek V4 Pro - flagship MoE model (1.6T total, 49B active) with 1M context",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
           "input_cost": 0.435,
           "output_cost": 0.87
         },
         {
           "id": "gemma4:31b",
-          "name": "gemma4:31b"
+          "name": "gemma4:31b",
+          "description": "Gemma 4 31B - Google DeepMind multimodal model with 256K context",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ]
         },
         {
           "id": "glm-5.1",
           "name": "glm-5.1",
+          "description": "GLM-5.1 - Z.AI flagship agentic coding model with 200K context",
+          "context_length": 200000,
+          "tags": [
+            "tools"
+          ],
           "input_cost": 0.966,
           "output_cost": 3.036
         },
         {
           "id": "glm-5.2",
           "name": "glm-5.2",
-          "input_cost": 0.707,
-          "output_cost": 2.222
+          "description": "GLM-5.2 - Z.AI flagship with 1M-token context for long-horizon tasks",
+          "context_length": 1048576,
+          "tags": [
+            "tools"
+          ],
+          "input_cost": 0.76,
+          "output_cost": 2.42
         },
         {
           "id": "gpt-oss:120b",
-          "name": "gpt-oss:120b"
+          "name": "gpt-oss:120b",
+          "description": "OpenAI gpt-oss 120B - open-weight model for reasoning and agentic tasks",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
         },
         {
           "id": "gpt-oss:20b",
-          "name": "gpt-oss:20b"
+          "name": "gpt-oss:20b",
+          "description": "OpenAI gpt-oss 20B - open-weight model for reasoning and agentic tasks",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
         },
         {
           "id": "kimi-k2.6",
           "name": "kimi-k2.6",
-          "input_cost": 0.6,
-          "output_cost": 3.41
+          "description": "Kimi K2.6 - native multimodal agentic model with 256K context",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.589,
+          "output_cost": 2.48
         },
         {
           "id": "kimi-k2.7-code",
           "name": "kimi-k2.7-code",
+          "description": "Kimi K2.7 Code - coding-focused agentic model built on K2.6",
+          "context_length": 262144,
+          "tags": [
+            "tools"
+          ],
           "input_cost": 0.73,
           "output_cost": 3.5
         },
         {
           "id": "kimi-k3",
           "name": "kimi-k3",
+          "description": "Kimi K3 - frontier agentic model with 1M context",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
           "input_cost": 3,
           "output_cost": 15
         },
         {
           "id": "minimax-m2.7",
           "name": "minimax-m2.7",
-          "input_cost": 0.25,
-          "output_cost": 1
+          "description": "MiniMax M2.7 - model for real-world engineering and office delivery",
+          "context_length": 204800,
+          "tags": [
+            "tools"
+          ],
+          "input_cost": 0.27,
+          "output_cost": 1.08
         },
         {
           "id": "minimax-m3",
           "name": "minimax-m3",
+          "description": "MiniMax M3 - frontier multimodal coding model with 1M context",
+          "context_length": 1048576,
+          "tags": [
+            "tools"
+          ],
           "input_cost": 0.3,
           "output_cost": 1.2
         },
         {
           "id": "mistral-large-3:675b",
-          "name": "mistral-large-3:675b"
+          "name": "mistral-large-3:675b",
+          "description": "Mistral Large 3 - open-weight flagship multimodal model",
+          "context_length": 262144,
+          "tags": [
+            "tools"
+          ]
         },
         {
           "id": "nemotron-3-nano:30b",
-          "name": "nemotron-3-nano:30b"
+          "name": "nemotron-3-nano:30b",
+          "description": "Nemotron 3 Nano 30B - efficient lightweight reasoning model",
+          "context_length": 131072,
+          "tags": [
+            "tools"
+          ]
         },
         {
           "id": "nemotron-3-super",
-          "name": "nemotron-3-super"
+          "name": "nemotron-3-super",
+          "description": "Nemotron 3 Super - agentic MoE model for multi-agent systems",
+          "context_length": 262144,
+          "tags": [
+            "tools"
+          ]
         },
         {
           "id": "nemotron-3-ultra",
-          "name": "nemotron-3-ultra"
+          "name": "nemotron-3-ultra",
+          "description": "Nemotron 3 Ultra - frontier reasoning and agentic coding model",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
         },
         {
           "id": "qwen3.5:397b",
-          "name": "qwen3.5:397b"
+          "name": "qwen3.5:397b",
+          "description": "Qwen3.5 397B - Alibaba flagship MoE model with 256K context and vision",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ]
         }
       ]
     },
@@ -1268,7 +1400,7 @@
         },
         {
           "id": "deepseek/deepseek-v4-flash",
-          "name": "DeepSeek: DeepSeek V4 Flash",
+          "name": "DeepSeek: DeepSeek V4 Flash 0423",
           "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
           "context_length": 1048576,
           "tags": [
@@ -1705,8 +1837,8 @@
           "tags": [
             "structured_output"
           ],
-          "input_cost": 0.06,
-          "output_cost": 0.06
+          "input_cost": 0.08,
+          "output_cost": 0.11
         },
         {
           "id": "ibm-granite/granite-4.0-h-micro",
@@ -1902,8 +2034,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.13,
-          "output_cost": 0.39999999999999997
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.32
         },
         {
           "id": "meta-llama/llama-4-maverick",
@@ -2059,8 +2191,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.25,
-          "output_cost": 1
+          "input_cost": 0.27,
+          "output_cost": 1.08
         },
         {
           "id": "minimax/minimax-m3",
@@ -2274,8 +2406,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.075,
-          "output_cost": 0.19999999999999998
+          "input_cost": 0.09375,
+          "output_cost": 0.25
         },
         {
           "id": "mistralai/mixtral-8x22b-instruct",
@@ -2362,8 +2494,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.6,
-          "output_cost": 3.41
+          "input_cost": 0.589,
+          "output_cost": 2.48
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -3601,8 +3733,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.7999999999999999,
-          "output_cost": 1
+          "input_cost": 0.25,
+          "output_cost": 0.75
         },
         {
           "id": "qwen/qwen3-14b",
@@ -3741,7 +3873,7 @@
             "structured_output"
           ],
           "input_cost": 0.07,
-          "output_cost": 0.28
+          "output_cost": 0.27
         },
         {
           "id": "qwen/qwen3-coder-flash",
@@ -3813,7 +3945,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
+          "input_cost": 0.09,
           "output_cost": 1.1
         },
         {
@@ -3866,8 +3998,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.13,
-          "output_cost": 0.52
+          "input_cost": 0.15,
+          "output_cost": 0.6
         },
         {
           "id": "qwen/qwen3-vl-30b-a3b-thinking",
@@ -3934,8 +4066,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.39999999999999997,
-          "output_cost": 3.1999999999999997
+          "input_cost": 0.26,
+          "output_cost": 2.08
         },
         {
           "id": "qwen/qwen3.5-27b",
@@ -4046,8 +4178,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 2
+          "input_cost": 0.28900000000000003,
+          "output_cost": 2.4
         },
         {
           "id": "qwen/qwen3.6-35b-a3b",
@@ -4144,6 +4276,20 @@
           ],
           "input_cost": 0.32,
           "output_cost": 1.28
+        },
+        {
+          "id": "qwen/qwen3.8-max",
+          "name": "Qwen: Qwen3.8 Max",
+          "description": "Qwen3.8 Max is the flagship model in Alibaba's Qwen3.8 series, the general-availability successor to the Qwen3.8 Max Preview. It is a multimodal reasoning model intended for complex reasoning, visual understanding,...",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 6
         },
         {
           "id": "rekaai/reka-edge",
@@ -4407,8 +4553,8 @@
         },
         {
           "id": "x-ai/grok-4.20",
-          "name": "xAI: Grok 4.20",
-          "description": "Grok 4.20 is a reasoning model from xAI with industry-leading speed and agentic tool calling capabilities. It combines the lowest hallucination rate on the market with strict prompt adherance, delivering...",
+          "name": "SpaceXAI: Grok 4.20",
+          "description": "Grok 4.20 is a reasoning model from SpaceXAI with industry-leading speed and agentic tool calling capabilities. It combines the lowest hallucination rate on the market with strict prompt adherance, delivering...",
           "context_length": 2000000,
           "tags": [
             "tools",
@@ -4421,8 +4567,8 @@
         },
         {
           "id": "x-ai/grok-4.20-multi-agent",
-          "name": "xAI: Grok 4.20 Multi-Agent",
-          "description": "Grok 4.20 Multi-Agent is a variant of xAI’s Grok 4.20 designed for collaborative, agent-based workflows. Multiple agents operate in parallel to conduct deep research, coordinate tool use, and synthesize information...",
+          "name": "SpaceXAI: Grok 4.20 Multi-Agent",
+          "description": "Grok 4.20 Multi-Agent is a variant of SpaceXAI’s Grok 4.20 designed for collaborative, agent-based workflows. Multiple agents operate in parallel to conduct deep research, coordinate tool use, and synthesize information...",
           "context_length": 2000000,
           "tags": [
             "vision",
@@ -4434,8 +4580,8 @@
         },
         {
           "id": "x-ai/grok-4.3",
-          "name": "xAI: Grok 4.3",
-          "description": "Grok 4.3 is a reasoning model from xAI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual...",
+          "name": "SpaceXAI: Grok 4.3",
+          "description": "Grok 4.3 is a reasoning model from SpaceXAI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual...",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -4448,7 +4594,7 @@
         },
         {
           "id": "x-ai/grok-4.5",
-          "name": "xAI: Grok 4.5",
+          "name": "SpaceXAI: Grok 4.5",
           "description": "Grok 4.5 is SpaceXAI's smartest model with frontier performance on coding, knowledge work, and STEM.",
           "context_length": 500000,
           "tags": [
@@ -4462,8 +4608,8 @@
         },
         {
           "id": "x-ai/grok-build-0.1",
-          "name": "xAI: Grok Build 0.1",
-          "description": "Grok Build 0.1 is xAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
+          "name": "SpaceXAI: Grok Build 0.1",
+          "description": "Grok Build 0.1 is SpaceXAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
           "context_length": 256000,
           "tags": [
             "tools",
@@ -4642,8 +4788,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.707,
-          "output_cost": 2.222
+          "input_cost": 0.76,
+          "output_cost": 2.42
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -5580,7 +5726,7 @@
         {
           "id": "openai/gpt-oss-120b-Ultra",
           "name": "openai/gpt-oss-120b-Ultra",
-          "description": "Ultra fast version of gpt-oss-120b",
+          "description": "Ultra speed version of gpt-oss-120b",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -5862,6 +6008,18 @@
           "output_cost": 7.5
         },
         {
+          "id": "Qwen/Qwen3.8-Max",
+          "name": "Qwen/Qwen3.8-Max",
+          "description": "Qwen's latest 2.4-trillion-parameter MoE flagship model delivering a comprehensive leap in coding and professional work.",
+          "context_length": 256000,
+          "tags": [
+            "tools",
+            "structured_output"
+          ],
+          "input_cost": 1.65,
+          "output_cost": 4.9510000000000005
+        },
+        {
           "id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
           "name": "Sao10K/L3-8B-Lunaris-v1-Turbo",
           "context_length": 8192,
@@ -6058,7 +6216,15 @@
       "models": [
         {
           "id": "deepseek-ai/DeepSeek-V3.2-TEE",
-          "name": "deepseek-ai/DeepSeek-V3.2-TEE"
+          "name": "deepseek-ai/DeepSeek-V3.2-TEE",
+          "description": "DeepSeek V3.2 on confidential TEE compute",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 1,
+          "output_cost": 1
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
@@ -6066,47 +6232,135 @@
         },
         {
           "id": "google/gemma-4-31B-turbo-TEE",
-          "name": "google/gemma-4-31B-turbo-TEE"
+          "name": "google/gemma-4-31B-turbo-TEE",
+          "description": "Google Gemma 4 31B Turbo on confidential TEE compute",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "vision"
+          ],
+          "input_cost": 0.12,
+          "output_cost": 0.37
         },
         {
           "id": "moonshotai/Kimi-K2.6-TEE",
-          "name": "moonshotai/Kimi-K2.6-TEE"
+          "name": "moonshotai/Kimi-K2.6-TEE",
+          "description": "Moonshot Kimi K2.6 on confidential TEE compute",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.66,
+          "output_cost": 3.5
         },
         {
           "id": "moonshotai/Kimi-K3-TEE",
-          "name": "moonshotai/Kimi-K3-TEE"
+          "name": "moonshotai/Kimi-K3-TEE",
+          "description": "Moonshot Kimi K3 on confidential TEE compute",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 3,
+          "output_cost": 15
         },
         {
           "id": "Nemotron-3-Nano-Omni-30B-TEE",
-          "name": "Nemotron-3-Nano-Omni-30B-TEE"
+          "name": "Nemotron-3-Nano-Omni-30B-TEE",
+          "description": "NVIDIA Nemotron 3 Nano Omni 30B on confidential TEE compute",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 0.0245,
+          "output_cost": 0.0978
         },
         {
           "id": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
-          "name": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE"
+          "name": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
+          "description": "Qwen3 235B A22B Thinking on confidential TEE compute",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 0.2989,
+          "output_cost": 1.1957
         },
         {
           "id": "Qwen/Qwen3-32B-TEE",
-          "name": "Qwen/Qwen3-32B-TEE"
+          "name": "Qwen/Qwen3-32B-TEE",
+          "description": "Qwen3 32B on confidential TEE compute",
+          "context_length": 41984,
+          "tags": [
+            "tools"
+          ],
+          "input_cost": 0.104,
+          "output_cost": 0.416
         },
         {
           "id": "Qwen/Qwen3.5-397B-A17B-TEE",
-          "name": "Qwen/Qwen3.5-397B-A17B-TEE"
+          "name": "Qwen/Qwen3.5-397B-A17B-TEE",
+          "description": "Qwen3.5 397B A17B on confidential TEE compute",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.45,
+          "output_cost": 3
         },
         {
           "id": "Qwen/Qwen3.6-27B-TEE",
-          "name": "Qwen/Qwen3.6-27B-TEE"
+          "name": "Qwen/Qwen3.6-27B-TEE",
+          "description": "Qwen3.6 27B on confidential TEE compute",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 0.3,
+          "output_cost": 2
         },
         {
           "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
-          "name": "unsloth/Mistral-Nemo-Instruct-2407-TEE"
+          "name": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
+          "description": "Mistral Nemo Instruct 2407 on confidential TEE compute",
+          "context_length": 131072,
+          "tags": [
+            "tools"
+          ],
+          "input_cost": 0.0245,
+          "output_cost": 0.0978
         },
         {
           "id": "zai-org/GLM-5.1-TEE",
-          "name": "zai-org/GLM-5.1-TEE"
+          "name": "zai-org/GLM-5.1-TEE",
+          "description": "Z.AI GLM-5.1 on confidential TEE compute",
+          "context_length": 207872,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 0.98,
+          "output_cost": 3.08
         },
         {
           "id": "zai-org/GLM-5.2-TEE",
-          "name": "zai-org/GLM-5.2-TEE"
+          "name": "zai-org/GLM-5.2-TEE",
+          "description": "Z.AI GLM-5.2 on confidential TEE compute",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 1.25,
+          "output_cost": 3.95
         }
       ]
     },

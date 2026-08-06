@@ -55,6 +55,7 @@ sprout runs every embedding task through one model, EmbeddingGemma-300M (q4, ONN
 4. **Export friction**: Jina/CodeRankEmbed need `trust_remote_code` and custom pooling (ALiBi, mean-pool); prefer standard-architecture checkpoints first.
 5. **q4 degradation on code tokens**: verify q4-vs-fp16 parity on the regression corpus before shipping (Gemma q4 vs API fp16 already drifts to 0.95 cosine).
 6. **Dual-model RAM + plumbing**: two providers, two stores, two threshold sets — keep routing in one place behind `EmbeddingProvider`.
+7. **Jina v2 base code: keep int8 dynamic, don't switch to MatMulNBits.** Measured 2026-08-06 on ai-workstation (RTX PRO 6000). The shipped `model_quantized.onnx` (int8 dynamic, 154 MB) outperforms q4 and q8 MatMulNBits on both parity and speed: q4 fails parity (0.9450 cosine, needs more than 4 bits/weight), and even q8 (0.9998 cosine) is 6× slower and 2× larger than int8 dynamic. The "q4 wins on CPU" pattern from Gemma does not transfer — Jina's BERT+GEGLU+ALiBi op mix is different. The one real perf win available is **baking mean pooling into the ONNX graph** instead of doing it in Go (`jina_provider.go:runInference` + `runInferenceBatch`): the upstream graph returns `last_hidden_state [batch, seq_len, 768]`, forcing a cgo round-trip on the full 3D tensor per batch. sentence-transformers' export path bakes the configured `emb_pooler: mean` into the graph (fp32-pooled parity = 1.0000); use `scripts/export-jina-q4-pooled.py` as the basis for a future int8-dynamic-pooled re-export.
 
 ## Out of scope
 

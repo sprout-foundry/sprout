@@ -88,7 +88,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	// Failure is non-fatal: code queries fall back to the Gemma-backed index.
 	// The code index uses a separate store file (code_index.hnsw) keyed by the
 	// Jina model's hash, so the two models never invalidate each other.
-	m.initCodeProviderLocked(ctx, runtime)
+	m.initCodeProviderLocked(ctx)
 
 	// Store true last so concurrent IsInitialized() reads cannot observe a
 	// partially-initialized manager (all other fields are written above under m.mu).
@@ -98,29 +98,16 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 }
 
 // initCodeProviderLocked attempts to load the code-specific embedding model
-// (Jina Code v2) for the dual-model architecture. Best-effort: if the model
-// files are missing, the download fails, or the ONNX session can't be created,
-// codeAvailable stays false and code queries fall back to the Gemma provider.
+// (Jina Code v2) for the dual-model architecture. Uses the process-wide shared
+// provider cache so multiple agents share one model instance. Auto-downloads
+// on first use. Best-effort: if the download fails or the session can't be
+// created, codeAvailable stays false and code queries fall back to Gemma.
 // The caller must hold m.mu.
-func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context, runtime *ONNXRuntime) {
+func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context) {
 	cfg := JinaCodeV2Config()
-	modelName := cfg.Name
 	modelDir := DefaultModelDir()
-	modelPath := filepath.Join(modelDir, modelName, cfg.ModelFilenameOrDefault())
-	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
 
-	// Check if the model files exist locally. Unlike Gemma (which auto-
-	// downloads on first use), the code model is opt-in: if the user hasn't
-	// staged it, we silently skip. This avoids a 160MB download at startup
-	// without explicit opt-in.
-	if _, err := os.Stat(modelPath); err != nil {
-		return
-	}
-	if _, err := os.Stat(tokenizerPath); err != nil {
-		return
-	}
-
-	provider, err := NewJinaONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath)
+	provider, _, err := acquireSharedJinaProvider(ctx, modelDir, cfg)
 	if err != nil {
 		debugLogf("embedding: code provider init failed (non-fatal, falling back to Gemma): %v", err)
 		return
@@ -129,7 +116,6 @@ func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context, runtime *
 	codeStore, err := NewHNSWStore(filepath.Join(m.indexDir, "code_index.hnsw"), provider.ModelHash())
 	if err != nil {
 		debugLogf("embedding: code store open failed (non-fatal): %v", err)
-		provider.Close()
 		return
 	}
 
@@ -196,27 +182,30 @@ func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, e
 	if err != nil {
 		return nil, err
 	}
+
+	// When the code-specific provider (Jina) is available, it owns ALL code
+	// queries — search, duplicate detection, related code. Skip the Gemma code
+	// index build entirely (saves ~30 min on a fresh checkout). Gemma still
+	// runs for the ConversationStore (memory/recall), which is separate.
+	m.mu.Lock()
+	codeIdx := m.codeIndexMgr
+	codeAvailable := m.codeAvailable
+	m.mu.Unlock()
+
+	if codeAvailable && codeIdx != nil {
+		// Jina-only path: build the code index, skip the Gemma code index.
+		codeStats, codeErr := codeIdx.BuildIndex(ctx, m.workspaceRoot)
+		if codeErr != nil {
+			return nil, fmt.Errorf("embedding: code index build failed: %w", codeErr)
+		}
+		return codeStats, nil
+	}
+
+	// Fallback path: no code model, use Gemma for everything.
 	stats, err := idx.BuildIndex(ctx, m.workspaceRoot)
 	if err != nil {
 		return stats, err
 	}
-
-	// Build the code-specific index in parallel when the code provider is
-	// available (SP-135). This re-embeds the same files with Jina Code v2
-	// into the separate code_index.hnsw store. The code index is what
-	// CheckDuplicates and QuerySimilarCode query against.
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	m.mu.Unlock()
-	if codeIdx != nil {
-		codeStats, codeErr := codeIdx.BuildIndex(ctx, m.workspaceRoot)
-		if codeErr != nil {
-			debugLogf("embedding: code index build failed (non-fatal): %v", codeErr)
-		} else {
-			debugLogf("embedding: code index built: %d files, %d units", codeStats.FilesProcessed, codeStats.UnitsEmbedded)
-		}
-	}
-
 	return stats, nil
 }
 
@@ -351,23 +340,23 @@ func (m *EmbeddingManager) UpdateFile(ctx context.Context, filePath string) erro
 	if err := m.Init(ctx); err != nil {
 		return err
 	}
+
+	m.mu.Lock()
+	codeIdx := m.codeIndexMgr
+	codeAvailable := m.codeAvailable
+	m.mu.Unlock()
+
+	// When the code model is available, it owns the code index — update only it.
+	if codeAvailable && codeIdx != nil {
+		return codeIdx.UpdateFile(ctx, filePath)
+	}
+
+	// Fallback: no code model, update the Gemma index.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return err
 	}
-	if err := idx.UpdateFile(ctx, filePath); err != nil {
-		return err
-	}
-	// Keep the code-specific index in sync (SP-135 dual-model).
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	m.mu.Unlock()
-	if codeIdx != nil {
-		if err := codeIdx.UpdateFile(ctx, filePath); err != nil {
-			debugLogf("embedding: code index update failed for %s (non-fatal): %v", filePath, err)
-		}
-	}
-	return nil
+	return idx.UpdateFile(ctx, filePath)
 }
 
 // UpdateFromGitDiff incrementally updates the index by examining git-tracked
@@ -376,27 +365,23 @@ func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, 
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
+
+	m.mu.Lock()
+	codeIdx := m.codeIndexMgr
+	codeAvailable := m.codeAvailable
+	m.mu.Unlock()
+
+	// When the code model is available, it owns the code index — update only it.
+	if codeAvailable && codeIdx != nil {
+		return codeIdx.UpdateFromGitDiff(ctx, m.workspaceRoot)
+	}
+
+	// Fallback: no code model, update the Gemma index.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
-	stats, err := idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
-	if err != nil {
-		return stats, err
-	}
-	// Keep the code-specific index in sync (SP-135 dual-model).
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	m.mu.Unlock()
-	if codeIdx != nil {
-		codeStats, codeErr := codeIdx.UpdateFromGitDiff(ctx, m.workspaceRoot)
-		if codeErr != nil {
-			debugLogf("embedding: code index diff update failed (non-fatal): %v", codeErr)
-		} else if codeStats != nil {
-			debugLogf("embedding: code index updated: %d files, %d units", codeStats.FilesProcessed, codeStats.UnitsEmbedded)
-		}
-	}
-	return stats, nil
+	return idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
 }
 
 // UpdateFromGitDiffBackground starts an incremental index update in a
@@ -463,14 +448,14 @@ func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string,
 
 // QuerySimilar searches the index with a natural-language query.
 //
-// Use QuerySimilarCode when the input is source code — the two take different
-// task prefixes and produce similarity scores on different scales, so they are
-// not interchangeable even though both search the same records.
+// When the code-specific provider (Jina Code v2) is available, this routes to
+// the code index — Jina handles NL-code retrieval better than Gemma (10/10
+// correct, wider separation). Falls back to the Gemma-backed indexMgr otherwise.
 func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotIndexMgr()
+	idx, err := m.snapshotCodeIndexMgr()
 	if err != nil {
 		return nil, err
 	}
@@ -569,19 +554,16 @@ func (m *EmbeddingManager) Close() error {
 	m.indexMgr = nil
 
 	// Close code-specific provider and store (SP-135 dual-model).
-	// The code provider owns its own ONNX session (not shared), so always close it.
-	if m.codeProvider != nil {
-		if err := m.codeProvider.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		m.codeProvider = nil
-	}
+	// When shared (acquireSharedJinaProvider), the provider+runtime are owned
+	// by the process-wide cache and must not be closed — other agents reference
+	// them. Only close the store.
 	if m.codeStore != nil {
 		if err := m.codeStore.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 		m.codeStore = nil
 	}
+	m.codeProvider = nil
 	m.codeIndexMgr = nil
 	m.codeAvailable = false
 

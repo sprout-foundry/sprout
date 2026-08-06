@@ -105,7 +105,7 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		switch {
 		case r.CanAnswerQueries():
 			semanticHits, _ = env.EmbeddingMgr.QuerySimilar(ctx, query, limit*2,
-				embedding.DefaultSemanticSearchThreshold)
+				env.EmbeddingMgr.SemanticSearchThreshold())
 			if r.Building {
 				semanticNote = fmt.Sprintf("semantic results partial — index still building (%d records)", r.Records)
 			}

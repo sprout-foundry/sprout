@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // repoMapSemanticTopK bounds how many semantically-matched files widen the map.
@@ -105,7 +103,7 @@ func semanticMatchesForQuery(ctx context.Context, env ToolEnv, directory, query 
 	// Bounded: this runs on a tool call the user is waiting on, and the map
 	// itself is capped at repoMapMaxFiles anyway.
 	results, err := env.EmbeddingMgr.QuerySimilar(ctx, query, repoMapSemanticTopK,
-		embedding.DefaultSemanticSearchThreshold)
+		env.EmbeddingMgr.SemanticSearchThreshold())
 	if err != nil || len(results) == 0 {
 		return nil
 	}

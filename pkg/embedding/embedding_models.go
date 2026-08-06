@@ -267,6 +267,32 @@ func (m *EmbeddingManager) snapshotQueryParams() (threshold float32, topK int) {
 	return m.threshold, m.maxResults
 }
 
+// SemanticSearchThreshold returns the appropriate NL-code search threshold
+// for the active provider. When the code model (Jina) is available, returns
+// the Jina-specific gate (0.30); otherwise returns the Gemma gate (0.40).
+// Callers that pass a threshold to QuerySimilar should use this instead of
+// hardcoding DefaultSemanticSearchThreshold.
+func (m *EmbeddingManager) SemanticSearchThreshold() float32 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.codeAvailable {
+		return DefaultCodeModelSemanticSearchThreshold
+	}
+	return DefaultSemanticSearchThreshold
+}
+
+// RelatedCodeThreshold returns the appropriate related-code threshold for the
+// active provider. When the code model (Jina) is available, returns 0.35;
+// otherwise returns the Gemma gate (0.55).
+func (m *EmbeddingManager) RelatedCodeThreshold() float32 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.codeAvailable {
+		return DefaultCodeModelRelatedThreshold
+	}
+	return DefaultRelatedCodeThreshold
+}
+
 // resolveIndexDirFromConfig resolves the embedding index directory using the
 // same precedence as initLocked: explicit config value first, then the
 // workspace-scoped default under the data root.

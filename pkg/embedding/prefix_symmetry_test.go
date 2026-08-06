@@ -87,7 +87,7 @@ func TestPrefixSymmetryAffectsDuplicateThresholds(t *testing.T) {
 	t.Logf("    near-duplicate : %.3f", asymDup)
 	t.Logf("    unrelated      : %.3f", asymUnrel)
 	t.Log("")
-	t.Logf("shipping thresholds: CheckDuplicates=%.2f  file-dup-check=%.2f", 0.90, 0.85)
+	t.Logf("shipping thresholds: CheckDuplicates=%.2f  file-dup-check=%.2f", 0.65, 0.55)
 
 	if symDup <= asymDup {
 		t.Logf("NOTE: symmetric did not exceed asymmetric; prefix is not the dominant factor here")

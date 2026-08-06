@@ -63,10 +63,10 @@ type EmbeddingManager struct {
 	// the code index uses the code provider's ModelHash, the Gemma index
 	// keeps its own. Falls back to indexMgr (Gemma) when the code model is
 	// unavailable or not initialized.
-	codeProvider   EmbeddingProvider
-	codeStore      VectorStore
-	codeIndexMgr   *IndexManager
-	codeAvailable  bool
+	codeProvider  EmbeddingProvider
+	codeStore     VectorStore
+	codeIndexMgr  *IndexManager
+	codeAvailable bool
 
 	// sharedKey identifies this manager in the process-wide registry when it
 	// came from AcquireManager. Empty for directly-constructed managers, which

@@ -161,7 +161,7 @@ func TestGetAvailableToolNames(t *testing.T) {
 		"write_file":            false,
 		"edit_file":             false,
 		"write_structured_file": false,
-		"search_files":          false,
+		"search":                false,
 	}
 
 	for _, name := range names {

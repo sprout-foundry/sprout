@@ -15,7 +15,7 @@
         "edit_file",
         "write_structured_file",
         "patch_structured_file",
-        "search_files",
+        "search",
         "analyze_ui_screenshot",
         "analyze_image_content",
         "browse_url",
@@ -28,9 +28,16 @@
         "rollback_changes",
         "list_skills",
         "activate_skill",
-        "TodoWrite",
-        "TodoRead",
-        "manage_memory"
+        "todo_write",
+        "todo_read",
+        "manage_memory",
+        "repo_map",
+        "list_directory",
+        "respond_clarification",
+        "create_pull_request",
+        "run_automate",
+        "list_automate_workflows",
+        "ask_user"
       ],
       "capabilities": [
         "git_write"

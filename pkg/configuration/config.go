@@ -458,11 +458,6 @@ func NewConfig() *Config {
 		EmbeddingIndex: &EmbeddingIndexConfig{
 			Enabled:   boolPtr(false),
 			AutoIndex: boolPtr(false),
-			// 0.65, not 0.90: the write-time duplicate check is code-vs-code
-			// and a textbook near-duplicate tops out at ~0.767 through the
-			// production path (see embedding.DefaultDuplicateThreshold). A 0.90
-			// gate never fires, so duplicate detection silently did nothing.
-			SimilarityThreshold: 0.65,
 			MaxResults:          3,
 		},
 	}

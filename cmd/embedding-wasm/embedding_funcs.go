@@ -39,8 +39,7 @@ func getEmbeddingManager() (*embedding.EmbeddingManager, error) {
 		// Use a relaxed default config — auto-build off, since the host page
 		// drives indexing explicitly via buildSemanticIndex.
 		cfg := &configuration.EmbeddingIndexConfig{
-			SimilarityThreshold: 0.5,
-			MaxResults:          10,
+			MaxResults: 10,
 		}
 		cfg.SetEnabled(true)
 		cfg.SetAutoIndex(false)

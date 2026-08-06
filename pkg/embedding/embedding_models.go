@@ -269,9 +269,8 @@ func (m *EmbeddingManager) snapshotQueryParams() (threshold float32, topK int) {
 
 // SemanticSearchThreshold returns the appropriate NL-code search threshold
 // for the active provider. When the code model (Jina) is available, returns
-// the Jina-specific gate (0.30); otherwise returns the Gemma gate (0.40).
-// Callers that pass a threshold to QuerySimilar should use this instead of
-// hardcoding DefaultSemanticSearchThreshold.
+// the Jina-specific gate (0.30) — Jina serves all code queries including NL
+// search. Otherwise returns the Gemma gate (0.40).
 func (m *EmbeddingManager) SemanticSearchThreshold() float32 {
 	m.mu.Lock()
 	defer m.mu.Unlock()

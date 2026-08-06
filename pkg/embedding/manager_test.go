@@ -26,9 +26,8 @@ func TestNewEmbeddingManager_NilConfig(t *testing.T) {
 
 func TestNewEmbeddingManager_WithConfig(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{
-		Enabled:             boolPtrTest(true),
-		SimilarityThreshold: 0.85,
-		MaxResults:          5,
+		Enabled:    boolPtrTest(true),
+		MaxResults: 5,
 	}
 	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
 	if mgr == nil {
@@ -180,9 +179,8 @@ func TestEmbeddingManager_CheckDuplicates_WithConfigThreshold(t *testing.T) {
 	dir := t.TempDir()
 
 	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir:            dir,
-		SimilarityThreshold: 0.75,
-		MaxResults:          10,
+		IndexDir:   dir,
+		MaxResults: 10,
 	}
 	mgr := NewEmbeddingManager(cfg, dir)
 
@@ -233,9 +231,8 @@ func TestEmbeddingManager_CheckDuplicates_UsesConfigDefaults(t *testing.T) {
 	dir := t.TempDir()
 
 	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir:            dir,
-		SimilarityThreshold: 0.0, // very low threshold
-		MaxResults:          5,
+		IndexDir:   dir,
+		MaxResults: 5,
 	}
 	mgr := NewEmbeddingManager(cfg, dir)
 

@@ -5,6 +5,7 @@ package embedding
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,15 +16,24 @@ import (
 
 // Init initializes the ONNX embedding provider and opens the vector store.
 // This is idempotent — calling it multiple times is safe.
-// If a previous Init() failed, the cached error is returned immediately.
+//
+// A previous failure does NOT block retries. Model downloads can fail on
+// transient network issues (CDN stalls, TLS timeouts), and caching the error
+// permanently meant a single blip killed the index for the entire process
+// lifetime — no build, no query, no duplicate check could recover without a
+// restart. The initError field is still set on failure (for InitError()
+// diagnostics), but each Init() call clears it and retries.
 func (m *EmbeddingManager) Init(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// If we already tried and failed, return the cached error.
-	if m.initError != nil {
-		return m.initError
+	if m.initialized.Load() {
+		return nil
 	}
+
+	// Clear any cached error so transient failures (network blips, download
+	// timeouts) can be recovered from on retry.
+	m.initError = nil
 
 	return m.initLocked(ctx)
 }
@@ -42,13 +52,12 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	// Resolve index directory
 	m.indexDir = resolveIndexDirFromConfig(m.config, m.workspaceRoot)
 
-	// Store resolved threshold and maxResults as fields (SHOULD_FIX #7).
-	m.threshold = m.config.SimilarityThreshold
-	if m.threshold == 0 {
-		// Duplicate detection is what this threshold gates (see CheckDuplicates
-		// below); it is not a search threshold.
-		m.threshold = DefaultDuplicateThreshold
-	}
+	// The duplicate-detection threshold is NOT configurable. It is a measured
+	// constant (DefaultDuplicateThreshold) that must match the model's score
+	// distribution. A user-settable threshold repeatedly caused duplicate
+	// detection to silently stop working (0.90 was unreachable, 0.85 was
+	// unreachable), so the field is intentionally hardcoded.
+	m.threshold = DefaultDuplicateThreshold
 
 	m.maxResults = m.config.MaxResults
 	if m.maxResults == 0 {
@@ -109,13 +118,13 @@ func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context) {
 
 	provider, _, err := acquireSharedJinaProvider(ctx, modelDir, cfg)
 	if err != nil {
-		debugLogf("embedding: code provider init failed (non-fatal, falling back to Gemma): %v", err)
+		log.Printf("embedding: code provider (Jina Code v2) init failed — falling back to Gemma for code queries: %v", err)
 		return
 	}
 
 	codeStore, err := NewHNSWStore(filepath.Join(m.indexDir, "code_index.hnsw"), provider.ModelHash())
 	if err != nil {
-		debugLogf("embedding: code store open failed (non-fatal): %v", err)
+		log.Printf("embedding: code store open failed — falling back to Gemma: %v", err)
 		return
 	}
 
@@ -178,22 +187,22 @@ func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, e
 		return nil, fmt.Errorf("embedding: workspace has %d files (max %d for auto-build)", len(files), MaxFileCount)
 	}
 
-	idx, err := m.snapshotIndexMgr()
-	if err != nil {
-		return nil, err
-	}
-
 	// When the code-specific provider (Jina) is available, it owns ALL code
-	// queries — search, duplicate detection, related code. Skip the Gemma code
-	// index build entirely (saves ~30 min on a fresh checkout). Gemma still
-	// runs for the ConversationStore (memory/recall), which is separate.
+	// queries — NL search, duplicate detection, related code. Skip the Gemma
+	// code index build entirely (saves ~30 min on a fresh checkout). Gemma
+	// still runs for the ConversationStore (memory/recall), which is separate.
+	//
+	// Jina is symmetric (no task prefixes) and beats Gemma on every code
+	// metric: 9× faster (59 vs 6.5 units/s), wider separation (unrelated
+	// 0.066 vs 0.355), better NL-code recall (correct hits 0.343–0.823 vs
+	// 0.499–0.613, wrong answers near-zero vs 0.32). Building a second index
+	// with a slower, worse model is pure overhead. See SP-135 eval data.
 	m.mu.Lock()
 	codeIdx := m.codeIndexMgr
 	codeAvailable := m.codeAvailable
 	m.mu.Unlock()
 
 	if codeAvailable && codeIdx != nil {
-		// Jina-only path: build the code index, skip the Gemma code index.
 		codeStats, codeErr := codeIdx.BuildIndex(ctx, m.workspaceRoot)
 		if codeErr != nil {
 			return nil, fmt.Errorf("embedding: code index build failed: %w", codeErr)
@@ -201,12 +210,12 @@ func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, e
 		return codeStats, nil
 	}
 
-	// Fallback path: no code model, use Gemma for everything.
-	stats, err := idx.BuildIndex(ctx, m.workspaceRoot)
+	// Fallback: no code model, use Gemma for everything.
+	idx, err := m.snapshotIndexMgr()
 	if err != nil {
-		return stats, err
+		return nil, err
 	}
-	return stats, nil
+	return idx.BuildIndex(ctx, m.workspaceRoot)
 }
 
 // BuildIndexBackground starts an index build in a background goroutine and
@@ -328,10 +337,10 @@ func (m *EmbeddingManager) autoBuildWhenReady() {
 	defer cancel()
 	stats, err := m.BuildIndex(ctx)
 	if err != nil {
-		debugLogf("embedding: auto-build failed: %v", err)
+		log.Printf("embedding: auto-build failed: %v", err)
 		return
 	}
-	debugLogf("embedding: auto-build complete: %d files, %d units in %s",
+	log.Printf("embedding: auto-build complete: %d files, %d units in %s",
 		stats.FilesProcessed, stats.UnitsExtracted, stats.Duration)
 }
 
@@ -448,9 +457,11 @@ func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string,
 
 // QuerySimilar searches the index with a natural-language query.
 //
-// When the code-specific provider (Jina Code v2) is available, this routes to
-// the code index — Jina handles NL-code retrieval better than Gemma (10/10
-// correct, wider separation). Falls back to the Gemma-backed indexMgr otherwise.
+// Routes to the Jina code index when available (better NL-code separation than
+// Gemma: correct hits 0.343–0.823, wrong answers near-zero). Jina is symmetric
+// so the codeQueryPrefix passed by IndexManager.QuerySimilar is ignored by the
+// provider — both query and document land in the same space. Falls back to the
+// Gemma-backed indexMgr otherwise.
 func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
@@ -494,12 +505,10 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 		return m.convoStore, nil
 	}
 
-	// Match Init() behavior: return cached error if a prior init failed
-	if m.initError != nil {
-		return nil, m.initError
-	}
-
-	// Ensure the manager itself is initialized
+	// Ensure the manager itself is initialized. initLocked sets initError on
+	// failure for diagnostics (InitError), but we don't block on a stale
+	// cached error — retry so transient failures can recover.
+	m.initError = nil
 	if err := m.initLocked(ctx); err != nil {
 		return nil, err
 	}

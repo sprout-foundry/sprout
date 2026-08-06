@@ -86,7 +86,7 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 	tools := agent.getOptimizedToolDefinitions(nil)
 	expectedTools := map[string]bool{
 		"shell_command": true, "read_file": true, "write_file": true,
-		"edit_file": true, "search_files": true, "repo_map": true,
+		"edit_file": true, "search": true, "repo_map": true,
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
 		"run_subagent": true,

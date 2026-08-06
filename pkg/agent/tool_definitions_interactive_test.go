@@ -27,7 +27,7 @@ func TestIsInteractiveTool_ShellCommandFlagged(t *testing.T) {
 func TestIsInteractiveTool_NonInteractiveToolsReturnFalse(t *testing.T) {
 	// Sample of tools that definitely should NOT be interactive — they
 	// return a result to the agent without owning the terminal.
-	for _, name := range []string{"read_file", "todo_read", "search_files", "shell_command"} {
+	for _, name := range []string{"read_file", "todo_read", "search", "shell_command"} {
 		if IsInteractiveTool(name) {
 			t.Errorf("%s should not be Interactive", name)
 		}

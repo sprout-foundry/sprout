@@ -123,7 +123,7 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	assert.Contains(t, refactorPersona.AllowedTools, "edit_file")
 	assert.Contains(t, refactorPersona.AllowedTools, "write_structured_file")
 	assert.Contains(t, refactorPersona.AllowedTools, "patch_structured_file")
-	assert.Contains(t, refactorPersona.AllowedTools, "search_files")
+	assert.Contains(t, refactorPersona.AllowedTools, "search")
 }
 
 func TestGetSubagentType_AllowedToolsFromCatalog(t *testing.T) {

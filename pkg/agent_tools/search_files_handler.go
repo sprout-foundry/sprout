@@ -22,6 +22,7 @@ func (h *searchFilesHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "search_files",
 		Description: "Search text pattern in files (cross-platform, ignores .git, node_modules, .sprout by default)",
+		Hidden:      true, // superseded by `search`; still callable by name
 		Parameters: []ParameterDef{
 			{Name: "search_pattern", Type: "string", Description: "Text pattern or regex to search for", Required: true},
 			{Name: "directory", Type: "string", Description: "Directory to search (default: .)"},
@@ -42,15 +43,15 @@ func (h *searchFilesHandler) Validate(args map[string]any) error {
 func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	searchPattern, err := extractString(args, "search_pattern")
 	if err != nil {
-		return ToolResult{
-			Output:  err.Error(),
-			IsError: true,
-		}, nil
+		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
 	directory, _ := extractString(args, "directory")
-	fileGlob, _ := extractString(args, "file_glob")
-	caseSensitive := getBoolArg(args, "case_sensitive")
+	directory, err = resolveSearchDirectory(directory, env.WorkspaceRoot)
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+
 	maxResults, _ := extractInt(args, "max_results")
 	if maxResults <= 0 {
 		maxResults = 50
@@ -60,103 +61,47 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		maxBytes = 102400
 	}
 
-	if directory == "" {
-		directory = "."
-	}
-
-	// Resolve "." against the workspace root (from ToolEnv), not the process CWD.
-	// Since os.Chdir was eliminated (see agent_creation.go), the daemon CWD is
-	// the home directory — walking "." from there would traverse ~/Pictures,
-	// ~/Library, etc., triggering macOS permission dialogs and taking minutes.
-	if directory == "." && env.WorkspaceRoot != "" {
-		directory = env.WorkspaceRoot
-	}
-
-	if directory != "." {
-		if strings.Contains(directory, "..") {
-			return ToolResult{
-				Output:  fmt.Sprintf("invalid search directory: %q", directory),
-				IsError: true,
-			}, nil
-		}
-	}
-
-	compiled, err := compileSearchPattern(searchPattern, caseSensitive)
-	if err != nil {
-		return ToolResult{
-			Output:  fmt.Sprintf("Error: invalid search pattern '%s': %v", searchPattern, err),
-			IsError: true,
-		}, nil
-	}
-
-	matcher := newGlobMatcher(fileGlob)
-	results := make([]string, 0)
-	totalBytes := 0
-	matchCount := 0
-
-	err = walkDirCompat(directory, func(path string, info os.DirEntry, err error) error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		if err != nil {
-			return nil
-		}
-
-		if info.IsDir() {
-			if shouldSkipDir(path) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Early exit: stop walking entirely when limits are reached.
-		// Checking BEFORE isTextFile/searchFile avoids I/O and regex work for
-		// every remaining file in the tree once the result cap is hit.
-		if matchCount >= maxResults || totalBytes >= maxBytes {
-			return filepath.SkipAll
-		}
-
-		if info.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-
-		if !isTextFile(path) {
-			return nil
-		}
-
-		if matcher != nil && !matcher.Match(path) {
-			return nil
-		}
-
-		matches, bytesUsed, err := searchFile(path, compiled)
-		if err != nil {
-			return nil
-		}
-
-		totalBytes += bytesUsed
-		results = append(results, matches...)
-		matchCount += len(matches)
-
-		return nil
+	// Shares runLiteralSearch with the fused `search` tool. Two independent
+	// walkers drift on exactly the details that are easy to get subtly
+	// different — skip-dir rules, binary detection, where the caps apply — and
+	// then disagree about what the repository contains.
+	res, err := runLiteralSearch(ctx, literalSearchOpts{
+		Directory:     directory,
+		Pattern:       searchPattern,
+		FileGlob:      firstString(args, "file_glob"),
+		CaseSensitive: getBoolArg(args, "case_sensitive"),
+		MaxFiles:      maxResults,
+		MaxBytes:      maxBytes,
 	})
-
-	output := formatSearchResults(results, directory, searchPattern, matchCount, maxResults)
-	if err != nil && len(results) == 0 {
-		output = fmt.Sprintf("Error searching directory: %v", err)
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("Error: %v", err), IsError: true}, nil
 	}
 
-	// When grep finds nothing and embedding is available, hint at semantic search.
-	// Guard: only hint on clean zero-result runs, not when an error occurred.
-	if matchCount == 0 && err == nil && env.EmbeddingMgr != nil && env.EmbeddingMgr.IsInitialized() {
-		output = fmt.Sprintf("No results found for '%s' in %s.\n\nNo text matches, but the embedding index is available — try `semantic_search` to find code with similar meaning.", searchPattern, directory)
+	lines := make([]string, 0, len(res.Hits))
+	for _, hit := range res.Hits {
+		lines = append(lines, hit.String())
 	}
 
-	return ToolResult{
-		Output:  output,
-		IsError: false,
-	}, nil
+	output := formatSearchResults(lines, directory, searchPattern, len(res.Hits), maxResults)
+	if res.Truncated {
+		output += fmt.Sprintf("\n(showing %d of %d matching files — narrow the pattern or raise max_results)\n",
+			res.FilesShown, res.FilesMatched)
+	}
+
+	// When the literal pass finds nothing and semantic search can answer, say
+	// so — the two find different things, and a zero-result grep is not
+	// evidence that the code is absent.
+	if len(res.Hits) == 0 && env.EmbeddingMgr != nil && env.EmbeddingMgr.Readiness().CanAnswerQueries() {
+		output = fmt.Sprintf("No text matches for '%s' in %s.\n\nThe embedding index is available — `search` with a plain-language description will also find code that uses different wording.", searchPattern, directory)
+	}
+
+	return ToolResult{Output: output, IsError: false}, nil
+}
+
+// firstString returns a string arg or "".
+func firstString(args map[string]any, key string) string {
+	v, _ := extractString(args, key)
+	return v
 }
 
 func (h *searchFilesHandler) Aliases() []string      { return nil }

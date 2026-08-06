@@ -1,7 +1,7 @@
 {
   "chutes": {
     "source": "https://api.chutes.com/v1/models",
-    "last_verified": "2026-08-05",
+    "last_verified": "2026-08-06",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -72,7 +72,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-08-05",
+    "last_verified": "2026-08-06",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -549,12 +549,18 @@
         "input_per_mtok": 1.65,
         "output_per_mtok": 4.951,
         "cached_per_mtok": 0.206
+      },
+      {
+        "id": "inclusionAI/Ling-3.0-flash",
+        "input_per_mtok": 0.075,
+        "output_per_mtok": 0.22,
+        "cached_per_mtok": 0.015
       }
     ]
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-06",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -602,7 +608,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-06",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -805,7 +811,7 @@
   },
   "ollama-cloud": {
     "source": "https://api.ollama-cloud.com/v1/models",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-06",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -896,12 +902,17 @@
         "id": "qwen3.5:397b",
         "input_per_mtok": 0,
         "output_per_mtok": 0
+      },
+      {
+        "id": "deepseek-v4-flash:preview",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       }
     ]
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-06",
     "models": [
       {
         "id": "gpt-5",
@@ -1238,7 +1249,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-08-05",
+    "last_verified": "2026-08-06",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -3113,6 +3124,18 @@
         "input_per_mtok": 0.09,
         "output_per_mtok": 0.18,
         "cached_per_mtok": 0.018
+      },
+      {
+        "id": "inclusionai/ling-3.0-flash",
+        "input_per_mtok": 0.075,
+        "output_per_mtok": 0.22,
+        "cached_per_mtok": 0.015
+      },
+      {
+        "id": "meta/muse-spark-1.2",
+        "input_per_mtok": 1.25,
+        "output_per_mtok": 4.25,
+        "cached_per_mtok": 0.15
       }
     ]
   },

@@ -4546,6 +4546,34 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 131072,
+        "description": "*Ling-3.0-flash* is a *124B-parameter Mixture-of-Experts (MoE) model*, with approximately *5.1B parameters activated per token*. The model is designed with *token efficiency and production-scale agentic inference* as key priorities, enabling developers...",
+        "id": "inclusionai/ling-3.0-flash",
+        "input_cost": 0.075,
+        "name": "Ling-3.0-flash",
+        "output_cost": 0.22,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "Muse Spark 1.2 is a reasoning model from Meta, designed for complex agentic tasks. It accepts text, images, video, audio, and PDF documents, returns text, and offers a 1M-token context...",
+        "id": "meta/muse-spark-1.2",
+        "input_cost": 1.25,
+        "name": "Meta: Muse Spark 1.2",
+        "output_cost": 4.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

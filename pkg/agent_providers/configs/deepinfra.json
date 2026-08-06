@@ -1255,6 +1255,20 @@
           "tools",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 131072,
+        "description": "The model prioritizes token efficiency and agentic inference at production scale, stretching what developers can achieve within limited token, latency, and serving-cost budgets.",
+        "id": "inclusionAI/Ling-3.0-flash",
+        "input_cost": 0.075,
+        "name": "inclusionAI/Ling-3.0-flash",
+        "output_cost": 0.22,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

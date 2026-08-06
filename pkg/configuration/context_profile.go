@@ -132,7 +132,7 @@ var lowContextProfile = ContextProfile{
 		"read_file",
 		"write_file",
 		"edit_file",
-		"search_files",
+		"search",
 		"repo_map",
 		"web_search",
 		"fetch_url",

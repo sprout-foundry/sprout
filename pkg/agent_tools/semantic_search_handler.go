@@ -19,6 +19,7 @@ func (h *semanticSearchHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "semantic_search",
 		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
+		Hidden:      true, // superseded by `search`; still callable by name
 		Required:    []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Required: true, Description: "Natural language description of what you're looking for"},

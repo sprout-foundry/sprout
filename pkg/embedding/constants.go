@@ -99,6 +99,12 @@ const (
 	// DefaultCodeModelRelatedThreshold gates "related code" injection via Jina.
 	// Above unrelated (0.066) with wide margin, below related (0.459).
 	DefaultCodeModelRelatedThreshold = 0.35
+
+	// DefaultCodeModelSemanticSearchThreshold gates NL-code search via Jina
+	// (search tool, semantic_search, repo_map). Measured correct-hit range:
+	// 0.343–0.823, wrong answers −0.07–0.20. 0.30 sits below the floor of
+	// correct hits while keeping noise out.
+	DefaultCodeModelSemanticSearchThreshold = 0.30
 )
 
 // WalkTimeout is the absolute maximum time allowed for WalkCodeFiles to

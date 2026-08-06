@@ -59,10 +59,9 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		topK = 1
 	}
 
-	// Extract optional threshold. The default is measured, not guessed:
-	// correct results for natural-language code search score ~0.50-0.61, so a
-	// 0.75 default returned nothing for any realistic query.
-	threshold := float64(embedding.DefaultSemanticSearchThreshold)
+	// Threshold default — resolved after the manager is acquired below, so
+	// the right gate is used for the active provider (Jina 0.30, Gemma 0.40).
+	var threshold float64
 	if tRaw, exists := args["threshold"]; exists && tRaw != nil {
 		switch v := tRaw.(type) {
 		case float64:
@@ -128,6 +127,9 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 			IsError: true,
 		}, nil
 	}
+
+	// Resolve the default threshold based on the active provider.
+	threshold = float64(mgr.SemanticSearchThreshold())
 
 	// Gate on the index actually holding data. Without this, an unbuilt or
 	// still-building index returns zero hits and the formatter reports "No

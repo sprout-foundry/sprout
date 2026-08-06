@@ -127,7 +127,7 @@ func injectSemanticContext(ctx context.Context, a *Agent, filePath string, conte
 	// score is comparable to DefaultRelatedCodeThreshold. This used to call
 	// QuerySimilar at 0.85, which embedded the code as a question and gated it
 	// above anything that regime can produce, so nothing was ever injected.
-	results, err := em.QuerySimilarCode(ctx, query, 5, embedding.DefaultRelatedCodeThreshold)
+	results, err := em.QuerySimilarCode(ctx, query, 5, em.RelatedCodeThreshold())
 	if err != nil || len(results) == 0 {
 		return content
 	}

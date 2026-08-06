@@ -205,7 +205,7 @@ func MyFunc() {
 	x := 1
 }
 `
-	// threshold=0 means "use default 0.90".
+	// threshold=0 means "use default 0.65".
 	result, err := CheckFileForDuplicates(context.Background(), idx, "test.go", goSrc, "", 0, 0)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)

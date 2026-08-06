@@ -88,7 +88,10 @@ export function switchEmbeddingBackend(name: EmbeddingBackend): EmbeddingBackend
     return activeBackend;
   }
   // name === 'onnx-web'
-  const opts: Partial<EmbeddingOptions> = { dtype: 'q8', backend: 'wasm' };
+  // Default to WebGPU (auto-detected; falls back to WASM when the browser has
+  // no GPU). The provider's detectBackend() already handles the fallback —
+  // passing 'webgpu' explicitly just asks for the fast path when available.
+  const opts: Partial<EmbeddingOptions> = { dtype: 'q8', backend: 'webgpu' };
   activeProvider = installSproutONNXBridge(opts);
   activeBackend = 'onnx-web';
   return activeBackend;

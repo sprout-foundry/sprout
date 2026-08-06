@@ -43,8 +43,8 @@ func TestAcquireInferenceCapsConcurrency(t *testing.T) {
 	if peak > maxConcurrentInference {
 		t.Errorf("peak concurrent inferences = %d, want <= %d", peak, maxConcurrentInference)
 	}
-	if peak < 2 {
-		t.Errorf("peak concurrent inferences = %d; the gate serialized more than intended", peak)
+	if peak < 1 {
+		t.Errorf("peak concurrent inferences = %d; no goroutine reached the critical section", peak)
 	}
 	if got := atomic.LoadInt64(&live); got != 0 {
 		t.Errorf("%d permits still held after all releases", got)
@@ -93,4 +93,20 @@ func TestAcquireInferenceNilContext(t *testing.T) {
 		t.Fatalf("acquire with nil ctx: %v", err)
 	}
 	release()
+}
+
+// maxConcurrentInference must be 1, not 2. Two concurrent ORT session.Run
+// calls on the single shared process-wide session deadlock ORT's intra-op
+// thread pool (observed on-device during a background index build overlapped
+// with daemon embedding ops). The deadlock ignores Go contexts, so the build
+// timeout can't recover — only a process restart clears it.
+//
+// If a future change raises this value, it MUST first prove that overlapping
+// Runs is safe on every supported platform (Linux/macOS/Windows, x86/arm64)
+// and ORT version. The cost of being wrong is a wedged daemon.
+func TestMaxConcurrentInferenceIsOne(t *testing.T) {
+	if maxConcurrentInference != 1 {
+		t.Fatalf("maxConcurrentInference = %d, want 1 — see inference_gate.go doc for the deadlock rationale",
+			maxConcurrentInference)
+	}
 }

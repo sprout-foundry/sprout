@@ -204,6 +204,16 @@
           "tools",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Flash preview - Mixture-of-Experts model (284B total, 13B active) built for efficient reasoning across a 1M-token context window",
+        "id": "deepseek-v4-flash:preview",
+        "name": "DeepSeek V4 Flash Preview",
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
       }
     ]
   },

@@ -47,12 +47,17 @@ func TestBuildIndexResumesAfterInterruptedBuild(t *testing.T) {
 	store := newCountingStore()
 
 	// --- Build 1: cancelled after a couple of batches. ---
+	// Units sort by body length (all F funcs before all G funcs), so with
+	// BatchSize=4 and 2 units per file, no file completes until the 4th batch
+	// (G0-G3) lands. maxBatches=4 therefore interrupts the build with exactly
+	// files f0-f3 finished — the probe needs at least one complete file to
+	// distinguish per-file checkpointing from "store everything at the end".
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	interrupted := &cancellingProvider{
 		mockProvider: newMockProvider(8),
 		cancel:       cancel,
-		maxBatches:   1,
+		maxBatches:   4,
 	}
 	idx := NewIndexManager(interrupted, store, IndexOptions{
 		BatchSize:    4,
@@ -70,13 +75,25 @@ func TestBuildIndexResumesAfterInterruptedBuild(t *testing.T) {
 	if partial == fileCount*2 {
 		t.Fatal("build was not actually interrupted; test proves nothing")
 	}
+	if partial%2 != 0 {
+		t.Errorf("interrupted build stored %d records, want a whole number of 2-unit files", partial)
+	}
 
 	manifest, err := LoadManifest(manifestPath)
 	if err != nil {
 		t.Fatalf("load manifest: %v", err)
 	}
+	if got := len(manifest.Files); got == 0 {
+		t.Errorf("manifest marks no files indexed after a partial build that stored %d records — the next build cannot resume", partial)
+	}
 	if got := len(manifest.Files); got >= fileCount {
 		t.Errorf("manifest claims %d/%d files indexed after a partial build — the next build will skip them", got, fileCount)
+	}
+	// The manifest must agree with the store exactly: only files whose records
+	// were checkpointed are marked indexed, so a resumed build neither skips
+	// unstored files nor re-embeds stored ones.
+	if got := len(manifest.Files) * 2; got != partial {
+		t.Errorf("manifest marks %d files indexed but the store holds %d records (2 per file)", len(manifest.Files), partial)
 	}
 
 	// --- Build 2: fresh context, working provider. Must make progress. ---

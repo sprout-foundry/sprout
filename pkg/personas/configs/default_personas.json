@@ -40,10 +40,10 @@
         "list_directory",
         "respond_clarification",
         "create_pull_request",
-        "manage_settings",
         "run_automate",
         "list_automate_workflows",
-        "embedding_index"
+        "request_clarification",
+        "ask_user"
       ],
       "capabilities": [
         "git_write"
@@ -85,7 +85,7 @@
         "list_directory",
         "request_clarification",
         "register_preview_port",
-        "list_automate_workflows"
+        "ask_user"
       ],
       "delegatable": true,
       "description": "General-purpose persona for tasks that do not require deep specialization",
@@ -230,8 +230,7 @@
         "repo_map",
         "get_callers",
         "list_directory",
-        "request_clarification",
-        "register_preview_port"
+        "request_clarification"
       ],
       "delegatable": true,
       "description": "Unit test writing and test coverage specialist",
@@ -295,8 +294,7 @@
         "list_changes",
         "repo_map",
         "list_directory",
-        "request_clarification",
-        "list_automate_workflows"
+        "request_clarification"
       ],
       "delegatable": true,
       "description": "Combined local codebase analysis and external research specialist",

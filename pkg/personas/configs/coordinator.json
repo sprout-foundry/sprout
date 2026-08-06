@@ -35,10 +35,9 @@
         "list_directory",
         "respond_clarification",
         "create_pull_request",
-        "manage_settings",
         "run_automate",
         "list_automate_workflows",
-        "embedding_index"
+        "ask_user"
       ],
       "capabilities": [
         "git_write"

@@ -456,8 +456,8 @@ func NewConfig() *Config {
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(), // Default to enabling parallel subagents
 		EmbeddingIndex: &EmbeddingIndexConfig{
-			Enabled:             boolPtr(false),
-			AutoIndex:           boolPtr(false),
+			Enabled:   boolPtr(false),
+			AutoIndex: boolPtr(false),
 			// 0.65, not 0.90: the write-time duplicate check is code-vs-code
 			// and a textbook near-duplicate tops out at ~0.767 through the
 			// production path (see embedding.DefaultDuplicateThreshold). A 0.90

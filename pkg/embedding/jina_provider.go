@@ -233,7 +233,7 @@ func (p *JinaONNXEmbeddingProvider) runInference(ctx context.Context, tokenIDs [
 	}
 	defer outputTensor.Destroy()
 
-	if err := p.session.Run(
+	if err := runSessionWithOptions(ctx, p.session,
 		[]onnxruntime.Value{inputIDsTensor, attnMaskTensor},
 		[]onnxruntime.Value{outputTensor},
 	); err != nil {
@@ -288,7 +288,7 @@ func (p *JinaONNXEmbeddingProvider) runInferenceBatch(ctx context.Context, seqs 
 	}
 	defer outputTensor.Destroy()
 
-	if err := p.session.Run(
+	if err := runSessionWithOptions(ctx, p.session,
 		[]onnxruntime.Value{inputIDsTensor, attnMaskTensor},
 		[]onnxruntime.Value{outputTensor},
 	); err != nil {

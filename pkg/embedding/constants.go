@@ -75,6 +75,30 @@ const (
 	// admits only the top 4% of pairs, which for a *search* is effectively off.
 	// 0.45 matches what semantic recall already uses against the same store.
 	DefaultConversationSearchThreshold = 0.45
+
+	// Thresholds for the code-specific provider (Jina Code v2, SP-135).
+	// Jina's embedding space is fundamentally different from Gemma's:
+	// unrelated code scores near-zero (0.066) instead of Gemma's 0.355,
+	// so the gates sit higher with wider margins. Measured via the Go-native
+	// eval probe (code_model_eval_test.go):
+	//
+	//	near-duplicate (renamed identifiers) : 0.756
+	//	related (same domain, different job) : 0.459
+	//	unrelated                            : 0.066
+	//	NL-code correct hits                 : 0.343–0.823
+	//	NL-code wrong answers                : −0.07–0.20
+	//
+	// The Jina gates are only used when codeAvailable is true (code provider
+	// initialized). The Gemma gates above remain the defaults for the
+	// single-model path.
+
+	// DefaultCodeModelDuplicateThreshold gates duplicate detection via Jina.
+	// Sits above "related" (0.459) with margin, well below near-duplicate (0.756).
+	DefaultCodeModelDuplicateThreshold = 0.65
+
+	// DefaultCodeModelRelatedThreshold gates "related code" injection via Jina.
+	// Above unrelated (0.066) with wide margin, below related (0.459).
+	DefaultCodeModelRelatedThreshold = 0.35
 )
 
 // WalkTimeout is the absolute maximum time allowed for WalkCodeFiles to

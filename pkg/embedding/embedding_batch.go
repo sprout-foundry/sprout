@@ -83,11 +83,67 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	m.providerShared = true
 	m.store = store
 	m.indexMgr = indexMgr
+
+	// Best-effort init of the code-specific provider (Jina Code v2, SP-135).
+	// Failure is non-fatal: code queries fall back to the Gemma-backed index.
+	// The code index uses a separate store file (code_index.hnsw) keyed by the
+	// Jina model's hash, so the two models never invalidate each other.
+	m.initCodeProviderLocked(ctx, runtime)
+
 	// Store true last so concurrent IsInitialized() reads cannot observe a
 	// partially-initialized manager (all other fields are written above under m.mu).
 	m.initialized.Store(true)
 
 	return nil
+}
+
+// initCodeProviderLocked attempts to load the code-specific embedding model
+// (Jina Code v2) for the dual-model architecture. Best-effort: if the model
+// files are missing, the download fails, or the ONNX session can't be created,
+// codeAvailable stays false and code queries fall back to the Gemma provider.
+// The caller must hold m.mu.
+func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context, runtime *ONNXRuntime) {
+	cfg := JinaCodeV2Config()
+	modelName := cfg.Name
+	modelDir := DefaultModelDir()
+	modelPath := filepath.Join(modelDir, modelName, cfg.ModelFilenameOrDefault())
+	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
+
+	// Check if the model files exist locally. Unlike Gemma (which auto-
+	// downloads on first use), the code model is opt-in: if the user hasn't
+	// staged it, we silently skip. This avoids a 160MB download at startup
+	// without explicit opt-in.
+	if _, err := os.Stat(modelPath); err != nil {
+		return
+	}
+	if _, err := os.Stat(tokenizerPath); err != nil {
+		return
+	}
+
+	provider, err := NewJinaONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath)
+	if err != nil {
+		debugLogf("embedding: code provider init failed (non-fatal, falling back to Gemma): %v", err)
+		return
+	}
+
+	codeStore, err := NewHNSWStore(filepath.Join(m.indexDir, "code_index.hnsw"), provider.ModelHash())
+	if err != nil {
+		debugLogf("embedding: code store open failed (non-fatal): %v", err)
+		provider.Close()
+		return
+	}
+
+	codeIndexMgr := NewIndexManager(provider, codeStore, IndexOptions{
+		BatchSize:      32,
+		MaxBodyLen:     2000,
+		IndexFileLevel: true,
+		ManifestPath:   filepath.Join(m.indexDir, ".code_index.hnsw.manifest.json"),
+	})
+
+	m.codeProvider = provider
+	m.codeStore = codeStore
+	m.codeIndexMgr = codeIndexMgr
+	m.codeAvailable = true
 }
 
 // BuildIndex runs a full index build for the workspace.
@@ -140,7 +196,28 @@ func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, e
 	if err != nil {
 		return nil, err
 	}
-	return idx.BuildIndex(ctx, m.workspaceRoot)
+	stats, err := idx.BuildIndex(ctx, m.workspaceRoot)
+	if err != nil {
+		return stats, err
+	}
+
+	// Build the code-specific index in parallel when the code provider is
+	// available (SP-135). This re-embeds the same files with Jina Code v2
+	// into the separate code_index.hnsw store. The code index is what
+	// CheckDuplicates and QuerySimilarCode query against.
+	m.mu.Lock()
+	codeIdx := m.codeIndexMgr
+	m.mu.Unlock()
+	if codeIdx != nil {
+		codeStats, codeErr := codeIdx.BuildIndex(ctx, m.workspaceRoot)
+		if codeErr != nil {
+			debugLogf("embedding: code index build failed (non-fatal): %v", codeErr)
+		} else {
+			debugLogf("embedding: code index built: %d files, %d units", codeStats.FilesProcessed, codeStats.UnitsEmbedded)
+		}
+	}
+
+	return stats, nil
 }
 
 // BuildIndexBackground starts an index build in a background goroutine and
@@ -339,11 +416,16 @@ func (m *EmbeddingManager) UpdateFromGitDiffBackground(ctx context.Context) <-ch
 }
 
 // CheckDuplicates checks if file content duplicates existing code.
+//
+// When the code-specific provider (Jina Code v2) is available, this routes
+// to the code index for superior separation (near-dup 0.77, unrelated 0.07
+// vs Gemma's 0.77/0.36 — see SP-135 Phase-0 results). Falls back to the
+// Gemma-backed index otherwise.
 func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string, content string) (*CheckDuplicatesResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotIndexMgr()
+	idx, err := m.snapshotCodeIndexMgr()
 	if err != nil {
 		return nil, err
 	}
@@ -370,19 +452,21 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 // QuerySimilarCode searches the index using source code as the input, for
 // "what else looks like this" rather than "what answers this question".
 //
-// Both sides are embedded as documents, which is what makes the score
-// comparable to the duplicate/related thresholds. Passing code to QuerySimilar
-// instead embeds it as a question and lands ~0.10 lower, which is how the
-// related-code injection ended up gated at a level it could never reach.
+// When the code-specific provider (Jina Code v2) is available, this routes
+// to the code index for superior retrieval quality and separation (see
+// SP-135). Falls back to the Gemma-backed indexMgr otherwise.
 func (m *EmbeddingManager) QuerySimilarCode(ctx context.Context, codeText string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotIndexMgr()
+	idx, err := m.snapshotCodeIndexMgr()
 	if err != nil {
 		return nil, err
 	}
-	return idx.queryWithPrefix(ctx, codeText, documentPrefix, topK, threshold)
+	// IndexManager.CheckDuplicates embeds with documentPrefix and searches.
+	// For Jina (symmetric, no prefixes) the prefix is ignored by the provider,
+	// so this produces correct code-similarity embeddings.
+	return idx.CheckDuplicates(ctx, codeText, topK, threshold)
 }
 
 // GetConversationStore returns the conversation store, creating it lazily on first use.
@@ -455,6 +539,23 @@ func (m *EmbeddingManager) Close() error {
 		m.store = nil
 	}
 	m.indexMgr = nil
+
+	// Close code-specific provider and store (SP-135 dual-model).
+	// The code provider owns its own ONNX session (not shared), so always close it.
+	if m.codeProvider != nil {
+		if err := m.codeProvider.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		m.codeProvider = nil
+	}
+	if m.codeStore != nil {
+		if err := m.codeStore.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		m.codeStore = nil
+	}
+	m.codeIndexMgr = nil
+	m.codeAvailable = false
 
 	// Drop the cachedProvider reference so the underlying provider (and
 	// its internal state) can be GC'd. Without this, m.cachedProvider

@@ -348,3 +348,31 @@ func jsValueToFloat32Slice(v js.Value, expectedDims int) ([]float32, error) {
 	}
 	return out, nil
 }
+
+// ─── JinaONNXEmbeddingProvider (WASM stub) ────────────────────
+// The Jina Code v2 code-specific provider is native-only (requires CGO + the
+// ONNX Runtime C library). On WASM, it falls back to the Gemma-backed index
+// via the codeAvailable=false path in EmbeddingManager.
+
+type JinaONNXEmbeddingProvider struct{}
+
+func NewJinaONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string) (*JinaONNXEmbeddingProvider, error) {
+	return nil, fmt.Errorf("Jina embedding provider is not available on WASM")
+}
+
+func (p *JinaONNXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+	return nil, fmt.Errorf("Jina embedding not available on WASM")
+}
+func (p *JinaONNXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	return nil, fmt.Errorf("Jina embedding not available on WASM")
+}
+func (p *JinaONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text string, prefix string) ([]float32, error) {
+	return nil, fmt.Errorf("Jina embedding not available on WASM")
+}
+func (p *JinaONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
+	return nil, fmt.Errorf("Jina embedding not available on WASM")
+}
+func (p *JinaONNXEmbeddingProvider) Dimensions() int   { return 0 }
+func (p *JinaONNXEmbeddingProvider) Name() string      { return "jina-wasm-stub" }
+func (p *JinaONNXEmbeddingProvider) ModelHash() string { return "" }
+func (p *JinaONNXEmbeddingProvider) Close() error      { return nil }

@@ -17,13 +17,19 @@ import (
 // fresh agent per chat session — loaded one full copy of the model per agent.
 //
 // The model is identical across managers (same modelDir, same dims), and the
-// provider's Embed path is read-locked (concurrent inference is safe — ONNX
-// sessions are thread-safe), so a single process-wide instance can back every
+// provider's Embed path is read-locked for state (the embedding cache, model
+// weights, session handle), so a single process-wide instance can back every
 // manager. This cache holds one (provider, runtime) per (modelDir, dims) key
 // for the life of the process. Instances are intentionally never closed: the
 // model stays resident so the daemon can reuse it, and one-shot CLI runs free
 // it at process exit anyway. Managers that obtain a shared provider mark
 // themselves providerShared and skip closing it.
+//
+// NOTE: "concurrent inference is safe" here means the Go-level state is safe
+// to read concurrently. ORT session.Run is NOT safe to overlap on this build
+// of ONNX Runtime — two concurrent Runs on the same session deadlock the
+// intra-op thread pool (see inference_gate.go's maxConcurrentInference doc).
+// The gate, not the read lock, is what serializes Run calls.
 
 type sharedONNXEntry struct {
 	provider EmbeddingProvider

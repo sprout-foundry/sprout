@@ -14,11 +14,21 @@ import "context"
 // simultaneously — four concurrent builds were observed taking RSS from 1 GB to
 // 4.5 GB. The per-call budget multiplied by an unbounded factor is not a budget.
 //
-// 2 rather than 1 so an interactive query (proactive context runs one on every
-// prompt) is not stuck behind a long background build batch, and rather than
-// NumCPU because ORT already fans each matmul across IntraOpNumThreads (up to
-// 4) — more concurrent sessions add memory, not throughput.
-const maxConcurrentInference = 2
+// 1 rather than 2: two concurrent Run calls on the single shared ONNX session
+// deadlock ORT's intra-op thread pool (observed on-device during a background
+// index build overlapped with daemon embedding ops — proactive context, turn
+// embedding, memory migration, semantic search). Both Run goroutines spin
+// forever at ~50% CPU per worker, the build's session.Run never returns, the
+// 45-minute BuildTimeout can't cancel it (Run ignores Go contexts), and the
+// building flag stays true until the process is killed.
+//
+// Serializing Run calls makes the deadlock structurally impossible. The cost
+// is that an interactive embedding op (e.g. proactive context on every prompt)
+// queues behind whatever in-flight Run it overlaps — but acquireInference is
+// ctx-aware, so a blocked op fails fast on its own deadline instead of
+// hanging. Between build batches the permit is free, so daemon ops still get
+// service.
+const maxConcurrentInference = 1
 
 // inferenceGate is the process-wide inference permit pool. Buffered channel
 // rather than x/sync/semaphore: no new dependency, and select gives ctx-aware

@@ -192,9 +192,6 @@ func MergeConfig(base, override *Config) *Config {
 		if override.EmbeddingIndex.IndexDir != "" {
 			result.EmbeddingIndex.IndexDir = override.EmbeddingIndex.IndexDir
 		}
-		if override.EmbeddingIndex.SimilarityThreshold > 0 {
-			result.EmbeddingIndex.SimilarityThreshold = override.EmbeddingIndex.SimilarityThreshold
-		}
 		if override.EmbeddingIndex.MaxResults > 0 {
 			result.EmbeddingIndex.MaxResults = override.EmbeddingIndex.MaxResults
 		}

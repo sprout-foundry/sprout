@@ -82,12 +82,11 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	cfg := &configuration.Config{
 		EmbeddingIndex: &configuration.EmbeddingIndexConfig{
-			Enabled:             ptrTo(true),
-			AutoIndex:           ptrTo(true),
-			SimilarityThreshold: 0.87,
-			MaxResults:          5,
-			ExcludePaths:        []string{"node_modules", ".git"},
-			IndexDir:            "/tmp/idx",
+			Enabled:      ptrTo(true),
+			AutoIndex:    ptrTo(true),
+			MaxResults:   5,
+			ExcludePaths: []string{"node_modules", ".git"},
+			IndexDir:     "/tmp/idx",
 		},
 	}
 
@@ -101,9 +100,6 @@ func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	}
 	if !got.IsEnabled() || !got.IsAutoIndex() {
 		t.Errorf("booleans clobbered: enabled=%v auto_index=%v", got.IsEnabled(), got.IsAutoIndex())
-	}
-	if got.SimilarityThreshold != 0.87 {
-		t.Errorf("SimilarityThreshold = %v, want 0.87", got.SimilarityThreshold)
 	}
 	if got.IndexDir != "/tmp/idx" {
 		t.Errorf("IndexDir = %q, want /tmp/idx", got.IndexDir)

@@ -31,11 +31,6 @@ type EmbeddingIndexConfig struct {
 	// If empty, uses ~/.config/sprout/embeddings/
 	IndexDir string `json:"index_dir,omitempty"`
 
-	// SimilarityThreshold is the cosine similarity threshold for duplicate detection.
-	// Range: 0.0 to 1.0. Default: 0.65 (measured against the production path;
-	// a 0.90 default made write-time duplicate checks unreachable)
-	SimilarityThreshold float32 `json:"similarity_threshold,omitempty"`
-
 	// MaxResults is the maximum number of duplicate candidates to return.
 	// Default: 3
 	MaxResults int `json:"max_results,omitempty"`

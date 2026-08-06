@@ -37,8 +37,7 @@ func getEmbeddingManager() (*embedding.EmbeddingManager, error) {
 			return
 		}
 		cfg := &configuration.EmbeddingIndexConfig{
-			SimilarityThreshold: 0.5,
-			MaxResults:          10,
+			MaxResults: 10,
 		}
 		cfg.SetEnabled(true)
 		cfg.SetAutoIndex(false)

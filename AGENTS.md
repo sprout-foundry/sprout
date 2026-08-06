@@ -84,9 +84,6 @@ The `test-coverage` Makefile target and `build.yml` carry two Windows-specific a
 
 When a future Go version fixes either, revert the workaround and confirm all three OSes still pass.
 
-
-
-
 ### Rules
 
 - **NEVER FORCE PUSH** in any variant (`--force`, `-f`, `--force-with-lease`). A fast-forward push that drops remote-only commits is equally destructive.
@@ -226,13 +223,13 @@ The **conversation store** (vector embeddings via `pkg/agent/turn_embedding.go` 
 
 ## Embedding index build
 
-The codebase index build (`pkg/embedding/IndexManager.BuildIndex`) walks the workspace, runs symbol extraction per file, embeds each unit via an ONNX provider, and persists vectors to the HNSW store. On phones / ARM SBCs a full build can exceed the 45-minute `BuildTimeout` (`pkg/embedding/constants.go`), so the build is *expected* to be interrupted. Two load-bearing invariants make that survivable — don't break either:
+Two load-bearing invariants in the codebase index build (`pkg/embedding/IndexManager.BuildIndex`) — don't break either:
 
-**1. Partial builds must persist progress.** Every 50 completed files flush to the store + manifest via `recordBatcher` (`pkg/embedding/index_checkpoint.go`); the next `BuildIndex` skips files whose mtime matches the manifest, so progress accumulates across sessions. Don't move the flush back to "end of build" — that returns the codebase to "empty index forever" on slow devices.
+**1. Partial builds must persist progress.** Every 50 completed files flush to the store + manifest via `recordBatcher` (`pkg/embedding/index_checkpoint.go`); the next `BuildIndex` skips files whose mtime matches the manifest, so progress accumulates across sessions. On phones / ARM SBCs a full build can exceed the 45-minute `BuildTimeout` (`pkg/embedding/constants.go`); moving the flush back to "end of build" returns the codebase to "empty index forever" on slow devices.
 
-**2. ORT `session.Run` must be ctx-cancellable.** ORT's Run ignores Go contexts; a Run that hangs (degenerate input shape, intra-op contention) holds the inference gate permit forever without it. Both providers route Run through `runWithOptions` (`pkg/embedding/onnx_embedding_provider.go`), which spawns a watchdog goroutine that calls `RunOptions.Terminate()` when ctx fires. When a new ONNX provider lands, wire its Run calls through the same helper — don't call `session.Run` directly.
+**2. ORT `session.Run` must be ctx-cancellable.** ORT's Run ignores Go contexts; a Run that hangs holds the inference gate permit forever without it. Both ONNX providers route Run through `runSessionWithOptions` (`pkg/embedding/onnx_run_options.go`), which spawns a watchdog goroutine that calls `RunOptions.Terminate()` when ctx fires. When a new ONNX provider lands, wire its Run calls through the same helper — don't call `session.Run` directly.
 
-**Dual-model architecture.** Code retrieval + duplicate detection route through a dedicated code embedding model (`codeProvider`); conversation memory + NL file-level indexing stay on the general-purpose model. Two stores, keyed by different `ModelHash`es, swap independently via `manifestInvalidated` → `ReplaceAll`. When changing either model: (a) re-derive the threshold bands (`pkg/embedding/constants.go`) with the parity-probe methodology — they're geometry-specific, don't reuse the old model's numbers; (b) re-baseline `pkg/embedding/retrieval_quality_test.go` against the new model. `roadmap/SP-135-code-embedding-model.md` is the authoritative spec for the code-model decision; `roadmap/SP-134-gpu-macos-embeddings.md` owns the CoreML/GPU acceleration question.
+Model selection, quantization choices, threshold tuning, and perf studies live in `roadmap/SP-135-code-embedding-model.md` (code model) and `roadmap/SP-134-gpu-macos-embeddings.md` (CoreML/GPU) — not here. When changing either model, re-derive the threshold bands (`pkg/embedding/constants.go`) and re-baseline `pkg/embedding/retrieval_quality_test.go`.
 
 ## Change Tracking
 

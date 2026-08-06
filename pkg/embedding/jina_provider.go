@@ -300,17 +300,14 @@ func (p *JinaONNXEmbeddingProvider) runInferenceBatch(ctx context.Context, seqs 
 	for i := int64(0); i < batchSize; i++ {
 		offset := i * seqLen * hiddenDim
 		row := hidden[offset : offset+seqLen*hiddenDim]
-		// Count valid (non-padded) positions for correct mean pooling.
-		validLen := 0
-		for _, seq := range seqs[i] {
-			if seq > 0 || i == 0 { // attention mask is 1 for real tokens
-				validLen++
-			}
-		}
-		// Use the actual sequence length (not padded) for pooling.
+		// Use the actual (unpadded) sequence length for correct mean pooling.
 		actualLen := len(seqs[i])
 		if actualLen > maxLen {
 			actualLen = maxLen
+		}
+		if actualLen == 0 {
+			results[i] = make([]float32, hiddenDim)
+			continue
 		}
 		results[i] = meanPoolAndNormalize(row, actualLen, int(hiddenDim))
 	}

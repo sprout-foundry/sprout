@@ -87,7 +87,7 @@ func TestBatchPaddingProbe(t *testing.T) {
 	idx := NewIndexManager(onnx, newCountingStore(), IndexOptions{BatchSize: EmbedBatchSize, MaxBodyLen: 2000})
 
 	start := time.Now()
-	if _, err := idx.embedUnits(ctx, units[:sample]); err != nil {
+	if _, err := idx.embedUnits(ctx, units[:sample], nil); err != nil {
 		t.Fatalf("natural: %v", err)
 	}
 	naturalElapsed := time.Since(start)
@@ -97,7 +97,7 @@ func TestBatchPaddingProbe(t *testing.T) {
 		return len(embeddingText(bySize[a], 2000)) < len(embeddingText(bySize[b], 2000))
 	})
 	start = time.Now()
-	if _, err := idx.embedUnits(ctx, bySize); err != nil {
+	if _, err := idx.embedUnits(ctx, bySize, nil); err != nil {
 		t.Fatalf("sorted: %v", err)
 	}
 	sortedElapsed := time.Since(start)

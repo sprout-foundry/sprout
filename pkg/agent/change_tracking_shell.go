@@ -1,41 +1,7 @@
-// Shell-mutation tracking for ChangeTracker.
-//
-// The base ChangeTracker (change_tracking.go) only captures writes the
-// agent performs via the structured file tools (write_file, edit_file,
-// patch_structured_file, write_structured_file). Plenty of legitimate
-// agent actions mutate files outside those tools — `sed -i`, `mv`, `rm`,
-// `cp`, `tee`, `awk -i inplace`, build scripts, formatters, etc. — and
-// none of them currently appear in the manifest the subagent returns to
-// its primary.
-//
-// This file adds a "before/after" snapshot pass around every
-// shell_command invocation:
-//
-//  1. Before the shell runs, walk the workspace tree and capture file
-//     bytes for everything inside size/binary limits, skipping
-//     well-known bloat directories (.git, node_modules, dist, …).
-//     Works whether or not the workspace is a git repo — no git
-//     dependency, no reliance on git's tracked/untracked classification.
-//  2. Run the shell command.
-//  3. Walk again afterwards. Diff against the "before" map. Each
-//     deletion, modification, or creation that isn't already in the
-//     tracker becomes a new TrackedFileChange with the captured
-//     original content (when available — preserved so a user can
-//     recover an accidentally-deleted file from the session buffer,
-//     git-tracked or not).
-//
-// Size + binary filters keep this cheap and safe: 1 MiB ceiling per file
-// (so we don't buffer node_modules-style giants), plus a null-byte
-// sniff in the first 8 KiB so binaries aren't stored as text. A
-// per-snapshot total-bytes budget caps memory.
-//
-// This file is the primary entry point containing the main orchestration
-// methods. Supporting code is split across:
-//
-//   - change_tracking_snapshot.go — walk, file I/O, binary detection
-//   - change_tracking_mutations.go — mutation recording and bulk rollup
-//   - change_tracking_autoskip.go — adaptive auto-skip learning
-//   - change_tracking_shell_persist.go — cross-session persistence
+// Shell-mutation tracking: captures before/after snapshots around shell_command
+// invocations to detect file changes the structured tools miss (sed, mv, rm, etc.).
+// Supporting code: change_tracking_snapshot.go, change_tracking_mutations.go,
+// change_tracking_autoskip.go, change_tracking_shell_persist.go.
 package agent
 
 import (
@@ -118,29 +84,9 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 }
 
 // TrackShellTurn diffs the workspace against the primed baseline,
-// appends every detected mutation to the change tracker (with dedup
-// against direct-hook entries that fired during the same window),
-// then rebases the baseline to the new state.
-//
-// If the cache hasn't been primed yet this call auto-primes — the
-// pre-shell state is captured but no changes are recorded the first
-// time (we have no baseline to compare against). To track the very
-// first shell command's mutations, call PrimeShellTracking once at
-// agent session start before the first shell_command runs.
-//
-// Honors the per-tracker shellWalkEnabled knob — when disabled the
-// call is a no-op so users with weird workspaces can keep direct-tool
-// tracking without paying the walker's cost.
-//
-// `destructive` should be set when the shell command can clobber active
-// changes (`git checkout .`, `git reset --hard`, …). It flips the walk
-// into the safer mode that bypasses autoSkipDirs and emits per-file
-// rather than rolling up — see shell_destructive.go for the classifier
-// and walkWorkspace for the behaviour switch.
-//
-// Concurrency: serialized via the tracker's internal mutex. Subagents
-// each have their own ChangeTracker so cross-subagent calls don't
-// interfere.
+// records mutations, and rebases the baseline to the new state.
+// Auto-primes if the cache hasn't been primed yet (no changes recorded first time).
+// `destructive` enables the safer mode that bypasses autoSkipDirs.
 func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bool) {
 	if ct == nil || !ct.IsEnabled() {
 		return
@@ -156,14 +102,10 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		absWorkDir = workDir
 	}
 
+	// Re-prime if the workDir changed since the cache was built.
+	// Diffing a cache built for one root against a walk of another
+	// would classify every file outside the old root as a "create".
 	if ct.shellCache == nil || ct.shellCacheRoot != absWorkDir {
-		// Either first call, or the shell `cd`'d into a different
-		// directory since the cache was built. Re-prime silently
-		// against the new workDir — diffing a cache built for one
-		// root against a walk of another would classify every file
-		// outside the old root as a "create" (the 14k-entry runaway
-		// session that motivated shellCacheRoot). Priming is always
-		// non-destructive even when the triggering command is.
 		snap, _, _ := ct.walkWorkspace(workDir, nil, false)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}
@@ -173,21 +115,9 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		return
 	}
 
-	// `git stash` and `git stash pop` are uniquely dangerous to the shell-
-	// walk diff because the stash pop's 3-way merge can silently revert
-	// files to a state the agent never wrote. The diff would detect those
-	// reverted files as "modified by the shell command" and record them
-	// as agent mutations with empty/placeholder .original content.
-	//
-	// Other destructive git commands (checkout, restore, reset) revert
-	// files to HEAD — a known-good baseline — and the diff correctly
-	// attributes those reverts with real OriginalCode for recovery.
-	// Stash is different because the stash entry may predate the current
-	// working state, so the "original" captured is meaningless.
-	//
-	// When a stash operation is detected, re-prime the cache (new state
-	// = new baseline) instead of diffing against the stale pre-stash
-	// cache.
+	// git stash is uniquely dangerous: the stash pop's 3-way merge can
+	// silently revert files to a state the agent never wrote. Re-prime
+	// the cache instead of diffing against a stale pre-stash baseline.
 	if destructive && isGitStashOperation(toolCall) {
 		snap, _, _ := ct.walkWorkspace(workDir, nil, true)
 		if snap == nil {
@@ -204,33 +134,13 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		return
 	}
 
-	// SP-077: Filter out deltas caused by git operations. When a git
-	// command (merge, checkout, reset, pull) brings committed content
-	// into the working tree, the walker sees the resulting file changes
-	// as mutations. But these are not agent-authored edits — the
-	// "before" bytes are stale relative to the now-current HEAD, and
-	// recording them as recoverable OriginalCode creates the recurring
-	// failure mode where committed work later gets silently reverted.
-	//
-	// The filter checks: for each delta, does the post-operation content
-	// match HEAD? If so, git brought this file to a committed state.
-	//
-	// For NON-DESTRUCTIVE commands (merge, pull, fetch): the delta is
-	// suppressed — git brought committed content, nothing to recover.
-	//
-	// For DESTRUCTIVE commands (checkout, reset, clean): the delta is
-	// preserved IF the before-content differed from the after-content —
-	// meaning the destructive command changed the file's content, not
-	// just touched its mtime. The before-content might have been
-	// uncommitted agent work that the command destroyed; preserving the
-	// delta makes it recoverable via recover_file.
+	// Filter out deltas caused by git operations. When git brings committed
+	// content into the working tree, those aren't agent-authored edits.
+	// For non-destructive commands: suppressed. For destructive: preserved
+	// if before-content differed from after (uncommitted agent work).
 	pending = ct.filterGitSourcedDeltas(pending, workDir, destructive)
 
-	// Surface truncation as a manifest entry on destructive walks. Non-
-	// destructive truncation already gets logged; for destructive ops we
-	// want it impossible to miss because partial coverage might hide
-	// reverts the user expected to be recoverable. Recorded as Operation
-	// "warning" so the UI can highlight it distinctly.
+	// Surface truncation as a manifest entry on destructive walks.
 	if truncated && destructive {
 		ct.appendChange(TrackedFileChange{
 			FilePath:  toolCall,
@@ -241,12 +151,8 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		})
 	}
 
-	// Destructive commands above the bulk threshold collapse into a
-	// single recoverable entry. Below the threshold we keep the per-file
-	// shape so small reverts stay easy to scan flat. Non-destructive
-	// commands always emit per-file — the build-rollup machinery is
-	// dormant in production today (RecordShellMutations isn't wired in
-	// from this path), so we don't touch their behaviour here.
+	// Destructive commands above the bulk threshold collapse into a single
+	// recoverable entry. Below the threshold we keep per-file shape.
 	if destructive && len(pending) >= shellDestructiveBulkThreshold {
 		ct.appendDestructiveBulkRollup(pending, toolCall)
 	} else {
@@ -262,15 +168,8 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 }
 
 // SyncShellCacheForPath refreshes the shell cache entry for one path
-// against its current on-disk state. Called by the direct file-write
-// hooks (TrackFileWrite, TrackFileEdit) so the cache reflects writes
-// the agent just performed via structured-file tools — without this,
-// the next TrackShellTurn walk would see the new content as a stat
-// mismatch against stale cache and record a duplicate "edit" entry
-// even though no shell command touched the file.
-//
-// Safe to call when the cache hasn't been primed yet (no-op) — there's
-// no baseline to keep in sync.
+// against its current on-disk state. Called by direct file-write hooks
+// so the cache reflects writes the agent just performed.
 func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
 	if ct == nil || !ct.IsEnabled() {
 		return
@@ -318,23 +217,11 @@ func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
 }
 
 // filterGitSourcedDeltas removes deltas whose post-operation content
-// matches git HEAD — i.e. deltas that a git operation (merge, checkout,
-// reset, pull) produced by aligning the working tree to committed
-// content. These are NOT agent-authored edits; recording them with
-// recoverable OriginalCode would persist stale pre-operation bytes that
-// can later be written back, silently reverting committed work (SP-077).
-//
-// The check is batched: one call to git.CommittedFilePaths builds the
-// full set of committed-clean files for the repo, then each delta's
-// path is tested against the set in O(1). Non-repo workspaces (or any
-// git error) result in NO filtering — all deltas pass through unchanged
-// so the legitimate recovery value of shell-mutation tracking is
-// preserved outside git repos.
-//
-// Path-only entries (content was too large/binary) are kept: we can't
-// cheaply verify their committed status without reading them from disk,
-// and they carry no recoverable OriginalCode payload anyway (the Skipped
-// sentinel makes them non-recoverable by design).
+// matches git HEAD — i.e. deltas that a git operation produced by
+// aligning the working tree to committed content. These aren't
+// agent-authored edits; recording them would persist stale bytes.
+// Batched via git.CommittedFilePaths for O(1) per-delta lookup.
+// Non-repo workspaces skip filtering; path-only entries are kept.
 func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, workDir string, destructive bool) []pendingShellChange {
 	if len(pending) == 0 {
 		return pending
@@ -352,19 +239,14 @@ func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, wo
 		// also kept — no content payload to protect against.
 		if p.After != nil && p.After.Content != nil && committed[p.Path] {
 			if destructive {
-				// For destructive commands (checkout, reset, clean),
-				// check whether the BEFORE content was different from
-				// the AFTER content. If before != after, the command
-				// changed the file's content — the before-state might
-				// have been uncommitted agent work that was destroyed.
-				// Preserve the delta so it's recoverable.
+	// For destructive commands, check whether the BEFORE content was different.
 				if p.Before != nil && p.Before.Content != nil && !shellContentsEqual(p.Before, p.After) {
-					ct.logf("SP-077: preserving delta for %s (destructive git command changed content from uncommitted state)", p.Path)
+					ct.logf("preserving delta for %s (destructive git command changed content from uncommitted state)", p.Path)
 					kept = append(kept, p)
 					continue
 				}
 			}
-			ct.logf("SP-077: suppressing git-sourced delta for %s (post-op content matches HEAD)", p.Path)
+			ct.logf("suppressing git-sourced delta for %s (post-op content matches HEAD)", p.Path)
 			continue
 		}
 		kept = append(kept, p)

@@ -111,6 +111,8 @@ export type { SkeletonProps, SkeletonTextProps } from './components/Skeleton';
 export { default as Collapsible } from './components/Collapsible';
 export type { CollapsibleProps } from './components/Collapsible';
 
+export { default as CodeBlock } from './components/CodeBlock';
+
 // ── Dialogs ───────────────────────────────────────────────────────────
 export { showThemedAlert, showThemedConfirm, showThemedPrompt } from './components/ThemedDialog';
 

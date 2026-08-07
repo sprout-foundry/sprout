@@ -14,10 +14,7 @@ import (
 )
 
 // manageMemoryHandler implements ToolHandler for the consolidated manage_memory tool.
-//
-// Dispatches on `operation` to add/read/list/delete/search memories. Replaces
-// the legacy add_memory / read_memory / list_memories / delete_memory /
-// search_memories tools so the LLM only sees one entry for memory management.
+// Dispatches on `operation` to add/read/list/delete/search memories.
 type manageMemoryHandler struct{}
 
 func (h *manageMemoryHandler) Name() string { return "manage_memory" }
@@ -104,7 +101,7 @@ func (h *manageMemoryHandler) MaxResultSize() int     { return 0 }
 func (h *manageMemoryHandler) SafeForParallel() bool  { return false }
 func (h *manageMemoryHandler) Interactive() bool      { return false }
 
-// executeAdd handles the "add" operation: create/overwrite a memory file.
+// executeAdd handles the "add" operation.
 func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (ToolResult, error) {
 	name, _ := extractString(args, "name")
 	content, _ := extractString(args, "content")
@@ -135,7 +132,7 @@ func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (Tool
 	}, nil
 }
 
-// executeRead handles the "read" operation: return full content of a memory.
+// executeRead handles the "read" operation.
 func (h *manageMemoryHandler) executeRead(args map[string]any) (ToolResult, error) {
 	name, _ := extractString(args, "name")
 	sanitized := sanitizeMemoryName(name)
@@ -163,7 +160,7 @@ func (h *manageMemoryHandler) executeRead(args map[string]any) (ToolResult, erro
 	}, nil
 }
 
-// executeList handles the "list" operation: list all saved memories with previews.
+// executeList handles the "list" operation.
 func (h *manageMemoryHandler) executeList() (ToolResult, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
@@ -233,7 +230,7 @@ func (h *manageMemoryHandler) executeList() (ToolResult, error) {
 	}, nil
 }
 
-// executeDelete handles the "delete" operation: remove a memory file.
+// executeDelete handles the "delete" operation.
 func (h *manageMemoryHandler) executeDelete(args map[string]any) (ToolResult, error) {
 	name, _ := extractString(args, "name")
 	sanitized := sanitizeMemoryName(name)
@@ -256,9 +253,7 @@ func (h *manageMemoryHandler) executeDelete(args map[string]any) (ToolResult, er
 
 	result := fmt.Sprintf("Memory '%s' deleted.", sanitized)
 
-	// Remove embedding from conversation store (best-effort)
-	// This is handled by the embedding manager's background cleanup, so
-	// we don't block the user on it. The memory file is already deleted.
+	// Embedding removal is handled by the embedding manager's background cleanup.
 
 	return ToolResult{
 		Output:     result,
@@ -266,8 +261,7 @@ func (h *manageMemoryHandler) executeDelete(args map[string]any) (ToolResult, er
 	}, nil
 }
 
-// executeSearch handles the "search" operation: search memories by text matching
-// or semantic search via the embedding manager.
+// executeSearch handles the "search" operation: text matching or semantic search.
 func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (ToolResult, error) {
 	query, _ := extractString(args, "query")
 
@@ -302,8 +296,7 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 		threshold = 1
 	}
 
-	// Try semantic (embedding-based) search first if the embedding manager is
-	// available and initialized.
+	// Try semantic (embedding-based) search first if the embedding manager is available.
 	if env.EmbeddingMgr != nil && env.EmbeddingMgr.IsInitialized() {
 		output, err := h.semanticSearch(env, query, topK, float32(threshold))
 		if err == nil {
@@ -330,9 +323,7 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 	}, nil
 }
 
-// semanticSearch performs semantic search using the embedding manager's
-// ConversationStore. It embeds the query, retrieves matching memory records,
-// and formats the results for display.
+// semanticSearch performs semantic search using the embedding manager's ConversationStore.
 func (h *manageMemoryHandler) semanticSearch(env ToolEnv, query string, topK int, threshold float32) (string, error) {
 	ctx := context.Background()
 

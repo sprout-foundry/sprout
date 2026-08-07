@@ -24,13 +24,10 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	return a.processQueryWithSeed(userQuery)
 }
 
-// ProcessQueryWithContinuity processes a query with continuity from previous actions
 func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
-	// SP-108: Re-enable auto-resume when the user sends a manual message.
 	if userQuery != "" {
 		a.EnableWakeupIfDisabled()
 	}
-	// Drain pending background-task notifications and prepend them.
 	if notifications := a.DrainNotifications(); len(notifications) > 0 {
 		wakeupMsg := FormatWakeupBatch(notifications)
 		if userQuery != "" {
@@ -39,12 +36,10 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 			userQuery = wakeupMsg
 		}
 	}
-	// Ensure changes are committed even if there are unexpected errors or early termination
+	// Commit any uncommitted changes and auto-save state on exit.
 	defer func() {
-		// Only commit if we have changes and they haven't been committed yet
 		if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
 			a.Logger().Debug("DEFER: Attempting to commit %d tracked changes\n", a.GetChangeCount())
-			// Check if changes are already committed by trying to commit (it's safe due to committed flag)
 			if commitErr := a.CommitChanges("Session cleanup - ensuring changes are not lost"); commitErr != nil {
 				a.Logger().Debug("Warning: Failed to commit tracked changes during cleanup: %v\n", commitErr)
 			} else {
@@ -54,78 +49,50 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 			a.Logger().Debug("DEFER: No changes to commit (enabled: %v, count: %d)\n", a.IsChangeTrackingEnabled(), a.GetChangeCount())
 		}
 
-		// Auto-save memory state after every successful turn
 		a.autoSaveState()
 		a.Logger().Debug("DEFER: Auto-saved memory state\n")
 	}()
 
-	// Load previous state if available
 	if a.state.GetPreviousSummary() != "" {
-		// Inject the summary as a one-shot system supplement so it is attributed to
-		// the system (not the user) and does not consume the user input budget.
 		a.setPendingSystemSupplement(fmt.Sprintf(
 			"## Context From Previous Session\n\n%s\n\nNote: The user cannot see the previous session's responses. Build upon that work but present your response as if it's the first time addressing this topic.",
 			a.state.GetPreviousSummary()))
 	}
 
-	// Process the user's actual query, with or without previous context.
 	return a.ProcessQuery(userQuery)
 }
 
-// getOptimizedToolDefinitions returns tool definitions optimized based on conversation context
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
-	// Start with standard tools. Pulls from the canonical registry
-	// (pkg/agent/tool_registrations.go) via BuildToolDefinitions —
-	// the same registry seedRegistry uses, so the LLM and this
-	// optimisation path stay in sync.
 	tools := BuildToolDefinitionsForAgent(a)
 
-	// SP-125: Low-Context Mode tool allowlist. Applied first (before the
-	// subagent and persona filters) so it's the broadest narrowing pass —
-	// downstream filters can only further restrict, never widen beyond the
-	// LCM allowlist. An empty ToolAllowlist (full mode) is a no-op.
+	// LCM allowlist: applied first as the broadest narrowing pass.
 	if allow := a.contextProfile.ToolAllowlist; len(allow) > 0 {
 		tools = filterToolsByName(tools, makeAllowedToolSet(allow))
 	}
 
-	// Filter out run_parallel_subagents (not supported in LCM).
-	// For run_subagent, allow it in LCM mode even at depth limit for simple
-	// delegation, but still respect the depth limit in full mode.
+	// Filter subagent tools by mode and depth.
 	filtered := make([]api.Tool, 0, len(tools))
 	for _, tool := range tools {
 		if tool.Function.Name == "run_parallel_subagents" {
-			// In LCM mode, block parallel subagents (causes file conflicts)
-			// In full mode, allow if depth permits
-			if a.contextProfile.Mode == configuration.ContextModeLowContext {
-				continue
-			}
-			if !a.CanSpawnSubagents() {
+			if a.contextProfile.Mode == configuration.ContextModeLowContext || !a.CanSpawnSubagents() {
 				continue
 			}
 		}
-		if tool.Function.Name == "run_subagent" {
-			// Respect depth limit in all modes
-			if !a.CanSpawnSubagents() {
-				continue
-			}
+		if tool.Function.Name == "run_subagent" && !a.CanSpawnSubagents() {
+			continue
 		}
 		filtered = append(filtered, tool)
 	}
 	tools = filtered
 
-	// Add MCP tools if available
-	mcpTools := a.getMCPTools()
-	if mcpTools != nil {
+	if mcpTools := a.getMCPTools(); mcpTools != nil {
 		tools = append(tools, mcpTools...)
 	}
 
-	// For custom providers, apply tool filtering only when tool_calls is explicitly configured.
-	// Always preserve skill and memory tools regardless of the allowlist — these are
-	// lightweight context tools that should never be hidden from the model.
+	// Custom provider tool filtering preserves skill and memory tools.
 	if customProvider, ok := a.getCurrentCustomProvider(); ok {
 		if len(customProvider.ToolCalls) > 0 {
 			allowedToolSet := makeAllowedToolSet(customProvider.ToolCalls)
-			// Always include skill and memory tools so models can discover and use them
 			for _, t := range alwaysIncludedTools {
 				allowedToolSet[t] = struct{}{}
 			}
@@ -133,23 +100,12 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		}
 	}
 
-	// Apply active persona tool filter (used for direct /persona and subagent persona runs).
-	// In LCM mode, the curated allowlist is final — persona filtering would strip
-	// tools (repo_map, web_search, fetch_url) that the LCM profile intentionally includes.
+	// Persona tool filter skipped in LCM mode (allowlist is final).
 	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 &&
 		len(a.contextProfile.ToolAllowlist) == 0 {
 		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
 	}
 
-	// Vision models retain access to analyze_image_content and analyze_ui_screenshot tools
-	// even when direct multimodal images are present. This allows the agent to:
-	// - Analyze images from URLs or file paths mentioned in the conversation
-	// - Use specialized analysis modes (OCR, frontend analysis, etc.)
-	// - Get viewport-adjusted analysis for HTML files
-	// Direct multimodal images and tool-based analysis are complementary, not mutually exclusive.
-
-	// Future: Could optimize by analyzing conversation context
-	// and only returning relevant tools
 	return tools
 }
 
@@ -169,9 +125,7 @@ func (a *Agent) getCurrentCustomProvider() (*configuration.CustomProviderConfig,
 	return &provider, true
 }
 
-// alwaysIncludedTools are tools that must always be available to models regardless
-// of custom provider tool_calls filtering. These are lightweight context tools
-// for skill discovery, memory, and self-management that should never be hidden.
+// alwaysIncludedTools are always available regardless of custom provider filtering.
 var alwaysIncludedTools = []string{
 	"list_skills",
 	"activate_skill",
@@ -221,9 +175,7 @@ func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) 
 	return false
 }
 
-// ClearConversationHistory clears the conversation history
 func (a *Agent) ClearConversationHistory() {
-	// Keep messages empty; system prompt is added during prepareMessages
 	a.state.SetMessages([]api.Message{})
 	a.clearTurnCheckpoints()
 	a.state.SetCurrentIteration(0)
@@ -232,7 +184,6 @@ func (a *Agent) ClearConversationHistory() {
 	a.Logger().Debug("[clean] Conversation history cleared\n")
 }
 
-// SetConversationOptimization enables or disables conversation optimization
 func (a *Agent) SetConversationOptimization(enabled bool) {
 	if a.state.GetOptimizer() != nil {
 		a.state.GetOptimizer().SetEnabled(enabled)
@@ -244,7 +195,6 @@ func (a *Agent) SetConversationOptimization(enabled bool) {
 	}
 }
 
-// GetOptimizationStats returns optimization statistics
 func (a *Agent) GetOptimizationStats() map[string]interface{} {
 	if a.state.GetOptimizer() != nil {
 		return a.state.GetOptimizer().GetOptimizationStats()
@@ -255,33 +205,22 @@ func (a *Agent) GetOptimizationStats() map[string]interface{} {
 	}
 }
 
-// maxTotalImagePayloadBytesDefault is the fallback maximum combined size of
-// all images sent in a single query (20 MB) when the provider's
-// VisionCapabilities are unavailable.
+// Fallback max combined image payload (20 MB) when VisionCapabilities are unavailable.
 const maxTotalImagePayloadBytesDefault = 20 * 1024 * 1024
 
-// pastedImagePlaceholderRe matches the placeholder inserted by the console
-// when a user pastes an image.  ONLY this pattern is considered safe to load
-// and send as multimodal content — arbitrary file paths in user text are ignored.
+// Matches the placeholder inserted by the console when a user pastes an image.
 var pastedImagePlaceholderRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
 
-// visionEmbedMaxEdgePxDefault is the fallback longest-edge cap for embedded
-// images (1568px).  Anthropic recommends ≤1568px for the best cost/quality
-// trade-off.  Used when the provider's VisionCapabilities are unavailable.
+// Fallback longest-edge cap for embedded images (1568px, per Anthropic recommendation).
 const visionEmbedMaxEdgePxDefault = 1568
 
-// resizeImageForVisionEmbed caps the long edge of the decoded image at
-// maxEdgePx using bilinear resampling, re-encoding as JPEG at quality 85.
-// Returns the input unchanged if the long edge is already within the cap or
-// the bytes cannot be decoded by stdlib.
+// resizeImageForVisionEmbed caps the long edge at maxEdgePx using bilinear resampling.
 func resizeImageForVisionEmbed(data []byte, maxEdgePx int) ([]byte, error) {
-	// Fast path: check config without full decode.
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		// Format not supported by stdlib (e.g., webp/avif) — pass through.
-		return data, nil
+		return data, nil // unsupported format, pass through
 	}
-	_ = format // format is already handled by OptimizeImageData upstream
+	_ = format
 
 	longEdge := cfg.Width
 	if cfg.Height > longEdge {
@@ -291,13 +230,11 @@ func resizeImageForVisionEmbed(data []byte, maxEdgePx int) ([]byte, error) {
 		return data, nil
 	}
 
-	// Decode the full image.
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return data, nil
 	}
 
-	// Calculate new dimensions preserving aspect ratio.
 	scale := float64(maxEdgePx) / float64(longEdge)
 	newW := int(float64(cfg.Width)*scale + 0.5)
 	newH := int(float64(cfg.Height)*scale + 0.5)
@@ -322,36 +259,21 @@ func resizeImageForVisionEmbed(data []byte, maxEdgePx int) ([]byte, error) {
 }
 
 // processImagesInQuery detects and processes images in user queries.
-// If the primary model supports vision it returns the image data as multimodal
-// content so the model can see the images directly.  Otherwise it falls back
-// to the existing OCR pipeline which converts images to text descriptions.
 func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, error) {
-	// Skip if no client is available
 	if a.client == nil {
 		return nil, query, nil
 	}
 
-	// Multimodal path: if the active client supports *conversational* vision
-	// (chat models that handle inline image content), embed pasted images
-	// as multimodal content and strip the placeholder text. OCR-only models
-	// (glm-ocr etc.) flow through the tool path below.
 	if c := a.getClient(); c != nil && a.effectiveConversationalVision(c) {
 		return a.processImagesAsMultimodal(query)
 	}
 
-	// Non-multimodal / OCR-only path: rewrite the query to instruct the
-	// model to call analyze_image_content for each pasted image path.
-	// processImagesViaOCR runs the actual vision analysis synchronously and
-	// inlines the resulting text descriptions so non-vision chat models
-	// can answer questions about pasted images.
 	paths := extractPastedImagePaths(query)
 	if len(paths) == 0 {
 		return nil, query, nil
 	}
 
 	if c := a.getClient(); c != nil && a.effectiveVisionSupport() {
-		// OCR-only model: keep placeholder text AND run the OCR tool inline
-		// so the chat model gets text descriptions of the images.
 		enhancedQuery, err := a.processImagesViaOCR(query)
 		if err != nil {
 			a.Logger().Debug("[WARN] OCR fallback failed: %v\n", err)
@@ -360,8 +282,6 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, enhancedQuery, nil
 	}
 
-	// Plain non-vision model: hand it the OCR-tool prompt so it can call
-	// analyze_image_content to read images itself.
 	return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
 }
 
@@ -424,16 +344,10 @@ func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) stri
 	return b.String()
 }
 
-// processImagesAsMultimodal extracts pasted-image references from the query,
-// reads each file, and returns the image data for multimodal embedding.
-// SP-103-D3: uses the provider's VisionCapabilities to determine resize
-// dimensions, per-image caps, and total payload limits.
+// processImagesAsMultimodal extracts pasted-image references and returns image data for multimodal embedding.
 func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string, error) {
 	cwd := a.currentWorkspaceRoot()
 
-	// SP-103-D3: Query the provider's VisionCapabilities for per-provider
-	// limits. Fall back to safe defaults when the client is unavailable or
-	// returns zero values.
 	caps := api.VisionCapabilitiesDefault()
 	if c := a.getClient(); c != nil {
 		caps = api.VisionCapabilitiesOrDefault(c.VisionCapabilities())
@@ -441,8 +355,6 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	maxEdgePx := caps.MaxImageDimension
 	maxImageBytes := caps.MaxImageBytes
 	maxImageCount := caps.MaxImageCount
-	// Total payload cap: maxImageBytes * maxImageCount gives a provider-aware
-	// upper bound. Clamp to a reasonable minimum (20 MB) to avoid tiny caps.
 	maxTotalImagePayloadBytes := maxImageBytes * maxImageCount
 	if maxTotalImagePayloadBytes < maxTotalImagePayloadBytesDefault {
 		maxTotalImagePayloadBytes = maxTotalImagePayloadBytesDefault
@@ -451,14 +363,11 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	var images []api.ImageData
 	totalBytes := 0
 
-	// Run the regex once: it serves as both the "any matches?" check and
-	// the source of file paths for processing.
 	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
 	if len(uniqueMatches) == 0 {
 		return nil, query, nil
 	}
 
-	// Build replacement map so we can rewrite the query in a single pass.
 	var placeholders []placeholderInfo
 	seen := make(map[string]struct{}, len(uniqueMatches))
 	for _, loc := range uniqueMatches {
@@ -471,16 +380,9 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		placeholders = append(placeholders, placeholderInfo{fullMatch: fullMatch, filePath: filePath})
 	}
 
-	// SP-103-D2: Split images into inline (multimodal) and overflow (OCR fallback).
-	// Uses BatchSplit which considers both count AND total payload bytes to
-	// avoid provider 400 (context overflow) errors.
 	inlinePlaceholders, overflowPlaceholders := a.splitPlaceholdersWithBatchSplit(placeholders, caps, maxImageCount, maxTotalImagePayloadBytes)
 
-	// Rewrite the query once, replacing every occurrence of each placeholder.
-	// SP-103-B4: when there are multiple images, label each one with a numeric
-	// hint ("[image 1 of 3: foo.png]") so the model can refer to them in
-	// follow-up answers ("see image 2"). For single-image queries we keep
-	// the simpler "[image: foo.png]" form to avoid implying there's more.
+	// Rewrite the query, labeling images numerically for multi-image queries.
 	cleanedQuery := query
 	totalImages := len(placeholders)
 	multi := totalImages > 1
@@ -494,8 +396,6 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		}
 		cleanedQuery = strings.ReplaceAll(cleanedQuery, ph.fullMatch, replacement)
 	}
-	// Replace overflow placeholders with numbered labels too (they'll get OCR
-	// descriptions appended below).
 	for i, ph := range overflowPlaceholders {
 		fileName := filepath.Base(ph.filePath)
 		idx := len(inlinePlaceholders) + i + 1
@@ -503,34 +403,27 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 			fmt.Sprintf("[image %d of %d: %s]", idx, totalImages, fileName))
 	}
 
-	// Load inline image files.
+	// Load inline image files, enforcing directory containment and size caps.
 	expectedDir := filepath.Join(cwd, console.PastedImageDirName)
 	for _, ph := range inlinePlaceholders {
 		filePath := ph.filePath
 
-		// Resolve all paths to absolute for containment checking.
 		if !filepath.IsAbs(filePath) {
 			filePath = filepath.Join(cwd, filePath)
 		}
 
-		// Defense-in-depth: only read files under the pasted-images directory.
-		// This prevents reading arbitrary files if an LLM were to produce text
-		// matching the placeholder pattern.
 		relToExpected, err := filepath.Rel(expectedDir, filePath)
 		if err != nil || strings.HasPrefix(relToExpected, "..") {
 			a.Logger().Debug("[WARN] Skipping image %s: not in pasted images directory\n", filePath)
 			continue
 		}
 
-		// SP-103-D3: pass provider-aware caps to readImageAsImageData.
 		imgData, imgSize, err := readImageAsImageData(filePath, maxEdgePx)
 		if err != nil {
 			a.Logger().Debug("[WARN] Skipping image %s: %v\n", filePath, err)
 			continue
 		}
 
-		// Enforce per-image size cap: use the provider's MaxImageBytes when
-		// available, otherwise fall back to console.MaxPastedImageSize.
 		perImageCap := maxImageBytes
 		if perImageCap <= 0 {
 			perImageCap = console.MaxPastedImageSize
@@ -541,7 +434,6 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 			continue
 		}
 
-		// Enforce total payload cap.
 		if totalBytes+imgSize > maxTotalImagePayloadBytes {
 			a.Logger().Debug("[WARN] Skipping image %s: total payload would exceed cap (%d bytes)\n",
 				filePath, maxTotalImagePayloadBytes)
@@ -556,8 +448,6 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		a.Logger().Debug("[img] Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
 	}
 
-	// SP-103-D2: Process overflow images via OCR fallback so the model
-	// still gets text descriptions of images that exceed the inline limit.
 	if len(overflowPlaceholders) > 0 {
 		cleanedQuery = a.appendOCRFallback(cleanedQuery, overflowPlaceholders)
 	}
@@ -565,29 +455,22 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	return images, cleanedQuery, nil
 }
 
-// processImagesViaOCR uses the existing VisionProcessor to convert images to
-// text descriptions and embed them in the query.
+// processImagesViaOCR converts images to text descriptions via the VisionProcessor.
 func (a *Agent) processImagesViaOCR(query string) (string, error) {
-	// Check if vision processing is available
 	if !tools.HasVisionCapability() {
-		// No vision capability available, return original query
 		return query, nil
 	}
 
-	// Resolve via unified deterministic chain:
-	// active provider vision -> explicit custom fallback -> global list -> local Ollama.
 	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.getClientType())
 	if err != nil {
 		return query, agenterrors.NewAgent("conversation", "failed to create vision processor", err)
 	}
 
-	// Process any images found in the text
 	enhancedQuery, analyses, err := processor.ProcessImagesInText(a.InterruptCtx(), query)
 	if err != nil {
 		return query, agenterrors.NewAgent("conversation", "failed to process images", err)
 	}
 
-	// If images were processed, log the enhancement
 	if len(analyses) > 0 {
 		a.Logger().Debug("[img] Processed %d image(s) and enhanced query with vision analysis\n", len(analyses))
 		for _, analysis := range analyses {
@@ -598,41 +481,29 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 	return enhancedQuery, nil
 }
 
-// placeholderInfo is used by processImagesAsMultimodal to track image
-// placeholders and their file paths.
 type placeholderInfo struct {
 	fullMatch string
 	filePath  string
 }
 
-// splitPlaceholdersWithBatchSplit uses the BatchSplit function to determine
-// which images go inline (multimodal) and which are processed via OCR
-// fallback. It first stats the files to get approximate sizes so BatchSplit
-// can make a byte-aware decision, not just a count-based one. This avoids
-// provider 400 (context overflow) errors when embedding many/large images.
+// splitPlaceholdersWithBatchSplit splits images into inline and overflow lists using byte-aware BatchSplit.
 func (a *Agent) splitPlaceholdersWithBatchSplit(placeholders []placeholderInfo, caps api.VisionCapabilities, maxImageCount int, maxTotalImagePayloadBytes int) (inline, overflow []placeholderInfo) {
 	if len(placeholders) == 0 {
 		return placeholders, nil
 	}
 
-	// Quick stat pass: get file sizes for all images.
 	sizes := make([]int, len(placeholders))
 	for i, ph := range placeholders {
 		stat, err := os.Stat(ph.filePath)
 		if err != nil {
-			// Can't stat the file; it'll fail later during read. Use size 0
-			// so it stays inline — the existing read-time skip logic handles
-			// read failures gracefully without changing the label format.
 			sizes[i] = 0
 			continue
 		}
 		sizes[i] = int(stat.Size())
 	}
 
-	// Use BatchSplit for proactive byte-aware splitting.
 	result := BatchSplit(sizes, caps)
 
-	// Build inline and overflow lists from indices.
 	inline = make([]placeholderInfo, 0, len(result.InlineIndices))
 	overflow = make([]placeholderInfo, 0, len(result.OverflowIndices))
 
@@ -655,20 +526,12 @@ func (a *Agent) splitPlaceholdersWithBatchSplit(placeholders []placeholderInfo, 
 	return inline, overflow
 }
 
-// appendOCRFallback processes overflow images (those exceeding the provider's
-// inline vision limit) through the OCR pipeline and appends the text
-// descriptions to the cleaned query.
-//
-// SP-103-D2: This ensures the model still sees overflow images as text
-// descriptions even when they can't fit inline.
+// appendOCRFallback processes overflow images through OCR and appends the descriptions.
 func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []placeholderInfo) string {
 	if len(overflowPlaceholders) == 0 {
 		return cleanedQuery
 	}
 
-	// Build a synthetic query containing only the overflow image paths.
-	// processImagesViaOCR → ProcessImagesInText uses regex to find image
-	// file references by extension, so we just need the paths present.
 	var ocrBuilder strings.Builder
 	ocrBuilder.WriteString("Please analyze the following images:\n")
 	for _, ph := range overflowPlaceholders {
@@ -681,8 +544,6 @@ func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []pl
 	if err != nil {
 		a.Logger().Debug("[WARN] OCR fallback for %d overflow image(s) failed: %v\n",
 			len(overflowPlaceholders), err)
-		// Append a note so the model knows these images exist but couldn't
-		// be analyzed.
 		for _, ph := range overflowPlaceholders {
 			cleanedQuery += fmt.Sprintf("\n[OCR analysis unavailable for %s]", filepath.Base(ph.filePath))
 		}
@@ -691,23 +552,14 @@ func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []pl
 
 	a.Logger().Debug("[img] OCR fallback processed %d overflow image(s)\n", len(overflowPlaceholders))
 
-	// Append the OCR-enhanced text. The enhanced query contains the original
-	// paths replaced with ## Image Analysis sections, which is exactly what
-	// we want to append.
 	cleanedQuery += "\n\n## Additional Image Analysis (OCR fallback)\n"
 	cleanedQuery += enhanced
 
 	return cleanedQuery
 }
 
-// the MIME type from magic bytes, optimizes the image for vision models, and
-// returns base64-encoded ImageData with the byte length of the (possibly
-// optimized) image data.
-//
-// maxEdgePx is the longest-side cap for vision embedding (SP-103-D3).
-// Images larger than this are resized before encoding.
+// readImageAsImageData reads, validates, optimizes, and base64-encodes an image for vision embedding.
 func readImageAsImageData(filePath string, maxEdgePx int) (api.ImageData, int, error) {
-	// Check size before reading to avoid loading huge files into memory.
 	stat, err := os.Stat(filePath)
 	if err != nil {
 		return api.ImageData{}, 0, agenterrors.NewAgent("conversation", "failed to stat file", err)
@@ -721,34 +573,21 @@ func readImageAsImageData(filePath string, maxEdgePx int) (api.ImageData, int, e
 		return api.ImageData{}, 0, agenterrors.NewAgent("conversation", "failed to read file", err)
 	}
 
-	// Validate it is actually an image by checking magic bytes.
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
 		return api.ImageData{}, 0, agenterrors.NewInvalidInputError("unrecognised image format", nil)
 	}
 
-	// Optimize to cap dimensions at 4096px and compress for context efficiency.
 	optimized, optMime, optErr := tools.OptimizeImageData(filePath, data)
 	if optErr == nil && len(optimized) > 0 {
 		mimeType = optMime
 		data = optimized
 	}
 
-	// Pre-resize for vision embedding: cap long edge at maxEdgePx using
-	// bilinear resampling for better visual quality. Runs after
-	// OptimizeImageData so we don't double-resize small images.
-	//
-	// NOTE: OptimizeImageData already performs a 4096px nearest-neighbor
-	// resize for oversized images. For very large inputs (>4096px on the
-	// long edge), the chained steps (nearest-neighbor at 4096px → bilinear
-	// at maxEdgePx) may compound artifacts. This is a known limitation;
-	// future work could unify both passes into a single bilinear resize.
+	// Resize to cap long edge. NOTE: chaining nearest-neighbor (OptimizeImageData) then bilinear
+	// may compound artifacts for very large inputs (>4096px).
 	resized, resizeErr := resizeImageForVisionEmbed(data, maxEdgePx)
 	if resizeErr == nil && len(resized) > 0 {
-		// Check if the image was actually resized (different bytes).
-		// If the image was already small enough, resizeImageForVisionEmbed
-		// returns the original bytes; we detect this via byte comparison
-		// to preserve the original encoding for small images.
 		if !bytes.Equal(resized, data) {
 			data = resized
 			mimeType = "image/jpeg"

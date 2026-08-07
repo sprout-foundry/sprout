@@ -8,29 +8,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
-// SP-066 Phase 3d: embedding-driven rollup boundary detection.
-//
-// The default rollup picks the first rollupSourceCount contiguous entries
-// at the over-budget level. This produces fine results when those N
-// entries are about a single topic; it produces a fragmented summary when
-// the user shifted topics partway through the span (e.g. "fix the auth
-// bug" → "now help me set up CI").
-//
-// This file adds an opt-in refinement: if embeddings are available for
-// the candidate range, look for the largest pairwise-similarity drop
-// between consecutive entries. If the drop exceeds a threshold, treat
-// it as a natural topic boundary and shrink the rollup to stop before
-// it, so each rollup stays topically coherent.
-//
-// Behavior:
-//   - When embeddings aren't available (no manager, no records for these
-//     checkpoints, or an embed failure), fall back to the default first-N
-//     window. The worker never blocks on this.
-//   - When the largest drop is below the threshold, fall back to first-N.
-//     A small drop isn't a topic shift; it's normal turn-to-turn drift.
-//   - When the boundary would leave fewer than rollupBoundaryMin source
-//     items, fall back to first-N. Don't produce trivially-small rollups.
-
+// Embedding-driven rollup boundary detection. If embeddings are available for the
+// candidate range, look for the largest pairwise-similarity drop between consecutive
+// entries. If the drop exceeds a threshold, treat it as a natural topic boundary
+// and shrink the rollup to stop before it, keeping each rollup topically coherent.
 const (
 	// rollupBoundarySimilarityDrop is the minimum drop in cosine
 	// similarity (vs. the prior pairwise similarity in the candidate
@@ -45,14 +26,7 @@ const (
 	rollupBoundaryMin = 5
 )
 
-// refineRollupEnd returns an adjusted endIdx ≤ defaultEnd, narrowing the
-// rollup range to the largest topic boundary in [startIdx, defaultEnd]
-// when one is present. Returns defaultEnd unchanged when no manager,
-// no usable embeddings, or no significant drop is found.
-//
-// The function is best-effort: any retrieval failure causes a fall-back
-// to the default range. This keeps the rollup worker on its critical
-// path even when the embedding store is misbehaving.
+// refineRollupEnd returns an adjusted endIdx ≤ defaultEnd, narrowing the rollup range to the largest topic boundary.
 func (a *Agent) refineRollupEnd(ctx context.Context, checkpoints []TurnCheckpoint, startIdx, defaultEnd int) int {
 	if a == nil {
 		return defaultEnd

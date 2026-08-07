@@ -12,8 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
-// Init initializes the ONNX embedding provider and opens the vector store.
-// Idempotent and retryable — a previous failure does not block retries.
+// Init initializes the ONNX embedding provider and opens the vector store. Idempotent.
 func (m *EmbeddingManager) Init(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -323,7 +322,7 @@ func (m *EmbeddingManager) Close() error {
 		m.convoStore = nil
 	}
 
-	// Provider+runtime are shared across managers; don't close when shared.
+	// Provider and runtime are shared; don't close when shared.
 	if m.provider != nil {
 		if !m.providerShared {
 			if err := m.provider.Close(); err != nil && firstErr == nil {

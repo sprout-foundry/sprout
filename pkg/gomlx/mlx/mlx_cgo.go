@@ -121,6 +121,16 @@ func (a *Array) Free() {
 	a.finalize()
 }
 
+// RetainArray creates a new Go *Array that shares the same underlying MLX
+// array, incrementing the C refcount. Both the original and the retained copy
+// must be freed independently. Use this when multiple owners need to hold a
+// reference to the same array (e.g. KV caching).
+func RetainArray(a *Array) *Array {
+	retained := C.mlx_array_new()
+	C.mlx_array_set(&retained, a.cHandle())
+	return wrap(retained)
+}
+
 // wrap turns a freshly created C.mlx_array into a Go *Array with a finalizer.
 // The returned Array owns the handle. Assumes the caller just created the
 // handle (new or from an op) and the caller will not free it themselves.

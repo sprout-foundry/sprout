@@ -8,14 +8,7 @@ import (
 	"strings"
 )
 
-// BootstrapIsolatedConfig initializes an isolated config directory by cloning
-// the user's main config on first use.
-//
-// Behavior:
-// - Creates configDir if missing.
-// - If configDir/config.json already exists, does nothing.
-// - Otherwise clones default config from the main config location (if present).
-// - Removes command-history fields from the cloned config.
+// BootstrapIsolatedConfig initializes an isolated config directory by cloning the user's main config.
 func BootstrapIsolatedConfig(configDir string) error {
 	targetDir := strings.TrimSpace(configDir)
 	if targetDir == "" {
@@ -24,9 +17,7 @@ func BootstrapIsolatedConfig(configDir string) error {
 	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return fmt.Errorf("failed to create isolated config directory %q: %w", targetDir, err)
 	}
-	// MkdirAll preserves the mode of an already-existing dir; tighten explicitly
-	// so an isolated config bootstrapped from a pre-existing directory isn't
-	// left world-readable.
+	// Tighten permissions on an already-existing directory.
 	_ = os.Chmod(targetDir, 0700)
 
 	targetConfigPath := filepath.Join(targetDir, ConfigFileName)
@@ -52,8 +43,8 @@ func BootstrapIsolatedConfig(configDir string) error {
 			return fmt.Errorf("failed to parse source config file %q: %w", sourceConfigPath, err)
 		}
 
-		// Keep runtime/provider settings, but avoid copying history.
-		cfg.CommandHistoryByPath = nil
+	// Keep runtime/provider settings, but avoid copying history.
+	cfg.CommandHistoryByPath = nil
 		cfg.HistoryIndexByPath = nil
 
 		out, err := json.MarshalIndent(&cfg, "", "  ")
@@ -66,7 +57,6 @@ func BootstrapIsolatedConfig(configDir string) error {
 	}
 
 	// Ship a .gitignore covering personal overrides and state directories.
-	// Idempotent — only writes if the file doesn't exist.
 	gitignorePath := filepath.Join(targetDir, ".gitignore")
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
 		_ = os.WriteFile(gitignorePath, []byte(workspaceGitignoreContent), 0644)

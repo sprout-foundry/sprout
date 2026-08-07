@@ -8,6 +8,8 @@ import (
 	"math"
 	"sync"
 
+	goruntime "runtime"
+
 	onnxruntime "github.com/yalue/onnxruntime_go"
 )
 
@@ -56,7 +58,16 @@ func NewJinaONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, mod
 		return nil, fmt.Errorf("jina embedding: load tokenizer: %w", err)
 	}
 
-	intraThreads := 4
+	// Intra-op parallelism lets ORT process each batch's matmuls across
+	// multiple cores. Use NumCPU-1 (capped at 8) so one core stays free
+	// for the foreground chat loop and file watchers during background builds.
+	intraThreads := goruntime.NumCPU() - 1
+	if intraThreads > 8 {
+		intraThreads = 8
+	}
+	if intraThreads < 1 {
+		intraThreads = 1
+	}
 	session, err := runtime.NewDynamicSession(modelPath,
 		[]string{"input_ids", "attention_mask"},
 		[]string{"last_hidden_state"},

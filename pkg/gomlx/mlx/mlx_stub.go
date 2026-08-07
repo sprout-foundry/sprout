@@ -286,3 +286,14 @@ func SetCacheLimit(uint64) error                { return errUnavailable }
 func ClearCache() error                         { return errUnavailable }
 func ResetPeakMemory() error                    { return errUnavailable }
 func Snapshot() (MemoryStats, error)            { return MemoryStats{}, errUnavailable }
+
+// ClosureFunc is a Go closure over MLX arrays; unavailable on stub builds.
+type ClosureFunc func(inputs []*Array) ([]*Array, error)
+
+// Closure wraps an MLX closure; unavailable on stub builds.
+type Closure struct{}
+
+func NewClosure(ClosureFunc) (*Closure, error) { return nil, errUnavailable }
+func (c *Closure) Apply([]*Array) ([]*Array, error) { return nil, errUnavailable }
+func (c *Closure) Compile(bool) (*Closure, error)    { return nil, errUnavailable }
+func (c *Closure) Free()                             {}

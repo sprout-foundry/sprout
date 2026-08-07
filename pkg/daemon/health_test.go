@@ -24,7 +24,6 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestCheckHealthOK(t *testing.T) {
-	t.Parallel()
 
 	body := HealthStatus{
 		Status:         "ok",
@@ -59,7 +58,6 @@ func TestCheckHealthOK(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckHealthNon200(t *testing.T) {
-	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -79,7 +77,6 @@ func TestCheckHealthNon200(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckHealthConnectionRefused(t *testing.T) {
-	t.Parallel()
 
 	// Grab a free port, close the listener, so nothing is listening.
 	// NOTE: the port can be re-bound by a concurrent listener in another
@@ -87,8 +84,16 @@ func TestCheckHealthConnectionRefused(t *testing.T) {
 	// check succeed instead of failing. Retry with a fresh port until we
 	// observe a genuine refusal (or the port keeps getting stolen).
 	for attempt := 0; attempt < 5; attempt++ {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
+		var l net.Listener
+		var err error
+		for i := 0; i < 50; i++ { // retry transient ephemeral exhaustion
+			l, err = net.Listen("tcp", "127.0.0.1:0")
+			if err == nil {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		require.NoError(t, err, "net.Listen on ephemeral port")
 		addr := l.Addr().String()
 		l.Close()
 
@@ -108,7 +113,6 @@ func TestCheckHealthConnectionRefused(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckHealthTimeout(t *testing.T) {
-	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(300 * time.Millisecond)

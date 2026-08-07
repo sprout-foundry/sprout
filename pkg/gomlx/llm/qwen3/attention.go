@@ -15,19 +15,19 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	s := q.stream
 	cfg := q.cfg
 
-	q2d, err := llm.LinearT(h, lw.qProj, s)
+	q2d, err := lw.qProj.Forward(h, s)
 	if err != nil {
 		return nil, fmt.Errorf("q proj: %w", err)
 	}
 	defer q2d.Free()
 
-	k2d, err := llm.LinearT(h, lw.kProj, s)
+	k2d, err := lw.kProj.Forward(h, s)
 	if err != nil {
 		return nil, fmt.Errorf("k proj: %w", err)
 	}
 	defer k2d.Free()
 
-	v2d, err := llm.LinearT(h, lw.vProj, s)
+	v2d, err := lw.vProj.Forward(h, s)
 	if err != nil {
 		return nil, fmt.Errorf("v proj: %w", err)
 	}
@@ -171,7 +171,7 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	}
 	defer ctxFlat.Free()
 
-	return llm.LinearT(ctxFlat, lw.oProj, s)
+	return lw.oProj.Forward(ctxFlat, s)
 }
 
 // swiglu computes the MLP block: silu(h @ gate) * (h @ up) @ down.
@@ -196,13 +196,13 @@ func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights, layerIdx int) (*mlx.Array
 
 	s := q.stream
 
-	gate, err := llm.LinearT(h, lw.gateProj, s)
+	gate, err := lw.gateProj.Forward(h, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate proj: %w", err)
 	}
 	defer gate.Free()
 
-	up, err := llm.LinearT(h, lw.upProj, s)
+	up, err := lw.upProj.Forward(h, s)
 	if err != nil {
 		return nil, fmt.Errorf("up proj: %w", err)
 	}
@@ -220,7 +220,7 @@ func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights, layerIdx int) (*mlx.Array
 	}
 	defer gated.Free()
 
-	return llm.LinearT(gated, lw.downProj, s)
+	return lw.downProj.Forward(gated, s)
 }
 
 // useCompiledFFN gates the compiled-graph MLP path. Measured on M1 Pro:
@@ -259,12 +259,12 @@ func (q *Qwen3) swigluClosure(layerIdx int) *mlx.Closure {
 	lw := &q.weights.layers[layerIdx]
 	fn := func(inputs []*mlx.Array) ([]*mlx.Array, error) {
 		h := inputs[0]
-		gate, err := llm.LinearT(h, lw.gateProj, s)
+		gate, err := lw.gateProj.Forward(h, s)
 		if err != nil {
 			return nil, err
 		}
 		defer gate.Free()
-		up, err := llm.LinearT(h, lw.upProj, s)
+		up, err := lw.upProj.Forward(h, s)
 		if err != nil {
 			return nil, err
 		}
@@ -279,7 +279,7 @@ func (q *Qwen3) swigluClosure(layerIdx int) *mlx.Closure {
 			return nil, err
 		}
 		defer gated.Free()
-		out, err := llm.LinearT(gated, lw.downProj, s)
+		out, err := lw.downProj.Forward(gated, s)
 		if err != nil {
 			return nil, err
 		}

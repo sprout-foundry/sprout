@@ -78,6 +78,12 @@ type DaemonSpec struct {
 	// the daemon process. Default: [executable-path, "agent", "-d"].
 	DaemonCommand []string
 
+	// Env holds extra KEY=VALUE environment variables applied to the
+	// spawned daemon process (merged over the parent's environment).
+	// Used e.g. to set SPROUT_DAEMON_IDLE_TIMEOUT so auto-started
+	// daemons reap themselves after an idle period.
+	Env []string
+
 	// LogPath is where the spawned daemon's stdout/stderr are redirected.
 	// If empty, output goes to os.DevNull.
 	LogPath string
@@ -206,6 +212,12 @@ func startDaemonInner(ctx context.Context, spec DaemonSpec, logger *slog.Logger)
 	// tied to the caller's context lifetime. The daemon must survive the
 	// CLI exiting and be reaped later by the idle timer.
 	cmd := exec.Command(spec.DaemonCommand[0], spec.DaemonCommand[1:]...)
+
+	// Merge extra environment variables (e.g. SPROUT_DAEMON_IDLE_TIMEOUT)
+	// over the parent's environment.
+	if len(spec.Env) > 0 {
+		cmd.Env = append(os.Environ(), spec.Env...)
+	}
 
 	// Detach from parent session so the daemon survives the caller exiting.
 	applyDetach(cmd)

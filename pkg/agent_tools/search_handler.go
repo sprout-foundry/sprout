@@ -99,7 +99,10 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	case literalOnly:
 		semanticNote = "literal-only (requested)"
 	case env.EmbeddingMgr == nil:
-		semanticNote = "literal-only (no embedding index in this session)"
+		// Embeddings are off (the default). The literal pass already ran and
+		// its results are valid on their own, so the note stays terse — no
+		// mention of the missing index, which would read as a broken tool.
+		semanticNote = "literal-only"
 	default:
 		r := env.EmbeddingMgr.Readiness()
 		switch {
@@ -323,8 +326,7 @@ func formatEmptySearch(query, directory, note string, literalErr error) string {
 	// caller has to be able to tell the difference before concluding the code
 	// does not exist.
 	if note != "" {
-		sb.WriteString("\nThis run was " + note + ", so only exact text matches were considered.\n" +
-			"A conceptual query may still match code that uses different wording once the index is available.\n")
+		sb.WriteString("\nThis run was " + note + ", so only exact text matches were considered.\n")
 	} else {
 		sb.WriteString("\nBoth literal and semantic search were applied.\n")
 	}

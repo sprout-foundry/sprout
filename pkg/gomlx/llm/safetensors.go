@@ -26,6 +26,14 @@ type SafetensorsFile struct {
 	rawData []byte
 }
 
+// Release drops the raw file data. Call after every weight has been loaded via
+// Get: the MLX arrays own copies of their buffers, so the (potentially
+// multiple-hundred-MB) Go-side file blob can be garbage collected. Keeps the
+// header so Has/Get still work for metadata-only access.
+func (sf *SafetensorsFile) Release() {
+	sf.rawData = nil
+}
+
 // OpenSafetensors reads a safetensors file and returns its header + data.
 // The caller can then call Get to extract individual tensors as MLX arrays.
 func OpenSafetensors(path string) (*SafetensorsFile, error) {

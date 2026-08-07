@@ -63,10 +63,6 @@ type Architecture interface {
 type GreedyArchitecture interface {
 	Architecture
 
-	// ForwardPrefillArgmax runs prefill and returns the argmax token ID for
-	// the final position, computed on the GPU.
-	ForwardPrefillArgmax(ids *mlx.Array, seqLen int, cache *KVCache) (int, error)
-
 	// ForwardDecodeArgmax runs a single-token decode step and returns the
 	// argmax token ID, computed on the GPU.
 	ForwardDecodeArgmax(tokenID int, pos int, cache *KVCache) (int, error)

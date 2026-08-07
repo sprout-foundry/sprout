@@ -29,9 +29,13 @@ package mlx
 
 #include <mlx/c/array.h>
 #include <mlx/c/device.h>
+#include <mlx/c/error.h>
 #include <mlx/c/ops.h>
 #include <mlx/c/stream.h>
 #include <mlx/c/vector.h>
+
+// Defined in mlx_error_shim.c; forwards to the exported Go error handler.
+void mlx_go_error_handler_shim(const char* msg, void* data);
 */
 import "C"
 
@@ -39,8 +43,57 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync"
 	"unsafe"
 )
+
+// mlxLastError captures the most recent mlx-c error message so checkRC can
+// surface it as a Go error. mlx-c's default error handler prints to stderr
+// and calls exit(-1), which would kill the whole process on any runtime
+// error (e.g. a stream used from the wrong thread). We install a handler
+// that records the message instead.
+var (
+	mlxErrMu   sync.Mutex
+	mlxErrMsg  [1024]byte
+	mlxErrGrow []byte
+)
+
+//export mlxGoErrorHandler
+func mlxGoErrorHandler(msg *C.char, data unsafe.Pointer) {
+	if msg == nil {
+		return
+	}
+	mlxErrMu.Lock()
+	defer mlxErrMu.Unlock()
+	// Copy C string into a Go byte slice (C.GoString copies; keep it raw to
+	// avoid an extra allocation in the hot error path — errors are rare).
+	s := C.GoString(msg)
+	if len(s) >= len(mlxErrMsg) {
+		mlxErrGrow = []byte(s)
+		return
+	}
+	copy(mlxErrMsg[:], s)
+	// Clear any stale growth buffer.
+	mlxErrGrow = nil
+}
+
+func init() {
+	C.mlx_set_error_handler((C.mlx_error_handler_func)(C.mlx_go_error_handler_shim), nil, nil)
+}
+
+func lastMLXError() string {
+	mlxErrMu.Lock()
+	defer mlxErrMu.Unlock()
+	if mlxErrGrow != nil {
+		return string(mlxErrGrow)
+	}
+	s := mlxErrMsg[:]
+	n := 0
+	for n < len(s) && s[n] != 0 {
+		n++
+	}
+	return string(s[:n])
+}
 
 // Dtype is an MLX array element type. Values match the mlx_dtype enum so they
 // pass straight through to the C API.
@@ -114,9 +167,13 @@ func (a *Array) finalize() {
 	}
 }
 
-// Free releases the underlying MLX handle. Safe to call multiple times.
+// Free releases the underlying MLX handle. Safe to call multiple times and
+// on nil receivers (which makes ownership handoff to the KV cache clean).
 // After Free, the Array must not be used.
 func (a *Array) Free() {
+	if a == nil {
+		return
+	}
 	runtime.SetFinalizer(a, nil)
 	a.finalize()
 }
@@ -142,9 +199,15 @@ func wrap(h C.mlx_array) *Array {
 
 // checkRC converts a non-zero C return code into a Go error with the op name
 // for context. MLX uses 0 for success and non-zero for failure; the codes are
-// not documented as stable values, so we surface only success/failure.
+// not documented as stable values, so we surface only success/failure. The
+// captured mlx-c error message (via mlxGoErrorHandler) is appended when
+// present — otherwise errors like "no Stream in current thread" would surface
+// as opaque "failed (rc=1)".
 func checkRC(rc C.int, op string) error {
 	if rc != 0 {
+		if msg := lastMLXError(); msg != "" {
+			return fmt.Errorf("mlx: %s: %s", op, msg)
+		}
 		return fmt.Errorf("mlx: %s failed (rc=%d)", op, rc)
 	}
 	return nil
@@ -157,6 +220,9 @@ func wrapResult(h C.mlx_array, rc C.int, op string) (*Array, error) {
 	if rc != 0 {
 		if h.ctx != nil {
 			C.mlx_array_free(h)
+		}
+		if msg := lastMLXError(); msg != "" {
+			return nil, fmt.Errorf("mlx: %s: %s", op, msg)
 		}
 		return nil, fmt.Errorf("mlx: %s failed (rc=%d)", op, rc)
 	}
@@ -413,6 +479,30 @@ func DefaultGPUStream() (*Stream, error) {
 		return nil, errors.New("mlx: default GPU stream is null")
 	}
 	// The stream owns its device reference; we hold no device handle to free.
+	return &Stream{handle: stream}, nil
+}
+
+// NewGPUStream creates a brand-new GPU stream. Unlike DefaultGPUStream (which
+// returns a process-wide singleton), NewGPUStream gives the caller an
+// independent stream that is registered in the CURRENT thread's command
+// encoder map on first use. MLX command encoders are thread_local: the
+// process singleton breaks whenever the Go runtime migrates a goroutine to a
+// different OS thread between model load and generation. Creating a fresh
+// stream while holding runtime.LockOSThread avoids that class of
+// "There is no Stream(gpu, N) in current thread" failures.
+func NewGPUStream() (*Stream, error) {
+	if !gpuAvailable {
+		return nil, errors.New("mlx: no GPU available")
+	}
+	var dev C.mlx_device
+	if rc := C.mlx_get_default_device(&dev); rc != 0 || dev.ctx == nil {
+		return nil, fmt.Errorf("mlx: get default device failed (rc=%d)", rc)
+	}
+	stream := C.mlx_stream_new_device(dev)
+	C.mlx_device_free(dev)
+	if stream.ctx == nil {
+		return nil, errors.New("mlx: new GPU stream is null")
+	}
 	return &Stream{handle: stream}, nil
 }
 

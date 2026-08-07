@@ -24,6 +24,10 @@ func BootstrapIsolatedConfig(configDir string) error {
 	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return fmt.Errorf("failed to create isolated config directory %q: %w", targetDir, err)
 	}
+	// MkdirAll preserves the mode of an already-existing dir; tighten explicitly
+	// so an isolated config bootstrapped from a pre-existing directory isn't
+	// left world-readable.
+	_ = os.Chmod(targetDir, 0700)
 
 	targetConfigPath := filepath.Join(targetDir, ConfigFileName)
 	if _, err := os.Stat(targetConfigPath); err == nil {

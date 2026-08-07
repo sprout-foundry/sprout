@@ -21,6 +21,7 @@
 // use via loadOnnxRuntime() below.
 import type { InferenceSession, Tensor } from 'onnxruntime-web';
 import { loadOnnxRuntimeWeb, isOnnxRuntimeWebLoaded } from './onnxruntimeWebLoader';
+import { ByteLevelTokenizer, type ByteLevelTokenizerJSON } from './byteLevelTokenizer';
 
 let onnxModulePromise: Promise<typeof import('onnxruntime-web')> | null = null;
 async function loadOnnxRuntime(): Promise<typeof import('onnxruntime-web')> {
@@ -99,6 +100,15 @@ const MODEL_FILES: Record<'fp32' | 'q8' | 'q4', { model: string; data?: string }
 };
 
 const TOKENIZER_URL = `${HF_BASE}/tokenizer.json`;
+
+// ─── Jina Code v2 URLs ───────────────────────────────────────────
+// The sole embedding model after the Gemma→Jina consolidation. The quantized
+// ONNX export is self-contained (~162MB, no external weights blob), outputs
+// last_hidden_state [batch, seq, 768], and is symmetric (no task prefixes).
+
+const JINA_BASE = 'https://huggingface.co/jinaai/jina-embeddings-v2-base-code/resolve/main';
+const JINA_MODEL_URL = `${JINA_BASE}/onnx/model_quantized.onnx`;
+const JINA_TOKENIZER_URL = `${JINA_BASE}/tokenizer.json`;
 
 // ─── Persistent download cache ────────────────────────────────────
 // Model files and the tokenizer are large (80MB-600MB total) and don't
@@ -707,6 +717,272 @@ export class BrowserONNXProvider {
   }
 }
 
+// ─── Jina Code v2 Browser Provider ───────────────────────────────
+
+/**
+ * JinaCodeProvider runs jina-embeddings-v2-base-code in the browser using
+ * onnxruntime-web for ONNX inference and a byte-level BPE tokenizer.
+ *
+ * This is the browser counterpart to pkg/embedding/jina_provider.go. Jina is
+ * symmetric — it does NOT use task prefixes (unlike EmbeddingGemma) — so
+ * embed()/embedBatch() ignore the prefix argument and embed raw text. The
+ * model outputs last_hidden_state [batch, seq, 768]; attention-masked mean
+ * pooling + L2 normalization are done here, matching the Go side's
+ * meanPoolAndNormalize.
+ *
+ * Usage:
+ * ```typescript
+ * const provider = new JinaCodeProvider({ backend: 'webgpu' });
+ * await provider.initialize();
+ * const result = await provider.embed('func main() {}');
+ * console.log(result.embedding); // Float32Array[768]
+ * ```
+ */
+export class JinaCodeProvider {
+  private session: InferenceSession | null = null;
+  private tokenizer: ByteLevelTokenizer | null = null;
+  private ready = false;
+  private backend: 'webgpu' | 'wasm';
+  private detectedBackend: string | null = null;
+  private maxSequenceLength = 2048; // Jina Code v2 max position embeddings
+
+  constructor(options?: { backend?: 'webgpu' | 'wasm' }) {
+    this.backend = options?.backend ?? 'webgpu';
+  }
+
+  isReady(): boolean {
+    return this.ready;
+  }
+  dimensions(): number {
+    return 768;
+  }
+  getBackend(): string | null {
+    return this.detectedBackend;
+  }
+
+  async initialize(): Promise<void> {
+    if (this.ready) return;
+
+    await this.loadTokenizer();
+    const detected = this.detectBackend();
+    this.detectedBackend = detected;
+    await this.loadModel(detected);
+    this.ready = true;
+  }
+
+  /**
+   * Generate an embedding for a single text input. The prefix is ignored —
+   * Jina is symmetric. Returns the mean-pooled, L2-normalized 768-dim vector.
+   */
+  async embed(text: string, _prefix?: string): Promise<EmbeddingResult> {
+    if (!this.ready || !this.session || !this.tokenizer) {
+      throw new Error('Provider not initialized. Call initialize() first.');
+    }
+    const tokenIds = this.tokenize(text);
+    if (tokenIds.length === 0) {
+      // Mirrors the Go provider's empty-input path: return a zero vector.
+      return { embedding: new Float32Array(this.dimensions()), dims: this.dimensions() };
+    }
+    const pooled = await this.runInference([tokenIds]);
+    return this.normalize(pooled[0]);
+  }
+
+  /**
+   * Generate embeddings for a batch of texts. The prefix is ignored — Jina
+   * is symmetric. Sequences are right-padded to the longest length in the
+   * batch; the attention mask zeros out padded positions so mean pooling
+   * stays correct (the pooled mean uses each row's true unpadded length).
+   */
+  async embedBatch(texts: string[], _prefix?: string): Promise<EmbeddingResult[]> {
+    if (!this.ready || !this.session || !this.tokenizer) {
+      throw new Error('Provider not initialized. Call initialize() first.');
+    }
+    if (texts.length === 0) return [];
+    const seqs = texts.map((t) => this.tokenize(t));
+    const zero = this.dimensions();
+    if (seqs.every((s) => s.length === 0)) {
+      // Mirrors the Go provider: all-empty batch short-circuits to zeros.
+      return seqs.map(() => ({ embedding: new Float32Array(zero), dims: zero }));
+    }
+    const pooled = await this.runInference(seqs);
+    return pooled.map((v) => this.normalize(v));
+  }
+
+  async close(): Promise<void> {
+    if (this.session) {
+      await this.session.release();
+      this.session = null;
+    }
+    this.tokenizer = null;
+    this.ready = false;
+  }
+
+  // ─── Internal Methods ─────────────────────────────────────────
+
+  private detectBackend(): 'webgpu' | 'wasm' {
+    const pref = this.backend;
+    if (pref === 'webgpu' && typeof navigator !== 'undefined' && 'gpu' in navigator) {
+      return 'webgpu';
+    }
+    if (pref === 'wasm') return 'wasm';
+    if (typeof navigator !== 'undefined' && 'gpu' in navigator) return 'webgpu';
+    return 'wasm';
+  }
+
+  private async loadTokenizer(): Promise<void> {
+    const resp = await cachedFetch(JINA_TOKENIZER_URL);
+    if (!resp.ok) {
+      throw new Error(`Failed to download tokenizer: ${resp.status} ${resp.statusText}`);
+    }
+    const config: ByteLevelTokenizerJSON = await resp.json();
+    this.tokenizer = new ByteLevelTokenizer(config);
+  }
+
+  private async loadModel(backend: 'webgpu' | 'wasm'): Promise<void> {
+    // Pre-fetch the model graph via cachedFetch so subsequent page loads hit
+    // the Cache Storage instead of the network. Passing the bytes inline to
+    // InferenceSession.create (Uint8Array form) takes the URL fetch out of
+    // onnxruntime-web's hands — otherwise its internal fetch bypasses our
+    // cache entirely. Jina's quantized export is self-contained (no external
+    // weights blob), so there is no externalData wiring here.
+    const modelResp = await cachedFetch(JINA_MODEL_URL);
+    if (!modelResp.ok) {
+      throw new Error(`Failed to download model: ${modelResp.status} ${modelResp.statusText}`);
+    }
+    const modelBytes = new Uint8Array(await modelResp.arrayBuffer());
+
+    const opts: InferenceSession.SessionOptions = {
+      executionProviders: backend === 'webgpu' ? ['webgpu'] : ['wasm'],
+      graphOptimizationLevel: 'all',
+    };
+
+    // Ensure the onnxruntime-web CDN script is loaded before using the
+    // dynamic import below (same pattern as BrowserONNXProvider).
+    if (!isOnnxRuntimeWebLoaded()) {
+      await loadOnnxRuntimeWeb();
+    }
+
+    const ort = await loadOnnxRuntime();
+    this.session = await ort.InferenceSession.create(modelBytes, opts);
+  }
+
+  /** Encode with BOS/EOS wrapping and truncate to maxSequenceLength
+   *  (head-truncation, matching the Go provider's tokenize()). */
+  private tokenize(text: string): number[] {
+    if (!this.tokenizer) throw new Error('No tokenizer');
+    let ids = this.tokenizer.encodeWithBOSAndEOS(text);
+    if (ids.length > this.maxSequenceLength) {
+      ids = ids.slice(0, this.maxSequenceLength);
+    }
+    return ids;
+  }
+
+  /**
+   * Run ONNX inference on the given token sequences. Jina's graph outputs
+   * last_hidden_state [batch, seq, 768]; this method mean-pools each row
+   * over its actual (unpadded) token positions and returns the pooled
+   * vectors. L2 normalization is applied by the caller via normalize().
+   */
+  private async runInference(tokenSequences: number[][]): Promise<Float32Array[]> {
+    if (!this.session) throw new Error('No session');
+    const batchSize = tokenSequences.length;
+    const maxLen = tokenSequences.reduce((m, s) => Math.max(m, s.length), 0);
+    const padID = this.tokenizer?.padID ?? 0;
+
+    const inputIdsData = new BigInt64Array(batchSize * maxLen);
+    const attentionData = new BigInt64Array(batchSize * maxLen);
+    const ONE = BigInt(1);
+    const ZERO = BigInt(0);
+    for (let b = 0; b < batchSize; b++) {
+      const seq = tokenSequences[b];
+      for (let i = 0; i < maxLen; i++) {
+        if (i < seq.length) {
+          inputIdsData[b * maxLen + i] = BigInt(seq[i]);
+          attentionData[b * maxLen + i] = ONE;
+        } else {
+          inputIdsData[b * maxLen + i] = BigInt(padID);
+          attentionData[b * maxLen + i] = ZERO;
+        }
+      }
+    }
+
+    // Defensive: runInference could be reached directly without initialize()
+    // in custom bridges. loadOnnxRuntimeWeb is a no-op if already loaded.
+    if (!isOnnxRuntimeWebLoaded()) {
+      await loadOnnxRuntimeWeb();
+    }
+    const ort = await loadOnnxRuntime();
+    const inputIdsTensor = new ort.Tensor('int64', inputIdsData, [batchSize, maxLen]);
+    const attentionTensor = new ort.Tensor('int64', attentionData, [batchSize, maxLen]);
+
+    try {
+      const feeds: Record<string, Tensor> = {};
+      for (const name of this.session.inputNames) {
+        if (name === 'input_ids') feeds[name] = inputIdsTensor;
+        else if (name === 'attention_mask') feeds[name] = attentionTensor;
+      }
+      const outputs = await this.session.run(feeds);
+
+      const outputName = pickJinaEmbeddingOutput(this.session.outputNames);
+      const outputTensor = outputs[outputName];
+      const raw = await outputTensor.getData(true);
+      if (!(raw instanceof Float32Array)) {
+        throw new Error(`Unexpected output type: ${(raw as object).constructor.name}`);
+      }
+
+      const hiddenSize = this.dimensions();
+      const out: Float32Array[] = [];
+      // Manual mean-pool over real tokens (attention_mask == 1). The Go side
+      // (meanPoolAndNormalize) uses the true unpadded length per row, which
+      // is equivalent to averaging over mask==1 positions.
+      for (let b = 0; b < batchSize; b++) {
+        const seqLen = tokenSequences[b].length;
+        const accum = new Float32Array(hiddenSize);
+        for (let i = 0; i < seqLen; i++) {
+          const srcOffset = (b * maxLen + i) * hiddenSize;
+          for (let d = 0; d < hiddenSize; d++) {
+            accum[d] += raw[srcOffset + d];
+          }
+        }
+        if (seqLen > 0) {
+          for (let d = 0; d < hiddenSize; d++) accum[d] /= seqLen;
+        }
+        out.push(accum);
+      }
+      return out;
+    } finally {
+      inputIdsTensor.dispose?.();
+      attentionTensor.dispose?.();
+    }
+  }
+
+  /** L2-normalize in place (same math as the Go meanPoolAndNormalize tail). */
+  private normalize(v: Float32Array, targetDims?: number): EmbeddingResult {
+    const dims = targetDims ?? v.length;
+    const out = v.length === dims ? new Float32Array(v) : v.slice(0, dims);
+    let sum = 0;
+    for (let i = 0; i < out.length; i++) sum += out[i] * out[i];
+    if (sum > 1e-9) {
+      const inv = 1 / Math.sqrt(sum);
+      for (let i = 0; i < out.length; i++) out[i] *= inv;
+    }
+    return { embedding: out, dims };
+  }
+}
+
+/**
+ * Pick the embedding output tensor name out of the model's declared outputs.
+ * Jina's ONNX graph exposes `last_hidden_state` (not a pre-pooled
+ * sentence_embedding), so this prefers it; anything else falls back to the
+ * first declared output. The caller always mean-pools manually.
+ */
+function pickJinaEmbeddingOutput(outputNames: readonly string[]): string {
+  for (const n of outputNames) {
+    if (n === 'last_hidden_state' || n === 'hidden_states' || n === 'output') return n;
+  }
+  return outputNames[0];
+}
+
 /**
  * Pick the embedding output tensor name out of the model's declared outputs.
  * EmbeddingGemma ships both `last_hidden_state` and `sentence_embedding`;
@@ -748,3 +1024,14 @@ export const MODEL_SIZES: Record<'fp32' | 'q8' | 'q4', { model: string; data: st
 // going through the full BrowserONNXProvider plumbing.
 export { GemmaBpeTokenizer };
 export type { TokenizerJSON };
+
+// Jina Code v2 provider factory + tokenizer re-export. The byte-level
+// tokenizer lives in byteLevelTokenizer.ts (the TS port of
+// pkg/embedding/bytelevel_tokenizer.go) and is re-exported here so bridge
+// and test code can import it from one place.
+export function createJinaProvider(options?: { backend?: 'webgpu' | 'wasm' }): JinaCodeProvider {
+  return new JinaCodeProvider(options);
+}
+
+export { ByteLevelTokenizer };
+export type { ByteLevelTokenizerJSON };

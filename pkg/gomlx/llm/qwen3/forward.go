@@ -171,16 +171,21 @@ func freeArr(a *mlx.Array) {
 	}
 }
 
-// deepCopy creates an independent MLX array with the same data and shape.
-// Needed for KV caching: after Eval, a lazy array's data is materialized but
-// it may still reference intermediate arrays in the computation graph. A deep
-// copy severs that dependency so the copy survives after intermediates are freed.
-func deepCopy(a *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
+// materialize creates an independent copy of an MLX array by reading its
+// data and creating a new array. This is necessary for KV caching because
+// MLX arrays are lazy — without materialization, cached arrays reference
+// intermediate computation results that get freed when the function returns.
+func materialize(a *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 	data, err := a.Float32Data()
 	if err != nil {
 		return nil, err
 	}
 	return mlx.NewArrayFromFloat32(data, a.Shape())
+}
+
+// deepCopy is an alias for materialize.
+func deepCopy(a *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
+	return materialize(a, s)
 }
 
 // ForwardPrefill processes the full prompt sequence and returns last-position logits.
@@ -431,40 +436,47 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	// V doesn't get RoPE, so vT is already correct.
 
 	// KV Cache: store (prefill) or append (decode) K and V
-	// We eval the arrays first (materialize them), then create deep copies
-	// for the cache so they don't depend on any intermediate arrays that
-	// will be freed by deferred calls in this function.
 	var kForAttn, vForAttn *mlx.Array
 	if cache != nil {
-		// Synchronize ensures all queued ops are done
-		if err := s.Synchronize(); err != nil {
-			return nil, fmt.Errorf("sync for cache: %w", err)
-		}
+		// Materialize K and V before caching — MLX arrays are lazy and the
+		// intermediates they reference will be freed by deferred calls.
 		if err := kRot.Eval(); err != nil {
 			return nil, fmt.Errorf("eval kRot: %w", err)
 		}
 		if err := vT.Eval(); err != nil {
 			return nil, fmt.Errorf("eval vT: %w", err)
 		}
-
-		// Deep copy via data read + re-create
-		kCopy, err := deepCopy(kRot, s)
-		if err != nil {
-			return nil, fmt.Errorf("copy kRot: %w", err)
-		}
-		vCopy, err := deepCopy(vT, s)
-		if err != nil {
-			kCopy.Free()
-			return nil, fmt.Errorf("copy vT: %w", err)
+		if err := s.Synchronize(); err != nil {
+			return nil, fmt.Errorf("sync: %w", err)
 		}
 
-		if cache.CachedLen() == 0 {
-			if err := cache.Store(layerIdx, kCopy, vCopy); err != nil {
+		if !cache.IsInitialized(layerIdx) {
+			// Prefill: store. Use the materialized arrays directly — they
+			// are independent after Eval because MLX creates new buffers.
+			// Cancel the deferred frees by nil-checking in a wrapper.
+			kCopy, err := materialize(kRot, s)
+			if err != nil {
+				return nil, fmt.Errorf("materialize kRot: %w", err)
+			}
+			vCopy, err := materialize(vT, s)
+			if err != nil {
 				kCopy.Free()
-				vCopy.Free()
+				return nil, fmt.Errorf("materialize vT: %w", err)
+			}
+			if err := cache.Store(layerIdx, kCopy, vCopy); err != nil {
 				return nil, fmt.Errorf("cache store: %w", err)
 			}
 		} else {
+			// Decode: append to cache.
+			kCopy, err := materialize(kRot, s)
+			if err != nil {
+				return nil, fmt.Errorf("materialize kRot: %w", err)
+			}
+			vCopy, err := materialize(vT, s)
+			if err != nil {
+				kCopy.Free()
+				return nil, fmt.Errorf("materialize vT: %w", err)
+			}
 			if err := cache.Append(layerIdx, kCopy, vCopy); err != nil {
 				return nil, fmt.Errorf("cache append: %w", err)
 			}

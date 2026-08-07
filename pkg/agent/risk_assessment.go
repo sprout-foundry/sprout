@@ -1,3 +1,5 @@
+// RiskAssessment provides a unified, single-vocabulary risk assessment for tool calls,
+// folding the static classifier and persona cascade onto the Low/Medium/High/Critical scale.
 package agent
 
 import (
@@ -9,119 +11,50 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// SP-068 Phase 1 — One risk scale.
-//
-// Historically a tool call is judged by two independent vocabularies: the
-// static classifier (pkg/agent_tools: SAFE/CAUTION/DANGEROUS) and the
-// persona risk cascade (pkg/configuration: Low/Medium/High/Critical). This
-// file introduces a single canonical representation — RiskAssessment, on
-// the Low/Medium/High/Critical scale — and the mapping that folds the
-// classifier's three tiers onto it.
-//
-// Phase 1 is deliberately behavior-preserving: these types and helpers are
-// the vocabulary the Phase 2 resolver will consume. Nothing here changes a
-// gating decision on its own; the golden tests lock the mapping so Phase 2
-// can rewire the call sites without drift.
-
-// RiskSource identifies which check contributed to an assessment, so a
-// decision can be explained (Phase 3 `sprout explain`) instead of being an
-// opaque "blocked".
+// RiskSource identifies which check contributed to an assessment.
 type RiskSource string
 
 const (
-	// RiskSourceClassifier — the static, string-based classifier
-	// (pkg/agent_tools.ClassifyToolCall).
-	RiskSourceClassifier RiskSource = "classifier"
-	// RiskSourcePersonaCascade — the persona / risk-profile cascade
-	// (Agent.EvaluateOperationRisk).
-	RiskSourcePersonaCascade RiskSource = "persona-cascade"
-	// RiskSourceCriticalOp — the built-in critical-operation hard-block
-	// (configuration.IsCriticalOperation).
-	RiskSourceCriticalOp RiskSource = "critical-op"
-	// RiskSourceGitHistoryRewrite — git commands that can lose commit history
+	RiskSourceClassifier       RiskSource = "classifier"
+	RiskSourcePersonaCascade   RiskSource = "persona-cascade"
+	RiskSourceCriticalOp       RiskSource = "critical-op"
 	RiskSourceGitHistoryRewrite RiskSource = "git-history-rewrite"
-	// RiskSourceGitRebase — git rebase (AGENTS.md: unconditionally banned)
-	RiskSourceGitRebase RiskSource = "git-rebase"
-	// RiskSourceGitWrite — git write operations not allowed by persona
-	RiskSourceGitWrite RiskSource = "git-write"
-	// RiskSourceFSTier — filesystem path-tier classification (Sensitive/External)
-	RiskSourceFSTier RiskSource = "fs-tier"
-	// RiskSourceWorkspacePolicy — workspace security policy evaluation
-	RiskSourceWorkspacePolicy RiskSource = "workspace-policy"
-	// RiskSourceHandler — a security error raised by a tool handler at
-	// execution time (not by the pre-execute gate). Used when the only
-	// signal available is the typed SecurityError returned by the handler.
-	RiskSourceHandler RiskSource = "handler"
-	// RiskSourcePasswordPrompter — password prompter is registered, so
-	// privileged commands (sudo, passwd) are downgraded from block to prompt.
+	RiskSourceGitRebase        RiskSource = "git-rebase"
+	RiskSourceGitWrite         RiskSource = "git-write"
+	RiskSourceFSTier           RiskSource = "fs-tier"
+	RiskSourceWorkspacePolicy  RiskSource = "workspace-policy"
+	RiskSourceHandler          RiskSource = "handler"
 	RiskSourcePasswordPrompter RiskSource = "password-prompter"
 )
 
-// RiskAssessment is the canonical, single-vocabulary verdict for a tool
-// call. Phase 2 makes it the single output of the unified resolver; Phase 1
-// builds and tests it alongside the existing gates.
-//
-// SP-068 SP-127 synergy: PathTier and FileMode are structured fields that let
-// consumers distinguish "elevated due to sensitive system path" from "elevated
-// due to destructive shell command" without parsing Reason strings.
+// RiskAssessment is the canonical, single-vocabulary verdict for a tool call.
 type RiskAssessment struct {
-	// Level is the canonical risk on the Low/Medium/High/Critical scale.
 	Level configuration.RiskLevel
 
 	// IsHardBlock is true for critical-tier operations that no approval can
 	// override (rm -rf /, fork bombs, mkfs).
 	IsHardBlock bool
 
-	// RequiresIntentConfirmation marks a safe-but-consequential operation
-	// (e.g. launching an autonomous workflow) that needs explicit user
-	// intent. It is orthogonal to Level — such an op is Low risk but still
-	// gated on intent.
 	RequiresIntentConfirmation bool
 
-	// Sources lists every check that contributed, in precedence order.
 	Sources []RiskSource
 
-	// Reason is a human-readable explanation of the verdict.
 	Reason string
 
-	// PathTier is the filesystem path-tier for file-touching tools
-	// (PathTierWorkspace, PathTierExternal, PathTierSensitive). Zero value
-	// (empty string) means "not a file operation" or "tier not assessed".
-	// Consumers can use this to distinguish "elevated due to sensitive
-	// system path" from "elevated due to destructive shell command"
-	// without parsing Reason strings.
+	// PathTier and FileMode are structured fields for file-touching tools.
 	PathTier PathTier
 
-	// FileMode is "read" or "write" for file operations. Empty for
-	// non-file operations.
 	FileMode string
 }
 
-// ResolveToolRisk produces the unified, single-vocabulary assessment for a
-// tool call by folding all available security inputs onto one
-// Low/Medium/High/Critical scale. It incorporates:
-//
-//  1. Static classifier (pkg/agent_tools.ClassifyToolCall)
-//  2. Persona / risk-profile cascade (Agent.EvaluateOperationRisk)
-//  3. Git history-rewrite gate (isGitHistoryRewriteCommand + AllowGitHistoryRewrite)
-//  4. Git write gate (isGitWriteCommand + isGitWriteAllowed)
-//  5. Filesystem path-tier (ClassifyPathAccess for file tools)
-//  6. Workspace security policy (SecurityPolicy.Evaluate for shell_command)
-//
-// SP-068 Phase 2: this is the canonical risk view for gating when
-// UnifiedRiskResolver is enabled. When the flag is off it still powers
-// diagnostics (the gate's debug "[risk]" line and the future `sprout
-// explain`) and shadow-mode logging.
+// ResolveToolRisk produces the unified risk assessment for a tool call by
+// folding all security inputs onto the Low/Medium/High/Critical scale.
 func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) RiskAssessment {
 	// 1. Static classifier (always)
 	secResult := tools.ClassifyToolCall(toolName, args)
 	assessment := assessmentFromClassifier(secResult)
 
-	// SP-089-4: when a password prompter is registered, downgrade privileged
-	// commands (sudo, passwd, su) from High/Critical block to Medium prompt.
-	// This lets the user actually type their password instead of the command
-	// being hard-blocked. Destructive commands (rm -rf, dd, mkfs) are NEVER
-	// downgraded — only RiskCategoryPrivileged.
+	// Downgrade privileged commands when a password prompter is registered.
 	if toolName == "shell_command" && a != nil && a.HasPasswordPrompter() {
 		if secResult.Category == tools.RiskCategoryPrivileged && assessment.Level.Rank() >= configuration.RiskLevelHigh.Rank() {
 			assessment.Level = configuration.RiskLevelMedium
@@ -140,18 +73,9 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 			)
 
 			// 3. Git history-rewrite gate (promptable, not a hard block).
-			// These operations are recoverable via reflog, so they prompt the
-			// user rather than being hard-blocked. AllowGitHistoryRewrite=true
-			// skips the prompt entirely (config-level opt-in).
-			// Exception: rebase is unconditionally banned by AGENTS.md, regardless
-			// of AllowGitHistoryRewrite. The only permitted invocation is --abort.
+			// Rebase is unconditionally banned; --abort is the only permitted form.
 			if isGitHistoryRewriteCommand(cmd) {
 				if isGitRebaseCommand(cmd) {
-					// AGENTS.md: rebase is unconditionally banned — every
-					// form including interactive, --continue, --skip, and
-					// `git pull --rebase`. The only permitted invocation is
-					// pure `git rebase --abort` (recovery from a prior
-					// session's interrupted rebase).
 					assessment = assessment.combine(
 						RiskAssessment{
 							Level:       configuration.RiskLevelCritical,
@@ -161,7 +85,6 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 						},
 					)
 				} else {
-					// Other history-rewrite ops: branch -D, tag -d, reset --hard <commit-ish>
 					cfg := a.GetConfig()
 					if cfg == nil || !cfg.AllowGitHistoryRewrite {
 						assessment = assessment.combine(
@@ -200,7 +123,6 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 						},
 					)
 				case configuration.PolicyPrompt:
-					// Only contribute if classifier didn't already flag it
 					if assessment.Level.Rank() <= configuration.RiskLevelLow.Rank() {
 						assessment = assessment.combine(
 							RiskAssessment{
@@ -215,10 +137,7 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 		}
 	}
 
-	// 5. Filesystem path-tier (file tools)
-	// SP-068 SP-127 synergy: populate PathTier and FileMode for all file tools
-	// so consumers can distinguish path-tier from risk-tier. Risk contribution
-	// only applies to write tools (reads to sensitive paths are less concerning).
+	// 5. Filesystem path-tier (file tools). Only write tools contribute risk.
 	if (toolName == "write_file" || toolName == "edit_file" ||
 		toolName == "write_structured_file" || toolName == "patch_structured_file" ||
 		toolName == "read_file") && a != nil {
@@ -228,7 +147,6 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 			assessment.PathTier = tier
 			assessment.FileMode = accessModeForTool(toolName)
 
-			// Only write tools contribute fs-tier risk; reads are informational
 			isWriteTool := toolName == "write_file" || toolName == "edit_file" ||
 				toolName == "write_structured_file" || toolName == "patch_structured_file"
 
@@ -243,16 +161,7 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 						},
 					)
 				case PathTierExternal:
-					// Session-scoped folder allowlist: if the user already
-					// clicked "Allow folder this session" for this path's
-					// directory (see handleFileSecurityError /
-					// applyFilesystemDecision), skip the Medium contribution.
-					// Without this, the unified gate re-prompts on every
-					// write to an external folder the user already approved —
-					// because ResolveToolRisk runs BEFORE the filesystem
-					// layer that owns the allowlist. Sensitive-tier paths
-					// never reach this branch (they're caught above) and can
-					// never be session-allowlisted.
+					// Session-scoped folder allowlist: skip if user already approved this folder.
 					if a.IsFolderSessionAllowed(pathRaw) {
 						if a.debug {
 							a.debugLog("[risk] %s path %s is under a session-allowed folder — skipping external-tier Medium contribution\n", toolName, pathRaw)
@@ -275,16 +184,7 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 }
 
 // assessmentFromClassifier maps a static-classifier SecurityResult onto the
-// canonical scale:
-//
-//	SAFE                 → Low
-//	CAUTION              → Medium
-//	DANGEROUS            → High
-//	(IsHardBlock / crit) → Critical
-//
-// ShouldBlock/ShouldPrompt are not part of the canonical Level — they are
-// downstream policy decisions the resolver derives from Level + context.
-// IntentConfirmation is carried through as its own orthogonal flag.
+// canonical scale: SAFE→Low, CAUTION→Medium, DANGEROUS→High, hard-block→Critical.
 func assessmentFromClassifier(res tools.SecurityResult) RiskAssessment {
 	level := configuration.RiskLevelLow
 	switch res.Risk {
@@ -320,15 +220,11 @@ func assessmentFromPersonaCascade(level configuration.RiskLevel, reason string) 
 	}
 }
 
-// combine folds two assessments into one, taking the most restrictive Level
-// (the resolver's "tighten, never silence" rule). The OR of hard-block and
-// intent-confirmation flags is kept, and both sets of sources are merged so
-// the result can explain every contributing check.
+// combine folds two assessments into one, taking the most restrictive Level.
+// Critical always hard-blocks. Preserves PathTier and FileMode from the original.
 func (ra RiskAssessment) combine(other RiskAssessment) RiskAssessment {
 	winner := ra
 	loser := other
-	// The higher-ranked Level wins; its Reason is the headline. Ties keep
-	// ra as the winner (stable).
 	if other.Level.Rank() > ra.Level.Rank() {
 		winner = other
 		loser = ra
@@ -340,15 +236,9 @@ func (ra RiskAssessment) combine(other RiskAssessment) RiskAssessment {
 		RequiresIntentConfirmation: ra.RequiresIntentConfirmation || other.RequiresIntentConfirmation,
 		Reason:                     winner.Reason,
 		Sources:                    mergeRiskSources(winner.Sources, loser.Sources),
-		// Preserve file-operation context from the original assessment.
-		// SP-068 SP-127 synergy: these fields are set before any combine() calls
-		// and should survive the fold so consumers can distinguish path-tier
-		// from risk-tier elevation.
 		PathTier: ra.PathTier,
 		FileMode: ra.FileMode,
 	}
-	// A combined Critical Level always hard-blocks even if only one input
-	// flagged it, keeping the invariant that Critical is unconditional.
 	if merged.Level == configuration.RiskLevelCritical {
 		merged.IsHardBlock = true
 	}
@@ -427,8 +317,6 @@ func resolveUnifiedDecision(ra RiskAssessment) string {
 
 // isGitRebaseCommand reports whether `command` contains a `git rebase`
 // invocation that rewrites history (i.e. NOT `git rebase --abort`).
-// AGENTS.md bans rebase unconditionally; the only permitted rebase is
-// `--abort` (recovery from a prior session's interrupted rebase).
 func isGitRebaseCommand(command string) bool {
 	command = stripQuotedContent(command)
 	remaining := command

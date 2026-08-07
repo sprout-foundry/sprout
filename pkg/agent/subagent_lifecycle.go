@@ -20,8 +20,8 @@ func buildSubagentPrefix(persona, taskID string) string {
 }
 
 // activeSubagentCount is the process-wide count of currently-running
-// subagents. The CLI status footer reads it via GetActiveSubagents() to
-// render " · N sub" while delegation is in flight. SP-051-2d.
+// subagents. The CLI status footer reads it via GetActiveSubagents()
+// to render " · N sub" while delegation is in flight.
 var activeSubagentCount atomic.Int64
 
 // IncrementActiveSubagents bumps the active-subagent counter; paired with

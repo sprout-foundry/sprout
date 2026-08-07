@@ -405,8 +405,8 @@ func (p ShellProposal) HighRiskParts() []ShellPart {
 // Flow:
 //  1. If no parts, returns empty map and nil error.
 //  2. If the WebUI has an active surface, dispatch via the security
-//     approval manager (for now, return a "all approved" map — SP-093-3
-//     implements the real WebUI per-part dialog).
+//     approval manager (the real WebUI per-part dialog is implemented
+//     in requestShellApprovalViaWebUI).
 //  3. Otherwise, call console.PromptShellApprovalParts (the CLI picker).
 //
 // Errors come from the picker (e.g. context cancelled); a per-part
@@ -417,7 +417,7 @@ func (a *Agent) RequestShellApproval(ctx context.Context, p ShellProposal) (map[
 	}
 
 	// WebUI surface — publish a shell_approval_request event and block
-	// until the user responds via the per-part dialog (SP-093-3).
+	// until the user responds via the per-part dialog.
 	// The WebUI IS the interactive surface — a webui-only service has no
 	// TTY but still has live users who can answer per-part dialogs. The
 	// isNonInteractive() check only applies to the CLI fallback below.

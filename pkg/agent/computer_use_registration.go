@@ -21,28 +21,14 @@ import (
 
 // computerUseOnce guards one-time registration of the computer-use tools into
 // the global registries. Registration is global (the registries are
-// process-wide singletons), so it must happen at most once even across multiple
-// agent creations.
+// process-wide singletons), so it must happen at most once.
 var computerUseOnce sync.Once
 
-// computerUseToolNames is the set of tool names that are restricted to the
-// computer_user persona. Populated when the tools are registered; empty (and
-// therefore inert) when computer use is disabled.
+// computerUseToolNames is the set of tool names restricted to the computer_user persona.
 var computerUseToolNames = map[string]bool{}
 
 // RegisterComputerUseTools wires the computer_user persona's desktop-control
-// tools (SP-063) into the agent's registries — but only when cfg explicitly
-// enables them. Idempotent and safe to call on every agent creation.
-//
-// Gating layers (defense in depth):
-//  1. cfg.ComputerUse.Enabled must be true — off by default.
-//  2. A real platform backend must be constructable (macOS+cliclick or
-//     linux/X11+xdotool); otherwise nothing is registered and the reason is
-//     returned for the caller to surface.
-//  3. Exposure is limited to the computer_user persona's allowed_tools, and a
-//     dispatch-layer guard (isComputerUseToolBlocked) rejects the tools for any
-//     other active persona.
-//  4. Every action is rate-limited and audited (see the wrapped backend).
+// tools into the agent's registries — but only when cfg explicitly enables them.
 func RegisterComputerUseTools(cfg *configuration.Config) error {
 	if cfg == nil || cfg.ComputerUse == nil || !cfg.ComputerUse.Enabled {
 		return nil
@@ -70,10 +56,7 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 	}
 	computer_use.SetBackend(backend)
 
-	// SP-063-4h: wire the destructive-app gate into the auditing backend's
-	// PreActionHook. The hook fires before MouseClick, MouseDrag,
-	// KeyboardPress, and Scroll — the four action methods that could
-	// interact with a denylisted app.
+	// Wire the destructive-app gate into the auditing backend's PreActionHook.
 	if cu.DestructiveAppGate {
 		computer_use.SetBackendPreActionHook(computerUseDestructiveAppGateFn)
 	}
@@ -82,26 +65,17 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 		newReg := tools.GetNewToolRegistry()
 		for _, h := range computer_use.Handlers() {
 			if regErr := newReg.Register(h); regErr != nil {
-				// Already registered (e.g. a prior call) — definitions are
-				// global too, so skip re-adding.
 				continue
 			}
 		}
-		// Build the name set atomically so isComputerUseToolBlocked never
-		// sees a partially-populated map (avoids data race with concurrent
-		// dispatch).
 		names := make(map[string]bool)
 		for _, name := range computer_use.ToolNames() {
 			names[name] = true
 		}
 		computerUseToolNames = names
 
-		// Start the OS-chord watcher for the panic key. Best-effort: failure
-		// here must not block the rest of computer-use registration.
 		panicKeyChord := cu.PanicKeyChord
 		if !computer_use.IsChordDisabled(panicKeyChord) {
-			// Use a timeout context so an unresponsive osascript/xdotool
-			// can't hang agent creation.
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			watcher := computer_use.NewChordWatcher(panicKeyChord)
 			startErr := watcher.Start(ctx)
@@ -115,9 +89,8 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 	return nil
 }
 
-// checkComputerUseActivation enforces the SP-063 gates required to switch into
-// the computer_user persona. Returns a descriptive error (surfaced to the user)
-// when any precondition fails. Called from ApplyPersona.
+// checkComputerUseActivation enforces the gates required to switch into
+// the computer_user persona. Returns a descriptive error when any precondition fails.
 func (a *Agent) checkComputerUseActivation() error {
 	cfg := a.GetConfig()
 	if cfg == nil || cfg.ComputerUse == nil || !cfg.ComputerUse.Enabled {
@@ -126,11 +99,8 @@ func (a *Agent) checkComputerUseActivation() error {
 	if a.IsSubagent() {
 		return errors.NewPermission("computer_user must be a top-level persona; it cannot be activated inside a subagent (no silent autonomous computer control)", nil)
 	}
-	// SP-063: reject non-interactive activation. cfg.SkipPrompt is true for
-	// `sprout agent --skip-prompt`, automate workflows that run the agent, and
-	// the daemon serving API requests (see cmd/agent_modes.go). Computer use
-	// must never start silently — it always requires explicit interactive
-	// consent, so block under all three conditions.
+	// Reject non-interactive activation. cfg.SkipPrompt is true for
+	// `sprout agent --skip-prompt`, automate workflows, and the daemon.
 	if cfg.SkipPrompt {
 		return errors.NewPermission("the computer_user persona cannot run under --skip-prompt or in daemon mode (computer use requires explicit interactive consent)", nil)
 	}
@@ -144,10 +114,7 @@ func (a *Agent) checkComputerUseActivation() error {
 }
 
 // isComputerUseToolBlocked reports whether the named tool is a computer-use
-// tool being invoked by a persona other than computer_user. This is the
-// dispatch-layer enforcement of SP-063 Phase 6 (tools allowlisted only for the
-// computer_user persona). It is inert when computer use is disabled (the name
-// set is empty).
+// tool being invoked by a persona other than computer_user.
 func isComputerUseToolBlocked(toolName string, agent *Agent) bool {
 	if !computerUseToolNames[toolName] {
 		return false
@@ -159,29 +126,15 @@ func isComputerUseToolBlocked(toolName string, agent *Agent) bool {
 	return active != personas.IDComputerUser
 }
 
-// ---------------------------------------------------------------------------
-// SP-063: Per-session opt-in
-// ---------------------------------------------------------------------------
-
 // checkComputerUseSessionOptIn enforces the per-session consent gate for
-// computer-use actions (SP-063). On the first computer-use tool call in a
-// chat session it prompts the user for explicit consent via the standard
-// WebUI + CLI approval cascade. Once approved (or when the workspace is on
-// the persistent allowlist), subsequent calls are fast-pathed. Returns nil
-// when the action may proceed, an error when it must be blocked.
-//
-// The check is placed in ExecuteTool AFTER isComputerUseToolBlocked so that:
-//  1. Non-computer-use tools skip the check entirely (the name set acts as
-//     a cheap filter).
-//  2. Wrong-persona calls are rejected before reaching the prompt.
-//  3. Only legitimate computer-use calls incur the (potentially blocking)
-//     consent dialog.
+// computer-use actions. On the first tool call it prompts the user for
+// explicit consent. Once approved (or when the workspace is on the
+// persistent allowlist), subsequent calls are fast-pathed.
 func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 	if a == nil {
 		return nil
 	}
 
-	// Fast path: already approved this session.
 	a.computerUseMu.Lock()
 	approved := a.computerUseSessionApproved
 	a.computerUseMu.Unlock()
@@ -191,15 +144,9 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 
 	cfg := a.GetConfig()
 	if cfg == nil || cfg.ComputerUse == nil {
-		// No config or no computer-use config — this gate is inert. The
-		// isComputerUseToolBlocked check upstream already ensures the tools
-		// are registered, so reaching here without config means the feature
-		// wasn't enabled through the normal path. Allow (defense in depth
-		// is handled by activation gates).
 		return nil
 	}
 
-	// Auto-approve when the workspace is on the persistent allowlist.
 	ws := a.effectiveCwd()
 	if ws != "" && isWorkspaceComputerUseAllowlisted(ws, cfg.ComputerUse.WorkspaceAllowlist) {
 		a.computerUseMu.Lock()
@@ -220,10 +167,7 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 		ws, actionDesc,
 	)
 
-	// ---- WebUI path ----
-	// Prefer the browser dialog when a WebUI client is connected, matching
-	// the existing security-approval pattern in ExecuteTool /
-	// handleFileSecurityError.
+	// WebUI path
 	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() {
 		clihooks.SuspendIndicator()
 		clihooks.PauseSteer()
@@ -254,15 +198,12 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 		if outcome == security.ApprovalOutcomeResponded {
 			return a.applyComputerUseOptInDecision(decision, ws)
 		}
-		// Timed out or browser disconnected — fall through to CLI prompt
-		// so a user at the terminal can respond (same rationale as the
-		// tool-security path).
 		if a.debug {
 			a.debugLog("[computer-use] webui opt-in unanswered (outcome=%d) — falling back to CLI\n", outcome)
 		}
 	}
 
-	// ---- CLI fallback ----
+	// CLI fallback
 	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
 	if logger != nil && logger.IsInteractive() {
 		if !logger.AskForConfirmation(prompt, false, true) {
@@ -271,17 +212,13 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 			}
 			return errors.NewPermission("computer use denied: the user declined the per-session opt-in", nil)
 		}
-		// CLI path is yes/no only — record as session-scoped approval.
 		return a.applyComputerUseOptInDecision(security.ApprovalApproveOnce, ws)
 	}
 
-	// Non-interactive with no WebUI response — block for safety.
 	return errors.NewPermission("computer use requires interactive opt-in consent — no approval mechanism available (re-run interactively or add the workspace to computer_use.workspace_allowlist in settings)", nil)
 }
 
-// applyComputerUseOptInDecision records the user's consent choice, persists
-// "always" approvals to disk, writes an audit-log entry, and returns nil
-// when the action may proceed. ApprovalDeny returns an error.
+// applyComputerUseOptInDecision records the user's consent choice and persists "always" approvals.
 func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision, workspace string) error {
 	switch decision {
 	case security.ApprovalDeny:
@@ -290,19 +227,13 @@ func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision
 		}
 		return errors.NewPermission("computer use denied: the user declined the per-session opt-in", nil)
 	case security.ApprovalApproveAlways:
-		// Persist the workspace root to the allowlist so future sessions
-		// in this directory auto-approve.
 		if err := a.persistComputerUseWorkspaceAllowlist(workspace); err != nil {
 			if a.debug {
 				a.debugLog("[computer-use] failed to persist workspace allowlist: %v (continuing with session approval)\n", err)
 			}
-			// Non-fatal: still approve for this session.
 		}
 		fallthrough
 	default:
-		// ApproveOnce, Elevate, AllowFolderSession all collapse to
-		// session-scoped approval (the dialog conceptually only offers
-		// once / always / deny for computer use).
 		a.computerUseMu.Lock()
 		a.computerUseSessionApproved = true
 		a.computerUseMu.Unlock()
@@ -333,7 +264,7 @@ func (a *Agent) persistComputerUseWorkspaceAllowlist(workspace string) error {
 		}
 		for _, w := range cfg.ComputerUse.WorkspaceAllowlist {
 			if w == workspace {
-				return nil // dedup
+				return nil
 			}
 		}
 		cfg.ComputerUse.WorkspaceAllowlist = append(cfg.ComputerUse.WorkspaceAllowlist, workspace)
@@ -341,9 +272,8 @@ func (a *Agent) persistComputerUseWorkspaceAllowlist(workspace string) error {
 	})
 }
 
-// isWorkspaceComputerUseAllowlisted reports whether the given workspace path
-// sits under (or equals) any entry in the allowlist. Both sides are
-// normalized so trailing slashes and symlinks don't cause false negatives.
+// isWorkspaceComputerUseAllowlisted reports whether the workspace path
+// sits under (or equals) any entry in the allowlist.
 func isWorkspaceComputerUseAllowlisted(workspace string, allowlist []string) bool {
 	if workspace == "" || len(allowlist) == 0 {
 		return false
@@ -357,8 +287,7 @@ func isWorkspaceComputerUseAllowlisted(workspace string, allowlist []string) boo
 	return false
 }
 
-// computerUseActionDescription returns a human-readable one-line description
-// of what the named computer-use tool does, for the consent dialog.
+// computerUseActionDescription returns a human-readable description of what the named computer-use tool does.
 func computerUseActionDescription(toolName string) string {
 	switch toolName {
 	case "take_screenshot":

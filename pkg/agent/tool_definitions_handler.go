@@ -205,12 +205,10 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// both --unsafe mode and elevated risk profiles; hard blocks are
 	// still enforced by the handlers' own IsHardBlock early-returns.
 	env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
-	// SP-127 M4: FilesystemGate removed — off-workspace file access is
-	// handled entirely through PrecheckFileAccess which consults
-	// Gate 1's path-tier classifier. Handlers consult it up-front and
-	// return typed errors for Deny, bypass for Allow, or fall through
-	// for Prompt (which will fail with the raw filesystem error since
-	// the interactive gate is gone).
+	// Off-workspace file access is handled entirely through
+	// PrecheckFileAccess which consults Gate 1's path-tier classifier.
+	// Handlers consult it up-front and return typed errors for Deny,
+	// bypass for Allow, or fall through for Prompt.
 	return env
 }
 

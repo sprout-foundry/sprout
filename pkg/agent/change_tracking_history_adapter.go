@@ -6,9 +6,6 @@ import (
 )
 
 // convertToHistoryMessages converts api.Message to history.APIMessage format.
-// Returns nil for nil input — the receiving side handles nil gracefully.
-//
-// SP-075-extension: extracted from change_tracking.go. No behavior change.
 func convertToHistoryMessages(messages []api.Message) []history.APIMessage {
 	if messages == nil {
 		return nil
@@ -23,7 +20,6 @@ func convertToHistoryMessages(messages []api.Message) []history.APIMessage {
 			ToolCallID:       msg.ToolCallID,
 		}
 
-		// Convert tool calls if present
 		if len(msg.ToolCalls) > 0 {
 			result[i].ToolCalls = make([]history.APIToolCall, len(msg.ToolCalls))
 			for j, tc := range msg.ToolCalls {

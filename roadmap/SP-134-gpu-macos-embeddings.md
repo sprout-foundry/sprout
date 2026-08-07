@@ -134,13 +134,24 @@ Any MLX init error (shared library missing, Metal unavailable, etc.)
 logs a warning and falls back to ONNX CPU. The `SPROUT_EMBEDDING_BACKEND=mlx|cpu`
 env var forces a specific backend for debugging.
 
-### Phase 3 — Rollout
+### Phase 3 — Concurrency and rollout
 
-Default ON for darwin/arm64 + ≥8 GB RAM when safetensors weights are
-present and MLX initializes. CPU otherwise (non-darwin, Intel Mac, low-RAM,
-disabled). Exit criteria: `go test ./pkg/embedding/`, index of this repo on
-M-series showing 5×+ speedup vs ONNX CPU, `make build-all`,
-`sprout diag` reporting the active backend.
+**Concurrency model (DONE):** The MLX provider uses the same `inferenceGate`
+semaphore as the ONNX provider — a 2-permit pool that allows an interactive
+query to proceed while a background index build is mid-flight. The `RWMutex`
+guards only the `closed` flag (not inference), and `LockOSThread` +
+per-call `DefaultGPUStream()` handle MLX's thread-local stream requirement.
+
+This aligns with SP-136's daemon-first architecture: when the daemon lands,
+the MLX provider runs inside the daemon process. CLI clients proxy through
+the Unix socket (SP-136 Phase 3). The daemon's single inference gate
+coordinates all clients, and the 307 MB model stays resident in one process.
+
+**Rollout gate:** Default ON for darwin/arm64 + ≥8 GB RAM when safetensors
+weights are present and MLX initializes. CPU otherwise (non-darwin, Intel
+Mac, low-RAM, MLX lib missing). Exit criteria: `go test ./pkg/embedding/`,
+index of this repo on M-series showing 2×+ speedup vs ONNX CPU,
+`make build-all`, `sprout diag` reporting the active backend.
 
 ## Risks
 

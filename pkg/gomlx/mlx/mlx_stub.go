@@ -271,3 +271,18 @@ func RepeatAxis(a *Array, repeats, axis int, s *Stream) (*Array, error) {
 func Pad(a *Array, axes, low, high []int, padValue *Array, s *Stream) (*Array, error) {
 	return nil, errUnavailable
 }
+
+// MemoryStats is unavailable on stub builds.
+type MemoryStats struct {
+	Active, Cache, Peak, Limit, CacheLimit uint64
+}
+
+func ActiveMemory() (uint64, error)             { return 0, errUnavailable }
+func CacheMemory() (uint64, error)              { return 0, errUnavailable }
+func PeakMemory() (uint64, error)               { return 0, errUnavailable }
+func MemoryLimit() (uint64, error)              { return 0, errUnavailable }
+func SetMemoryLimit(uint64) error               { return errUnavailable }
+func SetCacheLimit(uint64) error                { return errUnavailable }
+func ClearCache() error                         { return errUnavailable }
+func ResetPeakMemory() error                    { return errUnavailable }
+func Snapshot() (MemoryStats, error)            { return MemoryStats{}, errUnavailable }

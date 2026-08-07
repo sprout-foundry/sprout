@@ -48,21 +48,47 @@ type weights struct {
 
 type layerWeights struct {
 	inputNorm *mlx.Array
-	qProj     *mlx.Array
-	kProj     *mlx.Array
-	vProj     *mlx.Array
-	oProj     *mlx.Array
-	qNorm     *mlx.Array
-	kNorm     *mlx.Array
-	postNorm  *mlx.Array
-	gateProj  *mlx.Array
-	upProj    *mlx.Array
-	downProj  *mlx.Array
+	// Projection weights are stored pre-transposed in [in, out] layout so the
+	// forward pass can MatMul directly without per-call transposes.
+	qProj    *mlx.Array // [hidden, num_heads*head_dim]
+	kProj    *mlx.Array // [hidden, num_kv_heads*head_dim]
+	vProj    *mlx.Array // [hidden, num_kv_heads*head_dim]
+	oProj    *mlx.Array // [num_heads*head_dim, hidden]
+	qNorm    *mlx.Array
+	kNorm    *mlx.Array
+	postNorm *mlx.Array
+	gateProj *mlx.Array // [hidden, intermediate]
+	upProj   *mlx.Array // [hidden, intermediate]
+	downProj *mlx.Array // [intermediate, hidden]
 }
 
 func (q *Qwen3) Config() llm.ModelConfig { return q.cfg }
 
 func (q *Qwen3) SetStream(s *mlx.Stream) { q.stream = s }
+
+// loadLinearT loads a weight from safetensors and returns it pre-transposed
+// into [in, out] layout for direct MatMul in the forward pass. The transpose
+// is evaluated immediately on the loading thread so the result is a concrete
+// buffer — lazy transposes would bind to the loading thread's stream and fail
+// with "no Stream in current thread" when first evaluated during generation
+// on a different OS thread.
+func loadLinearT(sf *llm.SafetensorsFile, name string, s *mlx.Stream) (*mlx.Array, error) {
+	w, err := sf.Get(name, s)
+	if err != nil {
+		return nil, err
+	}
+	wT, err := mlx.Transpose(w, s)
+	if err != nil {
+		w.Free()
+		return nil, fmt.Errorf("transpose %s: %w", name, err)
+	}
+	w.Free()
+	if err := wT.Eval(); err != nil {
+		wT.Free()
+		return nil, fmt.Errorf("eval transpose %s: %w", name, err)
+	}
+	return wT, nil
+}
 
 func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 	q.stream = s
@@ -82,6 +108,10 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 	if err != nil {
 		return fmt.Errorf("transpose embed_tokens: %w", err)
 	}
+	// Materialize on the loading thread (see loadLinearT).
+	if err := w.embedTokensT.Eval(); err != nil {
+		return fmt.Errorf("eval transpose embed_tokens: %w", err)
+	}
 	w.normWeight, err = sf.Get("model.norm.weight", s)
 	if err != nil {
 		return fmt.Errorf("load final norm: %w", err)
@@ -95,20 +125,16 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 		if err != nil {
 			return fmt.Errorf("load layer %d input_norm: %w", i, err)
 		}
-		lw.qProj, err = sf.Get(p+".self_attn.q_proj.weight", s)
-		if err != nil {
+		if lw.qProj, err = loadLinearT(sf, p+".self_attn.q_proj.weight", s); err != nil {
 			return fmt.Errorf("load layer %d q_proj: %w", i, err)
 		}
-		lw.kProj, err = sf.Get(p+".self_attn.k_proj.weight", s)
-		if err != nil {
+		if lw.kProj, err = loadLinearT(sf, p+".self_attn.k_proj.weight", s); err != nil {
 			return fmt.Errorf("load layer %d k_proj: %w", i, err)
 		}
-		lw.vProj, err = sf.Get(p+".self_attn.v_proj.weight", s)
-		if err != nil {
+		if lw.vProj, err = loadLinearT(sf, p+".self_attn.v_proj.weight", s); err != nil {
 			return fmt.Errorf("load layer %d v_proj: %w", i, err)
 		}
-		lw.oProj, err = sf.Get(p+".self_attn.o_proj.weight", s)
-		if err != nil {
+		if lw.oProj, err = loadLinearT(sf, p+".self_attn.o_proj.weight", s); err != nil {
 			return fmt.Errorf("load layer %d o_proj: %w", i, err)
 		}
 		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", s)
@@ -123,21 +149,21 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 		if err != nil {
 			return fmt.Errorf("load layer %d post_norm: %w", i, err)
 		}
-		lw.gateProj, err = sf.Get(p+".mlp.gate_proj.weight", s)
-		if err != nil {
+		if lw.gateProj, err = loadLinearT(sf, p+".mlp.gate_proj.weight", s); err != nil {
 			return fmt.Errorf("load layer %d gate_proj: %w", i, err)
 		}
-		lw.upProj, err = sf.Get(p+".mlp.up_proj.weight", s)
-		if err != nil {
+		if lw.upProj, err = loadLinearT(sf, p+".mlp.up_proj.weight", s); err != nil {
 			return fmt.Errorf("load layer %d up_proj: %w", i, err)
 		}
-		lw.downProj, err = sf.Get(p+".mlp.down_proj.weight", s)
-		if err != nil {
+		if lw.downProj, err = loadLinearT(sf, p+".mlp.down_proj.weight", s); err != nil {
 			return fmt.Errorf("load layer %d down_proj: %w", i, err)
 		}
 	}
 
 	q.weights = w
+	// The MLX arrays own copies of their buffers; release the multi-hundred-MB
+	// file blob from the Go heap so GC can collect it.
+	sf.Release()
 	log.Printf("qwen3: %d layers loaded", q.cfg.NumLayers)
 	return nil
 }
@@ -177,17 +203,6 @@ func (q *Qwen3) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) (
 	}
 	defer logits.Free()
 	return q.logitsToFloat32(logits)
-}
-
-// ForwardPrefillArgmax runs prefill and returns the GPU-computed argmax token
-// ID for the final position, avoiding the full [vocab] logits transfer.
-func (q *Qwen3) ForwardPrefillArgmax(ids *mlx.Array, seqLen int, cache *llm.KVCache) (int, error) {
-	logits, err := q.prefillInternal(ids, seqLen, cache)
-	if err != nil {
-		return 0, err
-	}
-	defer logits.Free()
-	return q.logitsToArgmax(logits)
 }
 
 // prefillInternal runs the forward pass over the full prompt, returning the
@@ -278,16 +293,10 @@ func (q *Qwen3) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (*mlx.A
 		h = out
 	}
 
-	logits, err := q.computeLogits(h)
-	if err != nil {
-		h.Free()
-		return nil, err
-	}
-	if err := s.Synchronize(); err != nil {
-		logits.Free()
-		return nil, fmt.Errorf("synchronize: %w", err)
-	}
-	return logits, nil
+	// No explicit sync here: the caller's data read (Float32Data or
+	// Uint32Data in logitsToFloat32/logitsToArgmax) evaluates the lazy graph
+	// and synchronizes once. An extra sync here would cost ~5-10ms per token.
+	return q.computeLogits(h)
 }
 
 // logitsToFloat32 casts a BF16 logits array to FP32 and reads it into a Go slice.
@@ -305,15 +314,14 @@ func (q *Qwen3) logitsToFloat32(logits *mlx.Array) ([]float32, error) {
 // the token ID. The logits array is [1, 1, vocab]; the flattened argmax is
 // exactly the vocab argmax.
 func (q *Qwen3) logitsToArgmax(logits *mlx.Array) (int, error) {
-	s := q.stream
-	idxArr, err := mlx.ArgMax(logits, false, s)
+	idxArr, err := mlx.ArgMax(logits, false, q.stream)
 	if err != nil {
 		return 0, fmt.Errorf("argmax: %w", err)
 	}
 	defer idxArr.Free()
-	if err := s.Synchronize(); err != nil {
-		return 0, fmt.Errorf("synchronize argmax: %w", err)
-	}
+	// Uint32Data's Eval evaluates the argmax (and its logits input) and
+	// synchronizes once — an explicit Synchronize here would add a second
+	// ~5-10ms pipeline drain per token.
 	data, err := idxArr.Uint32Data()
 	if err != nil {
 		return 0, fmt.Errorf("read argmax: %w", err)

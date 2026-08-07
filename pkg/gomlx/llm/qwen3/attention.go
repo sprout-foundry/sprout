@@ -14,19 +14,19 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	s := q.stream
 	cfg := q.cfg
 
-	q2d, err := llm.LinearNoBias(h, lw.qProj, s)
+	q2d, err := llm.LinearT(h, lw.qProj, s)
 	if err != nil {
 		return nil, fmt.Errorf("q proj: %w", err)
 	}
 	defer q2d.Free()
 
-	k2d, err := llm.LinearNoBias(h, lw.kProj, s)
+	k2d, err := llm.LinearT(h, lw.kProj, s)
 	if err != nil {
 		return nil, fmt.Errorf("k proj: %w", err)
 	}
 	defer k2d.Free()
 
-	v2d, err := llm.LinearNoBias(h, lw.vProj, s)
+	v2d, err := llm.LinearT(h, lw.vProj, s)
 	if err != nil {
 		return nil, fmt.Errorf("v proj: %w", err)
 	}
@@ -96,12 +96,10 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	var kForAttn, vForAttn *mlx.Array
 
 	if cache != nil && cache.IsInitialized(layerIdx) {
-		// Decode: append new K/V to cache via lazy ConcatenateAxis
 		cached, err := cache.Get(layerIdx)
 		if err != nil {
 			return nil, err
 		}
-
 		newK, err := mlx.ConcatenateAxis([]*mlx.Array{cached.K, kRot}, 2, s)
 		if err != nil {
 			return nil, fmt.Errorf("concat K: %w", err)
@@ -111,22 +109,15 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 			newK.Free()
 			return nil, fmt.Errorf("concat V: %w", err)
 		}
-
 		cached.K.Free()
 		cached.V.Free()
 		cached.K = newK
 		cached.V = newV
-
 		kForAttn = newK
 		vForAttn = newV
-
 	} else if cache != nil {
-		// Prefill: store retained copies of live K/V for future decode.
-		// RetainArray increments the C refcount without forcing evaluation,
-		// which would corrupt the lazy computation graph.
 		kForAttn = kRot
 		vForAttn = vT
-
 		kRetained := mlx.RetainArray(kRot)
 		vRetained := mlx.RetainArray(vT)
 		if err := cache.Store(layerIdx, kRetained, vRetained); err != nil {
@@ -134,7 +125,6 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 			vRetained.Free()
 			return nil, fmt.Errorf("cache store: %w", err)
 		}
-
 	} else {
 		kForAttn = kRot
 		vForAttn = vT
@@ -180,19 +170,19 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	}
 	defer ctxFlat.Free()
 
-	return llm.LinearNoBias(ctxFlat, lw.oProj, s)
+	return llm.LinearT(ctxFlat, lw.oProj, s)
 }
 
 func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
 	s := q.stream
 
-	gate, err := llm.LinearNoBias(h, lw.gateProj, s)
+	gate, err := llm.LinearT(h, lw.gateProj, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate proj: %w", err)
 	}
 	defer gate.Free()
 
-	up, err := llm.LinearNoBias(h, lw.upProj, s)
+	up, err := llm.LinearT(h, lw.upProj, s)
 	if err != nil {
 		return nil, fmt.Errorf("up proj: %w", err)
 	}
@@ -210,5 +200,5 @@ func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
 	}
 	defer gated.Free()
 
-	return llm.LinearNoBias(gated, lw.downProj, s)
+	return llm.LinearT(gated, lw.downProj, s)
 }

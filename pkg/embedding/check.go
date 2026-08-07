@@ -38,15 +38,8 @@ func FormatDuplicateWarning(matches []QueryResult) string {
 	return sb.String()
 }
 
-// CheckFileForDuplicates checks if any functions in the given file content
-// have semantically similar existing code in the index.
-//
-// It works by extracting code units from the content, embedding each one,
-// and querying the existing index for similar records. Self-matches (same
-// ID or same file path) are filtered out using workspace-relative path comparison.
-//
-// The top-K overall matches above the threshold are returned, sorted by
-// similarity descending.
+// CheckFileForDuplicates extracts code units from content, embeds each, and queries
+// the index for similar records. Filters self-matches via workspace-relative path comparison.
 func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath string, content string, workspaceRoot string, threshold float32, topK int) (*CheckDuplicatesResult, error) {
 	if mgr == nil {
 		return &CheckDuplicatesResult{}, nil
@@ -90,19 +83,14 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 		// Build the embedding text the same way as the index pipeline.
 		queryText := u.Signature + "\n" + u.Body
 
-		// CheckDuplicates, not QuerySimilar: this compares code against code,
-		// so both sides need documentPrefix. QuerySimilar embeds its input as a
-		// natural-language question, which put the two duplicate paths on
-		// different prefixes while sharing one threshold constant — the exact
-		// shape of the original defect.
+		// Use CheckDuplicates (code-vs-code) not QuerySimilar (NL-vs-code).
 		matches, err := mgr.CheckDuplicates(ctx, queryText, topK, threshold)
 		if err != nil {
 			// Log but continue — a single unit failure shouldn't block the whole check.
 			continue
 		}
 
-		// Filter out self-matches: same ID or same file path.
-		// Use workspace-relative path normalization for reliable comparison.
+		// Filter self-matches: same ID or same file.
 		for _, m := range matches {
 			if m.Record.ID == u.ID || NormalizePathToWorkspace(workspaceRoot, m.Record.File) == NormalizePathToWorkspace(workspaceRoot, filePath) {
 				continue
@@ -154,17 +142,14 @@ func NormalizePathToWorkspace(workspaceRoot, path string) string {
 	return rel
 }
 
-// extractFromContent writes content to a temporary file with the appropriate
-// extension so that ExtractFromFile can parse it, then extracts code units.
-// The temporary file is cleaned up after extraction.
+// extractFromContent writes content to a temp file and extracts code units via ExtractFromFile.
 func extractFromContent(filePath string, content string) ([]CodeUnit, error) {
-	// Early return for empty content
+	// Skip empty content.
 	if strings.TrimSpace(content) == "" {
 		return []CodeUnit{}, nil
 	}
 
-	// Create a temp file with the same extension as the target path so the
-	// extractor picks the right language parser.
+	// Temp file gets the target extension so the extractor picks the right language.
 	tmpDir, err := os.MkdirTemp("", "embedding-check-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -186,7 +171,7 @@ func extractFromContent(filePath string, content string) ([]CodeUnit, error) {
 		return nil, fmt.Errorf("extract from file: %w", err)
 	}
 
-	// Override File to use the intended target path, not the temp path
+	// Use the target path, not the temp path.
 	for i := range units {
 		units[i].File = filePath
 	}

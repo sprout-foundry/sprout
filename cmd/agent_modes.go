@@ -328,6 +328,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				go reapIdleDaemon(ctx, cancel, webServer, idleTimeout)
 			}
 		}
+
+		// SP-136 P3: the daemon hosts the embedding socket so CLI processes
+		// route embedding ops through it (one model load, one index writer).
+		if daemonMode {
+			embedSrv := startDaemonEmbeddingServer(ctx, true)
+			if embedSrv != nil {
+				defer embedSrv.Close()
+			}
+		}
 	}
 
 	// Setup signal handling with buffered channel for multiple signals

@@ -43,7 +43,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		m.maxResults = 3
 	}
 
-	provider, runtime, err := m.createONNXProvider(ctx)
+	provider, runtime, err := m.createProvider(ctx)
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: init provider: %w", err)
 		return m.initError

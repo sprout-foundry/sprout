@@ -379,6 +379,10 @@ Examples:
 		stopDaemonKeepAlive := maybeAutoStartDaemon(cmd.Context(), daemonMode)
 		defer stopDaemonKeepAlive()
 
+		// SP-136 P3: route embedding operations through the daemon socket
+		// when available (falls back to in-process ONNX otherwise).
+		maybeEnableRemoteEmbedding(daemonMode)
+
 		// Propagate --mock-llm flag to the agent package before agent creation.
 		agent.UseMockLLM = agentMockLLM
 

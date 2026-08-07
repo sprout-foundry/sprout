@@ -89,16 +89,15 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 	// can race the writer in the agent. Only fall back to a transient
 	// manager when running outside an agent context (CLI tools, tests).
 	//
-	// Without ANY manager there is nothing to search. The registration path
-	// (pkg/agent's seed registry) drops this tool entirely when the agent
-	// has no EmbeddingManager, so the model never sees it — this branch only
-	// guards direct calls (replayed sessions, saved automations) and returns
-	// a silent no-results verdict instead of an "embeddings are off" error.
+	// Without ANY manager, fall back to a literal search. The registration
+	// path drops this tool when the agent has no EmbeddingManager, so the
+	// model never calls it — this branch guards direct calls from replayed
+	// sessions or saved automations. Returning empty results for a query the
+	// literal pass could answer is worse than answering it: the caller has no
+	// way to tell "nothing matched" from "nothing was searched."
 	mgr := env.EmbeddingMgr
 	if mgr == nil {
-		return ToolResult{
-			Output: fmt.Sprintf("No results found matching: %q (threshold: %.2f)\n\nTry broadening your search query or lowering the threshold.", query, threshold),
-		}, nil
+		return literalFallbackSemantic(ctx, env, query), nil
 	}
 
 	if err := mgr.Init(ctx); err != nil {

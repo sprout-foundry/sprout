@@ -315,7 +315,7 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 	}
 
 	// Fall back to text-based search
-	results, err := searchMemoriesByText(query, topK, threshold)
+	results, err := SearchMemoriesByText(query, topK, threshold)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("memory search failed: %v", err),
@@ -323,7 +323,7 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 		}, nil
 	}
 
-	output := formatMemorySearchResults(query, results, threshold)
+	output := FormatMemorySearchResults(query, results, threshold)
 	return ToolResult{
 		Output:     output,
 		TokenUsage: int64(estimateTokenUsage(output)),

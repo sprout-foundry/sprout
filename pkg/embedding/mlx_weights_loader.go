@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 
@@ -34,7 +35,7 @@ func loadJinaSafetensors(path string, s *mlx.Stream) (*jinaWeights, error) {
 	}
 
 	headerBytes := make([]byte, headerLen)
-	if _, err := f.Read(headerBytes); err != nil {
+	if _, err := io.ReadFull(f, headerBytes); err != nil {
 		return nil, fmt.Errorf("read header: %w", err)
 	}
 
@@ -50,7 +51,7 @@ func loadJinaSafetensors(path string, s *mlx.Stream) (*jinaWeights, error) {
 	}
 	dataSize := stat.Size() - dataStart
 	rawData := make([]byte, dataSize)
-	if _, err := f.Read(rawData); err != nil {
+	if _, err := io.ReadFull(f, rawData); err != nil {
 		return nil, fmt.Errorf("read data blob: %w", err)
 	}
 

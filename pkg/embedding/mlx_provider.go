@@ -218,12 +218,20 @@ func (p *MLXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) (
 }
 
 func (p *MLXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text, prefix string) ([]float32, error) {
-	_ = prefix
+	if prefix != "" {
+		text = prefix + text
+	}
 	return p.Embed(ctx, text)
 }
 
 func (p *MLXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
-	_ = prefix
+	if prefix != "" {
+		prefixed := make([]string, len(texts))
+		for i, t := range texts {
+			prefixed[i] = prefix + t
+		}
+		texts = prefixed
+	}
 	return p.EmbedBatch(ctx, texts)
 }
 

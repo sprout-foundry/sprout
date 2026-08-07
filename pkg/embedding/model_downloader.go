@@ -433,10 +433,10 @@ func JinaCodeV2SafetensorsConfig() ModelConfig {
 	return ModelConfig{
 		Name:          "jina-code-v2-mlx",
 		ModelURL:      base + "/model.safetensors",
-		ModelHash:     "",
+		ModelHash:     "8b53bfd4ae2cd586004a6ca4a16551b630a2a1b1d655ff1ee9be1286a1781c5b",
 		ModelFilename: "model.safetensors",
 		TokenizerURL:  base + "/tokenizer.json",
-		TokenizerHash: "",
+		TokenizerHash: "b01c78a902aa4facb2f47f95449f48e2f7bbfea5d2472ee2f6ce92323c6f86e5",
 		FullDims:      768,
 		Dims:          768,
 	}

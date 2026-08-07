@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
@@ -68,70 +67,39 @@ func OpenSafetensors(path string) (*SafetensorsFile, error) {
 	return &SafetensorsFile{header: headerMap, rawData: rawData}, nil
 }
 
-// Get loads a tensor by name, converting BF16 or F16 to fp32 MLX array.
+// Get loads a tensor by name as a native-dtype MLX array. BF16 and F16 weights
+// are loaded directly without conversion to float32 — MLX Metal kernels handle
+// these dtypes natively at full speed, keeping memory usage and bandwidth at
+// the native (half-precision) level.
 func (sf *SafetensorsFile) Get(name string, s *mlx.Stream) (*mlx.Array, error) {
 	entry, ok := sf.header[name]
 	if !ok {
 		return nil, fmt.Errorf("safetensors: key %q not found", name)
 	}
-	if entry.DType != "BF16" && entry.DType != "F16" {
-		return nil, fmt.Errorf("safetensors: %q has dtype %s, expected BF16 or F16", name, entry.DType)
-	}
 
 	start := entry.DataOffsets[0]
 	end := entry.DataOffsets[1]
-	data := sf.rawData[start:end]
+	rawBytes := sf.rawData[start:end]
 
-	nElements := 1
-	for _, d := range entry.Shape {
-		nElements *= d
+	var dtype mlx.Dtype
+	switch entry.DType {
+	case "BF16":
+		dtype = mlx.BFloat16
+	case "F16":
+		dtype = mlx.Float16
+	case "F32":
+		dtype = mlx.Float32
+	default:
+		return nil, fmt.Errorf("safetensors: %q has unsupported dtype %s", name, entry.DType)
 	}
 
-	float32Data := make([]float32, nElements)
-	if entry.DType == "BF16" {
-		for i := 0; i < nElements; i++ {
-			bits := binary.LittleEndian.Uint16(data[i*2 : i*2+2])
-			float32Data[i] = math.Float32frombits(uint32(bits) << 16)
-		}
-	} else {
-		for i := 0; i < nElements; i++ {
-			bits := binary.LittleEndian.Uint16(data[i*2 : i*2+2])
-			float32Data[i] = float32from16(bits)
-		}
-	}
-
-	return mlx.NewArrayFromFloat32(float32Data, entry.Shape)
+	return mlx.NewArrayFromBytes(rawBytes, entry.Shape, dtype)
 }
 
 // Has reports whether a tensor exists in the file.
 func (sf *SafetensorsFile) Has(name string) bool {
 	_, ok := sf.header[name]
 	return ok
-}
-
-// float32from16 converts IEEE 754 half-precision (float16) to float32.
-func float32from16(bits uint16) float32 {
-	s := uint32(bits&0x8000) << 16
-	exp := uint32(bits&0x7C00) >> 10
-	mant := uint32(bits & 0x03FF)
-
-	switch exp {
-	case 0:
-		if mant == 0 {
-			return math.Float32frombits(s)
-		}
-		for mant&0x0400 == 0 {
-			mant <<= 1
-			exp--
-		}
-		exp++
-		mant &= 0x03FF
-	case 0x1F:
-		return math.Float32frombits(s | 0x7F800000 | (mant << 13))
-	}
-
-	exp = exp + 127 - 15
-	return math.Float32frombits(s | (exp << 23) | (mant << 13))
 }
 
 func parseSafetensorsHeader(headerBytes []byte) (map[string]safetensorEntry, error) {

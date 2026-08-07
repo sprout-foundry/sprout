@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -83,6 +84,27 @@ func TestDaemonHelperProcess(t *testing.T) {
 	// Self-expire after 20s — safety net against process leaks.
 	time.AfterFunc(20*time.Second, func() { os.Exit(0) })
 
+	// Optionally simulate idle reaping: if SPROUT_DAEMON_HELPER_IDLE_MS is
+	// set, the helper exits when no request has been received for that long.
+	// The handler below updates lastRequest on every request.
+	var lastRequest atomic.Int64
+	lastRequest.Store(time.Now().UnixMilli())
+	if idleStr := os.Getenv("SPROUT_DAEMON_HELPER_IDLE_MS"); idleStr != "" {
+		var idleMs int
+		if _, err := fmt.Sscanf(idleStr, "%d", &idleMs); err == nil && idleMs > 0 {
+			go func() {
+				ticker := time.NewTicker(50 * time.Millisecond)
+				defer ticker.Stop()
+				for range ticker.C {
+					if time.Since(time.UnixMilli(lastRequest.Load())) > time.Duration(idleMs)*time.Millisecond {
+						fmt.Fprintf(os.Stderr, "helper idle for %d ms — exiting\n", idleMs)
+						os.Exit(0)
+					}
+				}
+			}()
+		}
+	}
+
 	// Start serving on 127.0.0.1:<port>. Retry the bind: under heavy
 	// parallel test load the port from freePort() can be transiently
 	// stolen by a concurrent listener; the parent's StartTimeout (5s)
@@ -105,6 +127,7 @@ func TestDaemonHelperProcess(t *testing.T) {
 
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			lastRequest.Store(time.Now().UnixMilli())
 			if r.URL.Path == "/health" {
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]string{"status": "ok"})

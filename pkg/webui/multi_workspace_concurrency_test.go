@@ -54,6 +54,18 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 
 	daemonRoot := t.TempDir()
 
+	// Canonicalize for macOS: /var is a symlink to /private/var and the
+	// server resolves workspace roots via filepathAbsEval (EvalSymlinks).
+	// The isolation assertions below compare raw paths, so everything must
+	// be on the same (canonical) footing or they trip on the symlink.
+	canonicalPath := func(p string) string {
+		if evaled, err := filepath.EvalSymlinks(p); err == nil {
+			return evaled
+		}
+		return p
+	}
+	daemonRoot = canonicalPath(daemonRoot)
+
 	// Three workspaces under the daemon root (required by setClientWorkspaceRoot).
 	workspaceDirs := []string{
 		filepath.Join(daemonRoot, "w1"),

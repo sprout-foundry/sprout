@@ -140,7 +140,8 @@ func DetectDaemon(ctx context.Context, spec DaemonSpec) (bool, error) {
 }
 
 // detectHTTP sends a GET to baseURL+"/health" and reports whether it
-// returns HTTP 200.
+// returns HTTP 200. Uses a fresh connection (no keep-alive pooling) so a
+// daemon that has exited is never masked by a stale pooled connection.
 func detectHTTP(ctx context.Context, baseURL string, timeout time.Duration) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -150,7 +151,10 @@ func detectHTTP(ctx context.Context, baseURL string, timeout time.Duration) (boo
 		return false, fmt.Errorf("create health request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{
+		Transport: &http.Transport{DisableKeepAlives: true},
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return false, nil // network error → daemon not available (not a real error)
 	}

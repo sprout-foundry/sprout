@@ -37,6 +37,7 @@ type OutputManager interface {
 // AgentOutputManager implements OutputManager.
 type AgentOutputManager struct {
 	outputMutex       *sync.Mutex
+	mu                sync.RWMutex // guards the streaming/state fields below
 	streamingEnabled  bool
 	streamingCallback func(string)
 	reasoningCallback func(string)
@@ -60,34 +61,50 @@ func NewAgentOutputManager() *AgentOutputManager {
 }
 
 func (m *AgentOutputManager) SetStreamingEnabled(enabled bool) {
+	m.mu.Lock()
 	m.streamingEnabled = enabled
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) IsStreamingEnabled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.streamingEnabled
 }
 
 func (m *AgentOutputManager) SetStreamingCallback(cb func(string)) {
+	m.mu.Lock()
 	m.streamingCallback = cb
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) GetStreamingCallback() func(string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.streamingCallback
 }
 
 func (m *AgentOutputManager) SetReasoningCallback(cb func(string)) {
+	m.mu.Lock()
 	m.reasoningCallback = cb
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) GetReasoningCallback() func(string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.reasoningCallback
 }
 
 func (m *AgentOutputManager) SetFlushCallback(cb func()) {
+	m.mu.Lock()
 	m.flushCallback = cb
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) GetFlushCallback() func() {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.flushCallback
 }
 
@@ -108,19 +125,27 @@ func (m *AgentOutputManager) GetReasoningBuffer() *strings.Builder {
 }
 
 func (m *AgentOutputManager) GetOutputRouter() *OutputRouter {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.outputRouter
 }
 
 func (m *AgentOutputManager) SetOutputRouter(router *OutputRouter) {
+	m.mu.Lock()
 	m.outputRouter = router
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) GetAsyncOutput() chan string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.asyncOutput
 }
 
 func (m *AgentOutputManager) SetAsyncOutput(ch chan string) {
+	m.mu.Lock()
 	m.asyncOutput = ch
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) EnsureAsyncOutputWorker(fn func()) {
@@ -128,11 +153,15 @@ func (m *AgentOutputManager) EnsureAsyncOutputWorker(fn func()) {
 }
 
 func (m *AgentOutputManager) GetAsyncBufferSize() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.asyncBufferSize
 }
 
 func (m *AgentOutputManager) SetAsyncBufferSize(size int) {
+	m.mu.Lock()
 	m.asyncBufferSize = size
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) GetEventMetadata() map[string]interface{} {
@@ -158,9 +187,13 @@ func (m *AgentOutputManager) GetEventMetadataMutex() *sync.RWMutex {
 }
 
 func (m *AgentOutputManager) SetTerminalWriter(fn func(string)) {
+	m.mu.Lock()
 	m.terminalWriter = fn
+	m.mu.Unlock()
 }
 
 func (m *AgentOutputManager) GetTerminalWriter() func(string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.terminalWriter
 }

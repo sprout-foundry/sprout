@@ -12,6 +12,7 @@ import "C"
 
 import (
 	"fmt"
+	"unsafe"
 )
 
 // newOutput allocates an empty mlx_array handle for use as an op's output
@@ -324,4 +325,99 @@ func SqueezeAxis(a *Array, axis int, s *Stream) (*Array, error) {
 	out := newOutput()
 	rc := C.mlx_squeeze_axis(&out, a.cHandle(), C.int(axis), s.cHandle())
 	return wrapResult(out, rc, "squeeze_axis")
+}
+
+// ------------------------------------------------------------
+// Trig + power ops (for RoPE)
+// ------------------------------------------------------------
+
+// Cos returns the elementwise cosine.
+func Cos(a *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_cos(&out, a.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "cos")
+}
+
+// Sin returns the elementwise sine.
+func Sin(a *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_sin(&out, a.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "sin")
+}
+
+// Power returns a raised to the scalar power exp.
+func Power(a *Array, exp float32, s *Stream) (*Array, error) {
+	expArr, err := NewArrayFromFloat32([]float32{exp}, []int{1})
+	if err != nil {
+		return nil, err
+	}
+	defer expArr.Free()
+	out := newOutput()
+	rc := C.mlx_power(&out, a.cHandle(), expArr.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "power")
+}
+
+// Square returns a*a (elementwise).
+func Square(a *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_square(&out, a.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "square")
+}
+
+// ------------------------------------------------------------
+// Indexing / masking ops
+// ------------------------------------------------------------
+
+// Slice extracts a sub-array along every axis. start, stop, and strides must
+// have the same length as the array's ndim. A stride of 0 is invalid in MLX.
+func Slice(a *Array, start, stop, strides []int, s *Stream) (*Array, error) {
+	cStart, _ := cIntPtrs(start)
+	cStop, _ := cIntPtrs(stop)
+	cStrides, _ := cIntPtrs(strides)
+	out := newOutput()
+	rc := C.mlx_slice(&out, a.cHandle(),
+		cStart, C.size_t(len(start)),
+		cStop, C.size_t(len(stop)),
+		cStrides, C.size_t(len(strides)),
+		s.cHandle())
+	return wrapResult(out, rc, "slice")
+}
+
+// Tril returns the lower-triangular part of a (elements below the k-th
+// diagonal kept, others zeroed). Used to build causal attention masks.
+func Tril(a *Array, k int, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_tril(&out, a.cHandle(), C.int(k), s.cHandle())
+	return wrapResult(out, rc, "tril")
+}
+
+// Where selects elements from x where condition is true, else from y.
+func Where(condition, x, y *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_where(&out, condition.cHandle(), x.cHandle(), y.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "where")
+}
+
+// RepeatAxis repeats the array along an axis the given number of times.
+func RepeatAxis(a *Array, repeats, axis int, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_repeat_axis(&out, a.cHandle(), C.int(repeats), C.int(axis), s.cHandle())
+	return wrapResult(out, rc, "repeat_axis")
+}
+
+// Pad pads an array along specified axes with a constant value. axes, low,
+// and high must all have the same length.
+func Pad(a *Array, axes, low, high []int, padValue *Array, s *Stream) (*Array, error) {
+	cAxes, _ := cIntPtrs(axes)
+	cLow, _ := cIntPtrs(low)
+	cHigh, _ := cIntPtrs(high)
+	mode := C.CString("constant")
+	defer C.free(unsafe.Pointer(mode))
+	out := newOutput()
+	rc := C.mlx_pad(&out, a.cHandle(),
+		cAxes, C.size_t(len(axes)),
+		cLow, C.size_t(len(low)),
+		cHigh, C.size_t(len(high)),
+		padValue.cHandle(), mode, s.cHandle())
+	return wrapResult(out, rc, "pad")
 }

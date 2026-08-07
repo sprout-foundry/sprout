@@ -130,13 +130,55 @@
 .markdown-preview-body .code-language {
   position: absolute;
   top: 4px;
-  right: 6px;
+  right: 34px;
   font-size: 10px;
   color: var(--text-secondary);
   text-transform: uppercase;
   background: var(--bg-elevated);
   padding: 2px 6px;
   border-radius: var(--radius-md);
+}
+
+.markdown-preview-body .code-copy-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-out, ease),
+              background 0.15s var(--ease-out, ease),
+              color 0.15s var(--ease-out, ease);
+  pointer-events: auto;
+}
+
+.markdown-preview-body .code-copy-button:hover {
+  opacity: 1;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.markdown-preview-body .code-copy-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  opacity: 1;
+}
+
+.markdown-preview-body .code-copy-button.copied {
+  color: var(--accent-success);
+}
+
+.markdown-preview-body .code-block:hover .code-copy-button,
+.markdown-preview-body .code-block:focus-within .code-copy-button {
+  opacity: 0.7;
 }
 
 /* Tables */

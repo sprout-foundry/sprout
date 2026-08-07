@@ -17,7 +17,7 @@ const (
 	// documentPrefix is prepended to code/text before embedding for indexing.
 	documentPrefix = "title: none | text: "
 
-	queryPrefix = "task: search result | query: "
+	queryPrefix     = "task: search result | query: "
 	codeQueryPrefix = "task: code retrieval | query: "
 )
 
@@ -539,8 +539,8 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 
 	for i := 0; i < len(order); i += m.opts.BatchSize {
 		if err := ctx.Err(); err != nil {
-					// Return partial results on cancellation; completed files were already flushed.
-		log.Printf("index: embedding interrupted after %d/%d units: %v",embedded, len(units), err)
+			// Return partial results on cancellation; completed files were already flushed.
+			log.Printf("index: embedding interrupted after %d/%d units: %v", embedded, len(units), err)
 			break
 		}
 

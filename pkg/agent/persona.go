@@ -289,7 +289,7 @@ func (a *Agent) parentRuntimeProvider() string {
 func (a *Agent) GetAvailableToolNames() []string {
 	tools := a.getOptimizedToolDefinitions(nil)
 	if len(tools) == 0 {
-		tools = BuildToolDefinitions()
+		tools = BuildToolDefinitionsForAgent(a)
 	}
 
 	names := make([]string, 0, len(tools))

@@ -54,6 +54,13 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 
 	// Register all tools from the handler-based tool registry.
 	for _, h := range tools.GetNewToolRegistry().All() {
+		// Tools that require an embedding index have no useful behavior when
+		// embeddings are off (the default — embeddings are OPT-IN). Drop them
+		// from the seed registry so seed never advertises them to the model:
+		// a tool the model never sees is a tool it can never fail to call.
+		if h.Definition().RequiresEmbeddings && (agent == nil || agent.GetEmbeddingManager() == nil) {
+			continue
+		}
 		if agent != nil {
 			// Filter run_parallel_subagents in LCM mode (causes file conflicts)
 			// In full mode, allow if depth permits

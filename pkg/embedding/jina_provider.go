@@ -12,22 +12,9 @@ import (
 )
 
 // JinaONNXEmbeddingProvider implements EmbeddingProvider using Jina Code v2
-// (jinaai/jina-embeddings-v2-base-code) via ONNX Runtime.
-//
-// Unlike EmbeddingGemma (which exports a pre-pooled sentence_embedding output),
-// Jina's ONNX graph outputs last_hidden_state [batch, seq_len, 768]. Mean
-// pooling with the attention mask is done in Go, matching Jina's reference
-// implementation (sentence-transformers mean pooling).
-//
-// Jina is symmetric: it does NOT use task prefixes. EmbedWithPrefix and
-// EmbedBatchWithPrefix delegate to Embed / EmbedBatch, ignoring the prefix —
-// the query and document are embedded identically. This is the model's design,
-// not a shortcut: CodeRankEmbed/Jina-Code are trained for symmetric code
-// retrieval, while EmbeddingGemma uses asymmetric task-specific prefixes.
-//
-// The ByteLevelTokenizer (GPT-2 BPE with bytes_to_unicode mapping) is required
-// for correct tokenization — the GemmaTokenizer (SentencePiece ▁ normalization)
-// produces wrong token IDs for Jina inputs.
+// via ONNX Runtime. Outputs last_hidden_state [batch, seq_len, 768] which
+// is mean-pooled and L2-normalized in Go. Symmetric model: query and document
+// embeddings use identical encoding (no task prefixes).
 type JinaONNXEmbeddingProvider struct {
 	mu        sync.RWMutex
 	runtime   *ONNXRuntime
@@ -44,8 +31,6 @@ type JinaONNXEmbeddingProvider struct {
 }
 
 // NewJinaONNXEmbeddingProvider creates a Jina Code v2 embedding provider.
-// The runtime must already be initialized. modelPath points to the .onnx
-// model file, tokenizerPath points to tokenizer.json.
 func NewJinaONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string) (*JinaONNXEmbeddingProvider, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

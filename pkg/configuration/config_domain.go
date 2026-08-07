@@ -148,7 +148,7 @@ func (c *VisionConfig) Resolve() VisionConfig {
 	if c.MaxBatchSize > 0 {
 		result.MaxBatchSize = clampInt(c.MaxBatchSize, 1, 8)
 	}
-		result.EnableBatchProcessing = c.EnableBatchProcessing
+	result.EnableBatchProcessing = c.EnableBatchProcessing
 	return result
 }
 

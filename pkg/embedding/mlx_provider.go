@@ -41,11 +41,11 @@ type MLXEmbeddingProvider struct {
 // jinaWeights holds all MLX arrays for the 12-layer Jina Code v2 model.
 // Weights are loaded once at init and reused for every inference call.
 type jinaWeights struct {
-	wordEmb      *mlx.Array
-	tokEmb       *mlx.Array
-	embNormW     *mlx.Array
-	embNormB     *mlx.Array
-	layers       [numJinaLayers]*jinaLayerWeights
+	wordEmb  *mlx.Array
+	tokEmb   *mlx.Array
+	embNormW *mlx.Array
+	embNormB *mlx.Array
+	layers   [numJinaLayers]*jinaLayerWeights
 }
 
 type jinaLayerWeights struct {

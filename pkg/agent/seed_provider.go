@@ -20,11 +20,11 @@ import (
 
 // sproutProvider adapts sprout's ClientInterface to seed's Provider interface.
 type sproutProvider struct {
-	agent          *Agent
-	client         api.ClientInterface
-	pastedImages   map[string][]api.ImageData
-	pastedImagesMu sync.RWMutex
-	tokenAnchor    tokenAnchor
+	agent           *Agent
+	client          api.ClientInterface
+	pastedImages    map[string][]api.ImageData
+	pastedImagesMu  sync.RWMutex
+	tokenAnchor     tokenAnchor
 	maxTokensHint   int
 	maxTokensHintMu sync.RWMutex
 }

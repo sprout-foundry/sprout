@@ -86,7 +86,7 @@ func (a *Agent) ClearInterrupt() {
 	a.interruptCtx = newCtx
 	a.interruptCancel = newCancel
 	a.interruptMu.Unlock()
-// Cancel the previous ctx outside the lock so callbacks can re-enter without deadlocking on interruptMu.
+	// Cancel the previous ctx outside the lock so callbacks can re-enter without deadlocking on interruptMu.
 	if oldCancel != nil {
 		oldCancel()
 	}

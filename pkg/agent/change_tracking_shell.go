@@ -239,7 +239,7 @@ func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, wo
 		// also kept — no content payload to protect against.
 		if p.After != nil && p.After.Content != nil && committed[p.Path] {
 			if destructive {
-	// For destructive commands, check whether the BEFORE content was different.
+				// For destructive commands, check whether the BEFORE content was different.
 				if p.Before != nil && p.Before.Content != nil && !shellContentsEqual(p.Before, p.After) {
 					ct.logf("preserving delta for %s (destructive git command changed content from uncommitted state)", p.Path)
 					kept = append(kept, p)

@@ -81,12 +81,12 @@ type AgentRequest struct {
 
 // AgentResponse is a single protocol response (non-streaming ops).
 type AgentResponse struct {
-	ID       string           `json:"id"`
-	Error    string           `json:"error,omitempty"`
-	Sessions []SessionInfo    `json:"sessions,omitempty"`
-	Session  *SessionInfo     `json:"session,omitempty"`
-	Result   string           `json:"result,omitempty"`
-	Tool     *ToolResult      `json:"tool,omitempty"`
+	ID       string        `json:"id"`
+	Error    string        `json:"error,omitempty"`
+	Sessions []SessionInfo `json:"sessions,omitempty"`
+	Session  *SessionInfo  `json:"session,omitempty"`
+	Result   string        `json:"result,omitempty"`
+	Tool     *ToolResult   `json:"tool,omitempty"`
 }
 
 // AgentService is the daemon-side capability for CLI-on-daemon (SP-136 P4).
@@ -114,11 +114,11 @@ type AgentServer struct {
 	// Logger receives request/error logs.
 	Logger *slog.Logger
 
-	ln   net.Listener
-	mu   sync.Mutex
+	ln    net.Listener
+	mu    sync.Mutex
 	conns map[net.Conn]struct{}
-	done chan struct{}
-	once sync.Once
+	done  chan struct{}
+	once  sync.Once
 }
 
 // Start begins listening. Returns once bound.

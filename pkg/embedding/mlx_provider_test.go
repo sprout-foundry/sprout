@@ -74,7 +74,7 @@ func TestMLXProviderParity(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ONNX embed %d: %v", i, err)
 			}
-		 mlxE, err := mlxProvider.Embed(ctx, text)
+			mlxE, err := mlxProvider.Embed(ctx, text)
 			if err != nil {
 				t.Fatalf("MLX embed %d: %v", i, err)
 			}

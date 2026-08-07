@@ -9,8 +9,6 @@ import (
 )
 
 // repoMapSemanticTopK bounds how many semantically-matched files widen the map.
-// Large enough to cover a feature area, small enough that a vague query cannot
-// pull in the whole repo and defeat the point of filtering.
 const repoMapSemanticTopK = 40
 
 type repoMapHandler struct{}
@@ -41,7 +39,7 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		directory = "."
 	}
 
-	depth := env.RepoMapDefaultDepth // SP-125: profile override (1 in LCM, 0 = default 3)
+	depth := env.RepoMapDefaultDepth // profile override (1 in LCM, 0 = default 3)
 	if depth <= 0 {
 		depth = 3 // default: full symbols
 	}
@@ -81,16 +79,10 @@ func (h *repoMapHandler) Interactive() bool      { return false }
 
 // semanticMatchesForQuery resolves the workspace-relative files that a semantic
 // search associates with query, or nil when semantic search is unavailable.
-//
-// Returning nil rather than an error is deliberate: the repo map is useful
-// without an embedding index, and a query that finds nothing semantically
-// should still get its substring matches. Every failure mode here — no index,
-// index disabled, query error — degrades to plain substring behaviour.
+// Every failure mode degrades to plain substring behavior.
 func semanticMatchesForQuery(ctx context.Context, env ToolEnv, directory, query string) map[string]bool {
 	// An index with no records cannot contribute matches, and querying it costs
-	// a ~145ms embed for a guaranteed-empty result. Degrading to the substring
-	// filter is correct here — unlike semantic_search, repo_map still returns a
-	// usable map, so this needs no user-facing warning.
+	// a ~145ms embed for a guaranteed-empty result.
 	if query == "" || env.EmbeddingMgr == nil || !env.EmbeddingMgr.Readiness().CanAnswerQueries() {
 		return nil
 	}
@@ -100,8 +92,7 @@ func semanticMatchesForQuery(ctx context.Context, env ToolEnv, directory, query 
 		root = directory
 	}
 
-	// Bounded: this runs on a tool call the user is waiting on, and the map
-	// itself is capped at repoMapMaxFiles anyway.
+	// Bounded: this runs on a tool call the user is waiting on.
 	results, err := env.EmbeddingMgr.QuerySimilar(ctx, query, repoMapSemanticTopK,
 		env.EmbeddingMgr.SemanticSearchThreshold())
 	if err != nil || len(results) == 0 {

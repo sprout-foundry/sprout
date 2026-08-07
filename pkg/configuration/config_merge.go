@@ -83,11 +83,7 @@ func MergeConfig(base, override *Config) *Config {
 		result.SkipPrompt = override.SkipPrompt
 	}
 
-	// SP-058: RiskProfile is a single-value selector; non-empty
-	// override wins. RiskProfiles is a map of named overrides; we
-	// merge per-key so a workspace can override just one profile
-	// without wiping out user-defined profiles from the global
-	// config.
+	// SP-058: RiskProfile is a single-value selector; non-empty override wins.
 	if override.RiskProfile != "" {
 		result.RiskProfile = override.RiskProfile
 	}
@@ -99,14 +95,11 @@ func MergeConfig(base, override *Config) *Config {
 			result.RiskProfiles[k] = v
 		}
 	}
-	// SP-125: ContextMode is a single-value selector, same shape as
-	// RiskProfile — non-empty override wins.
+	// ContextMode is a single-value selector — non-empty override wins.
 	if override.ContextMode != "" {
 		result.ContextMode = override.ContextMode
 	}
-	// ApprovedShellCommands: union the two lists (override entries are
-	// additive to base). De-dupe so a workspace config that re-lists a
-	// command already in the global config doesn't grow the file.
+	// Union-merge ApprovedShellCommands so workspace entries stack on global.
 	if len(override.ApprovedShellCommands) > 0 {
 		seen := make(map[string]struct{}, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
 		merged := make([]string, 0, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
@@ -126,9 +119,7 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		result.ApprovedShellCommands = merged
 	}
-	// ApprovedShellCommandPatterns: same union-merge as ApprovedShellCommands
-	// so patterns defined at the workspace layer stack on top of the global
-	// layer rather than silently overwriting it.
+	// Same union-merge for ApprovedShellCommandPatterns.
 	if len(override.ApprovedShellCommandPatterns) > 0 {
 		seen := make(map[string]struct{}, len(result.ApprovedShellCommandPatterns)+len(override.ApprovedShellCommandPatterns))
 		merged := make([]string, 0, len(result.ApprovedShellCommandPatterns)+len(override.ApprovedShellCommandPatterns))
@@ -318,8 +309,7 @@ func MergeConfig(base, override *Config) *Config {
 		result.Shell.WorkspaceOverlay = override.Shell.WorkspaceOverlay
 	}
 
-	// Merge Training configuration — override wins when Enabled is true
-	// or an Endpoint is provided. ExcludePaths are appended (deduped).
+	// Merge Training configuration.
 	if override.overrides("training.enabled", override.Training.Enabled) {
 		result.Training.Enabled = true
 	}
@@ -348,12 +338,7 @@ func cloneConfig(cfg *Config) *Config {
 	}
 	// Unexported — the roundtrip above drops it, same as SubagentTypes below.
 	out.explicitKeys = cfg.copyExplicitKeys()
-	// SubagentTypes is intentionally tagged json:"-" (personas are catalog-fixed
-	// and not persisted to disk). The JSON roundtrip strips it, so we copy it
-	// directly from the source — preserving any in-memory mutations (e.g. test
-	// fixtures that inject custom personas, workflow-automation overrides).
-	// If the source map is empty, fall back to the catalog defaults so callers
-	// never see a nil/empty SubagentTypes from a freshly loaded config.
+	// SubagentTypes is tagged json:"-" so the roundtrip strips it; copy directly.
 	if len(cfg.SubagentTypes) > 0 {
 		out.SubagentTypes = make(map[string]SubagentType, len(cfg.SubagentTypes))
 		for id, st := range cfg.SubagentTypes {

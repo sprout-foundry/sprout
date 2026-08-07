@@ -1,5 +1,4 @@
-// Package agent: seed ToolRegistry construction and registration of all sprout
-// tools. (split from seed_tool_registry.go)
+// Package agent: seed ToolRegistry construction and registration of all sprout tools.
 package agent
 
 import (
@@ -11,20 +10,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// NewSeedToolRegistry creates a seed core.ToolRegistry with all 30 sprout tools
-// registered. The registry implements core.ToolExecutor directly, so it can be
-// used as the Executor in core.Options.
-//
-// Seed's ToolRegistry handles: channel suffix stripping, alias resolution,
-// argument parsing/repair, type coercion, required parameter validation,
-// per-tool timeouts, result truncation, circuit breakers, parallel execution
-// for SafeForParallel tools, and event publishing.
-//
-// Sprout-specific concerns are wired through:
-//   - PreExecuteHook: security classification + subagent nesting prevention
-//   - Handler closures: capture agent for sprout's (ctx, agent, args) signature
-//     and apply all post-processing (constraints, truncation, secret redaction,
-//     duplicate embedding check, TodoWrite events, error sanitization).
+// NewSeedToolRegistry creates a seed core.ToolRegistry with all sprout tools registered.
 func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 	var ep core.EventPublisher
 	if agent != nil && agent.GetEventBus() != nil {
@@ -34,16 +20,7 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 	return newSeedToolRegistryWithPublisher(agent, ep)
 }
 
-// newSeedToolRegistryWithPublisher creates a seed ToolRegistry using the
-// provided EventPublisher. This is used by processQueryWithSeed which creates
-// one shared publisher for both the registry and the seed core agent so that
-// all events carry the same client_id/chat_id/user_id metadata.
-//
-// The registry is built from the handler-based tool registry in
-// pkg/agent_tools/ — the single source of truth for tool definitions.
-// Each handler is converted to a seed core.ToolConfig via
-// convertHandlerToSeedToolConfig, which wires up the handler closures
-// and post-processing pipeline.
+// newSeedToolRegistryWithPublisher creates a seed ToolRegistry using the provided EventPublisher.
 func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *core.ToolRegistry {
 	registry := core.NewToolRegistry(core.ToolRegistryOptions{
 		DefaultTimeout: 5 * time.Minute,
@@ -52,31 +29,18 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 		PreExecuteHook: newPreExecuteHook(agent),
 	})
 
-	// Register all tools from the handler-based tool registry.
 	for _, h := range tools.GetNewToolRegistry().All() {
-		// Tools that require an embedding index have no useful behavior when
-		// embeddings are off (the default — embeddings are OPT-IN). Drop them
-		// from the seed registry so seed never advertises them to the model:
-		// a tool the model never sees is a tool it can never fail to call.
 		if h.Definition().RequiresEmbeddings && (agent == nil || agent.GetEmbeddingManager() == nil) {
 			continue
 		}
 		if agent != nil {
-			// Filter run_parallel_subagents in LCM mode (causes file conflicts)
-			// In full mode, allow if depth permits
 			if h.Name() == "run_parallel_subagents" {
-				if agent.contextProfile.Mode == configuration.ContextModeLowContext {
-					continue
-				}
-				if !agent.CanSpawnSubagents() {
+				if agent.contextProfile.Mode == configuration.ContextModeLowContext || !agent.CanSpawnSubagents() {
 					continue
 				}
 			}
-			// For run_subagent, respect depth limit in all modes
-			if h.Name() == "run_subagent" {
-				if !agent.CanSpawnSubagents() {
-					continue
-				}
+			if h.Name() == "run_subagent" && !agent.CanSpawnSubagents() {
+				continue
 			}
 		}
 		if err := registry.Register(convertHandlerToSeedToolConfig(h, agent)); err != nil {

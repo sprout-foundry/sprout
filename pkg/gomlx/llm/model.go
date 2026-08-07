@@ -186,12 +186,23 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 		return fmt.Errorf("prefill: %w", err)
 	}
 
-	// Apply repetition penalty from the prompt tokens
-	if genCfg.RepetitionPenalty != 0 {
-		applyRepetitionPenalty(logits, tokenIDs, genCfg.RepetitionPenalty)
-	}
+	// Fast greedy path: no repetition penalty means we can sample on the GPU
+	// (argmax) and avoid transferring the full [vocab] logits vector each step.
+	greedyArch, greedyOK := m.arch.(GreedyArchitecture)
+	useGPUArgmax := greedyOK && genCfg.Temperature <= 0 && genCfg.RepetitionPenalty == 0
 
-	nextToken := sample(logits, genCfg)
+	nextToken := 0
+	if useGPUArgmax {
+		nextToken, err = greedyArch.ForwardPrefillArgmax(m.makeIDsArray(tokenIDs), len(tokenIDs), cache)
+		if err != nil {
+			return fmt.Errorf("prefill argmax: %w", err)
+		}
+	} else {
+		if genCfg.RepetitionPenalty != 0 {
+			applyRepetitionPenalty(logits, tokenIDs, genCfg.RepetitionPenalty)
+		}
+		nextToken = sample(logits, genCfg)
+	}
 	if onToken != nil && !m.shouldFilterToken(nextToken, genCfg) {
 		onToken(nextToken)
 	}
@@ -214,16 +225,23 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 		}
 		recent := recentTokens[recentStart:]
 
-		logits, err = m.arch.ForwardDecode(nextToken, len(tokenIDs)+i-1, cache)
-		if err != nil {
-			return fmt.Errorf("decode step %d: %w", i, err)
-		}
+		if useGPUArgmax {
+			nextToken, err = greedyArch.ForwardDecodeArgmax(nextToken, len(tokenIDs)+i-1, cache)
+			if err != nil {
+				return fmt.Errorf("decode step %d: %w", i, err)
+			}
+		} else {
+			logits, err = m.arch.ForwardDecode(nextToken, len(tokenIDs)+i-1, cache)
+			if err != nil {
+				return fmt.Errorf("decode step %d: %w", i, err)
+			}
 
-		if genCfg.RepetitionPenalty != 0 {
-			applyRepetitionPenalty(logits, recent, genCfg.RepetitionPenalty)
-		}
+			if genCfg.RepetitionPenalty != 0 {
+				applyRepetitionPenalty(logits, recent, genCfg.RepetitionPenalty)
+			}
 
-		nextToken = sample(logits, genCfg)
+			nextToken = sample(logits, genCfg)
+		}
 		generated = append(generated, nextToken)
 
 		if onToken != nil && !m.shouldFilterToken(nextToken, genCfg) {

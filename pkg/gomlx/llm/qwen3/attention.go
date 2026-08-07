@@ -1,0 +1,214 @@
+//go:build darwin && arm64 && cgo && mlx
+
+package qwen3
+
+import (
+	"fmt"
+	"math"
+
+	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+)
+
+func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
+	s := q.stream
+	cfg := q.cfg
+
+	q2d, err := llm.LinearNoBias(h, lw.qProj, s)
+	if err != nil {
+		return nil, fmt.Errorf("q proj: %w", err)
+	}
+	defer q2d.Free()
+
+	k2d, err := llm.LinearNoBias(h, lw.kProj, s)
+	if err != nil {
+		return nil, fmt.Errorf("k proj: %w", err)
+	}
+	defer k2d.Free()
+
+	v2d, err := llm.LinearNoBias(h, lw.vProj, s)
+	if err != nil {
+		return nil, fmt.Errorf("v proj: %w", err)
+	}
+	defer v2d.Free()
+
+	qR, err := mlx.Reshape(q2d, []int{1, seqLen, cfg.NumHeads, cfg.HeadDim}, s)
+	if err != nil {
+		return nil, fmt.Errorf("q reshape: %w", err)
+	}
+	defer qR.Free()
+
+	kR, err := mlx.Reshape(k2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
+	if err != nil {
+		return nil, fmt.Errorf("k reshape: %w", err)
+	}
+
+	vR, err := mlx.Reshape(v2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
+	if err != nil {
+		return nil, fmt.Errorf("v reshape: %w", err)
+	}
+
+	qNormed, err := llm.RMSNorm(qR, lw.qNorm, cfg.RMSNormEPS, s)
+	if err != nil {
+		return nil, fmt.Errorf("q norm: %w", err)
+	}
+	defer qNormed.Free()
+	qR.Free()
+	qR = qNormed
+
+	kNormed, err := llm.RMSNorm(kR, lw.kNorm, cfg.RMSNormEPS, s)
+	if err != nil {
+		return nil, fmt.Errorf("k norm: %w", err)
+	}
+	kR.Free()
+	kR = kNormed
+
+	qT, err := mlx.TransposeAxes(qR, []int{0, 2, 1, 3}, s)
+	if err != nil {
+		return nil, fmt.Errorf("q transpose: %w", err)
+	}
+	defer qT.Free()
+
+	kT, err := mlx.TransposeAxes(kR, []int{0, 2, 1, 3}, s)
+	if err != nil {
+		return nil, fmt.Errorf("k transpose: %w", err)
+	}
+	defer kT.Free()
+
+	vT, err := mlx.TransposeAxes(vR, []int{0, 2, 1, 3}, s)
+	if err != nil {
+		return nil, fmt.Errorf("v transpose: %w", err)
+	}
+	defer vT.Free()
+
+	qRot, err := llm.ApplyRoPEFast(qT, startPos, cfg.HeadDim, cfg.RopeTheta, s)
+	if err != nil {
+		return nil, fmt.Errorf("q rope: %w", err)
+	}
+	defer qRot.Free()
+
+	kRot, err := llm.ApplyRoPEFast(kT, startPos, cfg.HeadDim, cfg.RopeTheta, s)
+	if err != nil {
+		return nil, fmt.Errorf("k rope: %w", err)
+	}
+	defer kRot.Free()
+
+	var kForAttn, vForAttn *mlx.Array
+
+	if cache != nil && cache.IsInitialized(layerIdx) {
+		// Decode: append new K/V to cache via lazy ConcatenateAxis
+		cached, err := cache.Get(layerIdx)
+		if err != nil {
+			return nil, err
+		}
+
+		newK, err := mlx.ConcatenateAxis([]*mlx.Array{cached.K, kRot}, 2, s)
+		if err != nil {
+			return nil, fmt.Errorf("concat K: %w", err)
+		}
+		newV, err := mlx.ConcatenateAxis([]*mlx.Array{cached.V, vT}, 2, s)
+		if err != nil {
+			newK.Free()
+			return nil, fmt.Errorf("concat V: %w", err)
+		}
+
+		cached.K.Free()
+		cached.V.Free()
+		cached.K = newK
+		cached.V = newV
+
+		kForAttn = newK
+		vForAttn = newV
+
+	} else if cache != nil {
+		// Prefill: store retained copies of live K/V for future decode.
+		// RetainArray increments the C refcount without forcing evaluation,
+		// which would corrupt the lazy computation graph.
+		kForAttn = kRot
+		vForAttn = vT
+
+		kRetained := mlx.RetainArray(kRot)
+		vRetained := mlx.RetainArray(vT)
+		if err := cache.Store(layerIdx, kRetained, vRetained); err != nil {
+			kRetained.Free()
+			vRetained.Free()
+			return nil, fmt.Errorf("cache store: %w", err)
+		}
+
+	} else {
+		kForAttn = kRot
+		vForAttn = vT
+	}
+
+	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
+	if err != nil {
+		return nil, fmt.Errorf("k expand: %w", err)
+	}
+	defer kExp.Free()
+
+	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
+	if err != nil {
+		return nil, fmt.Errorf("v expand: %w", err)
+	}
+	defer vExp.Free()
+
+	// Fused scaled dot-product attention: Q@K^T/scale + mask + softmax + @V
+	// is a single Metal kernel via mlx_fast_scaled_dot_product_attention.
+	// Mask mode: causal for prefill (seqLen>1), none for decode (single token
+	// attending to the full cached prefix — the causal constraint is already
+	// satisfied by construction).
+	maskMode := ""
+	if seqLen > 1 {
+		maskMode = "causal"
+	}
+	scale := float32(1.0 / math.Sqrt(float64(cfg.HeadDim)))
+	ctx, err := mlx.FastScaledDotProductAttention(qRot, kExp, vExp, scale, maskMode, nil, nil, s)
+	if err != nil {
+		return nil, fmt.Errorf("fused attention: %w", err)
+	}
+	defer ctx.Free()
+
+	ctxT, err := mlx.TransposeAxes(ctx, []int{0, 2, 1, 3}, s)
+	if err != nil {
+		return nil, fmt.Errorf("ctx transpose: %w", err)
+	}
+	defer ctxT.Free()
+
+	ctxFlat, err := mlx.Reshape(ctxT, []int{1, seqLen, cfg.NumHeads * cfg.HeadDim}, s)
+	if err != nil {
+		return nil, fmt.Errorf("ctx reshape: %w", err)
+	}
+	defer ctxFlat.Free()
+
+	return llm.LinearNoBias(ctxFlat, lw.oProj, s)
+}
+
+func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
+	s := q.stream
+
+	gate, err := llm.LinearNoBias(h, lw.gateProj, s)
+	if err != nil {
+		return nil, fmt.Errorf("gate proj: %w", err)
+	}
+	defer gate.Free()
+
+	up, err := llm.LinearNoBias(h, lw.upProj, s)
+	if err != nil {
+		return nil, fmt.Errorf("up proj: %w", err)
+	}
+	defer up.Free()
+
+	gateSilu, err := llm.SiLU(gate, s)
+	if err != nil {
+		return nil, fmt.Errorf("silu: %w", err)
+	}
+	defer gateSilu.Free()
+
+	gated, err := mlx.Multiply(gateSilu, up, s)
+	if err != nil {
+		return nil, fmt.Errorf("gate multiply: %w", err)
+	}
+	defer gated.Free()
+
+	return llm.LinearNoBias(gated, lw.downProj, s)
+}

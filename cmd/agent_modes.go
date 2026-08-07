@@ -337,6 +337,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				defer embedSrv.Close()
 			}
 		}
+
+		// SP-136 P4: the daemon hosts the agent socket so the CLI can run
+		// one-shot queries through the daemon-owned agent.
+		if daemonMode {
+			agentSrv := startDaemonAgentServer(ctx, true, chatAgent)
+			if agentSrv != nil {
+				defer agentSrv.Close()
+			}
+		}
 	}
 
 	// Setup signal handling with buffered channel for multiple signals
@@ -509,6 +518,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		query, err = workflow.ResolveWorkflowInitialPrompt(query, workflowConfig)
 		if err != nil {
 			return fmt.Errorf("failed to resolve workflow initial prompt: %w", err)
+		}
+
+		// SP-136 P4: one-shot CLI-on-daemon. Plain (non-workflow) one-shot
+		// queries route through the daemon's agent socket when it is
+		// available; the daemon owns the agent. Falls back to in-process
+		// when the socket is unreachable.
+		if query != "" && workflowConfig == nil && !daemonMode {
+			if handled, derr := tryDaemonOneShot(ctx, query, outputFormatJSON); handled {
+				return derr
+			}
 		}
 		hasLoop := workflowConfig != nil && workflowConfig.Loop != nil
 		if query == "" && !hasLoop && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {

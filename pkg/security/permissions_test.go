@@ -133,6 +133,7 @@ func TestFixPermissions(t *testing.T) {
 }
 
 func TestRunStartupCheck_Clean(t *testing.T) {
+	resetStartupCheck()
 	tmpDir := t.TempDir()
 	err := os.Chmod(tmpDir, 0700)
 	require.NoError(t, err)
@@ -141,13 +142,37 @@ func TestRunStartupCheck_Clean(t *testing.T) {
 	assert.False(t, warnings)
 }
 
-func TestRunStartupCheck_Warnings(t *testing.T) {
+func TestRunStartupCheck_AutoFix(t *testing.T) {
+	resetStartupCheck()
 	tmpDir := t.TempDir()
 	err := os.Chmod(tmpDir, 0755)
 	require.NoError(t, err)
 
+	// Write a file with insecure perms so FixPermissions has something to fix.
+	err = os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("{}"), 0644)
+	require.NoError(t, err)
+
+	// RunStartupCheck fixes then checks; if fix succeeds, no warning is emitted.
 	warnings := RunStartupCheck(tmpDir)
-	assert.True(t, warnings)
+	assert.False(t, warnings, "auto-fix should suppress warnings when it succeeds")
+
+	// Verify the directory was actually tightened.
+	info, err := os.Stat(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0700), info.Mode().Perm(), "dir should be tightened to 0700")
+}
+
+func TestRunStartupCheck_Dedup(t *testing.T) {
+	resetStartupCheck()
+	tmpDir := t.TempDir()
+	err := os.Chmod(tmpDir, 0700)
+	require.NoError(t, err)
+
+	// First call runs the check.
+	result1 := RunStartupCheck(tmpDir)
+	// Second call should be a no-op via sync.Once and return the same result.
+	result2 := RunStartupCheck(tmpDir)
+	assert.Equal(t, result1, result2, "deduped call should return cached result")
 }
 
 func TestGetPermissionError(t *testing.T) {

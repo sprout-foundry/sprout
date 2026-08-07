@@ -123,7 +123,7 @@ func TestMLXProviderParity(t *testing.T) {
 		}
 
 		runtime.ReadMemStats(&m2)
-		allocAfter10Batches := m2.Alloc - m1.Alloc
+		allocAfter10Batches := int64(m2.Alloc) - int64(m1.Alloc)
 		t.Logf("Memory after 10 batches: alloc=%d bytes (%.1f MB), total_alloc=%d, sys=%d (%.1f MB)",
 			allocAfter10Batches,
 			float64(allocAfter10Batches)/1024/1024,

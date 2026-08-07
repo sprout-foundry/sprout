@@ -193,9 +193,9 @@ func jinaForwardLayer(h *mlx.Array, lw *jinaLayerWeights, alibi, attnMask *mlx.A
 		scoreInput = maskedScores
 	}
 
-	// Softmax along the last axis (key dimension). SoftmaxAxis is required
-	// here because the axis-less Softmax flattens the whole array.
-	probs, err := mlx.SoftmaxAxis(scoreInput, -1, s)
+	// Softmax along the last axis (key dimension). The score tensor is 4D
+	// [batch, heads, seq, seq]; the last axis is axis 3.
+	probs, err := mlx.SoftmaxAxis(scoreInput, 3, s)
 	if err != nil {
 		return nil, fmt.Errorf("softmax: %w", err)
 	}

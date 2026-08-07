@@ -207,9 +207,9 @@ func Split(a *Array, indices []int, s *Stream) ([]*Array, error) {
 	return SplitAxis(a, indices, 0, s)
 }
 
-// SplitAxis splits a along the given axis at the given section-boundary indices.
-// Uses mlx_split (num_splits equal parts) if len(indices)==1 and the axis size
-// divides evenly; otherwise uses mlx_split_sections with boundary indices.
+// SplitAxis splits a along the given axis. When len(indices)==1, it splits
+// into 2 equal parts via mlx_split (requires the axis size to be even).
+// For multiple boundaries, uses mlx_split_sections with section-boundary indices.
 func SplitAxis(a *Array, indices []int, axis int, s *Stream) ([]*Array, error) {
 	vec := C.mlx_vector_array_new()
 	var rc C.int

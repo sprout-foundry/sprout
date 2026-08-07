@@ -5,6 +5,7 @@ package qwen3
 import (
 	"fmt"
 	"math"
+	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
@@ -173,7 +174,26 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	return llm.LinearT(ctxFlat, lw.oProj, s)
 }
 
-func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
+// swiglu computes the MLP block: silu(h @ gate) * (h @ up) @ down.
+// When the MLX compiled-graph path is available it runs the per-layer MLP as
+// one compiled closure instead of ~5 eager kernel launches per token.
+func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights, layerIdx int) (*mlx.Array, error) {
+	if useCompiledFFN() {
+		if c := q.swigluClosure(layerIdx); c != nil {
+			out, err := c.Apply([]*mlx.Array{h})
+			if err != nil {
+				return nil, fmt.Errorf("compiled ffn: %w", err)
+			}
+			if len(out) != 1 {
+				for _, a := range out {
+					a.Free()
+				}
+				return nil, fmt.Errorf("compiled ffn: expected 1 output, got %d", len(out))
+			}
+			return out[0], nil
+		}
+	}
+
 	s := q.stream
 
 	gate, err := llm.LinearT(h, lw.gateProj, s)
@@ -201,4 +221,83 @@ func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
 	defer gated.Free()
 
 	return llm.LinearT(gated, lw.downProj, s)
+}
+
+// useCompiledFFN gates the compiled-graph MLP path. Measured on M1 Pro:
+// per-op compiled MLP is ~26% SLOWER than eager (closure apply marshaling
+// overhead exceeds fusion gains on a 5-op block dominated by 3 matmuls that
+// cannot fuse). The full-layer compile that showed +17% in Python requires
+// the functional preallocated-cache refactor, which is not yet wired. Keep
+// the machinery available for experimentation via GO_COMPILED_FFN=1.
+func useCompiledFFN() bool {
+	return os.Getenv("GO_COMPILED_FFN") == "1"
+}
+
+// swigluClosure returns the compiled MLP closure for a layer, compiling it
+// lazily on the inference thread when the per-call stream changes. Returns
+// nil if compilation is unavailable (stub build) or fails — the eager path
+// is always the fallback.
+func (q *Qwen3) swigluClosure(layerIdx int) *mlx.Closure {
+	if q.mlxSwigluStream != q.stream {
+		for i, c := range q.mlxSwigluClosures {
+			if c != nil {
+				c.Free()
+			}
+			q.mlxSwigluClosures[i] = nil
+		}
+		q.mlxSwigluClosures = nil
+		q.mlxSwigluStream = q.stream
+	}
+	if q.mlxSwigluClosures == nil {
+		q.mlxSwigluClosures = make([]*mlx.Closure, q.cfg.NumLayers)
+	}
+	if q.mlxSwigluClosures[layerIdx] != nil {
+		return q.mlxSwigluClosures[layerIdx]
+	}
+
+	s := q.stream
+	lw := &q.weights.layers[layerIdx]
+	fn := func(inputs []*mlx.Array) ([]*mlx.Array, error) {
+		h := inputs[0]
+		gate, err := llm.LinearT(h, lw.gateProj, s)
+		if err != nil {
+			return nil, err
+		}
+		defer gate.Free()
+		up, err := llm.LinearT(h, lw.upProj, s)
+		if err != nil {
+			return nil, err
+		}
+		defer up.Free()
+		gateSilu, err := llm.SiLU(gate, s)
+		if err != nil {
+			return nil, err
+		}
+		defer gateSilu.Free()
+		gated, err := mlx.Multiply(gateSilu, up, s)
+		if err != nil {
+			return nil, err
+		}
+		defer gated.Free()
+		out, err := llm.LinearT(gated, lw.downProj, s)
+		if err != nil {
+			return nil, err
+		}
+		return []*mlx.Array{out}, nil
+	}
+
+	plain, err := mlx.NewClosure(fn)
+	if err != nil {
+		return nil
+	}
+	compiled, err := plain.Compile(false)
+	if err != nil {
+		plain.Free()
+		return nil
+	}
+	// plain must stay registered: the first apply of compiled runs the
+	// original body once on placeholder inputs to trace the graph. The
+	// compiled closure owns a template ref and frees it when released.
+	q.mlxSwigluClosures[layerIdx] = compiled
+	return compiled
 }

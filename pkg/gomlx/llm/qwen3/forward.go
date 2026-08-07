@@ -29,6 +29,13 @@ type Qwen3 struct {
 	cfg     llm.ModelConfig
 	stream  *mlx.Stream
 	weights *weights
+
+	// mlxSwigluClosures are compiled per-layer MLP closures, created lazily
+	// on the inference thread (MLX compiled graphs bind to the thread-local
+	// stream used at trace time). Keyed by stream pointer so a fresh per-call
+	// stream triggers recompilation.
+	mlxSwigluClosures []*mlx.Closure
+	mlxSwigluStream   *mlx.Stream
 }
 
 func New(cfg llm.ModelConfig) (llm.Architecture, error) {
@@ -169,6 +176,15 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 }
 
 func (q *Qwen3) FreeWeights() {
+	for i, c := range q.mlxSwigluClosures {
+		if c != nil {
+			c.Free()
+		}
+		q.mlxSwigluClosures[i] = nil
+	}
+	q.mlxSwigluClosures = nil
+	q.mlxSwigluStream = nil
+
 	if q.weights == nil {
 		return
 	}
@@ -389,7 +405,7 @@ func (q *Qwen3) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cache
 	}
 	defer normed2.Free()
 
-	ffnOut, err := q.swiglu(normed2, lw)
+	ffnOut, err := q.swiglu(normed2, lw, layerIdx)
 	if err != nil {
 		return nil, fmt.Errorf("ffn: %w", err)
 	}

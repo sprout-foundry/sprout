@@ -141,7 +141,25 @@ func Abs(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
 func Exp(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
 
 // Sqrt returns errUnavailable on stub builds.
-func Sqrt(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+func Sqrt(a *Array, s *Stream) (*Array, error)        { return nil, errUnavailable }
+func Rsqrt(a *Array, s *Stream) (*Array, error)     { return nil, errUnavailable }
+func Sigmoid(a *Array, s *Stream) (*Array, error)   { return nil, errUnavailable }
+func Negative(a *Array, s *Stream) (*Array, error)  { return nil, errUnavailable }
+func ArgMaxAxis(a *Array, axis int, keepdims bool, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+func ArgMax(a *Array, keepdims bool, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+func FastRMSNorm(x, weight *Array, eps float32, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+func FastRoPE(x *Array, dims int, traditional bool, base float64, scale float32, offset int, freqs *Array, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+func FastScaledDotProductAttention(q, k, v *Array, scale float32, maskMode string, maskArr, sinks *Array, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
 
 // Tanh returns errUnavailable on stub builds.
 func Tanh(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }

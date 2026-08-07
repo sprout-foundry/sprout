@@ -16,7 +16,6 @@ package qwen3
 import (
 	"fmt"
 	"log"
-	"math"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
@@ -41,9 +40,10 @@ func New(cfg llm.ModelConfig) (llm.Architecture, error) {
 }
 
 type weights struct {
-	embedTokens *mlx.Array
-	layers      []layerWeights
-	normWeight  *mlx.Array
+	embedTokens  *mlx.Array
+	embedTokensT *mlx.Array // transposed [hidden, vocab], cached at load
+	layers       []layerWeights
+	normWeight   *mlx.Array
 }
 
 type layerWeights struct {
@@ -77,6 +77,10 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 	w.embedTokens, err = sf.Get("model.embed_tokens.weight", s)
 	if err != nil {
 		return fmt.Errorf("load embed_tokens: %w", err)
+	}
+	w.embedTokensT, err = mlx.Transpose(w.embedTokens, s)
+	if err != nil {
+		return fmt.Errorf("transpose embed_tokens: %w", err)
 	}
 	w.normWeight, err = sf.Get("model.norm.weight", s)
 	if err != nil {
@@ -167,6 +171,28 @@ func freeArr(a *mlx.Array) {
 
 // ForwardPrefill processes the full prompt sequence and returns last-position logits.
 func (q *Qwen3) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
+	logits, err := q.prefillInternal(ids, seqLen, cache)
+	if err != nil {
+		return nil, err
+	}
+	defer logits.Free()
+	return q.logitsToFloat32(logits)
+}
+
+// ForwardPrefillArgmax runs prefill and returns the GPU-computed argmax token
+// ID for the final position, avoiding the full [vocab] logits transfer.
+func (q *Qwen3) ForwardPrefillArgmax(ids *mlx.Array, seqLen int, cache *llm.KVCache) (int, error) {
+	logits, err := q.prefillInternal(ids, seqLen, cache)
+	if err != nil {
+		return 0, err
+	}
+	defer logits.Free()
+	return q.logitsToArgmax(logits)
+}
+
+// prefillInternal runs the forward pass over the full prompt, returning the
+// raw (BF16) logits array for the final position.
+func (q *Qwen3) prefillInternal(ids *mlx.Array, seqLen int, cache *llm.KVCache) (*mlx.Array, error) {
 	s := q.stream
 
 	h, err := llm.GatherAxis(q.weights.embedTokens, ids, 0, []int{1, q.cfg.HiddenSize}, s)
@@ -188,38 +214,42 @@ func (q *Qwen3) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) (
 		h = out
 	}
 
-	logits, err := q.computeLogits(h)
+	logits, err := q.computeLogitsLast(h, seqLen)
 	if err != nil {
 		h.Free()
 		return nil, err
 	}
-	defer logits.Free()
-
 	if err := s.Synchronize(); err != nil {
+		logits.Free()
 		return nil, fmt.Errorf("synchronize: %w", err)
 	}
-
-	// Cast logits to FP32 for CPU-side sampling
-	logitsF32, err := mlx.AsType(logits, mlx.Float32, s)
-	if err != nil {
-		return nil, fmt.Errorf("cast logits: %w", err)
-	}
-	defer logitsF32.Free()
-
-	data, err := logitsF32.Float32Data()
-	if err != nil {
-		return nil, fmt.Errorf("read logits: %w", err)
-	}
-
-	vocabSize := q.cfg.VocabSize
-	lastPos := (seqLen - 1) * vocabSize
-	result := make([]float32, vocabSize)
-	copy(result, data[lastPos:lastPos+vocabSize])
-	return result, nil
+	return logits, nil
 }
 
 // ForwardDecode processes a single token using the KV cache.
 func (q *Qwen3) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]float32, error) {
+	logits, err := q.decodeInternal(tokenID, pos, cache)
+	if err != nil {
+		return nil, err
+	}
+	defer logits.Free()
+	return q.logitsToFloat32(logits)
+}
+
+// ForwardDecodeArgmax runs a single-token decode step and returns the
+// GPU-computed argmax token ID.
+func (q *Qwen3) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (int, error) {
+	logits, err := q.decodeInternal(tokenID, pos, cache)
+	if err != nil {
+		return 0, err
+	}
+	defer logits.Free()
+	return q.logitsToArgmax(logits)
+}
+
+// decodeInternal runs the forward pass for a single token, returning the raw
+// (BF16) logits array.
+func (q *Qwen3) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (*mlx.Array, error) {
 	s := q.stream
 
 	idData := []int64{int64(tokenID)}
@@ -253,20 +283,45 @@ func (q *Qwen3) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]float
 		h.Free()
 		return nil, err
 	}
-	defer logits.Free()
-
 	if err := s.Synchronize(); err != nil {
+		logits.Free()
 		return nil, fmt.Errorf("synchronize: %w", err)
 	}
+	return logits, nil
+}
 
-	// Cast logits to FP32 for CPU-side sampling
+// logitsToFloat32 casts a BF16 logits array to FP32 and reads it into a Go slice.
+func (q *Qwen3) logitsToFloat32(logits *mlx.Array) ([]float32, error) {
+	s := q.stream
 	logitsF32, err := mlx.AsType(logits, mlx.Float32, s)
 	if err != nil {
 		return nil, fmt.Errorf("cast logits: %w", err)
 	}
 	defer logitsF32.Free()
-
 	return logitsF32.Float32Data()
+}
+
+// logitsToArgmax computes the argmax of a logits array on the GPU and returns
+// the token ID. The logits array is [1, 1, vocab]; the flattened argmax is
+// exactly the vocab argmax.
+func (q *Qwen3) logitsToArgmax(logits *mlx.Array) (int, error) {
+	s := q.stream
+	idxArr, err := mlx.ArgMax(logits, false, s)
+	if err != nil {
+		return 0, fmt.Errorf("argmax: %w", err)
+	}
+	defer idxArr.Free()
+	if err := s.Synchronize(); err != nil {
+		return 0, fmt.Errorf("synchronize argmax: %w", err)
+	}
+	data, err := idxArr.Uint32Data()
+	if err != nil {
+		return 0, fmt.Errorf("read argmax: %w", err)
+	}
+	if len(data) == 0 {
+		return 0, fmt.Errorf("argmax returned no data")
+	}
+	return int(data[0]), nil
 }
 
 func (q *Qwen3) computeLogits(h *mlx.Array) (*mlx.Array, error) {
@@ -277,13 +332,25 @@ func (q *Qwen3) computeLogits(h *mlx.Array) (*mlx.Array, error) {
 	}
 	defer normed.Free()
 
-	embedT, err := mlx.Transpose(q.weights.embedTokens, s)
-	if err != nil {
-		return nil, fmt.Errorf("transpose embed: %w", err)
-	}
-	defer embedT.Free()
+	return mlx.MatMul(normed, q.weights.embedTokensT, s)
+}
 
-	return mlx.MatMul(normed, embedT, s)
+// computeLogitsLast slices h to the final position, then projects to vocab.
+// The prefill only needs the last token's logits to sample the first output.
+func (q *Qwen3) computeLogitsLast(h *mlx.Array, seqLen int) (*mlx.Array, error) {
+	s := q.stream
+	if seqLen > 1 {
+		start := []int{0, seqLen - 1, 0}
+		stop := []int{1, seqLen, q.cfg.HiddenSize}
+		strides := []int{1, 1, 1}
+		sliced, err := mlx.Slice(h, start, stop, strides, s)
+		if err != nil {
+			return nil, fmt.Errorf("slice last position: %w", err)
+		}
+		defer sliced.Free()
+		return q.computeLogits(sliced)
+	}
+	return q.computeLogits(h)
 }
 
 func (q *Qwen3) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
@@ -333,245 +400,3 @@ func (q *Qwen3) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cache
 //   - Decode (cache non-nil, layer initialized): concatenate new K/V to cache
 //     via MLX ConcatenateAxis (lazy), use full cache for attention.
 //   - No cache: compute attention from live K/V only.
-func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
-	s := q.stream
-	cfg := q.cfg
-
-	q2d, err := llm.LinearNoBias(h, lw.qProj, s)
-	if err != nil {
-		return nil, fmt.Errorf("q proj: %w", err)
-	}
-	defer q2d.Free()
-
-	k2d, err := llm.LinearNoBias(h, lw.kProj, s)
-	if err != nil {
-		return nil, fmt.Errorf("k proj: %w", err)
-	}
-	defer k2d.Free()
-
-	v2d, err := llm.LinearNoBias(h, lw.vProj, s)
-	if err != nil {
-		return nil, fmt.Errorf("v proj: %w", err)
-	}
-	defer v2d.Free()
-
-	qR, err := mlx.Reshape(q2d, []int{1, seqLen, cfg.NumHeads, cfg.HeadDim}, s)
-	if err != nil {
-		return nil, fmt.Errorf("q reshape: %w", err)
-	}
-	defer qR.Free()
-
-	kR, err := mlx.Reshape(k2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
-	if err != nil {
-		return nil, fmt.Errorf("k reshape: %w", err)
-	}
-
-	vR, err := mlx.Reshape(v2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
-	if err != nil {
-		return nil, fmt.Errorf("v reshape: %w", err)
-	}
-
-	qNormed, err := llm.RMSNorm(qR, lw.qNorm, cfg.RMSNormEPS, s)
-	if err != nil {
-		return nil, fmt.Errorf("q norm: %w", err)
-	}
-	defer qNormed.Free()
-	qR.Free()
-	qR = qNormed
-
-	kNormed, err := llm.RMSNorm(kR, lw.kNorm, cfg.RMSNormEPS, s)
-	if err != nil {
-		return nil, fmt.Errorf("k norm: %w", err)
-	}
-	kR.Free()
-	kR = kNormed
-
-	qT, err := mlx.TransposeAxes(qR, []int{0, 2, 1, 3}, s)
-	if err != nil {
-		return nil, fmt.Errorf("q transpose: %w", err)
-	}
-	defer qT.Free()
-
-	kT, err := mlx.TransposeAxes(kR, []int{0, 2, 1, 3}, s)
-	if err != nil {
-		return nil, fmt.Errorf("k transpose: %w", err)
-	}
-	defer kT.Free()
-
-	vT, err := mlx.TransposeAxes(vR, []int{0, 2, 1, 3}, s)
-	if err != nil {
-		return nil, fmt.Errorf("v transpose: %w", err)
-	}
-	defer vT.Free()
-
-	qRot, err := llm.ApplyRoPE(qT, startPos, cfg.HeadDim, cfg.RopeTheta, s)
-	if err != nil {
-		return nil, fmt.Errorf("q rope: %w", err)
-	}
-	defer qRot.Free()
-
-	kRot, err := llm.ApplyRoPE(kT, startPos, cfg.HeadDim, cfg.RopeTheta, s)
-	if err != nil {
-		return nil, fmt.Errorf("k rope: %w", err)
-	}
-	defer kRot.Free()
-
-	var kForAttn, vForAttn *mlx.Array
-
-	if cache != nil && cache.IsInitialized(layerIdx) {
-		// Decode: append new K/V to cache via lazy ConcatenateAxis
-		cached, err := cache.Get(layerIdx)
-		if err != nil {
-			return nil, err
-		}
-
-		newK, err := mlx.ConcatenateAxis([]*mlx.Array{cached.K, kRot}, 2, s)
-		if err != nil {
-			return nil, fmt.Errorf("concat K: %w", err)
-		}
-		newV, err := mlx.ConcatenateAxis([]*mlx.Array{cached.V, vT}, 2, s)
-		if err != nil {
-			newK.Free()
-			return nil, fmt.Errorf("concat V: %w", err)
-		}
-
-		cached.K.Free()
-		cached.V.Free()
-		cached.K = newK
-		cached.V = newV
-
-		kForAttn = newK
-		vForAttn = newV
-
-	} else if cache != nil {
-		// Prefill: store retained copies of live K/V for future decode.
-		// RetainArray increments the C refcount without forcing evaluation,
-		// which would corrupt the lazy computation graph.
-		kForAttn = kRot
-		vForAttn = vT
-
-		kRetained := mlx.RetainArray(kRot)
-		vRetained := mlx.RetainArray(vT)
-		if err := cache.Store(layerIdx, kRetained, vRetained); err != nil {
-			kRetained.Free()
-			vRetained.Free()
-			return nil, fmt.Errorf("cache store: %w", err)
-		}
-
-	} else {
-		kForAttn = kRot
-		vForAttn = vT
-	}
-
-	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
-	if err != nil {
-		return nil, fmt.Errorf("k expand: %w", err)
-	}
-	defer kExp.Free()
-
-	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
-	if err != nil {
-		return nil, fmt.Errorf("v expand: %w", err)
-	}
-	defer vExp.Free()
-
-	kT2, err := mlx.TransposeAxes(kExp, []int{0, 1, 3, 2}, s)
-	if err != nil {
-		return nil, fmt.Errorf("k^T: %w", err)
-	}
-	defer kT2.Free()
-
-	scores, err := mlx.MatMul(qRot, kT2, s)
-	if err != nil {
-		return nil, fmt.Errorf("scores: %w", err)
-	}
-	defer scores.Free()
-
-	scale := float32(1.0 / math.Sqrt(float64(cfg.HeadDim)))
-	scaleArr, err := mlx.NewArrayFromFloat32([]float32{scale}, []int{1})
-	if err != nil {
-		return nil, err
-	}
-	defer scaleArr.Free()
-	scaleBF16, err := mlx.AsType(scaleArr, mlx.BFloat16, s)
-	if err != nil {
-		return nil, err
-	}
-	defer scaleBF16.Free()
-
-	scaled, err := mlx.Multiply(scores, scaleBF16, s)
-	if err != nil {
-		return nil, fmt.Errorf("scale scores: %w", err)
-	}
-
-	if seqLen > 1 {
-		cachedLen := 0
-		if cache != nil {
-			cachedLen = cache.CachedLen() - seqLen
-		}
-		masked, err := llm.ApplyCausalMask(scaled, seqLen, startPos, cachedLen, s)
-		if err != nil {
-			scaled.Free()
-			return nil, fmt.Errorf("causal mask: %w", err)
-		}
-		scaled.Free()
-		scaled = masked
-	}
-	defer scaled.Free()
-
-	probs, err := mlx.SoftmaxAxis(scaled, 3, s)
-	if err != nil {
-		return nil, fmt.Errorf("softmax: %w", err)
-	}
-	defer probs.Free()
-
-	ctx, err := mlx.MatMul(probs, vExp, s)
-	if err != nil {
-		return nil, fmt.Errorf("context: %w", err)
-	}
-	defer ctx.Free()
-
-	ctxT, err := mlx.TransposeAxes(ctx, []int{0, 2, 1, 3}, s)
-	if err != nil {
-		return nil, fmt.Errorf("ctx transpose: %w", err)
-	}
-	defer ctxT.Free()
-
-	ctxFlat, err := mlx.Reshape(ctxT, []int{1, seqLen, cfg.NumHeads * cfg.HeadDim}, s)
-	if err != nil {
-		return nil, fmt.Errorf("ctx reshape: %w", err)
-	}
-	defer ctxFlat.Free()
-
-	return llm.LinearNoBias(ctxFlat, lw.oProj, s)
-}
-
-func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
-	s := q.stream
-
-	gate, err := llm.LinearNoBias(h, lw.gateProj, s)
-	if err != nil {
-		return nil, fmt.Errorf("gate proj: %w", err)
-	}
-	defer gate.Free()
-
-	up, err := llm.LinearNoBias(h, lw.upProj, s)
-	if err != nil {
-		return nil, fmt.Errorf("up proj: %w", err)
-	}
-	defer up.Free()
-
-	gateSilu, err := llm.SiLU(gate, s)
-	if err != nil {
-		return nil, fmt.Errorf("silu: %w", err)
-	}
-	defer gateSilu.Free()
-
-	gated, err := mlx.Multiply(gateSilu, up, s)
-	if err != nil {
-		return nil, fmt.Errorf("gate multiply: %w", err)
-	}
-	defer gated.Free()
-
-	return llm.LinearNoBias(gated, lw.downProj, s)
-}

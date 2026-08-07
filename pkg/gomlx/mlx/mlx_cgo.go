@@ -316,6 +316,29 @@ func (a *Array) Int64Data() ([]int64, error) {
 	return out, nil
 }
 
+// Uint32Data returns the array's data as a uint32 slice, evaluating first.
+// Used for argmax/argmin results, which MLX returns as uint32.
+func (a *Array) Uint32Data() ([]uint32, error) {
+	if got := a.Dtype(); got != UInt32 {
+		return nil, fmt.Errorf("mlx: Uint32Data on %v array", got)
+	}
+	if err := a.Eval(); err != nil {
+		return nil, err
+	}
+	n := int(C.mlx_array_size(a.cHandle()))
+	if n == 0 {
+		return []uint32{}, nil
+	}
+	ptr := C.mlx_array_data_uint32(a.cHandle())
+	if ptr == nil {
+		return nil, errors.New("mlx: data pointer is null (eval failed?)")
+	}
+	out := make([]uint32, n)
+	backed := unsafe.Slice((*uint32)(unsafe.Pointer(ptr)), n)
+	copy(out, backed)
+	return out, nil
+}
+
 // Size returns the total number of elements in the array.
 func (a *Array) Size() int {
 	return int(C.mlx_array_size(a.cHandle()))

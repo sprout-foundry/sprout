@@ -12,7 +12,47 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
+
+// defaultSubagentTimeout bounds a subagent run when the caller didn't set
+// an explicit timeout. Generous enough for locally-hosted models (which may
+// be slower than cloud APIs) while still bounding the worst case.
+const defaultSubagentTimeout = 30 * time.Minute
+
+// orchestratorSubagentTimeout bounds the orchestrator persona when it is
+// itself spawned as a subagent. It delegates to nested subagents and drives
+// multi-phase workflows, so a full hour avoids cutting it short
+// mid-delegation.
+const orchestratorSubagentTimeout = time.Hour
+
+// resolveSubagentTimeout returns the effective execution timeout for a
+// subagent run: an explicit caller-set timeout always wins; otherwise the
+// orchestrator persona (by canonical ID or alias) gets a full hour and every
+// other persona gets the 30-minute default. Alias resolution goes through
+// the config catalog so it stays in sync with the persona definitions.
+func (r *SubagentRunner) resolveSubagentTimeout(opts SubagentOptions) time.Duration {
+	if opts.Timeout > 0 {
+		return opts.Timeout
+	}
+	if r.isOrchestratorPersona(opts.Persona) {
+		return orchestratorSubagentTimeout
+	}
+	return defaultSubagentTimeout
+}
+
+// isOrchestratorPersona reports whether the given persona string resolves to
+// the canonical orchestrator persona (by ID or alias) via the config catalog.
+func (r *SubagentRunner) isOrchestratorPersona(persona string) bool {
+	if persona == "" {
+		return false
+	}
+	if r.shared == nil || r.shared.ConfigManager == nil {
+		return false
+	}
+	st := r.shared.ConfigManager.GetConfig().GetSubagentType(persona)
+	return st != nil && st.ID == personas.IDOrchestrator
+}
 
 // subagentRunContext holds all the state wired up during setupSubagentRun
 // so that runTask can remain a thin orchestrator. Closures (streaming
@@ -464,11 +504,12 @@ func (r *SubagentRunner) runTask(
 
 	// Apply a default timeout when the caller didn't set one explicitly.
 	// Without this, a hung subagent blocks the primary indefinitely — no
-	// caller in subagent_runners.go sets opts.Timeout. 20 minutes is
+	// caller in subagent_runners.go sets opts.Timeout. 30 minutes for most
+	// personas, 1 hour for the orchestrator (see resolveSubagentTimeout) —
 	// generous enough for locally-hosted models (which may be slower than
 	// cloud APIs) while still bounding the worst case.
 	if opts.Timeout <= 0 {
-		opts.Timeout = 20 * time.Minute
+		opts.Timeout = r.resolveSubagentTimeout(opts)
 	}
 
 	// Setup

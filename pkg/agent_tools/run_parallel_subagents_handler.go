@@ -92,7 +92,7 @@ func (h *runParallelSubagentsHandler) Execute(ctx context.Context, env ToolEnv, 
 }
 
 func (h *runParallelSubagentsHandler) Aliases() []string      { return nil }
-func (h *runParallelSubagentsHandler) Timeout() time.Duration { return 30 * time.Minute }
+func (h *runParallelSubagentsHandler) Timeout() time.Duration { return subagentToolTimeout }
 func (h *runParallelSubagentsHandler) MaxResultSize() int     { return 0 }
 func (h *runParallelSubagentsHandler) SafeForParallel() bool  { return false }
 func (h *runParallelSubagentsHandler) Interactive() bool      { return false }

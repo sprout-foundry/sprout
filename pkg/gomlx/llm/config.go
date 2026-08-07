@@ -27,6 +27,15 @@ type hfConfig struct {
 	TieWordEmbeddings  bool     `json:"tie_word_embeddings"`
 	AttentionBias      bool     `json:"attention_bias"`
 	MaxPositionEmbeds  int      `json:"max_position_embeddings"`
+	Quantization       *quantConfig `json:"quantization"`
+}
+
+// quantConfig is the mlx-lm quantization section of config.json (present on
+// pre-quantized models like mlx-community/Qwen3-0.6B-4bit).
+type quantConfig struct {
+	GroupSize int    `json:"group_size"`
+	Bits      int    `json:"bits"`
+	Mode      string `json:"mode"`
 }
 
 // LoadConfig reads a HuggingFace config.json and returns a ModelConfig.
@@ -58,6 +67,21 @@ func LoadConfig(path string) (ModelConfig, error) {
 		UseAttentionBias:  raw.AttentionBias,
 		UseTiedEmbeddings: raw.TieWordEmbeddings,
 		MaxPosition:       raw.MaxPositionEmbeds,
+	}
+
+	// Quantization section from a pre-quantized model (mlx-community style).
+	if raw.Quantization != nil {
+		cfg.Quantization = &QuantConfig{
+			GroupSize: raw.Quantization.GroupSize,
+			Bits:      raw.Quantization.Bits,
+			Mode:      raw.Quantization.Mode,
+		}
+		if cfg.Quantization.Mode == "" {
+			cfg.Quantization.Mode = "affine"
+		}
+		if cfg.Quantization.GroupSize == 0 {
+			cfg.Quantization.GroupSize = 64
+		}
 	}
 
 	// Architecture-specific inference

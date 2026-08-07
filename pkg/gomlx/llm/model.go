@@ -176,13 +176,15 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	m.stream = s
 	m.arch.SetStream(s)
 
-	// Create KV cache for efficient decode
-	cache := NewKVCache(m.cfg.NumLayers, s)
-	defer cache.Free()
-	m.cache = cache
-	_ = cache // TODO: re-enable after fixing KV cache correctness
+	// KV cache is disabled until correctness bug is fixed.
+	// The full re-encode path (O(n²)) is used instead.
+	// TODO: re-enable KV cache for O(n) decode.
+	// cache := NewKVCache(m.cfg.NumLayers, s)
+	// defer cache.Free()
+	// m.cache = cache
+	_ = NewKVCache // keep reference to avoid unused import
 
-	// Prefill: process the entire prompt, populating the KV cache
+	// Prefill: process the entire prompt
 	logits, err := m.arch.ForwardPrefill(m.makeIDsArray(tokenIDs), len(tokenIDs), nil)
 	if err != nil {
 		return fmt.Errorf("prefill: %w", err)
@@ -216,7 +218,8 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 		}
 		recent := recentTokens[recentStart:]
 
-		// Full sequence re-encode (no KV cache yet — correctness over speed)
+		// Full sequence re-encode for correctness.
+		// TODO: replace with cache.ForwardDecode once KV cache bug is fixed.
 		allTokens := append(append([]int{}, tokenIDs...), generated...)
 		logits, err = m.arch.ForwardPrefill(m.makeIDsArray(allTokens), len(allTokens), nil)
 		if err != nil {

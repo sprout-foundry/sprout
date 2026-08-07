@@ -19,9 +19,14 @@ import (
 // Memory: at seq=2048, each layer stores 2 tensors of
 // [1, 8, 2048, 128] * 4 bytes (fp32) = 16 MB. For 28 layers: ~900 MB.
 // With fp16 (future): ~450 MB.
+// CacheState tracks whether a layer has been initialized in the cache.
+// During prefill, each layer stores its K/V in sequence. Using CachedLen()
+// (which checks layer 0) to decide Store vs Append is wrong — layers 1+ see
+// layer 0's length and incorrectly take the Append path.
 type KVCache struct {
-	layers []*KVCacheLayer
-	stream *mlx.Stream
+	layers    []*KVCacheLayer
+	initialized []bool
+	stream    *mlx.Stream
 }
 
 // KVCacheLayer holds the cached K and V for a single transformer layer.
@@ -33,9 +38,18 @@ type KVCacheLayer struct {
 // NewKVCache creates a cache for the given number of layers.
 func NewKVCache(numLayers int, s *mlx.Stream) *KVCache {
 	return &KVCache{
-		layers: make([]*KVCacheLayer, numLayers),
-		stream: s,
+		layers:      make([]*KVCacheLayer, numLayers),
+		initialized: make([]bool, numLayers),
+		stream:      s,
 	}
+}
+
+// IsInitialized reports whether a layer's cache has been populated.
+func (c *KVCache) IsInitialized(layerIdx int) bool {
+	if layerIdx < 0 || layerIdx >= len(c.initialized) {
+		return false
+	}
+	return c.initialized[layerIdx]
 }
 
 // Store writes the initial K/V tensors for a layer during prefill. The cache
@@ -49,6 +63,7 @@ func (c *KVCache) Store(layerIdx int, k, v *mlx.Array) error {
 		c.layers[layerIdx].V.Free()
 	}
 	c.layers[layerIdx] = &KVCacheLayer{K: k, V: v}
+	c.initialized[layerIdx] = true
 	return nil
 }
 
@@ -62,8 +77,9 @@ func (c *KVCache) Append(layerIdx int, newK, newV *mlx.Array) error {
 
 	cached := c.layers[layerIdx]
 	if cached == nil {
-		// First decode step — store directly
+		// First entry — store directly
 		c.layers[layerIdx] = &KVCacheLayer{K: newK, V: newV}
+		c.initialized[layerIdx] = true
 		return nil
 	}
 	defer newK.Free()

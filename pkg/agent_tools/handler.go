@@ -98,6 +98,13 @@ type ToolDefinition struct {
 	// sessions, saved automations, subagent configs naming it directly — keep
 	// working instead of failing on an unknown tool.
 	Hidden bool `json:"-"`
+
+	// RequiresEmbeddings marks a tool that has no useful behavior without an
+	// embedding index. The tool-registration path (pkg/agent's seed registry)
+	// filters these out when the agent has no EmbeddingManager, so the model
+	// never sees — and never calls — a tool that would fail at execution time.
+	// Embeddings are OPT-IN (off by default), so this is the common case.
+	RequiresEmbeddings bool `json:"-"`
 }
 
 // ParameterDef defines a single tool parameter's schema.

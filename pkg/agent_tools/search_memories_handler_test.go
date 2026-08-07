@@ -330,7 +330,7 @@ func TestSearchMemoriesHandler_Validate(t *testing.T) {
 	require.Contains(t, err.Error(), "must be a number")
 }
 
-// Test searchMemoriesByText directly
+// Test SearchMemoriesByText directly
 func TestSearchMemoriesByText(t *testing.T) {
 	t.Parallel()
 	names := createTestMemories(t, []struct {
@@ -343,7 +343,7 @@ func TestSearchMemoriesByText(t *testing.T) {
 	})
 	defer removeTestMemories(t, names)
 
-	results, err := searchMemoriesByText("zephyr", 10, 0.0)
+	results, err := SearchMemoriesByText("zephyr", 10, 0.0)
 	require.NoError(t, err)
 	require.Greater(t, len(results), 0, "should find at least one result")
 
@@ -428,21 +428,21 @@ func TestFirstLine(t *testing.T) {
 	}
 }
 
-// Test formatMemorySearchResults
+// Test FormatMemorySearchResults
 func TestFormatMemorySearchResults(t *testing.T) {
 	t.Parallel()
 
 	// Empty results
-	output := formatMemorySearchResults("test query", nil, 0.75)
+	output := FormatMemorySearchResults("test query", nil, 0.75)
 	require.Contains(t, output, "No memories found")
 	require.Contains(t, output, "test query")
 
 	// With results
-	results := []memorySearchResult{
+	results := []MemorySearchResult{
 		{Name: "test-memory", Preview: "# Test Memory", Score: 0.95},
 		{Name: "another-memory", Preview: "# Another", Score: 0.8},
 	}
-	output = formatMemorySearchResults("test", results, 0.5)
+	output = FormatMemorySearchResults("test", results, 0.5)
 	require.Contains(t, output, "Found 2 memory/memories")
 	require.Contains(t, output, "test-memory")
 	require.Contains(t, output, "0.95")

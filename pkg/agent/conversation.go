@@ -78,7 +78,7 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// (pkg/agent/tool_registrations.go) via BuildToolDefinitions —
 	// the same registry seedRegistry uses, so the LLM and this
 	// optimisation path stay in sync.
-	tools := BuildToolDefinitions()
+	tools := BuildToolDefinitionsForAgent(a)
 
 	// SP-125: Low-Context Mode tool allowlist. Applied first (before the
 	// subagent and persona filters) so it's the broadest narrowing pass —

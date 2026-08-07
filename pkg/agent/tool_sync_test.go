@@ -77,12 +77,20 @@ func handlerParamNames(h tools.ToolHandler) []string {
 
 // TestToolSync_AllToolsPresent tests that the seed registry and the handler
 // registry register exactly the same set of tool names.
+//
+// When the seed registry is built with agent == nil (as here), embedding-
+// dependent tools are filtered out — they have no useful behavior without an
+// EmbeddingManager. The handler registry still lists them (it's the source of
+// truth for what *exists*), so the comparison skips RequiresEmbeddings tools.
 func TestToolSync_AllToolsPresent(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
 
 	sproutNames := make(map[string]bool)
 	for _, h := range sprout.All() {
+		if h.Definition().RequiresEmbeddings {
+			continue // filtered from seed when no embedding manager
+		}
 		sproutNames[h.Name()] = true
 	}
 
@@ -302,11 +310,20 @@ func TestToolSync_NilToolRegistry(t *testing.T) {
 }
 
 // TestToolSync_CountConsistency verifies that both registries have the same tool count.
+//
+// Embedding-dependent tools are filtered from the seed registry when the agent
+// has no EmbeddingManager (the default), so the handler count is adjusted to
+// exclude them before comparison.
 func TestToolSync_CountConsistency(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
 
-	sproutCount := len(sprout.All())
+	sproutCount := 0
+	for _, h := range sprout.All() {
+		if !h.Definition().RequiresEmbeddings {
+			sproutCount++
+		}
+	}
 	seedCount := len(seed.GetTools())
 
 	if sproutCount != seedCount {

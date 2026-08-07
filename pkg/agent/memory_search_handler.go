@@ -8,6 +8,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // handleSearchMemories searches memory files by semantic similarity.
@@ -52,7 +53,14 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		return "Memory search requires the embedding index to be enabled. Use the /index command to enable workspace indexing.", nil
+		// Embeddings are off (the default). Fall back to text-based memory
+		// search rather than returning empty — memory files exist on disk
+		// and a text match is a real result the caller can act on.
+		results, err := tools.SearchMemoriesByText(query, topK, float64(threshold))
+		if err != nil {
+			return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold), nil
+		}
+		return tools.FormatMemorySearchResults(query, results, float64(threshold)), nil
 	}
 
 	store, err := em.GetConversationStore(ctx)
@@ -105,7 +113,34 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 func handleSearchMemoriesJSON(ctx context.Context, a *Agent, query string, topK int, threshold float32) (string, error) {
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		return "[]", nil
+		// Embeddings off: fall back to text search and marshal the results
+		// into the same JSON shape the caller expects.
+		results, err := tools.SearchMemoriesByText(query, topK, float64(threshold))
+		if err != nil {
+			return "[]", nil
+		}
+		type memoryResult struct {
+			Name      string  `json:"name"`
+			Relevance float32 `json:"relevance"`
+			Title     string  `json:"title,omitempty"`
+		}
+		var output []memoryResult
+		for _, r := range results {
+			preview := r.Preview
+			if len(preview) > 120 {
+				preview = preview[:117] + "..."
+			}
+			output = append(output, memoryResult{
+				Name:      r.Name,
+				Relevance: float32(r.Score),
+				Title:     preview,
+			})
+		}
+		data, err := json.Marshal(output)
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
 	}
 
 	store, err := em.GetConversationStore(ctx)

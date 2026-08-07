@@ -256,6 +256,7 @@ jobs:
       run: |
         OS_NAME=""
         EXT=""
+        BUILD_TAGS="browser"
         if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
           OS_NAME="windows"
           EXT=".exe"
@@ -264,15 +265,21 @@ jobs:
         else
           OS_NAME="linux"
         fi
+        # MLX C library is only available on macOS arm64 (Apple Silicon runners)
+        if [[ "${{ matrix.os }}" == "macos-latest" && "${{ matrix.arch }}" == "arm64" ]]; then
+          brew install mlx-c
+          BUILD_TAGS="browser mlx"
+        fi
         echo "os_name=${OS_NAME}" >> $GITHUB_OUTPUT
         echo "ext=${EXT}" >> $GITHUB_OUTPUT
+        echo "build_tags=${BUILD_TAGS}" >> $GITHUB_OUTPUT
         echo "binary_name=sprout-${OS_NAME}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
 
     - name: Build
       env:
         GOOS: ${{ steps.set_vars.outputs.os_name }}
         GOARCH: ${{ matrix.arch }}
-      run: go build -tags "browser" -o ${{ steps.set_vars.outputs.binary_name }}${{ steps.set_vars.outputs.ext }} .
+      run: go build -tags "${{ steps.set_vars.outputs.build_tags }}" -o ${{ steps.set_vars.outputs.binary_name }}${{ steps.set_vars.outputs.ext }} .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

@@ -128,3 +128,25 @@ func Negative(a *Array, s *Stream) (*Array, error) {
 	return wrapResult(out, rc, "negative")
 }
 
+// Zeros creates a new array of the given shape filled with zeros.
+func Zeros(shape []int, dtype Dtype, s *Stream) (*Array, error) {
+	out := newOutput()
+	shapePtr, _ := cIntPtrs(shape)
+	rc := C.mlx_zeros(&out, shapePtr, C.size_t(len(shape)), C.mlx_dtype(dtype), s.cHandle())
+	return wrapResult(out, rc, "zeros")
+}
+
+// SliceUpdate writes update into src at the region [start, stop) and returns
+// a new array sharing src's buffer. For the KV cache this performs an
+// in-place-style write of one token into a preallocated buffer.
+func SliceUpdate(src, update *Array, start, stop []int, s *Stream) (*Array, error) {
+	out := newOutput()
+	startPtr, _ := cIntPtrs(start)
+	stopPtr, _ := cIntPtrs(stop)
+	strides := []int{1, 1, 1, 1}
+	stridesPtr, _ := cIntPtrs(strides)
+	rc := C.mlx_slice_update(&out, src.cHandle(), update.cHandle(),
+		startPtr, C.size_t(len(start)), stopPtr, C.size_t(len(stop)), stridesPtr, C.size_t(len(strides)), s.cHandle())
+	return wrapResult(out, rc, "slice_update")
+}
+

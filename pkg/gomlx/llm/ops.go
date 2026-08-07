@@ -19,13 +19,21 @@ func RMSNorm(x, weight *mlx.Array, eps float32, s *mlx.Stream) (*mlx.Array, erro
 	return normed, nil
 }
 
-// LinearNoBias computes y = x @ W^T (no bias addition).
+// LinearNoBias computes y = x @ W^T (no bias addition). The weight W is in
+// [out, in] PyTorch layout and is transposed on every call.
 func LinearNoBias(x, w *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 	wT, err := mlx.Transpose(w, s)
 	if err != nil {
 		return nil, fmt.Errorf("transpose weight: %w", err)
 	}
 	defer wT.Free()
+	return mlx.MatMul(x, wT, s)
+}
+
+// LinearT computes y = x @ W where W is already in [in, out] layout
+// (pre-transposed at load). Avoids re-transposing weights on every call —
+// important for decode, where each of the ~7 projections runs once per token.
+func LinearT(x, wT *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 	return mlx.MatMul(x, wT, s)
 }
 

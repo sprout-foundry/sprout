@@ -3,10 +3,32 @@
 package llm
 
 import (
+	"container/heap"
 	"math"
 	"math/rand"
-	"sort"
 )
+
+// logitHeapItem pairs a scaled logit value with its token index for the
+// max-heap used in top-K/top-P filtering.
+type logitHeapItem struct {
+	value float32
+	idx   int
+}
+
+// logitHeap implements heap.Interface as a max-heap over logitHeapItem.
+type logitHeap []logitHeapItem
+
+func (h logitHeap) Len() int            { return len(h) }
+func (h logitHeap) Less(i, j int) bool  { return h[i].value > h[j].value }
+func (h logitHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
+func (h *logitHeap) Push(x any)         { *h = append(*h, x.(logitHeapItem)) }
+func (h *logitHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	*h = old[:n-1]
+	return item
+}
 
 // sample picks the next token from logits using temperature + top-k/top-p sampling.
 func sample(logits []float32, cfg GenerateConfig) int {
@@ -20,73 +42,104 @@ func sample(logits []float32, cfg GenerateConfig) int {
 		scaled[i] = v / cfg.Temperature
 	}
 
-	// Top-K filtering: keep only the top K tokens
-	if cfg.TopK > 0 && cfg.TopK < len(scaled) {
-		indices := make([]int, len(scaled))
-		for i := range indices {
-			indices[i] = i
+	useTopK := cfg.TopK > 0 && cfg.TopK < len(scaled)
+	useTopP := cfg.TopP > 0 && cfg.TopP < 1.0
+
+	// Candidate indices, sorted descending by scaled logit. Built with a
+	// max-heap so we never sort the full [vocab] array (the old sort.Slice
+	// approach cost ~2 × O(V log V) per token and dominated decode time).
+	var cand []int
+	if useTopK || useTopP {
+		limit := len(scaled)
+		if useTopK {
+			limit = cfg.TopK
 		}
-		sort.Slice(indices, func(a, b int) bool {
-			return scaled[indices[a]] > scaled[indices[b]]
-		})
-		threshold := scaled[indices[cfg.TopK-1]]
-		for i := range scaled {
-			if scaled[i] < threshold {
-				scaled[i] = float32(math.Inf(-1))
-			}
+		h := make(logitHeap, len(scaled))
+		for i, v := range scaled {
+			h[i] = logitHeapItem{value: v, idx: i}
+		}
+		heap.Init(&h)
+		cand = make([]int, 0, limit)
+		for len(cand) < limit && h.Len() > 0 {
+			item := heap.Pop(&h).(logitHeapItem)
+			cand = append(cand, item.idx)
 		}
 	}
 
-	// Softmax
+	// Softmax over the candidate set (or the full array when no filter).
 	maxVal := float32(math.Inf(-1))
-	for _, v := range scaled {
-		if v > maxVal {
-			maxVal = v
+	consider := func(i int) {
+		if scaled[i] > maxVal {
+			maxVal = scaled[i]
+		}
+	}
+	if cand == nil {
+		for i := range scaled {
+			consider(i)
+		}
+	} else {
+		for _, i := range cand {
+			consider(i)
 		}
 	}
 
-	var sum float64
 	probs := make([]float64, len(scaled))
-	for i, v := range scaled {
-		e := math.Exp(float64(v - maxVal))
+	sum := 0.0
+	accumulate := func(i int) {
+		e := math.Exp(float64(scaled[i] - maxVal))
 		probs[i] = e
 		sum += e
 	}
-
-	// Top-P (nucleus) filtering
-	if cfg.TopP < 1.0 {
-		indices := make([]int, len(probs))
-		for i := range indices {
-			indices[i] = i
+	if cand == nil {
+		for i := range scaled {
+			accumulate(i)
 		}
-		sort.Slice(indices, func(a, b int) bool {
-			return probs[indices[a]] > probs[indices[b]]
-		})
-
-		cumProb := 0.0
-		keep := make(map[int]bool)
-		for _, idx := range indices {
-			cumProb += probs[idx]
-			keep[idx] = true
-			if cumProb >= float64(cfg.TopP) {
-				break
-			}
-		}
-		sum = 0
-		for i := range probs {
-			if !keep[i] {
-				probs[i] = 0
-			}
-			sum += probs[i]
+	} else {
+		for _, i := range cand {
+			accumulate(i)
 		}
 	}
 
-	// Sample from the distribution
+	// Top-P (nucleus) filtering: cand is already ordered by descending
+	// probability, so the surviving set is a prefix of it.
+	keepCount := len(cand)
+	if useTopP && cand != nil {
+		cum := 0.0
+		keepCount = 0
+		for _, i := range cand {
+			cum += probs[i] / sum
+			keepCount++
+			if cum >= float64(cfg.TopP) {
+				break
+			}
+		}
+	}
+
+	// Sample from the (filtered) distribution.
 	r := rand.Float64() * sum
 	cumulative := 0.0
-	for i, p := range probs {
-		cumulative += p
-		if r <= cumulative {
+	pick := func(i int) bool {
+		cumulative += probs[i]
+		return r <= cumulative
+	}
+	if useTopP && cand != nil {
+		for j := 0; j < keepCount; j++ {
+			if pick(cand[j]) {
+				return cand[j]
+			}
+		}
+		return cand[keepCount-1]
+	}
+	if cand != nil {
+		for _, i := range cand {
+			if pick(i) {
+				return i
+			}
+		}
+		return cand[len(cand)-1]
+	}
+	for i := range probs {
+		if pick(i) {
 			return i
 		}
 	}

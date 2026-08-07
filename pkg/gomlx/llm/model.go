@@ -54,6 +54,10 @@ func NewModel(modelDir string) (*Model, error) {
 
 	// Weights are loaded using the default stream; actual inference creates
 	// a fresh GPU stream on the calling thread (MLX streams are thread-local).
+	// Pin to this OS thread for the whole load so lazy transpose evals (and
+	// the thread-local default stream) stay consistent.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	loadStream, err := mlx.DefaultStream()
 	if err != nil {
 		return nil, fmt.Errorf("create load stream: %w", err)
@@ -63,6 +67,10 @@ func NewModel(modelDir string) (*Model, error) {
 		loadStream.Free()
 		return nil, fmt.Errorf("load weights: %w", err)
 	}
+
+	// See NewModelFromFiles: one explicit GC reclaims the released safetensors
+	// file blob so it doesn't inflate the first generation's GC threshold.
+	runtime.GC()
 
 	m := &Model{
 		cfg:       cfg,
@@ -98,6 +106,9 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 		return nil, fmt.Errorf("load tokenizer: %w", err)
 	}
 
+	// Pin to this OS thread for the whole load; see NewModel for why.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	loadStream, err := mlx.DefaultStream()
 	if err != nil {
 		return nil, fmt.Errorf("create load stream: %w", err)
@@ -107,6 +118,12 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 		loadStream.Free()
 		return nil, fmt.Errorf("load weights: %w", err)
 	}
+
+	// InitWeights released the safetensors file blob (potentially ~1.2GB).
+	// Run one explicit GC so the reclaimed memory is usable before the first
+	// generation; otherwise the pre-collection heap size sets the first GC
+	// threshold at ~2x that size and memory appears to leak during generation.
+	runtime.GC()
 
 	m := &Model{
 		cfg:       cfg,
@@ -168,7 +185,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	s, err := mlx.DefaultGPUStream()
+	s, err := mlx.NewGPUStream()
 	if err != nil {
 		return fmt.Errorf("get GPU stream: %w", err)
 	}
@@ -176,7 +193,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	m.stream = s
 	m.arch.SetStream(s)
 
-	// KV cache: prefill stores K/V, decode appends — O(1) per token instead of O(n).
+	// KV cache: prefill stores K/V, decode appends via per-token concat.
 	cache := NewKVCache(m.cfg.NumLayers, s)
 	defer cache.Free()
 
@@ -193,10 +210,11 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 
 	nextToken := 0
 	if useGPUArgmax {
-		nextToken, err = greedyArch.ForwardPrefillArgmax(m.makeIDsArray(tokenIDs), len(tokenIDs), cache)
-		if err != nil {
-			return fmt.Errorf("prefill argmax: %w", err)
-		}
+		// The prefill above already computed logits and populated the cache.
+		// Do NOT re-run prefill via ForwardPrefillArgmax — it would re-run all
+		// layers on an already-initialized KV cache. Argmax the CPU copy
+		// (608KB, one-time) instead; decode steps stay on the GPU argmax path.
+		nextToken = argmax(logits)
 	} else {
 		if genCfg.RepetitionPenalty != 0 {
 			applyRepetitionPenalty(logits, tokenIDs, genCfg.RepetitionPenalty)

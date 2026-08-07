@@ -1,4 +1,4 @@
-// Package console: code line syntax highlighting for Go, Python, Bash, JSON, YAML, JavaScript, TypeScript, and generic (split from markdown_formatter.go)
+// Package console provides code line syntax highlighting.
 package console
 
 import (
@@ -100,8 +100,7 @@ func (f *MarkdownFormatter) highlightBash(line string) string {
 }
 
 func (f *MarkdownFormatter) highlightJSON(line string) string {
-	// Step 1: Highlight key-value pairs where value is a scalar or string.
-	// "key": "value" → green key, cyan string value / yellow number
+	// Highlight key-value pairs
 	pairRegex := regexp.MustCompile(`"([^"]*)":\s*("[^"]*"|true|false|null|-?\d+\.?\d*)`)
 	line = pairRegex.ReplaceAllStringFunc(line, func(match string) string {
 		parts := pairRegex.FindStringSubmatch(match)
@@ -117,7 +116,7 @@ func (f *MarkdownFormatter) highlightJSON(line string) string {
 		return ColorGreen + "\"" + key + "\": " + ColorReset + val
 	})
 
-	// Step 2: Highlight keys whose value is an object/array (e.g. "key": {)
+	// Highlight keys whose value is an object/array
 	keyObjRegex := regexp.MustCompile(`"([^"]*)":(\s*[{\[])`)
 	line = keyObjRegex.ReplaceAllString(line, ColorGreen+"\"$1\":"+"$2"+ColorReset)
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -102,22 +104,100 @@ func (m *ModelsCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 	})
 }
 
+// modelCompleteCache caches model lists per provider for autocomplete.
+// The list is small (typically < 50 entries) and changes rarely, but
+// fetching it can take up to 500ms on a cold model registry or longer
+// on a live provider API call. Serving stale results while refreshing
+// in the background keeps the input loop unblocked.
+var (
+	modelCompleteMu       sync.RWMutex
+	modelCompleteCache    = map[string]modelCompleteEntry{}
+	modelCompleteRefresh  = make(map[string]bool) // prevents duplicate background refreshes
+	modelCompleteCacheTTL = 30 * time.Second
+)
+
+type modelCompleteEntry struct {
+	models    []api.ModelInfo
+	fetchedAt time.Time
+}
+
+// cachedModelsForProvider returns models for the provider, using a cached
+// result when available. If the cache is stale it kicks off a background
+// refresh but returns the stale data immediately (stale-while-revalidate),
+// so the autocomplete dropdown is never blocked on network I/O. The first
+// call (cold cache) must fetch synchronously.
+func cachedModelsForProvider(clientType api.ClientType) []api.ModelInfo {
+	key := string(clientType)
+
+	modelCompleteMu.RLock()
+	entry, ok := modelCompleteCache[key]
+	modelCompleteMu.RUnlock()
+
+	age := time.Since(entry.fetchedAt)
+	if ok && age < modelCompleteCacheTTL {
+		return entry.models
+	}
+
+	// Stale or missing. If we have stale data, return it immediately and
+	// refresh in the background.
+	if ok {
+		modelCompleteMu.Lock()
+		alreadyRefreshing := modelCompleteRefresh[key]
+		if !alreadyRefreshing {
+			modelCompleteRefresh[key] = true
+		}
+		modelCompleteMu.Unlock()
+
+		if !alreadyRefreshing {
+			go refreshModelCache(key, clientType)
+		}
+		return entry.models
+	}
+
+	// Cold cache — must fetch synchronously. This only happens once per
+	// provider per session.
+	refreshModelCache(key, clientType)
+
+	modelCompleteMu.RLock()
+	defer modelCompleteMu.RUnlock()
+	return modelCompleteCache[key].models
+}
+
+func refreshModelCache(key string, clientType api.ClientType) {
+	defer func() {
+		modelCompleteMu.Lock()
+		delete(modelCompleteRefresh, key)
+		modelCompleteMu.Unlock()
+	}()
+
+	models, err := api.GetModelsForProvider(clientType)
+	if err != nil || len(models) == 0 {
+		return
+	}
+
+	modelCompleteMu.Lock()
+	modelCompleteCache[key] = modelCompleteEntry{
+		models:    models,
+		fetchedAt: time.Now(),
+	}
+	modelCompleteMu.Unlock()
+}
+
 // Complete provides argument completions for /model. Suggests the
 // "select" subcommand, and when a partial model name is typed, lists
-// matching models from the current provider.
+// matching models from the current provider. Uses a stale-while-revalidate
+// cache so the dropdown is never blocked on a network call after the first.
 func (m *ModelsCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	if len(args) == 0 {
 		return []string{"select"}
 	}
 
-	// If the last arg looks like it could be a model prefix, try listing
-	// models from the provider.
 	if chatAgent == nil {
 		return nil
 	}
 	clientType := chatAgent.GetProviderType()
-	models, err := api.GetModelsForProvider(clientType)
-	if err != nil || len(models) == 0 {
+	models := cachedModelsForProvider(clientType)
+	if len(models) == 0 {
 		return nil
 	}
 

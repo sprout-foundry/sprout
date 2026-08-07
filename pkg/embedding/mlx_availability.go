@@ -4,8 +4,8 @@ package embedding
 
 import (
 	"os"
-	"runtime"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/sprout-foundry/sprout/pkg/mlx"
 )
@@ -33,21 +33,15 @@ func mlxProviderAvailable() bool {
 		return false
 	}
 
-	_ = runtime.GOARCH // ensure runtime import is used
+	_ = os.Getenv("SPROUT_EMBEDDING_BACKEND")
 	return true
 }
 
 // getTotalSystemRAM returns total system RAM in bytes, or 0 if unknown.
 func getTotalSystemRAM() int64 {
-	memStr, err := syscall.Sysctl("hw.memsize")
-	if err != nil || memStr == "" {
+	mem, err := unix.SysctlUint64("hw.memsize")
+	if err != nil {
 		return 0
 	}
-	var mem int64
-	for _, c := range memStr {
-		if c >= '0' && c <= '9' {
-			mem = mem*10 + int64(c-'0')
-		}
-	}
-	return mem
+	return int64(mem)
 }

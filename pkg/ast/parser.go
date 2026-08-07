@@ -1,9 +1,10 @@
 // Package ast provides a unified AST parser using gotreesitter (pure Go
 // tree-sitter) for Go, TypeScript, JavaScript, and Python source files.
 //
-// The parser pre-loads grammar blobs at init time so that the first call to
-// ParseFile does not pay the grammar-loading cost.  It is safe for concurrent
-// use: each call to ParseFile creates its own parser instance.
+// The parser pre-warms grammar blobs at init time (unless
+// SPROUT_SKIP_GRAMMAR_PREWARM=1) so that the first call to ParseFile does
+// not pay the grammar-loading cost.  It is safe for concurrent use: each
+// call to ParseFile creates its own parser instance.
 //
 // Usage:
 //
@@ -16,6 +17,7 @@ package ast
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -1206,8 +1208,16 @@ func childText(node *gotreesitter.Node, bt *gotreesitter.BoundTree, field string
 }
 
 // init pre-warms the grammar cache for the four supported languages so the
-// first parse is fast.
+// first parse is fast. Skipped when SPROUT_SKIP_GRAMMAR_PREWARM=1 — used by
+// test helpers that spawn the test binary as a subprocess (e.g. the daemon
+// helper). Under `go test -race`, gob-decoding every embedded grammar blob
+// at init can take tens of seconds, which makes a spawned helper unable to
+// become healthy within any reasonable startup window. The helper never
+// parses code, so skipping the pre-warm is safe.
 func init() {
+	if os.Getenv("SPROUT_SKIP_GRAMMAR_PREWARM") == "1" {
+		return
+	}
 	for lang := range SupportedLanguages {
 		// Best-effort: if a grammar is not available (e.g. trimmed build),
 		// silently skip it.

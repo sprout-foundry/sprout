@@ -45,6 +45,12 @@ type HealthStatus struct {
 // returned.  Any other status code, network error, or JSON decode error
 // returns a descriptive error.
 //
+// Each check uses a FRESH connection (no keep-alive pooling). A pooled
+// keep-alive connection to a server that has since exited masks the port
+// state — the retry dial can hit a reused ephemeral port and return a stale
+// "ok" — which makes daemon-gone detection (idle reap, crash) unreliable.
+// Health checks are infrequent, so the dial cost is negligible.
+//
 // Use http.NewRequestWithContext internally so the caller's context
 // cancellation is respected.
 func CheckHealth(ctx context.Context, baseURL string, timeout time.Duration) (*HealthStatus, error) {
@@ -56,7 +62,10 @@ func CheckHealth(ctx context.Context, baseURL string, timeout time.Duration) (*H
 		return nil, fmt.Errorf("create health request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{
+		Transport: &http.Transport{DisableKeepAlives: true},
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("health check request failed: %w", err)
 	}

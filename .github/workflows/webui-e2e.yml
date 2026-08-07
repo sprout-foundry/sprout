@@ -25,7 +25,11 @@ jobs:
   e2e:
     name: E2E (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Shard 1 runs the heaviest specs and has historically exceeded 10m on
+    # loaded runners (timing out at 10m17s with the rest of the shards
+    # finishing in 1.5–6.5m). 15m gives it comfortable headroom; the E2E
+    # suite is 64 tests / 27 specs and retries once on flake in CI.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

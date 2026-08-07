@@ -54,6 +54,24 @@ type Architecture interface {
 	Config() ModelConfig
 }
 
+// GreedyArchitecture is an optional refinement implemented by architectures
+// that can sample the next token greedily on the GPU. When a Model uses
+// Temperature <= 0, it prefers this path to avoid transferring the full
+// [vocabSize] logits vector to the CPU on every decode step — a major
+// throughput win for large-vocab models. Falls back to the standard
+// Architecture methods when the architecture doesn't implement it.
+type GreedyArchitecture interface {
+	Architecture
+
+	// ForwardPrefillArgmax runs prefill and returns the argmax token ID for
+	// the final position, computed on the GPU.
+	ForwardPrefillArgmax(ids *mlx.Array, seqLen int, cache *KVCache) (int, error)
+
+	// ForwardDecodeArgmax runs a single-token decode step and returns the
+	// argmax token ID, computed on the GPU.
+	ForwardDecodeArgmax(tokenID int, pos int, cache *KVCache) (int, error)
+}
+
 // ModelConfig holds architecture-independent configuration values. Every
 // decoder-only transformer shares these fields; architecture-specific values
 // (e.g. QK norm presence, bias presence) are encoded as booleans that the

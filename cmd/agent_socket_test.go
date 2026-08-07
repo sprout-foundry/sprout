@@ -4,6 +4,8 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -43,11 +45,20 @@ func (s *stubAgentForCmd) ExecuteTool(context.Context, string, map[string]any) (
 	return &daemon.ToolResult{Content: "ok"}, nil
 }
 
-// startCmdAgentServer starts an agent socket server at a temp path and
+// shortSocketPath returns a Unix socket path short enough for macOS, where
+// sun_path is limited to 104 bytes. t.TempDir() paths on CI runners can
+// exceed that (e.g. /var/folders/df/<random>/T/TestName.../001/agent.sock),
+// which makes listen fail with "bind: invalid argument".
+func shortSocketPath(t *testing.T, name string) string {
+	t.Helper()
+	return filepath.Join(os.TempDir(), fmt.Sprintf("sprout-%s-%d.sock", name, os.Getpid()))
+}
+
+// startCmdAgentServer starts an agent socket server at a short temp path and
 // returns the path + cleanup.
 func startCmdAgentServer(t *testing.T, svc daemon.AgentService) string {
 	t.Helper()
-	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+	sockPath := shortSocketPath(t, "agent")
 	srv := &daemon.AgentServer{SocketPath: sockPath, Service: svc}
 	require.NoError(t, srv.Start(context.Background()))
 	t.Cleanup(func() { srv.Close() })
@@ -71,7 +82,7 @@ func TestTryDaemonOneShot_RoutesThroughDaemon(t *testing.T) {
 // TestTryDaemonOneShot_FallsBackWhenNoSocket verifies the safety net: no
 // daemon socket → the CLI falls back to in-process (handled=false).
 func TestTryDaemonOneShot_FallsBackWhenNoSocket(t *testing.T) {
-	t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", filepath.Join(t.TempDir(), "missing.sock"))
+	t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", shortSocketPath(t, "missing"))
 	t.Setenv("SPROUT_DAEMON_AGENT", "1")
 
 	handled, err := tryDaemonOneShot(context.Background(), "hello", false)

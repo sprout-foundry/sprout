@@ -68,6 +68,16 @@ type webClientContext struct {
 	ChatSessions   map[string]*chatSession
 	DefaultChatID  string
 	nextChatNumber int
+
+	// DeletedChats records chat IDs that were deleted but whose deletion may
+	// still be settling (the delete handler removes the session from the map
+	// and then recomputes the top-level ActiveQuery flag in a later lock
+	// block). A query targeting an absent chat falls back to the top-level
+	// ActiveQuery, which the recompute may have reset to false — allowing a
+	// query to start on a chat that was just deleted. Tombstones make an
+	// absent-but-deleted chat permanently non-queryable until a new chat
+	// with the same ID is created (which clears the tombstone).
+	DeletedChats map[string]struct{}
 }
 
 func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncherURL, sshHomePath string) *webClientContext {
@@ -81,6 +91,7 @@ func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncher
 		FileConsents:   newFileConsentManager(),
 		AgentState:     emptyAgentStateSnapshot(),
 		LastSeenAt:     time.Now(),
+		DeletedChats:   map[string]struct{}{},
 	}
 	ctx.ensureDefaultChatSession()
 	return ctx

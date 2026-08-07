@@ -84,9 +84,31 @@ func TestDaemonHelperProcess(t *testing.T) {
 	// Self-expire after 20s — safety net against process leaks.
 	time.AfterFunc(20*time.Second, func() { os.Exit(0) })
 
-	// Optionally simulate idle reaping: if SPROUT_DAEMON_HELPER_IDLE_MS is
-	// set, the helper exits when no request has been received for that long.
-	// The handler below updates lastRequest on every request.
+	// Start serving on 127.0.0.1:<port>. Retry the bind for up to
+	// StartTimeout (15s in the spec helpers): under parallel test load the
+	// port from freePort() can be transiently stolen by a concurrent
+	// listener, and the only safe response is to keep retrying until the
+	// parent's health-poll deadline — not to give up after a few seconds.
+	var ln net.Listener
+	{
+		var bindErr error
+		for attempt := 0; attempt < 150; attempt++ {
+			ln, bindErr = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+			if bindErr == nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if bindErr != nil {
+			fmt.Fprintf(os.Stderr, "helper listen error after retries: %v\n", bindErr)
+			os.Exit(1)
+		}
+	}
+
+	// Idle-reaper clock starts only AFTER the listener is bound and about
+	// to serve. A slow-started helper (delayed spawn, slow CI runner under
+	// -race) must not be reaped before the parent's first health poll can
+	// reset the clock. The handler below updates lastRequest per request.
 	var lastRequest atomic.Int64
 	lastRequest.Store(time.Now().UnixMilli())
 	if idleStr := os.Getenv("SPROUT_DAEMON_HELPER_IDLE_MS"); idleStr != "" {
@@ -102,26 +124,6 @@ func TestDaemonHelperProcess(t *testing.T) {
 					}
 				}
 			}()
-		}
-	}
-
-	// Start serving on 127.0.0.1:<port>. Retry the bind: under heavy
-	// parallel test load the port from freePort() can be transiently
-	// stolen by a concurrent listener; the parent's StartTimeout (5s)
-	// gives us ~4s of retry budget.
-	var ln net.Listener
-	{
-		var bindErr error
-		for attempt := 0; attempt < 40; attempt++ {
-			ln, bindErr = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-			if bindErr == nil {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		if bindErr != nil {
-			fmt.Fprintf(os.Stderr, "helper listen error after retries: %v\n", bindErr)
-			os.Exit(1)
 		}
 	}
 
@@ -153,7 +155,7 @@ func makeTestSpec(t *testing.T, tmpDir string, port int) DaemonSpec {
 	spec.DaemonURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	spec.PIDFilePath = filepath.Join(tmpDir, "daemon.pid")
 	spec.SocketPath = "" // disabled for most tests
-	spec.StartTimeout = 5 * time.Second
+	spec.StartTimeout = 15 * time.Second
 	// CRITICAL: never spawn the real default command ([os.Executable(),
 	// "agent", "-d"]) from a test — that runs the compiled test binary as a
 	// sprout daemon, which recursively executes the test suite. Tests that
@@ -181,13 +183,19 @@ func helperSpec(t *testing.T, tmpDir string, port int, delayMs int, markerFile s
 	spec.DaemonURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	spec.PIDFilePath = filepath.Join(tmpDir, "daemon.pid")
 	spec.SocketPath = ""
-	spec.StartTimeout = 5 * time.Second
+	spec.StartTimeout = 15 * time.Second
 	spec.DaemonCommand = []string{
 		os.Args[0],
 		"-test.run=TestDaemonHelperProcess",
 		"--",
 	}
 	spec.LogPath = filepath.Join(tmpDir, "daemon.log")
+
+	// The spawned helper is the full test binary; under `go test -race` its
+	// package init (eager tree-sitter grammar blob decoding in pkg/ast) can
+	// take tens of seconds, far beyond any StartTimeout. The helper only
+	// serves /health — it never parses code — so skip the pre-warm.
+	spec.Env = append(spec.Env, "SPROUT_SKIP_GRAMMAR_PREWARM=1")
 
 	// Always kill spawned helpers when the test finishes, even on failure —
 	// orphaned helpers leak listener ports and exhaust the ephemeral range

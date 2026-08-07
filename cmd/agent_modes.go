@@ -127,22 +127,38 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		// Determine port strategy.
 		//
-		// Daemon mode (no explicit port): use the single-port supervisor on
-		// the unified daemon port (56000) so all daemons compete for one
-		// stable port.  This is the "primary" instance users bookmark.
+		// IN VARIANT: The daemon serves ALL workspaces from a single port.
+		//   When daemon mode is active and no explicit --web-port is given,
+		//   the port is always DaemonPort (56000).  The daemon handles
+		//   multiple workspaces by routing internally per-workspace via
+		//   clientContext / chat_sessions — there are NO folder-scoped
+		//   daemon ports.  The single-port supervisor handles leadership
+		//   election so exactly one daemon process serves 56000; additional
+		//   daemon instances attach to the leader.
 		//
 		// Non-daemon interactive (no explicit port): each instance gets its
-		// own unique port so browser windows can connect independently.
-		// We scan from 56001 (DaemonPort+1) for a free port.
+		// own dynamic port (starting at 56001 = DaemonPort+1) so that
+		// separate browser windows can connect independently.  This is
+		// intentional: non-daemon instances are short-lived and do not share
+		// a persistent port.
 		//
 		// Explicit --web-port N: always start directly on that port,
-		// regardless of daemon mode.
+		// regardless of daemon mode (user override).
+		//
+		// GUARD: daemon mode NEVER falls into the FindAvailablePort path.
+		//   If daemonMode is true and webPort is 0, the port is set to
+		//   webui.DaemonPort unconditionally below.
 		port := webPort
 		if port == 0 {
 			if daemonMode {
+				// Daemon mode: always use the single shared DaemonPort.
+				// This path is mutually exclusive with the dynamic-port branch
+				// — if daemonMode is true, FindAvailablePort is never called.
 				port = webui.DaemonPort
 			} else {
-				// Non-daemon: find a free dynamic port.
+				// Non-daemon interactive: find a free dynamic port so each
+				// instance gets its own browser window.  This path is only
+				// reachable when daemonMode is false.
 				dynamicPort, dynErr := webui.FindAvailablePort(webui.DaemonPort + 1)
 				if dynErr != nil {
 					console.GlyphWarning.Fprintf(os.Stderr, "Could not find a dynamic port: %v; web UI disabled", dynErr)

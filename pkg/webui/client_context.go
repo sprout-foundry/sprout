@@ -193,6 +193,28 @@ func (ws *ReactWebServer) getOrCreateClientContext(clientID string) *webClientCo
 }
 
 func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webClientContext {
+	// SP-136 isolation invariants (enforced by this function):
+	//   1. clientContexts is keyed by clientID — each browser tab / client
+	//      session gets its own context.
+	//   2. Each webClientContext owns its own WorkspaceRoot, Agent,
+	//      Terminal, FileConsents, and ChatSessions.  When the workspace
+	//      root changes (setClientWorkspaceRoot), old agents are released
+	//      and chat sessions are reset.
+	//   3. Agents are created per-chat via NewAgentWithLayersInWorkspace
+	//      using the workspace-specific config directory
+	//      (configuration.WorkspaceConfigDir(workspaceRoot)), ensuring
+	//      per-workspace config isolation.
+	//   4. Embedding managers are further isolated per workspace via
+	//      embedding.AcquireManager keyed by (indexDir, workspaceRoot).
+	//
+	// EXCEPTIONS (intentional shared state):
+	//   - The defaultWebClientID context shares ws.terminalManager and
+	//     ws.fileConsents with the server.  This is the shared CLI+WebUI
+	//     mode where the CLI and default WebUI tab share one conversation.
+	//     Non-default clients always get fresh per-client Terminal/FileConsents.
+	//   - The eventBus is shared across all clients but events route by
+	//     client_id/chat_id via shouldForwardEventToConnection.
+	//
 	if ws.clientContexts == nil {
 		ws.clientContexts = make(map[string]*webClientContext)
 	}
@@ -670,6 +692,15 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	// chat session with the CLI's agent instance so both frontends share
 	// one conversation history, one session, and one state. This bypasses
 	// the lazy-create path in getOrCreateAgent.
+	//
+	// SP-136 isolation guarantee: the seed is gated on BOTH
+	// clientID == defaultWebClientID AND chatID == defaultChatID.
+	// Therefore a WebUI session for a different workspace (which uses a
+	// non-default clientID) never receives the CLI agent.  Furthermore,
+	// even if the CLI agent IS seeded, getOrCreateAgent calls
+	// rearmWebUIAgent which re-sets the workspace root to the context's
+	// WorkspaceRoot — preventing workspace-A agents from leaking into
+	// workspace-B sessions.
 	if ws.IsSharedMode() && clientID == defaultWebClientID && chatID == defaultChatID {
 		if ws.agent != nil && cs.Agent == nil {
 			cs.mu.Lock()

@@ -2,6 +2,8 @@ module github.com/sprout-foundry/sprout
 
 go 1.25.0
 
+replace github.com/sprout-foundry/sprout/pkg/gomlx => ./pkg/gomlx
+
 require (
 	filippo.io/age v1.3.1
 	github.com/creack/pty v1.1.24
@@ -96,6 +98,7 @@ require (
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/viper v1.19.0 // indirect
+	github.com/sprout-foundry/sprout/pkg/gomlx v0.0.0-00010101000000-000000000000 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect

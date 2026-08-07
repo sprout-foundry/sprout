@@ -80,12 +80,11 @@ func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPa
 	// one core, so feeding a [batch, seq] tensor takes the same wallclock
 	// as N sequential per-row calls. The bench harness (default ORT
 	// threading on M1+) showed ~1.7× batched-vs-single speedup; we get
-	// roughly the same here. Cap at min(NumCPU, 4) so we don't starve
-	// other sprout work (the chat loop, file watchers, etc.) on a small
-	// machine, and to keep this consistent across CI runners.
-	intraThreads := goruntime.NumCPU()
-	if intraThreads > 4 {
-		intraThreads = 4
+	// roughly the same here. Use NumCPU-1 (capped at 8) so one core is
+	// always free for the foreground chat loop, file watchers, etc.
+	intraThreads := goruntime.NumCPU() - 1
+	if intraThreads > 8 {
+		intraThreads = 8
 	}
 	if intraThreads < 1 {
 		intraThreads = 1

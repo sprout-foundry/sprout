@@ -272,7 +272,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 
 		batcher := newRecordBatcher(m.store, checkpoint, manifestCheckpointInterval)
 
-		newRecords, err = m.embedUnits(ctx, unitsToEmbed, batcher.add)
+		newRecords, err = m.embedUnits(ctx, unitsToEmbed, rootDir, batcher.add)
 		// Flush whatever the callback left pending even when embedding
 		// aborted, so the store on disk matches the records embedUnits
 		// reports (and the manifest matches the store).
@@ -436,7 +436,7 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 		return nil
 	}
 
-	records, err := m.embedUnits(ctx, units, nil)
+	records, err := m.embedUnits(ctx, units, "", nil)
 	if err != nil {
 		return fmt.Errorf("index: embed %s: %w", filePath, err)
 	}
@@ -502,7 +502,7 @@ func (m *IndexManager) CheckDuplicates(ctx context.Context, codeText string, top
 // persists completed files in batches, so an interrupted build keeps the files
 // it finished instead of discarding them (the single end-of-build Store call
 // never ran on devices where the timeout fired mid-embed).
-func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileComplete func(file string, records []VectorRecord) error) ([]VectorRecord, error) {
+func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoot string, onFileComplete func(file string, records []VectorRecord) error) ([]VectorRecord, error) {
 	now := time.Now()
 	var records []VectorRecord
 	var embedded int
@@ -523,7 +523,33 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileC
 		order[i] = i
 		textOf[i] = embeddingText(units[i], m.opts.MaxBodyLen)
 	}
+
+	// Embed recently-touched files first so the partial index becomes
+	// semantically useful within ~1 min instead of ~17 min on a full build.
+	// The store is flushed and queryable during embedding, so ordering
+	// determines when useful results appear to the user.
+	priority := buildFilePriority(repoRoot, uniqueFiles(units))
+	if len(priority) > 0 {
+		var t0, t1, t2 int
+		for _, u := range units {
+			switch priority[u.File] {
+			case 0:
+				t0++
+			case 1:
+				t1++
+			default:
+				t2++
+			}
+		}
+		debugLogf("index: priority tiers — recent: %d, 30d: %d, older: %d units", t0, t1, t2)
+	}
+
 	sort.SliceStable(order, func(a, b int) bool {
+		pa := priority[units[order[a]].File]
+		pb := priority[units[order[b]].File]
+		if pa != pb {
+			return pa < pb
+		}
 		return len(textOf[order[a]]) < len(textOf[order[b]])
 	})
 
@@ -874,6 +900,67 @@ func runGit(dir string, args ...string) ([]string, error) {
 		}
 	}
 	return lines, nil
+}
+
+// buildFilePriority assigns each file a priority tier using git recency.
+// Tier 0 = modified within 7 days, Tier 1 = modified within 30 days,
+// Tier 2 = older or not found in git history.
+// Returns a map of file path → tier. If git fails, returns an empty map
+// so the caller falls back to pure length-based ordering.
+func buildFilePriority(repoRoot string, files []string) map[string]int {
+	if repoRoot == "" {
+		return nil
+	}
+
+	recent7, err := runGit(repoRoot, "log", "--name-only", "--format=", "--since=7 days ago")
+	if err != nil {
+		return nil
+	}
+	recent30, err := runGit(repoRoot, "log", "--name-only", "--format=", "--since=30 days ago")
+	if err != nil {
+		return nil
+	}
+
+	set7 := make(map[string]bool)
+	for _, f := range recent7 {
+		set7[filepath.Clean(f)] = true
+	}
+	set30 := make(map[string]bool)
+	for _, f := range recent30 {
+		set30[filepath.Clean(f)] = true
+	}
+
+	result := make(map[string]int, len(files))
+	for _, f := range files {
+		rel, err := filepath.Rel(repoRoot, f)
+		if err != nil {
+			result[f] = 2
+			continue
+		}
+		clean := filepath.Clean(rel)
+		switch {
+		case set7[clean]:
+			result[f] = 0
+		case set30[clean]:
+			result[f] = 1
+		default:
+			result[f] = 2
+		}
+	}
+	return result
+}
+
+// uniqueFiles extracts the distinct file paths from a slice of CodeUnits.
+func uniqueFiles(units []CodeUnit) []string {
+	seen := make(map[string]bool)
+	var files []string
+	for _, u := range units {
+		if !seen[u.File] {
+			seen[u.File] = true
+			files = append(files, u.File)
+		}
+	}
+	return files
 }
 
 // isSupportedFile returns true if the file path has a supported source-code extension.

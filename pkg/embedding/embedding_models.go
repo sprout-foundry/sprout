@@ -39,8 +39,8 @@ type EmbeddingManager struct {
 
 	cachedProvider *cachedProvider
 
-	sharedKey      string
-	autoBuildOnce  sync.Once
+	sharedKey     string
+	autoBuildOnce sync.Once
 }
 
 type BuildResult struct {

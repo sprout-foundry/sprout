@@ -133,16 +133,22 @@ func (p *MLXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float3
 	}
 
 	p.mu.RLock()
-	defer p.mu.RUnlock()
-
 	if p.closed {
+		p.mu.RUnlock()
 		return nil, fmt.Errorf("mlx embedding: provider is closed")
 	}
+	p.mu.RUnlock()
 
 	tokenIDs := p.tokenize(text)
 	if len(tokenIDs) == 0 {
 		return make([]float32, p.dims), nil
 	}
+
+	release, err := acquireInference(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	return p.runInference(ctx, tokenIDs)
 }
@@ -154,11 +160,11 @@ func (p *MLXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) (
 	}
 
 	p.mu.RLock()
-	defer p.mu.RUnlock()
-
 	if p.closed {
+		p.mu.RUnlock()
 		return nil, fmt.Errorf("mlx embedding: provider is closed")
 	}
+	p.mu.RUnlock()
 
 	if len(texts) == 0 {
 		return nil, nil
@@ -184,6 +190,12 @@ func (p *MLXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) (
 	}
 
 	results := make([][]float32, len(texts))
+
+	release, err := acquireInference(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	chunkSize := defaultBatchChunkSize
 	for start := 0; start < len(texts); start += chunkSize {

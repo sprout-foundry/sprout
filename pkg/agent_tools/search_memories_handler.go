@@ -13,14 +13,7 @@ import (
 )
 
 // searchMemoriesHandler implements ToolHandler for the search_memories tool.
-//
-// Because ToolEnv does not carry an EmbeddingManager, this handler implements
-// a text-based fallback: it lists all memory files and filters them by
-// matching the query against each memory's name and first-line preview.
-//
-// When the ToolHandler path eventually gains embedding support (e.g. via a
-// dedicated EmbeddingAccessor interface in ToolEnv), this can be extended to
-// also run vector search.
+// Uses text-based fallback since ToolEnv doesn't carry an EmbeddingManager.
 type searchMemoriesHandler struct{}
 
 func (h *searchMemoriesHandler) Name() string {
@@ -161,7 +154,7 @@ type MemorySearchResult struct {
 }
 
 // SearchMemoriesByText lists all memory files and scores them against the query
-// using simple text matching. This is a fallback when no embedding index is available.
+// using simple text matching. Returns nil when no embedding index is available.
 func SearchMemoriesByText(query string, topK int, threshold float64) ([]MemorySearchResult, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
@@ -201,8 +194,8 @@ func SearchMemoriesByText(query string, topK int, threshold float64) ([]MemorySe
 			preview = preview[:117] + "..."
 		}
 
-		// Score based on name match + content match
-		score := scoreMemoryMatch(name, preview, content, queryWords)
+	// Score based on name match + content match
+	score := scoreMemoryMatch(name, preview, content, queryWords)
 
 		if score >= threshold {
 			results = append(results, MemorySearchResult{
@@ -252,7 +245,7 @@ func scoreMemoryMatch(name, preview, content string, queryWords []string) float6
 		// Name match is weighted highest
 		if strings.Contains(nameLower, word) {
 			matches++
-			totalScore += 0.5 // Name matches are very valuable
+			totalScore += 0.5
 		}
 
 		// Preview match is next
@@ -272,8 +265,7 @@ func scoreMemoryMatch(name, preview, content string, queryWords []string) float6
 		return 0
 	}
 
-	// Normalize to 0-1 range
-	// Maximum possible score per word is 1.0 (name + preview + content match)
+	// Normalize to 0-1 range (max possible per word is 1.0)
 	maxPossible := float64(len(queryWords))
 	if maxPossible == 0 {
 		return 0

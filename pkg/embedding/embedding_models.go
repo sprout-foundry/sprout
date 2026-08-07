@@ -44,7 +44,7 @@ type EmbeddingManager struct {
 
 	// ONNX runtime (held so Close() can release it). When providerShared is
 	// true, provider+onnxRuntime came from the process-wide shared cache
-	// (acquireSharedONNXProvider) and MUST NOT be closed by this manager —
+	// (acquireSharedJinaProvider) and MUST NOT be closed by this manager —
 	// other managers/agents in the same process reference the same instances.
 	onnxRuntime    *ONNXRuntime
 	providerShared bool
@@ -56,17 +56,6 @@ type EmbeddingManager struct {
 	// cachedProvider wraps the raw provider with an LRU content-hash cache.
 	// This is the provider exposed via GetConversationStore().Provider().
 	cachedProvider *cachedProvider
-
-	// Code-specific provider (Jina Code v2) for the dual-model architecture
-	// (SP-135). When available, QuerySimilarCode and CheckDuplicates route
-	// here instead of the Gemma-backed indexMgr. Both stores are separate:
-	// the code index uses the code provider's ModelHash, the Gemma index
-	// keeps its own. Falls back to indexMgr (Gemma) when the code model is
-	// unavailable or not initialized.
-	codeProvider  EmbeddingProvider
-	codeStore     VectorStore
-	codeIndexMgr  *IndexManager
-	codeAvailable bool
 
 	// sharedKey identifies this manager in the process-wide registry when it
 	// came from AcquireManager. Empty for directly-constructed managers, which
@@ -156,14 +145,6 @@ func (m *EmbeddingManager) Readiness() IndexReadiness {
 	if m.store != nil {
 		r.Records = m.store.Size()
 	}
-	// When the dual-model code provider is active, report the max of both
-	// stores so CanAnswerQueries() is true if EITHER index has records.
-	// A code-only build (Gemma store empty) should still answer code queries.
-	if m.codeStore != nil {
-		if codeSize := m.codeStore.Size(); codeSize > r.Records {
-			r.Records = codeSize
-		}
-	}
 	return r
 }
 
@@ -184,19 +165,12 @@ func (m *EmbeddingManager) InitError() error {
 
 // IndexSize returns the number of records in the vector store.
 // Returns 0 and a nil error if the manager is not yet initialized.
-// Reports the max of the Gemma and code stores so the status reflects whichever
-// index has data (SP-135 dual-model).
 func (m *EmbeddingManager) IndexSize() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	size := 0
 	if m.store != nil {
 		size = m.store.Size()
-	}
-	if m.codeStore != nil {
-		if codeSize := m.codeStore.Size(); codeSize > size {
-			size = codeSize
-		}
 	}
 	return size
 }
@@ -244,22 +218,6 @@ func (m *EmbeddingManager) snapshotIndexMgr() (*IndexManager, error) {
 	return m.indexMgr, nil
 }
 
-// snapshotCodeIndexMgr returns the code-specific IndexManager when the dual-
-// model architecture is active (codeProvider available), or falls back to the
-// Gemma-backed indexMgr otherwise. The caller (QuerySimilarCode /
-// CheckDuplicates) routes to whichever provider is ready.
-func (m *EmbeddingManager) snapshotCodeIndexMgr() (*IndexManager, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if !m.initialized.Load() {
-		return nil, fmt.Errorf("embedding: manager not initialized")
-	}
-	if m.codeAvailable && m.codeIndexMgr != nil {
-		return m.codeIndexMgr, nil
-	}
-	return m.indexMgr, nil
-}
-
 // snapshotQueryParams returns the resolved threshold and maxResults under lock.
 func (m *EmbeddingManager) snapshotQueryParams() (threshold float32, topK int) {
 	m.mu.Lock()
@@ -267,29 +225,20 @@ func (m *EmbeddingManager) snapshotQueryParams() (threshold float32, topK int) {
 	return m.threshold, m.maxResults
 }
 
-// SemanticSearchThreshold returns the appropriate NL-code search threshold
-// for the active provider. When the code model (Jina) is available, returns
-// the Jina-specific gate (0.30) — Jina serves all code queries including NL
-// search. Otherwise returns the Gemma gate (0.40).
+// SemanticSearchThreshold returns the NL-code search threshold for the sole
+// provider (Jina Code v2, SP-135). Jina serves all code queries including NL
+// search; its embedding space scores unrelated code near zero, so the gate
+// sits at 0.30 — below the measured correct-hit floor (0.343) with margin
+// over wrong answers (−0.07–0.20).
 func (m *EmbeddingManager) SemanticSearchThreshold() float32 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.codeAvailable {
-		return DefaultCodeModelSemanticSearchThreshold
-	}
-	return DefaultSemanticSearchThreshold
+	return DefaultCodeModelSemanticSearchThreshold
 }
 
-// RelatedCodeThreshold returns the appropriate related-code threshold for the
-// active provider. When the code model (Jina) is available, returns 0.35;
-// otherwise returns the Gemma gate (0.55).
+// RelatedCodeThreshold returns the related-code threshold for the sole
+// provider (Jina Code v2, SP-135). Jina scores unrelated code near zero
+// (0.066) and related code at 0.459, so the gate sits at 0.35.
 func (m *EmbeddingManager) RelatedCodeThreshold() float32 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.codeAvailable {
-		return DefaultCodeModelRelatedThreshold
-	}
-	return DefaultRelatedCodeThreshold
+	return DefaultCodeModelRelatedThreshold
 }
 
 // resolveIndexDirFromConfig resolves the embedding index directory using the
@@ -397,33 +346,19 @@ func sanitizeSlugName(name string) string {
 	return out
 }
 
-// Measured alternatives to the shipped q4f16 export, on this repository's own
-// code units (M1 Pro, 4 intra-op threads, after length-sorted batching):
+// createONNXProvider returns the process-wide shared Jina Code v2 embedding
+// provider and its runtime, creating (and downloading the model, if needed) on
+// first use. The returned instances are owned by the shared cache — the manager
+// must NOT close them (see providerShared and acquireSharedJinaProvider).
+// Sharing avoids loading a fresh ~160MB model copy per agent, which matters
+// most for the WebUI daemon that builds one agent per chat session.
 //
-//	model_q4 (shipped)     ~6.5 units/s   (fp32 activations suit the ORT CPU
-//	                                       backend, which has no native fp16
-//	                                       kernels)
-//	model_q4f16            ~4.4-5.3 units/s
-//	model_fp16             ~3.9 units/s
-//	model_quantized (int8) ~1.8 units/s
-//
-// Changing this is not free for users: ModelHash keys the vector store, so a
-// swap clears every index and forces a full rebuild, plus a fresh download.
-//
-// CoreML is NOT a shortcut here despite being available in the Go binding
-// (AppendExecutionProviderCoreMLV2). The export uses dynamic sequence length,
-// which MIL cannot bound, so the EP shatters the graph — 291 partitions out of
-// 1767 nodes — and compiling them exhausted memory before producing a single
-// embedding. GPU/ANE would need a fixed-shape (seq-length-bucketed) export.
-//
-// createONNXProvider returns the process-wide shared ONNX embedding provider
-// and its runtime, creating (and downloading the model, if needed) on first
-// use. The returned instances are owned by the shared cache — the manager must
-// NOT close them (see providerShared and acquireSharedONNXProvider). Sharing
-// avoids loading a fresh ~180MB model copy per agent, which matters most for
-// the WebUI daemon that builds one agent per chat session.
-//
-// On WASM the JS bridge (__sproutONNX) handles model loading internally.
+// Jina Code v2 (jina-embeddings-v2-base-code) is the sole embedding provider:
+// code search, duplicate detection, related-code, and conversation recall all
+// run through it. It replaced the dual-model setup (Gemma + Jina overlay) after
+// the NL parity probe confirmed Jina beats Gemma on every measured task — see
+// SP-135 eval data — and its symmetric space (no task prefixes) means one store
+// serves every query type.
 func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
-	return acquireSharedONNXProvider(ctx, DefaultModelDir(), EmbeddingGemma300MConfig())
+	return acquireSharedJinaProvider(ctx, DefaultModelDir(), JinaCodeV2Config())
 }

@@ -176,16 +176,12 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	m.stream = s
 	m.arch.SetStream(s)
 
-	// KV cache is disabled until correctness bug is fixed.
-	// The full re-encode path (O(n²)) is used instead.
-	// TODO: re-enable KV cache for O(n) decode.
-	// cache := NewKVCache(m.cfg.NumLayers, s)
-	// defer cache.Free()
-	// m.cache = cache
-	_ = NewKVCache // keep reference to avoid unused import
+	// KV cache: prefill stores K/V, decode appends — O(1) per token instead of O(n).
+	cache := NewKVCache(m.cfg.NumLayers, s)
+	defer cache.Free()
 
-	// Prefill: process the entire prompt
-	logits, err := m.arch.ForwardPrefill(m.makeIDsArray(tokenIDs), len(tokenIDs), nil)
+	// Prefill: process the entire prompt, populating the KV cache
+	logits, err := m.arch.ForwardPrefill(m.makeIDsArray(tokenIDs), len(tokenIDs), cache)
 	if err != nil {
 		return fmt.Errorf("prefill: %w", err)
 	}
@@ -218,10 +214,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 		}
 		recent := recentTokens[recentStart:]
 
-		// Full sequence re-encode for correctness.
-		// TODO: replace with cache.ForwardDecode once KV cache bug is fixed.
-		allTokens := append(append([]int{}, tokenIDs...), generated...)
-		logits, err = m.arch.ForwardPrefill(m.makeIDsArray(allTokens), len(allTokens), nil)
+		logits, err = m.arch.ForwardDecode(nextToken, len(tokenIDs)+i-1, cache)
 		if err != nil {
 			return fmt.Errorf("decode step %d: %w", i, err)
 		}
@@ -265,6 +258,14 @@ func (m *Model) Close() error {
 	m.arch.FreeWeights()
 	return nil
 }
+
+// TokenizerEncode exposes the tokenizer for diagnostic purposes.
+func (m *Model) TokenizerEncode(text string) []int {
+	return m.tokenizer.Encode(text)
+}
+
+// BOSID returns the beginning-of-sequence token ID.
+func (m *Model) BOSID() int { return m.cfg.BOSTokenID }
 
 // makeIDsArray converts token IDs to an MLX int64 array [1, seqLen].
 func (m *Model) makeIDsArray(ids []int) *mlx.Array {

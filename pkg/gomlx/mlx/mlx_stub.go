@@ -57,6 +57,9 @@ type Array struct{}
 // Free is a no-op on stub builds.
 func (a *Array) Free() {}
 
+// RetainArray is unavailable on stub builds.
+func RetainArray(a *Array) *Array { return &Array{} }
+
 // Eval always returns errUnavailable on stub builds.
 func (a *Array) Eval() error { return errUnavailable }
 

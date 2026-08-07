@@ -111,8 +111,18 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 // provider cache so multiple agents share one model instance. Auto-downloads
 // on first use. Best-effort: if the download fails or the session can't be
 // created, codeAvailable stays false and code queries fall back to Gemma.
+//
+// Skipped entirely on devices below dualModelMemoryFloor (phones, SBCs) where
+// the second model's memory + thermal cost exceeds the retrieval-quality win
+// of code-specific embeddings. The fallback is transparent: callers see
+// codeAvailable=false and route through the primary Gemma provider.
 // The caller must hold m.mu.
 func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context) {
+	if !dualModelSupported() {
+		log.Printf("embedding: skipping dual-model code provider (insufficient RAM for two concurrent ONNX sessions); code queries will use the primary model")
+		return
+	}
+
 	cfg := JinaCodeV2Config()
 	modelDir := DefaultModelDir()
 

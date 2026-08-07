@@ -16,6 +16,7 @@ package qwen3
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
@@ -43,6 +44,20 @@ func New(cfg llm.ModelConfig) (llm.Architecture, error) {
 		cfg.HeadDim = cfg.HiddenSize / cfg.NumHeads
 	}
 	cfg.UseQKNorm = true
+	// Testing hook: GO_QUANTIZE=4|6|8 forces on-the-fly quantization of a
+	// full-precision model (useful before downloading a pre-quantized one).
+	// Overrides any quantization section in config.json.
+	if bits := os.Getenv("GO_QUANTIZE"); bits != "" {
+		var n int
+		if _, err := fmt.Sscanf(bits, "%d", &n); err == nil && n >= 2 && n <= 8 {
+			cfg.Quantization = &llm.QuantConfig{
+				GroupSize: 64,
+				Bits:      n,
+				Mode:      "affine",
+			}
+			log.Printf("qwen3: forcing %d-bit quantization at load", n)
+		}
+	}
 	return &Qwen3{cfg: cfg}, nil
 }
 
@@ -55,18 +70,19 @@ type weights struct {
 
 type layerWeights struct {
 	inputNorm *mlx.Array
-	// Projection weights are stored pre-transposed in [in, out] layout so the
-	// forward pass can MatMul directly without per-call transposes.
-	qProj    *mlx.Array // [hidden, num_heads*head_dim]
-	kProj    *mlx.Array // [hidden, num_kv_heads*head_dim]
-	vProj    *mlx.Array // [hidden, num_kv_heads*head_dim]
-	oProj    *mlx.Array // [num_heads*head_dim, hidden]
+	// Projections dispatch between full-precision and quantized matmul in
+	// Forward (see linear.go). Quantized weights stay in [out, in] PyTorch
+	// layout; full precision is pre-transposed [in, out].
+	qProj    *linear // [hidden, num_heads*head_dim]
+	kProj    *linear // [hidden, num_kv_heads*head_dim]
+	vProj    *linear // [hidden, num_kv_heads*head_dim]
+	oProj    *linear // [num_heads*head_dim, hidden]
 	qNorm    *mlx.Array
 	kNorm    *mlx.Array
 	postNorm *mlx.Array
-	gateProj *mlx.Array // [hidden, intermediate]
-	upProj   *mlx.Array // [hidden, intermediate]
-	downProj *mlx.Array // [intermediate, hidden]
+	gateProj *linear // [hidden, intermediate]
+	upProj   *linear // [hidden, intermediate]
+	downProj *linear // [intermediate, hidden]
 }
 
 func (q *Qwen3) Config() llm.ModelConfig { return q.cfg }
@@ -127,21 +143,22 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 	for i := 0; i < q.cfg.NumLayers; i++ {
 		lw := &w.layers[i]
 		p := fmt.Sprintf("model.layers.%d", i)
+		quant := q.cfg.Quantization
 
 		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d input_norm: %w", i, err)
 		}
-		if lw.qProj, err = loadLinearT(sf, p+".self_attn.q_proj.weight", s); err != nil {
+		if lw.qProj, err = loadLinear(sf, p+".self_attn.q_proj.weight", s, quant); err != nil {
 			return fmt.Errorf("load layer %d q_proj: %w", i, err)
 		}
-		if lw.kProj, err = loadLinearT(sf, p+".self_attn.k_proj.weight", s); err != nil {
+		if lw.kProj, err = loadLinear(sf, p+".self_attn.k_proj.weight", s, quant); err != nil {
 			return fmt.Errorf("load layer %d k_proj: %w", i, err)
 		}
-		if lw.vProj, err = loadLinearT(sf, p+".self_attn.v_proj.weight", s); err != nil {
+		if lw.vProj, err = loadLinear(sf, p+".self_attn.v_proj.weight", s, quant); err != nil {
 			return fmt.Errorf("load layer %d v_proj: %w", i, err)
 		}
-		if lw.oProj, err = loadLinearT(sf, p+".self_attn.o_proj.weight", s); err != nil {
+		if lw.oProj, err = loadLinear(sf, p+".self_attn.o_proj.weight", s, quant); err != nil {
 			return fmt.Errorf("load layer %d o_proj: %w", i, err)
 		}
 		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", s)
@@ -156,13 +173,13 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 		if err != nil {
 			return fmt.Errorf("load layer %d post_norm: %w", i, err)
 		}
-		if lw.gateProj, err = loadLinearT(sf, p+".mlp.gate_proj.weight", s); err != nil {
+		if lw.gateProj, err = loadLinear(sf, p+".mlp.gate_proj.weight", s, quant); err != nil {
 			return fmt.Errorf("load layer %d gate_proj: %w", i, err)
 		}
-		if lw.upProj, err = loadLinearT(sf, p+".mlp.up_proj.weight", s); err != nil {
+		if lw.upProj, err = loadLinear(sf, p+".mlp.up_proj.weight", s, quant); err != nil {
 			return fmt.Errorf("load layer %d up_proj: %w", i, err)
 		}
-		if lw.downProj, err = loadLinearT(sf, p+".mlp.down_proj.weight", s); err != nil {
+		if lw.downProj, err = loadLinear(sf, p+".mlp.down_proj.weight", s, quant); err != nil {
 			return fmt.Errorf("load layer %d down_proj: %w", i, err)
 		}
 	}
@@ -192,16 +209,16 @@ func (q *Qwen3) FreeWeights() {
 	freeArr(q.weights.normWeight)
 	for i := range q.weights.layers {
 		freeArr(q.weights.layers[i].inputNorm)
-		freeArr(q.weights.layers[i].qProj)
-		freeArr(q.weights.layers[i].kProj)
-		freeArr(q.weights.layers[i].vProj)
-		freeArr(q.weights.layers[i].oProj)
+		q.weights.layers[i].qProj.Free()
+		q.weights.layers[i].kProj.Free()
+		q.weights.layers[i].vProj.Free()
+		q.weights.layers[i].oProj.Free()
 		freeArr(q.weights.layers[i].qNorm)
 		freeArr(q.weights.layers[i].kNorm)
 		freeArr(q.weights.layers[i].postNorm)
-		freeArr(q.weights.layers[i].gateProj)
-		freeArr(q.weights.layers[i].upProj)
-		freeArr(q.weights.layers[i].downProj)
+		q.weights.layers[i].gateProj.Free()
+		q.weights.layers[i].upProj.Free()
+		q.weights.layers[i].downProj.Free()
 	}
 }
 

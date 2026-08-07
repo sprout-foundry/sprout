@@ -89,6 +89,17 @@ type ModelConfig struct {
 	UseAttentionBias  bool   // Llama uses bias on QKV projections
 	UseTiedEmbeddings bool   // lm_head shares weights with embed_tokens
 	MaxPosition       int    // Maximum context length
+	Quantization      *QuantConfig // nil = full precision
+}
+
+// QuantConfig describes weight quantization for a model. It is set from the
+// `quantization` section of config.json on pre-quantized MLX models (e.g.
+// mlx-community/Qwen3-0.6B-4bit) or forced at load time to quantize a full
+// model on the fly.
+type QuantConfig struct {
+	GroupSize int
+	Bits      int
+	Mode      string
 }
 
 // ModelWeights is the base set of weights common to all transformer decoders.

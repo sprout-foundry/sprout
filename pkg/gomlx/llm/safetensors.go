@@ -97,6 +97,10 @@ func (sf *SafetensorsFile) Get(name string, s *mlx.Stream) (*mlx.Array, error) {
 		dtype = mlx.Float16
 	case "F32":
 		dtype = mlx.Float32
+	case "U32":
+		dtype = mlx.UInt32
+	case "I32":
+		dtype = mlx.Int32
 	default:
 		return nil, fmt.Errorf("safetensors: %q has unsupported dtype %s", name, entry.DType)
 	}

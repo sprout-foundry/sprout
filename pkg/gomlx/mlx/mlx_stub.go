@@ -297,3 +297,10 @@ func NewClosure(ClosureFunc) (*Closure, error) { return nil, errUnavailable }
 func (c *Closure) Apply([]*Array) ([]*Array, error) { return nil, errUnavailable }
 func (c *Closure) Compile(bool) (*Closure, error)    { return nil, errUnavailable }
 func (c *Closure) Free()                             {}
+
+func Quantize(*Array, int, int, string, *Stream) ([]*Array, error) {
+	return nil, errUnavailable
+}
+func QuantizedMatMul(*Array, *Array, *Array, *Array, bool, int, int, string, *Stream) (*Array, error) {
+	return nil, errUnavailable
+}

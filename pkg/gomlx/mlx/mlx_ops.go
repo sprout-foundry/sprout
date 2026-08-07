@@ -13,6 +13,11 @@ package mlx
 */
 import "C"
 
+import (
+	"fmt"
+	"unsafe"
+)
+
 // newOutput allocates an empty mlx_array handle for use as an op's output
 // parameter. MLX op functions overwrite the pointed-to handle; the caller wraps
 // the result on success (see wrapResult) or frees it on error.
@@ -73,6 +78,58 @@ func MatMul(a, b *Array, s *Stream) (*Array, error) {
 	out := newOutput()
 	rc := C.mlx_matmul(&out, a.cHandle(), b.cHandle(), s.cHandle())
 	return wrapResult(out, rc, "matmul")
+}
+
+// Quantize converts a float weight matrix into MLX's quantized representation
+// and returns [weight, scales, biases] (biases nil when mode produces none).
+// w must be a 2D [out, in] matrix in PyTorch layout. groupSize is the group
+// size for scale/bias (typically 64 or 128); bits is 2-8 (4, 6, 8 common).
+// mode is "affine" (default) or a grouped mode. The returned weight is an
+// int32 array in [out, in*bits/32] packed layout, matching what
+// QuantizedMatMul expects with transpose=true.
+func Quantize(w *Array, groupSize, bits int, mode string, s *Stream) ([]*Array, error) {
+	var vec C.mlx_vector_array = C.mlx_vector_array_new()
+	defer C.mlx_vector_array_free(vec)
+	gs := C.mlx_optional_int{value: C.int(groupSize), has_value: true}
+	bs := C.mlx_optional_int{value: C.int(bits), has_value: true}
+	cMode := C.CString(mode)
+	defer C.free(unsafe.Pointer(cMode))
+	rc := C.mlx_quantize(&vec, w.cHandle(), gs, bs, cMode, C.mlx_array{}, s.cHandle())
+	if rc != 0 {
+		return nil, fmt.Errorf("mlx: quantize: %s", lastMLXError())
+	}
+	n := int(C.mlx_vector_array_size(vec))
+	out := make([]*Array, 0, n)
+	for i := 0; i < n; i++ {
+		var h C.mlx_array
+		if grc := C.mlx_vector_array_get(&h, vec, C.size_t(i)); grc != 0 {
+			for _, a := range out {
+				a.Free()
+			}
+			return nil, fmt.Errorf("mlx: quantize: read output %d: %s", i, lastMLXError())
+		}
+		out = append(out, wrap(h))
+	}
+	return out, nil
+}
+
+// QuantizedMatMul computes x @ dequant(w)^T with weights quantized by
+// Quantize (or loaded from an MLX-format safetensors file). w is the packed
+// int32 weight [out, in*bits/32]; scales is [out, in/groupSize]; biases is
+// [out, in/groupSize] or nil for modes without bias. transpose should be
+// true when w is stored in [out, in] PyTorch layout (the mlx-lm convention).
+func QuantizedMatMul(x, w, scales *Array, biases *Array, transpose bool, groupSize, bits int, mode string, s *Stream) (*Array, error) {
+	out := newOutput()
+	gs := C.mlx_optional_int{value: C.int(groupSize), has_value: true}
+	bs := C.mlx_optional_int{value: C.int(bits), has_value: true}
+	cMode := C.CString(mode)
+	defer C.free(unsafe.Pointer(cMode))
+	var biasH C.mlx_array
+	if biases != nil {
+		biasH = biases.cHandle()
+	}
+	rc := C.mlx_quantized_matmul(&out, x.cHandle(), w.cHandle(), scales.cHandle(), biasH, C.bool(transpose), gs, bs, cMode, s.cHandle())
+	return wrapResult(out, rc, "quantized_matmul")
 }
 
 // Maximum returns the elementwise max of a and b.

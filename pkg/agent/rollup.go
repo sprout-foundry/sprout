@@ -14,54 +14,26 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// SP-066 Phase 2: hierarchical rollup of TurnCheckpoints.
+// Hierarchical rollup of TurnCheckpoints. As a conversation grows, the per-turn
+// checkpoint list grows linearly. The rollup worker folds N items at each level
+// into one coarser summary at level+1, keeping the list bounded.
 //
-// As a conversation grows, the per-turn checkpoint list grows linearly. Even
-// though each checkpoint is small, the list itself becomes unwieldy and the
-// substitute-every-prompt-build pass starts producing a long, fragmented
-// context. The rollup worker folds N items at each level into one coarser
-// summary at level+1, keeping the list bounded regardless of conversation
-// length.
-//
-// The substitution logic in seed treats a rolled-up checkpoint exactly like
-// a per-turn one — it's just a TurnCheckpoint whose StartIndex/EndIndex span
-// a wider historical range and whose Summary covers many turns. See SP-066
-// for the architecture.
-
-// Rollup tuning constants. Calibrated from the SP-066 2026-06-08 audit,
-// which found that the original 10+20=30 threshold never fired on real
-// user workloads (longest observed session reached 21 checkpoints).
-// Lowered to 5+15=20 so the first rollup fires within a moderate coding
-// session, exercising the Phase 2 hierarchy as a real safety net instead
-// of dormant code. See roadmap/SP-066-never-ending-context.md "Adjacent
-// question raised by the audit".
+// Rollup tuning constants.
 const (
-	// recentTurnsToPreserveDefault is the number of most-recent Level=0
-	// checkpoints kept at full fidelity. The rollup worker never folds
-	// entries in this window even if the level-0 count exceeds the threshold.
-	//
-	// SP-125: Low-Context Mode overrides this to 2 (via
-	// ContextProfile.RecentTurnsToPreserve) because LCM sessions are short
-	// (2–4 round-trips) and the recency window is nearly the whole
-	// conversation. See recentTurnsToPreserveFor for the profile-aware value.
+	// recentTurnsToPreserveDefault is the number of most-recent Level=0 checkpoints kept at full fidelity.
+	// Low-Context Mode overrides this to 2 (via ContextProfile.RecentTurnsToPreserve).
 	recentTurnsToPreserveDefault = 5
 
-	// rollupSourceCount is the number of source checkpoints folded into a
-	// single rollup at any level. Same N at every level for simplicity.
+	// rollupSourceCount is the number of source checkpoints folded into a single rollup at any level.
 	rollupSourceCount = 15
 
-	// rollupTriggerCount is the per-level checkpoint count that triggers a
-	// rollup. Anything ≥ this number at level L (excluding the recency
-	// window at level 0) gets folded into a level-(L+1) entry.
+	// rollupTriggerCount is the per-level checkpoint count that triggers a rollup.
 	rollupTriggerCount = rollupSourceCount
 
-	// rollupMaxLevel caps how deeply rollups stack. Beyond this depth we
-	// stop folding to avoid runaway summary-of-summary degradation.
+	// rollupMaxLevel caps how deeply rollups stack.
 	rollupMaxLevel = 5
 
-	// rollupTargetWords is the soft word budget passed to the LLM for the
-	// rolled-up summary body. Should match the limit in the rollup prompt
-	// template (prompts/rollup_prompt.md).
+	// rollupTargetWords is the soft word budget passed to the LLM for the rolled-up summary body.
 	rollupTargetWords = 400
 )
 
@@ -124,11 +96,7 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 		return nil
 	}
 
-	// SP-066 Phase 3d: if embeddings are available, look for a topic-shift
-	// boundary inside the candidate range and shrink the rollup to stop
-	// at it. Falls back to the default range when embeddings aren't
-	// available or no significant drop is detected. Best-effort: the
-	// worker never blocks on this.
+	// If embeddings are available, look for a topic-shift boundary inside the candidate range.
 	endIdx = a.refineRollupEnd(ctx, checkpoints, startIdx, endIdx)
 
 	sources := checkpoints[startIdx : endIdx+1]
@@ -139,10 +107,7 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 
 	a.replaceWithRollup(startIdx, endIdx, rollup)
 
-	// SP-066 Phase 3a: embed the rollup so semantic recall can surface it
-	// after its source per-turn entries are absorbed (and beyond, after any
-	// future /compact wipe). The conversation store is the permanent memory
-	// layer; the checkpoint list is just the active substitution window.
+	// Embed the rollup so semantic recall can surface it after its source entries are absorbed.
 	sessionID := ""
 	if a.state != nil {
 		sessionID = a.state.GetSessionID()
@@ -152,7 +117,6 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 }
 
 // recentTurnsToPreserveFor returns the profile-aware recency window size.
-// SP-125: Low-Context Mode overrides this to 2; full mode uses the default (5).
 func (a *Agent) recentTurnsToPreserveFor() int {
 	if n := a.contextProfile.RecentTurnsToPreserve; n > 0 {
 		return n
@@ -258,7 +222,7 @@ func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpo
 		if cp.CoveredTurns > 0 {
 			coveredTurns += cp.CoveredTurns
 		} else {
-			// Level-0 entries before SP-066 may have CoveredTurns=0.
+			// Legacy Level-0 entries may have CoveredTurns=0.
 			coveredTurns++
 		}
 		if cp.ID != "" {

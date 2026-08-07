@@ -16,12 +16,7 @@ type Skill struct {
 }
 
 // EmbeddingIndexConfig configures the embedding-based duplicate detection and semantic search.
-//
-// Enabled and AutoIndex are *bool rather than bool so a config layer can say
-// "off" as distinct from "unspecified". With a plain bool plus omitempty, false
-// is indistinguishable from absent both on disk and in the merge, which made
-// these flags one-way: a narrower layer could switch indexing on but never back
-// off. Read them through IsEnabled/IsAutoIndex, which treat nil as false.
+// Enabled and AutoIndex are *bool so a layer can distinguish "off" from "unspecified".
 type EmbeddingIndexConfig struct {
 	// Enabled controls whether the embedding index is active.
 	// nil means "not specified at this layer" — inherit from a broader layer.
@@ -43,9 +38,7 @@ type EmbeddingIndexConfig struct {
 	ExcludePaths []string `json:"exclude_paths,omitempty"`
 }
 
-// IsEnabled reports whether the embedding index is on. Unspecified is off —
-// indexing is opt-in, and defaulting it on is what previously had the daemon
-// indexing whatever directory it happened to start in.
+// IsEnabled reports whether the embedding index is on. Unspecified is off.
 func (e *EmbeddingIndexConfig) IsEnabled() bool {
 	return e != nil && e.Enabled != nil && *e.Enabled
 }
@@ -55,46 +48,32 @@ func (e *EmbeddingIndexConfig) IsAutoIndex() bool {
 	return e != nil && e.AutoIndex != nil && *e.AutoIndex
 }
 
-// SetEnabled and SetAutoIndex record an explicit value, which is what makes a
-// layer able to assert "off" against a broader layer's "on".
+// SetEnabled and SetAutoIndex record an explicit value.
 func (e *EmbeddingIndexConfig) SetEnabled(v bool)   { e.Enabled = &v }
 func (e *EmbeddingIndexConfig) SetAutoIndex(v bool) { e.AutoIndex = &v }
 
-// ComputerUseConfig gates the computer_user persona's desktop-control tools
-// (SP-063). The feature is categorically more dangerous than file edits — a
-// click can send an email or empty the trash — so it is off by default and
-// every field is a safety lever.
+// ComputerUseConfig gates the computer_user persona's desktop-control tools. Off by default.
 type ComputerUseConfig struct {
-	// Enabled is the master switch. When false (default) the computer_user
-	// persona's mouse/keyboard/screenshot tools are never registered or
-	// executed. Turning it on is a deliberate, one-time user choice.
+	// Enabled is the master switch. When false the computer_user tools are never registered.
 	Enabled bool `json:"enabled,omitempty"`
 
-	// MaxActionsPerMinute caps the action rate as a runaway-loop backstop.
-	// Default: 60. Set to 0 to disable the cap (not recommended).
+	// MaxActionsPerMinute caps the action rate. Default: 60. Set to 0 to disable.
 	MaxActionsPerMinute int `json:"max_actions_per_minute,omitempty"`
 
 	// AuditLogDir is where per-session JSONL action logs are written.
 	// Default: ~/.config/sprout/computer_use_log when empty.
 	AuditLogDir string `json:"audit_log_dir,omitempty"`
 
-	// WorkspaceAllowlist lists workspace roots where computer use is
-	// auto-approved for the session without the per-session opt-in prompt.
+	// WorkspaceAllowlist lists workspace roots where computer use is auto-approved.
 	WorkspaceAllowlist []string `json:"workspace_allowlist,omitempty"`
 
-	// PanicKeyChord is the key chord that triggers the panic key. Defaults
-	// to "ctrl+shift+escape". Set to "disabled" to turn off the panic key
-	// entirely.
+	// PanicKeyChord is the key chord that triggers the panic key. Defaults to "ctrl+shift+escape".
 	PanicKeyChord string `json:"panic_key_chord,omitempty"`
 
-	// DestructiveAppGate controls whether the destructive-app denylist gate
-	// is active. When true (default), actions targeting apps on the
-	// denylist prompt the user for approval before proceeding.
+	// DestructiveAppGate controls whether the destructive-app denylist gate is active. Default: true.
 	DestructiveAppGate bool `json:"destructive_app_gate,omitempty"`
 
-	// OverrideFilePath is an optional override of the per-user denylist
-	// override file location. When empty, the default path
-	// (~/.config/sprout/computer_use_denylist_overrides.json) is used.
+	// OverrideFilePath is an optional override of the denylist override file location.
 	OverrideFilePath string `json:"denylist_override_file,omitempty"`
 }
 
@@ -112,16 +91,9 @@ func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 		}
 		result.AuditLogDir = c.AuditLogDir
 		result.WorkspaceAllowlist = append([]string{}, c.WorkspaceAllowlist...)
-		// PanicKeyChord: if non-empty, use it. "disabled" is preserved as an
-		// explicit-off sentinel. Empty string defaults to "ctrl+shift+escape".
 		if c.PanicKeyChord != "" {
 			result.PanicKeyChord = c.PanicKeyChord
 		}
-		// DestructiveAppGate defaults to true. Because it's a plain bool
-		// (not a pointer), we can't distinguish "not set" from "set to
-		// false" — so the default is always true when computer use is
-		// enabled. Users who want to disable it must use a pointer-based
-		// config override (out of scope for this change).
 		result.DestructiveAppGate = true
 		result.OverrideFilePath = c.OverrideFilePath
 	}
@@ -139,19 +111,9 @@ func clampInt(v, lo, hi int) int {
 	return v
 }
 
-// VisionConfig controls vision-pipeline runtime behavior (SP-103-C3).
-//
-// All fields are zero-valued by default; Resolve() fills in safe defaults.
-// VisionConfig is consulted at runtime by the parallel OCR worker pool
-// (pkg/agent_tools/vision_parallel.go::getVisionParallelWorkers).
+// VisionConfig controls vision-pipeline runtime: parallel workers, concurrency cap, and batching.
 type VisionConfig struct {
-	// ParallelWorkers caps concurrent in-flight vision requests per
-	// session. Vision requests are heavyweight (large payloads, slow
-	// provider round-trips) so this defaults to 3 — independent of the
-	// generic request_parallelism setting.
-	//
-	// Range: 1..32. Values outside this range are clamped in Resolve().
-	// Set to 0 to fall back to the default (3).
+	// ParallelWorkers caps concurrent in-flight vision requests per session. Default: 3. Range: 1..32.
 	ParallelWorkers int `json:"parallel_workers,omitempty"`
 
 	// MaxParallelRequests caps the global number of in-flight vision
@@ -159,12 +121,10 @@ type VisionConfig struct {
 	// ParallelWorkers (which is per-session). Default: 8.
 	MaxParallelRequests int `json:"max_parallel_requests,omitempty"`
 
-	// EnableBatchProcessing toggles the multi-image batching layer
-	// (VISION-4). Default: true.
+	// EnableBatchProcessing toggles the multi-image batching layer. Default: true.
 	EnableBatchProcessing bool `json:"enable_batch_processing,omitempty"`
 
-	// MaxBatchSize is the maximum number of images sent to the provider
-	// in a single batched call. Default: 4. Range: 1..8.
+	// MaxBatchSize is the maximum number of images sent in a single batched call. Default: 4. Range: 1..8.
 	MaxBatchSize int `json:"max_batch_size,omitempty"`
 }
 
@@ -188,24 +148,11 @@ func (c *VisionConfig) Resolve() VisionConfig {
 	if c.MaxBatchSize > 0 {
 		result.MaxBatchSize = clampInt(c.MaxBatchSize, 1, 8)
 	}
-	// EnableBatchProcessing defaults to true. Because it's a plain bool
-	// (not a pointer), we can't distinguish "not set" from "set to
-	// false" — so the default is always true. Users must explicitly
-	// set false via JSON to disable. This mirrors the
-	// ComputerUseConfig.DestructiveAppGate pattern.
-	result.EnableBatchProcessing = c.EnableBatchProcessing
+		result.EnableBatchProcessing = c.EnableBatchProcessing
 	return result
 }
 
-// GetVisionConfig returns the raw VisionConfig from the on-disk
-// configuration file. If the config file can't be loaded or the Vision
-// section is absent, returns a zero-valued VisionConfig (all fields are
-// zero). Callers should use Resolve() on the result to fill in defaults,
-// or check individual fields directly (zero means "not set") for
-// precedence-based lookups.
-//
-// This is a convenience accessor for callers that don't have a Manager
-// instance (e.g., vision_parallel.go::getVisionParallelWorkers).
+// GetVisionConfig returns the raw VisionConfig from the on-disk config file.
 func GetVisionConfig() VisionConfig {
 	cfg, err := Load()
 	if err != nil || cfg == nil || cfg.Vision == nil {
@@ -214,18 +161,15 @@ func GetVisionConfig() VisionConfig {
 	return *cfg.Vision
 }
 
-// NotificationsConfig controls how the agent notifies the user when
-// long-running turns complete (SP-070).
+// NotificationsConfig controls how the agent notifies the user when long-running turns complete.
 type NotificationsConfig struct {
 	// CLIBell emits a terminal bell (\a) on completion.
 	CLIBell bool `json:"cli_bell,omitempty"`
 	// OSNotify fires an OS-level desktop notification on completion.
 	OSNotify bool `json:"os_notify,omitempty"`
-	// Browser fires a browser notification (used by WebUI, SP-070-4).
+	// Browser fires a browser notification (used by WebUI).
 	Browser bool `json:"browser,omitempty"`
-	// MinSeconds is the minimum turn duration (in seconds) before a
-	// notification is sent.  Default: 10.0.  Turns completing in less
-	// than this are considered too brief to warrant a notification.
+	// MinSeconds is the minimum turn duration before a notification is sent. Default: 10.
 	MinSeconds float64 `json:"min_seconds,omitempty"`
 }
 
@@ -245,7 +189,7 @@ func (c *NotificationsConfig) Resolve() NotificationsConfig {
 	return result
 }
 
-// EditApprovalConfig controls the per-hunk diff approval gate (SP-072).
+// EditApprovalConfig controls the per-hunk diff approval gate.
 type EditApprovalConfig struct {
 	Mode  string   `json:"mode,omitempty"`
 	Paths []string `json:"paths,omitempty"`
@@ -294,53 +238,35 @@ func (c *EditApprovalConfig) ShouldGate(path string) bool {
 
 // PersistentContextConfig configures persistent conversational context and memory retrieval.
 type PersistentContextConfig struct {
-	// ProactiveContextEnabled controls whether the system primes new sessions with
-	// relevant past work via semantic retrieval from conversation history.
-	// Default: true
+	// ProactiveContextEnabled controls whether the system primes new sessions with relevant past work. Default: true.
 	ProactiveContextEnabled bool `json:"proactiveContextEnabled,omitempty"`
 
-	// MaxContextualResults is the maximum number of past turns to retrieve for context.
-	// Default: 5
+	// MaxContextualResults is the maximum number of past turns to retrieve. Default: 5.
 	MaxContextualResults int `json:"maxContextualResults,omitempty"`
 
-	// MinRelevanceScore is the minimum time-decayed cosine similarity score for retrieval.
-	// Range: 0.0 to 1.0. Results below this score are filtered out.
-	// Default: 0.50
+	// MinRelevanceScore is the minimum time-decayed cosine similarity score. Range: 0.0–1.0. Default: 0.50.
 	MinRelevanceScore float64 `json:"minRelevanceScore,omitempty"`
 
-	// MaxContextChars is the hard cap on total injected character count for context.
-	// Default: 4000
+	// MaxContextChars is the hard cap on total injected character count. Default: 4000.
 	MaxContextChars int `json:"maxContextChars,omitempty"`
 
-	// WorkspaceScopedRetrieval restricts retrieval to turns from the current workspace only.
-	// When false (default), retrieval searches across all workspaces.
-	// Default: false
+	// WorkspaceScopedRetrieval restricts retrieval to the current workspace. Default: false.
 	WorkspaceScopedRetrieval bool `json:"workspaceScopedRetrieval,omitempty"`
 
-	// DriftDetectionEnabled controls whether conversational drift detection is active.
-	// When enabled, the system checks if the conversation has drifted from its original intent.
-	// Default: true
+	// DriftDetectionEnabled controls whether conversational drift detection is active. Default: true.
 	DriftDetectionEnabled bool `json:"driftDetectionEnabled,omitempty"`
 
-	// DriftThreshold is the cosine similarity threshold below which drift is flagged.
-	// Range: 0.0 to 1.0. Lower values require more divergence before flagging.
-	// Default: 0.60
+	// DriftThreshold is the cosine similarity threshold below which drift is flagged. Default: 0.60.
 	DriftThreshold float64 `json:"driftThreshold,omitempty"`
 
-	// DriftCheckInterval is the number of turns between drift checks.
-	// For example, 5 means drift is checked on turns 5, 10, 15, etc.
-	// Default: 5
+	// DriftCheckInterval is the number of turns between drift checks. Default: 5.
 	DriftCheckInterval int `json:"driftCheckInterval,omitempty"`
 
-	// RetentionDays controls how many days to keep persistent context entries.
-	// Default: 0 (never expire). Set to a positive value to automatically clean
-	// up entries older than the specified number of days at agent startup.
+	// RetentionDays controls how many days to keep persistent context entries. Default: 0 (never expire).
 	RetentionDays int `json:"retentionDays,omitempty"`
 }
 
-// Resolve returns a copy of the config with default values filled in for any
-// zero-value fields. Use this after loading from disk to ensure sensible defaults.
-// If the receiver is nil, returns a fully-defaulted config.
+// Resolve fills in defaults for zero-value fields. Safe to call on nil.
 func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 	result := PersistentContextConfig{
 		ProactiveContextEnabled:  true,
@@ -378,117 +304,52 @@ func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 	return result
 }
 
-// ChangeTrackingConfig gates and tunes the ChangeTracker. When Enabled
-// is false (the default) the entire subsystem is dormant — no file
-// changes are recorded, no revision history is written, and the
-// rollback/recover/view_history tools are no-ops. When Enabled is true
-// the per-shell_command snapshot walk runs (tuned by the remaining
-// fields) and direct file-tool tracking (write_file, edit_file,
-// patch_structured_file) records changes.
+// ChangeTrackingConfig gates and tunes the ChangeTracker.
 type ChangeTrackingConfig struct {
-	// Enabled controls whether the change tracking subsystem is active
-	// at all. When false, no file changes are recorded, no revision
-	// history is written, and the rollback/recover/view_history tools
-	// are no-ops.
-	//
-	// Defaults to true. The git-awareness guards (IsRevertSafe) now
-	// prevent the subsystem from reverting committed work, so tracking
-	// stays on by default. Set to false to disable the entire subsystem.
+	// Enabled controls whether the change tracking subsystem is active. Default: true.
 	Enabled *bool `json:"enabled,omitempty"`
 
-	// ShellWalkEnabled controls whether the per-shell_command snapshot
-	// walk runs at all. Disable for workspaces where the walk cost is
-	// unacceptable (e.g., very-large monorepos with novel bloat
-	// directories) or for users who don't care about recovering
-	// shell-deleted untracked files. Direct file-tool tracking is
-	// unaffected. Default: true. Only meaningful when Enabled is true.
+	// ShellWalkEnabled controls whether the per-shell_command snapshot walk runs. Default: true.
 	ShellWalkEnabled *bool `json:"shell_walk_enabled,omitempty"`
 
-	// MaxFiles caps the number of files visited in a single walk.
-	// Larger workspaces hit the cap and yield partial coverage with a
-	// truncation log. Default: 50000.
+	// MaxFiles caps the number of files visited in a single walk. Default: 50000.
 	MaxFiles int `json:"max_files,omitempty"`
 
-	// MaxTotalBytes caps cumulative content bytes captured per walk.
-	// Files past this cap get path-only entries (still appear in
-	// list_changes / FilesModified, but report recoverable=false).
-	// Default: 32 MiB (33554432).
+	// MaxTotalBytes caps cumulative content bytes captured per walk. Default: 32 MiB.
 	MaxTotalBytes int64 `json:"max_total_bytes,omitempty"`
 
-	// MaxDurationMs is the wall-clock budget for a single walk, in
-	// milliseconds. Exceeding it aborts the walk with a partial-
-	// coverage log. Default: 500 ms.
+	// MaxDurationMs is the wall-clock budget for a single walk. Default: 500ms.
 	MaxDurationMs int `json:"max_duration_ms,omitempty"`
 
-	// AutoSkipFileCountThreshold is the per-directory immediate child
-	// file count that triggers adaptive auto-skip. Default: 1500.
+	// AutoSkipFileCountThreshold is the per-directory child count that triggers auto-skip. Default: 1500.
 	AutoSkipFileCountThreshold int `json:"auto_skip_file_count_threshold,omitempty"`
 
-	// RevisionRetention controls how the persistent revision store
-	// (.sprout/revisions/ + .sprout/changes/) is compacted. Quantity-
-	// based tiering: most recent N revisions are kept verbatim, next M
-	// drop the conversation transcript, next K collapse to a one-line
-	// summary, the rest are dropped. Position is by directory mtime,
-	// so accessing an old revision via view_history / recover_file
-	// promotes it back toward "hot" automatically.
+	// RevisionRetention controls how the persistent revision store is compacted.
 	RevisionRetention *RevisionRetentionConfig `json:"revision_retention,omitempty"`
 }
 
-// RevisionRetentionConfig controls the quantity-based compaction of
-// the persistent revision history. Two retained tiers plus a drop
-// threshold:
-//
-//   - hot:   the most recent N revisions kept verbatim
-//   - warm:  the next M revisions with conversation.json dropped
-//   - drop:  anything older is removed entirely
-//
-// The ChangeTracker is a short-horizon stop-gap (recover from a bad
-// sed -i, undo a hasty rm), not a long-term audit log — that's what
-// git is for. Once a revision falls out of warm, the user has either
-// committed the work or wasn't going to recover it anyway, and the
-// disk space is better spent on hot data.
-//
-// See AGENTS.md "Change Tracking" for context.
+// RevisionRetentionConfig controls the quantity-based compaction of the persistent revision history.
 type RevisionRetentionConfig struct {
-	// HotCount: most recent N revisions kept verbatim (full
-	// conversation.json + instructions + llm_response + all change
-	// payloads). Fast view_history + full recovery. Default: 200.
+	// HotCount: most recent N revisions kept verbatim. Default: 200.
 	HotCount int `json:"hot_count,omitempty"`
 
-	// WarmCount: next M revisions after the hot tier. conversation.json
-	// dropped; instructions + response + change payloads kept. Recovery
-	// still works; conversation context lost. Default: 500.
+	// WarmCount: next M revisions with conversation.json dropped. Default: 500.
 	WarmCount int `json:"warm_count,omitempty"`
 
-	// MaxDirBytes is the long-stop cap on total revisions+changes
-	// disk usage per workspace. If the count-based tiering still
-	// leaves the directory over this size, trim oldest warm entries
-	// until under cap. Default: 1 GiB (1073741824).
+	// MaxDirBytes is the cap on total revisions+changes disk usage. Default: 1 GiB.
 	MaxDirBytes int64 `json:"max_dir_bytes,omitempty"`
 
-	// ArchiveFrozen: if true, dropped revisions are moved to
-	// .sprout/revisions/_frozen/ instead of being deleted outright.
-	// Opt-in safety net for users who want a recoverable record of
-	// long-tail history at the cost of unbounded growth. Default: false.
+	// ArchiveFrozen: if true, dropped revisions are moved to _frozen/ instead of deleted. Default: false.
 	ArchiveFrozen bool `json:"archive_frozen,omitempty"`
 
-	// MaxChangesPerRevision caps the number of change records kept per
-	// revision in .sprout/changes/. A single runaway session (e.g. an
-	// agent that `cd`'d into $HOME so a shell walk classified
-	// pre-existing files as creates) can produce tens of thousands of
-	// records; without this cap, count bloat persists even when total
-	// bytes are under MaxDirBytes. Default: 10000.
+	// MaxChangesPerRevision caps the number of change records kept per revision. Default: 10000.
 	MaxChangesPerRevision int `json:"max_changes_per_revision,omitempty"`
 
-	// MaxChangesAgeDays drops change records older than this number of
-	// days regardless of their parent revision's tier. Belt-and-
-	// suspenders against changes/ accumulating inside the hot window.
-	// Default: 30. Set to a negative value to disable.
+	// MaxChangesAgeDays drops change records older than this many days. Default: 30. Negative to disable.
 	MaxChangesAgeDays int `json:"max_changes_age_days,omitempty"`
 }
 
-// Resolve fills in defaults for any zero-value fields and returns a
-// fully-populated config. Safe to call on nil — yields all-defaults.
+// Resolve fills in defaults for zero-value fields. Safe to call on nil.
 func (c *ChangeTrackingConfig) Resolve() ChangeTrackingConfig {
 	result := ChangeTrackingConfig{
 		MaxFiles:                   50000,
@@ -496,10 +357,7 @@ func (c *ChangeTrackingConfig) Resolve() ChangeTrackingConfig {
 		MaxDurationMs:              500,
 		AutoSkipFileCountThreshold: 1500,
 	}
-	// Change tracking is enabled by default. The git-awareness guards
-	// (IsRevertSafe) prevent the subsystem from reverting committed
-	// work, so it stays on unless the user explicitly sets
-	// change_tracking.enabled = false.
+	// Change tracking is enabled by default.
 	enabledDefault := true
 	result.Enabled = &enabledDefault
 	result.ShellWalkEnabled = &enabledDefault
@@ -532,9 +390,7 @@ func (c *ChangeTrackingConfig) Resolve() ChangeTrackingConfig {
 	return result
 }
 
-// Resolve fills in defaults for any zero-value fields and returns a
-// fully-populated retention config. Safe to call on nil — yields
-// all-defaults.
+// Resolve fills in defaults for zero-value fields. Safe to call on nil.
 func (c *RevisionRetentionConfig) Resolve() RevisionRetentionConfig {
 	result := RevisionRetentionConfig{
 		HotCount:              200,

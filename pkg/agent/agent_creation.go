@@ -123,12 +123,9 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.state.SetCurrentContextTokens(0)
 		agent.state.SetContextWarningIssued(false)
 
-		// SP-125: resolve the context profile once at agent creation.
-		// Uses the now-known model context window to auto-detect LCM.
-		// Explicit config.context_mode overrides auto-detection. A window
-		// below ContextFloor (8K) returns an error that surfaces to the
-		// caller — the agent refuses to start rather than producing a
-		// broken session.
+		// Resolve the context profile once at agent creation.
+		// Auto-detects LCM from model context window; config.context_mode overrides.
+		// Windows below ContextFloor (8K) return an error — agent refuses to start.
 		var cfg *configuration.Config
 		if agent.configManager != nil {
 			cfg = agent.configManager.GetConfig()
@@ -142,18 +139,8 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		}
 		agent.contextProfile = profile
 
-		// SP-126: resolve the effective context cap once at agent creation
-		// and store on the Agent. Every downstream call site (seed_provider.Info,
-		// seed_query.OnIteration) reads this field rather than re-deriving
-		// from Config.MaxContextTokens or calling client.GetModelContextLimit()
-		// directly. The state.MaxContextTokens write above uses the same
-		// resolved value (getModelContextLimit routes through this resolver
-		// via the config check), so state and Agent stay in sync.
-		//
-		// A cap explicitly set below EffectiveContextCapMinimum (1024)
-		// returns an error that surfaces to the caller — matches the
-		// /max-context and settings_defs validators' behavior so users
-		// see consistent feedback regardless of which surface set the cap.
+		// Resolve the effective context cap once at agent creation and store it.
+		// Caps below EffectiveContextCapMinimum (1024) return an error.
 		nativeWindow := agent.getNativeModelContextLimit()
 		resolvedCap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
 		if capErr != nil {
@@ -165,8 +152,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		// native window, emit a one-time stderr line so they can verify
 		// it's active. Skip when the cap equals the native window (no-op)
 		// and skip when no cap was set (no point announcing "you're using
-		// the full window"). This matches SP-125's LCM auto-detect notice
-		// pattern — same idea, different lever.
+		// the full window").
 		if cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 &&
 			agent.effectiveContextCap > 0 &&
 			agent.effectiveContextCap < nativeWindow {
@@ -181,11 +167,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		}
 
 		if profile.Mode == configuration.ContextModeLowContext {
-			// Distinguish auto-detected LCM from explicit config. When the
-			// user explicitly set context_mode: "low_context", they already
-			// know — no notice needed. When it was auto-detected from the
-			// model's context window, surface a one-time notice so they
-			// understand why the experience is different.
+			// Show a one-time notice only when LCM was auto-detected, not when explicitly configured.
 			explicit := cfg != nil && cfg.ContextMode == configuration.ContextModeLowContext
 			if !explicit {
 				_, _ = fmt.Fprintf(os.Stderr,
@@ -201,27 +183,19 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			}
 		}
 
-		// Clean up old sessions once per process. Uses sync.Once so daemon
-		// mode (which creates agents per chat session) only runs cleanup on
-		// the very first agent, not on every subsequent chat session.
+		// Clean up old sessions once per process.
 		sessionCleanupOnce.Do(func() {
 			if err := cleanupMemorySessions(); err != nil && agent.debug {
 				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to clean up old sessions: %v\n", err)))
 			}
 		})
 
-		// SP-062: Clean up orphaned background processes from previous
-		// unclean exits (kill, segfault, etc.) once per process.
-		// Delegated to a build-tagged helper (no-op in WASM).
+		// Clean up orphaned background processes from previous unclean exits.
 		backgroundOrphanCleanupOnce.Do(func() {
 			cleanupOrphanedBackgroundProcesses(agent.debug)
 		})
 
-		// SP-089-4: auto-register a CLI password prompter when stdin is a
-		// TTY. The WebUI prompter is registered lazily by the WebUI server
-		// (via SetPasswordPrompter) when a client connects. This is
-		// best-effort: if stdin is not a TTY, passwordPrompter stays nil
-		// and sudo commands are blocked as before (safe default).
+		// Auto-register a CLI password prompter when stdin is a TTY.
 		if isInteractiveTerminal() {
 			agent.passwordPrompter = NewCLIPasswordPrompter()
 			if agent.debug {
@@ -257,9 +231,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			}
 		}
 
-		// SP-063: register computer_user desktop-control tools when explicitly
-		// enabled in config. No-op (and harmless) when disabled or when the
-		// platform lacks the required CLI tools.
+		// Register computer_use desktop-control tools when enabled in config.
 		if agent.configManager != nil {
 			if cuErr := RegisterComputerUseTools(agent.configManager.GetConfig()); cuErr != nil && agent.debug {
 				agent.Logger().Info("computer_use tools not registered: %v", cuErr)
@@ -304,39 +276,12 @@ func NewAgent() (*Agent, error) {
 }
 
 // resolveProfileAndSystemPrompt resolves the Low-Context Mode profile
-// (SP-125) and the system prompt matched to that profile, using the
-// model context window reported by the provider client. It is the
-// shared seam between NewAgentWithClient (SDK/WASM path) and
-// newAgentWithConfigManagerInner (CLI path) — both call sites MUST
-// route through here so the profile is computed from the same inputs
-// (config + window) and the system prompt always matches the resolved
-// profile. Previously the CLI path loaded the prompt via
-// GetEmbeddedSystemPromptWithProvider, which returned the full prompt
-// unconditionally — silently disabling LCM even when the profile
-// resolved to low_context. That regression is what this helper fixes.
-//
-// Contract:
-//  1. The context window is read from client.GetModelContextLimit().
-//     An error is treated as "unknown" (window=0) — the profile
-//     resolver tolerates this and falls back to the default profile.
-//  2. The profile is resolved via configuration.ResolveContextProfile.
-//     The floor error it returns when the window is below ContextFloor
-//     MUST propagate — callers turn it into a permanent error that
-//     surfaces to the user. We do not suppress it.
-//  3. The system prompt is loaded via GetEmbeddedSystemPromptForProfile
-//     using the resolved profile's SystemPromptPath (lite.md for LCM,
-//     the default otherwise). Paths are derived from the profile, not
-//     hardcoded.
-//  4. The configured SystemPromptText override (if any) is applied via
-//     resolveConfiguredSystemPrompt. Resolution semantics are unchanged.
-//
-// The profile is re-resolved inside initAgentFromResolvedProvider once
-// the agent's state manager has been initialized (so the cap-aware
-// resolver can be used); both calls share the same inputs (cfg +
-// GetModelContextLimit) and therefore agree. We accept the second
-// resolution rather than thread the profile through, because the state
-// manager owns MaxContextTokens and the re-resolution reflects the
-// finalized cap.
+// and the system prompt matched to that profile, using the model
+// context window reported by the provider client. Shared by both the
+// SDK/WASM path (NewAgentWithClient) and the CLI path
+// (newAgentWithConfigManagerInner) so the profile is computed from
+// the same inputs and the prompt always matches the resolved profile.
+// Floor errors (window < 8K) propagate to the caller.
 func resolveProfileAndSystemPrompt(
 	configManager *configuration.Manager,
 	client api.ClientInterface,
@@ -345,9 +290,7 @@ func resolveProfileAndSystemPrompt(
 ) (configuration.ContextProfile, string, error) {
 	providerName := api.GetProviderName(clientType)
 
-	// (1) Read the model context window. Errors are non-fatal — the
-	// profile resolver treats window=0 as "unknown" and falls back to
-	// the default profile. This matches the SDK path's prior behavior.
+	// Read the model context window. Errors are non-fatal — falls back to default profile.
 	contextWindow := 0
 	if client != nil {
 		if limit, err := client.GetModelContextLimit(); err == nil {
@@ -355,8 +298,7 @@ func resolveProfileAndSystemPrompt(
 		}
 	}
 
-	// (2) Resolve the profile. The floor error propagates — see
-	// isRunningUnderTest's caller suppression test for the floor case.
+	// Resolve the profile. Floor errors propagate to the caller.
 	var cfg *configuration.Config
 	if configManager != nil {
 		cfg = configManager.GetConfig()

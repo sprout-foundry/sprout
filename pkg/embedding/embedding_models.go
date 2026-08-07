@@ -40,8 +40,8 @@ type EmbeddingManager struct {
 
 	cachedProvider *cachedProvider
 
-	sharedKey      string
-	autoBuildOnce  sync.Once
+	sharedKey     string
+	autoBuildOnce sync.Once
 }
 
 type BuildResult struct {
@@ -175,10 +175,7 @@ func DefaultIndexDir(workspaceRoot string) string {
 	return resolveIndexDir(workspaceRoot)
 }
 
-// resolveIndexDir resolves the index directory under the data root, scoped
-// per-workspace. The workspace slug is load-bearing: without it, every manager
-// in a process shares one index, and the daemon's per-session managers would
-// clobber each other's manifests on every build.
+// resolveIndexDir resolves the index directory under the data root, scoped per-workspace via a slug.
 func resolveIndexDir(workspaceRoot string) string {
 	dataDir, err := envutil.DataDir()
 	if err != nil {

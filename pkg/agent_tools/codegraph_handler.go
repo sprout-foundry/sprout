@@ -16,24 +16,16 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
-// codegraphBuildMu guards codegraphBuildAttempted. Together they ensure only
-// one background build runs at a time while still allowing retry when a build
-// fails. This replaces sync.Once, which permanently blocked retries after a
-// single transient failure (e.g. file locked during a git operation).
+// codegraphBuildMu guards codegraphBuildAttempted to ensure only one
+// background build runs at a time while still allowing retry on failure.
 var (
 	codegraphBuildMu        sync.Mutex
 	codegraphBuildAttempted bool
 )
 
 // triggerCodegraphBuild kicks off a background goroutine that populates
-// the codegraph database. The first call to any codegraph query tool
-// returns "not indexed yet", but by the next call (typically seconds
-// later) the DB is populated and queries work. Already-populated DBs
-// are skipped (idempotent, safe for multiple agent instances).
-//
-// Unlike sync.Once, a failed build clears the attempted flag so the next
-// query tool call retries instead of returning "not indexed" for the
-// entire process lifetime.
+// the codegraph database. Already-populated DBs are skipped.
+// A failed build clears the attempted flag so the next call retries.
 func triggerCodegraphBuild() {
 	codegraphBuildMu.Lock()
 	if codegraphBuildAttempted {
@@ -75,10 +67,8 @@ func triggerCodegraphBuild() {
 	}()
 }
 
-// codegraphRefreshMu guards a single in-flight incremental refresh, and
-// codegraphRefreshAt rate-limits how often one is started. The graph is
-// consulted by several tools that an agent may call repeatedly within one turn;
-// without the interval every one of those calls would kick off another walk.
+// codegraphRefreshMu guards a single in-flight incremental refresh.
+// codegraphRefreshAt rate-limits how often one is started.
 var (
 	codegraphRefreshMu      sync.Mutex
 	codegraphRefreshRunning bool
@@ -86,18 +76,11 @@ var (
 )
 
 // codegraphRefreshInterval is how long a refresh is considered fresh enough.
-// Short, because the agent edits files between its own tool calls and a graph
-// that lags its edits is worse than useless — it reports confident, wrong
-// call relationships.
 const codegraphRefreshInterval = 30 * time.Second
 
 // triggerCodegraphRefresh re-indexes files whose mtime is newer than their
-// last_indexed timestamp, in the background.
-//
-// Incremental by construction (IndexChangedFiles → GetStaleFiles), so the cost
-// is a stat sweep when nothing changed. Failures are logged and the flag is
-// cleared so the next call retries; a stale graph is degraded, not broken, so a
-// failed refresh must never block the query the caller actually asked for.
+// last_indexed timestamp, in the background. Failures are logged but never
+// block the query the caller asked for.
 func triggerCodegraphRefresh() {
 	codegraphRefreshMu.Lock()
 	if codegraphRefreshRunning || time.Since(codegraphRefreshAt) < codegraphRefreshInterval {
@@ -131,8 +114,7 @@ func triggerCodegraphRefresh() {
 }
 
 // allowCodegraphRetry clears the attempted flag so the next query tool call
-// can trigger a fresh background build. Called when a build fails to start
-// or completes with an error.
+// can trigger a fresh background build.
 func allowCodegraphRetry() {
 	codegraphBuildMu.Lock()
 	codegraphBuildAttempted = false
@@ -304,17 +286,11 @@ func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
 	}
 	dbPath := filepath.Join(gitRoot, ".sprout", "codegraph.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		// Trigger a background build so that subsequent calls have data.
-		triggerCodegraphBuild()
-		return nil, nil
-	}
-	// The store exists, but existing is not the same as current. Nothing else
-	// refreshes it: IndexChangedFiles is reachable only from the /codegraph CLI
-	// command and from embedding_index(update) — a tool named for a different
-	// subsystem, which no persona is granted. Without this, get_callers,
-	// get_callees, find_dead_code and repo_map's warm path answer from whatever
-	// the tree looked like the first time the graph was ever built, and report
-	// it with no indication that it is stale.
+	// Trigger a background build so that subsequent calls have data.
+	triggerCodegraphBuild()
+	return nil, nil
+}
+// The store exists but may be stale. Refresh it in the background.
 	triggerCodegraphRefresh()
 	return codegraph.NewStore("")
 }
@@ -328,8 +304,6 @@ func formatSymbolListHandler(title string, symbols []codegraph.Symbol) string {
 	return b.String()
 }
 
-// formatDeadCodeWithConfidence groups candidates by confidence tier and formats
-// them with per-tier summaries and test-only annotations.
 func formatDeadCodeWithConfidence(candidates []codegraph.DeadCodeCandidate) string {
 	groups := map[codegraph.ConfidenceLevel][]codegraph.DeadCodeCandidate{
 		codegraph.ConfidenceHigh:   {},

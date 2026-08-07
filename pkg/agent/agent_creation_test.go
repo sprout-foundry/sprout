@@ -536,109 +536,39 @@ func newCLIPathTestServer() *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
-// cliPathTestEnv prepares the global state required to drive
-// newAgentWithConfigManagerInner end-to-end with a real GenericProvider.
-//
-// Returns:
-//   - manager: an isolated configuration Manager pointing at a temp dir
-//     (via NewTestManager) so the test cannot touch the user's real
-//     ~/.config/sprout settings.
-//   - server: the httptest server the GenericProvider will hit. The
-//     caller's t.Cleanup-equivalent is the returned cleanup() func.
-//   - cleanup: restores the original "lmstudio" config in the global
-//     factory and removes the env vars the test set. ALWAYS defer
-//     cleanup(); the next test in the package will see the original
-//     factory only if every test cleans up after itself.
-//
-// Important: sprout has TWO independent global factory singletons
-// (`pkg/agent_providers.GlobalFactory` and `pkg/factory.GlobalFactory`).
-// factory.CreateGenericProvider (the path used by agent creation) reads
-// from `pkg/factory.GlobalFactory`, while pkg/agent_providers' singleton
-// is the older API. We must upsert into BOTH so the test config is
-// honored end-to-end.
-//
-// Environment variables set by this helper:
-//
-//   - SPROUT_CONFIG / SPROUT_CONFIG: redirected to the temp dir via
-//     NewTestManager (so any indirect Load() lands in the temp dir).
-//   - ALLOW_REAL_PROVIDER: bypasses the isRunningUnderTest() shortcut
-//     in newAgentWithConfigManagerInner that would route to TestClient.
-//   - SKIP_CONNECTION_CHECK: bypasses CheckConnection()'s production
-//     chat-completions round-trip so the variable under test is the
-//     profile resolution, not the network round-trip. See the package-
-//     level comment's "What this test does NOT cover" section for why
-//     this seam is the right one to use.
-//   - MODEL_REGISTRY_URL=off: GenericProvider's GetModelContextLimit
-//     fetches from the remote GitHub-Pages registry; disabling it
-//     keeps the test deterministic and avoids 2s network timeouts.
-//   - MODEL_REGISTRY_TIMEOUT=200ms: belt-and-braces fast timeout in
-//     case the registry URL is left enabled in some path.
-//
-// Both SPROUT_* and SPROUT_* prefixes are set for env vars that the
-// codebase reads under either name (configuration.GetEnvSimple looks
-// up both). Tests now use SPROUT_ prefix only
-// rename and matches the pattern used elsewhere in pkg/agent_tests.
+// cliPathTestEnv sets up global state for end-to-end CLI-path tests with
+// a real GenericProvider backed by httptest. Upserts the test provider into
+// BOTH global factory singletons (pkg/agent_providers and pkg/factory).
+// Returns an isolated config Manager, the httptest server, and a cleanup
+// func that restores the original factory state. MUST defer cleanup().
+// Env vars set: SPROUT_ALLOW_REAL_PROVIDER, SPROUT_SKIP_CONNECTION_CHECK,
+// SPROUT_MODEL_REGISTRY_URL=off, SPROUT_MODEL_REGISTRY_TIMEOUT=200ms.
 func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configuration.Manager, server *httptest.Server, cleanup func()) {
 	t.Helper()
 
-	// Step 1: isolated config dir so the test cannot touch the user's
-	// real config. NewTestManager handles SPROUT_CONFIG/SPROUT_CONFIG
-	// and the Layer-5 cleanup-detector that complains if the real
-	// config gets modified.
+	// Isolated config dir so the test cannot touch the user's real config.
 	manager, mgrCleanup := configuration.NewTestManager(t)
 
-	// Step 2: bypass the isRunningUnderTest() shortcut in
-	// newAgentWithConfigManagerInner. Without this, the CLI path
-	// would route to TestClientType and never exercise our helper.
-	// GetEnvSimple checks SPROUT_ and SPROUT_ prefixes, so we set both
-	// to be safe.
+	// Bypass the isRunningUnderTest() shortcut that would route to TestClientType.
 	t.Setenv("SPROUT_ALLOW_REAL_PROVIDER", "1")
-	// Skip the production connection-check request so the variable
-	// under test is profile resolution, not the network round-trip.
-	// See package-level comment's "What this test does NOT cover".
+	// Skip the production connection-check so the variable under test is profile resolution.
 	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
-	// Disable the model registry fetch so GenericProvider.GetModelContextLimit
-	// resolves through the config (default_context_limit) rather than
-	// hitting the remote registry. The fetch has a 2s timeout and
-	// returns Empty models when the registry 404s; both behaviors are
-	// noisy and avoidable in tests.
+	// Disable the model registry fetch so GetModelContextLimit resolves through the config.
 	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
 	t.Setenv("SPROUT_MODEL_REGISTRY_TIMEOUT", "200ms")
-	// Skip the connection probe. Under `go test` stdin is a pipe,
-	// isNonInteractive() returns true, and any failed CheckConnection
-	// is fatal via recoverProviderStartup. The LCM logic under test
-	// doesn't depend on connectivity — it depends only on
-	// GetModelContextLimit, which reads from the provider config we
-	// just upserted. Skipping the probe keeps the test focused.
-	t.Setenv("SPROUT_SKIP_CONNECTION_CHECK", "1")
 
-	// Step 3: write the provider config to a temp dir so the user
-	// (and the failure mode where the provider config is loaded from
-	// the filesystem) can be convinced the config is real. We don't
-	// actually load from this file — the GlobalFactory is the
-	// in-process registry — but the file proves the test is wired
-	// against a syntactically valid provider config JSON.
+	// Write the provider config to a temp dir for syntactic validity proof.
 	configDir := t.TempDir()
 	configFile := filepath.Join(configDir, cliTestProviderName+".json")
 	if err := os.WriteFile(configFile, []byte(buildCLIProviderConfigJSON(defaultContextLimit)), 0o600); err != nil {
 		t.Fatalf("write provider config to %s: %v", configFile, err)
 	}
 
-	// Step 4: capture the original "lmstudio" config from BOTH factory
-	// singletons so we can restore them after the test. Without this,
-	// the next test that touches the factory would see our test
-	// endpoint URL and (in CI) try to "ensure model" against a
-	// long-dead httptest server. Each singleton has its own state
-	// because pkg/agent_providers and pkg/factory each instantiate a
-	// ProviderFactory and load embedded configs in their own init().
+	// Capture the original "lmstudio" config from BOTH factory singletons for cleanup.
 	originalProvidersLMStudio, originalProvidersErr := providers.GlobalFactory().GetProviderConfig(cliTestProviderName)
 	originalFactoryLMStudio, originalFactoryErr := factory.GlobalFactory().GetProviderConfig(cliTestProviderName)
 
-	// Step 5: build the test ProviderConfig and upsert it into BOTH
-	// factories. The endpoint is rewritten to the running httptest
-	// server URL. The parsed config is reused from the JSON file we
-	// wrote above so the schema matches what real (filesystem)
-	// configs look like.
+	// Build the test ProviderConfig and upsert it into BOTH factories.
 	server = newCLIPathTestServer()
 	buildTestConfig := func() (*providers.ProviderConfig, error) {
 		data, err := os.ReadFile(configFile)

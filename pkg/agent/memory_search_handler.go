@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"strings"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
-// handleSearchMemories searches memory files by semantic similarity.
-// It embeds the query and searches the ConversationStore for records
-// with Type "memory", returning ranked results.
 func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	query, ok := args["query"].(string)
 	if !ok || query == "" {
@@ -30,8 +27,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		}
 	}
 
-	// Memories live in the conversation store, whose unprefixed embedding space
-	// scores far lower than the code index. 0.75 there admits ~4% of pairs.
 	threshold := float32(embedding.DefaultConversationSearchThreshold)
 	if t, ok := args["threshold"]; ok {
 		switch v := t.(type) {
@@ -44,7 +39,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		}
 	}
 
-	// Clamp threshold to [0.0, 1.0]
 	if threshold < 0 {
 		threshold = 0
 	} else if threshold > 1 {
@@ -53,9 +47,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		// Embeddings are off (the default). Fall back to text-based memory
-		// search rather than returning empty — memory files exist on disk
-		// and a text match is a real result the caller can act on.
 		results, err := tools.SearchMemoriesByText(query, topK, float64(threshold))
 		if err != nil {
 			return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold), nil
@@ -93,7 +84,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 
 		sb.WriteString(fmt.Sprintf("#%d — **%s** (relevance: %.2f)\n", i+1, name, similarity))
 		if preview != "" {
-			// Truncate preview for display
 			displayPreview := preview
 			if len(displayPreview) > 150 {
 				displayPreview = displayPreview[:147] + "..."
@@ -108,13 +98,9 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 	return sb.String(), nil
 }
 
-// handleSearchMemoriesJSON returns structured JSON results from memory search.
-// Used internally for programmatic access.
 func handleSearchMemoriesJSON(ctx context.Context, a *Agent, query string, topK int, threshold float32) (string, error) {
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		// Embeddings off: fall back to text search and marshal the results
-		// into the same JSON shape the caller expects.
 		results, err := tools.SearchMemoriesByText(query, topK, float64(threshold))
 		if err != nil {
 			return "[]", nil

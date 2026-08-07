@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -233,4 +234,48 @@ func sanitizeSlugName(name string) string {
 
 func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
 	return acquireSharedJinaProvider(ctx, DefaultModelDir(), JinaCodeV2Config())
+}
+
+// createProvider returns the best available embedding provider for this
+// platform. On Apple Silicon (darwin/arm64) with a GPU and sufficient RAM,
+// it tries the MLX Metal provider first (SP-134). On every other platform
+// it falls back to the ONNX CPU provider.
+//
+// The SPROUT_EMBEDDING_BACKEND env var overrides the selection:
+// "mlx" forces MLX (fails if unavailable), "cpu" forces ONNX CPU.
+func (m *EmbeddingManager) createProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
+	backend := os.Getenv("SPROUT_EMBEDDING_BACKEND")
+
+	if backend != "cpu" && mlxProviderAvailable() {
+		p, err := m.createMLXProvider(ctx)
+		if err == nil {
+			return p, nil, nil
+		}
+		log.Printf("embedding: MLX provider unavailable (%v), falling back to ONNX CPU", err)
+		if backend == "mlx" {
+			return nil, nil, fmt.Errorf("MLX backend forced but unavailable: %w", err)
+		}
+	}
+
+	return m.createONNXProvider(ctx)
+}
+
+// createMLXProvider creates the MLX Metal provider for Jina Code v2.
+// On non-Apple-Silicon builds, mlxProviderAvailable() returns false and this
+// method is never called.
+func (m *EmbeddingManager) createMLXProvider(ctx context.Context) (EmbeddingProvider, error) {
+	modelDir := DefaultModelDir()
+	cfg := JinaCodeV2SafetensorsConfig()
+	modelPath := filepath.Join(modelDir, cfg.Name, cfg.ModelFilenameOrDefault())
+	tokenizerPath := filepath.Join(modelDir, cfg.Name, "tokenizer.json")
+
+	if _, err := os.Stat(modelPath); err != nil {
+		log.Printf("embedding: downloading MLX model %s...", cfg.Name)
+		if err := DownloadModel(ctx, modelDir, cfg); err != nil {
+			return nil, fmt.Errorf("mlx: download model: %w", err)
+		}
+		log.Printf("embedding: MLX model %s downloaded", cfg.Name)
+	}
+
+	return NewMLXEmbeddingProvider(ctx, modelPath, tokenizerPath)
 }

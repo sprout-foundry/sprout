@@ -36,7 +36,7 @@ func TestCodeModelEval(t *testing.T) {
 
 	ctx := context.Background()
 	modelDir := DefaultModelDir()
-	modelPath := filepath.Join(modelDir, "jina-code-v2", "model_q.onnx")
+	modelPath := filepath.Join(modelDir, "jina-code-v2", "model_quantized.onnx")
 	tokenizerPath := filepath.Join(modelDir, "jina-code-v2", "tokenizer.json")
 	if _, err := os.Stat(modelPath); err != nil {
 		t.Skipf("jina-code-v2 model not staged at %s: %v", modelPath, err)

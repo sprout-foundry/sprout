@@ -184,8 +184,11 @@ func TestHandleSearchMemories_NoEmbeddingManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-	if !strings.Contains(result, "embedding index") {
-		t.Errorf("expected helpful error message; got: %s", result)
+	// With embeddings off (the default), the tool degrades silently to a
+	// "no matches" verdict rather than surfacing an error about the missing
+	// index — the model should never see a broken-tool message.
+	if !strings.Contains(result, "No memories found") {
+		t.Errorf("expected silent 'No memories found' message; got: %s", result)
 	}
 }
 

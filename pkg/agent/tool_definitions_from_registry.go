@@ -34,6 +34,34 @@ func BuildToolDefinitions() []api.Tool {
 	return result
 }
 
+// BuildToolDefinitionsForAgent is BuildToolDefinitions filtered to the tools
+// the given agent can actually execute. Tools marked RequiresEmbeddings are
+// dropped when the agent has no embedding manager (the default — embeddings
+// are OPT-IN), keeping this roster in sync with the seed registry filter in
+// seed_tool_registry.go so the model is never offered a tool that would fail
+// at call time.
+func BuildToolDefinitionsForAgent(a *Agent) []api.Tool {
+	tools := BuildToolDefinitions()
+	if a == nil || a.GetEmbeddingManager() != nil {
+		return tools
+	}
+	filtered := make([]api.Tool, 0, len(tools))
+	for _, t := range tools {
+		if toolRequiresEmbeddings(t.Function.Name) {
+			continue
+		}
+		filtered = append(filtered, t)
+	}
+	return filtered
+}
+
+// toolRequiresEmbeddings reports whether the named tool is registered with
+// RequiresEmbeddings=true in the handler registry. Unknown tools return false.
+func toolRequiresEmbeddings(name string) bool {
+	h, ok := tools.GetNewToolRegistry().Lookup(name)
+	return ok && h.Definition().RequiresEmbeddings
+}
+
 // convertHandlerToAPITool converts a ToolHandler into an api.Tool for LLM consumption.
 func convertHandlerToAPITool(h tools.ToolHandler) api.Tool {
 	def := h.Definition()

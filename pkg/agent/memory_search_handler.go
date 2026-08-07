@@ -52,7 +52,11 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		return "Memory search requires the embedding index to be enabled. Use the /index command to enable workspace indexing.", nil
+		// Embeddings are off (the default). Memory search still works as a
+		// tool — it just has nothing to rank semantically, so the honest
+		// result is a silent "no matches" rather than an "embeddings are
+		// unavailable" error the model would have to react to.
+		return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold), nil
 	}
 
 	store, err := em.GetConversationStore(ctx)

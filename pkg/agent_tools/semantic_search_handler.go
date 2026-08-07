@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
@@ -20,7 +19,12 @@ func (h *semanticSearchHandler) Definition() ToolDefinition {
 		Name:        "semantic_search",
 		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
 		Hidden:      true, // superseded by `search`; still callable by name
-		Required:    []string{"query"},
+		// RequiresEmbeddings: without an embedding index this tool has nothing
+		// to search — the registration path drops it entirely (the model never
+		// sees it), and the nil-manager early return below keeps direct calls
+		// from a replayed session silent instead of reporting the feature off.
+		RequiresEmbeddings: true,
+		Required:           []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Required: true, Description: "Natural language description of what you're looking for"},
 			{Name: "threshold", Type: "number", Description: "Minimum similarity score 0.0-1.0 (default: 0.4)"},
@@ -84,41 +88,17 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 	// re-downloads the model on first use, double-opens the HNSW store, and
 	// can race the writer in the agent. Only fall back to a transient
 	// manager when running outside an agent context (CLI tools, tests).
+	//
+	// Without ANY manager there is nothing to search. The registration path
+	// (pkg/agent's seed registry) drops this tool entirely when the agent
+	// has no EmbeddingManager, so the model never sees it — this branch only
+	// guards direct calls (replayed sessions, saved automations) and returns
+	// a silent no-results verdict instead of an "embeddings are off" error.
 	mgr := env.EmbeddingMgr
-	ownsMgr := false
 	if mgr == nil {
-		var cfg *configuration.Config
-		if env.ConfigManager != nil {
-			cfg = env.ConfigManager.GetConfig()
-		} else {
-			cfgMgr, err := configuration.NewManager()
-			if err != nil {
-				return ToolResult{
-					Output:  fmt.Sprintf("Error getting configuration: %v", err),
-					IsError: true,
-				}, nil
-			}
-			cfg = cfgMgr.GetConfig()
-		}
-
-		workspaceRoot := env.WorkspaceRoot
-		if workspaceRoot == "" {
-			workspaceRoot = "."
-		}
-
-		embeddingCfg := cfg.EmbeddingIndex
-		if embeddingCfg == nil {
-			embeddingCfg = &configuration.EmbeddingIndexConfig{}
-		}
-
-		// Acquire from the process-wide registry rather than constructing one:
-		// a directly-built manager is a second in-memory store over the same
-		// index files, competing with whatever the agent already has open.
-		mgr = embedding.AcquireManager(embeddingCfg, workspaceRoot)
-		ownsMgr = true
-	}
-	if ownsMgr {
-		defer embedding.ReleaseManager(mgr)
+		return ToolResult{
+			Output: fmt.Sprintf("No results found matching: %q (threshold: %.2f)\n\nTry broadening your search query or lowering the threshold.", query, threshold),
+		}, nil
 	}
 
 	if err := mgr.Init(ctx); err != nil {

@@ -2,6 +2,8 @@
 sprout
 sprout-*
 sprout-main
+# Provider config for the local MLX model (embedded via go:embed; must be tracked)
+!pkg/agent_providers/configs/sprout-local.json
 ledit
 ledit-*
 ledit-main

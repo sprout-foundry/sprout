@@ -24,6 +24,7 @@ var knownEmbeddedProviders = []string{
 	"minimax",
 	"zai",
 	"zai-coding",
+	"sprout-local",
 }
 
 // ---------------------------------------------------------------------------

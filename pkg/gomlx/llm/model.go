@@ -300,6 +300,20 @@ func (m *Model) TokenizerEncode(text string) []int {
 	return m.tokenizer.Encode(text)
 }
 
+// FormatChat applies the chat template to a list of messages, producing the
+// raw prompt string fed to the model.
+func (m *Model) FormatChat(messages []ChatMessage) string {
+	return m.tokenizer.FormatChat(messages)
+}
+
+// DecodeToken converts a single token ID back to text (for streaming deltas).
+func (m *Model) DecodeToken(id int) string {
+	return m.tokenizer.Decode([]int{id})
+}
+
+// Config returns the model's configuration.
+func (m *Model) Config() ModelConfig { return m.cfg }
+
 // BOSID returns the beginning-of-sequence token ID.
 func (m *Model) BOSID() int { return m.cfg.BOSTokenID }
 
@@ -316,6 +330,11 @@ func (m *Model) makeIDsArray(ids []int) *mlx.Array {
 // shouldFilterToken returns true if the token should be hidden from the caller.
 // Used to filter thinking-mode tokens when ThinkingTokens is false.
 func (m *Model) shouldFilterToken(tokenID int, genCfg GenerateConfig) bool {
+	// Never surface the EOS token to callbacks: it terminates generation and
+	// decoding it would inject <|im_end|> (or similar) into the output text.
+	if tokenID == m.cfg.EOSTokenID {
+		return true
+	}
 	if genCfg.ThinkingTokens {
 		return false
 	}

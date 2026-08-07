@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"os"
-	goruntime "runtime"
 	"sync"
 
 	onnxruntime "github.com/yalue/onnxruntime_go"
@@ -78,18 +77,10 @@ func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPa
 	// Intra-op parallelism unlocks the batched-embedding speedup: with the
 	// previous IntraOpNumThreads=1 setting, ORT processes each matmul on
 	// one core, so feeding a [batch, seq] tensor takes the same wallclock
-	// as N sequential per-row calls. The bench harness (default ORT
-	// threading on M1+) showed ~1.7× batched-vs-single speedup; we get
-	// roughly the same here. Cap at min(NumCPU, 4) so we don't starve
-	// other sprout work (the chat loop, file watchers, etc.) on a small
-	// machine, and to keep this consistent across CI runners.
-	intraThreads := goruntime.NumCPU()
-	if intraThreads > 4 {
-		intraThreads = 4
-	}
-	if intraThreads < 1 {
-		intraThreads = 1
-	}
+	// as N sequential per-row calls. The thread budget is process-aware:
+	// it divides (NumCPU-1) across concurrent sprout instances so 5
+	// processes don't each spawn 8 ORT threads and oversubscribe the CPU.
+	intraThreads := defaultIntraOpThreads()
 	session, err := runtime.NewDynamicSession(modelPath,
 		[]string{"input_ids", "attention_mask"},
 		[]string{"sentence_embedding"},

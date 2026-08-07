@@ -12,17 +12,12 @@ import (
 	"time"
 )
 
-// EmbeddingGemma task prefixes for task-specific embedding.
-// These match the prefixes defined in the ONNX provider to ensure queries
-// and documents are embedded into the correct semantic space.
+// Task prefixes for embedding queries and documents.
 const (
 	// documentPrefix is prepended to code/text before embedding for indexing.
 	documentPrefix = "title: none | text: "
 
-	// queryPrefix is prepended to search queries before embedding.
 	queryPrefix = "task: search result | query: "
-
-	// codeQueryPrefix is prepended to code-specific search queries.
 	codeQueryPrefix = "task: code retrieval | query: "
 )
 
@@ -34,7 +29,7 @@ type IndexStats struct {
 	Duration       time.Duration
 }
 
-// IndexOptions configures the behavior of IndexManager.
+// IndexOptions configures IndexManager behavior.
 type IndexOptions struct {
 	// IncludeTests controls whether test functions are indexed.
 	IncludeTests bool
@@ -42,13 +37,9 @@ type IndexOptions struct {
 	BatchSize int
 	// MaxBodyLen truncates CodeUnit.Body to this many bytes before embedding (0 = no limit).
 	MaxBodyLen int
-	// IndexFileLevel controls whether non-code files (markdown, configs, etc.)
-	// are indexed at the file level. When true, files like README.md, package.json,
-	// Dockerfile, etc. are indexed as single records with Type="file".
+	// IndexFileLevel indexes non-code files (markdown, configs, etc.) at file level.
 	IndexFileLevel bool
-	// ManifestPath is the path to the build manifest file that tracks file
-	// modification times from the last successful build. When set, BuildIndex
-	// uses the manifest to skip parsing unchanged files.
+	// ManifestPath is the path to the build manifest file for incremental rebuilds.
 	ManifestPath string
 }
 
@@ -76,13 +67,7 @@ func NewIndexManager(provider EmbeddingProvider, store VectorStore, opts IndexOp
 }
 
 // BuildIndex walks rootDir, extracts code units, embeds them, and stores them.
-// Uses incremental rebuild: loads existing records, compares content hashes,
-// and only re-embeds changed or new files. Deleted files have their records
-// removed from the store.
-// When ManifestPath is set, uses an mtime-based manifest to skip parsing
-// unchanged files entirely, turning a multi-minute full parse into a
-// ~2-second stat sweep on warm indexes.
-// When IndexFileLevel is enabled, also indexes non-code files at the file level.
+// Uses incremental rebuild with mtime-based manifest to skip unchanged files.
 func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexStats, error) {
 	start := time.Now()
 	stats := &IndexStats{}
@@ -186,9 +171,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 
 	stats.UnitsExtracted = len(allUnits)
 
-	// Note: we no longer early-return when allUnits is empty. Even if no
-	// files changed, existing records for files that were deleted from
-	// the workspace must still be cleaned up below.
+	// Note: we don't early-return when allUnits is empty — deleted file records still need cleanup below.
 
 	// --- Incremental rebuild logic ---
 
@@ -244,18 +227,9 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		}
 	}
 
-	// Embed only changed units, checkpointing each file as it completes so an
-	// interrupted build persists whatever it finished instead of discarding
-	// everything accumulated up to the timeout.
-	//
-	// Store writes are batched because HNSWStore.Store rewrites the whole
-	// records JSON plus HNSW graph on every call: flushing per file made a
-	// build O(N²) in store I/O. The recordBatcher flushes every
-	// manifestCheckpointInterval files plus a final flush after embedUnits
-	// returns (including on cancellation, so the timeout path loses nothing).
-	// A hard process death between flushes loses at most the in-memory batch;
-	// Store is an upsert by ID, so the next build simply re-embeds those
-	// files. The 50× write-amplification reduction is worth that trade.
+	// Embed only changed units, checkpointing each file as it completes.
+	// Batch store writes to avoid O(N²) I/O — HNSWStore.Store rewrites
+	// the whole records JSON plus HNSW graph on every call.
 	var newRecords []VectorRecord
 	if len(unitsToEmbed) > 0 {
 		debugLogf("index: re-embedding %d units...", len(unitsToEmbed))
@@ -295,8 +269,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		debugLogf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
 	}
 
-	// Manifest-invalidated path: model changed, every embedding is stale.
-	// ReplaceAll wipes the store and writes the freshly-embedded records.
+	// Model changed: replace all records with fresh embeddings.
 	if manifestInvalidated && len(newRecords) > 0 {
 		debugLogf("index: replacing all records with %d re-embedded records (model changed)", len(newRecords))
 		storeStart := time.Now()
@@ -306,14 +279,8 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
 		stats.UnitsEmbedded = len(newRecords)
 	} else {
-		// Compute stale record IDs: records whose owning file or symbol no
-		// longer exists in the workspace. Two cases:
-		//   1. The file was re-walked (in currentFileUnits) and the symbol
-		//      ID is missing from the new extraction → symbol was removed.
-		//   2. The file is absent from both changedFiles (walked) and
-		//      unchangedFiles (manifest-skipped) → file was deleted.
-		// Records for manifest-skipped files are left alone; we have no
-		// evidence they're stale.
+		// Compute stale record IDs: removed symbols and deleted files.
+		// Manifest-skipped files are left alone.
 		unchangedSet := make(map[string]bool, len(unchangedFiles))
 		for _, f := range unchangedFiles {
 			unchangedSet[f] = true
@@ -349,16 +316,8 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		}
 	}
 
-	// Save the manifest covering only files this build actually finished.
-	//
-	// embedUnits degrades gracefully on timeout: it returns the records it got
-	// and a nil error. Recording every walked file as indexed on top of that
-	// used to freeze the index permanently — the next build's mtime diff saw
-	// nothing changed, re-embedded nothing, and the partial record count stood
-	// forever. A full build of this repository is projected well past the
-	// 15-minute auto-build budget, so the interrupted case is the normal case,
-	// not an edge case. Excluding partially-embedded files is what makes a
-	// build resumable across runs.
+	// Save manifest covering only files this build actually finished.
+	// Partially-embedded files are excluded so the next build resumes them.
 	if m.opts.ManifestPath != "" {
 		wantByFile := make(map[string]int, len(unitsToEmbed))
 		for _, u := range unitsToEmbed {
@@ -448,14 +407,8 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 	return nil
 }
 
-// queryWithPrefix embeds text under the given EmbeddingGemma task prefix and
-// returns the top-K records above threshold.
-//
-// The prefix is not decoration: EmbeddingGemma embeds queries and documents
-// into deliberately different subspaces, so the same pair of texts scores very
-// differently depending on which prefix each side carried. Picking the wrong
-// one silently shifts the whole similarity distribution out from under
-// whatever threshold the caller applies.
+// queryWithPrefix embeds text under a task prefix and returns the top-K records above threshold.
+// EmbeddingGemma uses different subspaces for queries vs documents, so the prefix matters.
 func (m *IndexManager) queryWithPrefix(ctx context.Context, text, prefix string, topK int, threshold float32) ([]QueryResult, error) {
 	vec, err := m.provider.EmbedWithPrefix(ctx, text, prefix)
 	if err != nil {
@@ -491,32 +444,13 @@ func (m *IndexManager) CheckDuplicates(ctx context.Context, codeText string, top
 }
 
 // embedUnits converts CodeUnits to text, batch-embeds, and returns VectorRecords.
-// On context cancellation (timeout), it returns partial results instead of an error
-// so that the caller can store whatever was processed so far.
-// Detects file-level units (ID == file path) vs code units (ID == file:path) and
-// uses the appropriate converter to set the Type field correctly.
-//
-// When onFileComplete is non-nil, it is invoked the moment every unit belonging
-// to a file has been embedded — in batch completion order, not input order —
-// with that file's records. BuildIndex feeds these to a recordBatcher that
-// persists completed files in batches, so an interrupted build keeps the files
-// it finished instead of discarding them (the single end-of-build Store call
-// never ran on devices where the timeout fired mid-embed).
+// Returns partial results on cancellation. Calls onFileComplete per-file for checkpointed persistence.
 func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileComplete func(file string, records []VectorRecord) error) ([]VectorRecord, error) {
 	now := time.Now()
 	var records []VectorRecord
 	var embedded int
 
-	// Embed short units alongside short ones. Every row in an ORT chunk pads up
-	// to that chunk's longest row, so batching in extraction order makes a
-	// one-line function pay for the 2000-byte file-level unit that happens to
-	// sit beside it. Measured on this repository: median unit is 122 tokens but
-	// p90 is 540, and extraction-order batching does 3.4x the token-positions
-	// actually needed. Grouping by length cuts that to 1.1x — 2.4x faster
-	// end-to-end (2.4 -> 5.9 units/s).
-	//
-	// Sorting a permutation rather than `units` keeps the caller's slice
-	// untouched and lets the output stay in input order.
+	// Sort by length to minimize padding waste in batch embedding.
 	order := make([]int, len(units))
 	textOf := make([]string, len(units))
 	for i := range units {
@@ -527,8 +461,7 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileC
 		return len(textOf[order[a]]) < len(textOf[order[b]])
 	})
 
-	// Vectors land here by original index so a partial (cancelled) run still
-	// reports which specific units completed.
+	// Track vectors by original index for partial results.
 	vecByIndex := make([][]float32, len(units))
 
 	// Group unit indices by file so a file's completion can be detected the
@@ -540,9 +473,7 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileC
 	embeddedByFile := make(map[string]int, len(unitsByFile))
 	completedFiles := make(map[string]bool, len(unitsByFile))
 
-	// recordsForFile assembles one file's records from the vectors that have
-	// landed. Only called once every unit of the file has embedded, so every
-	// index is non-nil.
+	// recordsForFile assembles one file's records from embedded vectors.
 	recordsForFile := func(file string) []VectorRecord {
 		idxs := unitsByFile[file]
 		out := make([]VectorRecord, 0, len(idxs))
@@ -582,12 +513,8 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileC
 
 	for i := 0; i < len(order); i += m.opts.BatchSize {
 		if err := ctx.Err(); err != nil {
-			// Graceful degradation: return partial results on timeout/cancellation.
-			// Completed files were already handed to onFileComplete (and the
-			// caller flushes them), so `embedded` is the honest progress figure —
-			// len(records) is still empty here.
-			log.Printf("index: embedding interrupted after %d/%d units: %v",
-				embedded, len(units), err)
+					// Return partial results on cancellation; completed files were already flushed.
+		log.Printf("index: embedding interrupted after %d/%d units: %v",embedded, len(units), err)
 			break
 		}
 
@@ -622,15 +549,12 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, onFileC
 		}
 	}
 
-	// Emit in input order so records stay grouped by file, which is what the
-	// caller's per-file completeness check reads.
+	// Emit in input order for per-file grouping.
 	for i, u := range units {
 		if vecByIndex[i] == nil {
 			continue // not reached before cancellation
 		}
-		// Check if this is a file-level unit (ID == file path) or code unit (ID contains :)
-		// File-level units from FileExtractor have ID == File
-		// Code units from ExtractFromFile have ID == "file:functionName"
+		// File-level units have ID == file path; code units have ID == "file:name".
 		if u.ID == u.File {
 			// File-level unit
 			records = append(records, fileCodeUnitToRecord(u, vecByIndex[i], now))

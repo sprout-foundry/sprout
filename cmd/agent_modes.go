@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -492,6 +493,25 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return nil
 		}); err != nil {
 			return fmt.Errorf("failed to update config for direct mode: %w", err)
+		}
+
+		// SP-048-4: When the direct-mode run has a terminal on stderr
+		// (workflow coordinator invoked with shared stdout/stderr but no
+		// stdin), start the status footer and terminal tool subscriber
+		// so the user sees the same tool timeline and footer as the
+		// interactive CLI. The footer is TTY-gated internally; we gate
+		// the subscriber too so agent_message rendering through the
+		// subscriber only activates when there is a real terminal.
+		if chatAgent != nil && !daemonMode && term.IsTerminal(int(os.Stderr.Fd())) {
+			footerSource := &agentFooterSource{agent: chatAgent}
+			footer := console.NewStatusFooter(os.Stderr, footerSource)
+			console.RegisterGlobalStatusFooter(footer)
+			footer.Start()
+			defer footer.Stop()
+
+			subCtx, cancelSub := context.WithCancel(ctx)
+			defer cancelSub()
+			_ = cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 		}
 
 		// Direct mode

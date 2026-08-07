@@ -13,13 +13,13 @@ import (
 )
 
 // completionCacheTTL is how long argument-completion results are cached
-// before re-querying. Short enough that newly registered MCP servers or
-// config changes appear within a second of the user pausing, long enough
-// to prevent repeated network calls or config reads during rapid typing.
-// The TTL is refreshed on every cache hit (sliding window), so a user
-// typing continuously never re-queries — the recompute only fires after
-// ~TTL of inactivity on a given command context.
-const completionCacheTTL = 500 * time.Millisecond
+// before re-querying. Long enough that a pause to read the dropdown
+// doesn't trigger a re-fetch (the source data — model lists, provider
+// lists, config — changes on the order of minutes, not seconds), short
+// enough that newly registered MCP servers or config changes appear
+// within a few seconds. The TTL is refreshed on every cache hit
+// (sliding window), so a user typing continuously never re-queries.
+const completionCacheTTL = 5 * time.Second
 
 // slashCommandCache caches the command registry and argument-completion
 // results so the autocomplete dropdown doesn't rebuild the registry or

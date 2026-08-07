@@ -12,14 +12,9 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// SP-066 Phase 3: semantic recall of historical conversation summaries.
-//
+// Semantic recall of historical conversation summaries.
 // On user-turn ingest, embed the user message, query the conversation store
-// for top-K similar past summaries (per-turn or rollup), and inject any
-// that aren't already in the current substitution window as a "recalled
-// context" block on the next prompt. The store is permanent memory; this
-// surface lets a long-running session re-reference work the user has long
-// since rolled past.
+// for top-K similar past summaries, and inject them as "recalled context" on the next prompt.
 
 // Tunable defaults for the recall pipeline. Conservative values to start;
 // tune from the recall_diagnostic telemetry once we see real sessions.
@@ -165,14 +160,9 @@ func retrieveSemanticRecall(
 	return candidates, diag, nil
 }
 
-// recalledItemFromRecord converts a store QueryResult into a RecalledItem,
-// applying the recency decay. Returns ok=false when the record's metadata
-// is missing the fields recall needs (covers schema drift gracefully —
-// older per-turn embeddings written before SP-066 won't have a
-// checkpoint_id and just won't be eligible).
+// recalledItemFromRecord converts a store QueryResult into a RecalledItem, applying the recency decay.
 func recalledItemFromRecord(r embedding.QueryResult, expectedSessionID string, now time.Time, decayRate float64) (RecalledItem, bool) {
-	// Filter to the active session's records. Cross-session recall is
-	// explicitly out of scope per SP-066's "Out of Scope" section.
+	// Filter to the active session's records. Cross-session recall is out of scope.
 	if expectedSessionID != "" {
 		if sid, _ := r.Record.Metadata["sessionId"].(string); sid != "" && sid != expectedSessionID {
 			return RecalledItem{}, false
@@ -195,8 +185,7 @@ func recalledItemFromRecord(r embedding.QueryResult, expectedSessionID string, n
 		Score:      score,
 	}
 
-	// Pull metadata fields if present. Both per-turn and rollup records
-	// expose checkpoint_id; legacy per-turn records (pre-SP-066) may not.
+	// Pull metadata fields if present. Both per-turn and rollup records expose checkpoint_id; legacy records may not.
 	if v, ok := r.Record.Metadata["checkpoint_id"].(string); ok {
 		item.CheckpointID = v
 	}
@@ -276,22 +265,10 @@ func formatRecalledBlock(item RecalledItem) string {
 	return b.String()
 }
 
-// Recall runs the semantic-recall pipeline over the conversation store and
-// returns the items worth surfacing, capped at `limit`. It is the pure-data
-// sibling of InjectSemanticRecall: no formatting, no system-supplement
-// mutation, no telemetry publish. Used by:
-//   - InjectSemanticRecall (the in-loop wrapper that adds formatting)
-//   - the future /recall CLI command (SP-092-2)
-//   - the future webui /api/recall endpoint (SP-092-3)
-//
-// Returns (nil, nil) when:
-//   - the agent or its embedding manager is missing
-//   - the query is blank after trim
-//   - limit <= 0
-//
-// `limit` replaces the hardcoded semanticRecallTopK (3) for the slice length;
-// the same gating constants (recency decay, similarity threshold) still apply
-// inside retrieveSemanticRecall.
+// Recall runs the semantic-recall pipeline over the conversation store.
+// Returns (nil, nil) when the agent or its embedding manager is missing,
+// the query is blank, or limit <= 0. Used by InjectSemanticRecall and
+// the future /recall CLI and webui /api/recall endpoints.
 func (a *Agent) Recall(ctx context.Context, query string, limit int) ([]RecalledItem, error) {
 	if a == nil {
 		return nil, nil
@@ -362,14 +339,9 @@ func (a *Agent) InjectSemanticRecallWithItems(ctx context.Context, query string,
 	// Publish telemetry (the diagnostic is best-effort — we re-summarize
 	// here so the existing PublishRecallDiagnostic signature stays stable).
 	//
-	// TODO(SP-095 — see TODO.md instrumentation ticket): Recall discards the
-	// retrieval-time diag from retrieveSemanticRecall, so we lose the
-	// following per-call fields here:
-	//   - EmbedDurationMS      (provider.Embed wall time)
-	//   - CandidatesConsidered (raw store.Query result count)
-	//   - TopScores            (raw cosine similarities for telemetry)
-	// Re-introduce them when the instrumentation follow-up lands. Recall's
-	// signature may grow to return the diag, or we may wrap it.
+	// TODO: Recall discards the retrieval-time diag from retrieveSemanticRecall,
+	// so we lose EmbedDurationMS, CandidatesConsidered, and TopScores.
+	// Re-introduce them when the instrumentation follow-up lands.
 	diag := recallRetrievalDiagnostic{
 		Injected:      len(items),
 		InjectedChars: len(formatted),

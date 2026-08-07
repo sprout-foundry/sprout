@@ -1,3 +1,4 @@
+// Package agent: rollup embedding — writes rollup summaries into the conversation store.
 package agent
 
 import (
@@ -11,25 +12,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
-// SP-066 Phase 3: rollup summaries get embedded into the same conversation
-// store that holds per-turn embeddings, so semantic recall can surface them
-// when a future user turn asks about a span that's already been rolled up.
-//
-// Per-turn embeddings (Type="conversation_turn", written by EmbedAndStoreTurn)
-// continue to live alongside rollup embeddings (Type="checkpoint_rollup",
-// written here). Both survive `/compact` wipes — the active TurnCheckpoint
-// list is just the substitution window; the embedding store is the
-// permanent memory layer.
-
-// checkpointRollupRecordType is the VectorRecord.Type tag for rollup
-// embeddings. Distinct from "conversation_turn" (per-turn) and "memory"
-// (cross-session) so recall queries can filter by resolution level.
+// checkpointRollupRecordType is the VectorRecord.Type tag for rollup embeddings.
 const checkpointRollupRecordType = "checkpoint_rollup"
 
-// embedRollupCheckpoint writes the rollup's summary into the conversation
-// store as a VectorRecord. Called from the rollup worker after the LLM
-// returns a non-empty summary; errors are logged and swallowed so a flaky
-// embedding provider never blocks rollup completion.
+// embedRollupCheckpoint writes the rollup's summary into the conversation store.
 func (a *Agent) embedRollupCheckpoint(ctx context.Context, sessionID string, rollup TurnCheckpoint) {
 	if a == nil {
 		return
@@ -53,8 +39,7 @@ func (a *Agent) embedRollupCheckpoint(ctx context.Context, sessionID string, rol
 		return
 	}
 
-	// Redact secrets before embedding — the conversation store is
-	// long-lived persistent memory and survives /compact wipes.
+	// Redact secrets before embedding.
 	safeSummary := redact.String(rollup.Summary)
 	safeActionable := redact.String(rollup.ActionableSummary)
 

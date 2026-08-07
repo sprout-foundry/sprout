@@ -1,15 +1,6 @@
 // Package agent provides the shell command handler with a unified security model.
-//
-// When UnifiedRiskResolver is ON (the default, set by config_migration.go),
-// a single ResolveToolRisk assessment gates every shell command. The unified
-// gate (unifiedSecurityGate in tool_security.go) runs once per tool call —
-// no Gate 1/Gate 2 bridge or suppression plumbing is needed.
-//
-// When the flag is OFF (legacy fallback), the older dual-gate model applies:
-// Gate 1 (ClassifyToolCall static classifier) + Gate 2 (EvaluateOperationRisk
-// persona cascade). Note that the legacy path may double-prompt because the
-// suppression bridge was removed in SP-068 Phase 3; the unified resolver is
-// the recommended and default path.
+// When UnifiedRiskResolver is ON (the default), a single ResolveToolRisk assessment
+// gates every shell command. When OFF, the older dual-gate model applies.
 package agent
 
 import (
@@ -111,7 +102,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
-	// SP-068 Phase 2: when UnifiedRiskResolver is enabled, use the single
+	// When UnifiedRiskResolver is enabled, use the single
 	// ResolveToolRisk assessment instead of the individual gates below.
 	if cfg := a.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
 		return a.handleShellCommandUnified(ctx, command, background)
@@ -119,7 +110,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 
 	// Shadow-mode logging: compare old dual-gate decision vs new unified
 	// assessment when the flag is off so we can validate parity before
-	// flipping the flag (SP-068 Phase 2).
+	// flipping the flag.
 	if a.debug {
 		secResult := tools.ClassifyToolCall("shell_command", map[string]interface{}{"command": command})
 		unified := a.ResolveToolRisk("shell_command", map[string]interface{}{"command": command})
@@ -144,7 +135,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	}
 
 	// — Legacy dual-gate path (flag OFF) —
-	// Risk cascade for personas / risk profiles (SP-058).
+	// Risk cascade for personas / risk profiles.
 	// Resolution:
 	//   Critical → ALWAYS reject (rm -rf root, fork bomb). No persona,
 	//              profile, or interactive prompt can override this.
@@ -156,9 +147,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	//
 	// historyRewriteAlreadyApproved tracks whether the High-tier prompt
 	// below already approved this command, so the git history-rewrite
-	// gate doesn't re-prompt for the same operation (e.g. git reset
-	// --hard is HighRiskNever → High, then also matches the
-	// history-rewrite gate).
+	// gate doesn't re-prompt for the same operation.
 	historyRewriteAlreadyApproved := false
 	if risk := a.EvaluateOperationRisk(command); risk == configuration.RiskLevelCritical {
 		return "", agenterrors.NewSecurityError(
@@ -561,7 +550,7 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 }
 
 // handleShellCommandUnified is the single-risk-assessment path for shell
-// commands when the UnifiedRiskResolver flag is ON (SP-068 Phase 2).
+// commands when the UnifiedRiskResolver flag is ON.
 // It folds all security gates into one RiskAssessment via ResolveToolRisk
 // and acts on the result.
 func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, background bool) (string, error) {
@@ -587,7 +576,7 @@ func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, b
 	// highRiskApprovedForCommand check before this handler was invoked.
 	// Re-checking here is redundant — Gate 1's approval is authoritative for
 	// the unified path. Proceed directly to execution for all non-Critical
-	// levels (High/Medium/Low). SP-068 Phase 3 removed the redundant Gate 2.
+	// levels (High/Medium/Low). The redundant Gate 2 was removed.
 	if background {
 		return a.executeShellCommandBackground(ctx, command)
 	}

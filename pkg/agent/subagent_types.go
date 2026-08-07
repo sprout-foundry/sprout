@@ -21,8 +21,6 @@ import (
 // SUBAGENT_FAILED sentinel string prefixes — those literals are retained
 // in the human-readable Output so any LLM behavior keyed on the legacy
 // shape still works, but in-process callers should switch to Status.
-//
-// See SP-059 Phase 2d.
 type SubagentStatus string
 
 const (
@@ -35,8 +33,6 @@ const (
 )
 
 // FileChange is a single tracked write/edit/delete from a subagent run.
-// Sourced from ChangeTracker.GetChanges() (SP-059 Phase 2c) when change
-// tracking is enabled; nil when it isn't.
 type FileChange struct {
 	Path string `json:"path"`
 	Op   string `json:"op"` // "created" | "modified" | "deleted"
@@ -59,8 +55,6 @@ type SubagentRunMetrics struct {
 // for the old map[string]string shape so existing LLM behavior keeps
 // working, plus new typed fields (status, files_modified, metrics) for
 // callers that want them.
-//
-// See SP-059 Phase 2a.
 type SubagentReturn struct {
 	// Output is the subagent's final assistant message (was: "stdout").
 	Output string `json:"stdout"`
@@ -94,7 +88,7 @@ type SubagentReturn struct {
 	// WorkingDir is the directory the subagent executed under.
 	WorkingDir string `json:"working_dir,omitempty"`
 
-	// ── New typed fields (SP-059) ──
+	// ── New typed fields ──
 
 	// Status is the terminal state. Always populated, even on success.
 	Status SubagentStatus `json:"status"`
@@ -110,7 +104,7 @@ type SubagentReturn struct {
 	// ProgressLog is a capped timeline of subagent activity events
 	// (spawn / output / complete) so the primary's LLM can reason about
 	// what the subagent actually did, not just its final assistant
-	// message. nil when no events were captured. SP-059 Phase 3a.
+	// message. nil when no events were captured.
 	ProgressLog []ProgressEntry `json:"progress_log,omitempty"`
 }
 
@@ -187,7 +181,7 @@ type SubagentResult struct {
 	// Iterations is the assistant-turn count consumed by this subagent
 	// run. Surfaced to the primary via SubagentRunMetrics.Iterations so
 	// the model has visibility into how many LLM rounds a delegated task
-	// burned. SP-059 Phase 5.
+	// burned.
 	Iterations     int
 	Elapsed        time.Duration
 	Cancelled      bool
@@ -203,13 +197,13 @@ type SubagentResult struct {
 	OutputComplete bool
 	// FileChanges is the manifest of writes/edits this subagent performed,
 	// captured via its own ChangeTracker. nil when tracking wasn't
-	// initialized for this run. SP-059 Phase 2c.
+	// initialized for this run.
 	FileChanges []TrackedFileChange
 	// ProgressLog is a per-run timeline of notable subagent events
 	// (spawn, output, complete). Surfaced to the primary's LLM via the
 	// SubagentReturn envelope so the model can reason about *what* the
 	// subagent did, not just the final assistant message. Capped to
-	// subagentProgressLogCap entries. SP-059 Phase 3a.
+	// subagentProgressLogCap entries.
 	ProgressLog []SubagentProgressEntry
 }
 

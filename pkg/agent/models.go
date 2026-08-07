@@ -48,9 +48,7 @@ func (a *Agent) GetProviderType() api.ClientType {
 	return a.getClientType()
 }
 
-// selectDefaultModel chooses an appropriate default model from available models.
-// It prefers probe-recommended candidates first (primary > subagent), then applies
-// config-driven provider patterns, and finally falls back to the first model.
+// selectDefaultModel chooses an appropriate default model from available models. Prefers probe-recommended candidates first.
 func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientType) string {
 	if len(models) == 0 {
 		return ""
@@ -82,8 +80,7 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 	return models[0].ID
 }
 
-// getDefaultModelPatterns returns auto-selection preferences from the embedded
-// provider config. Local Ollama is special-cased because it has no JSON config.
+// getDefaultModelPatterns returns auto-selection preferences from the embedded provider config. Ollama is special-cased.
 func (a *Agent) getDefaultModelPatterns(provider api.ClientType) []string {
 	if provider == api.OllamaClientType || provider == api.OllamaLocalClientType {
 		return []string{"llama3.2", "llama3.1"}
@@ -100,8 +97,7 @@ func (a *Agent) getDefaultModelPatterns(provider api.ClientType) []string {
 	return config.Models.DefaultModelPatterns
 }
 
-// matchPattern performs a case-insensitive substring match for every non-empty
-// component separated by '*'. Empty patterns do not match anything.
+// matchPattern performs a case-insensitive substring match for every non-empty component separated by '*'.
 func matchPattern(modelID, pattern string) bool {
 	if pattern == "" {
 		return false
@@ -115,12 +111,7 @@ func matchPattern(modelID, pattern string) bool {
 	return true
 }
 
-// selectProbeRecommended scans the model list for probe-backed recommendations.
-// It returns the first model whose RecommendedRoles contains "primary" (strongest
-// signal — complex stage passed). If none have "primary", it returns the first
-// model with "subagent" (gates passed). Returns "" if no probe-backed candidate
-// exists. An empty RecommendedRoles slice means the model was never probed and
-// is ignored by this function.
+// selectProbeRecommended scans for probe-backed recommendations: primary first, then subagent. Returns "" if none.
 func selectProbeRecommended(models []api.ModelInfo) string {
 	var firstSubagent string
 	for _, m := range models {
@@ -185,9 +176,7 @@ func (a *Agent) getModelFromCustomProviderConfig(provider api.ClientType) string
 	return ""
 }
 
-// SetProvider switches to a specific provider with its default or current model.
-// Session-scoped: changes are not written to config. Use SetProviderPersisted
-// when the user explicitly chose the provider (e.g. CLI /provider command).
+// SetProvider switches to a specific provider with its default or current model. Session-scoped (not persisted).
 func (a *Agent) SetProvider(provider api.ClientType) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
@@ -240,8 +229,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Set debug mode on the new client
 	newClient.SetDebug(a.debug)
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so provider/model switches feel instant in the UI.
+	// Connection is validated on the first real request — skip the blocking check here for instant switches.
 
 	// Switch to the new client atomically (both fields under the write lock)
 	a.setClient(newClient, provider)
@@ -250,7 +238,6 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	actualModel := newClient.GetModel()
 
 	// Store in session fields (not config) - this allows session-scoped changes
-	// without affecting other sessions or persisting to config
 	a.state.SetSessionProvider(provider)
 	a.state.SetSessionModel(actualModel)
 
@@ -271,9 +258,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	return nil
 }
 
-// SetProviderPersisted switches to a specific provider and persists the choice to config.
-// This is intended for CLI use where the selection should be saved.
-// The test/mock provider is rejected since it should never be the persisted default.
+// SetProviderPersisted switches to a specific provider and persists the choice to config. Rejects test provider.
 func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	if provider == api.TestClientType {
 		return agenterrors.NewInvalidInputError("test provider cannot be persisted as the active provider", nil)
@@ -330,8 +315,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Set debug mode on the new client
 	newClient.SetDebug(a.debug)
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so provider/model switches feel instant in the CLI.
+	// Connection is validated on the first real request — skip the blocking check for instant CLI switches.
 
 	// Switch to the new client atomically (both fields under the write lock)
 	a.setClient(newClient, provider)
@@ -339,10 +323,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Get the actual model being used (might be different due to fallback)
 	actualModel := newClient.GetModel()
 
-	// Mirror SetProvider: update session state so GetModel()/GetProvider()
-	// return the new values immediately. Without this, a stale session
-	// override from a prior SetProvider/SetModel call masks the new client
-	// and the footer shows the old model until the override is cleared.
+	// Update session state so GetModel()/GetProvider() return the new values immediately.
 	a.state.SetSessionProvider(provider)
 	a.state.SetSessionModel(actualModel)
 
@@ -384,23 +365,16 @@ func resolveModelIDForProvider(model string, models []api.ModelInfo) (string, bo
 	return "", false
 }
 
-// SetModel changes the current model for the session.
-// This is the session-scoped version that doesn't persist to config.
-// For CLI use with persistence, use SetModelPersisted.
+// SetModel changes the current model for the session (session-scoped, not persisted).
 func (a *Agent) SetModel(model string) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
 
-	// Hold the read lock for the entire SetModel operation. SetModel only
-	// changes the model name on the existing client — it doesn't swap the
-	// client pointer. Holding RLock prevents SetProvider from swapping
-	// the client out from under us mid-operation. A concurrent SetModel
-	// on the same agent is fine (RLock is shared).
+	// Hold the read lock for the entire SetModel operation. RLock prevents SetProvider from swapping the client out.
 	a.clientMu.RLock()
 	defer a.clientMu.RUnlock()
 
-	// Try to set the model directly first - this allows testing unknown models
-	// Only validate against known models if the direct setting fails
+	// Try to set the model directly first - allows testing unknown models. Only validate against known models if direct setting fails.
 	err := a.client.SetModel(model)
 	if err != nil {
 		// If direct setting failed, try to find the model in the known list
@@ -432,8 +406,7 @@ func (a *Agent) SetModel(model string) error {
 		}
 	}
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so model switches feel instant in the UI.
+	// Connection is validated on the first real request — skip the blocking check for instant UI switches.
 
 	// Store in session fields (not config) - this allows session-scoped changes
 	a.state.SetSessionModel(model)
@@ -447,7 +420,6 @@ func (a *Agent) SetModel(model string) error {
 }
 
 // SetModelPersisted changes the current model and persists the choice to config.
-// This is intended for CLI use where the selection should be saved.
 func (a *Agent) SetModelPersisted(model string) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
@@ -456,8 +428,7 @@ func (a *Agent) SetModelPersisted(model string) error {
 	a.clientMu.RLock()
 	defer a.clientMu.RUnlock()
 
-	// Try to set the model directly first - this allows testing unknown models
-	// Only validate against known models if the direct setting fails
+	// Try to set the model directly first - allows testing unknown models. Only validate against known models if direct setting fails.
 	err := a.client.SetModel(model)
 	if err != nil {
 		// If direct setting failed, try to find the model in the known list
@@ -489,8 +460,7 @@ func (a *Agent) SetModelPersisted(model string) error {
 		}
 	}
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so model switches feel instant in the CLI.
+	// Connection is validated on the first real request — skip the blocking check for instant CLI switches.
 
 	// Store in session fields so GetModel() returns the new value immediately.
 	a.state.SetSessionModel(model)
@@ -534,19 +504,15 @@ func (a *Agent) isProviderAvailable(provider api.ClientType) bool {
 func (a *Agent) ClearSessionOverrides() {
 	a.state.SetSessionProvider("")
 	a.state.SetSessionModel("")
-	// SP-063: reset per-session computer-use consent so the next session
-	// re-prompts. The persistent workspace allowlist survives (it's in
-	// config), but the transient session flag does not.
+	// Reset per-session computer-use consent so the next session re-prompts.
 	a.ResetComputerUseSessionApproval()
-	// SP-063-4h: clear the per-session app allowlist too.
+	// Clear the per-session app allowlist too.
 	a.computerUseMu.Lock()
 	a.computerUseAppAllowlist = nil
 	a.computerUseMu.Unlock()
 }
 
-// ResetComputerUseSessionApproval clears the per-session computer-use opt-in
-// flag (SP-063). Called from ClearSessionOverrides when a session ends so
-// that the next session re-prompts the user for consent.
+// ResetComputerUseSessionApproval clears the per-session computer-use opt-in flag. Called from ClearSessionOverrides.
 func (a *Agent) ResetComputerUseSessionApproval() {
 	if a == nil {
 		return

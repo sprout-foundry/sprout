@@ -13,14 +13,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// passwordPromptTimeout is the maximum time a password request blocks
-// waiting for a WebUI response. Shorter than edit approval's 30 min
-// because passwords are time-sensitive (sudo credential caches, etc.).
+// passwordPromptTimeout is the maximum time a password request blocks waiting for a WebUI response.
 var passwordPromptTimeout = 5 * time.Minute
 
-// WebUIPasswordPrompter implements PasswordPrompter for WebUI sessions.
-// It publishes a password_request event and blocks until the browser
-// POSTs the response (or the timeout fires).
+// WebUIPasswordPrompter implements PasswordPrompter for WebUI sessions. Publishes a password_request event and blocks for the response.
 type WebUIPasswordPrompter struct {
 	agent *Agent
 }
@@ -33,11 +29,7 @@ func NewWebUIPasswordPrompter(agent *Agent) *WebUIPasswordPrompter {
 	return &WebUIPasswordPrompter{agent: agent}
 }
 
-// Prompt asks the WebUI to collect a password from the user.
-//
-// Returns ErrNoInteractiveSurface when there's no event bus or no active
-// WebUI clients. On timeout, returns a descriptive error. On context
-// cancellation, returns ctx.Err().
+// Prompt asks the WebUI to collect a password from the user. Returns ErrNoInteractiveSurface if no event bus or active WebUI clients.
 func (wp *WebUIPasswordPrompter) Prompt(ctx context.Context, reason string) (string, error) {
 	if wp.agent == nil || wp.agent.GetEventBus() == nil || !wp.agent.HasActiveWebUIClients() {
 		return "", tools.ErrNoInteractiveSurface
@@ -51,9 +43,7 @@ func (wp *WebUIPasswordPrompter) Prompt(ctx context.Context, reason string) (str
 	ch := passwordPrompterBroker.register(requestID)
 	defer passwordPrompterBroker.cleanup(requestID)
 
-	// TODO(SP-089-4): When the shell tool passes a real PasswordRequest
-	// with separate command and prompt fields, use those instead of
-	// passing `reason` as both.
+	// TODO: When the shell tool passes a real PasswordRequest with separate command and prompt fields, use those instead.
 	payload := events.PasswordRequestEvent(requestID, reason, reason)
 	wp.agent.publishEvent(events.EventTypePasswordRequest, payload)
 	// Notify input-required subscribers (CLI bell, browser notification).
@@ -79,11 +69,7 @@ func (wp *WebUIPasswordPrompter) Prompt(ctx context.Context, reason string) (str
 	}
 }
 
-// RespondToPasswordRequest delivers a user password to a pending password
-// request. Called by the WebUI handler (POST /api/password/{id}/respond)
-// when the user submits their password.
-//
-// Returns true if the request was found and the password was delivered.
+// RespondToPasswordRequest delivers a user password to a pending password request. Called by the WebUI handler.
 func (a *Agent) RespondToPasswordRequest(requestID string, password string) bool {
 	return passwordPrompterBroker.respond(requestID, password)
 }

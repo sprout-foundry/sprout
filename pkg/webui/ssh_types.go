@@ -159,10 +159,13 @@ const (
 	sshLaunchHealthTimeout  = 30 * time.Second
 	sshRestoreHealthTimeout = 12 * time.Second
 
-	// DaemonPort is the unified fixed port used by all sprout daemons
-	// (both local and SSH-launched remote).  All daemons on a given host
-	// share this port — the launcher detects an existing daemon and
-	// reuses it rather than starting a duplicate.
+	// DaemonPort is the single shared port used by all sprout daemons for
+	// every workspace.  Both local daemons (sprout daemon / sprout service)
+	// and SSH-launched remote daemons listen on this port.  The daemon
+	// serves ALL workspaces from this single port, routing per-workspace
+	// internally via clientContext and chat_sessions — there are no
+	// folder-scoped daemon ports.  The launcher detects an existing daemon
+	// on this port and reuses it rather than starting a duplicate.
 	DaemonPort = 56000
 )
 

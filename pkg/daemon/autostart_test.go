@@ -1144,11 +1144,13 @@ func TestStartDaemon_DetachedFromCtx(t *testing.T) {
 	assert.ErrorIs(t, startErr, context.Canceled)
 
 	// The context was cancelled, but the daemon should still come up
-	// because the spawned process is detached.  We need to wait for it.
-	time.Sleep(800 * time.Millisecond)
-
-	ok, _ := DetectDaemon(context.Background(), spec)
-	assert.True(t, ok, "detached daemon should be healthy despite ctx cancellation")
+	// because the spawned process is detached. Poll — the helper test
+	// binary can take >1s to start under load.
+	require.Eventually(t, func() bool {
+		ok, _ := DetectDaemon(context.Background(), spec)
+		return ok
+	}, 10*time.Second, 200*time.Millisecond,
+		"detached daemon should be healthy despite ctx cancellation")
 
 	// Cleanup.
 }

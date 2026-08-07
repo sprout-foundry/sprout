@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -123,6 +124,56 @@ func (m *EmbeddingManager) ModelHash() string {
 	return m.provider.ModelHash()
 }
 
+// Name returns the provider's human-readable name ("" before Init).
+func (m *EmbeddingManager) Name() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.provider == nil {
+		return ""
+	}
+	return m.provider.Name()
+}
+
+// Dimensions returns the embedding dimensionality (0 before Init).
+func (m *EmbeddingManager) Dimensions() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.provider == nil {
+		return 0
+	}
+	return m.provider.Dimensions()
+}
+
+// Embed embeds a single text with the manager's provider, initializing it
+// first. Used by the daemon socket service (SP-136 P3).
+func (m *EmbeddingManager) Embed(ctx context.Context, text string) ([]float32, error) {
+	if err := m.Init(ctx); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	provider := m.cachedProvider
+	m.mu.Unlock()
+	if provider == nil {
+		return nil, errors.New("embedding: provider not initialized")
+	}
+	return provider.Embed(ctx, text)
+}
+
+// EmbedBatch embeds multiple texts with the manager's provider, initializing
+// it first. The returned slice matches the input order.
+func (m *EmbeddingManager) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	if err := m.Init(ctx); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	provider := m.cachedProvider
+	m.mu.Unlock()
+	if provider == nil {
+		return nil, errors.New("embedding: provider not initialized")
+	}
+	return provider.EmbedBatch(ctx, texts)
+}
+
 func (m *EmbeddingManager) closeCh() <-chan struct{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -226,6 +277,41 @@ func sanitizeSlugName(name string) string {
 		out = out[:48]
 	}
 	return out
+}
+
+// SetProviderFactory installs a process-wide factory consulted by
+// EmbeddingManager.initLocked BEFORE falling back to in-process ONNX.
+//
+// SP-136 P3: a CLI that has a live daemon socket sets this to construct
+// RemoteEmbeddingProvider instances, so the daemon owns the model copy and
+// the CLI never loads its own 155MB model. If the factory returns an error
+// (socket unavailable), initLocked silently falls back to in-process ONNX —
+// sprout always works.
+func SetProviderFactory(f func(ctx context.Context) (EmbeddingProvider, error)) {
+	providerMu.Lock()
+	defer providerMu.Unlock()
+	providerFactory = f
+}
+
+var (
+	providerMu      sync.Mutex
+	providerFactory func(ctx context.Context) (EmbeddingProvider, error)
+)
+
+// createProvider returns the manager's provider: the process-wide remote
+// factory if it is set and succeeds, otherwise the in-process ONNX provider.
+func (m *EmbeddingManager) createProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
+	providerMu.Lock()
+	factory := providerFactory
+	providerMu.Unlock()
+
+	if factory != nil {
+		if p, err := factory(ctx); err == nil && p != nil {
+			return p, nil, nil
+		}
+		// Remote unavailable — fall through to in-process ONNX.
+	}
+	return m.createONNXProvider(ctx)
 }
 
 func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {

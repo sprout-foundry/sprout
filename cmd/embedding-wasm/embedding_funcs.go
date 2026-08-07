@@ -110,7 +110,7 @@ func getSemanticStatusFunc(_ js.Value, _ []js.Value) interface{} {
 func searchSemanticFunc(_ js.Value, args []js.Value) interface{} {
 	query := argString(args, 0, "")
 	topK := argInt(args, 1, 5)
-	threshold := argFloat32(args, 2, embedding.DefaultSemanticSearchThreshold)
+	threshold := argFloat32(args, 2, embedding.DefaultCodeModelSemanticSearchThreshold)
 	return asPromise(func(ctx context.Context) (interface{}, error) {
 		if query == "" {
 			return nil, fmt.Errorf("query is required")

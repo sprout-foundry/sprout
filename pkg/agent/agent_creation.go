@@ -20,13 +20,10 @@ import (
 	"golang.org/x/term"
 )
 
-// sessionCleanupOnce ensures session cleanup runs only once per process,
-// preventing repeated cleanup in daemon mode where multiple agents are created.
+// sessionCleanupOnce ensures session cleanup runs only once per process.
 var sessionCleanupOnce sync.Once
 
-// backgroundOrphanCleanupOnce ensures orphaned background process cleanup
-// runs only once per process. At startup it kills any background processes
-// left behind by a previous unclean exit (kill, segfault, etc.).
+// backgroundOrphanCleanupOnce kills background processes left behind by a previous unclean exit.
 var backgroundOrphanCleanupOnce sync.Once
 
 func isDebugEnvEnabled() bool {
@@ -42,8 +39,7 @@ func isDebugEnvEnabled() bool {
 	}
 }
 
-// agentInitParams encapsulates the parameters needed to initialize an Agent
-// after the provider and client have been resolved.
+// agentInitParams encapsulates the parameters needed to initialize an Agent after the provider and client have been resolved.
 type agentInitParams struct {
 	client          api.ClientInterface
 	clientType      api.ClientType
@@ -53,21 +49,15 @@ type agentInitParams struct {
 	debug           bool
 	interruptCtx    context.Context
 	interruptCancel context.CancelFunc
-	// subagentDepth tracks the nesting depth of this agent.
-	// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
+	// subagentDepth tracks the nesting depth of this agent. 0 = primary, 1 = orchestrator, 2 = coder/tester, etc.
 	subagentDepth int
-	// rootPersonaID tracks the persona of the top-level (depth 0) agent.
-	// Propagated to subagents so depth limits can vary by root persona.
+	// rootPersonaID tracks the persona of the top-level (depth 0) agent. Propagated to subagents so depth limits can vary by root persona.
 	rootPersonaID string
-	// isProduction indicates this is a production agent, not a test agent.
-	// Production agents have additional initialization steps (context limits,
-	// todo clearing, session cleanup, computer-use tool registration).
+	// isProduction indicates this is a production agent, not a test agent. Production agents have additional initialization steps.
 	isProduction bool
 }
 
-// initAgentFromResolvedProvider creates and initializes an Agent from resolved
-// provider parameters. This consolidates the common agent initialization logic
-// that was duplicated between test and production paths.
+// initAgentFromResolvedProvider creates and initializes an Agent from resolved provider parameters.
 func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	// Create sub-managers
 	stateMgr := NewAgentStateManager(params.debug)
@@ -123,9 +113,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.state.SetCurrentContextTokens(0)
 		agent.state.SetContextWarningIssued(false)
 
-		// Resolve the context profile once at agent creation.
-		// Auto-detects LCM from model context window; config.context_mode overrides.
-		// Windows below ContextFloor (8K) return an error — agent refuses to start.
+		// Resolve the context profile once at agent creation. Auto-detects LCM from model context window.
 		var cfg *configuration.Config
 		if agent.configManager != nil {
 			cfg = agent.configManager.GetConfig()
@@ -139,8 +127,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		}
 		agent.contextProfile = profile
 
-		// Resolve the effective context cap once at agent creation and store it.
-		// Caps below EffectiveContextCapMinimum (1024) return an error.
+		// Resolve the effective context cap once at agent creation. Caps below EffectiveContextCapMinimum (1024) return an error.
 		nativeWindow := agent.getNativeModelContextLimit()
 		resolvedCap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
 		if capErr != nil {
@@ -148,11 +135,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		}
 		agent.effectiveContextCap = resolvedCap
 
-		// Activation notice: when the user explicitly set a cap below the
-		// native window, emit a one-time stderr line so they can verify
-		// it's active. Skip when the cap equals the native window (no-op)
-		// and skip when no cap was set (no point announcing "you're using
-		// the full window").
+		// Activation notice: emit a one-time stderr line when the user set a cap below the native window.
 		if cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 &&
 			agent.effectiveContextCap > 0 &&
 			agent.effectiveContextCap < nativeWindow {
@@ -203,11 +186,10 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			}
 		}
 
-		// Sweep expired persistent context entries based on retention policy
-		if agent.configManager != nil {
-			cfg := agent.configManager.GetConfig()
+			// Sweep expired persistent context entries based on retention policy.
+	if agent.configManager != nil {cfg := agent.configManager.GetConfig()
 			if cfg != nil && cfg.PersistentContext != nil && cfg.PersistentContext.RetentionDays > 0 {
-				// Resolve storePath using the same logic as EmbeddingManager.initLocked()
+	// Resolve storePath using the same logic as EmbeddingManager.initLocked().
 				convoStoreDir := ""
 				if cfg.EmbeddingIndex != nil {
 					convoStoreDir = cfg.EmbeddingIndex.IndexDir
@@ -251,8 +233,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	agent.changeTracker = NewChangeTracker(agent, "")
 	agent.changeTracker.Enable() // Start enabled by default
 
-	// Wire the package-level logger so package-level functions (embedding,
-	// proactive context, etc.) can use structured logging with session context.
+	// Wire the package-level logger so package-level functions can use structured logging with session context.
 	SetPackageLogger(agent.Logger())
 
 	// Restore embedding index if previously enabled for this workspace
@@ -263,8 +244,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.autoActivateCoordinatorPersona()
 	}
 
-	// Wire tool function pointers so handlers in pkg/agent_tools can
-	// dispatch back into this agent's handler methods.
+	// Wire tool function pointers so handlers in pkg/agent_tools can dispatch back into this agent's handler methods.
 	wireAgentToolFuncs(agent, params.isProduction)
 
 	return agent, nil
@@ -275,12 +255,8 @@ func NewAgent() (*Agent, error) {
 	return NewAgentWithModel("")
 }
 
-// resolveProfileAndSystemPrompt resolves the Low-Context Mode profile
-// and the system prompt matched to that profile, using the model
-// context window reported by the provider client. Shared by both the
-// SDK/WASM path (NewAgentWithClient) and the CLI path
-// (newAgentWithConfigManagerInner) so the profile is computed from
-// the same inputs and the prompt always matches the resolved profile.
+// resolveProfileAndSystemPrompt resolves the context profile and matching system prompt.
+// Shared by both the SDK/WASM path (NewAgentWithClient) and the CLI path (newAgentWithConfigManagerInner).
 // Floor errors (window < 8K) propagate to the caller.
 func resolveProfileAndSystemPrompt(
 	configManager *configuration.Manager,
@@ -322,17 +298,9 @@ func resolveProfileAndSystemPrompt(
 	return profile, systemPrompt, nil
 }
 
-// NewAgentWithClient builds an agent around a pre-constructed provider
-// client. The interactive provider-resolution path in newAgentWithConfigManager
-// (API-key prompts, connection checks, recovery loops) is skipped — useful
-// for WASM/SDK callers where the caller already knows which provider and
-// model to use, and where API keys live elsewhere (e.g. attached server-side
-// by the sprout-foundry platform proxy).
-//
-// The configManager must already be initialized; pass one from
-// configuration.NewManagerSilent() or similar. The returned agent is a
-// production agent (full lifecycle: context limits, session cleanup, tool
-// registry, persona auto-activation).
+// NewAgentWithClient builds an agent around a pre-constructed provider client.
+// Skips the interactive provider-resolution path — useful for WASM/SDK callers where the caller already knows which provider and model to use.
+// The configManager must already be initialized. The returned agent is a production agent.
 func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, configManager *configuration.Manager) (*Agent, error) {
 	if client == nil {
 		return nil, agenterrors.NewPermanentError("client is required", nil)
@@ -349,12 +317,8 @@ func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, c
 		workspaceRoot = absWorkspaceRoot
 	}
 
-	// SP-125: resolve the context profile and load the matching
-	// system prompt via the shared helper. The profile is also
-	// re-resolved inside initAgentFromResolvedProvider (after the
-	// agent's state manager is initialized and MaxContextTokens is
-	// set); the two resolutions agree because they use the same inputs
-	// (config + window).
+	// Resolve the context profile and load the matching system prompt via the shared helper.
+	// The profile is also re-resolved inside initAgentFromResolvedProvider; the two resolutions agree because they use the same inputs.
 	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, workspaceRoot)
 	if err != nil {
 		return nil, err
@@ -386,9 +350,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	return newAgentWithConfigManager(configManager, model)
 }
 
-// NewAgentWithConfigDir creates a new agent using a per-client config directory.
-// This enables per-client config isolation for the WebUI, where each X-Sprout-Client-ID
-// can have its own isolated config directory so settings changes by one client don't affect another.
+// NewAgentWithConfigDir creates a new agent using a per-client config directory for WebUI isolation.
 func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
 	// Initialize configuration manager with a client-specific directory
 	configManager, err := configuration.NewManagerWithDir(configDir)
@@ -399,9 +361,7 @@ func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
 	return newAgentWithConfigManager(configManager, model)
 }
 
-// NewAgentWithLayers creates a new agent using layered configuration.
-// globalDir contains global config (~/.config/sprout/), workspaceDir contains workspace config.
-// This is the preferred method for WebUI usage where workspace config is supported.
+// NewAgentWithLayers creates a new agent using layered configuration (global + workspace).
 func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
 	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
 	if err != nil {
@@ -411,10 +371,7 @@ func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
 	return newAgentWithConfigManager(configManager, model)
 }
 
-// NewAgentWithLayersInWorkspace creates a new agent using layered configuration
-// with an explicit workspace root, avoiding the need for os.Chdir in daemon mode.
-// globalDir contains global config (~/.config/sprout/), workspaceDir contains workspace config.
-// workspaceRoot is the absolute path to the workspace directory.
+// NewAgentWithLayersInWorkspace creates a new agent using layered configuration with an explicit workspace root.
 func NewAgentWithLayersInWorkspace(globalDir, workspaceDir, workspaceRoot, model string) (*Agent, error) {
 	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
 	if err != nil {
@@ -424,10 +381,7 @@ func NewAgentWithLayersInWorkspace(globalDir, workspaceDir, workspaceRoot, model
 	return newAgentWithConfigManagerAndWorkspace(configManager, workspaceRoot, model)
 }
 
-// newAgentWithConfigManagerAndWorkspace is like newAgentWithConfigManager
-// but accepts an explicit workspace root instead of reading os.Getwd().
-// This eliminates the need for os.Chdir in daemon mode, which was a
-// process-global serialization point (workspaceExecMu).
+// newAgentWithConfigManagerAndWorkspace is like newAgentWithConfigManager but accepts an explicit workspace root.
 func newAgentWithConfigManagerAndWorkspace(configManager *configuration.Manager, workspaceRoot, model string) (*Agent, error) {
 	if workspaceRoot == "" {
 		var err error
@@ -457,20 +411,14 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	return newAgentWithConfigManagerInner(configManager, workspaceRoot, model)
 }
 
-// newAgentWithConfigManagerInner is the core implementation that accepts an
-// explicit workspace root, shared by both the CWD-based and workspace-explicit
-// agent creation paths.
+// newAgentWithConfigManagerInner is the core implementation that accepts an explicit workspace root.
 func newAgentWithConfigManagerInner(configManager *configuration.Manager, workspaceRoot, model string) (*Agent, error) {
 	var err error
 
 	var clientType api.ClientType
 	var finalModel string
 
-	// --mock-llm flag override: use a deterministic mock provider instead of
-	// any real LLM. Checked before the test-under-go-test path so that
-	// `sprout serve` (which sets UseMockLLM=true) works even outside tests.
-	// The mock provider implementation is excluded from the WASM build
-	// (//go:build !js), so this helper is a no-op there.
+	// --mock-llm flag override: use a deterministic mock provider. Excluded from WASM build.
 	if handled, agent, err := tryMockLLMAgent(model, configManager, workspaceRoot); handled {
 		return agent, err
 	}
@@ -508,20 +456,8 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		})
 	}
 
-	// Non-interactive fast-fail: check provider availability before entering
-	// the retry loop. In non-interactive mode (daemon, piped input, CI),
-	// we cannot prompt for provider selection or API keys, so fail early with
-	// a clear message if no provider is usable.
-	//
-	// NOTE: This early-exit path is not directly testable under `go test`
-	// because isRunningUnderTest() returns true for all test binaries
-	// (which inject -test.* flags into os.Args). End-to-end validation is
-	// covered by webui integration tests and manual daemon testing.
-	//
-	// EXCEPTION: SSH daemons set BROWSER=none and allow startup even
-	// without a provider so that the web UI can handle provider setup.
-	// This supports SSH workspace setup where the daemon starts on a fresh
-	// remote machine before provider is configured.
+	// Non-interactive fast-fail: check provider availability before entering the retry loop.
+	// SSH daemons allow startup even without a provider so the web UI can handle provider setup.
 	if isNonInteractive() && !isRunningUnderTest() && !isSSHDaemon() {
 		resolvedType, _, resolveErr := configManager.ResolveProviderModel("", model)
 		if resolveErr != nil {
@@ -539,21 +475,12 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		}
 
 		// Warn that non-interactive runs use a permissive security posture.
-		// Only routine (Medium/High) operations are auto-approved; Critical
-		// ops (rm -rf /, fork bombs) still hard-block and exit. The
-		// assumption is that non-interactive automation runs in a
-		// container/sandbox, so we print this reminder so the operator can
-		// confirm the execution environment is appropriately isolated.
 		console.GlyphWarning.Fprintf(os.Stderr,
 			"Non-interactive mode: security is permissive (Medium/High operations auto-approved; only Critical ops block). "+
 				"Run inside a container or sandbox for isolation.\n")
 	}
 
-	// NOTE: The early check above ensures that in non-interactive mode the
-	// provider resolves and has an API key before reaching the retry loop
-	// below. The retry loop's recoverProviderStartup calls include their
-	// own non-interactive guards and serve as defense-in-depth, but are
-	// unreachable via the non-interactive path when this early check succeeds.
+	// The early check ensures the provider resolves before the retry loop. The retry loop's recoverProviderStartup calls serve as defense-in-depth.
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
 		console.GlyphWarning.Fprintf(os.Stderr, "Failed to resolve configured provider/model: %v", err)
@@ -626,10 +553,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		debug := isDebugEnvEnabled()
 		client.SetDebug(debug)
 
-		// Check connection (allow tests to skip by setting SPROUT_SKIP_CONNECTION_CHECK or legacy SPROUT_SKIP_CONNECTION_CHECK)
-		// Also skip for providers where a fast/reliable connectivity probe is not
-		// available (Z.AI and GLM Coding Plan both use a slow subscription endpoint
-		// where the probe is unreliable). ZAICodingClientType is "zai-coding".
+		// Check connection. Skip for providers where a fast/reliable connectivity probe is not available (Z.AI, GLM Coding).
 		skipConnectionCheck := configuration.GetEnvSimple("SKIP_CONNECTION_CHECK") != "" ||
 			clientType == api.ZAIClientType ||
 			clientType == api.ZAICodingClientType
@@ -665,15 +589,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 	// Check if debug mode is enabled
 	debug := isDebugEnvEnabled()
 
-	// SP-125: resolve the context profile and load the matching system
-	// prompt via the shared helper. Previously this path used
-	// GetEmbeddedSystemPromptWithProvider, which always returned the
-	// full prompt — so a 32K model that successfully auto-activated
-	// LCM still received the 6.6K full prompt on the wire. Routing
-	// through resolveProfileAndSystemPrompt makes the CLI path match
-	// the SDK path's behavior. The floor error propagates here so
-	// users with sub-8K models get a clear directive rather than a
-	// broken session.
+	// Resolve the context profile and load the matching system prompt via the shared helper.
 	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, workspaceRoot)
 	if err != nil {
 		return nil, err
@@ -696,15 +612,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 	})
 }
 
-// autoActivateCoordinatorPersona checks if the Coordinator persona (formerly
-// Executive Assistant) should be auto-activated based on the workspace root
-// being the user's home directory. This is a no-op if a persona is already
-// set, if the Coordinator persona is unavailable, or if the user has opted
-// out via DisableCoordinatorAutoActivate in their config.
 // isHomeDirPath reports whether dir resolves to the user's home directory.
-// Both sides go through EvalSymlinks so macOS /Users → /private/Users (or a
-// symlinked home) doesn't produce a false negative; on resolution failure it
-// falls back to a direct comparison.
 func isHomeDirPath(dir string) bool {
 	if dir == "" {
 		return false
@@ -722,6 +630,7 @@ func isHomeDirPath(dir string) bool {
 	return resolvedDir == resolvedHome
 }
 
+// autoActivateCoordinatorPersona auto-activates the Coordinator persona if the workspace is the user's home directory.
 func (a *Agent) autoActivateCoordinatorPersona() {
 	// Don't override an already-set persona
 	if a.state.GetActivePersona() != "" {

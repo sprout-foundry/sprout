@@ -12,8 +12,8 @@ import (
 )
 
 // newCheckpointID returns a stable identifier for a new TurnCheckpoint.
-// Used by SP-066 Phase 2 rollups to reference source checkpoints via
-// SourceCheckpointIDs independently of slice position.
+// Used by rollups to reference source checkpoints via SourceCheckpointIDs
+// independently of slice position.
 func newCheckpointID() string {
 	return "cp-" + uuid.NewString()
 }
@@ -100,7 +100,7 @@ func (a *Agent) RecordTurnCheckpoint(startIndex, endIndex int) {
 
 	turnMessages := append([]api.Message(nil), msgs[startIndex:endIndex+1]...)
 	a.recordTurnCheckpointFromMessages(startIndex, endIndex, turnMessages)
-	// SP-046 §7: turn boundary — the next turn must call read_file again
+	// Turn boundary — the next turn must call read_file again
 	// before writing the same paths.
 	a.ResetFileReadsForNewTurn()
 }
@@ -118,7 +118,7 @@ func (a *Agent) RecordTurnCheckpointAsync(startIndex, endIndex int) {
 	// disruptive operations such as clear/import replace the checkpoint set.
 	turnMessages := append([]api.Message(nil), msgs[startIndex:endIndex+1]...)
 	go a.recordTurnCheckpointFromMessages(startIndex, endIndex, turnMessages)
-	// SP-046 §7: reset the read tracker synchronously even though the
+	// Reset the read tracker synchronously even though the
 	// summary job runs in the background — the next turn's tool calls
 	// must not see the previous turn's reads.
 	a.ResetFileReadsForNewTurn()
@@ -230,7 +230,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		}
 	}
 
-	// SP-066 Phase 2: after a new per-turn checkpoint lands, check whether
+	// After a new per-turn checkpoint lands, check whether
 	// any level is now over its rollup threshold. Idempotent and bounded —
 	// at most one rollup runs at a time per agent; subsequent turns retrigger
 	// for additional levels.
@@ -329,7 +329,7 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 		// This checkpoint is consumed (applied to the compaction)
 		compacted = append(compacted, messages[nextIndex:checkpoint.StartIndex]...)
 
-		// SP-128 §fix: When this checkpoint is about to drop a user message at
+		// When this checkpoint is about to drop a user message at
 		// the boundary (messages[nextIndex] with role="user"), preserve it in the
 		// compacted output before inserting the assistant summary. Without this,
 		// strict-syntax chat templates (Qwen3.5, any provider with raise_exception
@@ -394,7 +394,7 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	// immediately preceding it.
 	compacted = dropOrphanToolMessages(compacted, a.debug)
 
-	// SP-128 §belt-and-suspenders: ensure at least one user message exists in
+	// Belt-and-suspenders: ensure at least one user message exists in
 	// the compacted output. Strict-syntax chat templates (Qwen3.5, others with
 	// raise_exception) reject requests with zero role:user entries. This guards
 	// against future code path changes that might bypass the per-checkpoint

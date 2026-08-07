@@ -1,4 +1,4 @@
-// Package agent: delegation getters and setters for sub-managers (split from agent_getters.go)
+// Package agent: delegation getters and setters for sub-managers.
 package agent
 
 import (
@@ -15,10 +15,7 @@ import (
 // GetDebugLogPath returns the path to the current debug log file (if any)
 func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
 
-// getClient safely returns the current LLM client under the client read lock.
-// Callers must not retain the returned pointer beyond the immediate call site
-// — SetProvider may swap it concurrently. For operations that need a stable
-// reference across multiple calls, use withClient instead.
+// getClient safely returns the current LLM client under the client read lock. Callers must not retain the pointer beyond the immediate call site.
 func (a *Agent) getClient() api.ClientInterface {
 	a.clientMu.RLock()
 	defer a.clientMu.RUnlock()
@@ -33,28 +30,14 @@ func (a *Agent) getClientType() api.ClientType {
 }
 
 // setClient safely swaps both the client and clientType under the write lock.
-// Used by SetProvider and SetModel to atomically update both fields.
+// invalidateVisionCache and refreshSystemPrompt run AFTER releasing the lock to avoid deadlock
+// (they acquire visionProcMu/clientMu in the opposite order).
 func (a *Agent) setClient(client api.ClientInterface, clientType api.ClientType) {
 	a.clientMu.Lock()
 	a.client = client
 	a.clientType = clientType
 	a.clientMu.Unlock()
 
-	// Both calls below must run AFTER setClient releases its write lock:
-	//
-	// invalidateVisionCache takes visionProcMu and visionProbeMu. GetVisionProcessor
-	// (line 228) acquires visionProcMu then calls getClientType() which takes
-	// clientMu.RLock() — the reverse order. Calling invalidateVisionCache inside
-	// clientMu.Lock() would deadlock (AB-BA: clientMu→visionProcMu vs
-	// visionProcMu→clientMu). Running it outside the lock matches
-	// refreshSystemPrompt's pattern and the staleness argument below.
-	//
-	// refreshSystemPrompt calls getClientType() and getModelContextLimit(), both of
-	// which take clientMu.RLock() — must run after the write lock is released.
-	// A slow refresh doesn't delay the next setClient, and prompt/vision reads
-	// tolerate brief staleness between the swap and the refresh landing. This
-	// matches the legacy SetSystemPrompt call sites, which also write without
-	// coordinating against the client lock.
 	a.invalidateVisionCache()
 	a.refreshSystemPrompt()
 }
@@ -84,13 +67,7 @@ func (a *Agent) GetConfig() *configuration.Config {
 	return a.configManager.GetConfig()
 }
 
-// GetContextProfile (SP-125) returns the resolved context profile active
-// for this agent — the set of context-engine levers (tool allowlist,
-// prompt path, compaction trigger, etc.) chosen once at agent creation.
-// The profile does not change during a session; /context persists a new
-// selection to config for the next session start rather than mutating
-// the live agent (the system prompt and tool set are already baked in).
-// Returns a zero-value ContextProfile (full mode) if unset.
+// GetContextProfile returns the resolved context profile active for this agent.
 func (a *Agent) GetContextProfile() configuration.ContextProfile {
 	return a.contextProfile
 }
@@ -208,11 +185,7 @@ func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
 	return a.embeddingMgr
 }
 
-// GetVisionProcessor returns the agent's vision processor, creating it
-// lazily on first call. The processor is cached for the life of the Agent
-// so that subsequent calls reuse the same vision client and cache.
-// Returns nil if no vision-capable provider is available, or if the agent
-// is nil.
+// GetVisionProcessor returns the agent's vision processor, creating it lazily on first call.
 func (a *Agent) GetVisionProcessor() *tools.VisionProcessor {
 	if a == nil {
 		return nil

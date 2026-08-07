@@ -31,13 +31,11 @@ type ShellCommandResult struct {
 // TurnCheckpoint stores a compact summary for a completed user turn while
 // preserving the original full messages for cache-efficient reuse until needed.
 //
-// SP-066 Phase 2 generalizes this struct: a Level=0 entry is a per-turn
-// checkpoint (the historical default). A Level>0 entry is a "rollup" that
-// folds many lower-level checkpoints into one coarser summary. Both kinds
-// substitute identically through seed's BuildCheckpointCompactedMessages —
-// the rollup is just a checkpoint whose StartIndex/EndIndex span a wider
-// historical range. The extra fields are sprout-side metadata for the
-// rollup worker and the WebUI; seed doesn't read them.
+// A Level=0 entry is a per-turn checkpoint (the historical default).
+// A Level>0 entry is a "rollup" that folds many lower-level checkpoints
+// into one coarser summary. Both kinds substitute identically through
+// seed's BuildCheckpointCompactedMessages — the rollup is just a checkpoint
+// whose StartIndex/EndIndex span a wider historical range.
 type TurnCheckpoint struct {
 	StartIndex        int    `json:"start_index"`
 	EndIndex          int    `json:"end_index"`
@@ -57,8 +55,7 @@ type TurnCheckpoint struct {
 	// revision_id from the source set.
 	RevisionID string `json:"revision_id,omitempty"`
 
-	// SP-066 Phase 2 — rollup metadata. Absent on legacy/per-turn
-	// checkpoints; populated by the rollup worker.
+	// Rollup metadata. Absent on legacy/per-turn checkpoints; populated by the rollup worker.
 
 	// ID is a stable identifier for this checkpoint, independent of its
 	// position in the TurnCheckpoints slice. Used by rollups to reference
@@ -104,7 +101,7 @@ type AgentState struct {
 	CacheWriteTokens        int     `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64 `json:"cached_cost_savings"`
 	ImageTokens             int     `json:"image_tokens,omitempty"`
-	// Billing-model-aware cost tracking (SP-080)
+	// Billing-model-aware cost tracking
 	ChargedCostTotal   float64 `json:"charged_cost_total,omitempty"`
 	TokenCostTotal     float64 `json:"token_cost_total,omitempty"`
 	SubscriptionTokens int     `json:"subscription_tokens,omitempty"`

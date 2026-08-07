@@ -49,13 +49,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	})
 	printSubagentDone(spec.persona, result)
 
-	// SP-059 Phase 2c (missing step): merge the subagent's tracked
-	// changes into the primary's ChangeTracker so list_changes,
-	// recover_file, and revert_my_changes see subagent edits.
+	// Merge the subagent's tracked changes into the primary's ChangeTracker
+	// so list_changes, recover_file, and revert_my_changes see subagent edits.
 	a.MergeSubagentChanges(result.FileChanges, spec.persona)
 
-	// Phase 3: Build resultMap from SubagentResult
-	// SP-059 Phase 2a: build the typed envelope. resultMap is preserved
+	// Build resultMap from SubagentResult. resultMap is preserved
 	// for the legacy code paths below that still mutate it via string
 	// keys (file change extraction, security re-prompt, etc.) — both
 	// views are kept in sync at the marshal site.
@@ -292,11 +290,10 @@ func parseParallelTasks(args map[string]interface{}) ([]SubagentTask, error) {
 // format, counts failures, and tracks LLM usage costs. Returns the resultMap
 // and the number of failed tasks.
 func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *Agent) (map[string]map[string]string, int) {
-	// SP-059 Phase 2c (missing step): merge each subagent's tracked
-	// changes into the primary's ChangeTracker so list_changes,
-	// recover_file, and revert_my_changes see subagent edits. Build a
-	// taskID -> persona lookup so merged changes are attributed to the
-	// correct subagent persona.
+	// Merge each subagent's tracked changes into the primary's ChangeTracker
+	// so list_changes, recover_file, and revert_my_changes see subagent edits.
+	// Build a taskID -> persona lookup so merged changes are attributed to
+	// the correct subagent persona.
 	personaByID := make(map[string]string, len(tasks))
 	for _, t := range tasks {
 		personaByID[t.ID] = t.Persona

@@ -16,8 +16,7 @@ import (
 // PasswordPrompter. Catches signature drift if the interface changes.
 var _ tools.PasswordPrompter = (*CLIPasswordPrompter)(nil)
 
-// CLIPasswordPrompter implements PasswordPrompter for CLI terminal sessions.
-// It reads the password from stdin with echo disabled using golang.org/x/term.
+// CLIPasswordPrompter implements PasswordPrompter for CLI terminal sessions. Reads password from stdin with echo disabled.
 type CLIPasswordPrompter struct{}
 
 // NewCLIPasswordPrompter constructs a CLI password prompter.
@@ -26,18 +25,7 @@ func NewCLIPasswordPrompter() *CLIPasswordPrompter {
 }
 
 // Prompt asks the user to type a password on the terminal.
-//
-// If stdin is not a TTY it returns ErrNoInteractiveSurface immediately.
-// The reason string is printed to stderr as a prompt label.
-// Terminal state is always restored via defer even when an error occurs.
-//
-// The clihooks.WithCookedStdin wrapper ensures the active CLI activity
-// indicator (spinner) is suspended and the SP-055 SteerInputReader (which
-// holds stdin in raw mode during a turn) is paused for the duration of
-// the read. Without this, the spinner would clobber the prompt text on
-// stderr, and a mid-turn call would hit EOF immediately because the steer
-// reader is consuming raw-mode stdin. WithCookedStdin is a no-op when
-// no hook is registered (non-interactive runs).
+// Returns ErrNoInteractiveSurface if stdin is not a TTY. SuspendIndicator/PauseSteer/SuspendStreaming ensure the prompt isn't clobbered.
 func (cli *CLIPasswordPrompter) Prompt(ctx context.Context, reason string) (string, error) {
 	if ctx.Err() != nil {
 		return "", ctx.Err()
@@ -55,14 +43,7 @@ func (cli *CLIPasswordPrompter) Prompt(ctx context.Context, reason string) (stri
 	// context is cancelled while the goroutine is blocked on the read.
 	defer term.Restore(fd, oldState)
 
-	// Suspend the CLI spinner and pause the SP-055 SteerInputReader so the
-	// prompt text isn't clobbered by an in-flight indicator and so stdin
-	// isn't held in raw mode by the steer reader (which would cause
-	// term.ReadPassword to see odd input on a mid-turn call). Also
-	// suspend the streaming callback's prose output so a mid-turn call
-	// (e.g. NativeShellPassword) isn't trampled by a concurrent chunk
-	// write. All three hooks no-op when no implementation is registered
-	// (non-interactive).
+	// Suspend the CLI spinner, pause the steer reader, and suspend streaming so the prompt isn't clobbered.
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
 	clihooks.SuspendStreaming()
@@ -73,11 +54,7 @@ func (cli *CLIPasswordPrompter) Prompt(ctx context.Context, reason string) (stri
 	// Write the prompt to stderr so it doesn't interfere with stdout piping.
 	fmt.Fprintf(os.Stderr, "%s: ", reason)
 
-	// Read in a goroutine so we can select on context cancellation. NOTE:
-	// if ctx is cancelled while term.ReadPassword is blocked, the goroutine
-	// is abandoned — there is no portable way to interrupt a blocking
-	// terminal read. It will exit when the user types a response or stdin
-	// closes.
+	// Read in a goroutine so we can select on context cancellation.
 	type result struct {
 		password []byte
 		err      error

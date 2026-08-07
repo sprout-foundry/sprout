@@ -8,17 +8,9 @@ import (
 	"unicode/utf8"
 )
 
-// ByteLevelTokenizer implements HuggingFace's ByteLevel pre-tokenizer + BPE
-// encoding for GPT-2 / Jina / RoBERTa-style tokenizers. Unlike Gemma's
-// SentencePiece tokenizer (which replaces spaces with ▁ and merges on raw
-// Unicode runes), ByteLevel maps every byte to a printable Unicode code point
-// via a fixed 256-entry table, pre-splits the input on whitespace and punctuation
-// using a regex, then applies BPE on the byte-mapped strings.
-//
-// This is a separate type from GemmaTokenizer because the two share only the
-// final BPE merge loop — the pre-tokenization, normalization, and vocab format
-// are all fundamentally different. Conflating them produced wrong token IDs
-// for Jina inputs (SP-135 Phase-0 evaluation).
+// ByteLevelTokenizer implements HuggingFace ByteLevel pre-tokenizer + BPE
+// encoding for GPT-2/Jina/RoBERTa-style tokenizers. Separate from
+// GemmaTokenizer because pre-tokenization and vocab format differ.
 
 // byteEncoder maps raw byte values (0–255) to the GPT-2 Unicode code points
 // used in ByteLevel tokenizers. Initialized from buildByteEncoder().
@@ -31,10 +23,7 @@ func init() {
 	buildByteEncoder()
 }
 
-// buildByteEncoder fills byteEncoder and byteDecoder with the GPT-2 byte-level
-// mapping. The algorithm mirrors HuggingFace's bytes_to_unicode: printable
-// bytes (33-126, 161-172, 174-255) map to themselves; all others shift up by
-// 256 into a printable Unicode range. Space (32) maps to 'Ġ' (U+0120).
+// buildByteEncoder fills byteEncoder/byteDecoder with the GPT-2 byte-level mapping.
 func buildByteEncoder() {
 	// Printable byte ranges that map to themselves.
 	printable := make(map[int]bool)
@@ -70,10 +59,7 @@ func buildByteEncoder() {
 type byteLevelPreTokenizer struct{}
 
 func (byteLevelPreTokenizer) preTokenize(text string) []string {
-	// This regex matches the GPT-2 pre-tokenization pattern used by HF's
-	// ByteLevel pre-tokenizer with use_regex=true.
-	// Groups: contractions ('s, 't, ...), letters, digits, whitespace-prefixed
-	// content, and any single other character.
+	// GPT-2 pre-tokenization regex: contractions, letters, digits, whitespace, single chars.
 	segments := gpt2RegexSplit(text)
 	out := make([]string, 0, len(segments))
 	for _, seg := range segments {
@@ -133,15 +119,7 @@ func gpt2RegexSplit(s string) []string {
 
 		r := runes[i]
 
-		// Non-space whitespace (\n, \t, etc.): HF's ByteLevel regex
-		// \s+(?!\S)|\s+ splits whitespace runs. For a run of N whitespace
-		// chars followed by non-whitespace: \s+(?!\S) matches N-1 chars,
-		// then \s+ matches the final char separately. This lets BPE merge
-		// adjacent whitespace into vocab entries (e.g., \n+\t → Ċĉ).
-		//
-		// Space (32) is NOT handled here — it's consumed as an optional
-		// prefix by the ` ?\p{L}+` etc. alternatives below, or falls through
-		// to this branch only when it's a standalone whitespace run.
+		// Non-space whitespace: split runs per HF ByteLevel regex (\s+(?!\S) peels the last char).
 		if unicode.IsSpace(r) && r != ' ' {
 			start := i
 			i++
@@ -158,9 +136,7 @@ func gpt2RegexSplit(s string) []string {
 			continue
 		}
 
-		// Standalone space run (not followed by a word/digit/punct token).
-		// "  " (double space) → one segment, BPE merges Ġ+Ġ.
-		// A single space before a word is consumed as a prefix below.
+		// Standalone space run: keep as one segment unless followed by non-space whitespace.
 		if r == ' ' && (i+1 >= len(runes) || runes[i+1] == ' ') {
 			start := i
 			i++
@@ -215,9 +191,7 @@ func gpt2RegexSplit(s string) []string {
 	return result
 }
 
-// ByteLevelTokenizer is a GPT-2/Jina/RoBERTa-style BPE tokenizer that uses
-// byte-level pre-tokenization. It reads the standard HuggingFace
-// tokenizer.json format (vocab + merges + added_tokens).
+// ByteLevelTokenizer is a GPT-2/Jina/RoBERTa BPE tokenizer with byte-level pre-tokenization.
 type ByteLevelTokenizer struct {
 	vocab    map[string]int32
 	bpeRanks map[bpePair]int
@@ -235,8 +209,7 @@ type ByteLevelTokenizer struct {
 	preTok byteLevelPreTokenizer
 }
 
-// NewByteLevelTokenizer parses a HuggingFace tokenizer.json file for a
-// ByteLevel BPE model (GPT-2, Jina, RoBERTa family) and returns an encoder.
+// NewByteLevelTokenizer parses a HuggingFace tokenizer.json file.
 func NewByteLevelTokenizer(path string) (*ByteLevelTokenizer, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -306,9 +279,7 @@ func (t *ByteLevelTokenizer) Encode(text string) []int32 {
 	}
 	var ids []int32
 	for _, word := range t.preTok.preTokenize(text) {
-		// Check added tokens first (exact match on the original, unmapped text).
-		// This is rarely hit for ByteLevel models since added tokens are special
-		// strings like <s>, </s>, etc. that won't survive pre-tokenization.
+		// Exact match on added tokens.
 		if id, ok := t.vocab[word]; ok {
 			ids = append(ids, id)
 			continue

@@ -1,23 +1,8 @@
 // Package tools provides the interface-based tool system for the Sprout AI agent.
 //
 // Tools are capabilities the LLM can invoke — reading files, executing shell commands,
-// searching code, delegating to subagents, automating browsers, and more. Each tool
-// implements the ToolHandler interface and is registered with the ToolRegistry.
-//
-// # ToolHandler interface
-//
-// The ToolHandler interface replaced the legacy `type ToolHandler func(ctx, args,
-// agent) (images, output, error)` func type. The old func-based system tightly coupled
-// every tool to the *Agent type, making tools hard to test in isolation and difficult
-// to share across different execution contexts. The new interface-based system provides
-// explicit dependencies through ToolEnv, enabling clean separation of concerns:
-//
-//	type ToolHandler interface {
-//	    Name() string
-//	    Definition() ToolDefinition
-//	    Validate(args map[string]any) error
-//	    Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error)
-//	}
+// searching code, delegating to subagents, and more. Each tool implements the
+// ToolHandler interface and is registered with the ToolRegistry.
 //
 // # Adding a new tool
 //
@@ -26,25 +11,9 @@
 //     Validate, Execute, plus the 5 optional metadata methods).
 //  3. Register it in `AllTools()` in `all.go`.
 //
-// See AGENTS.md for tool documentation and conventions.
-//
-// # Migration from legacy func-style handlers
-//
-// The legacy tool system used function types directly coupled to *Agent. The new
-// interface-based system decouples tools from the agent via ToolEnv, which provides
-// explicit dependencies (EventBus, WorkspaceRoot, OutputWriter, etc.).
-//
-// During the migration period, a dual-dispatch shim in pkg/agent/tool_definitions.go
-// bridges both systems: when ExecuteTool() is called, it first checks the new registry
-// via tools.GetNewToolRegistry().Lookup(name). If a handler is found there, it builds
-// a ToolEnv from the agent context and dispatches through the new interface. If no
-// handler exists in the new registry, it falls back to the legacy func-style handlers.
-// This allows incremental migration without breaking existing functionality.
-//
 // The subagent tools (run_subagent / run_parallel_subagents) intentionally
-// remain in the seed registry under pkg/agent because they need *Agent
-// access for nested runner orchestration. See pkg/agent_tools/all.go for
-// the canonical tool list.
+// remain in pkg/agent because they need *Agent access for nested runner
+// orchestration. See pkg/agent_tools/all.go for the canonical tool list.
 package tools
 
 import (
@@ -92,18 +61,15 @@ type ToolDefinition struct {
 	Parameters  []ParameterDef `json:"parameters"`
 	Required    []string       `json:"required,omitempty"` // Required parameter names
 
-	// Hidden keeps the tool callable but omits it from the roster advertised to
-	// the model. Use it for a tool that has been superseded: the schema no
-	// longer costs context on every turn, but existing callers — replayed
-	// sessions, saved automations, subagent configs naming it directly — keep
-	// working instead of failing on an unknown tool.
+	// Hidden keeps the tool callable but omits it from the roster advertised
+	// to the model. Use it for superseded tools: existing callers keep
+	// working without the schema costing context on every turn.
 	Hidden bool `json:"-"`
 
 	// RequiresEmbeddings marks a tool that has no useful behavior without an
-	// embedding index. The tool-registration path (pkg/agent's seed registry)
-	// filters these out when the agent has no EmbeddingManager, so the model
-	// never sees — and never calls — a tool that would fail at execution time.
-	// Embeddings are OPT-IN (off by default), so this is the common case.
+	// embedding index. The registration path filters these out when the
+	// agent has no EmbeddingManager, so the model never sees a tool that
+	// would fail at execution time.
 	RequiresEmbeddings bool `json:"-"`
 }
 
@@ -126,20 +92,14 @@ type ToolEnv struct {
 	// ApprovalManager for security approvals; nil if approvals are not supported
 	ApprovalManager ApprovalManager
 	// FileAccessClassifier provides Gate 1's path-tier verdict before
-	// a file operation runs. When non-nil, handlers call it up-front
-	// (SP-127 M2) so Deny is caught immediately with a typed error,
-	// Allow skips the gate prompt entirely, and Prompt falls through
-	// to the interactive dialog. Nil means no classifier is available;
-	// handlers return the raw filesystem error.
+	// a file operation runs. Nil means no classifier is available.
 	FileAccessClassifier FileAccessClassifier
 	// MaxTokensFunc returns the current token budget limit
 	MaxTokensFunc func() int
 	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
 	ConfigManager *configuration.Manager
-	// EmbeddingMgr is the agent's long-lived embedding manager. When set, tools
-	// must reuse it instead of constructing their own — the manager holds the
-	// loaded ONNX model and an open HNSW handle, so per-call construction is
-	// both slow and unsafe under concurrent writes.
+	// EmbeddingMgr is the agent's long-lived embedding manager. When set,
+	// tools must reuse it instead of constructing their own.
 	EmbeddingMgr *embedding.EmbeddingManager
 	// AskUser routes ask_user prompts through the active interactive channel
 	// (WebUI dialog when a browser is connected, terminal stdin otherwise).
@@ -169,53 +129,34 @@ type ToolEnv struct {
 	// subagent, 2 = second-level, etc.). Used by memory gate and other subagent-specific
 	// tool behaviors. Default 0 means not in subagent context.
 	SubagentDepth int
-	// Gate1AutoApproved reports whether Gate 1 (ExecuteTool via
-	// staticGateAutoApprove) already auto-approved this tool call. This
-	// happens when the agent is in --unsafe mode OR the session risk
-	// profile is elevated (permissive/unrestricted) for a non-hard-block
-	// operation. When true, handlers that run their own security
-	// classification (Gate 2) skip their interactive approval prompt to
-	// match Gate 1's decision and avoid double-prompting.
-	//
-	// Hard blocks (IsHardBlock) are NEVER bypassed regardless of this
-	// flag — staticGateAutoApprove returns true for hard blocks only under
-	// full --unsafe mode, and handlers must still honor their own
-	// IsHardBlock early-returns.
+	// Gate1AutoApproved reports whether Gate 1 already auto-approved this
+	// tool call (--unsafe mode or elevated risk profile). When true,
+	// handlers skip their interactive approval prompt to avoid double-prompting.
+	// Hard blocks are NEVER bypassed regardless of this flag.
 	Gate1AutoApproved bool
 	// RawArgsJSON is the raw JSON string of the tool arguments as sent by the
 	// LLM. When set, handlers can parse this to recover the original key
 	// insertion order of nested maps (e.g., the "data" field in
 	// write_structured_file) before Go's map iteration randomizes it.
 	RawArgsJSON string
-	// RepoMapDefaultDepth (SP-125) overrides the repo_map tool's default
-	// depth when the caller doesn't specify one. Zero means use the tool's
-	// built-in default (3 = full symbols). Low-Context Mode sets this to 1
-	// (directory tree only) to keep repo_map output under ~800 tokens.
+	// RepoMapDefaultDepth overrides the repo_map tool's default depth when
+	// the caller doesn't specify one. Zero means use the tool's built-in
+	// default (3 = full symbols). Low-Context Mode sets this to 1.
 	RepoMapDefaultDepth int
 	Notifier            BackgroundNotifier
 	// LifetimeCtx is a process-scoped context that outlives any single
-	// turn. Background goroutines (e.g., wakeup watchers for background
-	// shell tasks) must use this instead of the per-turn ctx so they
-	// survive turn boundaries and can fire completion notifications
-	// after the agent's current turn has finished. Cancelled when the
-	// agent shuts down.
+	// turn. Background goroutines must use this instead of the per-turn
+	// ctx so they survive turn boundaries. Cancelled when the agent shuts down.
 	LifetimeCtx context.Context
-	// Agent is the *pkg/agent.Agent instance. Only set for tools that explicitly
-	// need agent access (e.g., run_subagent, run_parallel_subagents).
-	// For all other tools this is nil. Use with care — it creates a tight
-	// coupling that should be avoided for new tools.
+	// Agent is the *pkg/agent.Agent instance. Only set for tools that
+	// explicitly need agent access (e.g., run_subagent). Nil for all others.
 	Agent interface{} `json:"-"`
 }
 
-// AskUserService is the interface ask_user-style tools use to drive an
-// interactive prompt. Implementations decide between WebUI routing
-// (event bus + AskUserManager) and CLI stdin fallback based on whether
-// a browser client is connected. ToolEnv.AskUser is populated by the
-// agent at dispatch time so the tool handler doesn't need *Agent.
+// AskUserService routes ask_user prompts through the active interactive
+// channel (WebUI dialog or CLI stdin). Nil means no input channel is available.
 type AskUserService interface {
-	// Ask presents req to the user and returns their response. Returns
-	// ErrAskUserNoChannel when no input channel is available so callers
-	// can surface a structured error to the LLM.
+	// Ask presents req to the user and returns their response.
 	Ask(ctx context.Context, req AskUserRequest) (string, error)
 }
 
@@ -233,62 +174,32 @@ type ApprovalManager interface {
 	RequestApproval(requestID, toolName, riskLevel, prompt string, extras map[string]string) ApprovalResult
 }
 
-// FileAccessClassifier is the interface through which tool handlers
-// consult Gate 1's path-tier decision before running a file operation.
-// It lives in the tool layer (this package) so handlers in
-// pkg/agent_tools can classify a path without importing pkg/agent.
-//
-// Implementations are responsible for the full allow/prompt/deny
-// decision, including workspace containment, /tmp short-circuit,
-// session allowlist checks, sensitive-path checks, and read_only
-// enforcement. A nil classifier means no Gate 1 context is available
-// (e.g., unit tests); handlers return the raw filesystem error.
-//
-// SP-127 M2: handlers call ClassifyFileAccess at the top of Execute
-// so Gate 1 sees the path on the FIRST call, not after
-// SafeResolvePath fails. The result controls whether to proceed
-// directly (Allow), fall through to the interactive dialog (Prompt),
-// or return a typed denial (Deny).
+// FileAccessClassifier provides Gate 1's path-tier verdict before
+// running a file operation. It lives in the tool layer so handlers
+// can classify a path without importing pkg/agent. Nil means no
+// classifier is available (e.g., unit tests).
 type FileAccessClassifier interface {
-	// ClassifyFileAccess returns the Gate 1 verdict for a file path.
-	// Inputs match classifyFileAccess: filePath (user-supplied),
-	// resolvedPath (symlink-evaluated canonical form, may equal filePath),
-	// mode ("read" or "write").
-	// Returns: "allow" (proceed), "prompt" (fall through to gate), "deny" (return error).
-	// ctx carries the audit logger; implementations log the verdict via LogJSON
-	// so every decision (allow/prompt/deny) appears in the audit trail.
+	// ClassifyFileAccess returns the Gate 1 verdict for a file path:
+	// "allow" (proceed), "prompt" (fall through to gate), "deny" (error).
 	ClassifyFileAccess(ctx context.Context, filePath, resolvedPath, mode string) string
 
 	// IsFolderSessionAllowed reports whether absPath sits under a folder
-	// the user has allowlisted via "Allow this folder for the rest of the
-	// session" (workflow-declared allowed_paths OR manual folder approval).
-	// Used by PrecheckFileAccess to emit the discriminated "allowed_path_hit"
-	// audit event (SP-127 Phase 2.7) — distinct from base "allowed" — so
-	// the WebUI automations panel can count per-run session-allowlist grants.
+	// the user has allowlisted for the rest of the session.
 	IsFolderSessionAllowed(absPath string) bool
 }
 
 // ---------------------------------------------------------------------------
-// SP-079-1: Agent subsystem interfaces
+// Agent subsystem interfaces
 // ---------------------------------------------------------------------------
 
 // VisionProcessor is defined in vision_analyze_types.go as a concrete struct.
-// We use the pointer directly here — no separate interface needed since
-// the type already lives in this package.
 
 // WebBrowser provides headless browser navigation for URL/content analysis.
 type WebBrowser interface {
-	// BrowseURL navigates to a URL and returns rendered content.
-	// The opts parameter carries tool arguments (action, viewport dimensions,
-	// selectors, steps, etc.) as a flexible map. Implementations are expected
-	// to convert this map into their internal option struct (e.g.
-	// webcontent.BrowseOptions) and perform any action-specific validation.
 	BrowseURL(ctx context.Context, url string, opts map[string]any) (string, error)
 }
 
-// SkillInfo is the canonical description of a skill loaded from disk or
-// embedded. It lives here (rather than in pkg/agent) so that pkg/agent_tools
-// can reference it without creating an import cycle.
+// SkillInfo describes a skill loaded from disk or embedded.
 type SkillInfo struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`

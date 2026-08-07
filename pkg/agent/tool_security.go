@@ -29,31 +29,19 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		agent.debugLog("[tool] tool dispatched via new registry: %s\n", toolName)
 	}
 
-	// SP-063: computer-use tools are restricted to the computer_user persona.
-	// Inert unless computer use is enabled (the restricted-name set is empty).
+	// Computer-use tools are restricted to the computer_user persona.
 	if isComputerUseToolBlocked(toolName, agent) {
 		return nil, "", agenterrors.NewPermission("tool "+toolName+" is only available to the computer_user persona", map[string]any{"tool": toolName})
 	}
 
-	// SP-063: per-session opt-in. Even after the persona-activation gates
-	// pass, the FIRST computer-use action in a session must get explicit
-	// user consent. Placed AFTER isComputerUseToolBlocked so that only
-	// legitimate computer-use calls (correct persona + registered tool)
-	// incur the potentially blocking consent dialog. Non-computer-use tools
-	// and wrong-persona calls are already filtered above. Once approved,
-	// the session flag makes this a fast no-op for the rest of the session.
+	// Per-session opt-in: first computer-use action in a session requires explicit user consent.
 	if agent != nil && computerUseToolNames[toolName] {
 		if err := agent.checkComputerUseSessionOptIn(toolName); err != nil {
 			return nil, "", err
 		}
 	}
 
-	// CRITICAL: Depth-based subagent nesting prevention
-	// Agents at or beyond the maximum nesting depth cannot spawn further subagents.
-	// This prevents runaway agent chains while allowing configurable multi-level nesting
-	// (e.g., EA (depth=0) → orchestrator (depth=1) → coder/tester (depth=2)).
-	// ask_user is NOT blocked for subagents — they share the event bus and questions
-	// are routed through the same WebUI/CLI prompt mechanism as the primary agent.
+	// Depth-based subagent nesting prevention.
 	if agent != nil {
 		// In LCM mode, block parallel subagents (causes file conflicts)
 		// In full mode, allow if depth permits
@@ -88,12 +76,6 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 	}
 
 	// Security validation — classify and block/prompt dangerous operations.
-	//
-	// SP-068 Phase 2: when UnifiedRiskResolver is enabled, use the single
-	// ResolveToolRisk assessment for gating — same path as the seed
-	// pre-execute hook. This keeps the public ExecuteTool API consistent
-	// with the live dispatch path. When disabled (flag OFF), the legacy
-	// dual-gate block below runs unchanged.
 	usedUnifiedGate := false
 	if agent != nil {
 		if cfg := agent.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
@@ -106,12 +88,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 	if !usedUnifiedGate {
 		secResult := tools.ClassifyToolCall(toolName, args)
 		if secResult.ShouldBlock || secResult.ShouldPrompt || secResult.IntentConfirmation {
-			// Workflow-declared auto-approval for run_automate. When the
-			// workflow JSON sets requires_approval: false, the model can
-			// invoke it without a user prompt — designed for validation
-			// workflows referenced from AGENTS.md that the model must run
-			// before declaring work done. Failure to read the file falls
-			// through to the normal approval path (fail-safe).
+			// Workflow-declared auto-approval for run_automate.
 			workflowAutoApproved := false
 			if agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
 				if wf, ok := args["workflow"].(string); ok && wf != "" {
@@ -123,10 +100,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 					}
 				}
 			}
-			// In-session re-authorization for run_automate. Once the user has
-			// explicitly approved a workflow during this chat session, subsequent
-			// calls (e.g. retries kicked off by the primary agent after a failure)
-			// don't need to re-prompt — the user opted in once for this workflow.
+			// In-session re-authorization for run_automate.
 			alreadyApprovedInSession := false
 			if !workflowAutoApproved && agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
 				if wf, ok := args["workflow"].(string); ok && agent.IsWorkflowApprovedInSession(wf) {
@@ -139,24 +113,14 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 			if workflowAutoApproved || alreadyApprovedInSession {
 				// fall through to handler execution below
 			} else if agent != nil {
-				// SP-127 M1: staticGateAutoApprove now decides both bypass
-				// AND path-tier, so file-touching tools benefit from the same
-				// allowlist-aware allow that the filesystem gate adapter uses.
 				filePath, mode := extractFilePathAndMode(toolName, args)
 				if agent.staticGateAutoApprove(secResult, filePath, "", mode) && !secResult.IntentConfirmation {
-					// Unsafe mode, session elevation, or path-tier allow —
-					// skip the prompt for non-hard-block operations.
-					// See staticGateAutoApprove.
-					// IntentConfirmation is never auto-approved — it's about
-					// explicit user intent, not risk bypass.
+					// Unsafe mode, session elevation, or path-tier allow — skip the prompt for non-hard-block operations.
 					if agent.debug {
 						agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated/path-tier): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
 					}
 				} else if agent.GetUnsafeShellMode() && toolName == "shell_command" && !secResult.IsHardBlock && secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
-					// --unsafe-shell bypasses CAUTION-tier shell prompts across all
-					// modes (CLI and WebUI) so the flag behaves consistently regardless
-					// of UI. DANGEROUS and hard-block operations still require approval.
-					// IntentConfirmation is never auto-approved here either.
+					// --unsafe-shell bypasses CAUTION-tier shell prompts.
 					if agent.debug {
 						agent.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (risk: %s)\n", toolName, secResult.Risk)
 					}
@@ -169,31 +133,11 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 				// Check if we're running as a subagent — subagents cannot prompt
 				isSubagent := agent.IsSubagent()
 
-				// When true, the browser dialog conclusively answered (approve or
-				// deny); skip the CLI fallback. Stays false when the webui path is
-				// unavailable or the dialog went unanswered (timeout / disconnect),
-				// in which case we fall through to the terminal prompt below so an
-				// unattended browser tab can't dead-end the agent.
 				approvedViaWebUI := false
 
 				// Prefer webui approval path when a browser tab is connected.
-				// When the process has an active webui client, the query likely
-				// originated from the browser. Sending the approval request through
-				// the event bus ensures the dialog appears in the webui. The CLI
-				// interactive prompt is unreliable in this case because stdin may
-				// belong to the terminal that launched the server — the user is
-				// interacting via the browser, not the terminal.
 				if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
-					// WEBUI: request approval via event bus for the browser dialog.
-					//
-					// Suspend the CLI spinner and pause the steer reader BEFORE
-					// blocking on the webui response. The approval request can
-					// block for up to 30 minutes (DefaultTimeout). Without
-					// suspending, the steer reader stays in raw mode while the
-					// agent is blocked, and any stdout writes from background
-					// goroutines (tool output, streaming) corrupt the terminal
-					// display. After the block returns (approved, denied, or
-					// timed out), ResumeSteer restores the terminal state.
+					// Suspend the CLI spinner and pause the steer reader before blocking on the webui response.
 					clihooks.SuspendIndicator()
 					clihooks.PauseSteer()
 					defer clihooks.ResumeSteer()
@@ -291,11 +235,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.EventBus = agent.GetEventBus()
 		// Use effectiveCwd so tools honor cd commands during a session.
 		env.WorkspaceRoot = agent.effectiveCwd()
-		// SP-074-2: Route tool output through the agent's output system
-		// (PrintLineAsync → OutputRouter) instead of os.Stdout.
-		// Gate on verbose mode: in default/compact, tool output is
-		// suppressed — the user doesn't need to see raw read_file
-		// contents or full shell stdout dumped to their terminal.
+		// Route tool output through the agent's output system in verbose mode.
 		if cfg := agent.GetConfig(); cfg != nil && cfg.OutputVerbosity == configuration.OutputVerbosityVerbose {
 			env.OutputWriter = newOutputRouter(agent)
 		}
@@ -305,37 +245,23 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.TodoManager = agent.GetTodoManager()
 		// Interactive CLI means: no browser client connected AND stdin is a TTY.
 		env.IsInteractiveCLI = !agent.HasActiveWebUIClients() && !isNonInteractive()
-		// SP-074-3: Wire ApprovalManager adapter so migrated tools can
-		// request security approvals through the normal CLI/WebUI flow.
+		// Wire ApprovalManager adapter so migrated tools can request security approvals.
 		env.ApprovalManager = newToolsApprovalAdapter(agent)
-		// SP-079-1: Wire new ToolEnv fields for vision, embedding, and
-		// the remaining subsystem interfaces.
+		// Wire new ToolEnv fields for vision, embedding, and subsystem interfaces.
 		env.EmbeddingMgr = agent.GetEmbeddingManager()
 		env.VisionProcessor = agent.GetVisionProcessor()
 		env.WebBrowser = tools.NewBrowserAdapter()
 		env.SkillLoader = newSkillLoaderAdapter(agent)
 		env.SearchEngine = newSearchEngineAdapter(agent)
-		// SP-082-1: Pass the raw JSON args so handlers can recover key
-		// insertion order from the LLM's original tool call.
+		// Pass the raw JSON args so handlers can recover key insertion order.
 		env.RawArgsJSON = rawArgsJSON
 		env.Notifier = agent
 		env.LifetimeCtx = agent.LifetimeCtx()
 		// Propagate subagent depth for memory gate and other subagent-specific behaviors.
 		env.SubagentDepth = agent.subagentDepth
-		// Propagate Gate 1's auto-approve decision so handler-level gates
-		// (Gate 2) skip their interactive prompt, matching Gate 1. Covers
-		// both --unsafe mode and elevated risk profiles; hard blocks are
-		// still enforced by the handlers' own IsHardBlock early-returns.
+		// Propagate Gate 1's auto-approve decision so handler-level gates skip their interactive prompt.
 		env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
-		// SP-127 M4: FilesystemGate removed — off-workspace file access is
-		// handled entirely through PrecheckFileAccess which consults
-		// Gate 1's path-tier classifier. When nil (no agent context),
-		// handlers fall through and return the raw filesystem error.
-		// SP-127 M2: Wire Gate 1's path-tier classifier into ToolEnv so
-		// handlers can consult it up-front. The classifier implements
-		// FileAccessClassifier and delegates to the existing
-		// classifyFileAccess method. When nil (no agent context), handlers
-		// return the raw filesystem error.
+		// Wire Gate 1's path-tier classifier into ToolEnv so handlers can consult it up-front.
 		env.FileAccessClassifier = agent
 	} else {
 		env.OutputWriter = os.Stdout
@@ -346,10 +272,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		return nil, "", agenterrors.Wrapf(err, "validation failed for tool %q", toolName)
 	}
 
-	// SP-104-3: Memory gate for memory-intensive subagent shell commands.
-	// Only gate commands that are likely to consume significant memory
-	// (test runners, bundlers, compilers) to avoid blocking trivial
-	// commands like ls, cat, echo with 30-second sleeps.
+	// Memory gate for memory-intensive subagent shell commands.
 	if toolName == "shell_command" && agent.subagentDepth > 0 {
 		if cmd, ok := args["command"].(string); ok && IsMemoryIntensiveCommand(cmd) {
 			gate := DefaultMemoryGate()
@@ -408,15 +331,9 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 	return images, output, nil
 }
 
-// staticGateAutoApprove reports whether a tool call that the static
-// classifier (Gate 1) flagged as risky should skip the interactive
-// approval prompt because the session is in a bypass state:
-//
-//   - Unsafe mode: every security check is off.
-//   - Session elevation: the active risk profile is permissive or
-//     unrestricted (the user clicked "Elevate (session)" on a prior
-//     dialog or ran /risk-profile permissive), so non-hard-block
-//     operations auto-approve for the rest of the session.
+// staticGateAutoApprove reports whether a tool call should skip the interactive
+// approval prompt because the session is in a bypass state (unsafe mode,
+// session elevation, or path-tier allow).
 func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult, filePath, resolvedPath, mode string) bool {
 	if a == nil {
 		return false
@@ -427,11 +344,7 @@ func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult, filePath, 
 	if a.IsSessionElevated() && !secResult.IsHardBlock {
 		return true
 	}
-	// SP-127 M1: path-tier allow. When a file path is supplied, consult
-	// the same classifier the filesystem gate adapter uses so Gate 1 and
-	// Gate 2 agree on the verdict. FileAccessAllow skips the prompt;
-	// FileAccessDeny propagates the hard block so the caller rejects the
-	// op; FileAccessPrompt falls through to the existing prompt flow.
+	// Path-tier allow: consult the same classifier the filesystem gate adapter uses.
 	if filePath != "" {
 		switch a.classifyFileAccess(filePath, resolvedPath, mode) {
 		case FileAccessAllow:
@@ -445,21 +358,8 @@ func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult, filePath, 
 	return false
 }
 
-// unifiedSecurityGate is the Phase-2 security gate. When
-// UnifiedRiskResolver is ON it replaces the split Gate 1 / Gate 2
-// call-site path with a single ResolveToolRisk assessment.
-//
-// The decision mapping mirrors the existing call-site logic:
-//
-//	Critical/IsHardBlock → hard-block error
-//	High                → highRiskApprovedForCommand (same as today)
-//	Medium              → go through the interactive approval flow
-//	(reuse existing
-//	 prompt wiring)
-//	Low                 → allow
-//
-// The function returns nil when the call is allowed to proceed, or an
-// error when it should be blocked.
+// unifiedSecurityGate is the unified security gate. When UnifiedRiskResolver is ON
+// it replaces the split Gate 1 / Gate 2 call-site path with a single ResolveToolRisk assessment.
 func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) error {
 	assessment := a.ResolveToolRisk(name, args)
 
@@ -475,8 +375,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 		)
 	}
 
-	// High risk: reuse the existing approval cascade (EA persona reasons,
-	// interactive users get prompted, non-interactive subagents are blocked)
+	// High risk: reuse the existing approval cascade.
 	if assessment.Level == configuration.RiskLevelHigh {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if !a.highRiskApprovedForCommand(nil, cmd) {
@@ -491,16 +390,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 		}
 	}
 
-	// Workflow-declared auto-approval for run_automate. When the
-	// workflow JSON sets requires_approval: false, the model can
-	// invoke it without a user prompt — designed for validation
-	// workflows referenced from AGENTS.md that the model must run
-	// before declaring work done. Failure to read the file falls
-	// through to the normal intent-confirmation path (fail-safe).
-	// In-session re-authorization for run_automate. Once the user has
-	// explicitly approved a workflow during this chat session, subsequent
-	// calls (e.g. retries kicked off by the primary agent after a failure)
-	// don't need to re-prompt — the user opted in once for this workflow.
+	// Workflow-declared auto-approval and in-session re-authorization for run_automate.
 	if name == "run_automate" && assessment.RequiresIntentConfirmation {
 		if wf, ok := args["workflow"].(string); ok && wf != "" {
 			if !workflowRequiresApproval(a, wf) {
@@ -541,10 +431,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	return nil
 }
 
-// unifiedSecurityPrompt handles the interactive approval flow for Medium
-// risk or intent-confirmation operations in the unified gate. Delegates to
-// RequestApproval which owns surface selection, fallback, and 4-option
-// outcome (SP-068 Phase 3).
+// unifiedSecurityPrompt handles the interactive approval flow for Medium risk or intent-confirmation operations.
 func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, assessment RiskAssessment) error {
 	_, err := a.RequestApproval(assessment, name, args)
 	return err

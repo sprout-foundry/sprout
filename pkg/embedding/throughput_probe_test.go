@@ -74,7 +74,7 @@ func TestIndexThroughputProbe(t *testing.T) {
 	})
 
 	embedStart := time.Now()
-	records, err := idx.embedUnits(ctx, units[:sample], nil)
+	records, err := idx.embedUnits(ctx, units[:sample], "", nil)
 	if err != nil {
 		t.Fatalf("embed: %v", err)
 	}

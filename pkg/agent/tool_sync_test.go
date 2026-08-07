@@ -10,9 +10,6 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
-// validJSONSchemaTypes defines the allowed JSON Schema primitive types for
-// tool parameter definitions. Both the sprout ToolHandler registry and the seed
-// core.ToolRegistry must only use these types to prevent model confusion.
 var validJSONSchemaTypes = map[string]bool{
 	"string":  true,
 	"integer": true,
@@ -22,12 +19,6 @@ var validJSONSchemaTypes = map[string]bool{
 	"object":  true,
 }
 
-// ---------------------------------------------------------------------------
-// Helper: convert seed ToolParameters (built by buildSchema) into the shape
-// we need for comparison — a map from parameter name → {Type, Required}.
-// ---------------------------------------------------------------------------
-
-// seedParamInfo holds the fields extracted from a seed ToolParameters schema.
 type seedParamInfo struct {
 	Type     string
 	Required bool
@@ -39,7 +30,6 @@ func parseSeedToolParameters(params interface{}) map[string]seedParamInfo {
 		return result
 	}
 
-	// Try direct ToolParameters struct first
 	if tp, ok := params.(core.ToolParameters); ok {
 		requiredSet := make(map[string]bool, len(tp.Required))
 		for _, name := range tp.Required {
@@ -57,10 +47,6 @@ func parseSeedToolParameters(params interface{}) map[string]seedParamInfo {
 	return result
 }
 
-// ---------------------------------------------------------------------------
-// Helper: build a canonical list of parameter names from a handler definition.
-// ---------------------------------------------------------------------------
-
 func handlerParamNames(h tools.ToolHandler) []string {
 	def := h.Definition()
 	names := make([]string, 0, len(def.Parameters))
@@ -71,17 +57,6 @@ func handlerParamNames(h tools.ToolHandler) []string {
 	return names
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-// TestToolSync_AllToolsPresent tests that the seed registry and the handler
-// registry register exactly the same set of tool names.
-//
-// When the seed registry is built with agent == nil (as here), embedding-
-// dependent tools are filtered out — they have no useful behavior without an
-// EmbeddingManager. The handler registry still lists them (it's the source of
-// truth for what *exists*), so the comparison skips RequiresEmbeddings tools.
 func TestToolSync_AllToolsPresent(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
@@ -89,7 +64,7 @@ func TestToolSync_AllToolsPresent(t *testing.T) {
 	sproutNames := make(map[string]bool)
 	for _, h := range sprout.All() {
 		if h.Definition().RequiresEmbeddings {
-			continue // filtered from seed when no embedding manager
+			continue
 		}
 		sproutNames[h.Name()] = true
 	}
@@ -99,14 +74,12 @@ func TestToolSync_AllToolsPresent(t *testing.T) {
 		seedNames[name] = true
 	}
 
-	// Check every sprout tool exists in seed
 	for name := range sproutNames {
 		if !seedNames[name] {
 			t.Errorf("handler registry has tool %q not found in seed registry", name)
 		}
 	}
 
-	// Check every seed tool exists in sprout
 	for name := range seedNames {
 		if !sproutNames[name] {
 			t.Errorf("seed registry has tool %q not found in handler registry", name)
@@ -114,19 +87,15 @@ func TestToolSync_AllToolsPresent(t *testing.T) {
 	}
 }
 
-// TestToolSync_ParametersMatch tests that for every tool present in both
-// registries, the parameter names, types, and required flags are identical.
 func TestToolSync_ParametersMatch(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
 
-	// Build handler tool definition lookup
 	handlerDefs := make(map[string]tools.ToolHandler)
 	for _, h := range sprout.All() {
 		handlerDefs[h.Name()] = h
 	}
 
-	// Iterate over every seed tool
 	for _, seedTool := range seed.GetTools() {
 		name := seedTool.Function.Name
 
@@ -137,10 +106,8 @@ func TestToolSync_ParametersMatch(t *testing.T) {
 		}
 		def := h.Definition()
 
-		// Parse seed schema
 		seedParams := parseSeedToolParameters(seedTool.Function.Parameters)
 
-		// Build handler lookup for this tool's parameters
 		handlerParamMap := make(map[string]struct {
 			Type     string
 			Required bool
@@ -160,13 +127,11 @@ func TestToolSync_ParametersMatch(t *testing.T) {
 			}{p.Type, req}
 		}
 
-		// Compare parameter counts
 		if len(seedParams) != len(handlerParamMap) {
 			t.Errorf("tool %q: parameter count mismatch — seed has %d, handler has %d",
 				name, len(seedParams), len(handlerParamMap))
 		}
 
-		// Check every seed parameter exists in handler
 		for paramName, seedInfo := range seedParams {
 			handlerInfo, found := handlerParamMap[paramName]
 			if !found {
@@ -185,7 +150,6 @@ func TestToolSync_ParametersMatch(t *testing.T) {
 			}
 		}
 
-		// Check every handler parameter exists in seed
 		for paramName := range handlerParamMap {
 			if _, found := seedParams[paramName]; !found {
 				t.Errorf("tool %q: handler parameter %q not found in seed", name, paramName)
@@ -194,11 +158,7 @@ func TestToolSync_ParametersMatch(t *testing.T) {
 	}
 }
 
-// TestToolSync_ValidJSONSchemaTypes tests that every parameter in both
-// registries uses one of the valid JSON Schema types ("string", "integer",
-// "number", "boolean", "array", "object").
 func TestToolSync_ValidJSONSchemaTypes(t *testing.T) {
-	// Check handler registry
 	sprout := tools.GetNewToolRegistry()
 	for _, h := range sprout.All() {
 		def := h.Definition()
@@ -210,7 +170,6 @@ func TestToolSync_ValidJSONSchemaTypes(t *testing.T) {
 		}
 	}
 
-	// Check seed registry
 	seed := NewSeedToolRegistry(nil)
 	for _, tool := range seed.GetTools() {
 		seedParams := parseSeedToolParameters(tool.Function.Parameters)
@@ -223,8 +182,6 @@ func TestToolSync_ValidJSONSchemaTypes(t *testing.T) {
 	}
 }
 
-// sortedValidTypes returns a sorted, comma-separated list of valid types for
-// inclusion in error messages.
 func sortedValidTypes() []string {
 	types := make([]string, 0, len(validJSONSchemaTypes))
 	for t := range validJSONSchemaTypes {
@@ -234,9 +191,6 @@ func sortedValidTypes() []string {
 	return types
 }
 
-// TestToolSync_AlternativeNamesMatch tests that alternative parameter names
-// (aliases) are handled correctly. Since seed absorbs alternatives, the test
-// verifies parameter name consistency between the two registries.
 func TestToolSync_AlternativeNamesMatch(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
@@ -268,16 +222,9 @@ func TestToolSync_AlternativeNamesMatch(t *testing.T) {
 				t.Errorf("tool %q: parameter %q exists in handler but not seed", name, hName)
 			}
 		}
-
-		// Validate handler alternatives check no longer applicable
-		// (handler definitions use a single Required field per parameter,
-		// not an Alternatives list). Seed absorbs alternatives during schema
-		// construction — the parameter name set comparison above is sufficient.
 	}
 }
 
-// TestToolSync_NilToolRegistry tests that NewSeedToolRegistry(nil) works
-// without panicking — the registry must handle a nil agent argument.
 func TestToolSync_NilToolRegistry(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -290,13 +237,11 @@ func TestToolSync_NilToolRegistry(t *testing.T) {
 		t.Fatal("NewSeedToolRegistry(nil) returned nil")
 	}
 
-	// Verify some tools are registered
 	tools := seed.GetTools()
 	if len(tools) == 0 {
 		t.Error("seed registry should have at least some tools registered")
 	}
 
-	// Check that well-known tools are present
 	known := []string{"shell_command", "read_file", "write_file", "git", "commit"}
 	toolNames := make(map[string]bool)
 	for _, t := range tools {
@@ -309,11 +254,6 @@ func TestToolSync_NilToolRegistry(t *testing.T) {
 	}
 }
 
-// TestToolSync_CountConsistency verifies that both registries have the same tool count.
-//
-// Embedding-dependent tools are filtered from the seed registry when the agent
-// has no EmbeddingManager (the default), so the handler count is adjusted to
-// exclude them before comparison.
 func TestToolSync_CountConsistency(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
@@ -332,9 +272,7 @@ func TestToolSync_CountConsistency(t *testing.T) {
 	t.Logf("both registries have %d tools", sproutCount)
 }
 
-// TestToolSync_Negative_InvalidType confirms the test catches invalid JSON Schema types.
 func TestToolSync_Negative_InvalidType(t *testing.T) {
-	// The test should flag "int" as invalid (it should be "integer")
 	if validJSONSchemaTypes["int"] {
 		t.Fatal("test setup broken: \"int\" should not be a valid JSON Schema type")
 	}
@@ -345,7 +283,6 @@ func TestToolSync_Negative_InvalidType(t *testing.T) {
 		t.Fatal("test setup broken: \"float64\" should not be a valid JSON Schema type")
 	}
 
-	// The test should allow the standard types
 	for _, valid := range []string{"string", "integer", "number", "boolean", "array", "object"} {
 		if !validJSONSchemaTypes[valid] {
 			t.Errorf("test setup broken: %q should be a valid JSON Schema type", valid)
@@ -353,8 +290,6 @@ func TestToolSync_Negative_InvalidType(t *testing.T) {
 	}
 }
 
-// TestToolSync_BrowseUrlParameters tests that the complex browse_url tool
-// has consistent parameter definitions between both registries.
 func TestToolSync_BrowseUrlParameters(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
@@ -391,7 +326,6 @@ func TestToolSync_BrowseUrlParameters(t *testing.T) {
 		}{p.Type, req}
 	}
 
-	// browse_url has many parameters — verify they all match
 	expectedParams := []string{
 		"url", "action", "screenshot_path", "session_id", "persist_session",
 		"close_session", "viewport_width", "viewport_height", "user_agent",
@@ -423,9 +357,7 @@ func TestToolSync_BrowseUrlParameters(t *testing.T) {
 	}
 }
 
-// TestToolSync_SyncErrorMessageQuality ensures error messages are descriptive.
 func TestToolSync_SyncErrorMessageQuality(t *testing.T) {
-	// Create a seed tool with a mismatched type
 	seed := core.NewToolRegistry(core.ToolRegistryOptions{
 		DefaultTimeout: 5 * time.Minute,
 		MaxResultSize:  50 * 1024,
@@ -444,7 +376,6 @@ func TestToolSync_SyncErrorMessageQuality(t *testing.T) {
 		t.Fatalf("failed to register seed tool: %v", err)
 	}
 
-	// Check the seed tool has the correct type
 	seedTool := seed.GetTool("deliberate_mismatch")
 	seedParams := parseSeedToolParameters(seedTool.Function.Parameters)
 	seedInfo := seedParams["foo"]
@@ -453,7 +384,6 @@ func TestToolSync_SyncErrorMessageQuality(t *testing.T) {
 		t.Errorf("expected seed type to be \"integer\", got %q", seedInfo.Type)
 	}
 
-	// "int" is NOT valid per validJSONSchemaTypes
 	if !validJSONSchemaTypes["integer"] {
 		t.Errorf("test setup broken: \"integer\" should be a valid JSON Schema type")
 	}

@@ -9,22 +9,10 @@ import (
 	onnxruntime "github.com/yalue/onnxruntime_go"
 )
 
-// runSessionWithOptions wraps session.RunWithOptions with ctx-aware
-// termination. Both ONNXEmbeddingProvider and JinaONNXEmbeddingProvider
-// route their session.Run calls through it.
-//
-// ORT's session.Run ignores Go contexts — a Run that hangs (degenerate
-// input shape, intra-op thread pool contention, etc.) keeps spinning until
-// it finishes or the process dies. On slow devices a hung Run holds the
-// inference gate permit forever, wedging the build ("building in progress"
-// status that never advances, ORT workers at ~70% CPU producing nothing).
-//
-// RunOptions.Terminate() is ORT's official cancellation: it sets a flag the
-// ORT kernel loop checks between operations, causing the in-flight Run to
-// return an error "quickly" (per onnxruntime_go's doc — typically <1s). We
-// allocate one RunOptions per call (cheap), spawn a watchdog that calls
-// Terminate() when ctx fires, and clean up on Run return. The defer chain
-// guarantees both the goroutine is signalled and the RunOptions is freed.
+// runSessionWithOptions wraps session.RunWithOptions with ctx-aware termination.
+// ORT's session.Run ignores Go contexts; a hung Run holds the inference gate
+// permit forever. Terminate() on ctx cancellation lets the in-flight Run
+// return promptly.
 func runSessionWithOptions(
 	ctx context.Context,
 	session *onnxruntime.DynamicAdvancedSession,

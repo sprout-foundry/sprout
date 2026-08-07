@@ -870,6 +870,19 @@ const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
       command: data.command != null ? String(data.command) : undefined,
       riskType: data.risk_type != null ? String(data.risk_type) : undefined,
       target: data.target != null ? String(data.target) : undefined,
+      // SP-058: the server sends allow_options="true" in extras for
+      // shell_command. Without it the dialog falls back to the legacy
+      // Allow / Block pair and the Elevate / Always-approve actions are
+      // unreachable. fs fields (kind/folder/path) drive the
+      // filesystem-tier dialog (backend extras["kind"] etc.).
+      allowOptions: data.allow_options === 'true',
+      fsKind: data.kind === 'fs_external' || data.kind === 'fs_sensitive' ? data.kind : undefined,
+      fsFolder: data.folder != null ? String(data.folder) : undefined,
+      fsPath: data.path != null ? String(data.path) : data.target != null ? String(data.target) : undefined,
+      // SP-124-2: LLM-derived analysis attached by the backend. Parse on
+      // receive so the dialog can render the summary / recommendation
+      // panel above the command.
+      securityAnalysis: parseSecurityAnalysis(event.data),
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));

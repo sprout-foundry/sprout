@@ -129,6 +129,63 @@ describe('SecurityApprovalDialog', () => {
   });
 
   // ────────────────────────────────────────────────────────────────
+  // SP-058 4-option dialog (allowOptions) + delivery-error regression
+  // ────────────────────────────────────────────────────────────────
+
+  it('renders the 4-option layout when allowOptions is true (Approve once / Deny / Always approve / Always ask / Elevate)', () => {
+    render(<SecurityApprovalDialog {...BASE_PROPS} allowOptions command="rm -rf /tmp/x" />);
+    expect(screen.getByText('Approve once')).toBeInTheDocument();
+    expect(screen.getByText('Deny')).toBeInTheDocument();
+    expect(screen.getByText('Always approve')).toBeInTheDocument();
+    expect(screen.getByText('Always ask')).toBeInTheDocument();
+    expect(screen.getByText('Elevate (session)')).toBeInTheDocument();
+  });
+
+  it('does NOT render the 4-option actions when allowOptions is false', () => {
+    render(<SecurityApprovalDialog {...BASE_PROPS} command="rm -rf /tmp/x" />);
+    expect(screen.queryByText('Approve once')).not.toBeInTheDocument();
+    expect(screen.queryByText('Elevate (session)')).not.toBeInTheDocument();
+  });
+
+  it('Approve once forwards the approve_once action', async () => {
+    const onRespond = vi.fn();
+    render(<SecurityApprovalDialog {...BASE_PROPS} allowOptions command="rm -rf /tmp/x" onRespond={onRespond} />);
+    fireEvent.click(screen.getByText('Approve once'));
+    await waitFor(() => {
+      expect(onRespond).toHaveBeenCalledWith('req-test-001', true, 'approve_once');
+    });
+  });
+
+  it('Elevate forwards the elevate action', async () => {
+    const onRespond = vi.fn();
+    render(<SecurityApprovalDialog {...BASE_PROPS} allowOptions command="rm -rf /tmp/x" onRespond={onRespond} />);
+    fireEvent.click(screen.getByText('Elevate (session)'));
+    await waitFor(() => {
+      expect(onRespond).toHaveBeenCalledWith('req-test-001', true, 'elevate');
+    });
+  });
+
+  it('Always approve forwards the approve_always action', async () => {
+    const onRespond = vi.fn();
+    render(<SecurityApprovalDialog {...BASE_PROPS} allowOptions command="rm -rf /tmp/x" onRespond={onRespond} />);
+    fireEvent.click(screen.getByText('Always approve'));
+    await waitFor(() => {
+      expect(onRespond).toHaveBeenCalledWith('req-test-001', true, 'approve_always');
+    });
+  });
+
+  it('renders the delivery error banner when deliveryError is provided', () => {
+    render(
+      <SecurityApprovalDialog
+        {...BASE_PROPS}
+        command="ls"
+        deliveryError="Connection lost — approval not delivered. Please retry once the connection is restored."
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(/Connection lost/);
+  });
+
+  // ────────────────────────────────────────────────────────────────
   // SP-124b Phase 2: chain stepper rendering
   // ────────────────────────────────────────────────────────────────
 

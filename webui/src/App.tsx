@@ -459,6 +459,7 @@ function AppInner() {
                         fsFolder={state.securityApprovalRequest.fsFolder}
                         fsPath={state.securityApprovalRequest.fsPath}
                         securityAnalysis={state.securityApprovalRequest.securityAnalysis}
+                        deliveryError={state.securityApprovalRequest.deliveryError}
                         onRespond={handleSecurityApprovalResponse}
                       />
                     )}

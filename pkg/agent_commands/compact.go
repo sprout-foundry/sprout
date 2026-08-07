@@ -18,35 +18,6 @@ import (
 const compactSummaryHeader = "Compacted earlier conversation state:"
 
 // Manual /compact tuning constants.
-//
-// These mirror seed's Structural* values where the semantics line up —
-// min-message threshold and min-middle-size threshold — and intentionally
-// diverge from StructuralRecentToKeep (24) because /compact is a
-// USER-INITIATED conservation action. The user explicitly asked for
-// context reduction when they type /compact; the auto-path runs silently
-// in the background and must preserve as much recent causal chain as
-// possible to avoid visible mid-session context loss. A 12-message recent
-// window covers the last ~3–6 turns of agentic work, which is enough for
-// continuity without defeating the purpose of the manual hammer.
-//
-// Rationale per constant:
-//   - compactMinMessagesToCompact (30): match seed. Below 30 messages the
-//     LLM call costs more than it saves.
-//   - compactMinMiddleMessages (6): match seed. Middles smaller than 6
-//     messages aren't worth a summary rewrite.
-//   - compactRecentToKeep (12): deliberately smaller than seed's 24.
-//     /compact is opt-in reduction; the user wants headroom back.
-//   - compactSummaryMaxWords (1500): raise from 600 so a long-running
-//     agentic session (which often has 50–150K tokens of middle
-//     activity) still compresses into a useful recap rather than a
-//     one-paragraph stub.
-//   - manual vs. auto anchor treatment: sprout's /compact copies the
-//     anchor verbatim, while seed's auto-compaction demotes the
-//     anchored user/assistant messages into past-tense stubs to
-//     prevent the model from re-anchoring on a stale original prompt.
-//     /compact preserves the live opening task because manual
-//     compaction is user-initiated: the user is returning to the same
-//     task, not abandoning it.
 const (
 	compactMinMessagesToCompact = 30
 	compactMinMiddleMessages    = 6
@@ -54,24 +25,12 @@ const (
 	compactSummaryMaxWords      = 1500
 )
 
-// CompactCommand implements the /compact slash command. It splits the
-// conversation into three segments — the opening task anchor
-// (system + first user/assistant turn), the middle, and the recent
-// causal chain (last 12 messages, adjusted to keep tool calls paired
-// with their results) — and replaces the middle with a single
-// LLM-generated recap while preserving anchor and recent verbatim.
+// CompactCommand implements the /compact slash command.
 type CompactCommand struct {
-	ctx context.Context // SP-073: cancellation context for LLM calls
+	ctx context.Context // cancellation context for LLM calls
 }
 
 // SetContext sets the cancellation context for the LLM summarization call.
-// When wired through the command registry, this receives the agent's
-// InterruptCtx so Stop/Ctrl+C can abort in-flight compaction.
-//
-// Note: in concurrent multi-chat daemon mode, the registry reuses the
-// same CompactCommand singleton, so c.ctx may be overwritten by a
-// concurrent call. The Execute method falls back to the agent's own
-// InterruptCtx() to avoid cross-chat interference.
 func (c *CompactCommand) SetContext(ctx context.Context) {
 	c.ctx = ctx
 }
@@ -131,9 +90,7 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return nil
 	}
 
-	// Mirror seed's CompactWithLLMSummary boundary logic: keep the
-	// opening anchor (system + first user/assistant turn) and the last
-	// compactRecentToKeep messages intact; summarize only the middle.
+	// Mirror seed's CompactWithLLMSummary boundary logic.
 	anchorEnd := compactAnchorEnd(messages)
 	recentStart := len(messages) - compactRecentToKeep
 	if recentStart <= anchorEnd {
@@ -176,14 +133,7 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return emptyErr
 	}
 
-	// Preserve the head's file-change manifest by appending it to the
-	// summary body. The block format round-trips through
-	// ExtractFileChangesFromMessages so the manifest persists across
-	// successive compactions instead of being lost the moment the LLM
-	// recap replaces the tool-call detail it was derived from. The
-	// manifest represents file changes that happened DURING the
-	// compacted middle, which is exactly the window we want carried
-	// forward.
+	// Preserve the head's file-change manifest by appending it to the summary body.
 	manifest := agent.ExtractFileChangesFromMessages(middle)
 	summaryContent := compactSummaryHeader + "\n" + body
 	if block := agent.FormatFileChangesForSummary(manifest); block != "" {
@@ -194,18 +144,14 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		Role:    "assistant",
 		Content: summaryContent,
 	}
-	// Anchor preserved verbatim (system + first user/assistant turn);
-	// recent causal chain preserved verbatim (last 12 messages, tool-
-	// adjusted); middle replaced by summary. This mirrors seed's
-	// structural compaction splice.
+	// Anchor and recent preserved verbatim; middle replaced by summary.
 	newMessages := make([]api.Message, 0, len(anchor)+1+len(tail))
 	newMessages = append(newMessages, anchor...)
 	newMessages = append(newMessages, summaryMsg)
 	newMessages = append(newMessages, tail...)
 	chatAgent.SetMessages(newMessages)
 
-	// Drop turn checkpoints — their stored indices point into the old
-	// message list and are no longer meaningful after substitution.
+	// Drop turn checkpoints — their stored indices are no longer meaningful.
 	chatAgent.ReplaceTurnCheckpoints(nil)
 
 	if path, err := chatAgent.CaptureTranscriptSnapshot("post-compact-manual", false); err == nil {
@@ -229,21 +175,6 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 // compactAnchorEnd returns the index past the opening task anchor —
 // the system message (if any) plus the first user message and any
 // immediately-following non-tool-calling assistant response.
-//
-// This is the sprout-side replica of seed's unexported
-// compactionAnchorEnd. The anchor's contents are carried forward
-// verbatim by /compact so the model retains the original task framing
-// after compaction.
-//
-// Behavior:
-//   - len == 0 → 0
-//   - system at [0] → start at 1
-//   - find first user message at or after anchorEnd
-//   - include it, then include the following assistant reply if it
-//     has no tool calls (a tool-calling assistant in the anchor would
-//     need its tool results to follow; better to leave that assistant
-//     in the middle than to anchor it without its results)
-//   - if no user message is found, anchorEnd falls back to 1
 func compactAnchorEnd(messages []api.Message) int {
 	if len(messages) == 0 {
 		return 0
@@ -273,21 +204,7 @@ func compactAnchorEnd(messages []api.Message) int {
 
 // adjustRecentBoundary walks recentStart backward past dangling tool
 // results and assistant-with-tool-calls messages so the compaction cut
-// never splits a tool call from its result. This is the sprout-side
-// replica of seed's unexported adjustCompactionBoundary.
-//
-// The loop continues while recentStart > anchorEnd and the slot at or
-// just before recentStart is part of an in-flight tool call chain:
-//   - if messages[recentStart] is a tool result, step back so the
-//     result stays with the assistant tool call that produced it
-//     (which lives at recentStart-1 and will then be in the middle or
-//     recent window together with its result)
-//   - if messages[recentStart-1] is an assistant WITH tool calls and
-//     would otherwise be the last "kept" message before the tail,
-//     step back so the tool call sits with its results in the same
-//     segment
-//
-// The function never crosses anchorEnd — the anchor is fixed.
+// never splits a tool call from its result.
 func adjustRecentBoundary(messages []api.Message, recentStart, anchorEnd int) int {
 	for recentStart > anchorEnd {
 		if recentStart < len(messages) && messages[recentStart].Role == "tool" {

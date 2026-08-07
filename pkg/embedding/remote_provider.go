@@ -46,29 +46,29 @@ const (
 
 // RemoteRequest is a single protocol request.
 type RemoteRequest struct {
-	ID         string       `json:"id"`
-	Op         RemoteOp     `json:"op"`
-	Text       string       `json:"text,omitempty"`
-	Texts      []string     `json:"texts,omitempty"`
-	K          int          `json:"k,omitempty"`
-	Threshold  float32      `json:"threshold,omitempty"`
-	Workspace  string       `json:"workspace_root,omitempty"`
-	FilePath   string       `json:"file_path,omitempty"`
-	Content    string       `json:"content,omitempty"`
-	TopK       int          `json:"top_k,omitempty"`
+	ID        string   `json:"id"`
+	Op        RemoteOp `json:"op"`
+	Text      string   `json:"text,omitempty"`
+	Texts     []string `json:"texts,omitempty"`
+	K         int      `json:"k,omitempty"`
+	Threshold float32  `json:"threshold,omitempty"`
+	Workspace string   `json:"workspace_root,omitempty"`
+	FilePath  string   `json:"file_path,omitempty"`
+	Content   string   `json:"content,omitempty"`
+	TopK      int      `json:"top_k,omitempty"`
 }
 
 // RemoteResponse is a single protocol response.
 type RemoteResponse struct {
-	ID        string              `json:"id"`
-	Error     string              `json:"error,omitempty"`
-	Name      string              `json:"name,omitempty"`
-	Dimensions int                `json:"dimensions,omitempty"`
-	ModelHash string              `json:"model_hash,omitempty"`
-	Vector    []float32           `json:"vector,omitempty"`
-	Vectors   [][]float32         `json:"vectors,omitempty"`
-	Results   []QueryResult       `json:"results,omitempty"`
-	Stats     *IndexStats         `json:"stats,omitempty"`
+	ID         string                 `json:"id"`
+	Error      string                 `json:"error,omitempty"`
+	Name       string                 `json:"name,omitempty"`
+	Dimensions int                    `json:"dimensions,omitempty"`
+	ModelHash  string                 `json:"model_hash,omitempty"`
+	Vector     []float32              `json:"vector,omitempty"`
+	Vectors    [][]float32            `json:"vectors,omitempty"`
+	Results    []QueryResult          `json:"results,omitempty"`
+	Stats      *IndexStats            `json:"stats,omitempty"`
 	Duplicates *CheckDuplicatesResult `json:"duplicates,omitempty"`
 }
 
@@ -166,11 +166,11 @@ type RemoteEmbeddingProvider struct {
 	conn       *remoteConn
 	mu         sync.Mutex // guards conn
 
-	dims     int
-	name     string
+	dims      int
+	name      string
 	modelHash string
-	metaOnce sync.Once
-	metaErr  error
+	metaOnce  sync.Once
+	metaErr   error
 }
 
 // NewRemoteEmbeddingProvider creates a provider backed by the daemon socket

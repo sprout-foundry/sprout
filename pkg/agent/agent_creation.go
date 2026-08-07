@@ -186,10 +186,11 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			}
 		}
 
-			// Sweep expired persistent context entries based on retention policy.
-	if agent.configManager != nil {cfg := agent.configManager.GetConfig()
+		// Sweep expired persistent context entries based on retention policy.
+		if agent.configManager != nil {
+			cfg := agent.configManager.GetConfig()
 			if cfg != nil && cfg.PersistentContext != nil && cfg.PersistentContext.RetentionDays > 0 {
-	// Resolve storePath using the same logic as EmbeddingManager.initLocked().
+				// Resolve storePath using the same logic as EmbeddingManager.initLocked().
 				convoStoreDir := ""
 				if cfg.EmbeddingIndex != nil {
 					convoStoreDir = cfg.EmbeddingIndex.IndexDir

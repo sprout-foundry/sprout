@@ -65,11 +65,11 @@ func buildSubagentReturn(m map[string]string, result *SubagentResult, status Sub
 			ToolCalls:  result.ToolCalls,
 			Iterations: result.Iterations,
 		}
-	// Structured file manifest: map ChangeTracker's operation labels
-	// (write/edit/create) to the simpler created/modified/deleted vocabulary
-	// the envelope exposes. Both "write" and "create" map to
-	// "created" because the tracker doesn't distinguish them.
-	if len(result.FileChanges) > 0 {
+		// Structured file manifest: map ChangeTracker's operation labels
+		// (write/edit/create) to the simpler created/modified/deleted vocabulary
+		// the envelope exposes. Both "write" and "create" map to
+		// "created" because the tracker doesn't distinguish them.
+		if len(result.FileChanges) > 0 {
 			files := make([]FileChange, 0, len(result.FileChanges))
 			for _, ch := range result.FileChanges {
 				files = append(files, FileChange{

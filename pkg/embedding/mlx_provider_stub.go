@@ -32,7 +32,7 @@ func (p *MLXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts [
 	return nil, fmt.Errorf("mlx embedding: not available")
 }
 
-func (p *MLXEmbeddingProvider) Dimensions() int  { return 0 }
-func (p *MLXEmbeddingProvider) Name() string     { return "mlx-unavailable" }
+func (p *MLXEmbeddingProvider) Dimensions() int   { return 0 }
+func (p *MLXEmbeddingProvider) Name() string      { return "mlx-unavailable" }
 func (p *MLXEmbeddingProvider) ModelHash() string { return "" }
 func (p *MLXEmbeddingProvider) Close() error      { return nil }

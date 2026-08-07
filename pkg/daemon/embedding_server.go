@@ -47,11 +47,11 @@ type EmbeddingServer struct {
 	// Logger receives request/error logs.
 	Logger *slog.Logger
 
-	ln   net.Listener
-	mu   sync.Mutex
+	ln    net.Listener
+	mu    sync.Mutex
 	conns map[net.Conn]struct{}
-	done chan struct{}
-	once sync.Once
+	done  chan struct{}
+	once  sync.Once
 }
 
 // Start begins listening and serving. It returns once the listener is bound

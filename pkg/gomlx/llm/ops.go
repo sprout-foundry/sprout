@@ -9,6 +9,29 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
+// scalarBF16 creates a single-element BF16 MLX array from a float32 value.
+// Used for constants in the forward pass to keep the computation graph
+// homogeneous BF16, avoiding type-promotion kernel overhead.
+var scalarCache = map[float32]*mlx.Array{}
+
+func scalarBF16(val float32, s *mlx.Stream) (*mlx.Array, error) {
+	if cached, ok := scalarCache[val]; ok && cached != nil {
+		return cached, nil
+	}
+	arr, err := mlx.NewArrayFromFloat32([]float32{val}, []int{1})
+	if err != nil {
+		return nil, err
+	}
+	bf16, err := mlx.AsType(arr, mlx.BFloat16, s)
+	if err != nil {
+		arr.Free()
+		return nil, err
+	}
+	arr.Free()
+	scalarCache[val] = bf16
+	return bf16, nil
+}
+
 // RMSNorm computes x / sqrt(mean(x^2) + eps) * weight over the last axis.
 func RMSNorm(x, weight *mlx.Array, eps float32, s *mlx.Stream) (*mlx.Array, error) {
 	lastAxis := x.Ndim() - 1
@@ -25,11 +48,10 @@ func RMSNorm(x, weight *mlx.Array, eps float32, s *mlx.Stream) (*mlx.Array, erro
 	}
 	defer meanSq.Free()
 
-	epsArr, err := mlx.NewArrayFromFloat32([]float32{eps}, []int{1})
+	epsArr, err := scalarBF16(eps, s)
 	if err != nil {
 		return nil, err
 	}
-	defer epsArr.Free()
 
 	meanSqEps, err := mlx.Add(meanSq, epsArr, s)
 	if err != nil {
@@ -64,13 +86,12 @@ func LinearNoBias(x, w *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 
 // SiLU computes x * sigmoid(x) = x / (1 + exp(-x)).
 func SiLU(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
-	neg, err := mlx.NewArrayFromFloat32([]float32{-1}, []int{1})
+	negOne, err := scalarBF16(-1, s)
 	if err != nil {
 		return nil, err
 	}
-	defer neg.Free()
 
-	negX, err := mlx.Multiply(x, neg, s)
+	negX, err := mlx.Multiply(x, negOne, s)
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +103,10 @@ func SiLU(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 	}
 	defer expNegX.Free()
 
-	one, err := mlx.NewArrayFromFloat32([]float32{1}, []int{1})
+	one, err := scalarBF16(1, s)
 	if err != nil {
 		return nil, err
 	}
-	defer one.Free()
 
 	denom, err := mlx.Add(one, expNegX, s)
 	if err != nil {
@@ -104,10 +124,6 @@ func SiLU(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 }
 
 // ApplyRoPE applies rotary position embeddings (non-interleaved/half-split).
-// Standard HuggingFace implementation:
-//   - inv_freq[i] = 1 / theta^(2i/head_dim) for i in [0, head_dim/2)
-//   - cos/sin = cos/sin(positions * inv_freq), duplicated: cat(freqs, freqs)
-//   - output = x * cos + rotate_half(x) * sin
 func ApplyRoPE(x *mlx.Array, startPos, headDim int, ropeTheta float64, s *mlx.Stream) (*mlx.Array, error) {
 	shape := x.Shape()
 	seqLen := shape[2]
@@ -127,8 +143,9 @@ func ApplyRoPE(x *mlx.Array, startPos, headDim int, ropeTheta float64, s *mlx.St
 			c := float32(math.Cos(angle))
 			si := float32(math.Sin(angle))
 			cosData[pos*headDim+j] = c
-			sinData[pos*headDim+j] = si
+			sinData[pos*headDim+halfDim+j] = c
 			cosData[pos*headDim+halfDim+j] = c
+			sinData[pos*headDim+j] = si
 			sinData[pos*headDim+halfDim+j] = si
 		}
 	}
@@ -138,12 +155,22 @@ func ApplyRoPE(x *mlx.Array, startPos, headDim int, ropeTheta float64, s *mlx.St
 		return nil, fmt.Errorf("create cos: %w", err)
 	}
 	defer cosArr.Free()
+	cosBF16, err := mlx.AsType(cosArr, mlx.BFloat16, s)
+	if err != nil {
+		return nil, fmt.Errorf("cast cos: %w", err)
+	}
+	defer cosBF16.Free()
 
 	sinArr, err := mlx.NewArrayFromFloat32(sinData, []int{1, 1, seqLen, headDim})
 	if err != nil {
 		return nil, fmt.Errorf("create sin: %w", err)
 	}
 	defer sinArr.Free()
+	sinBF16, err := mlx.AsType(sinArr, mlx.BFloat16, s)
+	if err != nil {
+		return nil, fmt.Errorf("cast sin: %w", err)
+	}
+	defer sinBF16.Free()
 
 	rotated, err := rotateHalf(x, s)
 	if err != nil {
@@ -151,13 +178,13 @@ func ApplyRoPE(x *mlx.Array, startPos, headDim int, ropeTheta float64, s *mlx.St
 	}
 	defer rotated.Free()
 
-	cosPart, err := mlx.Multiply(x, cosArr, s)
+	cosPart, err := mlx.Multiply(x, cosBF16, s)
 	if err != nil {
 		return nil, fmt.Errorf("cos multiply: %w", err)
 	}
 	defer cosPart.Free()
 
-	sinPart, err := mlx.Multiply(rotated, sinArr, s)
+	sinPart, err := mlx.Multiply(rotated, sinBF16, s)
 	if err != nil {
 		return nil, fmt.Errorf("sin multiply: %w", err)
 	}
@@ -204,11 +231,10 @@ func rotateHalf(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 	}
 	defer x2.Free()
 
-	negOne, err := mlx.NewArrayFromFloat32([]float32{-1}, []int{1})
+	negOne, err := scalarBF16(-1, s)
 	if err != nil {
 		return nil, err
 	}
-	defer negOne.Free()
 
 	negX2, err := mlx.Multiply(x2, negOne, s)
 	if err != nil {
@@ -220,16 +246,10 @@ func rotateHalf(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 }
 
 // ApplyCausalMask adds -inf to positions that should not be attended to.
-// seqLen is the number of new tokens. cachedLen is how many tokens are already
-// in the KV cache before this pass. During prefill, cachedLen=0 and the mask
-// is a standard causal mask [seq, seq]. During cached decode (seqLen=1), no
-// mask is needed since the single token can attend to all cached tokens.
 func ApplyCausalMask(scores *mlx.Array, seqLen, startPos, cachedLen int, s *mlx.Stream) (*mlx.Array, error) {
 	totalLen := cachedLen + seqLen
 	maskData := make([]float32, seqLen*totalLen)
 
-	// Each new token at position startPos+i can attend to cached positions 0..cachedLen-1
-	// and new positions 0..i (inclusive)
 	for i := 0; i < seqLen; i++ {
 		absPos := cachedLen + i
 		for j := 0; j < totalLen; j++ {
@@ -244,8 +264,13 @@ func ApplyCausalMask(scores *mlx.Array, seqLen, startPos, cachedLen int, s *mlx.
 		return nil, err
 	}
 	defer mask.Free()
+	maskBF16, err := mlx.AsType(mask, mlx.BFloat16, s)
+	if err != nil {
+		return nil, err
+	}
+	defer maskBF16.Free()
 
-	return mlx.Add(scores, mask, s)
+	return mlx.Add(scores, maskBF16, s)
 }
 
 // ExpandKVHeads replicates KV heads to match Q heads for GQA.

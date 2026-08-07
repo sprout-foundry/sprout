@@ -199,7 +199,14 @@ func (q *Qwen3) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) (
 		return nil, fmt.Errorf("synchronize: %w", err)
 	}
 
-	data, err := logits.Float32Data()
+	// Cast logits to FP32 for CPU-side sampling
+	logitsF32, err := mlx.AsType(logits, mlx.Float32, s)
+	if err != nil {
+		return nil, fmt.Errorf("cast logits: %w", err)
+	}
+	defer logitsF32.Free()
+
+	data, err := logitsF32.Float32Data()
 	if err != nil {
 		return nil, fmt.Errorf("read logits: %w", err)
 	}
@@ -252,7 +259,14 @@ func (q *Qwen3) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]float
 		return nil, fmt.Errorf("synchronize: %w", err)
 	}
 
-	return logits.Float32Data()
+	// Cast logits to FP32 for CPU-side sampling
+	logitsF32, err := mlx.AsType(logits, mlx.Float32, s)
+	if err != nil {
+		return nil, fmt.Errorf("cast logits: %w", err)
+	}
+	defer logitsF32.Free()
+
+	return logitsF32.Float32Data()
 }
 
 func (q *Qwen3) computeLogits(h *mlx.Array) (*mlx.Array, error) {
@@ -479,8 +493,13 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 		return nil, err
 	}
 	defer scaleArr.Free()
+	scaleBF16, err := mlx.AsType(scaleArr, mlx.BFloat16, s)
+	if err != nil {
+		return nil, err
+	}
+	defer scaleBF16.Free()
 
-	scaled, err := mlx.Multiply(scores, scaleArr, s)
+	scaled, err := mlx.Multiply(scores, scaleBF16, s)
 	if err != nil {
 		return nil, fmt.Errorf("scale scores: %w", err)
 	}

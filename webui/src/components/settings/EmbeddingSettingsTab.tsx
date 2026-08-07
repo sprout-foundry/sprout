@@ -41,6 +41,12 @@ export default function EmbeddingSettingsTab({
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Embedding-dependent controls (status, model info, auto-build, duplicate
+  // detection tuning, exclude paths, rebuild) only make sense once the index
+  // is enabled. Collapse them when it is off so the panel never shows controls
+  // that would appear to work but do nothing.
+  const isEnabled = !!(settings && getNestedValue(settings, 'embedding_index.enabled'));
+
   const rawExclude = settings ? (getNestedValue(settings, 'embedding_index.exclude_paths') as unknown) : [];
   const persistedExclude: string[] = Array.isArray(rawExclude) ? rawExclude : [];
   const [excludeDraft, setExcludeDraft] = useState<string>(persistedExclude.join('\n'));
@@ -142,7 +148,8 @@ export default function EmbeddingSettingsTab({
     <div className="section">
       <h4>Embedding Index</h4>
 
-      {/* Status Card */}
+      {/* Status Card — only relevant when the index is enabled */}
+      {isEnabled && (
       <div className="settings-card embedding-status-card">
         <div className="embedding-status-header">
           <Database size={16} />
@@ -177,8 +184,11 @@ export default function EmbeddingSettingsTab({
           </div>
         )}
       </div>
+      )}
 
-      {/* Model Info — read from the backend, never hardcoded. */}
+      {/* Model Info — read from the backend, never hardcoded. Only shown when
+          the index is enabled. */}
+      {isEnabled && (
       <div className="settings-card embedding-model-card">
         {status?.model ? (
           <>
@@ -199,12 +209,14 @@ export default function EmbeddingSettingsTab({
           </div>
         )}
       </div>
+      )}
 
       {/* Configuration */}
       {renderToggle('embedding_index.enabled', 'Enable embedding index')}
-      {renderToggle('embedding_index.auto_index', 'Auto-build on startup')}
-      {renderTextInput('embedding_index.max_results', 'Max duplicate results', '1 – 10')}
+      {isEnabled && renderToggle('embedding_index.auto_index', 'Auto-build on startup')}
+      {isEnabled && renderTextInput('embedding_index.max_results', 'Max duplicate results', '1 – 10')}
 
+      {isEnabled && (
       <div className="config-item">
         <label htmlFor="setting-embedding-exclude-paths">Exclude paths</label>
         <textarea
@@ -236,7 +248,9 @@ export default function EmbeddingSettingsTab({
           One path per line. Matching files are skipped when indexing. Lines are trimmed; blank lines are ignored.
         </div>
       </div>
+      )}
 
+      {isEnabled && (
       <div className="embedding-action-row">
         <button
           className="settings-action-btn"
@@ -249,6 +263,7 @@ export default function EmbeddingSettingsTab({
         </button>
         {error && <span className="embedding-action-error">{error}</span>}
       </div>
+      )}
     </div>
   );
 }

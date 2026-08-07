@@ -1,5 +1,3 @@
-// Batch operations for the embedding index
-
 package embedding
 
 import (
@@ -15,14 +13,7 @@ import (
 )
 
 // Init initializes the ONNX embedding provider and opens the vector store.
-// This is idempotent — calling it multiple times is safe.
-//
-// A previous failure does NOT block retries. Model downloads can fail on
-// transient network issues (CDN stalls, TLS timeouts), and caching the error
-// permanently meant a single blip killed the index for the entire process
-// lifetime — no build, no query, no duplicate check could recover without a
-// restart. The initError field is still set on failure (for InitError()
-// diagnostics), but each Init() call clears it and retries.
+// Idempotent and retryable — a previous failure does not block retries.
 func (m *EmbeddingManager) Init(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -31,10 +22,7 @@ func (m *EmbeddingManager) Init(ctx context.Context) error {
 		return nil
 	}
 
-	// Clear any cached error so transient failures (network blips, download
-	// timeouts) can be recovered from on retry.
 	m.initError = nil
-
 	return m.initLocked(ctx)
 }
 
@@ -44,35 +32,24 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		return nil
 	}
 
-	// Handle nil config gracefully
 	if m.config == nil {
 		m.config = &configuration.EmbeddingIndexConfig{}
 	}
 
-	// Resolve index directory
 	m.indexDir = resolveIndexDirFromConfig(m.config, m.workspaceRoot)
 
-	// The duplicate-detection threshold is NOT configurable. It is a measured
-	// constant (DefaultDuplicateThreshold) that must match the model's score
-	// distribution. A user-settable threshold repeatedly caused duplicate
-	// detection to silently stop working (0.90 was unreachable, 0.85 was
-	// unreachable), so the field is intentionally hardcoded.
 	m.threshold = DefaultDuplicateThreshold
-
 	m.maxResults = m.config.MaxResults
 	if m.maxResults == 0 {
 		m.maxResults = 3
 	}
 
-	// Create ONNX embedding provider as the sole provider. provider+runtime
-	// are owned by the shared cache; do not Close them on any failure path.
 	provider, runtime, err := m.createONNXProvider(ctx)
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: init provider: %w", err)
 		return m.initError
 	}
 
-	// Open vector store with the ONNX provider's model hash
 	store, err := NewHNSWStore(filepath.Join(m.indexDir, "index.hnsw"), provider.ModelHash())
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: open store: %w", err)
@@ -82,7 +59,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	indexMgr := NewIndexManager(provider, store, IndexOptions{
 		BatchSize:      32,
 		MaxBodyLen:     2000,
-		IndexFileLevel: true, // Enable file-level indexing by default
+		IndexFileLevel: true,
 		ManifestPath:   filepath.Join(m.indexDir, ".index.hnsw.manifest.json"),
 	})
 
@@ -93,57 +70,10 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	m.store = store
 	m.indexMgr = indexMgr
 
-	// Best-effort init of the code-specific provider (Jina Code v2, SP-135).
-	// Failure is non-fatal: code queries fall back to the Gemma-backed index.
-	// The code index uses a separate store file (code_index.hnsw) keyed by the
-	// Jina model's hash, so the two models never invalidate each other.
-	m.initCodeProviderLocked(ctx)
-
-	// Store true last so concurrent IsInitialized() reads cannot observe a
-	// partially-initialized manager (all other fields are written above under m.mu).
 	m.initialized.Store(true)
-
 	return nil
 }
 
-// initCodeProviderLocked attempts to load the code-specific embedding model
-// (Jina Code v2) for the dual-model architecture. Uses the process-wide shared
-// provider cache so multiple agents share one model instance. Auto-downloads
-// on first use. Best-effort: if the download fails or the session can't be
-// created, codeAvailable stays false and code queries fall back to Gemma.
-// The caller must hold m.mu.
-func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context) {
-	cfg := JinaCodeV2Config()
-	modelDir := DefaultModelDir()
-
-	provider, _, err := acquireSharedJinaProvider(ctx, modelDir, cfg)
-	if err != nil {
-		log.Printf("embedding: code provider (Jina Code v2) init failed — falling back to Gemma for code queries: %v", err)
-		return
-	}
-
-	codeStore, err := NewHNSWStore(filepath.Join(m.indexDir, "code_index.hnsw"), provider.ModelHash())
-	if err != nil {
-		log.Printf("embedding: code store open failed — falling back to Gemma: %v", err)
-		return
-	}
-
-	codeIndexMgr := NewIndexManager(provider, codeStore, IndexOptions{
-		BatchSize:      32,
-		MaxBodyLen:     2000,
-		IndexFileLevel: true,
-		ManifestPath:   filepath.Join(m.indexDir, ".code_index.hnsw.manifest.json"),
-	})
-
-	m.codeProvider = provider
-	m.codeStore = codeStore
-	m.codeIndexMgr = codeIndexMgr
-	m.codeAvailable = true
-}
-
-// BuildIndex runs a full index build for the workspace.
-// It acquires the building lock, validates workspace size, and delegates to
-// buildIndexLocked for the actual work.
 func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) {
 	m.mu.Lock()
 	if m.building {
@@ -162,55 +92,24 @@ func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) 
 	return m.buildIndexLocked(ctx)
 }
 
-// buildIndexLocked performs the actual index build. The caller must have
-// already acquired the building lock. Used by both BuildIndex and
-// BuildIndexBackground to avoid the deadlock of calling BuildIndex from
-// a path that already set the building flag.
+// buildIndexLocked performs the actual build. The caller must hold the building lock.
 func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
 
-	// Safety: refuse to index a user's home directory.
-	// In daemon/service mode workspaceRoot may be set to the home dir,
-	// and walking it would index private keys, credentials, media, etc.
 	if filesystem.IsHomeDir(m.workspaceRoot) {
-		return nil, fmt.Errorf("embedding: refusing to index home directory %q — set workspace_root to a project directory instead", m.workspaceRoot)
+		return nil, fmt.Errorf("embedding: refusing to index home directory %q", m.workspaceRoot)
 	}
 
-	// Safety: skip if workspace is too large for auto-build.
 	files, err := WalkCodeFiles(ctx, m.workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("embedding: scan workspace: %w", err)
 	}
 	if len(files) > MaxFileCount {
-		return nil, fmt.Errorf("embedding: workspace has %d files (max %d for auto-build)", len(files), MaxFileCount)
+		return nil, fmt.Errorf("embedding: workspace has %d files (max %d)", len(files), MaxFileCount)
 	}
 
-	// When the code-specific provider (Jina) is available, it owns ALL code
-	// queries — NL search, duplicate detection, related code. Skip the Gemma
-	// code index build entirely (saves ~30 min on a fresh checkout). Gemma
-	// still runs for the ConversationStore (memory/recall), which is separate.
-	//
-	// Jina is symmetric (no task prefixes) and beats Gemma on every code
-	// metric: 9× faster (59 vs 6.5 units/s), wider separation (unrelated
-	// 0.066 vs 0.355), better NL-code recall (correct hits 0.343–0.823 vs
-	// 0.499–0.613, wrong answers near-zero vs 0.32). Building a second index
-	// with a slower, worse model is pure overhead. See SP-135 eval data.
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	codeAvailable := m.codeAvailable
-	m.mu.Unlock()
-
-	if codeAvailable && codeIdx != nil {
-		codeStats, codeErr := codeIdx.BuildIndex(ctx, m.workspaceRoot)
-		if codeErr != nil {
-			return nil, fmt.Errorf("embedding: code index build failed: %w", codeErr)
-		}
-		return codeStats, nil
-	}
-
-	// Fallback: no code model, use Gemma for everything.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
@@ -218,24 +117,13 @@ func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, e
 	return idx.BuildIndex(ctx, m.workspaceRoot)
 }
 
-// BuildIndexBackground starts an index build in a background goroutine and
-// returns a channel on which the result (or error) will be delivered. This
-// must be used when called from HTTP handlers or other code paths where
-// blocking would cause a timeout.
-//
-// The returned channel is non-buffered and the caller should read from it
-// once to retrieve the result. The context passed to the caller is used for
-// cancellation; if the context is cancelled, the build is interrupted
-// gracefully (partial results may be stored).
 func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *BuildResult {
 	ch := make(chan *BuildResult, 1)
 
 	m.mu.Lock()
 	if m.building {
 		m.mu.Unlock()
-		ch <- &BuildResult{
-			Err: fmt.Errorf("embedding: build already in progress"),
-		}
+		ch <- &BuildResult{Err: fmt.Errorf("embedding: build already in progress")}
 		return ch
 	}
 	m.building = true
@@ -248,12 +136,6 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 			m.mu.Unlock()
 		}()
 
-		// Honor the manager's close signal before doing any work. Without
-		// this check, a DisableEmbeddingIndex call arriving after the
-		// goroutine is launched would not abort the 10-minute WalkTimeout
-		// nor the Init/build work; the goroutine would either run to
-		// completion against torn-down state or hit ErrStoreClosed deep
-		// in the embedder. Surface the close as the result instead.
 		select {
 		case <-m.closeCh():
 			ch <- &BuildResult{Err: ErrStoreClosed}
@@ -270,62 +152,30 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 		}
 
 		stats, err := m.buildIndexLocked(ctx)
-		ch <- &BuildResult{
-			Stats: stats,
-			Err:   err,
-		}
+		ch <- &BuildResult{Stats: stats, Err: err}
 	}()
 
 	return ch
 }
 
-// AutoBuildWhenReady runs a background index build after a short delay.
-// This is called at agent startup so the index is ready for duplicate
-// detection and context enrichment without waiting for an explicit query.
-// The timeout is adaptive — large workspaces get proportionally more time
-// (see autoBuildTimeout) so the build doesn't get killed mid-way on
-// resource-constrained devices like Termux/Android.
-//
-// Two teardown paths are honored so a DisableEmbeddingIndex call arriving
-// during the startup sleep (or during Init/Build) does not race into a
-// closed store and panic:
-//
-//  1. The 3-second startup sleep selects on m.closeCh() so Close() can
-//     wake it early.
-//  2. After the sleep returns, m.closeCh() is re-checked *before* the
-//     BuildIndex call. This catches the case where Close() ran while the
-//     sleep was in flight (sleep saw the wake-up but the goroutine still
-//     proceeded because the select picked the timer branch first).
-//
-// As a last line of defense, HNSWStore.Store/ReplaceAll/DeleteByFile/
-// DeleteByIDs/Save return ErrStoreClosed instead of panicking on a nil
-// records map if the goroutine still loses the race.
+// AutoBuildWhenReady runs a background index build after a short startup delay.
 func (m *EmbeddingManager) AutoBuildWhenReady() {
 	m.autoBuildOnce.Do(m.autoBuildWhenReady)
 }
 
 func (m *EmbeddingManager) autoBuildWhenReady() {
-	// Wait a few seconds so we don't compete with startup I/O.
-	// Use a select-based timer so Close() can wake us early.
 	select {
 	case <-time.After(3 * time.Second):
 	case <-m.closeCh():
 		return
 	}
 
-	// Re-check the close signal before doing any work. The select above
-	// can return through either branch when both fire concurrently; if
-	// Close() ran while we were waking up, bail before reaching into
-	// m.store (which Close() has already nulled out).
 	select {
 	case <-m.closeCh():
 		return
 	default:
 	}
 
-	// Walk the workspace to count files, then derive an adaptive timeout.
-	// The walk is fast (directory traversal, no embedding) and its own
-	// WalkTimeout guards against pathological cases.
 	walkCtx, walkCancel := context.WithTimeout(context.Background(), WalkTimeout)
 	files, _ := WalkCodeFiles(walkCtx, m.workspaceRoot)
 	walkCancel()
@@ -344,23 +194,10 @@ func (m *EmbeddingManager) autoBuildWhenReady() {
 		stats.FilesProcessed, stats.UnitsExtracted, stats.Duration)
 }
 
-// UpdateFile incrementally updates the index for a single file.
 func (m *EmbeddingManager) UpdateFile(ctx context.Context, filePath string) error {
 	if err := m.Init(ctx); err != nil {
 		return err
 	}
-
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	codeAvailable := m.codeAvailable
-	m.mu.Unlock()
-
-	// When the code model is available, it owns the code index — update only it.
-	if codeAvailable && codeIdx != nil {
-		return codeIdx.UpdateFile(ctx, filePath)
-	}
-
-	// Fallback: no code model, update the Gemma index.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return err
@@ -368,24 +205,10 @@ func (m *EmbeddingManager) UpdateFile(ctx context.Context, filePath string) erro
 	return idx.UpdateFile(ctx, filePath)
 }
 
-// UpdateFromGitDiff incrementally updates the index by examining git-tracked
-// files that have changed, been added, or been created since the last build.
 func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	codeAvailable := m.codeAvailable
-	m.mu.Unlock()
-
-	// When the code model is available, it owns the code index — update only it.
-	if codeAvailable && codeIdx != nil {
-		return codeIdx.UpdateFromGitDiff(ctx, m.workspaceRoot)
-	}
-
-	// Fallback: no code model, update the Gemma index.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
@@ -393,18 +216,13 @@ func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, 
 	return idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
 }
 
-// UpdateFromGitDiffBackground starts an incremental index update in a
-// background goroutine. It reuses the build lock so update and build cannot
-// run simultaneously. The returned channel receives exactly one result.
 func (m *EmbeddingManager) UpdateFromGitDiffBackground(ctx context.Context) <-chan *BuildResult {
 	ch := make(chan *BuildResult, 1)
 
 	m.mu.Lock()
 	if m.building {
 		m.mu.Unlock()
-		ch <- &BuildResult{
-			Err: fmt.Errorf("embedding: build already in progress"),
-		}
+		ch <- &BuildResult{Err: fmt.Errorf("embedding: build already in progress")}
 		return ch
 	}
 	m.building = true
@@ -428,26 +246,17 @@ func (m *EmbeddingManager) UpdateFromGitDiffBackground(ctx context.Context) <-ch
 		defer cancel()
 
 		stats, err := m.UpdateFromGitDiff(ctx)
-		ch <- &BuildResult{
-			Stats: stats,
-			Err:   err,
-		}
+		ch <- &BuildResult{Stats: stats, Err: err}
 	}()
 
 	return ch
 }
 
-// CheckDuplicates checks if file content duplicates existing code.
-//
-// When the code-specific provider (Jina Code v2) is available, this routes
-// to the code index for superior separation (near-dup 0.77, unrelated 0.07
-// vs Gemma's 0.77/0.36 — see SP-135 Phase-0 results). Falls back to the
-// Gemma-backed index otherwise.
 func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string, content string) (*CheckDuplicatesResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotCodeIndexMgr()
+	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
@@ -455,67 +264,42 @@ func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string,
 	return CheckFileForDuplicates(ctx, idx, filePath, content, m.workspaceRoot, threshold, topK)
 }
 
-// QuerySimilar searches the index with a natural-language query.
-//
-// Routes to the Jina code index when available (better NL-code separation than
-// Gemma: correct hits 0.343–0.823, wrong answers near-zero). Jina is symmetric
-// so the codeQueryPrefix passed by IndexManager.QuerySimilar is ignored by the
-// provider — both query and document land in the same space. Falls back to the
-// Gemma-backed indexMgr otherwise.
 func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotCodeIndexMgr()
+	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
 	return idx.QuerySimilar(ctx, query, topK, threshold)
 }
 
-// QuerySimilarCode searches the index using source code as the input, for
-// "what else looks like this" rather than "what answers this question".
-//
-// When the code-specific provider (Jina Code v2) is available, this routes
-// to the code index for superior retrieval quality and separation (see
-// SP-135). Falls back to the Gemma-backed indexMgr otherwise.
+// QuerySimilarCode searches using source code as the input rather than NL.
 func (m *EmbeddingManager) QuerySimilarCode(ctx context.Context, codeText string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotCodeIndexMgr()
+	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
-	// IndexManager.CheckDuplicates embeds with documentPrefix and searches.
-	// For Jina (symmetric, no prefixes) the prefix is ignored by the provider,
-	// so this produces correct code-similarity embeddings.
 	return idx.CheckDuplicates(ctx, codeText, topK, threshold)
 }
 
-// GetConversationStore returns the conversation store, creating it lazily on first use.
-// The store is user-scoped and lives at {indexDir}/conversation_turns.hnsw.
-// Multiple calls return the same instance.
 func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*ConversationStore, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Return cached instance if already created
 	if m.convoStore != nil {
 		return m.convoStore, nil
 	}
 
-	// Ensure the manager itself is initialized. initLocked sets initError on
-	// failure for diagnostics (InitError), but we don't block on a stale
-	// cached error — retry so transient failures can recover.
 	m.initError = nil
 	if err := m.initLocked(ctx); err != nil {
 		return nil, err
 	}
 
-	// Create conversation store with the cached provider so that all
-	// Embed/EmbedBatch calls (turn embedding, rollup embedding, proactive
-	// context, semantic recall) benefit from the content-hash cache.
 	convoPath := filepath.Join(m.indexDir, "conversation_turns.hnsw")
 	convoStore, err := NewConversationStore(m.cachedProvider, convoPath, m.provider.ModelHash())
 	if err != nil {
@@ -526,14 +310,12 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 	return convoStore, nil
 }
 
-// Close releases all resources.
 func (m *EmbeddingManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	var firstErr error
 
-	// Close conversation store
 	if m.convoStore != nil {
 		if err := m.convoStore.Close(); err != nil && firstErr == nil {
 			firstErr = err
@@ -541,11 +323,7 @@ func (m *EmbeddingManager) Close() error {
 		m.convoStore = nil
 	}
 
-	// Release provider/runtime references. When providerShared is true they are
-	// owned by the process-wide shared cache (acquireSharedONNXProvider) and
-	// other managers still reference them, so we drop our reference WITHOUT
-	// closing — closing would tear down a session the rest of the process is
-	// using. The shared instances intentionally live for the process lifetime.
+	// Provider+runtime are shared across managers; don't close when shared.
 	if m.provider != nil {
 		if !m.providerShared {
 			if err := m.provider.Close(); err != nil && firstErr == nil {
@@ -561,25 +339,6 @@ func (m *EmbeddingManager) Close() error {
 		m.store = nil
 	}
 	m.indexMgr = nil
-
-	// Close code-specific provider and store (SP-135 dual-model).
-	// When shared (acquireSharedJinaProvider), the provider+runtime are owned
-	// by the process-wide cache and must not be closed — other agents reference
-	// them. Only close the store.
-	if m.codeStore != nil {
-		if err := m.codeStore.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		m.codeStore = nil
-	}
-	m.codeProvider = nil
-	m.codeIndexMgr = nil
-	m.codeAvailable = false
-
-	// Drop the cachedProvider reference so the underlying provider (and
-	// its internal state) can be GC'd. Without this, m.cachedProvider
-	// outlives Close() and pins the (now-closed) provider alive for the
-	// remainder of the manager's lifetime.
 	m.cachedProvider = nil
 
 	if m.onnxRuntime != nil {
@@ -593,22 +352,13 @@ func (m *EmbeddingManager) Close() error {
 	m.providerShared = false
 
 	m.initialized.Store(false)
-	m.initError = nil // cleared to allow re-initialization after Close()
+	m.initError = nil
 
-	// Signal long-running goroutines to abort.
-	//
-	// closeChan is lazily created by closeCh()/CloseNotify() on first read.
-	// If a goroutine launched before Close() reached its first call to
-	// closeCh() — and Close() acquired m.mu first — closeChan would be
-	// nil at this point and the goroutine would sleep past its abort
-	// signal. Eagerly create the channel here under the same lock so the
-	// close is unconditional, even if no reader has materialized yet.
 	if m.closeChan == nil {
 		m.closeChan = make(chan struct{})
 	}
 	select {
 	case <-m.closeChan:
-		// Already closed
 	default:
 		close(m.closeChan)
 	}
@@ -616,19 +366,11 @@ func (m *EmbeddingManager) Close() error {
 	return firstErr
 }
 
-// ClearEmbeddingFiles removes embedding index files from the given directory.
-// fileType should be one of: "code", "conversation_turn", "memory", "all".
-// For "memory", it clears the same files as "conversation_turn" since memories
-// are stored in the conversation_turns index alongside conversation turns.
-// Returns the number of files actually deleted.
 func ClearEmbeddingFiles(indexDir string, fileType string) (int, error) {
 	switch fileType {
 	case "code":
 		return clearCodeEmbeddingFiles(indexDir)
-	case "conversation_turn":
-		return clearConversationEmbeddingFiles(indexDir)
-	case "memory":
-		// Memories are stored in the same conversation_turns files
+	case "conversation_turn", "memory":
 		return clearConversationEmbeddingFiles(indexDir)
 	case "all":
 		codeCount, err := clearCodeEmbeddingFiles(indexDir)
@@ -636,10 +378,7 @@ func ClearEmbeddingFiles(indexDir string, fileType string) (int, error) {
 			return codeCount, err
 		}
 		convCount, err := clearConversationEmbeddingFiles(indexDir)
-		if err != nil {
-			return codeCount + convCount, err
-		}
-		return codeCount + convCount, nil
+		return codeCount + convCount, err
 	default:
 		return 0, fmt.Errorf("invalid file type %q: valid options are code, conversation_turn, memory, all", fileType)
 	}
@@ -650,11 +389,7 @@ func clearCodeEmbeddingFiles(indexDir string) (int, error) {
 		filepath.Join(indexDir, "index.hnsw"),
 		filepath.Join(indexDir, "index.hnsw.meta"),
 		filepath.Join(indexDir, "index.hnsw.records.json"),
-		// Code-specific index (SP-135 dual-model: Jina Code v2)
-		filepath.Join(indexDir, "code_index.hnsw"),
-		filepath.Join(indexDir, "code_index.hnsw.meta"),
-		filepath.Join(indexDir, "code_index.hnsw.records.json"),
-		filepath.Join(indexDir, ".code_index.hnsw.manifest.json"),
+		filepath.Join(indexDir, ".index.hnsw.manifest.json"),
 	}
 	return removeFilesSilently(files)
 }

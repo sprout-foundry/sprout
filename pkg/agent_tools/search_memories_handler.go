@@ -125,7 +125,7 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}
 
 	// Perform text-based memory search
-	results, err := searchMemoriesByText(query, topK, threshold)
+	results, err := SearchMemoriesByText(query, topK, threshold)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("memory search failed: %v", err),
@@ -133,7 +133,7 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 		}, agenterrors.NewTool("search_memories", fmt.Sprintf("search memories: %v", err), err)
 	}
 
-	output := formatMemorySearchResults(query, results, threshold)
+	output := FormatMemorySearchResults(query, results, threshold)
 
 	// Write to output writer if available
 	if env.OutputWriter != nil {
@@ -152,17 +152,17 @@ func (h *searchMemoriesHandler) MaxResultSize() int     { return 0 }
 func (h *searchMemoriesHandler) SafeForParallel() bool  { return false }
 func (h *searchMemoriesHandler) Interactive() bool      { return false }
 
-// memorySearchResult holds a single result from a text-based memory search.
-type memorySearchResult struct {
+// MemorySearchResult holds a single result from a text-based memory search.
+type MemorySearchResult struct {
 	Name    string
 	Preview string
 	Score   float64
 	Content string
 }
 
-// searchMemoriesByText lists all memory files and scores them against the query
+// SearchMemoriesByText lists all memory files and scores them against the query
 // using simple text matching. This is a fallback when no embedding index is available.
-func searchMemoriesByText(query string, topK int, threshold float64) ([]memorySearchResult, error) {
+func SearchMemoriesByText(query string, topK int, threshold float64) ([]MemorySearchResult, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
 		return nil, nil // No memory directory = no results, not an error
@@ -179,7 +179,7 @@ func searchMemoriesByText(query string, topK int, threshold float64) ([]memorySe
 	queryLower := strings.ToLower(query)
 	queryWords := strings.Fields(queryLower)
 
-	var results []memorySearchResult
+	var results []MemorySearchResult
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
@@ -205,7 +205,7 @@ func searchMemoriesByText(query string, topK int, threshold float64) ([]memorySe
 		score := scoreMemoryMatch(name, preview, content, queryWords)
 
 		if score >= threshold {
-			results = append(results, memorySearchResult{
+			results = append(results, MemorySearchResult{
 				Name:    name,
 				Preview: preview,
 				Score:   score,
@@ -294,8 +294,8 @@ func firstLine(content string) string {
 	return ""
 }
 
-// formatMemorySearchResults formats search results for display.
-func formatMemorySearchResults(query string, results []memorySearchResult, threshold float64) string {
+// FormatMemorySearchResults formats search results for display.
+func FormatMemorySearchResults(query string, results []MemorySearchResult, threshold float64) string {
 	if len(results) == 0 {
 		return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold)
 	}

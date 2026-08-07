@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // PermissionChecker provides utilities to check file and directory permissions
@@ -193,21 +194,47 @@ func (pc *PermissionChecker) FixPermissions() []error {
 	return errors
 }
 
+var (
+	startupCheckOnce        sync.Once
+	startupCheckHadWarnings bool
+)
+
+// resetStartupCheck clears the once-guard so the next call re-runs the check.
+// Used by tests to isolate per-call behavior.
+func resetStartupCheck() {
+	startupCheckOnce = sync.Once{}
+	startupCheckHadWarnings = false
+}
+
 // RunStartupCheck performs a full permission check at startup and logs warnings.
+//
+// First call attempts to fix insecure permissions automatically, then checks
+// again and warns only about issues that persist after the fix attempt.
+// Subsequent calls return the cached result (deduplication across callers).
+// The configDir argument is only consulted on the first call; both the CLI
+// and WebUI callers pass configuration.GetConfigDir(), so this is safe.
 // Returns true if any warnings were issued.
 func RunStartupCheck(configDir string) bool {
-	checker := NewPermissionChecker(configDir)
-	warnings := checker.CheckAllSecurityFiles()
+	startupCheckOnce.Do(func() {
+		checker := NewPermissionChecker(configDir)
 
-	if len(warnings) > 0 {
-		log.Printf("[security] Permission check warnings:")
-		for _, warn := range warnings {
-			log.Printf("  %s", warn)
+		// Attempt to tighten permissions before reporting.
+		if errs := checker.FixPermissions(); len(errs) > 0 {
+			for _, err := range errs {
+				log.Printf("[security] failed to fix %s", err)
+			}
 		}
-		return true
-	}
 
-	return false
+		warnings := checker.CheckAllSecurityFiles()
+		if len(warnings) > 0 {
+			log.Printf("[security] Permission check warnings:")
+			for _, warn := range warnings {
+				log.Printf("  %s", warn)
+			}
+			startupCheckHadWarnings = true
+		}
+	})
+	return startupCheckHadWarnings
 }
 
 // GetPermissionError returns a descriptive error for common permission issues.

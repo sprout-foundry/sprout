@@ -60,6 +60,9 @@ func (a *Array) Free() {}
 // RetainArray is unavailable on stub builds.
 func RetainArray(a *Array) *Array { return &Array{} }
 
+// AsType is unavailable on stub builds.
+func AsType(a *Array, dtype Dtype, s *Stream) (*Array, error) { return nil, errUnavailable }
+
 // Eval always returns errUnavailable on stub builds.
 func (a *Array) Eval() error { return errUnavailable }
 

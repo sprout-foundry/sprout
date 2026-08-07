@@ -163,6 +163,23 @@ func wrapResult(h C.mlx_array, rc C.int, op string) (*Array, error) {
 	return wrap(h), nil
 }
 
+// AsType casts an array to a different dtype.
+func AsType(a *Array, dtype Dtype, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_astype(&out, a.cHandle(), C.mlx_dtype(dtype), s.cHandle())
+	return wrapResult(out, rc, "astype")
+}
+
+// NewArrayFromBytes creates an Array from a raw byte buffer with an explicit
+// dtype. The bytes are copied into MLX-managed memory. Used to load BF16/F16
+// weights without a Go-side conversion to float32.
+func NewArrayFromBytes(data []byte, shape []int, dtype Dtype) (*Array, error) {
+	if len(data) == 0 {
+		return nil, errors.New("mlx: empty data buffer")
+	}
+	return newArrayFromData(unsafe.Pointer(&data[0]), shape, dtype)
+}
+
 // NewArrayFromFloat32 creates an Array by copying data into MLX with the
 // given shape. The Go slice may be reused or modified after this returns.
 func NewArrayFromFloat32(data []float32, shape []int) (*Array, error) {

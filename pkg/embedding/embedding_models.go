@@ -299,8 +299,20 @@ var (
 	providerFactory func(ctx context.Context) (EmbeddingProvider, error)
 )
 
-// createProvider returns the manager's provider: the process-wide remote
-// factory if it is set and succeeds, otherwise the in-process ONNX provider.
+func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
+	return acquireSharedJinaProvider(ctx, DefaultModelDir(), JinaCodeV2Config())
+}
+
+// createProvider returns the best available embedding provider for this
+// platform. When a process-wide remote factory is installed (SP-136 P3 — CLI
+// processes routing through the daemon socket), it is consulted FIRST and its
+// success short-circuits local provider selection. Otherwise: on Apple
+// Silicon (darwin/arm64) with a GPU and sufficient RAM, it tries the MLX
+// Metal provider first (SP-134); on every other platform it falls back to the
+// ONNX CPU provider.
+//
+// The SPROUT_EMBEDDING_BACKEND env var overrides the selection:
+// "mlx" forces MLX (fails if unavailable), "cpu" forces ONNX CPU.
 func (m *EmbeddingManager) createProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
 	providerMu.Lock()
 	factory := providerFactory
@@ -310,23 +322,9 @@ func (m *EmbeddingManager) createProvider(ctx context.Context) (EmbeddingProvide
 		if p, err := factory(ctx); err == nil && p != nil {
 			return p, nil, nil
 		}
-		// Remote unavailable — fall through to in-process ONNX.
+		// Remote unavailable — fall through to local selection.
 	}
-	return m.createONNXProvider(ctx)
-}
 
-func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
-	return acquireSharedJinaProvider(ctx, DefaultModelDir(), JinaCodeV2Config())
-}
-
-// createProvider returns the best available embedding provider for this
-// platform. On Apple Silicon (darwin/arm64) with a GPU and sufficient RAM,
-// it tries the MLX Metal provider first (SP-134). On every other platform
-// it falls back to the ONNX CPU provider.
-//
-// The SPROUT_EMBEDDING_BACKEND env var overrides the selection:
-// "mlx" forces MLX (fails if unavailable), "cpu" forces ONNX CPU.
-func (m *EmbeddingManager) createProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
 	backend := os.Getenv("SPROUT_EMBEDDING_BACKEND")
 
 	if backend != "cpu" && mlxProviderAvailable() {

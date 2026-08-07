@@ -349,30 +349,142 @@ func jsValueToFloat32Slice(v js.Value, expectedDims int) ([]float32, error) {
 	return out, nil
 }
 
-// ─── JinaONNXEmbeddingProvider (WASM stub) ────────────────────
-// The Jina Code v2 code-specific provider is native-only (requires CGO + the
-// ONNX Runtime C library). On WASM, it falls back to the Gemma-backed index
-// via the codeAvailable=false path in EmbeddingManager.
+// ─── JinaONNXEmbeddingProvider (JS bridge or stub) ──────────────
 
-type JinaONNXEmbeddingProvider struct{}
+// errJinaWASMNotSupported is returned when the WASM build cannot find the
+// Jina-side provider. The host page must install a provider on
+// `globalThis.__sproutJinaONNX` (see docs/WASM_API.md) before the embedding
+// manager constructs the Jina provider; without it, manager Init falls back
+// to whatever the caller does with a provider-creation error.
+var errJinaWASMNotSupported = errors.New("onnx: Jina Code v2 ONNX runtime not available on WASM; install a JS-side onnxruntime-web provider on globalThis.__sproutJinaONNX to enable Jina Code v2 embeddings")
 
-func NewJinaONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string) (*JinaONNXEmbeddingProvider, error) {
-	return nil, fmt.Errorf("Jina embedding provider is not available on WASM")
+// JinaONNXEmbeddingProvider on WASM either bridges to the JS-side
+// onnxruntime-web provider installed on `globalThis.__sproutJinaONNX` or
+// returns errors for every operation. Construction picks the mode based on
+// whether the global is set — the same pattern as ONNXEmbeddingProvider and
+// its `__sproutONNX` global.
+//
+// Jina is symmetric: it does NOT use task prefixes (unlike EmbeddingGemma),
+// so EmbedWithPrefix / EmbedBatchWithPrefix delegate to Embed / EmbedBatch
+// and ignore the prefix entirely. The JS-side provider is responsible for
+// tokenization (byte-level BPE), mean pooling of last_hidden_state, and L2
+// normalization — the same math the native provider does in jina_provider.go.
+type JinaONNXEmbeddingProvider struct {
+	bridged    bool
+	jsProvider js.Value
+	dims       int
+	modelName  string
+	modelHash  string
+}
+
+// NewJinaONNXEmbeddingProvider on WASM detects the JS-side provider at
+// construction time. The runtime/model/tokenizer path arguments are ignored
+// because the JS-side handles model loading itself.
+func NewJinaONNXEmbeddingProvider(
+	_ context.Context,
+	_ *ONNXRuntime,
+	_, _ string,
+) (*JinaONNXEmbeddingProvider, error) {
+	jsProvider := js.Global().Get("__sproutJinaONNX")
+	if jsProvider.IsUndefined() || jsProvider.IsNull() {
+		return nil, errJinaWASMNotSupported
+	}
+	dims := 768
+	if dv := jsProvider.Get("dimensions"); dv.Type() == js.TypeNumber {
+		dims = dv.Int()
+	}
+	hash := "jina-browser-bridge"
+	if hv := jsProvider.Get("modelHash"); hv.Type() == js.TypeString {
+		hash = hv.String()
+	}
+	name := "jina-code-v2-wasm-bridge"
+	if nv := jsProvider.Get("modelName"); nv.Type() == js.TypeString {
+		name = nv.String()
+	}
+	return &JinaONNXEmbeddingProvider{
+		bridged:    true,
+		jsProvider: jsProvider,
+		dims:       dims,
+		modelName:  name,
+		modelHash:  hash,
+	}, nil
 }
 
 func (p *JinaONNXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
-	return nil, fmt.Errorf("Jina embedding not available on WASM")
+	if p == nil || !p.bridged {
+		return nil, errJinaWASMNotSupported
+	}
+	promise := p.jsProvider.Call("embed", text)
+	result, err := awaitPromise(ctx, promise)
+	if err != nil {
+		return nil, fmt.Errorf("jina bridge: embed: %w", err)
+	}
+	return jsValueToFloat32Slice(result, p.dims)
 }
+
 func (p *JinaONNXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
-	return nil, fmt.Errorf("Jina embedding not available on WASM")
+	if p == nil || !p.bridged {
+		return nil, errJinaWASMNotSupported
+	}
+	// Build a JS string array. js.ValueOf([]interface{}) works but requires
+	// the slice be []interface{}, so coerce element-by-element.
+	jsTexts := make([]interface{}, len(texts))
+	for i, t := range texts {
+		jsTexts[i] = t
+	}
+	promise := p.jsProvider.Call("embedBatch", js.ValueOf(jsTexts))
+	result, err := awaitPromise(ctx, promise)
+	if err != nil {
+		return nil, fmt.Errorf("jina bridge: embedBatch: %w", err)
+	}
+	if result.Type() != js.TypeObject {
+		return nil, fmt.Errorf("jina bridge: embedBatch expected an array, got %s", result.Type())
+	}
+	n := result.Length()
+	out := make([][]float32, n)
+	for i := 0; i < n; i++ {
+		vec, err := jsValueToFloat32Slice(result.Index(i), p.dims)
+		if err != nil {
+			return nil, fmt.Errorf("jina bridge: embedBatch[%d]: %w", i, err)
+		}
+		out[i] = vec
+	}
+	return out, nil
 }
-func (p *JinaONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text string, prefix string) ([]float32, error) {
-	return nil, fmt.Errorf("Jina embedding not available on WASM")
+
+// EmbedWithPrefix ignores the prefix — Jina is symmetric and does not use
+// task prefixes. The raw text is embedded identically to Embed.
+func (p *JinaONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text, prefix string) ([]float32, error) {
+	_ = prefix
+	return p.Embed(ctx, text)
 }
+
+// EmbedBatchWithPrefix ignores the prefix — Jina is symmetric and does not
+// use task prefixes.
 func (p *JinaONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
-	return nil, fmt.Errorf("Jina embedding not available on WASM")
+	_ = prefix
+	return p.EmbedBatch(ctx, texts)
 }
-func (p *JinaONNXEmbeddingProvider) Dimensions() int   { return 0 }
-func (p *JinaONNXEmbeddingProvider) Name() string      { return "jina-wasm-stub" }
-func (p *JinaONNXEmbeddingProvider) ModelHash() string { return "" }
-func (p *JinaONNXEmbeddingProvider) Close() error      { return nil }
+
+func (p *JinaONNXEmbeddingProvider) Dimensions() int {
+	if p == nil {
+		return 0
+	}
+	return p.dims
+}
+
+func (p *JinaONNXEmbeddingProvider) Name() string {
+	if p == nil || p.modelName == "" {
+		return "jina-code-v2-wasm-bridge"
+	}
+	return p.modelName
+}
+
+func (p *JinaONNXEmbeddingProvider) ModelHash() string {
+	if p == nil {
+		return ""
+	}
+	return p.modelHash
+}
+
+func (p *JinaONNXEmbeddingProvider) Close() error { return nil }

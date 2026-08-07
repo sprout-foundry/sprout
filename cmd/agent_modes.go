@@ -316,6 +316,18 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				console.GlyphInfo.Printf("Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 			}
 		}
+
+		// SP-136 P2: idle reaping for auto-started daemons.
+		// When SPROUT_DAEMON_IDLE_TIMEOUT is a positive duration, the daemon
+		// self-terminates after the web UI has had no active clients and no
+		// active queries for that long. Auto-start (cmd/daemon_autostart.go)
+		// sets this on daemons it spawns; explicitly-started daemons
+		// (sprout agent -d) are unaffected unless the operator opts in.
+		if daemonMode && webServer != nil {
+			if idleTimeout, perr := time.ParseDuration(os.Getenv("SPROUT_DAEMON_IDLE_TIMEOUT")); perr == nil && idleTimeout > 0 {
+				go reapIdleDaemon(ctx, cancel, webServer, idleTimeout)
+			}
+		}
 	}
 
 	// Setup signal handling with buffered channel for multiple signals

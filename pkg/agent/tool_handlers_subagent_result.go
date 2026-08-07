@@ -65,12 +65,11 @@ func buildSubagentReturn(m map[string]string, result *SubagentResult, status Sub
 			ToolCalls:  result.ToolCalls,
 			Iterations: result.Iterations,
 		}
-		// SP-059 Phase 2c: structured file manifest, no more regex
-		// scraping. Map ChangeTracker's operation labels (write/edit/
-		// create) to the simpler created/modified/deleted vocabulary
-		// the envelope exposes. Both "write" and "create" map to
-		// "created" because the tracker doesn't distinguish them.
-		if len(result.FileChanges) > 0 {
+	// Structured file manifest: map ChangeTracker's operation labels
+	// (write/edit/create) to the simpler created/modified/deleted vocabulary
+	// the envelope exposes. Both "write" and "create" map to
+	// "created" because the tracker doesn't distinguish them.
+	if len(result.FileChanges) > 0 {
 			files := make([]FileChange, 0, len(result.FileChanges))
 			for _, ch := range result.FileChanges {
 				files = append(files, FileChange{
@@ -88,11 +87,8 @@ func buildSubagentReturn(m map[string]string, result *SubagentResult, status Sub
 			// the JSON envelope carried an authoritative file list.
 			r.Output = prependFilesModifiedHeader(r.Output, files)
 		}
-		// SP-059 Phase 3a: pass the progress timeline through so the
-		// primary's LLM sees what the subagent did, not just the
-		// final answer. Type conversion exists because the runner's
-		// SubagentProgressEntry is internal — envelope ships its own
-		// ProgressEntry so the wire format is decoupled.
+		// Pass the progress timeline through so the primary's LLM sees
+		// what the subagent did, not just the final answer.
 		if len(result.ProgressLog) > 0 {
 			log := make([]ProgressEntry, 0, len(result.ProgressLog))
 			for _, p := range result.ProgressLog {

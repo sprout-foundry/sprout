@@ -1,5 +1,4 @@
-// Extracted from tool_security.go — path-related security helpers (SP-098).
-
+// Extracted from tool_security.go — path-related security helpers.
 package agent
 
 import (
@@ -125,8 +124,7 @@ func (a *Agent) classifyFileAccess(filePath, resolvedPath, mode string) FileAcce
 // can consult Gate 1's path-tier verdict without importing pkg/agent.
 // Translates the internal FileAccessDecision enum to the interface's
 // string contract: "allow", "prompt", "deny". Logs the verdict to the
-// audit logger on ctx (SP-127 M3.2 Phase 2.6 follow-on) so every
-// decision appears in the audit trail.
+// audit logger on ctx so every decision appears in the audit trail.
 func (a *Agent) ClassifyFileAccess(ctx context.Context, filePath, resolvedPath, mode string) string {
 	decision := a.classifyFileAccess(filePath, resolvedPath, mode)
 	switch decision {
@@ -180,15 +178,12 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	// Per-folder session allowlist short-circuit. If this path sits
 	// under a folder the user previously approved, skip the prompt.
 	if agent.IsFolderSessionAllowed(filePath) {
-		// SP-128-1f: read_only declared paths still satisfy
+		// read_only declared paths still satisfy
 		// IsFolderSessionAllowed (so reads continue to work), but
 		// a write tool must NOT be allowed under a read_only grant.
 		// We detect "write" via the error sentinel — every write
 		// tool surfaces ErrWriteOutsideWorkingDirectory; read tools
-		// surface ErrOutsideWorkingDirectory. This is the same
-		// signal the rest of the function uses (see the first
-		// errors.Is check at the top of this function), so the
-		// classification stays consistent. When the path is on the
+		// surface ErrOutsideWorkingDirectory. When the path is on the
 		// allowlist but the mode says read_only, return (ctx, false)
 		// so the caller returns a workflow-specific error instead
 		// of the generic off-workspace sentinel.

@@ -27,13 +27,11 @@ const (
 )
 
 // go-difflib's OpCode.Tag is a raw byte ('e'/'r'/'d'/'i').
-// The library doesn't export named constants, so we mirror
-// the values here. See github.com/pmezard/go-difflib/difflib/match.go
 const (
-	opEqual   byte = 'e' // equal/match
-	opReplace byte = 'r' // replace
-	opDelete  byte = 'd' // delete
-	opInsert  byte = 'i' // insert
+	opEqual   byte = 'e'
+	opReplace byte = 'r'
+	opDelete  byte = 'd'
+	opInsert  byte = 'i'
 )
 
 // DiffLine represents a single line in a unified diff hunk.
@@ -45,9 +43,9 @@ type DiffLine struct {
 // Hunk represents a discrete change region in a unified diff.
 type Hunk struct {
 	ID       string
-	OldStart int // 1-based
+	OldStart int
 	OldLines int
-	NewStart int // 1-based
+	NewStart int
 	NewLines int
 	Lines    []DiffLine
 }
@@ -63,18 +61,14 @@ type EditProposal struct {
 // EditDecision captures the user's per-hunk accept/reject choices.
 type EditDecision struct {
 	Approved      bool
-	AcceptedHunks []string // hunk IDs; empty + Approved=false => reject all
+	AcceptedHunks []string
 }
 
-// SplitIntoHunks computes the unified diff between original and proposed
-// content and splits it into discrete hunks with stable IDs ("hunk-0",
-// "hunk-1", …). Each hunk includes up to 3 lines of surrounding context.
+// SplitIntoHunks computes the unified diff and splits it into discrete hunks with stable IDs.
 func SplitIntoHunks(original, proposed string) []Hunk {
 	origLines := splitLines(original)
 	newLines := splitLines(proposed)
 
-	// GetGroupedOpCodes(n) returns groups of opcodes, each group being
-	// a hunk with up to n lines of context around changes.
 	groups := difflib.NewMatcher(origLines, newLines).GetGroupedOpCodes(3)
 
 	var hunks []Hunk
@@ -83,7 +77,6 @@ func SplitIntoHunks(original, proposed string) []Hunk {
 			ID: fmt.Sprintf("hunk-%d", hunkIdx),
 		}
 
-		// Set start positions from the first opcode (0-based → convert to 1-based later).
 		if len(group) > 0 {
 			hunk.OldStart = group[0].I1
 			hunk.NewStart = group[0].J1
@@ -119,7 +112,6 @@ func SplitIntoHunks(original, proposed string) []Hunk {
 			}
 		}
 
-		// Convert to 1-based line numbers for display.
 		hunk.OldStart++
 		hunk.NewStart++
 
@@ -130,8 +122,6 @@ func SplitIntoHunks(original, proposed string) []Hunk {
 }
 
 // ApplyHunks reconstructs file content by applying only the accepted hunks.
-// Rejected hunks leave the original lines unchanged. Hunks are applied in
-// order; each hunk locates its context in the current result and patches it.
 func ApplyHunks(original string, hunks []Hunk, acceptedIDs []string) string {
 	accepted := make(map[string]bool, len(acceptedIDs))
 	for _, id := range acceptedIDs {
@@ -150,10 +140,7 @@ func ApplyHunks(original string, hunks []Hunk, acceptedIDs []string) string {
 	return strings.Join(result, "\n")
 }
 
-// applySingleHunk finds the hunk's old-content region within lines and
-// replaces it with the new content. If the region cannot be located (the
-// surrounding context changed due to an earlier hunk shift), the lines are
-// returned unchanged (safety: never clobber).
+// applySingleHunk finds the hunk's old-content region and replaces it with the new content.
 func applySingleHunk(lines []string, hunk Hunk) []string {
 	var oldContent, newContent []string
 	for _, dl := range hunk.Lines {
@@ -180,11 +167,9 @@ func applySingleHunk(lines []string, hunk Hunk) []string {
 	return out
 }
 
-// findSubslice finds the index of oldContent within lines, starting near
-// startIdx (0-based). Returns -1 if not found.
+// findSubslice finds the index of oldContent within lines, starting near startIdx.
 func findSubslice(lines, oldContent []string, startIdx int) int {
 	if len(oldContent) == 0 {
-		// Clamp to valid insertion range to prevent index-out-of-bounds.
 		if startIdx < 0 {
 			return 0
 		}
@@ -194,7 +179,6 @@ func findSubslice(lines, oldContent []string, startIdx int) int {
 		return startIdx
 	}
 
-	// Try positions near startIdx first (±5 lines).
 	for _, offset := range []int{0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5} {
 		pos := startIdx + offset
 		if pos < 0 || pos+len(oldContent) > len(lines) {
@@ -212,7 +196,6 @@ func findSubslice(lines, oldContent []string, startIdx int) int {
 		}
 	}
 
-	// Full scan fallback.
 	for i := 0; i <= len(lines)-len(oldContent); i++ {
 		match := true
 		for j, s := range oldContent {
@@ -229,8 +212,7 @@ func findSubslice(lines, oldContent []string, startIdx int) int {
 	return -1
 }
 
-// GenerateUnifiedDiff produces a standard unified-diff string from original
-// and proposed content, suitable for terminal display.
+// GenerateUnifiedDiff produces a standard unified-diff string from original and proposed content.
 func GenerateUnifiedDiff(path, original, proposed string) (string, error) {
 	diff := difflib.UnifiedDiff{
 		A:        splitLines(original),
@@ -246,20 +228,10 @@ func GenerateUnifiedDiff(path, original, proposed string) (string, error) {
 	return result, nil
 }
 
-// editApprovalTimeout is the maximum time a request blocks waiting for a
-// WebUI response. Matches the security approval default generous window
-// so a user who steps away can still return and approve.
 var editApprovalTimeout = 30 * time.Minute
 
-// editApprovalBroker tracks pending edit approval requests and their
-// response channels. It mirrors the pattern used by
-// security.ApprovalManager: the agent registers a request, publishes an
-// event to the EventBus, then blocks on the channel until the WebUI
-// POSTs a decision (or the timeout fires).
-//
-// Package-level so that any agent instance can resolve any request ID —
-// essential in daemon mode where multiple chat agents exist and the
-// decision handler only has access to an arbitrary agent instance.
+// editApprovalBroker tracks pending edit approval requests and their response channels.
+// Package-level so any agent instance can resolve any request ID.
 var editApprovalBroker = &editApprovalBrokerType{
 	pending: make(map[string]chan EditDecision),
 }
@@ -269,9 +241,6 @@ type editApprovalBrokerType struct {
 	pending map[string]chan EditDecision
 }
 
-// register creates a buffered response channel for the given request ID
-// and returns it. The caller publishes the event, then blocks on the
-// channel. cleanup removes the entry after the block resolves.
 func (b *editApprovalBrokerType) register(requestID string) chan EditDecision {
 	ch := make(chan EditDecision, 1)
 	b.mu.Lock()
@@ -280,8 +249,6 @@ func (b *editApprovalBrokerType) register(requestID string) chan EditDecision {
 	return ch
 }
 
-// respond delivers the decision to the waiting goroutine. Returns false
-// if the request was not found or already resolved.
 func (b *editApprovalBrokerType) respond(requestID string, decision EditDecision) bool {
 	b.mu.Lock()
 	ch, ok := b.pending[requestID]
@@ -297,14 +264,12 @@ func (b *editApprovalBrokerType) respond(requestID string, decision EditDecision
 	}
 }
 
-// cleanup removes a pending entry after it resolves or times out.
 func (b *editApprovalBrokerType) cleanup(requestID string) {
 	b.mu.Lock()
 	delete(b.pending, requestID)
 	b.mu.Unlock()
 }
 
-// generateEditRequestID produces a unique ID for an edit approval request.
 var (
 	editReqCounter int64
 	editReqMu      sync.Mutex
@@ -319,52 +284,27 @@ func generateEditRequestID() string {
 
 // RequestEditApproval builds a proposal, asks the approval broker for a
 // decision, applies only accepted hunks, and returns the result.
-//
-// Resolution path depends on the execution surface:
-//
-//  1. Non-interactive (--skip-prompt, automate, daemon, non-TTY stdin):
-//     auto-approve all hunks. No one can answer a prompt, so blocking
-//     would dead-end the run.
-//
-//  2. WebUI with active clients: publish an edit_approval_request event
-//     to the EventBus and block on a response channel. The browser
-//     renders a per-hunk diff review panel and POSTs the decision back.
-//     On timeout, fall through to the terminal path.
-//
-//  3. CLI (TTY only, no WebUI): render the diff to stderr and prompt the
-//     user per-hunk via stdin. Accepted hunks are applied; rejected
-//     hunks keep the original lines.
 func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applied string, summary string, err error) {
-	// Check for context cancellation up front.
 	select {
 	case <-ctx.Done():
 		return "", "", ctx.Err()
 	default:
 	}
 
-	// Ensure hunks are populated.
 	if len(p.Hunks) == 0 {
 		p.Hunks = SplitIntoHunks(p.Original, p.Proposed)
 	}
 
-	// No changes — return original as-is.
 	if len(p.Hunks) == 0 {
 		return p.Original, fmt.Sprintf("no changes to %s", p.Path), nil
 	}
 
-	// Try the WebUI path first: if the event bus is wired and there are
-	// active browser clients, route the proposal through the diff review
-	// panel. The WebUI IS the interactive surface — a webui-only service
-	// has no TTY but still has live users who can review diffs. The
-	// isNonInteractive() check only governs the CLI fallback below.
+	// WebUI path: if the event bus is wired and there are active browser clients.
 	if a.HasActiveWebUIClients() && a.GetEventBus() != nil {
 		decision, outcome := a.requestWebUIEditApproval(ctx, p)
 		if outcome == approvalOutcomeResponded {
 			return a.applyEditDecision(p, decision)
 		}
-		// Timed out or no channel — fall through to terminal prompt if
-		// we have a TTY. If non-interactive, auto-approve as a safe
-		// fallback (the user can undo via recover_file / git).
 		if !term.IsTerminal(int(os.Stdin.Fd())) {
 			log.Printf("[edit_approval] WebUI timed out and no TTY — auto-approving %s", p.Path)
 			return a.applyEditDecision(p, EditDecision{
@@ -374,8 +314,6 @@ func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applie
 		}
 	}
 
-	// Non-interactive runs (--skip-prompt, automate, daemon without WebUI)
-	// treat the mode as approve-all (no silent hangs).
 	if a.isNonInteractive() {
 		return a.applyEditDecision(p, EditDecision{
 			Approved:      true,
@@ -383,22 +321,17 @@ func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applie
 		})
 	}
 
-	// CLI terminal path: render the diff and prompt per-hunk.
 	if term.IsTerminal(int(os.Stdin.Fd())) {
 		decision := a.requestCLIEditApproval(p)
 		return a.applyEditDecision(p, decision)
 	}
 
-	// No interactive surface at all — auto-approve.
 	return a.applyEditDecision(p, EditDecision{
 		Approved:      true,
 		AcceptedHunks: hunkIDs(p.Hunks),
 	})
 }
 
-// approvalOutcome mirrors security.ApprovalOutcome without the import
-// dependency. The WebUI path returns responded/timedOut/noChannel so
-// RequestEditApproval can decide whether to fall through to the CLI.
 type approvalOutcome int
 
 const (
@@ -407,14 +340,12 @@ const (
 	approvalOutcomeNoChannel
 )
 
-// requestWebUIEditApproval publishes an edit_approval_request event to
-// the EventBus and blocks until the WebUI responds or the timeout fires.
+// requestWebUIEditApproval publishes an edit_approval_request event and blocks for a response.
 func (a *Agent) requestWebUIEditApproval(ctx context.Context, p EditProposal) (EditDecision, approvalOutcome) {
 	requestID := generateEditRequestID()
 	ch := editApprovalBroker.register(requestID)
 	defer editApprovalBroker.cleanup(requestID)
 
-	// Build the event payload.
 	unifiedDiff, _ := GenerateUnifiedDiff(p.Path, p.Original, p.Proposed)
 	hunkPayloads := make([]map[string]interface{}, len(p.Hunks))
 	for i, h := range p.Hunks {
@@ -423,7 +354,6 @@ func (a *Agent) requestWebUIEditApproval(ctx context.Context, p EditProposal) (E
 
 	payload := events.EditApprovalRequestEvent(requestID, p.Path, unifiedDiff, hunkPayloads)
 	a.publishEvent(events.EventTypeEditApprovalRequest, payload)
-	// Notify input-required subscribers (CLI bell, browser notification).
 	a.publishEvent(events.EventTypeInputRequired, events.InputRequiredEvent("edit_approval", requestID))
 
 	log.Printf("[edit_approval] request %s for %s — waiting up to %v for WebUI response",
@@ -446,25 +376,11 @@ func (a *Agent) requestWebUIEditApproval(ctx context.Context, p EditProposal) (E
 	}
 }
 
-// requestCLIEditApproval renders the diff to stderr and prompts the user
-// to accept or reject each hunk via stdin. Each hunk is shown with its
-// line range and a y/n prompt. Defaults to accept (y) on empty input.
-//
-// Suspends the CLI activity indicator (spinner) and pauses the SP-055
-// SteerInputReader so the per-hunk prompts aren't clobbered by an
-// in-flight spinner and so stdin isn't held in raw mode by the steer
-// reader (which would cause fmt.Fscanln to read garbage on a mid-turn
-// call). Both hooks no-op cleanly when no implementation is registered.
+// requestCLIEditApproval renders the diff to stderr and prompts the user per-hunk.
 func (a *Agent) requestCLIEditApproval(p EditProposal) EditDecision {
 	unifiedDiff, _ := GenerateUnifiedDiff(p.Path, p.Original, p.Proposed)
 
 	var accepted []string
-	// Suspend streaming prose so a mid-turn fall-through (after the WebUI
-	// path times out) isn't trampled by a concurrent chunk write. The
-	// streaming flag is process-global — defer the resume so a panic in
-	// the closure doesn't leak a permanently-suspended stream for the
-	// rest of the process lifetime. WithCookedStdin already pairs
-	// SuspendIndicator + PauseSteer with their resumes.
 	clihooks.SuspendStreaming()
 	defer clihooks.ResumeStreaming()
 	err := clihooks.WithCookedStdin(func() error {
@@ -473,8 +389,6 @@ func (a *Agent) requestCLIEditApproval(p EditProposal) EditDecision {
 		fmt.Fprintf(os.Stderr, "\n%sReview each hunk:%s\n", "\x1b[1m", "\x1b[0m")
 
 		scanner := bufio.NewScanner(os.Stdin)
-		// Default 64KiB cap on bufio.Scanner is plenty for a y/n answer;
-		// bumping is unnecessary here.
 		accepted = make([]string, 0, len(p.Hunks))
 		for _, hunk := range p.Hunks {
 			fmt.Fprintf(os.Stderr, "  %s (lines %d-%d, +%d/-%d) [Y/n]: ",
@@ -485,15 +399,8 @@ func (a *Agent) requestCLIEditApproval(p EditProposal) EditDecision {
 			if scanner.Scan() {
 				answer = scanner.Text()
 			} else if err := scanner.Err(); err != nil {
-				// I/O error (not just EOF). Surface it; the caller treats
-				// any nil/empty AcceptedHunks list as "reject all" via the
-				// branch after WithCookedStdin returns.
 				return err
 			}
-			// EOF (clean shutdown, Ctrl+D) — fall through with answer=""
-			// so the user-default "y" applies, matching the prior
-			// fmt.Fscanln behavior where mid-hunk EOF silently accepted
-			// remaining hunks.
 
 			answer = strings.ToLower(strings.TrimSpace(answer))
 			if answer == "" || answer == "y" || answer == "yes" {
@@ -503,10 +410,6 @@ func (a *Agent) requestCLIEditApproval(p EditProposal) EditDecision {
 		return nil
 	})
 
-	// EOF (Ctrl+D / pipe closed) → treat the trailing request as cancelled
-	// by returning a deny decision. Other errors propagate as well — both
-	// are safe to fold into "no hunks approved" since the spec accepts an
-	// empty AcceptedHunks as reject-all.
 	if err != nil {
 		return EditDecision{Approved: false, AcceptedHunks: nil}
 	}
@@ -517,17 +420,12 @@ func (a *Agent) requestCLIEditApproval(p EditProposal) EditDecision {
 	}
 }
 
-// RespondToEditApproval delivers a user decision to a pending edit
-// approval request. Called by the WebUI handler (POST /api/edits/{id}/decision)
-// when the user submits their per-hunk accept/reject choices.
-//
-// Returns true if the request was found and the decision was delivered.
+// RespondToEditApproval delivers a user decision to a pending edit approval request.
 func (a *Agent) RespondToEditApproval(requestID string, decision EditDecision) bool {
 	return editApprovalBroker.respond(requestID, decision)
 }
 
-// applyEditDecision applies the accepted hunks to the original content
-// and builds a human-readable summary for the tool result.
+// applyEditDecision applies the accepted hunks to the original content.
 func (a *Agent) applyEditDecision(p EditProposal, decision EditDecision) (string, string, error) {
 	applied := ApplyHunks(p.Original, p.Hunks, decision.AcceptedHunks)
 
@@ -546,8 +444,7 @@ func (a *Agent) applyEditDecision(p EditProposal, decision EditDecision) (string
 	return applied, summary, nil
 }
 
-// hunkToPayload converts a Hunk to a JSON-serializable map for the
-// event payload, including per-line change type for the frontend.
+// hunkToPayload converts a Hunk to a JSON-serializable map for the event payload.
 func hunkToPayload(h Hunk) map[string]interface{} {
 	lines := make([]map[string]interface{}, len(h.Lines))
 	for i, dl := range h.Lines {
@@ -568,7 +465,6 @@ func hunkToPayload(h Hunk) map[string]interface{} {
 	}
 }
 
-// countLinesByType counts how many lines in a slice have the given type.
 func countLinesByType(lines []DiffLine, t DiffLineType) int {
 	n := 0
 	for _, dl := range lines {
@@ -580,16 +476,12 @@ func countLinesByType(lines []DiffLine, t DiffLineType) int {
 }
 
 // SetEditApprovalTimeout overrides the default WebUI response timeout.
-// Intended for tests; production code uses the 30-minute default.
 func SetEditApprovalTimeout(d time.Duration) {
 	editApprovalTimeout = d
 }
 
 // ShouldGateEdit reports whether a write to the given path should be
 // routed through the diff-approval gate based on the agent's config.
-// Returns false when edit_approval mode is "off" (default), when the
-// run is non-interactive (--skip-prompt / daemon / automate), or when
-// mode is "paths" and the path doesn't match any configured glob.
 func (a *Agent) ShouldGateEdit(path string) bool {
 	cfg := a.GetConfig()
 	if cfg == nil || cfg.EditApproval == nil {
@@ -602,23 +494,7 @@ func (a *Agent) ShouldGateEdit(path string) bool {
 }
 
 // isNonInteractive reports whether the agent is running in a mode where
-// interactive prompts are suppressed or impossible. This is the single
-// authoritative check used by the security system to decide between the
-// interactive gating path (full profiles, prompts, long approval timeout)
-// and the non-interactive path (permissive-by-default, Critical-only
-// blocks, fast-fail).
-//
-// True when ANY of:
-//   - stdin is not a TTY (daemon, CI, piped input)
-//   - cfg.SkipPrompt is set (--skip-prompt, automate, daemon flag)
-//
-// Both conditions must lead to the same behavior because either one means
-// there is no live user at a terminal to answer an approval prompt.
-//
-// SP-068 Phase 3: SPROUT_FORCE_INTERACTIVE=1 forces the interactive path
-// for testing — the WebUI approval surface is still gated by
-// HasActiveWebUIClients(), so the flag alone is not enough to make prompts
-// actually fire; it just disables the stdin/SkipPrompt short-circuit.
+// interactive prompts are suppressed or impossible.
 func (a *Agent) isNonInteractive() bool {
 	if strings.TrimSpace(os.Getenv("SPROUT_FORCE_INTERACTIVE")) == "1" {
 		return false
@@ -632,7 +508,6 @@ func (a *Agent) isNonInteractive() bool {
 	return false
 }
 
-// hunkIDs returns the IDs of all hunks.
 func hunkIDs(hunks []Hunk) []string {
 	ids := make([]string, len(hunks))
 	for i, h := range hunks {
@@ -660,8 +535,7 @@ func rejectedHunkList(hunks []Hunk, acceptedIDs []string) string {
 	return strings.Join(rejected, ", ")
 }
 
-// splitLines splits content into lines, preserving trailing empty elements
-// so that strings.Join(result, "\n") preserves trailing newlines.
+// splitLines splits content into lines, preserving trailing empty elements.
 func splitLines(content string) []string {
 	if content == "" {
 		return []string{""}

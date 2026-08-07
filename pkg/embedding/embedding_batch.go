@@ -64,8 +64,10 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		m.maxResults = 3
 	}
 
-	// Create ONNX embedding provider as the sole provider. provider+runtime
-	// are owned by the shared cache; do not Close them on any failure path.
+	// Create the Jina Code v2 ONNX provider as the sole provider — it serves
+	// code search, duplicate detection, related-code, and conversation recall
+	// alike (SP-135 single-model consolidation). provider+runtime are owned by
+	// the shared cache; do not Close them on any failure path.
 	provider, runtime, err := m.createONNXProvider(ctx)
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: init provider: %w", err)
@@ -93,52 +95,11 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	m.store = store
 	m.indexMgr = indexMgr
 
-	// Best-effort init of the code-specific provider (Jina Code v2, SP-135).
-	// Failure is non-fatal: code queries fall back to the Gemma-backed index.
-	// The code index uses a separate store file (code_index.hnsw) keyed by the
-	// Jina model's hash, so the two models never invalidate each other.
-	m.initCodeProviderLocked(ctx)
-
 	// Store true last so concurrent IsInitialized() reads cannot observe a
 	// partially-initialized manager (all other fields are written above under m.mu).
 	m.initialized.Store(true)
 
 	return nil
-}
-
-// initCodeProviderLocked attempts to load the code-specific embedding model
-// (Jina Code v2) for the dual-model architecture. Uses the process-wide shared
-// provider cache so multiple agents share one model instance. Auto-downloads
-// on first use. Best-effort: if the download fails or the session can't be
-// created, codeAvailable stays false and code queries fall back to Gemma.
-// The caller must hold m.mu.
-func (m *EmbeddingManager) initCodeProviderLocked(ctx context.Context) {
-	cfg := JinaCodeV2Config()
-	modelDir := DefaultModelDir()
-
-	provider, _, err := acquireSharedJinaProvider(ctx, modelDir, cfg)
-	if err != nil {
-		log.Printf("embedding: code provider (Jina Code v2) init failed — falling back to Gemma for code queries: %v", err)
-		return
-	}
-
-	codeStore, err := NewHNSWStore(filepath.Join(m.indexDir, "code_index.hnsw"), provider.ModelHash())
-	if err != nil {
-		log.Printf("embedding: code store open failed — falling back to Gemma: %v", err)
-		return
-	}
-
-	codeIndexMgr := NewIndexManager(provider, codeStore, IndexOptions{
-		BatchSize:      32,
-		MaxBodyLen:     2000,
-		IndexFileLevel: true,
-		ManifestPath:   filepath.Join(m.indexDir, ".code_index.hnsw.manifest.json"),
-	})
-
-	m.codeProvider = provider
-	m.codeStore = codeStore
-	m.codeIndexMgr = codeIndexMgr
-	m.codeAvailable = true
 }
 
 // BuildIndex runs a full index build for the workspace.
@@ -187,30 +148,8 @@ func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, e
 		return nil, fmt.Errorf("embedding: workspace has %d files (max %d for auto-build)", len(files), MaxFileCount)
 	}
 
-	// When the code-specific provider (Jina) is available, it owns ALL code
-	// queries — NL search, duplicate detection, related code. Skip the Gemma
-	// code index build entirely (saves ~30 min on a fresh checkout). Gemma
-	// still runs for the ConversationStore (memory/recall), which is separate.
-	//
-	// Jina is symmetric (no task prefixes) and beats Gemma on every code
-	// metric: 9× faster (59 vs 6.5 units/s), wider separation (unrelated
-	// 0.066 vs 0.355), better NL-code recall (correct hits 0.343–0.823 vs
-	// 0.499–0.613, wrong answers near-zero vs 0.32). Building a second index
-	// with a slower, worse model is pure overhead. See SP-135 eval data.
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	codeAvailable := m.codeAvailable
-	m.mu.Unlock()
-
-	if codeAvailable && codeIdx != nil {
-		codeStats, codeErr := codeIdx.BuildIndex(ctx, m.workspaceRoot)
-		if codeErr != nil {
-			return nil, fmt.Errorf("embedding: code index build failed: %w", codeErr)
-		}
-		return codeStats, nil
-	}
-
-	// Fallback: no code model, use Gemma for everything.
+	// The single Jina-backed index owns ALL queries — NL search, duplicate
+	// detection, related code, conversation recall. Build it directly.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
@@ -349,18 +288,6 @@ func (m *EmbeddingManager) UpdateFile(ctx context.Context, filePath string) erro
 	if err := m.Init(ctx); err != nil {
 		return err
 	}
-
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	codeAvailable := m.codeAvailable
-	m.mu.Unlock()
-
-	// When the code model is available, it owns the code index — update only it.
-	if codeAvailable && codeIdx != nil {
-		return codeIdx.UpdateFile(ctx, filePath)
-	}
-
-	// Fallback: no code model, update the Gemma index.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return err
@@ -374,18 +301,6 @@ func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, 
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-
-	m.mu.Lock()
-	codeIdx := m.codeIndexMgr
-	codeAvailable := m.codeAvailable
-	m.mu.Unlock()
-
-	// When the code model is available, it owns the code index — update only it.
-	if codeAvailable && codeIdx != nil {
-		return codeIdx.UpdateFromGitDiff(ctx, m.workspaceRoot)
-	}
-
-	// Fallback: no code model, update the Gemma index.
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
@@ -439,15 +354,13 @@ func (m *EmbeddingManager) UpdateFromGitDiffBackground(ctx context.Context) <-ch
 
 // CheckDuplicates checks if file content duplicates existing code.
 //
-// When the code-specific provider (Jina Code v2) is available, this routes
-// to the code index for superior separation (near-dup 0.77, unrelated 0.07
-// vs Gemma's 0.77/0.36 — see SP-135 Phase-0 results). Falls back to the
-// Gemma-backed index otherwise.
+// Runs against the sole Jina-backed index, whose separation (near-dup 0.756,
+// unrelated 0.066 — see SP-135) keeps duplicate detection precise.
 func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string, content string) (*CheckDuplicatesResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotCodeIndexMgr()
+	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
@@ -457,16 +370,15 @@ func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string,
 
 // QuerySimilar searches the index with a natural-language query.
 //
-// Routes to the Jina code index when available (better NL-code separation than
-// Gemma: correct hits 0.343–0.823, wrong answers near-zero). Jina is symmetric
-// so the codeQueryPrefix passed by IndexManager.QuerySimilar is ignored by the
-// provider — both query and document land in the same space. Falls back to the
-// Gemma-backed indexMgr otherwise.
+// Runs against the sole Jina-backed index. Jina is symmetric (no task
+// prefixes) so the codeQueryPrefix passed by IndexManager.QuerySimilar is
+// ignored by the provider — both query and document land in the same space.
+// Correct NL-code hits measure 0.343–0.823, wrong answers near-zero (SP-135).
 func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotCodeIndexMgr()
+	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
@@ -476,14 +388,13 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 // QuerySimilarCode searches the index using source code as the input, for
 // "what else looks like this" rather than "what answers this question".
 //
-// When the code-specific provider (Jina Code v2) is available, this routes
-// to the code index for superior retrieval quality and separation (see
-// SP-135). Falls back to the Gemma-backed indexMgr otherwise.
+// Runs against the sole Jina-backed index for retrieval quality and
+// separation (SP-135).
 func (m *EmbeddingManager) QuerySimilarCode(ctx context.Context, codeText string, topK int, threshold float32) ([]QueryResult, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
-	idx, err := m.snapshotCodeIndexMgr()
+	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +453,7 @@ func (m *EmbeddingManager) Close() error {
 	}
 
 	// Release provider/runtime references. When providerShared is true they are
-	// owned by the process-wide shared cache (acquireSharedONNXProvider) and
+	// owned by the process-wide shared cache (acquireSharedJinaProvider) and
 	// other managers still reference them, so we drop our reference WITHOUT
 	// closing — closing would tear down a session the rest of the process is
 	// using. The shared instances intentionally live for the process lifetime.
@@ -561,20 +472,6 @@ func (m *EmbeddingManager) Close() error {
 		m.store = nil
 	}
 	m.indexMgr = nil
-
-	// Close code-specific provider and store (SP-135 dual-model).
-	// When shared (acquireSharedJinaProvider), the provider+runtime are owned
-	// by the process-wide cache and must not be closed — other agents reference
-	// them. Only close the store.
-	if m.codeStore != nil {
-		if err := m.codeStore.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		m.codeStore = nil
-	}
-	m.codeProvider = nil
-	m.codeIndexMgr = nil
-	m.codeAvailable = false
 
 	// Drop the cachedProvider reference so the underlying provider (and
 	// its internal state) can be GC'd. Without this, m.cachedProvider
@@ -650,11 +547,7 @@ func clearCodeEmbeddingFiles(indexDir string) (int, error) {
 		filepath.Join(indexDir, "index.hnsw"),
 		filepath.Join(indexDir, "index.hnsw.meta"),
 		filepath.Join(indexDir, "index.hnsw.records.json"),
-		// Code-specific index (SP-135 dual-model: Jina Code v2)
-		filepath.Join(indexDir, "code_index.hnsw"),
-		filepath.Join(indexDir, "code_index.hnsw.meta"),
-		filepath.Join(indexDir, "code_index.hnsw.records.json"),
-		filepath.Join(indexDir, ".code_index.hnsw.manifest.json"),
+		filepath.Join(indexDir, ".index.hnsw.manifest.json"),
 	}
 	return removeFilesSilently(files)
 }

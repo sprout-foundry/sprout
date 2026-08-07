@@ -17,65 +17,14 @@ type SecurityManager interface {
 	GetUnsafeMode() bool
 	SetUnsafeShellMode(unsafe bool)
 	GetUnsafeShellMode() bool
-
-	// IsSecurityBypassApproved reports whether the user has approved
-	// any external filesystem access this session. After the SP-058
-	// follow-up this returns true iff at least one folder is on the
-	// session allowlist — used as a coarse "user has consented to
-	// external access" signal by subagent setup. Per-path decisions
-	// should call IsFolderSessionAllowed instead.
-	//
-	// Deprecated: use IsFolderSessionAllowed(absPath) for per-path
-	// checks. SetSecurityBypassApproved is gone — call
-	// AddSessionAllowedFolder with the specific folder instead.
 	IsSecurityBypassApproved() bool
-
-	// IsFolderSessionAllowed reports whether absPath sits under any
-	// folder the user has allowlisted for this session. Match is
-	// prefix-based (path-component aware) and case-sensitive on Unix.
 	IsFolderSessionAllowed(absPath string) bool
-
-	// IsFolderSessionWriteAllowed reports whether absPath sits under
-	// an allowlisted folder whose declared mode permits writes.
-	// Returns true when the folder is allowlisted AND its mode is
-	// empty (legacy default = read_write) OR explicitly
-	// "read_write". Returns false for "read_only" entries. Used by
-	// the filesystem gate to block write tools against folders the
-	// workflow declared as read_only (SP-128 / B6).
 	IsFolderSessionWriteAllowed(absPath string) bool
-
-	// AddSessionAllowedFolder records that the user picked "Allow
-	// this folder for the rest of the session" on the approval
-	// dialog. The folder is stored after Clean()-ing and dedup'd
-	// against the existing list.
 	AddSessionAllowedFolder(folder string)
-
-	// SetSessionAllowedFolderMode records the declared mode for an
-	// already-allowlisted folder. Calling with mode=="" clears the
-	// entry so the folder reverts to the default read_write
-	// semantics. Idempotent.
 	SetSessionAllowedFolderMode(folder, mode string)
-
-	// SnapshotSessionAllowedFolders returns a copy of the current
-	// allowlist. Used to propagate approvals into subagents (each
-	// subagent gets its own allowlist seeded from the parent's).
 	SnapshotSessionAllowedFolders() []string
-
-	// SnapshotSessionAllowedFolderModes returns a copy of the
-	// current folder-mode map. Used alongside
-	// SnapshotSessionAllowedFolders when seeding subagents so the
-	// declared mode survives delegation. Paths with no entry in the
-	// map default to read_write (legacy semantics).
 	SnapshotSessionAllowedFolderModes() map[string]string
-
-	// RemoveSessionAllowedFolder removes the given folder from the session
-	// allowlist. Returns nil if the folder was not on the list (idempotent).
-	// Also removes any associated mode entry from the folder-mode map.
-	// Used by the workflow step restore logic to undo per-step path grants
-	// without disturbing paths that were already present before the step
-	// started (SP-127 Phase 2.3).
 	RemoveSessionAllowedFolder(folder string) error
-
 	IsConcernIgnored(filePath, concern string) bool
 	SetConcernIgnored(filePath, concern string)
 	GetOutputRedactor() *security.OutputRedactor
@@ -85,36 +34,19 @@ type SecurityManager interface {
 	HasActiveWebUIClients() bool
 }
 
-// AgentSecurityManager implements SecurityManager, holding all security-related state
-// previously managed directly by the Agent struct.
+// AgentSecurityManager implements SecurityManager, holding all security-related state.
 type AgentSecurityManager struct {
 	securityApprovalMgr *security.ApprovalManager
 	askUserMgr          *agenttools.AskUserManager
 	unsafeMode          bool
 	unsafeShellMode     bool
 	securityBypassMu    sync.RWMutex
-	// sessionAllowedFolders holds absolute path prefixes the user
-	// approved via "Allow this folder for the rest of the session"
-	// on the filesystem approval dialog. Replaces the old global
-	// securityBypassApproved boolean — that flag was a real safety
-	// regression because approving one external path silently
-	// allowed every external path for the session.
 	sessionAllowedFolders []string
-	// sessionPathModes stores the declared mode ("read_only" or
-	// "read_write") for each session-allowlisted folder. An entry
-	// without a mode (e.g. added by the legacy AddSessionAllowedFolder
-	// call site) is treated as "read_write" — the most permissive
-	// reading. Workflow-declared paths (SP-128 allowed_paths) always
-	// carry a mode. Read tools don't consult this map; only write
-	// tools do (via IsFolderSessionWriteAllowed).
 	sessionPathModes        map[string]string
 	ignoredSecurityConcerns map[string]map[string]bool
 	ignoredSecurityMu       sync.RWMutex
 	outputRedactor          *security.OutputRedactor
 	elevationGate           *security.ElevationGate
-	// webuiClientsMu protects hasActiveWebUIClients, which is written by
-	// every getChatAgent call (potentially concurrently across chat
-	// sessions) and read by security prompt routing during tool execution.
 	webuiClientsMu        sync.RWMutex
 	hasActiveWebUIClients func() bool
 }
@@ -181,7 +113,6 @@ func (m *AgentSecurityManager) GetUnsafeShellMode() bool {
 func (m *AgentSecurityManager) IsSecurityBypassApproved() bool {
 	m.securityBypassMu.RLock()
 	defer m.securityBypassMu.RUnlock()
-	// Coarse signal: any folder approved this session counts.
 	return len(m.sessionAllowedFolders) > 0
 }
 
@@ -227,16 +158,7 @@ func (m *AgentSecurityManager) SnapshotSessionAllowedFolders() []string {
 }
 
 // IsFolderSessionWriteAllowed reports whether absPath sits under an
-// allowlisted folder whose mode permits writes. Matches the same
-// prefix-based semantics as IsFolderSessionAllowed: a folder is
-// "matched" if absPath == folder or sits strictly inside it
-// (component-aware). When the folder is allowlisted but has no entry
-// in sessionPathModes (legacy default), writes are permitted — the
-// pre-SP-128 allowlist was binary (allowed or not), and treating
-// entries added by the legacy path as read_write preserves the
-// existing behavior. Entries explicitly marked "read_only" block
-// writes here but do NOT change IsFolderSessionAllowed — reads
-// continue to succeed.
+// allowlisted folder whose mode permits writes.
 func (m *AgentSecurityManager) IsFolderSessionWriteAllowed(absPath string) bool {
 	if absPath == "" {
 		return false
@@ -258,12 +180,7 @@ func (m *AgentSecurityManager) IsFolderSessionWriteAllowed(absPath string) bool 
 }
 
 // SetSessionAllowedFolderMode records the declared mode for an
-// already-allowlisted folder. The folder itself must already be in
-// sessionAllowedFolders (call AddSessionAllowedFolder first); calling
-// this for a folder not on the allowlist is a no-op so the mode
-// can't widen access to a folder the user never approved. Passing
-// mode=="" clears the entry and reverts the folder to default
-// read_write semantics. Idempotent.
+// already-allowlisted folder. Idempotent.
 func (m *AgentSecurityManager) SetSessionAllowedFolderMode(folder, mode string) {
 	normalized := normalizePath(folder)
 	if normalized == "" {
@@ -288,12 +205,7 @@ func (m *AgentSecurityManager) SetSessionAllowedFolderMode(folder, mode string) 
 	m.sessionPathModes[normalized] = mode
 }
 
-// SnapshotSessionAllowedFolderModes returns a copy of the
-// folder-mode map. Used by the subagent creation path to propagate
-// declared modes alongside the folder allowlist so a subagent
-// inherits the workflow's read_only constraints. Returns an empty
-// map (not nil) so callers can mutate the result without affecting
-// the manager.
+// SnapshotSessionAllowedFolderModes returns a copy of the folder-mode map.
 func (m *AgentSecurityManager) SnapshotSessionAllowedFolderModes() map[string]string {
 	m.securityBypassMu.RLock()
 	defer m.securityBypassMu.RUnlock()

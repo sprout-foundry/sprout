@@ -1,10 +1,6 @@
 // Subagent spawn helper functions (extracted from tool_handlers_subagent_spawn.go).
-//
-// These helpers operate on the textual output and effective provider/model
-// resolution produced during subagent dispatch; they do not require the full
-// *Agent receiver used by handleRun*Subagent and so live in a separate file
-// for readability per SP-075 large-file decomposition guidance.
-
+// These helpers operate on textual output and provider/model resolution
+// produced during subagent dispatch.
 package agent
 
 import (
@@ -173,14 +169,9 @@ func extractSubagentSummary(stdout string) map[string]string {
 // warnSubagentFallback logs a single async warning line when the effective
 // provider/model for a subagent call came from the parent-agent fallback
 // path (neither persona nor config specified explicit values).
-//
 // A "true" fallback is when BOTH the persona-supplied and config-supplied
 // provider/model are empty, so the values were inherited from the parent's
-// runtime configuration. Other code paths (persona-set or config-set) do
-// not warn, since the user requested those values explicitly.
-//
-// Extracted from tool_handlers_subagent_spawn.go as part of SP-075's
-// large-file decomposition.
+// runtime configuration. Other code paths do not warn.
 func (a *Agent) warnSubagentFallback(scope, personaProvider, personaModel, configProvider, configModel, effectiveProvider, effectiveModel string) {
 	personaProvider = strings.TrimSpace(personaProvider)
 	personaModel = strings.TrimSpace(personaModel)

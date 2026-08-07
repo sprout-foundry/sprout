@@ -12,13 +12,10 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// UseMockLLM, when true, causes the agent creation path to return a
-// MockLLMProvider instead of the real provider. Set from the --mock-llm
-// CLI flag.
+// UseMockLLM, when true, causes agent creation to return a MockLLMProvider instead of the real provider.
 var UseMockLLM bool
 
-// MockLLMProvider implements api.ClientInterface with canned responses.
-// Thread-safe: all mutable state is protected by mu.
+// MockLLMProvider implements api.ClientInterface with canned responses. Thread-safe.
 type MockLLMProvider struct {
 	mu                sync.Mutex
 	ResponsesByPrompt map[string]string // substring match (case-insensitive) on last user message
@@ -26,9 +23,7 @@ type MockLLMProvider struct {
 	CallCount         int
 	model             string
 	debug             bool
-	// contextLimit overrides the default 128K context window when non-zero.
-	// Used by tests that exercise Low-Context Mode (SP-125) or the context
-	// floor. Zero means "use the 128K default."
+	// contextLimit overrides the default 128K context window when non-zero. Used by tests for LCM or the context floor.
 	contextLimit int
 }
 
@@ -40,10 +35,7 @@ func NewMockLLMProvider() *MockLLMProvider {
 	}
 }
 
-// NewMockLLMProviderWithLimit creates a mock provider with a specific context
-// window. Use this in tests that need to exercise Low-Context Mode (SP-125)
-// auto-detection (pass a value < 64_000) or the context floor error (pass a
-// value < 8_000).
+// NewMockLLMProviderWithLimit creates a mock provider with a specific context window for testing LCM and context floor.
 func NewMockLLMProviderWithLimit(limit int) *MockLLMProvider {
 	m := NewMockLLMProvider()
 	m.contextLimit = limit
@@ -208,10 +200,7 @@ func (m *MockLLMProvider) GetProvider() string {
 	return "mock"
 }
 
-// GetModelContextLimit returns a fixed context limit. The default of 128K
-// reflects a realistic agentic-capable model; tests that need to exercise
-// the Low-Context Mode (SP-125) paths or the context floor can construct
-// a provider with a smaller window via NewMockLLMProviderWithLimit.
+// GetModelContextLimit returns a fixed context limit. Default 128K; use NewMockLLMProviderWithLimit for smaller windows.
 func (m *MockLLMProvider) GetModelContextLimit() (int, error) {
 	if m.contextLimit > 0 {
 		return m.contextLimit, nil
@@ -235,16 +224,12 @@ func (m *MockLLMProvider) SupportsVision() bool {
 	return false
 }
 
-// SupportsConversationalVision returns false; the mock never participates
-// in inline multimodal turns.
+// SupportsConversationalVision returns false; the mock never participates in inline multimodal turns.
 func (m *MockLLMProvider) SupportsConversationalVision() bool {
 	return false
 }
 
-// VisionCapabilities returns the safe defaults. MockLLMProvider never
-// participates in real vision requests, but the method is required by
-// api.ClientInterface — the defaults keep mock-routed requests harmless.
-// SP-103-D3 / AUDIT-GAP-2.
+// VisionCapabilities returns the safe defaults. Required by api.ClientInterface; keeps mock-routed requests harmless.
 func (m *MockLLMProvider) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilitiesDefault()
 }

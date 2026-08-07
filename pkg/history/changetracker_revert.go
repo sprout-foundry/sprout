@@ -73,18 +73,8 @@ func isTmpPath(path string) bool {
 }
 
 // isWithinWorkspace reports whether the given filename resolves to a path
-// inside the current workspace root (determined from os.Getwd()). It is a
-// safety guard used by rollback/restore to prevent the history store from
-// silently overwriting files outside the project — e.g. committed files whose
-// old snapshots are still in the DB.
-//
-// The history package does not receive an explicit workspace root, so CWD is
-// the best available proxy, consistent with how SafeResolvePath in the
-// filesystem package falls back to CWD when no root is configured. /tmp paths
-// are always allowed (same exception as SafeResolvePath).
-//
-// Any error during path resolution causes this to return false (skip the
-// file) — failing closed is safer than writing to an unexpected location.
+// inside the current workspace root (determined from os.Getwd()). /tmp paths
+// are always allowed. Any error during path resolution returns false.
 func isWithinWorkspace(filename string) bool {
 	if filename == "" {
 		return false
@@ -161,17 +151,7 @@ func isWithinWorkspace(filename string) bool {
 
 // isFileStale reports whether the file on disk differs from the content
 // the agent wrote (change.NewCode). When true, the file was modified
-// intentionally after the snapshot — by a git commit, another session, or
-// manual edit — and rolling it back would clobber that change.
-//
-// Returns false (not stale / safe to rollback) when:
-//   - The file doesn't exist on disk (rollback is creating/restoring it)
-//   - The disk content matches NewCode exactly (nothing changed since)
-//   - NewCode is empty (no baseline to compare against — likely a delete op)
-//   - NewCode is the redacted marker (can't compare, allow the rollback)
-//
-// Returns true (stale / skip rollback) when the disk content differs from
-// NewCode, meaning someone modified the file after the agent's snapshot.
+// after the snapshot and rolling it back would clobber that change.
 func isFileStale(filename, newCode string) bool {
 	if newCode == "" || newCode == RedactedContentMarker {
 		return false
@@ -184,43 +164,17 @@ func isFileStale(filename, newCode string) bool {
 }
 
 // IsRevertSafe reports whether it is SAFE to proceed with a revert that
-// writes OriginalCode back to disk. It is the canonical git-aware
-// staleness guard for ALL rollback/revert paths (the history package's
-// handleRevisionRollback, the agent_tools RollbackChanges single-file
-// path, and the agent package's recover_file / revert_my_changes).
-//
-// It returns true (safe to proceed) when the revert will NOT clobber
-// intentional work, and false (must skip) when it would. The decision
-// layers two checks:
-//
-//  1. Content-identity: if the file on disk no longer matches the
-//     content the agent wrote (newCode), it was modified intentionally
-//     after the snapshot — return false (stale). Empty or redacted
-//     newCode, or a missing file, means there's no baseline to compare
-//     against, so the content check is skipped (return true).
-//
-//  2. Git-awareness (NEW): even when disk == newCode, the agent's edit
-//     may have since been committed to git. Writing OriginalCode back
-//     would silently undo committed, version-controlled work. If the
-//     working-tree copy matches HEAD (committed, clean), return false
-//     (protected). A git error (e.g. not a repo, or untracked file)
-//     means no git protection applies, so the content check alone
-//     decides — return true.
-//
-// The function never blocks legitimate reverts: outside a git repo, on
-// untracked files, or when the file has uncommitted modifications, the
-// content check is the sole authority.
+// writes OriginalCode back to disk. It returns true when the revert will
+// NOT clobber intentional work, and false when it would. The decision
+// layers two checks: content-identity and git-awareness.
 func IsRevertSafe(filename, newCode string) bool {
 	return IsRevertSafeWithOriginal(filename, newCode, "")
 }
 
 // IsRevertSafeWithOriginal is the full-aware staleness guard used by
-// recovery paths that have the OriginalCode (the content to be written
-// back). The original-aware path allows recovery when the file on disk
-// matches HEAD (a destructive git command aligned it to HEAD) but the
-// OriginalCode is NOT the HEAD content — meaning the original was
-// uncommitted work that the destructive command destroyed. Restoring
-// it does NOT undo committed work; it restores destroyed work.
+// recovery paths that have the OriginalCode. The original-aware path
+// allows recovery when the file on disk matches HEAD but the OriginalCode
+// is NOT the HEAD content — meaning the original was uncommitted work.
 func IsRevertSafeWithOriginal(filename, newCode, originalCode string) bool {
 	// 1. Empty or redacted newCode: no baseline to compare against.
 	//    Allow (matches the historical isFileStale behaviour).
@@ -271,26 +225,9 @@ func IsRevertSafeWithOriginal(filename, newCode, originalCode string) bool {
 }
 
 // isFileStaleForRestore reports whether the file on disk differs from
-// BOTH the pre-agent state (originalCode) and the agent's edit
-// (newCode). It is the restore counterpart of isFileStale.
-//
-// The restore operation writes newCode back to disk. It is safe when
-// the disk currently holds either originalCode (the agent's change was
-// rolled back, so restoring re-applies it) or newCode itself (already
-// in the target state — a no-op write). It is UNSAFE when the disk
-// holds neither — someone modified the file intentionally after the
-// snapshot (git commit, another session, manual edit), and restoring
-// would silently clobber that work.
-//
-// Returns false (not stale / safe to restore) when:
-//   - The file doesn't exist on disk (restore is creating it)
-//   - newCode is empty (no baseline to compare — nothing to restore)
-//   - newCode is the redacted marker (can't compare)
-//   - The disk content matches originalCode (rolled-back state)
-//   - The disk content matches newCode (already in target state)
-//
-// Returns true (stale / skip restore) when the disk content matches
-// neither originalCode nor newCode.
+// BOTH the pre-agent state (originalCode) and the agent's edit (newCode).
+// Returns false when the disk content matches either (safe to restore),
+// and true when it matches neither (stale / skip restore).
 func isFileStaleForRestore(filename, originalCode, newCode string) bool {
 	if newCode == "" || newCode == RedactedContentMarker {
 		return false
@@ -304,18 +241,9 @@ func isFileStaleForRestore(filename, originalCode, newCode string) bool {
 }
 
 // dedupChangesByFilename collapses multiple changes to the same file
-// into a single entry, keeping the earliest OriginalCode (the true
-// pre-session state for rollback) and the latest NewCode (the current
-// intended state for staleness comparison and restore). The latest
-// FileRevisionHash is kept so status updates target the most recent
-// change record.
-//
-// Without deduplication, a file edited twice (v0→v1, then v1→v2)
-// produces two change records. Rollback's staleness check on the first
-// (NewCode=v1) would see disk=v2 and skip, while the second writes
-// OriginalCode=v1 — an intermediate state, not the true original v0.
-// Dedup ensures rollback sees one entry (OriginalCode=v0, NewCode=v2)
-// and correctly restores v0.
+// into a single entry, keeping the earliest OriginalCode and the latest
+// NewCode and FileRevisionHash. Without deduplication, a file edited
+// twice produces two change records with incorrect rollback behavior.
 func dedupChangesByFilename(changes []ChangeLog) []ChangeLog {
 	if len(changes) <= 1 {
 		return changes
@@ -349,13 +277,7 @@ func dedupChangesByFilename(changes []ChangeLog) []ChangeLog {
 func handleRevisionRollback(group RevisionGroup) error {
 	fmt.Printf("Rolling back all changes in revision %s...\n", group.RevisionID)
 
-	// Deduplicate by filename: keep the earliest OriginalCode (true
-	// pre-session state) and the latest NewCode (current disk baseline
-	// for staleness comparison). Without this, a file edited twice
-	// (v0→v1, then v1→v2) produces two change records; the first one's
-	// staleness check sees disk=v2 ≠ NewCode=v1 and skips, while the
-	// second writes OriginalCode=v1 (an intermediate state, not the
-	// true original v0).
+	// Deduplicate by filename: keep the earliest OriginalCode and the latest NewCode.
 	deduped := dedupChangesByFilename(getActiveChanges(group.Changes))
 	for _, change := range deduped {
 		// Skip files with redacted content (external files)
@@ -374,14 +296,8 @@ func handleRevisionRollback(group RevisionGroup) error {
 		}
 
 		// Staleness guard: if the file on disk no longer matches what the
-		// agent wrote (NewCode), it was modified intentionally after this
-		// snapshot — by a git commit, another session, or manual edit.
-		// Rolling it back would silently clobber that change.
-		//
-		// IsRevertSafe additionally applies git-awareness: even when disk
-		// matches NewCode, if that content has been committed to git HEAD
-		// (the work is now version-controlled), the revert is refused so it
-		// can't silently undo committed work.
+		// agent wrote (NewCode), it was modified after this snapshot.
+		// IsRevertSafe additionally applies git-awareness.
 		if !IsRevertSafeWithOriginal(change.Filename, change.NewCode, change.OriginalCode) {
 			AuditRevertSkip("handleRevisionRollback", change.Filename, "stale or committed")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
@@ -425,13 +341,9 @@ func handleRevisionRestore(group RevisionGroup) error {
 			continue
 		}
 
-		// Staleness guard (mirrors handleRevisionRollback): if the file
-		// on disk no longer matches either the pre-agent state
-		// (OriginalCode) or the agent's edit (NewCode), it was modified
-		// intentionally after this snapshot — by a git commit, another
-		// session, or manual edit. Restoring would silently clobber that
-		// change. Without this guard, restore blindly overwrites files
-		// that may contain newer committed work.
+		// Staleness guard: if the file on disk no longer matches either
+		// the pre-agent state or the agent's edit, it was modified after
+		// the snapshot — restoring would silently clobber that change.
 		if isFileStaleForRestore(change.Filename, change.OriginalCode, change.NewCode) {
 			AuditRevertSkip("handleRevisionRestore", change.Filename, "stale")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)

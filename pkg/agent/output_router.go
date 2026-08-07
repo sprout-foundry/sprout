@@ -19,17 +19,7 @@ const (
 	OutputModeEventSourced                   // EventBus + terminal bridge
 )
 
-// OutputRouter is the single routing point for all agent output.
-// Instead of dual-writing (publish event + print to terminal), all output
-// flows through this router which handles both paths.
-//
-// Terminal output is ALWAYS produced via the streamingCallback (when set)
-// or via fmt.Print (fallback). The streamingCallback is the terminal display
-// — it is NOT a WebUI path. The event bus is the WebUI path.
-//
-// When the event bus is set, events are published for WebUI subscribers AND
-// the terminal still receives its output. This is by design: the terminal
-// always shows output; the WebUI optionally shows it via events.
+// OutputRouter is the single routing point for all agent output. Routes to event bus (WebUI) and/or terminal.
 type OutputRouter struct {
 	mu                       sync.RWMutex
 	mode                     OutputMode
@@ -37,49 +27,24 @@ type OutputRouter struct {
 	agent                    *Agent
 	reasoningTerminalEnabled bool
 
-	// externalWriteHook fires immediately before any non-stream terminal
-	// write (tool log, agent message, etc). Used by the CLI's assistant
-	// turn renderer to finalize the current prose "segment" so the
-	// upcoming non-prose output doesn't get reformatted away at turn-end.
-	// May be nil. Caller is responsible for thread-safety inside the
-	// hook (renderer uses its own mutex).
+	// externalWriteHook fires before non-stream terminal writes to finalize the prose segment. May be nil.
 	externalWriteHook func()
 
-	// terminalSubscriberActive indicates that a terminal subscriber
-	// (pkg/cliui/terminal_subscriber.go, extracted from cmd/agent_terminal_subscriber.go
-	// in SP-120 phase 2c) owns rendering agent_message
-	// events to the terminal. When true, RouteAgentMessage publishes the
-	// event (for the subscriber + WebUI) but skips the raw writeTerminalMessage
-	// fallback — the subscriber renders the glyph-prefixed line itself, so
-	// the raw write would double-print. Direct mode (sprout agent "query")
-	// has no subscriber and leaves this false, so writeTerminalMessage
-	// remains its only output path.
+	// terminalSubscriberActive: when true, a terminal subscriber owns agent_message rendering, so skip the raw write fallback.
 	terminalSubscriberActive bool
 
-	// reasoningCallback receives reasoning chunks separately from the
-	// regular streaming callback so the CLI can collapse the thinking
-	// stream into a one-line "▽ Thinking · N kB" header instead of
-	// flooding the terminal with raw monologue. When unset, reasoning
-	// falls through to the regular streamingCallback (the historic
-	// behaviour, gated by reasoningTerminalEnabled).
+	// reasoningCallback: dedicated sink for reasoning chunks so the CLI can render a collapsed header.
 	reasoningCallback func(string)
 }
 
-// SetExternalWriteHook registers a callback that fires before every
-// writeTerminalMessage emission. Pass nil to clear. Intended for the
-// AssistantTurnRenderer in pkg/console to break its prose segment when
-// chrome (tool logs / agent messages) interrupts the model's stream.
+// SetExternalWriteHook registers a callback that fires before every writeTerminalMessage emission. Pass nil to clear.
 func (r *OutputRouter) SetExternalWriteHook(fn func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.externalWriteHook = fn
 }
 
-// FlushExternalWrite fires the external-write hook if one is registered.
-// Used by the terminal subscriber (pkg/cliui) to flush the
-// AssistantTurnRenderer's buffered prose before writing tool chrome
-// (spinner, result lines) so partial text doesn't accumulate in the
-// renderer's buffer until turn end.
+// FlushExternalWrite fires the external-write hook if one is registered. Used by the terminal subscriber to flush prose before tool chrome.
 func (r *OutputRouter) FlushExternalWrite() {
 	r.mu.RLock()
 	hook := r.externalWriteHook
@@ -89,38 +54,21 @@ func (r *OutputRouter) FlushExternalWrite() {
 	}
 }
 
-// SetTerminalSubscriberActive marks whether a terminal subscriber owns
-// rendering agent_message events. When true, RouteAgentMessage skips the
-// raw writeTerminalMessage fallback (the subscriber renders the line with
-// proper glyph prefixing). Called by startTerminalToolSubscriber in
-// interactive/queue modes; left false in direct mode.
+// SetTerminalSubscriberActive marks whether a terminal subscriber owns agent_message rendering. When true, skip the raw write fallback.
 func (r *OutputRouter) SetTerminalSubscriberActive(active bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.terminalSubscriberActive = active
 }
 
-// TerminalSubscriberActive reports whether a terminal subscriber owns
-// terminal rendering. Callers that render their own completion / summary
-// lines (e.g. cmd/agent_query.go ProcessQuery) use this to suppress their
-// duplicate output when the subscriber will render it instead — the same
-// gate that protects RouteAgentMessage from double-printing.
+// TerminalSubscriberActive reports whether a terminal subscriber owns terminal rendering. Used to suppress duplicate output.
 func (r *OutputRouter) TerminalSubscriberActive() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.terminalSubscriberActive
 }
 
-// SetReasoningCallback registers a dedicated sink for reasoning chunks
-// so the CLI can render thinking-stream output as a collapsed header
-// instead of mixing it into the prose stream. When unset (the default),
-// reasoning chunks fall through to the regular streamingCallback if
-// SetReasoningTerminalEnabled is true; otherwise they're suppressed
-// from the terminal entirely (the historic behaviour).
-//
-// Pass nil to clear. The callback is invoked synchronously from
-// RouteStreamChunk; the caller is responsible for any locking it
-// needs internally.
+// SetReasoningCallback registers a dedicated sink for reasoning chunks so the CLI can render a collapsed header. Pass nil to clear.
 func (r *OutputRouter) SetReasoningCallback(fn func(string)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -251,22 +199,11 @@ func (r *OutputRouter) shouldRenderReasoning(contentType string) bool {
 	return r.reasoningTerminalEnabled
 }
 
-// RouteStreamChunk routes a streaming chunk to the event bus and, when allowed,
-// to terminal output.
-//
-// Streaming chunks are special: they represent the character-by-character
-// output of the assistant's response. For terminal display, they go through
-// the streamingCallback (real-time output). For WebUI, they are published as
-// stream_chunk events. Reasoning chunks are published but hidden from terminal
-// output unless explicitly enabled.
+// RouteStreamChunk routes a streaming chunk to the event bus and, when allowed, to terminal output.
 func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
-	// Publish to event bus for WebUI consumption (when active)
 	r.publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk, contentType))
 
-	// Reasoning chunks: route to the dedicated reasoning callback first,
-	// regardless of the reasoningTerminalEnabled flag. The callback is a
-	// separate sink (e.g., CLI collapsed header) that should always receive
-	// reasoning data when registered.
+	// Reasoning chunks: route to the dedicated reasoning callback first, regardless of reasoningTerminalEnabled.
 	if contentType == "reasoning" {
 		if reasoningCb := r.getReasoningCallback(); reasoningCb != nil {
 			reasoningCb(chunk)
@@ -274,18 +211,13 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 		}
 	}
 
-	// Reasoning is visible to the event bus by default, but not the terminal.
 	if !r.shouldRenderReasoning(contentType) {
 		return
 	}
 
-	// Terminal: write via streamingCallback if set (real-time character output)
+	// Terminal: write via streamingCallback if set. Callback acquires its own mutex — don't hold ours (self-deadlock).
 	callback, _ := r.getStreamingCallback()
 	if callback != nil {
-		// The callback (e.g., AssistantTurnRenderer.WriteChunk) acquires
-		// the output mutex itself via LockOutput(). Do NOT hold the
-		// shared mutex here — that would self-deadlock when the callback
-		// tries to acquire it.
 		callback(chunk)
 		return
 	}
@@ -296,27 +228,18 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 	}
 }
 
-// RouteAgentMessage routes an agent system message.
-// category: "info", "warning", "error", "tool_log", "thought"
-// RouteAgentMessage routes a message for display in both the WebUI and terminal.
+// RouteAgentMessage routes an agent system message to both WebUI (via event bus) and terminal.
 func (r *OutputRouter) RouteAgentMessage(category, message string, extra map[string]interface{}) {
-	// Always publish to event bus for WebUI (when active)
 	r.publish(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 
-	// Hand off to the Web UI: when a browser is connected, the primary agent's
-	// tool-call and thought logs render there, so keep the terminal quiet
-	// instead of duplicating them. Errors/warnings/info still print so failures
-	// are never hidden, and subagent output (its own display path) is untouched.
+	// When a browser is connected, suppress tool_log and thought on the terminal to avoid duplication.
 	if category == "tool_log" || category == "thought" {
 		if r.agent != nil && !r.agent.IsSubagent() && r.agent.HasActiveWebUIClients() {
 			return
 		}
 	}
 
-	// When a terminal subscriber owns agent_message rendering (interactive/
-	// queue modes), the event published above is rendered by the subscriber
-	// with glyph prefixing. Skip the raw write to avoid double-printing.
-	// Direct mode has no subscriber and relies on this write.
+	// When a terminal subscriber owns rendering, skip the raw write to avoid double-printing.
 	r.mu.RLock()
 	subscriberActive := r.terminalSubscriberActive
 	r.mu.RUnlock()
@@ -324,33 +247,21 @@ func (r *OutputRouter) RouteAgentMessage(category, message string, extra map[str
 		return
 	}
 
-	// Terminal output: write to terminal
 	r.writeTerminalMessage(message)
 }
 
-// RouteTerminalOnly writes a message directly to the terminal without publishing
-// to the event bus. Use this for output that is already published via a
-// separate, more specific event type (e.g., subagent output lines that are
-// published as subagent_activity events).
+// RouteTerminalOnly writes a message directly to the terminal without publishing to the event bus.
 func (r *OutputRouter) RouteTerminalOnly(message string) {
 	r.writeTerminalMessage(message)
 }
 
-// writeTerminalMessage writes a message to the terminal with appropriate formatting.
-// It acquires the outputMutex for thread safety, then routes through the
-// terminalWriter (if set for subagents), streamingCallback (if set), or prints directly.
-// Uses TryLock to prevent self-deadlock when the streaming callback re-enters
-// the output router (e.g., callback → PrintLine → writeTerminalMessage).
+// writeTerminalMessage writes a message to the terminal. Uses TryLock to prevent self-deadlock on reentrant calls.
 func (r *OutputRouter) writeTerminalMessage(message string) {
 	if message == "" {
 		return
 	}
 
-	// Fire the external-write hook BEFORE printing so the CLI assistant
-	// renderer can finalize its current prose segment (and skip
-	// re-rendering content that's about to be interrupted by chrome).
-	// Snapshot the hook under the read lock so a concurrent SetExternalWriteHook
-	// doesn't race with the call.
+	// Fire the external-write hook BEFORE printing so the CLI assistant renderer can finalize its prose segment.
 	r.mu.RLock()
 	hook := r.externalWriteHook
 	r.mu.RUnlock()
@@ -358,25 +269,19 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 		hook()
 	}
 
-	// Ensure newline
 	if !strings.HasSuffix(message, "\n") {
 		message += "\n"
 	}
 
 	agent := r.agent
 
-	// Route through terminalWriter if set (for subagent output).
-	// This MUST happen before acquiring outputMutex because the
-	// terminalWriter acquires the same mutex internally. Holding
-	// outputMutex while calling terminalWriter would deadlock.
+	// Route through terminalWriter if set (for subagent output). Must happen before acquiring outputMutex (deadlock).
 	if agent != nil && agent.output.GetTerminalWriter() != nil {
 		agent.output.GetTerminalWriter()(message)
 		return
 	}
 
-	// Acquire output mutex for thread-safe terminal output.
-	// TryLock prevents self-deadlock if the streaming callback re-enters
-	// this method (reentrant call from same goroutine).
+	// TryLock prevents self-deadlock if the streaming callback re-enters this method.
 	var mu *sync.Mutex
 	if agent != nil {
 		mu = agent.output.GetOutputMutex()
@@ -389,34 +294,14 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 		defer mu.Unlock()
 	}
 
-	// Direct terminal output. The streamingCallback is reserved for
-	// prose tokens (RouteStreamChunk → renderer.WriteChunk). Chrome
-	// (tool logs, agent messages, system info) must NOT route through
-	// it because the callback writes raw to the terminal with no row
-	// management, which appends chrome to whatever partial prose line
-	// is on the current row.
-	//
-	// No \r\033[K prefix: in TTY mode, that would clear any in-progress
-	// prose on the current row (the "word by word deleting" symptom).
-	// The externalWriteHook has already reset the renderer's prose
-	// segment, and the indicator's Stop has cleared the spinner row,
-	// so the cursor is already at a clean position. In non-TTY mode
-	// there's no cursor to manage at all.
+	// Direct terminal output. No \r\033[K prefix — the externalWriteHook already reset the renderer.
 	_, _ = os.Stdout.Write([]byte(message))
 }
 
-// RouteToolLog routes a tool execution log message with iteration and context info.
-//
-// Terminal rendering: a glyph-prefixed dim line. The iter/context info is
-// kept on the WebUI event (for the activity feed) but elided from the
-// terminal — that data already lives on the status footer, and pulling it
-// into every tool-log line just adds noise. Format:
-//
-//	→ shell_command ls -la /path
+// RouteToolLog routes a tool execution log message. Terminal output is handled by the terminal subscriber; this publishes the WebUI event.
 func (r *OutputRouter) RouteToolLog(action string, target string) {
 	agent := r.agent
 
-	// Calculate context usage percentage (still needed for the WebUI event).
 	var contextPercent string
 	var currentIter int
 	if agent != nil {
@@ -428,14 +313,7 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	}
 	iterInfo := fmt.Sprintf("[%d%s]", currentIter, contextPercent)
 
-	// Terminal output is handled entirely by the terminal subscriber
-	// (pkg/cliui/terminal_subscriber.go, extracted from cmd/agent_terminal_subscriber.go
-	// in SP-120 phase 2c) which renders the activity
-	// indicator spinner and tool-end lines with proper cursor management.
-	// The legacy writeTerminalMessage path here produced competing output
-	// that clobbered the spinner — see commit history for the fix.
-
-	// Always publish structured event for WebUI (even without agent, for robustness).
+	// Publish structured event for WebUI.
 	extra := map[string]interface{}{
 		"action":    action,
 		"target":    target,
@@ -449,18 +327,8 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	}
 }
 
-// RouteToolCompletion emits the inline duration / outcome chip that follows
-// a tool-log line. Kept separate from RouteToolLog because tool_start fires
-// before the work begins and tool_end fires after — the two are paired by
-// toolCallID at the call site (richEventPublisher / tool_executor).
-//
-// Format: `  ✓ 124ms` (indented under the prior tool-log line, dim green).
-// On failure: `  ✗ 124ms — <short error>`.
+// RouteToolCompletion emits the inline duration/outcome chip for the WebUI. Terminal output is handled by the subscriber.
 func (r *OutputRouter) RouteToolCompletion(ok bool, duration time.Duration, errMsg string) {
-	// Terminal output is handled entirely by the terminal subscriber.
-	// This method is kept for WebUI event publishing only.
-	// Publish a structured agent_message event so the WebUI activity
-	// feed can show tool completion status.
 	dur := formatToolDuration(duration)
 	var msg string
 	if ok {
@@ -479,8 +347,7 @@ func (r *OutputRouter) RouteToolCompletion(ok bool, duration time.Duration, errM
 	r.publish(events.EventTypeAgentMessage, events.AgentMessageEvent("tool_log", msg, nil))
 }
 
-// formatToolDuration picks a sensible unit for short tool runs: <1s → ms,
-// <60s → seconds with one decimal, ≥1m → "<m>m<s>s". Keeps the chip narrow.
+// formatToolDuration picks a sensible unit: <1s → ms, <60s → seconds, ≥1m → "m:ss".
 func formatToolDuration(d time.Duration) string {
 	if d < time.Second {
 		ms := d.Milliseconds()

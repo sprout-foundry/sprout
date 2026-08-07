@@ -1,4 +1,4 @@
-// Package agent: risk evaluation and profile management (split from agent_getters.go)
+// Package agent: risk evaluation and profile management.
 package agent
 
 import (
@@ -6,19 +6,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
-// EvaluateOperationRisk determines the risk level of a command for the
-// currently active persona, using the persona's auto-approve rules.
-// Returns RiskLevelCritical / High / Medium / Low.
-//
-// Resolution order (matches the SP-058 risk profile design):
-//  1. Critical patterns (rm -rf root, fork bomb) — ALWAYS return Critical,
-//     regardless of persona, profile, or active mode.
-//  2. Active persona has its own AutoApproveRules → use them (preserves
-//     EA autonomy and any other persona-specific carve-outs).
-//  3. Otherwise → resolve the agent's active risk profile and use its
-//     baked-in rules.
-//  4. No persona at all → return Low (no cascade gating, classic
-//     non-EA behavior).
+// EvaluateOperationRisk determines the risk level of a command for the currently active persona.
+// Resolution: Critical patterns always return Critical → persona rules → active risk profile → Low if no persona.
 func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
 	// Step 1: Critical is absolute and orthogonal to persona/profile.
 	if configuration.IsCriticalOperation(command) {
@@ -40,19 +29,13 @@ func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
 		return persona.EvaluateOperationRisk(command)
 	}
 
-	// Step 3: Fall back to the active risk profile. Use the
-	// config-aware resolver so user overrides in Config.RiskProfiles
-	// take precedence over baked-in defaults. A synthetic
-	// SubagentType reuses the existing rule-matching code path.
+	// Step 3: Fall back to the active risk profile.
 	rules := configuration.ResolveRiskProfileRules(cfg, a.activeRiskProfile())
 	synthetic := &configuration.SubagentType{AutoApproveRules: &rules}
 	return synthetic.EvaluateOperationRisk(command)
 }
 
-// activeRiskProfile returns the risk profile that should apply for
-// the next operation. Resolution: per-agent override (set by CLI
-// flag / workflow step) → config.RiskProfile (built-in or user-defined
-// in config.RiskProfiles) → "default".
+// activeRiskProfile returns the risk profile in effect: per-agent override → config.RiskProfile → "default".
 func (a *Agent) activeRiskProfile() configuration.RiskProfile {
 	if a.riskProfileOverride != "" {
 		return a.riskProfileOverride
@@ -64,10 +47,7 @@ func (a *Agent) activeRiskProfile() configuration.RiskProfile {
 	return configuration.RiskProfileDefault
 }
 
-// SetRiskProfileOverride installs a transient risk profile that
-// overrides the config-level setting for the lifetime of this agent.
-// Used by the --risk-profile CLI flag and per-step workflow overrides.
-// Pass "" to clear.
+// SetRiskProfileOverride installs a transient risk profile that overrides the config-level setting for the lifetime of this agent. Pass "" to clear.
 func (a *Agent) SetRiskProfileOverride(profile configuration.RiskProfile) {
 	a.riskProfileOverride = profile
 }
@@ -79,13 +59,8 @@ func (a *Agent) GetActiveRiskProfile() configuration.RiskProfile {
 	return a.activeRiskProfile()
 }
 
-// IsSessionElevated reports whether the user has elevated the session
-// to a permissive or unrestricted risk profile. When true, all three
-// security gates (static classifier, filesystem tier, shell risk
-// cascade) must skip their interactive prompts and auto-approve —
-// the user explicitly opted out of per-operation prompts for this
-// session. Critical-tier operations (rm -rf /, fork bombs) are NOT
-// covered by elevation and always block regardless.
+// IsSessionElevated reports whether the user has elevated the session to a permissive or unrestricted risk profile.
+// Critical-tier operations are NOT covered by elevation and always block regardless.
 func (a *Agent) IsSessionElevated() bool {
 	profile := a.activeRiskProfile()
 	return profile == configuration.RiskProfilePermissive || profile == configuration.RiskProfileUnrestricted

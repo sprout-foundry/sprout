@@ -43,41 +43,24 @@ const (
 )
 
 // UsageProvider is implemented by commands that want to surface a longer
-// per-command help string via `/help <name>`. Commands that don't implement
-// it fall back to their Description().
+// per-command help string via `/help <name>`.
 type UsageProvider interface {
 	Usage() string
 }
 
-// CompletableCommand is implemented by commands that support argument
-// completion beyond the command name itself. args does NOT include the
-// command name — it's already been parsed off. chatAgent may be nil
-// for commands that only need their static argument lists.
-//
-// NOTE: Complete is only called when the cursor is at end-of-line
-// (cursorPos == len(line)). The buildSlashCommandCompleter enforces
-// this invariant; individual implementations can rely on it.
-//
-// Returns candidate completions for the last positional argument in
-// args. If args is empty, returns completions for the first argument.
+// CompletableCommand is implemented by commands that support argument completion.
+// Complete is only called when the cursor is at end-of-line.
 type CompletableCommand interface {
 	Command
 	Complete(args []string, chatAgent *agent.Agent) []string
 }
 
-// SteerCapable is implemented by commands that can safely run mid-turn
-// while an agent query is in progress. Commands that don't implement this
-// are treated as PromptOnly (not safe to run mid-turn).
+// SteerCapable is implemented by commands that can safely run mid-turn.
 type SteerCapable interface {
-	// SafeDuringSteer returns true if this command is safe to run while
-	// an agent query is active. Read-only commands and config commands
-	// that don't interact with the active turn should return true.
 	SafeDuringSteer() bool
 }
 
 // OutputCommand is implemented by commands that accept an output writer.
-// When set, the command writes to this writer instead of os.Stdout.
-// The registry calls SetOutput before Execute when the caller provides one.
 type OutputCommand interface {
 	SetOutput(io.Writer)
 }
@@ -88,8 +71,6 @@ var (
 )
 
 // DefaultRegistry returns the process-wide default command registry.
-// Used by ClassifyPromptIntent and other callers that need a quick
-// check without carrying a registry reference.
 func DefaultRegistry() *CommandRegistry {
 	defaultRegistryOnce.Do(func() {
 		defaultRegistry = NewCommandRegistry()
@@ -104,8 +85,6 @@ type CommandRegistry struct {
 
 	outputWriter io.Writer // when non-nil, passed to OutputCommand implementations
 
-	// candidatesCache memoizes CompletionCandidates() since the registry
-	// is immutable after NewCommandRegistry. Built once on first access.
 	candidatesOnce  sync.Once
 	candidatesCache []string
 }
@@ -176,24 +155,24 @@ func NewCommandRegistry() *CommandRegistry {
 
 	// Register extend command
 
-	// SP-058: risk profile management
+	// risk profile management
 	registry.Register(&RiskProfileCommand{})
 
 	// Cost control
 	registry.Register(&MaxContextCommand{})
 
-	// SP-125: Low-Context Mode inspection and override
+	// Low-Context Mode inspection and override
 	registry.Register(&ContextCommand{})
 
 	registry.Register(&SetupCommand{})
 
-	// SP-105 Phase 2: interactive settings browser
+	// interactive settings browser
 	registry.Register(&SettingsCommand{})
 
-	// SP-105 Phase 3: visual usage dashboard
+	// visual usage dashboard
 	registry.Register(&UsageCommand{})
 
-	// SP-117A: output verbosity and tool invocation display
+	// output verbosity and tool invocation display
 	registry.Register(&VerboseCommand{})
 	registry.Register(&ToolsCommand{})
 
@@ -210,8 +189,7 @@ func NewCommandRegistry() *CommandRegistry {
 	// Code intelligence graph management
 	registry.Register(&CodegraphCommand{})
 
-	// SP-048-2d: short aliases for the most-used commands. Aliases resolve
-	// to canonical names during dispatch and appear in tab completion.
+	// Short aliases for the most-used commands.
 	registry.RegisterAlias("m", "model")
 	registry.RegisterAlias("p", "provider")
 	registry.RegisterAlias("x", "exit")
@@ -333,7 +311,7 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		commandName = "exec"
 	}
 
-	// Resolve aliases (SP-048-2d) before dispatching.
+	// Resolve aliases before dispatching.
 	if canonical, ok := r.aliases[commandName]; ok {
 		commandName = canonical
 	}
@@ -341,7 +319,7 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 	// Find and execute command
 	cmd, exists := r.commands[commandName]
 	if !exists {
-		// SP-048-2b: did-you-mean suggestions in the error message.
+		// did-you-mean suggestions in the error message.
 		suggestions := r.SuggestCommands(commandName, 2)
 		if len(suggestions) > 0 {
 			return fmt.Errorf("unknown command: %s — did you mean /%s?", commandName, strings.Join(suggestions, " or /"))
@@ -349,9 +327,8 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("unknown command: %s", commandName)
 	}
 
-	// SP-073: Wire the agent's interrupt context into commands that support
-	// SetContext, so Stop/Ctrl+C can abort long-running LLM calls (shell
-	// script generation, commit review, etc.).
+	// Wire the agent's interrupt context into commands that support
+	// SetContext, so Stop/Ctrl+C can abort long-running LLM calls.
 	if contextSetter, ok := cmd.(interface{ SetContext(context.Context) }); ok && chatAgent != nil {
 		contextSetter.SetContext(chatAgent.InterruptCtx())
 	}
@@ -412,7 +389,7 @@ func isLikelySlashCommandName(name string) bool {
 }
 
 // GetCommand returns a command by name. If name matches an alias, the
-// canonical command is returned (SP-048-2d).
+// canonical command is returned.
 func (r *CommandRegistry) GetCommand(name string) (Command, bool) {
 	if canonical, ok := r.aliases[name]; ok {
 		name = canonical

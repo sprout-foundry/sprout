@@ -1,9 +1,7 @@
 // Subagent spawn cleanup helpers: provider/model resolution and
 // post-run result processing (truncation, summary, security errors,
 // budget exceeded, final marshaling).
-//
-// Extracted from tool_handlers_subagent_spawn.go as part of SP-075's
-// large-file decomposition.
+// Extracted from tool_handlers_subagent_spawn.go for large-file decomposition.
 
 package agent
 
@@ -165,10 +163,8 @@ func truncateSubagentOutput(resultMap map[string]string) {
 // stdout and rolls the subagent's token/cost into the parent agent's totals.
 func extractAndTrackSubagentSummary(a *Agent, resultMap map[string]string, result *SubagentResult) {
 	// Extract summary from stdout (human-readable file changes, build/test
-	// status, etc.). SP-059 Phase 2b: token/cost tracking switched to the
-	// structured SubagentResult fields below, no longer regex-scraped from
-	// SUBAGENT_METRICS: lines (which silently regressed if a model dropped
-	// the line).
+	// status, etc.). Token/cost tracking uses the structured SubagentResult
+	// fields, not stdout scraping.
 	if stdout, ok := resultMap["stdout"]; ok {
 		summary := extractSubagentSummary(stdout)
 		summaryJSON, err := json.MarshalIndent(summary, "", "  ")
@@ -311,12 +307,11 @@ func handleSubagentNonSecurityFailure(a *Agent, resultMap map[string]string) str
 // buildSubagentFinalResult marshals the typed envelope and returns the
 // JSON string for the handler's return value.
 func buildSubagentFinalResult(a *Agent, resultMap map[string]string, result *SubagentResult) (string, error) {
-	// SP-059 Phase 2a/2d: marshal the typed envelope (preserves all old
-	// JSON keys for LLM compat) plus the new status / metrics / manifest
-	// fields. The Status enum supersedes the SUBAGENT_* sentinel string
-	// prefixes for in-process callers — the sentinels themselves still
-	// appear in earlier returned error messages so model-side behavior is
-	// unchanged.
+	// Marshal the typed envelope (preserves all old JSON keys for LLM compat)
+	// plus the new status / metrics / manifest fields. The Status enum
+	// supersedes the SUBAGENT_* sentinel string prefixes for in-process
+	// callers — the sentinels themselves still appear in earlier returned
+	// error messages so model-side behavior is unchanged.
 	ret := buildSubagentReturn(resultMap, result, statusFromResult(result, resultMap))
 	jsonStr, jsonErr := ret.MarshalJSONIndent()
 	if jsonErr != nil {

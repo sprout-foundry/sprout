@@ -179,11 +179,7 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// Reset termination reason for fresh query
 	a.state.SetLastRunTerminationReason("")
 
-	// Reset interrupt context so a Stop from the previous query doesn't
-	// instantly cancel this one. Per SP-034-1e we now plumb interruptCtx
-	// all the way into http.NewRequestWithContext, so leaving a cancelled
-	// ctx around would make the next ProcessQuery fail before the first
-	// LLM call lands.
+	// Reset interrupt context so a Stop from the previous query doesn't instantly cancel this one.
 	a.resetInterruptForNewQuery()
 
 	// Publish query started event
@@ -239,18 +235,8 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		injectCancel()
 	}
 
-	// SP-066 Phase 3: semantic recall is disabled per-turn. Cross-session
-	// memory is handled by InjectProactiveContext above (fires on first
-	// turn / cold restore). Intra-session recovery of compacted summaries
-	// should be handled by the compaction/summarization pipeline itself,
-	// not by a second injection mechanism that competes for context budget.
-	// The Recall method and instrumentation remain available for the
-	// future /recall CLI command (SP-092-2) and webui endpoint (SP-092-3).
-	// To re-enable per-turn recall, uncomment the block below:
-	//
-	// recallCtx, recallCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	// InstrumentedRecall(a, recallCtx, processedQuery)
-	// recallCancel()
+	// Semantic recall is disabled per-turn. Cross-session memory is handled by InjectProactiveContext above.
+	// The Recall method and instrumentation remain available for the future /recall CLI and webui endpoints.
 	_ = processedQuery // referenced by the commented recall block above
 
 	// Group extracted images for provider registration. All images from this
@@ -319,12 +305,10 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	}
 	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider()), a)
 
-	// SP-066 Phase 1: model-aware compaction trigger fraction. seed's default
-	// (0.85) leaves only 15% of the context window for response + thinking +
-	// tool I/O, which thinking-budget models exhaust before emitting any
-	// user-visible text. computeCompactionTriggerFraction subtracts the
-	// reservation fractions defined in context_budget.go so substitution
-	// fires earlier — by default at 0.70 instead of 0.85.
+	// Model-aware compaction trigger fraction. seed's default (0.85) leaves only 15% of the
+	// context window for response + thinking + tool I/O, which thinking-budget models exhaust
+	// before emitting any user-visible text. computeCompactionTriggerFraction subtracts the
+	// reservation fractions so substitution fires earlier — by default at 0.70 instead of 0.85.
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
 
 	if a.systemPrompt != "" {
@@ -338,20 +322,13 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement
 	}
 
-	// OnIteration callback: sync per-iteration context token estimates
-	// back to sprout's state so the UI can show real-time token usage,
-	// and emit the SP-066 context-management diagnostic so subscribers
-	// can verify the model-aware trigger fraction is sized correctly.
+	// OnIteration callback: sync per-iteration context token estimates back to sprout's state
+	// so the UI can show real-time token usage, and emit the context-management diagnostic.
 	opts.OnIteration = func(iteration, messages, tokenEstimate, contextSize int) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
 
-		// SP-126: re-apply the effective context cap here as a defensive
-		// measure. The cap is also applied at the source (seed_provider.Info()),
-		// but this guard catches any path that bypasses ProviderInfo — future
-		// seed internal changes, mock providers in tests, etc. Reading from
-		// a.effectiveContextCap keeps the cap authoritative regardless of
-		// how contextSize reaches us.
+		// Re-apply the effective context cap as a defensive measure.
 		if cap := a.effectiveContextCap; cap > 0 && (contextSize == 0 || contextSize > cap) {
 			contextSize = cap
 		}
@@ -400,28 +377,16 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 
 	// Run the query through seed's conversation loop.
 	// Use the processed (cleaned) query so image placeholders are replaced.
-	// ctx is the agent's interrupt context so TriggerInterrupt() — wired to
-	// the webui Stop button at pkg/webui/api_query.go::handleAPIQueryStop —
-	// actually aborts the in-flight HTTP request, not just the agent loop
-	// after the next iteration boundary. See SP-034-1e.
+	// ctx is the agent's interrupt context so TriggerInterrupt() aborts the in-flight HTTP request.
 	ctx, _ := a.snapshotInterrupt()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	// Bridge sprout's user-facing inputInjectionChan to seed's InjectInput.
-	// Callers (CLI prompt goroutine, webui /api/query/steer) push into the
-	// sprout channel via InjectInputContext; this forwarder drains it and
-	// hands the message to seed, which consumes it at the next natural
-	// break point in its loop (between iterations, before deciding to
-	// terminate the turn). Without this bridge the sprout channel buffers
-	// forever and "steering" silently no-ops.
-	//
-	// runCtx is scoped to this query (separate from a.interruptCtx, which
-	// outlives a single Run) so the forwarder exits cleanly when the
-	// model returns. seed.InjectInput is buffered size 1; if full we
-	// briefly sleep before retrying so we don't lose the user's steer to
-	// a transient collision with seed's own consumer.
+	// Callers (CLI prompt goroutine, webui /api/query/steer) push into the sprout channel;
+	// this forwarder drains it and hands the message to seed at the next natural break point.
+	// runCtx is scoped to this query so the forwarder exits cleanly when the model returns.
 	runCtx, runCancel := context.WithCancel(ctx)
 	injectChan := make(chan injectInputMsg, 8)
 	steerDone := make(chan struct{})

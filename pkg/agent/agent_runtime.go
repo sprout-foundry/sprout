@@ -1,4 +1,4 @@
-// Package agent: LLM response generation and cost tracking (split from agent_getters.go)
+// Package agent: LLM response generation and cost tracking.
 package agent
 
 import (
@@ -12,10 +12,6 @@ import (
 )
 
 // GenerateResponse generates a simple response using the current model without tool calls.
-//
-// SP-073: uses a.interruptCtx so Stop/cancel aborts the in-flight call. If
-// callers need to pass their own context, they can set it via SetInterruptCtx
-// before calling.
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	resp, err := a.getClient().SendChatRequest(a.interruptCtx, messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {
@@ -26,19 +22,13 @@ func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 		return "", agenterrors.NewProviderError(fmt.Sprintf("no response generated for %d messages", len(messages)), nil, a.GetProvider(), a.GetModel())
 	}
 
-	// Track cost for this response so gate calls in the TODO loop and
-	// other GenerateResponse callers contribute to fleetUsdBudget and
-	// lifetime cost counters. GenerateResponse bypasses the seed provider
-	// path (which does its own accumulateResponseCost), so we handle it here.
+	// Track cost so gate calls in the TODO loop and other GenerateResponse callers contribute to fleetUsdBudget.
 	a.accumulateResponseCost(resp)
 
 	return resp.Choices[0].Message.Content, nil
 }
 
-// accumulateResponseCost tracks the cost of a chat response in the agent's
-// state and debits the fleet USD budget. Mirrors sproutProvider's version
-// but operates directly on the Agent's state so callers like GenerateResponse
-// (which bypass the seed provider) still accumulate cost.
+// accumulateResponseCost tracks the cost of a chat response and debits the fleet USD budget.
 func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 	if a == nil || a.state == nil || resp == nil {
 		return
@@ -69,9 +59,7 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + resp.Usage.CompletionTokens)
 	a.state.SetLLMCallCount(a.state.GetLLMCallCount() + 1)
 
-	// Fleet USD budget: per SP-113 Layer 4, only ChargedCost is debited.
-	// Subscription and free providers (chargedCost == 0) must NOT consume
-	// the fleet budget — there is no marginal spend to protect against.
+	// Only charged cost is debited; subscription/free providers don't consume the budget.
 	if a.fleetUsdBudget != nil && chargedCost > 0 {
 		spent, crossed, justExceeded := a.fleetUsdBudget.Add(chargedCost)
 		_, limit := a.fleetUsdBudget.Snapshot()
@@ -102,7 +90,6 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 }
 
 // resolveBillingType returns the billing model for the current provider.
-// Mirrors sproutProvider.resolveBillingType but operates on Agent directly.
 func (a *Agent) resolveBillingType() string {
 	if a == nil {
 		return BillingPayPerToken
@@ -118,9 +105,7 @@ func (a *Agent) resolveBillingType() string {
 	return BillingPayPerToken
 }
 
-// ResolveBillingType is the exported wrapper around resolveBillingType so
-// the CLI footer (cmd package) can surface subscription/free billing
-// instead of "$0.0000". SP-113 Phase 3.
+// ResolveBillingType is the exported wrapper around resolveBillingType for the CLI footer.
 func (a *Agent) ResolveBillingType() string {
 	return a.resolveBillingType()
 }

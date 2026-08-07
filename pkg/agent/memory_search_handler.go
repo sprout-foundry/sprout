@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // handleSearchMemories searches memory files by semantic similarity.

@@ -27,35 +27,24 @@ type GenericProvider struct {
 	debug           bool
 	model           string
 
-	// mu guards models and modelsCached, which are written by the
-	// background warmModelsCache goroutine and read by GetModelContextLimit
-	// / ListModels / SetModel on the main goroutine.
+	// mu guards models/modelsCached written by the background warmModelsCache goroutine.
 	mu           sync.RWMutex
 	models       []api.ModelInfo
 	modelsCached bool
 
-	// warmPending prevents goroutine accumulation from rapid warmModelsCache
-	// calls (e.g. multiple SetModel in quick succession).
+	// warmPending prevents goroutine accumulation from rapid warmModelsCache calls.
 	warmPending atomic.Bool
 
-	// detectedBackend caches the auto-detected backend type. Set once
-	// during ListModels and reused for subsequent calls. Guarded by mu.
+	// detectedBackend caches the auto-detected backend type (guarded by mu).
 	detectedBackend BackendType
 	backendDetected bool
 
-	// maxTokensHint, when > 0, overrides the from-scratch CalculateMaxTokensWithLimits
-	// computation in buildChatRequest. Set by callers (sproutProvider) who have
-	// a more accurate token estimate via the token anchor. See MaxTokensHinter.
+	// maxTokensHint overrides the max_tokens computation in buildChatRequest when > 0.
 	maxTokensHint   int
 	maxTokensHintMu sync.RWMutex
 }
 
-// HTTP error formatting helpers are in generic_provider_http_errors.go:
-//   maxProviderErrorBodyPreview, formatProviderHTTPError, formatResponseHeaders,
-//   summarizeProviderHTTPError, extractProviderJSONErrorMessage,
-//   extractProviderJSONErrorField, looksLikeProviderHTMLErrorPage,
-//   summarizeProviderHTMLErrorPage, extractProviderHTMLTitle,
-//   limitProviderErrorText, modelInfoHasVisionTag
+// HTTP error formatting helpers are in generic_provider_http_errors.go.
 
 // NewGenericProvider creates a new generic provider from configuration
 func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
@@ -77,10 +66,7 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 		debug: false,
 		model: config.Defaults.Model,
 	}
-	// Warm the models cache in the background so GetModelContextLimit can
-	// use the endpoint-declared context_length on subsequent calls, without
-	// delaying startup. Only fire when we have a model and a remote endpoint
-	// (skip for local instances where the endpoint may not be up yet).
+	// Warm the models cache in the background (skip for local endpoints).
 	if p.model != "" && p.config.Endpoint != "" &&
 		!strings.Contains(p.config.Endpoint, "127.0.0.1") &&
 		!strings.Contains(p.config.Endpoint, "localhost") {
@@ -89,10 +75,7 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	return p, nil
 }
 
-// /models endpoint data (including context_length) is populated for
-// GetModelContextLimit without blocking startup. The first call to
-// GetModelContextLimit uses the fast registry/config fallback tiers;
-// subsequent calls (seconds later) hit the warm cache.
+// warmModelsCache fetches /models in the background to populate the cache.
 func (p *GenericProvider) warmModelsCache() {
 	p.mu.RLock()
 	cached := p.modelsCached
@@ -100,10 +83,7 @@ func (p *GenericProvider) warmModelsCache() {
 	if cached {
 		return
 	}
-	// Deduplication: prevent goroutine accumulation under rapid SetModel
-	// calls. Each warm-up makes an HTTP request to the provider's /models
-	// endpoint; without this guard, 100 rapid SetModel calls would spawn
-	// 100 concurrent goroutines all hitting the API.
+	// Deduplicate: prevent goroutine accumulation under rapid SetModel calls.
 	if !p.warmPending.CompareAndSwap(false, true) {
 		return // Another warm-up is already in flight
 	}
@@ -117,8 +97,7 @@ func (p *GenericProvider) warmModelsCache() {
 
 // SendChatRequest sends a non-streaming chat request
 func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
-	// Snapshot model under lock for all logging calls below — prevents races
-	// with SetModel or the background warmModelsCache goroutine.
+	// Snapshot model under lock to prevent races with SetModel.
 	p.mu.RLock()
 	currentModel := p.model
 	p.mu.RUnlock()
@@ -130,7 +109,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 
 	req, sentBody, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
 	if err != nil {
-		// Log request on build error — use the actual sent body (post-redaction)
+		// Log request on build error
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "build_http_request", err)
 		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
@@ -151,8 +130,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
-		// Compatibility fallback for OpenAI-compatible backends that require
-		// max_completion_tokens instead of max_tokens for certain models.
+		// Retry with max_completion_tokens for backends that require it
 		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(sentBody, false, body)
 		if retried {
 			requestBody = retryBody
@@ -178,7 +156,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 			return retryResponse, nil
 		}
 
-		// Log request on API error — use the actual sent body (post-redaction)
+		// Log request on API error
 		formattedErr := formatProviderHTTPError(resp.StatusCode, resp.Header, body)
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), formattedErr)
@@ -186,6 +164,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 	}
 	defer resp.Body.Close()
 
+	// Decode response (skip logging on success to avoid leaking payloads)
 	response, err := decodeChatResponseWithCost(resp.Body)
 	if err != nil {
 		// Log request on decode error
@@ -197,11 +176,8 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 	return response, nil
 }
 
-// decodeChatResponseWithCost decodes a chat-completion body into the typed
-// ChatResponse, then — when no cost arrived via the canonical typed fields —
-// probes the raw JSON for a cost reported under a differently-named property
-// (see api.CostFromJSON). This keeps cost capture working across providers
-// that report cost under non-standard property names.
+// decodeChatResponseWithCost decodes a chat response, then probes raw JSON for cost
+// when the canonical typed fields don't include one (see api.CostFromJSON).
 func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 	body, err := io.ReadAll(r)
 	if err != nil {
@@ -216,7 +192,7 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 			response.Usage.EstimatedCost = cost
 		}
 	}
-	// Extract image tokens from provider-specific fields (SP-103-D1)
+	// Extract image tokens from provider-specific fields
 	if response.Usage.ImageTokens == 0 {
 		var raw struct {
 			Usage struct {
@@ -273,10 +249,7 @@ func (p *GenericProvider) SetModel(model string) error {
 	p.maxTokensHintMu.Lock()
 	p.maxTokensHint = 0
 	p.maxTokensHintMu.Unlock()
-	// If we previously had a warm cache, re-fire the background warm-up so
-	// GetModelContextLimit picks up the new model's context_length from the
-	// endpoint. Without this, the cache stays cold after SetModel and
-	// context limits fall back to static config defaults permanently.
+	// Re-fire the background warm-up so GetModelContextLimit picks up the new model's context_length.
 	if hadCache {
 		p.warmModelsCache()
 	}
@@ -303,9 +276,7 @@ func (p *GenericProvider) SetStreamingClient(c *http.Client) {
 	p.mu.Unlock()
 }
 
-// RefreshAPIKey re-resolves the provider's API key from the credential store,
-// updating the cached key in p.config.Auth.Key. This is called after a rate-limit
-// rotation advances the key pool counter, so subsequent requests use the new key.
+// RefreshAPIKey re-resolves the API key from the credential store for subsequent requests.
 func (p *GenericProvider) RefreshAPIKey() error {
 	if p.config == nil {
 		return nil
@@ -340,16 +311,14 @@ func (p *GenericProvider) GetEndpoint() string {
 	return p.config.Endpoint
 }
 
-// GetHTTPClient returns the current HTTP client used for non-streaming requests.
-// Useful for WASM environments that need to verify client injection.
+// GetHTTPClient returns the HTTP client for non-streaming requests (useful for WASM verification).
 func (p *GenericProvider) GetHTTPClient() *http.Client {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.httpClient
 }
 
-// GetStreamingClient returns the current HTTP client used for streaming requests.
-// Useful for WASM environments that need to verify client injection.
+// GetStreamingClient returns the HTTP client for streaming requests (useful for WASM verification).
 func (p *GenericProvider) GetStreamingClient() *http.Client {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -358,10 +327,7 @@ func (p *GenericProvider) GetStreamingClient() *http.Client {
 
 // GetModelContextLimit returns the context limit for the current model
 func (p *GenericProvider) GetModelContextLimit() (int, error) {
-	// 1. If ListModels() has been called and cached a context length for this
-	//    model, use it — it came from the provider's own API.
-	//    (Cache is warmed asynchronously by warmModelsCache, started from
-	//    NewGenericProvider so it never blocks startup.)
+	// 1. Check the cached model list from ListModels()
 	p.mu.RLock()
 	modelName := p.model
 	if p.modelsCached {
@@ -374,11 +340,7 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 	}
 	p.mu.RUnlock()
 
-	// 2. Consult the published model registry (canonical per-provider files at
-	//    sprout-foundry.github.io). These carry the exact context window that
-	//    the refresh workflow fetched from the provider's API, which is more
-	//    accurate than the static config defaults below. Best-effort: a fetch
-	//    failure or cache miss silently falls through to the config.
+	// 2. Consult the published model registry (best-effort; falls through on failure)
 	if modelName != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), modelregistryFetchTimeout)
 		defer cancel()
@@ -391,26 +353,15 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 		}
 	}
 
-	// 3. Fall back to the static config (model_overrides → pattern_overrides
-	//    → model_info → default_context_limit → legacy context_limit → 32k).
+	// 3. Fall back to the static config (model_overrides → pattern_overrides → model_info → default)
 	return p.config.GetContextLimit(modelName), nil
 }
 
-// modelregistryFetchTimeout bounds the registry lookup in
-// GetModelContextLimit so a slow network can't stall the agent loop.
+// modelregistryFetchTimeout bounds the registry lookup in GetModelContextLimit to prevent stalling the agent loop.
 const modelregistryFetchTimeout = 2 * time.Second
 
-// ListModels returns available models.
-//
-// Dispatches to a backend-specific fetcher based on the configured or
-// auto-detected backend type:
-//   - openai: standard OpenAI-compatible /models endpoint (default)
-//   - vllm: vLLM /get_model_info + /models merge
-//   - llamacpp: llama.cpp /props + /models merge
-//   - auto: probe endpoint once, cache result, dispatch accordingly
-//
-// Results are cached; subsequent calls return the cached list without
-// re-fetching.
+// ListModels returns available models, dispatching to a backend-specific fetcher (openai, vllm, llamacpp, or auto).
+// Results are cached; subsequent calls return the cached list without re-fetching.
 func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	p.mu.RLock()
 	if p.modelsCached && len(p.models) > 0 {
@@ -435,10 +386,7 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 	}
 }
 
-// effectiveBackend returns the backend type to use for model discovery.
-// If the config explicitly sets a backend, that is used directly.
-// Otherwise (auto), detection runs during ListModels and the cached
-// result is returned on subsequent calls.
+// effectiveBackend returns the backend type for model discovery (explicit config or auto-detected and cached).
 func (p *GenericProvider) effectiveBackend() BackendType {
 	if b := p.config.BackendResolved(); b != BackendAuto {
 		return b
@@ -474,9 +422,7 @@ func (p *GenericProvider) detectAndCacheBackend(ctx context.Context) BackendType
 	return detected
 }
 
-// listModelsOpenAI fetches models from the standard OpenAI-compatible
-// /models endpoint. This is the original ListModels logic and the default
-// path for all providers.
+// listModelsOpenAI fetches models from the standard OpenAI-compatible /models endpoint.
 func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo, error) {
 	var models []api.ModelInfo
 
@@ -570,12 +516,7 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 			}
 		}
 
-		// Always resolve context_length through GetContextLimit when the API
-		// didn't provide one — it respects the full priority chain
-		// (model_overrides → pattern_overrides → model_info → default),
-		// whereas GetModelInfo only reads model_info and can disagree with
-		// a model_overrides entry (e.g. glm-4.5: model_info=131072,
-		// model_overrides=128000).
+		// Use GetContextLimit for the full priority chain (model_overrides → pattern_overrides → model_info → default)
 		if modelInfo.ContextLength <= 0 {
 			modelInfo.ContextLength = p.config.GetContextLimit(model.ID)
 		}
@@ -591,10 +532,7 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 	return models, nil
 }
 
-// listModelsVLLM fetches the model list from the OpenAI-compatible /models
-// endpoint and enriches it with context length from vLLM's /get_model_info.
-// If /models fails but /get_model_info succeeds, a single-entry list is
-// built from the current model ID.
+// listModelsVLLM fetches models from /models and enriches context length from vLLM's /get_model_info.
 func (p *GenericProvider) listModelsVLLM(ctx context.Context) ([]api.ModelInfo, error) {
 	p.mu.RLock()
 	endpoint := p.config.Endpoint
@@ -655,10 +593,7 @@ func (p *GenericProvider) listModelsVLLM(ctx context.Context) ([]api.ModelInfo, 
 	return models, nil
 }
 
-// listModelsLlamaCPP fetches the model list from the OpenAI-compatible
-// /models endpoint and enriches it with context length from llama.cpp's
-// /props endpoint. If /models fails but /props succeeds, a single-entry
-// list is built from the current model ID.
+// listModelsLlamaCPP fetches models from /models and enriches context length from llama.cpp's /props.
 func (p *GenericProvider) listModelsLlamaCPP(ctx context.Context) ([]api.ModelInfo, error) {
 	p.mu.RLock()
 	endpoint := p.config.Endpoint
@@ -719,8 +654,6 @@ func (p *GenericProvider) listModelsLlamaCPP(ctx context.Context) ([]api.ModelIn
 }
 
 // setCachedModels stores the fetched model list and marks the cache warm.
-// Acquires the write lock so concurrent GetModelContextLimit callers
-// see a consistent snapshot.
 func (p *GenericProvider) setCachedModels(models []api.ModelInfo) {
 	p.mu.Lock()
 	p.models = models
@@ -792,39 +725,19 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 
 // SupportsVision is defined in generic_provider_vision.go
 
-// VisionCapabilities returns the per-provider vision limits for this
-// GenericProvider (OpenAI-compatible). When p.config is nil (a defensive
-// guard for unit tests that construct a bare struct), returns the safe
-// defaults via VisionCapabilitiesDefault(). Otherwise returns the OpenAI
-// tier:
-//
-//	20MB per image, 500 images per request, 2048px longest side,
-//	detail tiers {low, high, auto}.
-//
-// The OpenAI tier is the conservative pick for all GenericProvider
-// backends (Anthropic, OpenRouter, Chutes, etc.). Per-provider override
-// (e.g. tighter Anthropic caps) can land later by switching on
-// p.config.Name; keeping a single safe value here avoids silent
-// variation while the SP-103-B2 / SP-103-D2 wiring stabilises.
-// SP-103-D3 / AUDIT-GAP-2.
+// VisionCapabilities returns per-provider vision limits (nil config returns safe defaults).
 func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
 	if p.config == nil {
 		return api.VisionCapabilitiesDefault()
 	}
 	switch p.config.Name {
 	case "anthropic":
-		// Anthropic's documented limits: ~5MB per image, auto-resizes to
-		// 1568px on the longest side, no hard image-count limit (20 is
-		// a safe practical cap).
 		return api.VisionCapabilities{
 			MaxImageBytes:     5_000_000,
 			MaxImageCount:     20,
 			MaxImageDimension: 1568,
 		}
 	case "openai":
-		// OpenAI's gpt-4o: ~20MB per image, supports low/high/auto detail
-		// tiers, up to 500 images in some endpoints (10 is a safe
-		// practical cap for most use-cases).
 		return api.VisionCapabilities{
 			MaxImageBytes:     20_000_000,
 			MaxImageCount:     10,
@@ -832,19 +745,12 @@ func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
 			DetailTiers:       []string{"low", "high", "auto"},
 		}
 	case "gemini":
-		// Google Gemini: up to ~20MB per image, ~3072px longest side,
-		// up to 10 images per request. No named detail tiers.
 		return api.VisionCapabilities{
 			MaxImageBytes:     20_000_000,
 			MaxImageCount:     10,
 			MaxImageDimension: 3072,
 		}
 	default:
-		// Conservative defaults for all other OpenAI-compatible backends
-		// (Chutes, LM Studio, etc.). OpenRouter is a multi-model proxy so
-		// its backend model determines the real caps; this generous tier
-		// (500 images) avoids false negatives while the caller is expected
-		// to respect per-model limits downstream.
 		return api.VisionCapabilities{
 			MaxImageBytes:     20_000_000,
 			MaxImageCount:     500,
@@ -854,7 +760,7 @@ func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
 	}
 }
 
-// TPS tracking methods - simplified for now
+// TPS tracking methods (no-op placeholders)
 func (p *GenericProvider) GetLastTPS() float64 {
 	return 0.0
 }
@@ -868,19 +774,14 @@ func (p *GenericProvider) GetTPSStats() map[string]float64 {
 }
 
 func (p *GenericProvider) ResetTPSStats() {
-	// No-op for now
 }
 
-// MaxTokensHinter is an optional interface that callers (e.g. sproutProvider)
-// can use to pass a pre-computed max_tokens value to the provider. This is
-// useful when the caller has a more accurate token estimate (e.g. from the
-// token anchor) and wants to avoid double-counting estimation error.
+// MaxTokensHinter lets callers pass a pre-computed max_tokens to the provider.
 type MaxTokensHinter interface {
 	SetMaxTokensHint(tokens int)
 }
 
-// SetMaxTokensHint sets a pre-computed max_tokens that buildChatRequest will
-// use instead of computing from the raw heuristic. Set to 0 to clear.
+// SetMaxTokensHint sets a pre-computed max_tokens override (0 to clear).
 func (p *GenericProvider) SetMaxTokensHint(tokens int) {
 	p.maxTokensHintMu.Lock()
 	p.maxTokensHint = tokens

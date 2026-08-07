@@ -61,10 +61,7 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		maxBytes = 102400
 	}
 
-	// Shares runLiteralSearch with the fused `search` tool. Two independent
-	// walkers drift on exactly the details that are easy to get subtly
-	// different — skip-dir rules, binary detection, where the caps apply — and
-	// then disagree about what the repository contains.
+	// Shares runLiteralSearch with the fused `search` tool to avoid drift.
 	res, err := runLiteralSearch(ctx, literalSearchOpts{
 		Directory:     directory,
 		Pattern:       searchPattern,
@@ -88,9 +85,7 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 			res.FilesShown, res.FilesMatched)
 	}
 
-	// When the literal pass finds nothing and semantic search can answer, say
-	// so — the two find different things, and a zero-result grep is not
-	// evidence that the code is absent.
+	// When the literal pass finds nothing and semantic search can answer, say so.
 	if len(res.Hits) == 0 && env.EmbeddingMgr != nil && env.EmbeddingMgr.Readiness().CanAnswerQueries() {
 		output = fmt.Sprintf("No text matches for '%s' in %s.\n\nThe embedding index is available — `search` with a plain-language description will also find code that uses different wording.", searchPattern, directory)
 	}
@@ -127,21 +122,16 @@ func compileSearchPattern(pattern string, caseSensitive bool) (*regexp.Regexp, e
 }
 
 // shouldSkipDir returns true for well-known directories that should never be
-// searched. Delegates to the canonical shared list in pkg/filesystem so
-// search_files stays in sync with embedding and codegraph exclusion behavior.
+// searched. Delegates to the canonical shared list in pkg/filesystem.
 func shouldSkipDir(path string) bool {
 	name := filepath.Base(path)
 	if filesystem.IsSkipDir(name) {
 		return true
 	}
-	// Cover directory names that are in search_files' historical list but
-	// not yet in the shared list (shouldn't exist, but as a safety net).
 	return false
 }
 
 // binaryExtensions lists file extensions known to be binary or non-text formats.
-// Checking the extension before opening the file avoids unnecessary I/O for the
-// ~30%+ of project files that are images, fonts, archives, or compiled artifacts.
 var binaryExtensions = map[string]bool{
 	// images
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".ico": true,

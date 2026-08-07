@@ -8,16 +8,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/local_llm"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+
+	// Register architectures
+	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
 )
 
 func main() {
-	modelPath := os.Getenv("HOME") + "/.cache/sprout/models/qwen3-0.6b/model.safetensors"
-	tokPath := os.Getenv("HOME") + "/.cache/sprout/models/qwen3-0.6b/tokenizer.json"
+	modelDir := os.Getenv("HOME") + "/.cache/sprout/models/qwen3-0.6b"
 
-	fmt.Println("Loading model...")
+	fmt.Println("Loading model from", modelDir)
 	start := time.Now()
-	model, err := local_llm.NewModel(modelPath, tokPath)
+	model, err := llm.NewModel(modelDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -31,13 +33,14 @@ func main() {
 		"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nSummarize in one sentence: The Go programming language is statically typed, compiled, and known for its simplicity.<|im_end|>\n<|im_start|>assistant\n",
 	}
 
-	cfg := local_llm.DefaultGenerateConfig()
+	cfg := llm.DefaultGenerateConfig()
 	cfg.MaxTokens = 80
 	cfg.Temperature = 0.0
 
 	for i, prompt := range prompts {
 		fmt.Printf("--- Test %d ---\n", i+1)
-		fmt.Printf("Prompt: %s\n", prompt[len("<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n"):])
+		userPart := prompt[len("<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n"):]
+		fmt.Printf("Prompt: %s\n", userPart)
 
 		genStart := time.Now()
 		text, err := model.GenerateText(context.Background(), prompt, cfg)

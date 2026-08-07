@@ -83,18 +83,7 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		threshold = 1
 	}
 
-	// Prefer the agent's long-lived embedding manager. It holds the loaded
-	// ONNX model and an open HNSW handle; constructing a fresh one per call
-	// re-downloads the model on first use, double-opens the HNSW store, and
-	// can race the writer in the agent. Only fall back to a transient
-	// manager when running outside an agent context (CLI tools, tests).
-	//
-	// Without ANY manager, fall back to a literal search. The registration
-	// path drops this tool when the agent has no EmbeddingManager, so the
-	// model never calls it — this branch guards direct calls from replayed
-	// sessions or saved automations. Returning empty results for a query the
-	// literal pass could answer is worse than answering it: the caller has no
-	// way to tell "nothing matched" from "nothing was searched."
+	// Use the agent's embedding manager when available; fall back to literal search.
 	mgr := env.EmbeddingMgr
 	if mgr == nil {
 		return literalFallbackSemantic(ctx, env, query), nil
@@ -110,11 +99,7 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 	// Resolve the default threshold based on the active provider.
 	threshold = float64(mgr.SemanticSearchThreshold())
 
-	// Gate on the index actually holding data. Without this, an unbuilt or
-	// still-building index returns zero hits and the formatter reports "No
-	// results found ... try broadening your search" — a statement about the
-	// codebase, when the truth is that nothing has been searched. The agent
-	// acts on that as evidence the code does not exist.
+	// Refuse to answer when the index is empty or still building.
 	if r := mgr.Readiness(); !r.CanAnswerQueries() {
 		switch {
 		case r.Building:

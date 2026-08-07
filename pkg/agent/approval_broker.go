@@ -19,8 +19,8 @@ type BrokerDecision struct {
 	Approved   bool
 	Decision   security.ApprovalDecision
 	Outcome    security.ApprovalOutcome
-	Surface    string         // "webui" or "cli" — which surface answered
-	Assessment RiskAssessment // echoed for caller diagnostics
+	Surface    string            // "webui" or "cli" — which surface answered
+	Assessment RiskAssessment    // echoed for caller diagnostics
 	Analysis   *SecurityAnalysis // LLM-derived security analysis when available; nil otherwise
 }
 
@@ -48,7 +48,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 								fmt.Sprintf("blocked by command policy: %s — %s", matchedPattern, assessment.Reason),
 								assessment.Explain(), nil,
 							)
-				case configuration.CommandPolicyAllow:
+					case configuration.CommandPolicyAllow:
 						// Auto-approve: skip classifier, risk profile, and interactive prompt.
 						// Critical-tier hard blocks can never be overridden by user policy.
 						if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
@@ -307,7 +307,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 								assessment.Explain(), nil,
 							)
 					}
-						// Per-part decision: any rejection -> deny whole command.
+					// Per-part decision: any rejection -> deny whole command.
 					allApproved := true
 					for _, part := range proposal.Parts {
 						if approved, ok := decisions[part.ID]; !ok || !approved {

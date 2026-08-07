@@ -270,8 +270,8 @@ func (a *Agent) RecoverFile(path string) (string, error) {
 func (a *Agent) TrackFileWrite(filePath string, content string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
 		err := a.changeTracker.TrackFileWrite(filePath, content)
-	// Keep the shell-snapshot cache in sync to avoid duplicate entries.
-	a.changeTracker.SyncShellCacheForPath(filePath)
+		// Keep the shell-snapshot cache in sync to avoid duplicate entries.
+		a.changeTracker.SyncShellCacheForPath(filePath)
 		return err
 	}
 

@@ -21,6 +21,7 @@ const agentsMdLargeTokenThreshold = 4000
 var systemPromptContent string
 
 // Lite prompt for Low-Context Mode (8K–64K context windows). ~1K tokens vs the full prompt's ~6.6K.
+//
 //go:embed prompts/system_prompt.lite.md
 var systemPromptLiteContent string
 
@@ -28,6 +29,7 @@ var systemPromptLiteContent string
 var planningPromptContent string
 
 // Rollup prompt template for the background rollup worker. Separate from the per-turn summarizer.
+//
 //go:embed prompts/rollup_prompt.md
 var rollupPromptContent string
 

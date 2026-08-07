@@ -22,8 +22,8 @@ func TestLifecycleIdleReap(t *testing.T) {
 		return nil
 	})
 
-	lc.Add()          // count = 1
-	lc.Remove()       // count = 0, timer starts
+	lc.Add()    // count = 1
+	lc.Remove() // count = 0, timer starts
 
 	// Wait for timer to fire.
 	select {
@@ -191,7 +191,7 @@ func TestLifecycleTimerActiveState(t *testing.T) {
 	}
 
 	// Let timer fire, then check it's false.
-	lc.Remove() // count = 0, timer restarts
+	lc.Remove()                        // count = 0, timer restarts
 	time.Sleep(400 * time.Millisecond) // wait for timer to fire
 	if lc.TimerActive() {
 		t.Error("TimerActive should be false after timer has fired")
@@ -242,11 +242,11 @@ func TestLifecycleMultipleCycles(t *testing.T) {
 	})
 
 	for i := 0; i < 5; i++ {
-		lc.Add()    // 0 → 1
-		lc.Remove() // 1 → 0, shutdown timer starts
+		lc.Add()                          // 0 → 1
+		lc.Remove()                       // 1 → 0, shutdown timer starts
 		time.Sleep(20 * time.Millisecond) // let timer tick a bit
-		lc.Add()    // 0 → 1, timer cancelled (daemon stays alive)
-		lc.Remove() // 1 → 0, timer starts again (next cycle begins from 0)
+		lc.Add()                          // 0 → 1, timer cancelled (daemon stays alive)
+		lc.Remove()                       // 1 → 0, timer starts again (next cycle begins from 0)
 	}
 
 	// The last Remove left a pending timer; it should fire exactly once.

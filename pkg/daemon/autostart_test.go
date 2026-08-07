@@ -381,7 +381,10 @@ func TestEnsureDaemon_Election(t *testing.T) {
 	spec := helperSpec(t, tmpDir, port, 400, markerFile)
 
 	var wg sync.WaitGroup
-	var results [2]struct{ already bool; err error }
+	var results [2]struct {
+		already bool
+		err     error
+	}
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
@@ -629,7 +632,10 @@ func TestEnsureDaemon_LoserNeverSpawns(t *testing.T) {
 
 	// Start first goroutine — it will likely win the flock.
 	var wg sync.WaitGroup
-	var resultA, resultB struct{ already bool; err error }
+	var resultA, resultB struct {
+		already bool
+		err     error
+	}
 
 	wg.Add(2)
 
@@ -944,7 +950,10 @@ func TestEnsureDaemon_Election_MultipleLoser(t *testing.T) {
 
 	var wg sync.WaitGroup
 	n := 3
-	results := make([]struct{ already bool; err error }, n)
+	results := make([]struct {
+		already bool
+		err     error
+	}, n)
 
 	for i := 0; i < n; i++ {
 		wg.Add(1)
@@ -1032,7 +1041,10 @@ func TestEnsureDaemon_Concurrent_Election_Race(t *testing.T) {
 	spec := helperSpec(t, tmpDir, port, 0, markerFile)
 
 	var wg sync.WaitGroup
-	results := [2]struct{ already bool; err error }{}
+	results := [2]struct {
+		already bool
+		err     error
+	}{}
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
@@ -1192,7 +1204,10 @@ func TestEnsureDaemon_Loser_PIDFileNotWritten(t *testing.T) {
 	spec := helperSpec(t, tmpDir, port, 300, markerFile)
 
 	var wg sync.WaitGroup
-	var results [2]struct{ already bool; err error }
+	var results [2]struct {
+		already bool
+		err     error
+	}
 
 	// Goroutine A starts first.
 	wg.Add(2)

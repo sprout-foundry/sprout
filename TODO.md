@@ -1,53 +1,29 @@
 # TODO
 
 Active work tracked here. Each item is scoped for a single agent run
-via the workflow automation (~1-4 hours of focused work). Only items that
-are approved and ready to assign are listed.
+via the workflow automation (~1-4 hours of focused work). Only items that are
+approved and ready to assign are listed.
 
 ---
 
-## SP-103: Vision Pipeline Reliability
+## SP-136: Daemon-First Architecture — Shared Process Model
 
-- [x] **SP-103 D1: Inline-image cost into budget tracker** — When `processImagesAsMultimodal` embeds images, per-image `image_tokens` / `cache_read_input_tokens` from provider response are dropped. Bridge them into cost tracking so users see actual vision cost. **~2 hours.** Touches `conversation.go` and provider response structs.
+Full spec: `roadmap/SP-136-daemon-first-architecture.md`
 
-- [x] **SP-103 D2: Batch splitting with fallback** — When N images exceed provider's vision context window, inline path fails with 400. Add batch splitting: try inline; on overflow, keep first K inline, call `analyze_image_content` for the rest. **~2 hours.** New `vision_batch_split.go` helper.
-
-- [x] **SP-103 D3: Per-provider VisionCapabilities values** — Struct exists with defaults. Ollama and OpenAI-compatible populate values. Populate per-provider values for Anthropic, Gemini, and other non-OpenAI providers. **~1 hour.**
-
----
-
-## SP-094: Typed Error Hierarchy
-
-- [x] **SP-094 Wave 1: Migrate tool handler errors** — Convert `pkg/agent_tools/*_handler.go` from `fmt.Errorf` to `TypedError`. ~80 sites, partial progress (vision handlers done). **~2 hours.**
-
-- [x] **SP-094 Wave 2: Migrate provider client errors** — Convert `pkg/agent/api_client*.go` from `fmt.Errorf` to `TypedError`. ~40 sites. **~2 hours.** — Already done: `api_client.go` was deleted in seed-integration refactor, remaining files have zero `fmt.Errorf`.
-
-- [x] **SP-094 Wave 3: Migrate subagent + delegator errors** — Convert `pkg/agent/subagent_*.go` from `fmt.Errorf` to `TypedError`. ~60 sites. **~2 hours.** — Migration was already largely done; only 1 remaining `fmt.Errorf` in `subagent_runner_test.go` converted to `agenterrors.NewInvalidInputError`.
-
-- [x] **SP-094 Wave 4: Migrate remaining pkg/agent errors** — Convert remaining `pkg/agent/*.go` from `fmt.Errorf` to `TypedError`. ~330 sites across multiple files. **~4 hours.** — All done: last 11 `fmt.Errorf` calls across 7 files converted to `agenterrors.NewConfig`, `agenterrors.NewInvalidInputError`, and `agenterrors.NewNotFound`.
-
-- [x] **SP-094: Wire broker exponential backoff** — Add exponential backoff on `ProviderError+RateLimitError` in provider retry path. Emit per-category labels. **~2 hours.**
-
-- [x] **SP-094: `sprout explain` typed errors** — Integrate typed error hierarchy into `sprout explain <hash>` instead of raw stack traces. **~1 hour.**
+The daemon already deduplicates model loads, inference permits, and index
+writers *within one process*. The missing piece is routing CLI processes
+through the daemon instead of each loading its own 155 MB model and racing
+on the same index files. These phases are sequential — each builds on the
+previous and ships independently.
 
 ---
 
-## SP-098: Large-File Decomposition
+- [ ] **SP-136 P0: File-lock index writes (urgent correctness fix)** — Two processes writing to the same HNSW index directory corrupt the graph and records JSON. `HNSWStore` uses an in-process `sync.Mutex` with no cross-process locking. Add `flock` on `indexDir/.build.lock` before any `BuildIndex` or `UpdateFromGitDiff` call. If another process holds the lock, skip the build. Read-only queries need no lock. Fallback: if `flock` is unavailable (WASM, restricted sandbox), proceed without locking. Write a `TestConcurrentBuilders` test: two goroutines calling `BuildIndex` on the same index dir, verify no corruption. **~2 hours.** Touches `pkg/embedding/store_hnsw.go` and `pkg/embedding/index.go`. Gate: `go test ./pkg/embedding/ -run TestConcurrentBuilders -v` passes, `make build-all` clean.
 
-**Highest priority (grew since audit):**
-- [x] **SP-098: Split `pkg/agent/tool_security.go` (1142 lines)** — Extract `tool_security_policy.go` + `tool_security_paths.go` + `tool_security_audit.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/events/events.go` (1218 lines)** — Extract `events_types.go` + `events_bus.go` + `events_filter.go`. **~2 hours.**
+- [ ] **SP-136 P1: Daemon multi-workspace hardening** — Fix the coordination bugs that would make CLI-on-daemon unsafe. (1) Investigate the folder-scoped WebUI port assignment (5600x vs 56000) — the daemon should serve all workspaces from one port, routing internally by workspace root. (2) Verify N concurrent CLI sessions across K workspaces get isolated agents, isolated embedding managers, and isolated stores via the `clientContext`/`chat_sessions` machinery. (3) Add health-check-based graceful degradation: if the daemon is unhealthy (OOM, stuck inference), connected clients must detect this and fall back with a clear warning, not hang silently. Write an integration test: 5 concurrent agent sessions across 3 workspaces, all complete; daemon RSS stays bounded. **~4 hours.** Touches `pkg/webui/server.go`, `pkg/webui/client_context.go`, `pkg/webui/chat_sessions.go`. Gate: integration test passes, `make build-all` clean.
 
-**Remaining (stable, ≥800 lines):**
-- [x] **SP-098: Split `pkg/embedding/manager.go` (902 lines)** — Extract `embedding_models.go` + `embedding_batch.go` + `embedding_cache.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/agent_tools/security_classifier.go` (900 lines)** — Extract `security_classifier_path.go` + `security_classifier_shell_patterns.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/agent_tools/background_process.go` (885 lines)** — Extract `background_process_log.go` + `background_process_pty.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/providerregistry/registry.go` (871 lines)** — Extract `registry_models.go` + `registry_providers.go` + `registry_aliases.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/history/changetracker.go` (868 lines)** — Extract `changetracker_record.go` + `changetracker_revert.go` + `changetracker_persist.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/console/select_list.go` (868 lines)** — Extract `select_list_filter.go` + `select_list_keymap.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/credentials/encrypt.go` (861 lines)** — Extract `encrypt_aes.go` + `encrypt_keyring.go` + `encrypt_migrate.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/agent/persistence.go` (857 lines)** — Extract `persistence_session.go` + `persistence_message.go` + `persistence_index.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/webui/settings_api_mcp.go` (847 lines)** — Extract `settings_api_mcp_oauth.go`. **~2 hours.**
-- [x] **SP-098: Split `pkg/agent/scripted_playback.go` (835 lines)** — Extract `scripted_record.go` + `scripted_assert.go`. **~2 hours.**
+- [ ] **SP-136 P2: Lazy daemon auto-start** — When `sprout` starts and no daemon is detected, automatically start one in the background and connect to it. Detection: check `GET /health` on port 56000 or Unix socket at `~/.local/share/sprout/daemon.sock`. Startup race: use PID file + `flock` on `daemon.pid` to elect a single starter; losers wait for the winner's daemon. Lifecycle: daemon stays alive while it has active connections; a shutdown timer (60s after last disconnect) reaps idle daemons; new connections during teardown cancel the timer. Auth: Unix socket with 0600 permissions. Fallback: if daemon fails to start within 10s, CLI falls back to in-process execution. Add `SPROUT_DAEMON=0` escape hatch to force in-process. Write test: `sprout` in clean env starts daemon, connects, executes query, disconnects; daemon shuts down after timeout. **~4 hours.** New `pkg/daemon/` package. Touches `cmd/root.go`, `cmd/agent_command.go`. Gate: test passes, `make build-all` clean.
 
----
+- [ ] **SP-136 P3: Embedding service via daemon socket** — CLI processes route embedding operations through the daemon via a JSON-over-Unix-socket protocol: `Embed(text)→[]float32`, `Query(text,k,threshold)→results`, `BuildIndex(workspaceRoot)→stats`, `CheckDuplicates(filePath,content)→matches`. Implement `RemoteEmbeddingProvider` implementing `EmbeddingProvider` that proxies to the daemon socket. If socket unavailable, fall back to in-process ONNX. The daemon owns the sole model copy, the sole writer per workspace index, and coordinates inference via its existing `inferenceGate`. Connection management: pool or multiplex over one socket, reconnect on transient failure. Write test: 3 CLI processes querying the same workspace — all get results from one model load, one index, zero corruption. **~4 hours.** New `pkg/embedding/remote_provider.go`, new socket handler in `pkg/webui/` or `pkg/daemon/`. Touches `pkg/agent/agent_embedding.go`. Gate: test passes, `make build-all` clean.
+
+- [ ] **SP-136 P4: Full CLI-on-daemon (agent execution)** — The CLI becomes a thin client for all agent work. Expand the socket protocol: `Query(prompt)→stream`, `ExecuteTool(name,args)→result`, `ListSessions/CreateSession/SwitchSession`. The daemon owns agent state, conversation history, tool dispatch, embedding index; the CLI is a presentation layer. One-shot mode: `sprout agent --json "query"` connects, runs, prints, disconnects. Fallback retained: if daemon unavailable and auto-start fails, fall back to in-process. Simplify `daemonMode` flag branches once CLI-on-daemon is default. Write gate test: full CLI session over daemon — interactive mode, streaming, tools, subagents, git operations — indistinguishable from today's in-process CLI. **~4 hours.** Touches `cmd/agent_command.go`, `pkg/agent/`, `pkg/webui/`. Gate: gate test passes, `make build-all` clean, existing CLI tests pass.

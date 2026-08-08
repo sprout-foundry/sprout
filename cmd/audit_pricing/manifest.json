@@ -1,7 +1,7 @@
 {
   "chutes": {
     "source": "https://api.chutes.com/v1/models",
-    "last_verified": "2026-08-06",
+    "last_verified": "2026-08-08",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -40,8 +40,8 @@
       },
       {
         "id": "moonshotai/Kimi-K2.6-TEE",
-        "input_per_mtok": 0.66,
-        "output_per_mtok": 3.5
+        "input_per_mtok": 0.58,
+        "output_per_mtok": 3.4
       },
       {
         "id": "moonshotai/Kimi-K3-TEE",
@@ -72,7 +72,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-08-06",
+    "last_verified": "2026-08-08",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -555,6 +555,12 @@
         "input_per_mtok": 0.075,
         "output_per_mtok": 0.22,
         "cached_per_mtok": 0.015
+      },
+      {
+        "id": "moonshotai/Kimi-K3",
+        "input_per_mtok": 2.7,
+        "output_per_mtok": 13.5,
+        "cached_per_mtok": 0.27
       }
     ]
   },
@@ -3774,7 +3780,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-07",
+    "last_verified": "2026-08-08",
     "models": [
       {
         "id": "glm-4.5",
@@ -3802,43 +3808,51 @@
       },
       {
         "id": "glm-4.5v",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 0.6,
+        "output_per_mtok": 1.8,
+        "cached_per_mtok": 0.11
       },
       {
         "id": "glm-4.6v",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 0.3,
+        "output_per_mtok": 0.9,
+        "cached_per_mtok": 0.05
       },
       {
         "id": "glm-4.7",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 0.6,
+        "output_per_mtok": 2.2,
+        "cached_per_mtok": 0.11
       },
       {
         "id": "glm-5",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 1.0,
+        "output_per_mtok": 3.2,
+        "cached_per_mtok": 0.2
       },
       {
         "id": "glm-5-turbo",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 1.2,
+        "output_per_mtok": 4.0,
+        "cached_per_mtok": 0.24
       },
       {
         "id": "glm-5.1",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 1.4,
+        "output_per_mtok": 4.4,
+        "cached_per_mtok": 0.26
       },
       {
         "id": "glm-5.2",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 1.4,
+        "output_per_mtok": 4.4,
+        "cached_per_mtok": 0.26
       },
       {
         "id": "glm-5v-turbo",
-        "input_per_mtok": 0,
-        "output_per_mtok": 0
+        "input_per_mtok": 1.2,
+        "output_per_mtok": 4.0,
+        "cached_per_mtok": 0.24
       },
       {
         "id": "glm-5.2:batch",

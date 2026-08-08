@@ -78,6 +78,24 @@ export interface ProviderModelsResponse {
   models: ProviderModel[];
 }
 
+export interface LocalLLMModel {
+  id: string;
+  name: string;
+  present: boolean;
+  size_hint: string;
+}
+
+export interface LocalLLMStatus {
+  available: boolean;
+  running: boolean;
+  model_present: boolean;
+  model_dir: string;
+  platform: string;
+  endpoint: string;
+  recommended_model: string;
+  models: LocalLLMModel[];
+}
+
 export interface ProvidersResponse {
   providers: Array<{
     id: string;

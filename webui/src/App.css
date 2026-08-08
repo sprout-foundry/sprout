@@ -1389,6 +1389,33 @@ body,
   margin-top: 6px;
 }
 
+.onboarding-offline-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent-info) 18%, transparent);
+  color: var(--accent-info);
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.onboarding-provider-caveats {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent-warning) 8%, transparent);
+  border: 1px solid var(--border-subtle);
+}
+
+.onboarding-caveat-item {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
 .onboarding-provider-card-topline {
   display: flex;
   align-items: center;

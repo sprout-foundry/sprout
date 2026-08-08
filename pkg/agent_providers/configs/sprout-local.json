@@ -21,7 +21,7 @@
 },
   "endpoint": "http://127.0.0.1:18081/v1/chat/completions",
   "name": "sprout-local",
-  "display_name": "Sprout Local (MLX)",
+  "display_name": "Local (Offline)",
   "headers": {},
   "message_conversion": {
   "convert_tool_role_to_user": false,

@@ -33,6 +33,12 @@ func NewModel(modelDir string) (*Model, error) {
 		return nil, fmt.Errorf("llm: MLX GPU not available")
 	}
 
+	// SP-134 RAM gate: refuse to load a model whose weights already threaten
+	// the machine's unified memory before we spend minutes loading it.
+	if err := ModelMemoryGate(modelDir); err != nil {
+		return nil, err
+	}
+
 	cfgPath := modelDir + "/config.json"
 	weightsPath := modelDir + "/model.safetensors"
 	tokPath := modelDir + "/tokenizer.json"
@@ -50,6 +56,15 @@ func NewModel(modelDir string) (*Model, error) {
 	tok, err := LoadTokenizer(tokPath)
 	if err != nil {
 		return nil, fmt.Errorf("load tokenizer: %w", err)
+	}
+
+	// Chat-style Qwen models terminate with <|im_end|>, which the tokenizer
+	// detects even when config.json's eos_token_id is the raw <|endoftext|>
+	// (the multimodal wrapper keeps the chat terminator out of the top-level
+	// config). Use the tokenizer's EOS so the decode loop breaks on the token
+	// the model actually emits.
+	if cfg.EOSTokenID <= 0 || tok.EOSID() > 0 {
+		cfg.EOSTokenID = tok.EOSID()
 	}
 
 	// Weights are loaded using the default stream; actual inference creates
@@ -104,6 +119,12 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 	tok, err := LoadTokenizer(tokenizerPath)
 	if err != nil {
 		return nil, fmt.Errorf("load tokenizer: %w", err)
+	}
+
+	// See NewModel: chat-style Qwen models end with <|im_end|> which the
+	// tokenizer detects even when config.json's eos_token_id is endoftext.
+	if cfg.EOSTokenID <= 0 || tok.EOSID() > 0 {
+		cfg.EOSTokenID = tok.EOSID()
 	}
 
 	// Pin to this OS thread for the whole load; see NewModel for why.

@@ -272,6 +272,14 @@ func NewArrayFromInt32(data []int32, shape []int) (*Array, error) {
 	return newArrayFromData(cPointer(data), shape, Int32)
 }
 
+// NewScalarInt32 creates a 0-dim (scalar) int32 array. Metal custom kernels
+// treat ndim==0 arrays as by-value scalar arguments (const constant T&),
+// which is how the DeltaNet kernel receives its sequence-length T.
+func NewScalarInt32(v int) (*Array, error) {
+	h := C.mlx_array_new_int(C.int(v))
+	return wrap(h), nil
+}
+
 // checkShape validates that shape is non-empty and its element product matches
 // the number of elements the caller is about to hand MLX. An empty data slice
 // with a zero-element shape is allowed; mismatched counts corrupt the buffer.

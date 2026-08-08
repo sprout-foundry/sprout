@@ -7,8 +7,14 @@ package mlx
 #cgo LDFLAGS: -L/opt/homebrew/lib -lmlx -lmlxc
 
 #include <mlx/c/memory.h>
+#include <sys/types.h>
+#include <sys/sysctl.h>
+
+const char sprout_memsize_name[] = "hw.memsize";
 */
 import "C"
+
+import "unsafe"
 
 // MemoryStats summarizes MLX's allocator state.
 type MemoryStats struct {
@@ -103,3 +109,15 @@ func Snapshot() (MemoryStats, error) {
 }
 
 var lastCacheLimit uint64
+
+// TotalSystemRAM returns the machine's physical RAM in bytes via sysctl
+// (hw.memsize), or 0 if the sysctl call fails. This is the SP-134 RAM-gate
+// source of truth for deciding whether a model can fit in unified memory.
+func TotalSystemRAM() uint64 {
+	var mem uint64
+	sz := C.size_t(unsafe.Sizeof(mem))
+	if rc := C.sysctlbyname(&C.sprout_memsize_name[0], unsafe.Pointer(&mem), &sz, nil, 0); rc != 0 {
+		return 0
+	}
+	return mem
+}

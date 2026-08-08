@@ -13,7 +13,6 @@ import (
 )
 
 // buildChatResponse constructs an api.ChatResponse from the given parameters.
-// idPrefix is typically "scripted-response-" or "vision-response-".
 func (c *ScriptedClient) buildChatResponse(
 	idPrefix string,
 	model string,
@@ -56,14 +55,9 @@ func (c *ScriptedClient) buildChatResponse(
 func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	c.mu.Lock()
 
-	// Record sent request
 	msgCopy := append([]api.Message(nil), messages...)
 	c.sentRequests = append(c.sentRequests, msgCopy)
 
-	// Rate limit simulation:
-	// - rateLimitExceeded is set once the counter reaches the threshold; all subsequent
-	//   calls fail immediately with RateLimitExceededError.
-	// - Per-response RateLimitAfter allows individual responses to trigger rate limiting.
 	if c.rateLimitExceeded {
 		c.mu.Unlock()
 		c.debugLog("Rate limit exceeded after %d attempts", c.rateLimitCounter)
@@ -75,9 +69,6 @@ func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Mes
 		resp = c.responses[c.index]
 	}
 
-	// Handle rate limit simulation - increment counter first, then check
-	// This ensures we count the current request.
-	// Once a threshold is established (from any response), it persists until reset.
 	if resp != nil && resp.RateLimitAfter > 0 {
 		c.rateLimitThreshold = resp.RateLimitAfter
 	}
@@ -91,7 +82,6 @@ func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Mes
 		}
 	}
 
-	// Get response content before releasing lock
 	var content string
 	var toolCalls []api.ToolCall
 	var finishReason string
@@ -108,15 +98,12 @@ func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Mes
 
 	c.mu.Unlock()
 
-	// Handle explicit error injection
 	if resp != nil && resp.Error != nil {
 		c.debugLog("Returning injected error: %v", resp.Error)
 		c.advanceIndex(resp)
 		return nil, resp.Error
 	}
 
-	// Check for delay (rate limit simulation). Honor both the per-call ctx
-	// and the client's own ctx so callers can cancel in-flight delays.
 	if resp != nil && resp.Delay > 0 {
 		c.debugLog("Applying delay of %v", resp.Delay)
 		select {
@@ -150,14 +137,9 @@ func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Mes
 func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	c.mu.Lock()
 
-	// Record sent request
 	msgCopy := append([]api.Message(nil), messages...)
 	c.sentRequests = append(c.sentRequests, msgCopy)
 
-	// Rate limit simulation:
-	// - rateLimitExceeded is set once the counter reaches the threshold; all subsequent
-	//   calls fail immediately with RateLimitExceededError.
-	// - Per-response RateLimitAfter allows individual responses to trigger rate limiting.
 	if c.rateLimitExceeded {
 		c.mu.Unlock()
 		c.debugLog("Rate limit exceeded after %d attempts", c.rateLimitCounter)
@@ -169,8 +151,6 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		resp = c.responses[c.index]
 	}
 
-	// Handle rate limit simulation - increment counter first, then check.
-	// Once a threshold is established (from any response), it persists until reset.
 	if resp != nil && resp.RateLimitAfter > 0 {
 		c.rateLimitThreshold = resp.RateLimitAfter
 	}
@@ -184,7 +164,6 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		}
 	}
 
-	// Get response content before releasing lock
 	var content string
 	var finishReason string
 	var reasoningContent string
@@ -204,14 +183,12 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 
 	c.mu.Unlock()
 
-	// Handle explicit error injection
 	if resp != nil && resp.Error != nil {
 		c.debugLog("Returning injected error: %v", resp.Error)
 		c.advanceIndex(resp)
 		return nil, resp.Error
 	}
 
-	// Check for delay. Honor both the per-call ctx and the client's own ctx.
 	if resp != nil && resp.Delay > 0 {
 		c.debugLog("Applying delay of %v", resp.Delay)
 		select {
@@ -227,7 +204,6 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 	if resp != nil && resp.StreamConfig != nil {
 		streamConfig := resp.StreamConfig
 
-		// Validate stream config
 		if len(streamConfig.Chunks) == 0 {
 			c.advanceIndex(resp)
 			return nil, errors.New("ScriptedResponse.StreamConfig.Chunks must not be empty")
@@ -240,27 +216,23 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		totalTokens := 0
 		startTime := time.Now()
 
-		// Stream each chunk
 		for i, chunk := range streamConfig.Chunks {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			case <-c.ctx.Done():
-				// Context cancellation: do NOT advance index (soft interruption, retry makes sense)
 				return nil, c.ctx.Err()
 			default:
 			}
 
 			callback(chunk, "assistant_text")
 
-			// Check for per-chunk errors
 			if i < len(streamConfig.ChunkErrors) && streamConfig.ChunkErrors[i] != nil {
 				c.debugLog("Chunk %d error: %v", i, streamConfig.ChunkErrors[i])
 				c.advanceIndex(resp)
 				return nil, streamConfig.ChunkErrors[i]
 			}
 
-			// Check for error after N chunks
 			if streamConfig.ErrorAfterChunks > 0 && i >= streamConfig.ErrorAfterChunks-1 {
 				c.debugLog("Error after %d chunks", streamConfig.ErrorAfterChunks)
 				c.advanceIndex(resp)
@@ -270,24 +242,20 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 				return nil, agenterrors.NewAgent("scripted_playback", fmt.Sprintf("simulated stream error after %d chunks", streamConfig.ErrorAfterChunks), nil)
 			}
 
-			// Add delay between chunks if configured
 			if streamConfig.ChunkDelay > 0 && i < len(streamConfig.Chunks)-1 {
 				select {
 				case <-time.After(streamConfig.ChunkDelay):
 				case <-ctx.Done():
 					return nil, ctx.Err()
 				case <-c.ctx.Done():
-					// Context cancellation: do NOT advance index
 					return nil, c.ctx.Err()
 				}
 			}
 
-			// Calculate TPS for this chunk
 			if streamConfig.ChunkDelay > 0 && streamConfig.TokensPerChunk > 0 {
 				chunkTPS := float64(streamConfig.TokensPerChunk) / streamConfig.ChunkDelay.Seconds()
 				c.mu.Lock()
 				c.lastTPS = chunkTPS
-				// Update average TPS
 				c.averageTPS = (c.averageTPS + chunkTPS) / 2
 				c.mu.Unlock()
 			}
@@ -299,7 +267,6 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 
 		finishReason = streamConfig.FinishReason
 
-		// Set final TPS based on total stream
 		if streamConfig.ChunkDelay > 0 && len(streamConfig.Chunks) > 0 {
 			totalTime := time.Since(startTime)
 			if totalTime > 0 {
@@ -310,7 +277,6 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 			}
 		}
 	} else {
-		// Simple streaming: send content as single chunk
 		callback(content, "assistant_text")
 	}
 
@@ -340,11 +306,10 @@ func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.M
 
 	c.mu.Lock()
 
-	// Record sent request
 	msgCopy := append([]api.Message(nil), messages...)
 	c.sentRequests = append(c.sentRequests, msgCopy)
 
-	// For vision requests, find vision-only responses
+	// Find vision-only responses
 	var resp *ScriptedResponse
 	var foundIndex int = -1
 
@@ -358,18 +323,12 @@ func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.M
 		}
 	}
 
-	// Rate limit simulation:
-	// - rateLimitExceeded is set once the counter reaches the threshold; all subsequent
-	//   calls fail immediately with RateLimitExceededError.
-	// - Per-response RateLimitAfter allows individual responses to trigger rate limiting.
 	if c.rateLimitExceeded {
 		c.mu.Unlock()
 		c.debugLog("Vision rate limit exceeded after %d attempts", c.rateLimitCounter)
 		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
 	}
 
-	// Handle rate limit simulation for vision requests.
-	// Once a threshold is established (from any response), it persists until reset.
 	if resp != nil && resp.RateLimitAfter > 0 {
 		c.rateLimitThreshold = resp.RateLimitAfter
 	}
@@ -383,12 +342,10 @@ func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.M
 		}
 	}
 
-	// Update index if we found a vision-only response
 	if foundIndex >= 0 {
 		c.index = foundIndex + 1
 	}
 
-	// Copy all necessary data while holding the lock to avoid race conditions
 	var content string
 	var finishReason string
 	var reasoningContent string
@@ -409,13 +366,11 @@ func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.M
 
 	c.mu.Unlock()
 
-	// Check for error injection (outside lock)
 	if errorToReturn != nil {
 		c.debugLog("Vision request returning injected error: %v", errorToReturn)
 		return nil, errorToReturn
 	}
 
-	// Check for delay (outside lock). Honor both the per-call ctx and client's own ctx.
 	if delay > 0 {
 		c.debugLog("Vision request applying delay of %v", delay)
 		select {
@@ -427,7 +382,6 @@ func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.M
 		}
 	}
 
-	// Build vision response (outside lock)
 	response := c.buildChatResponse(
 		"vision-response-",
 		c.visionModel,
@@ -440,7 +394,6 @@ func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.M
 	)
 
 	c.mu.Lock()
-	// Add to response history (index is already managed inside the lock section above)
 	if resp != nil {
 		c.responseHistory = append(c.responseHistory, resp)
 	}
@@ -480,10 +433,7 @@ func (c *ScriptedClient) GetProvider() string {
 	return "test"
 }
 
-// GetModelContextLimit returns the context limit. ScriptedClient defaults to
-// 128K (realistic agentic window). Tests that need to exercise Low-Context
-// Mode (SP-125) or the context floor should construct a client with a custom
-// limit rather than relying on this default.
+// GetModelContextLimit returns the context limit. Defaults to 128K (realistic agentic window).
 func (c *ScriptedClient) GetModelContextLimit() (int, error) {
 	return 128_000, nil
 }

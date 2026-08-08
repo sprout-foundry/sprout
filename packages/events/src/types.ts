@@ -275,6 +275,21 @@ export interface SecurityApprovalRequestData {
   risk_type?: string;
   target?: string;
   status?: string;
+  /** SP-058: "true" when the server opts the dialog into the 4-option
+   *  layout (Approve once / Deny / Always approve / Always ask / Elevate)
+   *  instead of the legacy Allow / Block pair. Only shell_command sends
+   *  this today. The backend sends it as a string in `extras`. */
+  allow_options?: string;
+  /** Filesystem approval dialog mode ("fs_external" | "fs_sensitive").
+   *  Sent by the backend (extras["kind"]) for out-of-workspace file
+   *  accesses. */
+  kind?: string;
+  /** Folder proposed for the session allowlist (fs_external only).
+   *  Backend extras["folder"]. */
+  folder?: string;
+  /** The exact path being accessed (filesystem dialog).
+   *  Backend extras["path"]; falls back to `target`. */
+  path?: string;
   /** LLM-generated analysis attached by the backend (SP-124-2). The Go broker
    *  JSON-marshals `pkg/agent.SecurityAnalysis` into a string and shoves it
    *  into `extras["security_analysis"]`, which then lands here verbatim —

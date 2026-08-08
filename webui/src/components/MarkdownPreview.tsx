@@ -34,11 +34,7 @@ function MarkdownPreview({ content, scrollRef }: MarkdownPreviewProps): JSX.Elem
               }
 
               return (
-                <CodeBlock
-                  language={language || 'text'}
-                  codeText={codeText}
-                  className={className}
-                >
+                <CodeBlock language={language || 'text'} codeText={codeText} className={className}>
                   {children}
                 </CodeBlock>
               );

@@ -13,9 +13,6 @@ const (
 	toolExecutionContextKeyToolName   toolExecutionContextKey = "tool_name"
 )
 
-// SP-068 Phase 3 removed the former Gate-1 → Gate-2 approval bridge
-// (WithUserApproved/HasUserApproval context values, then
-// recordGateApproval → consumeShellCommandApproval agent-scoped map).
 // The unified risk resolver (UnifiedRiskResolver flag, default ON) runs
 // a single gate, so no bridge plumbing is needed.
 

@@ -41,7 +41,11 @@ func NewJinaONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, mod
 		return nil, fmt.Errorf("jina embedding: load tokenizer: %w", err)
 	}
 
-	intraThreads := 4
+	// Intra-op parallelism lets ORT process each batch's matmuls across
+	// multiple cores. The thread budget is process-aware: it divides
+	// (NumCPU-1) across concurrent sprout instances so 5 processes on one
+	// machine don't each spawn 8 ORT threads and oversubscribe the CPU.
+	intraThreads := defaultIntraOpThreads()
 	session, err := runtime.NewDynamicSession(modelPath,
 		[]string{"input_ids", "attention_mask"},
 		[]string{"last_hidden_state"},

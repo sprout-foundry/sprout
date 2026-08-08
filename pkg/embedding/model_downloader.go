@@ -424,6 +424,24 @@ func JinaCodeV2Config() ModelConfig {
 	}
 }
 
+// JinaCodeV2SafetensorsConfig returns the config for the fp16 safetensors
+// weights of Jina Code v2, used by the MLX Metal provider (SP-134). The
+// safetensors format is loaded directly by the Go code (no ONNX), keeping
+// the model in fp16 for GPU inference.
+func JinaCodeV2SafetensorsConfig() ModelConfig {
+	const base = "https://huggingface.co/jinaai/jina-embeddings-v2-base-code/resolve/main"
+	return ModelConfig{
+		Name:          "jina-code-v2-mlx",
+		ModelURL:      base + "/model.safetensors",
+		ModelHash:     "8b53bfd4ae2cd586004a6ca4a16551b630a2a1b1d655ff1ee9be1286a1781c5b",
+		ModelFilename: "model.safetensors",
+		TokenizerURL:  base + "/tokenizer.json",
+		TokenizerHash: "b01c78a902aa4facb2f47f95449f48e2f7bbfea5d2472ee2f6ce92323c6f86e5",
+		FullDims:      768,
+		Dims:          768,
+	}
+}
+
 // DownloadModel ensures the model and tokenizer files exist in modelDir for the
 // given ModelConfig. If files already exist with matching checksums, download is skipped.
 // Progress is reported via the callback (0.0 to 1.0).

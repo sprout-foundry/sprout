@@ -78,20 +78,12 @@ func (a *Agent) PublishTodoUpdate(todos []map[string]interface{}) {
 	a.publishEvent(events.EventTypeTodoUpdate, events.TodoUpdateEvent(todos))
 }
 
-// PublishAgentMessage publishes a structured agent system message event.
-// This is the single unified routing point for all agent output.
-// Safe to call even when eventBus is nil (CLI-only mode) — the
-// internal publishEvent method checks for nil before publishing.
-// PublishFileChange emits a file_changed event so the WebUI activity
-// feed can reflect ChangeTracker-detected mutations (including
-// shell-driven ones, not just direct write_file/edit_file calls).
-// Content is the captured original (for deletes/edits) — pass empty
-// for creates, where there's no prior content. Action: "created" /
-// "modified" / "deleted" — matches events.FileChangedEvent vocabulary.
+// PublishFileChange emits a file_changed event for ChangeTracker-detected mutations.
 func (a *Agent) PublishFileChange(filePath, action, content string) {
 	a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(filePath, action, content))
 }
 
+// PublishAgentMessage publishes a structured agent system message event.
 func (a *Agent) PublishAgentMessage(category, message string, extra map[string]interface{}) {
 	a.publishEvent(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 }
@@ -110,16 +102,8 @@ func (a *Agent) PublishCompactCompleted(source string, beforeCount, afterCount, 
 	a.publishEvent(events.EventTypeCompactCompleted, events.CompactCompletedEvent(source, beforeCount, afterCount, summaryChars, err))
 }
 
-// PublishContextManagementDiagnostic (SP-066 Phase 1, SP-126) emits the
-// per-iteration context-budget snapshot so the WebUI metrics panel can render
-// the effective trigger threshold and verify substitution is doing the heavy
-// lifting. cachedTokens/promptTokens/cacheWriteTokens expose provider cache
-// effectiveness in the diagnostic payload.
-//
-// SP-126: emits both the effective max (post-cap) and the native max
-// (pre-cap) so subscribers can distinguish "X / 300K of 1M tokens"
-// (effective vs native) rather than collapsing them into a single value.
-// Pre-SP-126 the two were identical (no cap was honored end-to-end).
+// PublishContextManagementDiagnostic emits the per-iteration context-budget snapshot.
+// Emits both the effective max (post-cap) and the native max (pre-cap).
 func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, iteration, messageCount, cachedTokens, promptTokens, cacheWriteTokens int) {
 	nativeMax := a.getNativeModelContextLimit()
 	a.publishEvent(
@@ -141,10 +125,7 @@ func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, ite
 	)
 }
 
-// PublishRecallDiagnostic (SP-066 Phase 3) emits a single semantic-recall
-// pass diagnostic. Called from InjectSemanticRecall after every recall
-// query (including no-op queries) so subscribers can see the full
-// distribution of recall behavior, not just hits.
+// PublishRecallDiagnostic emits a single semantic-recall pass diagnostic.
 func (a *Agent) PublishRecallDiagnostic(diag recallRetrievalDiagnostic) {
 	a.publishEvent(
 		events.EventTypeRecallDiagnostic,
@@ -206,10 +187,7 @@ func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider s
 	}
 }
 
-// PublishEvent publishes an event through the agent's event bus, automatically
-// decorating it with client_id/chat_id metadata. This is the canonical way for
-// external callers (cmd/, webui) to publish events — use it instead of calling
-// eventBus.Publish directly, which skips metadata decoration.
+// PublishEvent publishes an event through the agent's event bus with metadata decoration.
 func (a *Agent) PublishEvent(eventType string, data interface{}) {
 	a.publishEvent(eventType, data)
 }
@@ -260,11 +238,7 @@ func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
 	}
 }
 
-// MergeEventMetadata adds extras to the current event metadata without
-// discarding existing keys. Unlike SetEventMetadata, which replaces the
-// map wholesale, this is the right call when a subagent needs to layer
-// per-spawn fields (e.g. subagent_depth, active_persona) on top of
-// already-set chat/client routing keys inherited from its parent.
+// MergeEventMetadata adds extras to the current event metadata without discarding existing keys.
 func (a *Agent) MergeEventMetadata(extras map[string]interface{}) {
 	if len(extras) == 0 {
 		return

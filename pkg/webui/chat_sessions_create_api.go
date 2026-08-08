@@ -66,6 +66,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 
 	cs := newChatSession(chatID, name)
 	ctx.ChatSessions[chatID] = cs
+	ctx.markChatCreated(chatID)
 	ws.mutex.Unlock()
 
 	ws.log().Info("created chat session", slog.String("chat_id", chatID), slog.String("name", name), slog.String("client_id", clientID))

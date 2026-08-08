@@ -35,6 +35,9 @@ export interface SecurityApprovalDialogProps {
     chainSubcommands?: string[];
     chainClassifications?: ('low' | 'moderate' | 'high')[];
   };
+  // Visible error when the user's response could not be delivered (socket
+  // down). The dialog stays open for retry instead of silently hanging.
+  deliveryError?: string;
   onRespond: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
 }
 
@@ -121,6 +124,7 @@ function SecurityApprovalDialog({
   fsFolder,
   fsPath,
   securityAnalysis,
+  deliveryError,
   onRespond,
 }: SecurityApprovalDialogProps): JSX.Element {
   const risk = toRiskKey(riskLevel);
@@ -224,6 +228,15 @@ function SecurityApprovalDialog({
 
           {/* Reasoning */}
           {reasoning && <div className="security-approval-reasoning">{reasoning}</div>}
+
+          {/* Delivery failure (socket down) — the click did not reach the
+              server. Kept visible so the retry affordance is obvious; the
+              dialog stays open until the connection is restored. */}
+          {deliveryError && (
+            <div className="security-approval-delivery-error" role="alert">
+              {deliveryError}
+            </div>
+          )}
 
           {/* Risk type category */}
           {riskType && <div className="security-approval-risk-type">{riskType}</div>}

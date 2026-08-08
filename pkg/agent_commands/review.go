@@ -23,12 +23,10 @@ import (
 // but accessible through the interactive agent console
 
 type ReviewCommand struct {
-	ctx context.Context // SP-073: cancellation context for LLM calls
+	ctx context.Context // cancellation context for LLM calls
 }
 
-// SetContext sets the cancellation context for review LLM calls (SP-073).
-// When wired through the command registry, this receives the agent's
-// InterruptCtx so Stop/Ctrl+C can abort in-flight review requests.
+// SetContext sets the cancellation context for review LLM calls.
 func (c *ReviewCommand) SetContext(ctx context.Context) {
 	c.ctx = ctx
 }
@@ -76,10 +74,10 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 // ReviewDeepCommand implements the /review-deep slash command
 // This command performs a deeper evidence-focused review on staged Git changes
 type ReviewDeepCommand struct {
-	ctx context.Context // SP-073: cancellation context
+	ctx context.Context // cancellation context
 }
 
-// SetContext sets the cancellation context for review LLM calls (SP-073).
+// SetContext sets the cancellation context for review LLM calls.
 func (c *ReviewDeepCommand) SetContext(ctx context.Context) {
 	c.ctx = ctx
 }
@@ -240,7 +238,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		Config:           cfg,
 		Logger:           logger,
 		AgentClient:      agentClient,
-		GoCtx:            goCtx, // SP-073: pass cancellation context
+		GoCtx:            goCtx, // cancellation context
 		ProjectType:      detectProjectType(),
 		CommitMessage:    extractStagedChangesSummary(),
 		KeyComments:      extractKeyCommentsFromDiff(stagedDiff),

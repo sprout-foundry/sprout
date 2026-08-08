@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -523,6 +524,10 @@ func TestChatSessionDeleteCannotDeleteActive(t *testing.T) {
 // shared state, so we wait for all in-flight work to settle before each
 // iteration's assertion.
 func TestChatSessionDeleteConcurrentWithQuery(t *testing.T) {
+	// Isolate agent state persistence so concurrently-created agents don't
+	// write into the real state dir (and trip the [state-leak] detector).
+	defer agent.NewTestStateDir(t)()
+
 	ws := setupConcurrentTestServer(t)
 
 	// Create a chat session to delete/query concurrently.
@@ -538,6 +543,7 @@ func TestChatSessionDeleteConcurrentWithQuery(t *testing.T) {
 		if _, ok := ctx.ChatSessions[chatX]; !ok {
 			cs := newChatSession(chatX, "Chat X")
 			ctx.ChatSessions[chatX] = cs
+			ctx.markChatCreated(chatX)
 		} else {
 			if cs := ctx.getChatSession(chatX); cs != nil {
 				cs.setQueryActive(false, "")

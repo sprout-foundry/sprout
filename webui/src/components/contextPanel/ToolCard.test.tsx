@@ -152,11 +152,11 @@ describe('ToolCard depth badge', () => {
       expect(badge?.getAttribute('data-depth-tier')).toBe('orchestrator');
     });
 
-    it('applies paddingLeft of 0px on the tool-summary', () => {
+    it('sets data-depth=1 on the execution row to drive CSS indentation', () => {
       renderToolCard({ depth: 1 });
-      const summary = container.querySelector('.tool-summary');
-      expect(summary).toBeTruthy();
-      expect(summary?.style.paddingLeft).toBe('0px');
+      const execution = container.querySelector('.tool-execution');
+      expect(execution).toBeTruthy();
+      expect(execution?.getAttribute('data-depth')).toBe('1');
     });
   });
 
@@ -175,11 +175,11 @@ describe('ToolCard depth badge', () => {
       expect(badge?.getAttribute('data-depth-tier')).toBe('deep');
     });
 
-    it('applies paddingLeft of 16px on the tool-summary', () => {
+    it('sets data-depth=2 on the execution row to drive CSS indentation', () => {
       renderToolCard({ depth: 2 });
-      const summary = container.querySelector('.tool-summary');
-      expect(summary).toBeTruthy();
-      expect(summary?.style.paddingLeft).toBe('16px');
+      const execution = container.querySelector('.tool-execution');
+      expect(execution).toBeTruthy();
+      expect(execution?.getAttribute('data-depth')).toBe('2');
     });
   });
 
@@ -198,11 +198,11 @@ describe('ToolCard depth badge', () => {
       expect(badge?.getAttribute('data-depth-tier')).toBe('deep');
     });
 
-    it('applies paddingLeft of 32px on the tool-summary', () => {
+    it('sets data-depth=3 on the execution row to drive CSS indentation', () => {
       renderToolCard({ depth: 3 });
-      const summary = container.querySelector('.tool-summary');
-      expect(summary).toBeTruthy();
-      expect(summary?.style.paddingLeft).toBe('32px');
+      const execution = container.querySelector('.tool-execution');
+      expect(execution).toBeTruthy();
+      expect(execution?.getAttribute('data-depth')).toBe('3');
     });
   });
 
@@ -228,25 +228,27 @@ describe('ToolCard depth badge', () => {
       expect(badge?.getAttribute('data-depth-tier')).toBe('deep');
     });
 
-    it('applies paddingLeft that scales linearly with depth', () => {
-      // depth 5 → (5-1) * 16 = 64px
+    it('sets data-depth that scales with depth to drive CSS indentation', () => {
+      // depth 5 → data-depth=5; the CSS indents via .tool-execution[data-depth]
       renderToolCard({ depth: 5 });
-      const summary = container.querySelector('.tool-summary');
-      expect(summary?.style.paddingLeft).toBe('64px');
+      const execution = container.querySelector('.tool-execution');
+      expect(execution).toBeTruthy();
+      expect(execution?.getAttribute('data-depth')).toBe('5');
     });
   });
 
   describe('indentation formula', () => {
     it.each([
-      [1, '0px'],
-      [2, '16px'],
-      [3, '32px'],
-      [4, '48px'],
-      [5, '64px'],
-    ])('paddingLeft = (depth - 1) * 16 → depth=%d → %s', (depth, expectedPadding) => {
+      [1, '1'],
+      [2, '2'],
+      [3, '3'],
+      [4, '4'],
+      [5, '5'],
+    ])('data-depth = depth → %s', (depth, expectedDepth) => {
       renderToolCard({ depth, id: `tool-${depth}` });
-      const summary = container.querySelector('.tool-summary');
-      expect(summary?.style.paddingLeft).toBe(expectedPadding);
+      const execution = container.querySelector('.tool-execution');
+      expect(execution).toBeTruthy();
+      expect(execution?.getAttribute('data-depth')).toBe(expectedDepth);
     });
   });
 

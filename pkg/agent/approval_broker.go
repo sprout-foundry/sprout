@@ -19,38 +19,17 @@ type BrokerDecision struct {
 	Approved   bool
 	Decision   security.ApprovalDecision
 	Outcome    security.ApprovalOutcome
-	Surface    string         // "webui" or "cli" — which surface answered
-	Assessment RiskAssessment // echoed for caller diagnostics
-	// Analysis holds the LLM-derived security analysis when available (SP-124).
-	// Nil when: tracking disabled, no LLM call needed (Low risk), LLM timed
-	// out, LLM errored, or analysis JSON failed to parse. Callers must treat
-	// nil as "fall back to static classifier reasoning".
-	Analysis *SecurityAnalysis
+	Surface    string            // "webui" or "cli" — which surface answered
+	Assessment RiskAssessment    // echoed for caller diagnostics
+	Analysis   *SecurityAnalysis // LLM-derived security analysis when available; nil otherwise
 }
 
 // RequestApproval performs the unified approval flow for a RiskAssessment.
-//
-// For Low-risk / no-prompt-needed assessments, returns early with
-// (BrokerDecision{Approved: true, Assessment: assessment}, nil).
-//
-// For Critical / IsHardBlock assessments, returns a SecurityError without
-// consulting any approval surface (hard-blocks are unconditional).
-//
-// For Medium/High/IntentConfirmation assessments:
-//  1. Checks fast-bypass paths (persistent allowlist, unsafe-mode, session
-//     elevation, unsafe-shell)
-//  2. Tries WebUI first if available
-//  3. Falls back to CLI (using AskForApprovalWithOptions for shell_command
-//     with 4-option cascade, or AskForConfirmation for other tools)
-//  4. For non-interactive with no surface: permissive auto-approve
-//
-// It returns (BrokerDecision, error) — non-nil error means deny/hard-block,
-// nil means approved (or auto-approved).
+// Low-risk auto-approves. Critical/hard-blocks deny unconditionally.
+// Medium/High/IntentConfirmation checks bypass paths then tries WebUI, CLI,
+// or falls back to permissive auto-approve in non-interactive mode.
 func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args map[string]interface{}) (BrokerDecision, error) {
-	// --- Command policy check (shell_command only) ---
-	// MUST be the very first check, before the Low-risk early return.
-	// If placed after the Low-risk check, "deny" and "ask" actions silently
-	// fail for commands the classifier rates as SAFE/Low.
+	// Command policy check (shell_command only) — must run before Low-risk early return.
 	skipAllowlist := false
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
@@ -91,8 +70,6 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 							Assessment: assessment,
 						}, nil
 					case configuration.CommandPolicyAsk:
-						// Force interactive prompt: skip the allowlist bypass below.
-						// The classifier risk is still computed for display.
 						skipAllowlist = true
 					}
 				}
@@ -123,8 +100,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 
 	// --- Fast bypass paths ---
 
-	// Persistent allowlist for shell commands (skipped when a command policy
-	// "ask" rule matched — those must always prompt)
+	// Persistent allowlist for shell commands (skipped when a command policy "ask" rule matched)
 	if !skipAllowlist && toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" && a.IsShellCommandAllowlisted(cmd) {
 			return BrokerDecision{
@@ -177,19 +153,14 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 		}, nil
 	}
 
-	// --- SP-124 Phase 1: optional LLM analysis for shell commands ---
-	// Only run for Medium/High risk shell commands (skip Low; skip Critical
-	// hard-blocks since those don't reach prompts). On error or timeout,
-	// securityAnalysis stays nil and we fall through to the static-classifier
-	// prompt.
+	// Optional LLM analysis for shell commands (Medium/High risk only).
+	// On error or timeout, securityAnalysis stays nil and we fall through.
 	var securityAnalysis *SecurityAnalysis
 	if toolName == "shell_command" &&
 		(assessment.Level == configuration.RiskLevelMedium ||
 			assessment.Level == configuration.RiskLevelHigh) {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
-			// Cache check — identical commands in the same session reuse
-			// the cached analysis. SP-124b: use normalized cache key so that
-			// whitespace-equivalent commands share the same cache entry.
+			// Cache check — identical commands in the same session reuse the cached analysis.
 			key := ChainCacheKey(cmd)
 			if cached, ok := a.getSecurityAnalysisCache().Get(key); ok {
 				securityAnalysis = cached
@@ -201,8 +172,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 					securityAnalysis = sa
 					a.getSecurityAnalysisCache().Set(key, sa)
 				}
-				// On error or timeout: securityAnalysis stays nil; fall through
-				// to static-classifier prompt.
+				// On error or timeout: securityAnalysis stays nil; fall through.
 			}
 		}
 	}
@@ -213,17 +183,13 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 
 	// WebUI path. When a browser tab is connected, the WebUI IS the
 	// interactive surface — the TTY status of os.Stdin is irrelevant.
-	// A webui-only service has no TTY but still has live users who can
-	// answer approval dialogs. The isNonInteractive() check is only
-	// meaningful for the CLI fallback path below.
 	webUICanAnswer := !isSubagent && a.HasActiveWebUIClients()
 	if a.debug {
 		a.debugLog("[APPROVAL] webUICanAnswer=%v (isSubagent=%v, hasWebUIClients=%v, hasMgr=%v, hasEventBus=%v)\n",
 			webUICanAnswer, isSubagent, a.HasActiveWebUIClients(), a.GetSecurityApprovalMgr() != nil, a.GetEventBus() != nil)
 	}
 	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && webUICanAnswer {
-		// Suspend CLI spinner and steer reader before blocking on the
-		// webui response — prevents terminal corruption during the wait.
+		// Suspend CLI spinner before blocking on the webui response.
 		clihooks.SuspendIndicator()
 		clihooks.PauseSteer()
 		defer clihooks.ResumeIndicator()
@@ -248,8 +214,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 			extras["intent_confirmation"] = "true"
 		}
 
-		// SP-124 Phase 1: attach LLM analysis to the WebUI extras so the
-		// approval dialog can display it (Phase 2).
+		// Attach LLM analysis to the WebUI extras for display.
 		if securityAnalysis != nil {
 			jsonBytes, _ := json.Marshal(securityAnalysis)
 			extras["security_analysis"] = string(jsonBytes)
@@ -273,7 +238,6 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 		// Only honor when the user actually responded; on timeout/disconnect
 		// fall through to CLI prompt below.
 		if outcome == security.ApprovalOutcomeResponded {
-			// Apply side effects for shell commands
 			if toolName == "shell_command" {
 				if cmd, ok := args["command"].(string); ok && cmd != "" {
 					a.applyApprovalDecision(decision, cmd)
@@ -323,9 +287,9 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 	}
 
 	if canPrompt {
-		// For shell_command: use the 4-option approval picker (AskForApprovalWithOptions)
+		// For shell_command: use the 4-option approval picker.
 		if toolName == "shell_command" {
-			// SP-093-2: per-part picker (opt-in via EditApprovalConfig.ShellCommand).
+			// Per-part picker (opt-in via EditApprovalConfig.ShellCommand).
 			if cfg != nil && cfg.EditApproval != nil && cfg.EditApproval.ShellCommand &&
 				args["command"] != "" {
 				if cmd, ok := args["command"].(string); ok && cmd != "" {
@@ -379,16 +343,8 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				if assessment.RequiresIntentConfirmation {
 					prompt = "High-risk operation — your active risk profile gates this command."
 				}
-				// SP-124 Phase 3: convert the agent-level analysis to the
-				// leaf-level utils view so the arrow-key picker can render
-				// it above the option list. nil when the analyzer timed
-				// out / errored / wasn't produced; the picker omits the
-				// panel in that case.
-				//
-				// SP-124b Phase 2: copy the chain metadata fields too so
-				// the CLI stepper can render per-subcommand dots when
-				// ChainLength > 1. Legacy single-command callers still
-				// pass nil/zero and see no chain UI.
+				// Convert the agent-level analysis to the leaf-level utils view
+				// so the arrow-key picker can render it above the option list.
 				var analysisView *utils.SecurityAnalysisView
 				if securityAnalysis != nil {
 					analysisView = &utils.SecurityAnalysisView{

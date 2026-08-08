@@ -6,15 +6,8 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// deferredQueue holds steer messages that the user typed while a turn
-// was running but chose to defer until the NEXT user-prompted turn
-// rather than inject mid-flight (SP-055 Phase 3b). The CLI's REPL
-// loop drains this queue and joins the entries with the user's next
-// typed prompt before calling ProcessQuery.
-//
-// Distinct from inputInjectionChan (which seed consumes mid-turn) so
-// the two delivery semantics never collide: a message goes to one
-// channel or the other based on the user's submit mode.
+// deferredQueue holds steer messages deferred until the NEXT user-prompted turn.
+// Distinct from inputInjectionChan so the two delivery semantics never collide.
 type deferredQueue struct {
 	mu    sync.Mutex
 	items []string
@@ -31,11 +24,7 @@ func (a *Agent) deferredQueue() *deferredQueue {
 	return actual.(*deferredQueue)
 }
 
-// EnqueueDeferredMessage appends a steer message to be consumed at the
-// start of the next user-prompted turn. Order is FIFO. No upper bound
-// is enforced — practical sessions accumulate at most a handful before
-// the user submits, but we cap defensively at 32 to avoid runaway
-// growth from a stuck loop.
+// EnqueueDeferredMessage appends a steer message for the next user-prompted turn. FIFO, capped at 32.
 const deferredQueueCap = 32
 
 func (a *Agent) EnqueueDeferredMessage(text string) {
@@ -51,9 +40,7 @@ func (a *Agent) EnqueueDeferredMessage(text string) {
 	}
 }
 
-// DrainDeferredMessages atomically removes and returns all queued
-// messages. The CLI's REPL loop calls this after ReadLine() returns
-// the user's next prompt and prepends them to the typed text.
+// DrainDeferredMessages atomically removes and returns all queued messages. Used by the CLI REPL loop.
 func (a *Agent) DrainDeferredMessages() []string {
 	if a == nil {
 		return nil
@@ -69,9 +56,7 @@ func (a *Agent) DrainDeferredMessages() []string {
 	return out
 }
 
-// DeferredMessageCount returns how many messages are currently queued.
-// Used by the UI to show "N queued" hints. Reads are racy with
-// enqueues but counts are advisory anyway.
+// DeferredMessageCount returns the number of queued messages (advisory only).
 func (a *Agent) DeferredMessageCount() int {
 	if a == nil {
 		return 0
@@ -82,7 +67,7 @@ func (a *Agent) DeferredMessageCount() int {
 	return len(q.items)
 }
 
-// InjectInputContext injects a new user input using context-based interrupt system
+// InjectInputContext injects a new user input using the context-based interrupt system.
 func (a *Agent) InjectInputContext(input string) error {
 	a.inputInjectionMutex.Lock()
 	defer a.inputInjectionMutex.Unlock()
@@ -101,14 +86,8 @@ func (a *Agent) GetInputInjectionContext() <-chan string {
 	return a.inputInjectionChan
 }
 
-// SteeringChannel returns the receive-only input channel that steer/queue
-// messages are delivered to. This is the same channel used by
-// InjectInputContext — it is the "user typed something while a turn is
-// running, queue it for the next user-prompted turn" semantics (SP-055).
-//
-// Subagent plumbing consults this channel FIRST before falling back to
-// its own input channel: if the parent has a steering channel, deliver
-// to the parent, not the subagent (SP-094-8).
+// SteeringChannel returns the receive-only input channel for steer/queue messages.
+// Subagent plumbing consults this channel FIRST before falling back to its own input channel.
 func (a *Agent) SteeringChannel() <-chan string {
 	if a == nil {
 		return nil

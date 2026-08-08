@@ -78,7 +78,7 @@ func (s *stubAgentService) ExecuteTool(_ context.Context, name string, args map[
 // tool execution — with the daemon owning all state.
 func TestAgentSocketGate(t *testing.T) {
 	svc := newStubAgentService()
-	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+	sockPath := shortSocketPath(t, "agent")
 
 	srv := &AgentServer{SocketPath: sockPath, Service: svc}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -148,7 +148,7 @@ func TestAgentClient_DialFailure(t *testing.T) {
 // the client as response errors, not dropped connections.
 func TestAgentServer_ServiceErrorPropagation(t *testing.T) {
 	svc := &failingAgentService{}
-	sockPath := filepath.Join(t.TempDir(), "agent.sock")
+	sockPath := shortSocketPath(t, "agent")
 	srv := &AgentServer{SocketPath: sockPath, Service: svc}
 	ctx := context.Background()
 	require.NoError(t, srv.Start(ctx))

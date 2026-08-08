@@ -257,6 +257,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	// Notify user if model was different due to fallback
@@ -357,6 +358,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	// Notify user if model was different due to fallback
@@ -441,6 +443,7 @@ func (a *Agent) SetModel(model string) error {
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	return nil
@@ -506,6 +509,7 @@ func (a *Agent) SetModelPersisted(model string) error {
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	return nil

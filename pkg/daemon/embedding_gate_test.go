@@ -116,7 +116,7 @@ func TestEmbeddingSocketGate(t *testing.T) {
 		Release: func(*embedding.EmbeddingManager) {},
 	}
 
-	sockPath := filepath.Join(t.TempDir(), "embed.sock")
+	sockPath := shortSocketPath(t, "embed")
 	srv := &EmbeddingServer{SocketPath: sockPath, Service: svc}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

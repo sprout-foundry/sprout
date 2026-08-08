@@ -12,10 +12,10 @@ import (
 // HuggingFace repo to download it from; MinRAM is the minimum physical RAM
 // (bytes) at which the model is the recommended choice.
 type CatalogModel struct {
-	Name    string // canonical name (e.g. "qwen3.5-4b")
-	Dir     string // directory name under the models root
-	HFRepo  string // HuggingFace repo (mlx-community layout)
-	MinRAM  uint64 // minimum total RAM (bytes) for this to be the pick
+	Name   string // canonical name (e.g. "qwen3.5-4b")
+	Dir    string // directory name under the models root
+	HFRepo string // HuggingFace repo (mlx-community layout)
+	MinRAM uint64 // minimum total RAM (bytes) for this to be the pick
 }
 
 // ModelCatalog lists the models the server knows how to serve, ordered by

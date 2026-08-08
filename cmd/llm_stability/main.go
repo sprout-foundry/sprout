@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
 func memStats() string {

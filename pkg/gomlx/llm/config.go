@@ -13,34 +13,34 @@ import (
 // hfConfig is the raw HuggingFace config.json structure. Only fields used by
 // supported architectures are included; unknown fields are silently ignored.
 type hfConfig struct {
-	Architectures      []string `json:"architectures"`
-	ModelType          string   `json:"model_type"`
-	HiddenSize         int      `json:"hidden_size"`
-	IntermediateSize   int      `json:"intermediate_size"`
-	NumHiddenLayers    int      `json:"num_hidden_layers"`
-	NumAttentionHeads  int      `json:"num_attention_heads"`
-	NumKVHeads         int      `json:"num_key_value_heads"`
-	HeadDim            int      `json:"head_dim"`
-	RMSNormEPS         float64  `json:"rms_norm_eps"`
-	RopeTheta          float64  `json:"rope_theta"`
-	VocabSize          int      `json:"vocab_size"`
-	BOSTokenID         int      `json:"bos_token_id"`
-	EOSTokenID         int      `json:"eos_token_id"`
-	TieWordEmbeddings  bool     `json:"tie_word_embeddings"`
-	AttentionBias      bool     `json:"attention_bias"`
-	MaxPositionEmbeds  int      `json:"max_position_embeddings"`
-	Quantization       *quantConfig `json:"quantization"`
+	Architectures     []string     `json:"architectures"`
+	ModelType         string       `json:"model_type"`
+	HiddenSize        int          `json:"hidden_size"`
+	IntermediateSize  int          `json:"intermediate_size"`
+	NumHiddenLayers   int          `json:"num_hidden_layers"`
+	NumAttentionHeads int          `json:"num_attention_heads"`
+	NumKVHeads        int          `json:"num_key_value_heads"`
+	HeadDim           int          `json:"head_dim"`
+	RMSNormEPS        float64      `json:"rms_norm_eps"`
+	RopeTheta         float64      `json:"rope_theta"`
+	VocabSize         int          `json:"vocab_size"`
+	BOSTokenID        int          `json:"bos_token_id"`
+	EOSTokenID        int          `json:"eos_token_id"`
+	TieWordEmbeddings bool         `json:"tie_word_embeddings"`
+	AttentionBias     bool         `json:"attention_bias"`
+	MaxPositionEmbeds int          `json:"max_position_embeddings"`
+	Quantization      *quantConfig `json:"quantization"`
 
 	// Hybrid linear-attention fields (Qwen3.5 / Qwen3-Next style).
-	FullAttentionInterval int      `json:"full_attention_interval"`
-	LinearNumKeyHeads     int      `json:"linear_num_key_heads"`
-	LinearNumValueHeads   int      `json:"linear_num_value_heads"`
-	LinearKeyHeadDim      int      `json:"linear_key_head_dim"`
-	LinearValueHeadDim    int      `json:"linear_value_head_dim"`
-	LinearConvKernelDim   int      `json:"linear_conv_kernel_dim"`
-	AttnOutputGate        bool     `json:"attn_output_gate"`
-	MTPNumHiddenLayers    int      `json:"mtp_num_hidden_layers"`
-	LayerTypes            []string `json:"layer_types"`
+	FullAttentionInterval int         `json:"full_attention_interval"`
+	LinearNumKeyHeads     int         `json:"linear_num_key_heads"`
+	LinearNumValueHeads   int         `json:"linear_num_value_heads"`
+	LinearKeyHeadDim      int         `json:"linear_key_head_dim"`
+	LinearValueHeadDim    int         `json:"linear_value_head_dim"`
+	LinearConvKernelDim   int         `json:"linear_conv_kernel_dim"`
+	AttnOutputGate        bool        `json:"attn_output_gate"`
+	MTPNumHiddenLayers    int         `json:"mtp_num_hidden_layers"`
+	LayerTypes            []string    `json:"layer_types"`
 	RopeParameters        *ropeParams `json:"rope_parameters"`
 
 	// TextConfig carries the nested text-model config for multimodal
@@ -50,11 +50,11 @@ type hfConfig struct {
 
 // ropeParams is the `rope_parameters` section of Qwen3.5 configs.
 type ropeParams struct {
-	PartialRotaryFactor float32  `json:"partial_rotary_factor"`
-	RopeTheta           float64  `json:"rope_theta"`
-	MRopeSection        []int    `json:"mrope_section"`
-	MRopeInterleaved    bool     `json:"mrope_interleaved"`
-	RopeType            string   `json:"rope_type"`
+	PartialRotaryFactor float32 `json:"partial_rotary_factor"`
+	RopeTheta           float64 `json:"rope_theta"`
+	MRopeSection        []int   `json:"mrope_section"`
+	MRopeInterleaved    bool    `json:"mrope_interleaved"`
+	RopeType            string  `json:"rope_type"`
 }
 
 // quantConfig is the mlx-lm quantization section of config.json (present on

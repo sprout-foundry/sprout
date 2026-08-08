@@ -263,4 +263,3 @@ func Conv1D(input, weight *Array, stride, padding, dilation, groups int, s *Stre
 		C.int(stride), C.int(padding), C.int(dilation), C.int(groups), s.cHandle())
 	return wrapResult(out, rc, "conv1d")
 }
-

@@ -31,8 +31,8 @@ type Dtype int
 // mlx_dtype enum because these are never passed to C — they exist only so the
 // stub compiles the same set of exported names.
 const (
-	Bool      Dtype = iota
-	UInt8            // explicit iota on subsequent lines for godoc alignment
+	Bool  Dtype = iota
+	UInt8       // explicit iota on subsequent lines for godoc alignment
 	UInt16
 	UInt32
 	UInt64
@@ -158,10 +158,10 @@ func Conv1D(input, weight *Array, stride, padding, dilation, groups int, s *Stre
 }
 
 // Sqrt returns errUnavailable on stub builds.
-func Sqrt(a *Array, s *Stream) (*Array, error)        { return nil, errUnavailable }
-func Rsqrt(a *Array, s *Stream) (*Array, error)     { return nil, errUnavailable }
-func Sigmoid(a *Array, s *Stream) (*Array, error)   { return nil, errUnavailable }
-func Negative(a *Array, s *Stream) (*Array, error)  { return nil, errUnavailable }
+func Sqrt(a *Array, s *Stream) (*Array, error)     { return nil, errUnavailable }
+func Rsqrt(a *Array, s *Stream) (*Array, error)    { return nil, errUnavailable }
+func Sigmoid(a *Array, s *Stream) (*Array, error)  { return nil, errUnavailable }
+func Negative(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
 func ArgMaxAxis(a *Array, axis int, keepdims bool, s *Stream) (*Array, error) {
 	return nil, errUnavailable
 }
@@ -301,15 +301,15 @@ type MemoryStats struct {
 // unified-memory RAM gate can be evaluated).
 func TotalSystemRAM() uint64 { return 0 }
 
-func ActiveMemory() (uint64, error)             { return 0, errUnavailable }
-func CacheMemory() (uint64, error)              { return 0, errUnavailable }
-func PeakMemory() (uint64, error)               { return 0, errUnavailable }
-func MemoryLimit() (uint64, error)              { return 0, errUnavailable }
-func SetMemoryLimit(uint64) error               { return errUnavailable }
-func SetCacheLimit(uint64) error                { return errUnavailable }
-func ClearCache() error                         { return errUnavailable }
-func ResetPeakMemory() error                    { return errUnavailable }
-func Snapshot() (MemoryStats, error)            { return MemoryStats{}, errUnavailable }
+func ActiveMemory() (uint64, error)  { return 0, errUnavailable }
+func CacheMemory() (uint64, error)   { return 0, errUnavailable }
+func PeakMemory() (uint64, error)    { return 0, errUnavailable }
+func MemoryLimit() (uint64, error)   { return 0, errUnavailable }
+func SetMemoryLimit(uint64) error    { return errUnavailable }
+func SetCacheLimit(uint64) error     { return errUnavailable }
+func ClearCache() error              { return errUnavailable }
+func ResetPeakMemory() error         { return errUnavailable }
+func Snapshot() (MemoryStats, error) { return MemoryStats{}, errUnavailable }
 
 // ClosureFunc is a Go closure over MLX arrays; unavailable on stub builds.
 type ClosureFunc func(inputs []*Array) ([]*Array, error)
@@ -317,10 +317,10 @@ type ClosureFunc func(inputs []*Array) ([]*Array, error)
 // Closure wraps an MLX closure; unavailable on stub builds.
 type Closure struct{}
 
-func NewClosure(ClosureFunc) (*Closure, error) { return nil, errUnavailable }
+func NewClosure(ClosureFunc) (*Closure, error)      { return nil, errUnavailable }
 func (c *Closure) Apply([]*Array) ([]*Array, error) { return nil, errUnavailable }
-func (c *Closure) Compile(bool) (*Closure, error)    { return nil, errUnavailable }
-func (c *Closure) Free()                             {}
+func (c *Closure) Compile(bool) (*Closure, error)   { return nil, errUnavailable }
+func (c *Closure) Free()                            {}
 
 func Quantize(*Array, int, int, string, *Stream) ([]*Array, error) {
 	return nil, errUnavailable

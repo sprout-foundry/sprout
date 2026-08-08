@@ -7,11 +7,11 @@
 //
 // Usage:
 //
-//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -port 8080   # auto-select model by RAM
-//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -model ~/dev/llm-models/qwen3.5-4b-4bit -port 8080
+//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -port 18081  # auto-select model by RAM
+//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -model ~/dev/llm-models/qwen3.5-4b-4bit -port 18081
 //
 // Then configure sprout with a provider whose endpoint is
-// http://127.0.0.1:8080/v1/chat/completions.
+// http://127.0.0.1:18081/v1/chat/completions.
 package main
 
 import (
@@ -259,9 +259,20 @@ func (s *server) handleModels(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleHealth reports whether the server is up and which model is loaded.
+// Lightweight and lock-free so it always answers even while a generation is
+// in flight.
+func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+		"model":  s.modelName,
+	})
+}
+
 func main() {
 	modelDir := flag.String("model", "", "path to the model directory (default: auto-select from ~/dev/llm-models by RAM)")
-	port := flag.Int("port", 8080, "port to listen on")
+	port := flag.Int("port", 18081, "port to listen on (default matches the sprout-local provider config)")
 	maxTokens := flag.Int("max-tokens", 512, "cap on max_tokens per request (0 = honor client value)")
 	flag.Parse()
 
@@ -302,6 +313,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", srv.handleChat)
 	mux.HandleFunc("/v1/models", srv.handleModels)
+	mux.HandleFunc("/health", srv.handleHealth)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
 	httpSrv := &http.Server{Addr: addr, Handler: mux}

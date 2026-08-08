@@ -25,7 +25,7 @@ type ChatMessage struct {
 	Content string
 }
 
-func NewModel(modelDir string) (*Model, error)              { return nil, errUnavailable }
+func NewModel(modelDir string) (*Model, error) { return nil, errUnavailable }
 func NewModelFromFiles(modelPath, configPath, tokPath string) (*Model, error) {
 	return nil, errUnavailable
 }
@@ -35,7 +35,7 @@ func (m *Model) Generate(ctx interface{}, prompt string, cfg GenerateConfig, onT
 func (m *Model) GenerateText(ctx interface{}, prompt string, cfg GenerateConfig) (string, error) {
 	return "", errUnavailable
 }
-func (m *Model) Close() error                              { return nil }
+func (m *Model) Close() error { return nil }
 func DefaultGenerateConfig() GenerateConfig {
 	return GenerateConfig{MaxTokens: 512, Temperature: 0.6, TopP: 0.95, TopK: 20, RepetitionPenalty: 1.1}
 }

@@ -104,8 +104,8 @@ type deltaKernelKey struct {
 }
 
 var (
-	deltaKernelMu   sync.Mutex
-	deltaKernels    = map[deltaKernelKey]*mlx.MetalKernel{}
+	deltaKernelMu sync.Mutex
+	deltaKernels  = map[deltaKernelKey]*mlx.MetalKernel{}
 )
 
 // getDeltaKernel returns (and lazily compiles) the fused Metal kernel for the

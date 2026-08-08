@@ -57,7 +57,6 @@ func Softplus(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 	return mlx.Log1p(exp, s)
 }
 
-
 // ApplyRoPEFast applies fused rotary position embeddings using the MLX
 // mlx_fast_rope kernel — one Metal op instead of ~10. offset is the absolute
 // position of the first token in x (0 for prefill, absolute pos for decode).

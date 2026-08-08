@@ -110,8 +110,10 @@ func freeAll(ys []*mlx.Array) {
 }
 
 // gatedDeltaUpdate implements the Gated DeltaNet recurrence over a full
-// sequence. It mirrors mlx-lm's gated_delta_ops reference implementation
-// (the sequential per-step scan — exact, and matches the GPU kernel's math).
+// sequence. On Apple Silicon (Metal available) it dispatches to a single
+// fused Metal kernel (fusedGatedDeltaUpdate) that scans the whole sequence in
+// one launch; otherwise it falls back to the exact sequential per-step ops
+// loop below (mirroring mlx-lm's gated_delta_ops reference implementation).
 //
 // Inputs (batch B):
 //
@@ -131,6 +133,22 @@ func freeAll(ys []*mlx.Array) {
 //	state = state + k_t * delta                [B,Hv,Dv,Dk]
 //	y_t = sum_dk(state * q_t)                  [B,Hv,Dv]
 func gatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*mlx.Array, *mlx.Array, error) {
+	// Fast path: one fused Metal kernel launch when available.
+	if mlx.Available() {
+		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, stream)
+		if err == nil {
+			return y, ns, nil
+		}
+		// Fall through to the sequential ops loop on any kernel error
+		// (uncompilable shape, Metal hiccup, etc.).
+	}
+	return gatedDeltaUpdateOps(q, k, v, g, beta, state, stream)
+}
+
+// gatedDeltaUpdateOps is the exact sequential per-step scan. It mirrors
+// mlx-lm's gated_delta_ops reference implementation (matches the fused GPU
+// kernel's math) and is used when Metal is unavailable.
+func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*mlx.Array, *mlx.Array, error) {
 	qs := q.Shape()
 	B, S, Hk, Dk := qs[0], qs[1], qs[2], qs[3]
 	vs := v.Shape()
@@ -172,7 +190,8 @@ func gatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*
 
 	ys := make([]*mlx.Array, 0, S)
 	for t := 0; t < S; t++ {
-		qt, err := sliceStep(qR, t, B, Hk, Dk, stream)
+		// qR/kR are [B, S, Hv, Dk] after the repeat — slice with Hv, not Hk.
+		qt, err := sliceStep(qR, t, B, Hv, Dk, stream)
 		if err != nil {
 			freeAll(ys)
 			if curOwned {
@@ -180,7 +199,7 @@ func gatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*
 			}
 			return nil, nil, err
 		}
-		kt, err := sliceStep(kR, t, B, Hk, Dk, stream)
+		kt, err := sliceStep(kR, t, B, Hv, Dk, stream)
 		if err != nil {
 			qt.Free()
 			freeAll(ys)

@@ -388,6 +388,13 @@ func (t *Tokenizer) VocabSize() int {
 	return len(t.vocab)
 }
 
+// EOSID returns the end-of-sequence token ID the tokenizer detected
+// (<|im_end|> for Qwen chat models, falling back to the Qwen3 default).
+// This is distinct from config.json's eos_token_id (which on multimodal
+// Qwen3.5 wrappers points at <|endoftext|>, not the chat terminator the
+// model actually emits).
+func (t *Tokenizer) EOSID() int { return t.eosID }
+
 // SortedTokens returns tokens sorted by ID (for debugging).
 func (t *Tokenizer) SortedTokens() []string {
 	ids := make([]int, 0, len(t.idToTok))

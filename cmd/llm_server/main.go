@@ -7,7 +7,7 @@
 //
 // Usage:
 //
-//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -model ~/.cache/sprout/models/qwen3-1.7b -port 8080
+//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -model ~/dev/llm-models/qwen3.5-9b-4bit -port 8080
 //
 // Then configure sprout with a provider whose endpoint is
 // http://127.0.0.1:8080/v1/chat/completions.
@@ -109,7 +109,11 @@ type modelList struct {
 type server struct {
 	model     *llm.Model
 	modelName string
-	mu        sync.Mutex // serializes generation (single GPU model, one request at a time)
+	// maxTokensCap is the maximum max_tokens the server honors per request
+	// (0 = no cap). Prevents a connection-check or runaway request from
+	// generating thousands of tokens on a RAM-constrained machine.
+	maxTokensCap int
+	mu           sync.Mutex // serializes generation (single GPU model, one request at a time)
 }
 
 func (s *server) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +142,9 @@ func (s *server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if req.MaxTokens != nil && *req.MaxTokens > 0 {
 		cfg.MaxTokens = *req.MaxTokens
 	}
+	if s.maxTokensCap > 0 && cfg.MaxTokens > s.maxTokensCap {
+		cfg.MaxTokens = s.maxTokensCap
+	}
 	if req.Temperature != nil {
 		cfg.Temperature = float32(*req.Temperature)
 	}
@@ -152,6 +159,7 @@ func (s *server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer llm.TrimCachedMemory()
 	text, err := s.model.GenerateText(r.Context(), prompt, cfg)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("generation failed: %v", err), http.StatusInternalServerError)
@@ -181,6 +189,7 @@ func (s *server) handleChat(w http.ResponseWriter, r *http.Request) {
 func (s *server) streamChat(w http.ResponseWriter, r *http.Request, prompt string, cfg llm.GenerateConfig, req chatRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer llm.TrimCachedMemory()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -249,13 +258,14 @@ func (s *server) handleModels(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	modelDir := flag.String("model", "", "path to the model directory (default: ~/.cache/sprout/models/qwen3-1.7b)")
+	modelDir := flag.String("model", "", "path to the model directory (default: ~/dev/llm-models/qwen3.5-9b-4bit)")
 	port := flag.Int("port", 8080, "port to listen on")
+	maxTokens := flag.Int("max-tokens", 512, "cap on max_tokens per request (0 = honor client value)")
 	flag.Parse()
 
 	dir := *modelDir
 	if dir == "" {
-		dir = os.Getenv("HOME") + "/.cache/sprout/models/qwen3-1.7b"
+		dir = os.Getenv("HOME") + "/dev/llm-models/qwen3.5-9b-4bit"
 	}
 
 	log.Printf("loading model from %s ...", dir)
@@ -265,12 +275,19 @@ func main() {
 	}
 	defer model.Close()
 
+	// SP-134 memory protections: size MLX's allocator to this machine so a
+	// long generation fails cleanly instead of blocking the process in a
+	// Metal cond wait, and return pooled buffers to the OS between requests.
+	if err := llm.ApplyMemoryLimits(); err != nil {
+		log.Fatalf("apply MLX memory limits: %v", err)
+	}
+
 	name := "local"
 	if cfg := model.Config(); cfg.Arch != "" {
 		name = fmt.Sprintf("%s-local-%d-%d", cfg.Arch, cfg.HiddenSize, cfg.NumLayers)
 	}
 
-	srv := &server{model: model, modelName: name}
+	srv := &server{model: model, modelName: name, maxTokensCap: *maxTokens}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", srv.handleChat)
 	mux.HandleFunc("/v1/models", srv.handleModels)

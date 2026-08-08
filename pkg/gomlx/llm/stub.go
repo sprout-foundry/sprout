@@ -40,3 +40,12 @@ func DefaultGenerateConfig() GenerateConfig {
 	return GenerateConfig{MaxTokens: 512, Temperature: 0.6, TopP: 0.95, TopK: 20, RepetitionPenalty: 1.1}
 }
 func LoadTokenizer(path string) (*Tokenizer, error) { return nil, errUnavailable }
+
+// ModelMemoryGate is a no-op on stub builds (no MLX runtime to gate).
+func ModelMemoryGate(modelDir string) error { return nil }
+
+// ApplyMemoryLimits is a no-op on stub builds.
+func ApplyMemoryLimits() error { return nil }
+
+// TrimCachedMemory is a no-op on stub builds.
+func TrimCachedMemory() error { return nil }

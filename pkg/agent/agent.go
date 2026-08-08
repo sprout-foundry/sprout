@@ -140,7 +140,9 @@ type Agent struct {
 	contextProfile configuration.ContextProfile
 
 	// effectiveContextCap is the resolved max context tokens for this session (min of native window and configured cap).
-	// Call sites must use this instead of Config.MaxContextTokens or client.GetModelContextLimit().
+	// Resolved at agent creation and refreshed on every provider/model
+	// switch via refreshEffectiveContextCap(). Call sites MUST use this
+	// instead of Config.MaxContextTokens or client.GetModelContextLimit().
 	effectiveContextCap int
 
 	// Shell CWD tracking — updated by cd commands so git operations use the correct directory.

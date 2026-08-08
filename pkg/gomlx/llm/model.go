@@ -31,7 +31,24 @@ type Model struct {
 	thinkID      int
 	endThinkID   int
 	inThinkBlock bool
+
+	// Prefix-cache state: a retained snapshot of the prompt's K/V from the
+	// previous generation, plus the token IDs it covers. Generate computes
+	// the longest common prefix with the new prompt and prefills only the
+	// delta, skipping recomputation of a shared history (multi-turn win).
+	// The snapshot is prompt-only — generated tokens are not part of the
+	// next prompt, so they're not cached.
+	prefixCache  *KVCache
+	prefixTokens []int
 }
+
+// minPrefixReuse is the smallest shared token prefix worth reusing. Below
+// this, a fresh full prefill is cheaper than the delta machinery.
+const minPrefixReuse = 8
+
+// maxPrefixLen caps the retained prefix so long histories don't pin memory
+// forever. Beyond this, caching is dropped for that request.
+const maxPrefixLen = 4096
 
 // NewModel creates a Model from a HuggingFace model directory containing
 // config.json, model.safetensors, and tokenizer.json. The architecture is
@@ -248,10 +265,42 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	cache := NewKVCache(m.cfg.NumLayers, s)
 	defer cache.Free()
 
-	// Prefill: process the entire prompt, populating the KV cache
-	logits, err := m.arch.ForwardPrefill(m.makeIDsArray(tokenIDs), len(tokenIDs), cache)
-	if err != nil {
-		return fmt.Errorf("prefill: %w", err)
+	// Prefix caching: if this prompt shares a prefix with the previous one,
+	// restore the retained prefix K/V and prefill only the delta. This skips
+	// recomputing shared history (multi-turn conversations).
+	shared := longestCommonPrefix(tokenIDs, m.prefixTokens)
+	var logits []float32
+	if shared >= minPrefixReuse && shared < len(tokenIDs) && m.prefixCache != nil {
+		if err := cache.RestorePrefix(m.prefixCache); err != nil {
+			return fmt.Errorf("restore prefix: %w", err)
+		}
+		delta := tokenIDs[shared:]
+		logits, err = m.arch.ForwardPrefillFrom(m.makeIDsArray(delta), len(delta), shared, cache)
+		if err != nil {
+			return fmt.Errorf("delta prefill: %w", err)
+		}
+	} else {
+		logits, err = m.arch.ForwardPrefill(m.makeIDsArray(tokenIDs), len(tokenIDs), cache)
+		if err != nil {
+			return fmt.Errorf("prefill: %w", err)
+		}
+	}
+
+	// Snapshot the prompt-only K/V for the next request BEFORE decoding
+	// (decode appends generated tokens to the working cache; the snapshot
+	// keeps just the prompt prefix alive). Drop caching for very long
+	// prompts so a huge history doesn't pin memory forever.
+	if len(tokenIDs) <= maxPrefixLen {
+		newPrefix := cache.SnapshotPrefix()
+		if m.prefixCache != nil {
+			m.prefixCache.Free()
+		}
+		m.prefixCache = newPrefix
+		m.prefixTokens = append([]int(nil), tokenIDs...)
+	} else if m.prefixCache != nil {
+		m.prefixCache.Free()
+		m.prefixCache = nil
+		m.prefixTokens = nil
 	}
 
 	// Fast greedy path: no repetition penalty means we can sample on the GPU
@@ -342,6 +391,11 @@ func (m *Model) Close() error {
 		return nil
 	}
 	m.closed = true
+	if m.prefixCache != nil {
+		m.prefixCache.Free()
+		m.prefixCache = nil
+	}
+	m.prefixTokens = nil
 	m.arch.FreeWeights()
 	return nil
 }
@@ -395,6 +449,19 @@ func promptEndsInsideThink(tokenIDs []int, thinkID, endThinkID int) bool {
 		return false // model has no thinking tokens
 	}
 	return lastThink > lastEnd
+}
+
+// longestCommonPrefix returns the length of the shared prefix of a and b.
+func longestCommonPrefix(a, b []int) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	i := 0
+	for i < n && a[i] == b[i] {
+		i++
+	}
+	return i
 }
 
 // shouldFilterToken returns true if the token should be hidden from the caller.

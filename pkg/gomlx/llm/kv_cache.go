@@ -164,6 +164,79 @@ func (c *KVCache) CachedLen() int {
 	return shape[2]
 }
 
+// SnapshotPrefix returns a new KVCache whose arrays are retained copies of
+// this cache's current arrays (same MLX buffers, refcount bumped). The
+// returned cache is independent — decoding into this cache will not disturb
+// the original. The original still owns its arrays; free the snapshot when
+// done. Used by prefix caching to keep a prompt-only snapshot alive while
+// the working cache continues decoding.
+func (c *KVCache) SnapshotPrefix() *KVCache {
+	snap := &KVCache{
+		layers:      make([]*KVCacheLayer, len(c.layers)),
+		initialized: make([]bool, len(c.initialized)),
+		stream:      c.stream,
+	}
+	for i, l := range c.layers {
+		if l == nil {
+			continue
+		}
+		cp := &KVCacheLayer{}
+		if l.K != nil {
+			cp.K = mlx.RetainArray(l.K)
+		}
+		if l.V != nil {
+			cp.V = mlx.RetainArray(l.V)
+		}
+		if l.State != nil {
+			cp.State = mlx.RetainArray(l.State)
+		}
+		if l.ConvState != nil {
+			cp.ConvState = mlx.RetainArray(l.ConvState)
+		}
+		snap.layers[i] = cp
+		snap.initialized[i] = c.initialized[i]
+	}
+	return snap
+}
+
+// RestorePrefix copies the retained prefix arrays from snap into this cache,
+// replacing whatever this cache held. The cache takes ownership (Free on
+// replace). snap is not modified.
+func (c *KVCache) RestorePrefix(snap *KVCache) error {
+	if len(snap.layers) != len(c.layers) {
+		return fmt.Errorf("kv_cache: prefix layers %d != cache layers %d", len(snap.layers), len(c.layers))
+	}
+	for i, l := range snap.layers {
+		if l == nil {
+			c.layers[i] = nil
+			c.initialized[i] = false
+			continue
+		}
+		if c.layers[i] != nil {
+			c.layers[i].K.Free()
+			c.layers[i].V.Free()
+			c.layers[i].State.Free()
+			c.layers[i].ConvState.Free()
+		}
+		cp := &KVCacheLayer{}
+		if l.K != nil {
+			cp.K = mlx.RetainArray(l.K)
+		}
+		if l.V != nil {
+			cp.V = mlx.RetainArray(l.V)
+		}
+		if l.State != nil {
+			cp.State = mlx.RetainArray(l.State)
+		}
+		if l.ConvState != nil {
+			cp.ConvState = mlx.RetainArray(l.ConvState)
+		}
+		c.layers[i] = cp
+		c.initialized[i] = snap.initialized[i]
+	}
+	return nil
+}
+
 // Free releases all MLX arrays held by the cache.
 func (c *KVCache) Free() {
 	for _, layer := range c.layers {

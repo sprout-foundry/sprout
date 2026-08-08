@@ -23,6 +23,14 @@ type fakeModel struct {
 	lastCfg   llm.GenerateConfig
 	genErr    error
 	chatOut   string // FormatChat output
+	ctxLen    int    // ContextLength report
+}
+
+func (f *fakeModel) ContextLength() int {
+	if f.ctxLen > 0 {
+		return f.ctxLen
+	}
+	return 32_000
 }
 
 func (f *fakeModel) FormatChat(messages []llm.ChatMessage) string {
@@ -307,6 +315,9 @@ func TestModels(t *testing.T) {
 	}
 	if len(body.Data) != 1 || body.Data[0].ID != "qwen3_5_text-local-2560-32" {
 		t.Errorf("data = %+v", body.Data)
+	}
+	if body.Data[0].ContextLength == 0 {
+		t.Errorf("context_length missing from /v1/models — sprout's LCM auto-detect relies on it")
 	}
 }
 

@@ -110,7 +110,7 @@ type ModelConfig struct {
 	PartialRotaryFactor   float32 // fraction of head dim rotated by RoPE (0.25 for qwen3_5)
 	MRopeSection          []int   // mRoPE section sizes [T, H, W]
 	MRopeInterleaved      bool    // mRoPE interleaved vs half-split
-	MTPNumHiddenLayers    int     // multi-token prediction layers (ignored for plain generation)
+	MTPNumHiddenLayers    int     // multi-token prediction layers; absent from MLX conversions (configs ship mtp=none, no mtp tensors on disk) — an MTP-aware conversion + decode path would be required to use it
 	WeightPrefix          string  // safetensors key prefix ("" or "model." for qwen3, "model.language_model." for qwen3_5)
 	LayerTypes            []string // optional per-layer type override; nil = derive from FullAttentionInterval
 }

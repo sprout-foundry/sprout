@@ -36,19 +36,19 @@ type SecurityManager interface {
 
 // AgentSecurityManager implements SecurityManager, holding all security-related state.
 type AgentSecurityManager struct {
-	securityApprovalMgr *security.ApprovalManager
-	askUserMgr          *agenttools.AskUserManager
-	unsafeMode          bool
-	unsafeShellMode     bool
-	securityBypassMu    sync.RWMutex
-	sessionAllowedFolders []string
+	securityApprovalMgr     *security.ApprovalManager
+	askUserMgr              *agenttools.AskUserManager
+	unsafeMode              bool
+	unsafeShellMode         bool
+	securityBypassMu        sync.RWMutex
+	sessionAllowedFolders   []string
 	sessionPathModes        map[string]string
 	ignoredSecurityConcerns map[string]map[string]bool
 	ignoredSecurityMu       sync.RWMutex
 	outputRedactor          *security.OutputRedactor
 	elevationGate           *security.ElevationGate
-	webuiClientsMu        sync.RWMutex
-	hasActiveWebUIClients func() bool
+	webuiClientsMu          sync.RWMutex
+	hasActiveWebUIClients   func() bool
 }
 
 // NewAgentSecurityManager creates a new AgentSecurityManager with all fields initialized.

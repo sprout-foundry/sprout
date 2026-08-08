@@ -117,12 +117,12 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		agent.clarificationManager = r.parentAgent.clarificationManager
 	}
 
-	// SP-059 Phase 2c: enable a lightweight change tracker on the subagent
-	// so the returned envelope can include a structured FilesModified
-	// manifest. Tracking just records writes in memory; it does not
-	// participate in the parent's revision/commit flow unless the parent
-	// also has tracking enabled (handled elsewhere). Cheap to keep always
-	// on — the cost is one entry per write.
+	// Enable a lightweight change tracker on the subagent so the returned
+	// envelope can include a structured FilesModified manifest. Tracking
+	// just records writes in memory; it does not participate in the
+	// parent's revision/commit flow unless the parent also has tracking
+	// enabled (handled elsewhere). Cheap to keep always on — the cost
+	// is one entry per write.
 	agent.EnableChangeTracking("subagent run")
 
 	// Inherit the parent's TerminalManager. Without this, subagents (and
@@ -147,7 +147,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		agent.rootPersonaID = r.parentAgent.rootPersonaID
 	}
 
-	// SP-058: propagate the active risk-profile override so the user's
+	// Propagate the active risk-profile override so the user's
 	// session-level --risk-profile (or per-step workflow override)
 	// continues to apply inside subagents. Without this the subagent
 	// would fall back to the config-level setting and a user who set
@@ -168,17 +168,17 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	for _, f := range r.parentAgent.SnapshotSessionAllowedFolders() {
 		agent.AddSessionAllowedFolder(f)
 	}
-	// Propagate the declared folder modes (SP-128) so a subagent
-	// running inside a workflow honors the workflow's read_only
-	// constraints. AddSessionAllowedFolder is called above in the
-	// same order, so by the time SetSessionAllowedFolderMode runs
-	// the folder is already on the subagent's allowlist (the mode
-	// setter no-ops for unallowlisted folders).
+	// Propagate the declared folder modes so a subagent running inside
+	// a workflow honors the workflow's read_only constraints.
+	// AddSessionAllowedFolder is called above in the same order, so by
+	// the time SetSessionAllowedFolderMode runs the folder is already
+	// on the subagent's allowlist (the mode setter no-ops for
+	// unallowlisted folders).
 	for folder, mode := range r.parentAgent.SnapshotSessionAllowedFolderModes() {
 		agent.SetSessionAllowedFolderMode(folder, mode)
 	}
 
-	// SP-051: tag every event this subagent publishes with depth + persona
+	// Tag every event this subagent publishes with depth + persona
 	// so the CLI tool-timeline can indent and color-badge by who's running.
 	// Merge (not replace) so parent-set chat/client/user routing keys still
 	// flow through subagent events to the right WebUI client.

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -41,13 +42,17 @@ type IndexOptions struct {
 	IndexFileLevel bool
 	// ManifestPath is the path to the build manifest file for incremental rebuilds.
 	ManifestPath string
+	// IndexDir is the directory containing the HNSW index files. Used to place
+	// the cross-process .build.lock file. Empty disables locking.
+	IndexDir string
 }
 
 // IndexManager orchestrates code extraction, embedding, and storage.
 type IndexManager struct {
-	provider EmbeddingProvider
-	store    VectorStore
-	opts     IndexOptions
+	provider      EmbeddingProvider
+	store         VectorStore
+	opts          IndexOptions
+	buildLockHeld atomic.Bool // true when this manager acquired the flock (for re-entrant calls)
 }
 
 // NewIndexManager creates an IndexManager with the given provider, store, and options.
@@ -66,11 +71,56 @@ func NewIndexManager(provider EmbeddingProvider, store VectorStore, opts IndexOp
 	}
 }
 
+// lockForBuild acquires the cross-process build lock with re-entrant behavior.
+//
+// If this IndexManager already holds the lock (e.g. UpdateFromGitDiff called
+// UpdateFile), it returns immediately without re-acquiring — avoiding the
+// deadlock that occurs when flock(2) is used on a different open file
+// description for the same lock file.
+//
+// Returns (nil, nil) when no lock is needed (IndexDir empty or flock unavailable).
+// Returns (release, nil) when the lock was acquired.
+// Returns (nil, errBuildLocked) when another process holds the lock.
+func (m *IndexManager) lockForBuild() (func(), error) {
+	// Re-entrant fast path: this manager already holds the lock.
+	if m.buildLockHeld.Load() {
+		return nil, nil
+	}
+
+	release, err := acquireBuildLock(m.opts.IndexDir)
+	if release != nil {
+		// Wrap the release to clear the re-entrant flag on unlock.
+		// Note: use a LOCAL variable, not a named return — a closure capturing
+		// a named return would recurse into itself after the return assigns it.
+		m.buildLockHeld.Store(true)
+		return func() {
+			m.buildLockHeld.Store(false)
+			release()
+		}, nil
+	}
+	// errBuildLocked or (nil, nil) from acquireBuildLock — pass through as-is.
+	return nil, err
+}
+
 // BuildIndex walks rootDir, extracts code units, embeds them, and stores them.
 // Uses incremental rebuild with mtime-based manifest to skip unchanged files.
 func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexStats, error) {
 	start := time.Now()
 	stats := &IndexStats{}
+
+	// Cross-process lock to prevent concurrent builds from corrupting the index.
+	release, err := m.lockForBuild()
+	if release != nil {
+		defer release()
+	}
+	if err == errBuildLocked {
+		debugLogf("index: build skipped — lock held by another process")
+		stats.Duration = time.Since(start)
+		return stats, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("index: acquire build lock: %w", err)
+	}
 
 	// Load existing records for incremental comparison.
 	existingRecords, err := m.store.LoadAll()
@@ -359,6 +409,18 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 // Handles both code files (symbol extraction) and non-code files (file-level embedding)
 // when IndexFileLevel is enabled.
 func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
+	// Cross-process lock (re-entrant: safe when called from UpdateFromGitDiff).
+	release, err := m.lockForBuild()
+	if release != nil {
+		defer release()
+	}
+	if err == errBuildLocked {
+		return fmt.Errorf("index: update %s: %w", filePath, errBuildLocked)
+	}
+	if err != nil {
+		return fmt.Errorf("index: acquire build lock: %w", err)
+	}
+
 	// Always delete old records first (handles deleted files too).
 	if err := m.store.DeleteByFile(filePath); err != nil {
 		return fmt.Errorf("index: delete file %s: %w", filePath, err)
@@ -367,7 +429,6 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 	// Determine which extractor to use
 	isCodeFile := hasCodeExtension(filePath)
 	var units []CodeUnit
-	var err error
 
 	if isCodeFile {
 		// Use code extractor for code files
@@ -673,6 +734,20 @@ func hasCodeExtension(path string) bool {
 func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (*IndexStats, error) {
 	start := time.Now()
 	stats := &IndexStats{}
+
+	// Cross-process lock to prevent concurrent builds from corrupting the index.
+	release, err := m.lockForBuild()
+	if release != nil {
+		defer release()
+	}
+	if err == errBuildLocked {
+		debugLogf("index: git-diff update skipped — lock held by another process")
+		stats.Duration = time.Since(start)
+		return stats, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("index: acquire build lock: %w", err)
+	}
 
 	// Collect deleted files from both staged and unstaged diffs (SHOULD_FIX #8).
 	var deletedFiles []string

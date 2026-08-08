@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Pre-commit hook: fast format/lint gates on staged files.
+#
+# Checks (matching the CI gates in .github/workflows/build.yml):
+#   1. gofmt          — staged *.go files (make fmt-check equivalent)
+#   2. prettier       — staged webui/src files (format:check equivalent)
+#   3. eslint         — staged webui/src .ts/.tsx files (lint equivalent)
+#
+# The hook intentionally checks ONLY staged files so it stays fast (sub-second
+# for typical commits). Full gates (vet, test-coverage, build-all) still run
+# in CI. If webui/node_modules is missing, the JS checks are skipped with a
+# warning instead of blocking the commit.
+#
+# Install with: make install-hooks   (or cp scripts/pre-commit .git/hooks/pre-commit)
+
+set -u
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "pre-commit: not a git repository"
+  exit 1
+}
+cd "$ROOT" || exit 1
+
+fail=0
+
+all_staged="$(git diff --cached --name-only --diff-filter=ACM)"
+
+# --- 1. gofmt on staged Go files -------------------------------------------
+go_files="$(printf '%s\n' "$all_staged" | grep '\.go$' || true)"
+if [ -n "$go_files" ]; then
+  if ! command -v gofmt >/dev/null 2>&1; then
+    echo "pre-commit: gofmt not found — skipping Go format check"
+  else
+    unformatted="$(printf '%s\n' "$go_files" | xargs gofmt -l 2>/dev/null)"
+    if [ -n "$unformatted" ]; then
+      echo "❌ gofmt: unformatted files (run: gofmt -w <files> then git add):"
+      printf '%s\n' "$unformatted" | sed 's/^/    /'
+      fail=1
+    fi
+  fi
+fi
+
+# --- 2. prettier on staged webui/src files ----------------------------------
+webui_ts="$(printf '%s\n' "$all_staged" | grep -E '^webui/src/.*\.(ts|tsx|css|json)$' || true)"
+if [ -n "$webui_ts" ]; then
+  if [ -x webui/node_modules/.bin/prettier ]; then
+    rel="$(printf '%s\n' "$webui_ts" | sed 's|^webui/||')"
+    if ! (cd webui && printf '%s\n' "$rel" | xargs node_modules/.bin/prettier --check >/dev/null 2>&1); then
+      echo "❌ prettier: formatting violations (run: cd webui && npx prettier --write <files> then git add):"
+      printf '%s\n' "$webui_ts" | sed 's/^/    /'
+      fail=1
+    fi
+  else
+    echo "pre-commit: webui/node_modules missing — skipping prettier check (run: npm ci)"
+  fi
+fi
+
+# --- 3. eslint on staged webui/src .ts/.tsx files ----------------------------
+webui_es="$(printf '%s\n' "$webui_ts" | grep -E '\.(ts|tsx)$' || true)"
+if [ -n "$webui_es" ]; then
+  if [ -x webui/node_modules/.bin/eslint ]; then
+    rel="$(printf '%s\n' "$webui_es" | sed 's|^webui/||')"
+    if ! (cd webui && printf '%s\n' "$rel" | xargs node_modules/.bin/eslint >/dev/null 2>&1); then
+      echo "❌ eslint: errors in staged files (fix them, then git add):"
+      printf '%s\n' "$webui_es" | sed 's/^/    /'
+      fail=1
+    fi
+  else
+    echo "pre-commit: webui/node_modules missing — skipping eslint check (run: npm ci)"
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "pre-commit: fix the issues above, stage the fixes, and retry the commit."
+  exit 1
+fi
+
+exit 0

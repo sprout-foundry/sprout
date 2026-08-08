@@ -58,6 +58,10 @@ const ProgressInterval = 500
 // Sized for this repo: ~12k units at ~5.3 units/s ≈ 40 min cold build.
 const BuildTimeout = 45 * time.Minute
 
+// BuildLockTimeout is the max time to poll (50ms intervals) for the cross-process
+// build lock after the initial non-blocking attempt fails.
+const BuildLockTimeout = 2 * time.Second
+
 // EmbedBatchSize is the number of code units per ONNX inference call.
 const EmbedBatchSize = 32
 

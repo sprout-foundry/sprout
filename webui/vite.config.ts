@@ -142,7 +142,12 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['./src/vitest.setup.ts'],
       include: [
         'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-        '../test/webui/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+        // Only .test.* files under test/webui are vitest unit tests.
+        // test/webui/*.spec.ts are Playwright E2E specs (run by the
+        // webui-e2e workflow) — importing them into vitest OOMs the
+        // worker because they pull in @playwright/test + chromium
+        // fixtures while collecting zero vitest tests.
+        '../test/webui/**/*.test.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
       ],
       // SP-104: Cap the worker pool. The default forks all CPU cores;
       // each jsdom worker is ~1–4 GB RSS. Webui uses Vitest 2.x which
@@ -157,6 +162,12 @@ export default defineConfig(({ mode }) => {
             ? parseInt(process.env.VITEST_MAX_FORKS, 10)
             : 4,
           singleFork: process.env.VITEST_MAX_FORKS === '1',
+          // jsdom workers accumulate RSS across the ~50 files each fork
+          // runs (CodeMirror/xterm DOM state is not fully released between
+          // files). Node's default 4 GB heap cap OOMs a worker mid-suite;
+          // raise it so the full suite completes. NODE_OPTIONS does not
+          // propagate to fork workers — this execArgv does.
+          execArgv: ['--max-old-space-size=8192'],
         },
       },
       coverage: {

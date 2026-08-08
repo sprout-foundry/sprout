@@ -26,27 +26,15 @@ func (a *Agent) GetCurrentIteration() int {
 
 // GetCurrentContextTokens returns the current context token count
 func (a *Agent) GetCurrentContextTokens() int {
-	// Return the current request context tokens, not cumulative
 	return a.state.GetCurrentContextTokens()
 }
 
 // GetMaxContextTokens returns the maximum context tokens for the current model
 func (a *Agent) GetMaxContextTokens() int {
-	// Get context limit from the model
 	return a.getModelContextLimit()
 }
 
-// GetEffectiveContextCap (SP-126) returns the user-facing effective
-// context cap for this session — the smaller of the model's native
-// window and the user's MaxContextTokens setting. Returns 0 when no
-// cap was set (native window flows through unconstrained). This is
-// the same value state.MaxContextTokens is initialized with and
-// updated with on every OnIteration; the Agent field is the
-// authoritative source, the state field is a copy kept in sync by
-// the callback. Prefer reading the Agent field directly when both
-// are available, and prefer this method over Agent.GetMaxContextTokens()
-// for new code that wants to render "effective" vs "native" window
-// values distinctly.
+// GetEffectiveContextCap returns the user-facing effective context cap — min of native window and user's MaxContextTokens setting.
 func (a *Agent) GetEffectiveContextCap() int {
 	if a.effectiveContextCap > 0 {
 		return a.effectiveContextCap
@@ -84,12 +72,7 @@ func (a *Agent) GetPromptTokens() int {
 }
 
 // TrackMetricsFromResponse updates agent metrics from API response usage data.
-// cacheWriteTokens is the number of prompt tokens written to the provider cache
-// on this request (Anthropic/OpenRouter cache_creation_input_tokens). Pass 0
-// when the provider does not report write tokens.
-// imageTokens is the number of tokens consumed by image inputs (vision models).
-// These are already included in PromptTokens/TotalTokens, so they are tracked
-// separately for display only — NOT for budget deduction (avoids double-counting).
+// cacheWriteTokens: prompt tokens written to provider cache. imageTokens: tokens from image inputs (display only, not for budget).
 func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens, cacheWriteTokens, imageTokens int) {
 	a.state.IncrementLLMCallCount()
 	a.state.SetTotalTokens(a.state.GetTotalTokens() + totalTokens)
@@ -130,21 +113,14 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 	// Fleet budget tracking: debit tokens to the shared fleet tracker.
 	if a.fleetBudgetTracker != nil && a.fleetBudgetLimit > 0 {
 		newTotal := a.fleetBudgetTracker.Add(int64(totalTokens))
-		// Budget is exceeded when cumulative tokens reach or exceed the limit.
 		if newTotal >= a.fleetBudgetLimit && !a.fleetBudgetTrunc.Load() {
 			a.fleetBudgetTrunc.Store(true)
 		}
 	}
 
-	// Fleet USD budget: NOT debited here. TrackMetricsFromResponse is only
-	// called from subagent result rollup, where the subagent has already
-	// debited the shared fleet budget via accumulateResponseCost. Debiting
-	// again would double-count. The token fleet budget (above) is also
-	// double-debited in theory, but subagent tokens are already counted
-	// via the shared fleetBudgetTracker — leaving as-is to avoid scope creep.
+	// Fleet USD budget NOT debited here — subagents already debit via accumulateResponseCost.
 
-	// Calculate cost savings from cached tokens using the per-model pricing
-	// resolver. Returns 0 when the cached rate is unknown — no fabrication.
+	// Calculate cost savings from cached tokens.
 	a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + a.calculateCachedTokenSavings(cachedTokens, totalTokens, estimatedCost))
 
 	// Trigger stats update callback if registered
@@ -169,16 +145,9 @@ func (a *Agent) GetLLMCallCount() int {
 	return a.state.GetLLMCallCount()
 }
 
-// ---------------------------------------------------------------------------
-// Security telemetry (Task 3)
-//
-// Lightweight counters that track what the LLM does after receiving a
-// SECURITY_CAUTION_REQUIRED signal. Exposed via the --output-json metrics
-// object so external tools can measure caution-signal effectiveness.
-// ---------------------------------------------------------------------------
+// Security telemetry: lightweight counters tracking LLM behavior after SECURITY_CAUTION_REQUIRED signals.
 
-// GetSecurityCautionsIssued returns the number of SECURITY_CAUTION_REQUIRED
-// errors produced this session.
+// GetSecurityCautionsIssued returns the number of SECURITY_CAUTION_REQUIRED errors produced this session.
 func (a *Agent) GetSecurityCautionsIssued() int64 {
 	if a == nil {
 		return 0
@@ -253,27 +222,8 @@ func (a *Agent) GetCachedCostSavings() float64 {
 	return a.state.GetCachedCostSavings()
 }
 
-// calculateCachedTokenSavings estimates the cost savings from cached prompt
-// tokens. Cached tokens are served from the provider's prompt cache instead
-// of being re-processed, so they cost a fraction of normal input price.
-//
-// When the (provider, model) pair resolves to a known cached-input rate
-// strictly less than the standard input rate, savings are exact:
-//
-//	savings = cachedTokens × (inputPrice − cachedInputPrice) / 1M
-//
-// The provider's reported estimatedCost already includes the discount on
-// cached tokens, so this difference is the unrealized cost — i.e. the savings.
-//
-// When the cached rate is unknown (provider/model not in catalogue, or
-// catalogue entry omits a distinct cached rate) the function returns 0
-// rather than fabricating a number. The provider-reported total cost
-// already reflects whatever rate was actually charged, so the ledger is
-// always accurate; only the estimated savings display is suppressed.
-//
-// cachedTokens: number of prompt tokens served from cache.
-// estimatedCost: total cost charged for this request.
-// totalTokens: total tokens (prompt + completion) for this request.
+// calculateCachedTokenSavings estimates the cost savings from cached prompt tokens.
+// Returns exact savings when (provider, model) has a known cached-input rate; returns 0 when unknown.
 func (a *Agent) calculateCachedTokenSavings(cachedTokens, totalTokens int, estimatedCost float64) float64 {
 	if cachedTokens <= 0 || totalTokens <= 0 || estimatedCost <= 0 {
 		return 0
@@ -285,27 +235,15 @@ func (a *Agent) calculateCachedTokenSavings(cachedTokens, totalTokens int, estim
 	if inputPerM, _, cachedPerM, ok := api.ResolveModelPricing(provider, model); ok && inputPerM > 0 {
 		switch {
 		case cachedPerM > 0 && cachedPerM < inputPerM:
-			// Exact: tokens that would have cost inputPrice actually cost
-			// cachedPrice. Savings is the unrealized cost difference.
 			return float64(cachedTokens) * (inputPerM - cachedPerM) / 1e6
 		case cachedPerM >= inputPerM:
-			// Cached price == input price (no discount). Provider reports
-			// cache hits but bills at standard rate — no savings to claim.
 			return 0
 		default:
-			// cachedPerM == 0: the provider/model has catalogue pricing
-			// but does not expose a distinct cached rate. Caching may
-			// still have happened (cachedTokens > 0) but we don't know
-			// the discount. Do not fabricate a number — return 0 rather
-			// than falling through to the 90% heuristic.
 			return 0
 		}
 	}
 
-	// Resolver miss: the (provider, model) pair is not in the catalogue at
-	// all. We have no reliable pricing to compute against. Return 0 rather
-	// than fabricate a 90% savings number from a cost figure we cannot
-	// attribute to a known price.
+	// Resolver miss: no reliable pricing to compute against.
 	return 0
 }
 

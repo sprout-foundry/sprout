@@ -77,16 +77,10 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		desc = summary.Description
 	}
 
-	// SP-128-1e: pre-seed the running agent's session allowlist
+	// Pre-seed the running agent's session allowlist
 	// with every declared allowed_path, tagged with the declared
-	// mode. This must happen BEFORE the in-process / BPM fork so
-	// the launched workflow inherits the grants; the in-process
-	// path inherits via SnapshotSessionAllowedFolders /
-	// SnapshotSessionAllowedFolderModes (run inside the goroutine
-	// — see subagent_creation.go), and the BPM subprocess path
-	// inherits because the parent process is the one carrying the
-	// session allowlist forward. We only act when Summarize
-	// succeeded: a parse failure already aborts the launch below.
+	// mode. Must happen BEFORE the in-process / BPM fork so
+	// the launched workflow inherits the grants.
 	if sumErr == nil && summary != nil {
 		for _, ap := range summary.AllowedPaths {
 			a.AddSessionAllowedFolder(ap.Path)
@@ -193,12 +187,12 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		// Log warning but don't fail the workflow.
 	}
 
-	// SP-065-2b: Publish session_started event
+	// Publish session_started event
 	a.publishEvent(events.EventTypeAutomateSessionStarted, events.AutomateSessionStartedEvent(
 		sessionID, filepath.Base(wfPath), "automate",
 	))
 
-	// SP-065-2d: Watch for process exit and publish session_ended
+	// Watch for process exit and publish session_ended
 	if proc, exists := bpm.GetProcess(sessionID); exists {
 		// Capture variables for goroutine closure
 		wfName := filepath.Base(wfPath)
@@ -229,7 +223,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	result["status"] = "started"
 	result["session_id"] = sessionID
-	// SP-065-5a: Include a message with session ID and link to Automations panel
+	// Include a message with session ID and link to Automations panel
 	result["message"] = fmt.Sprintf("Workflow started: session `%s` — view in [Automations panel](sprout://automations/session/%s)", sessionID, sessionID)
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
@@ -326,7 +320,7 @@ func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessMa
 // the automate/ directory against the agent's workspace root —
 // `automate.Dir()` alone returns the daemon CWD in SPROUT_SERVICE mode,
 // which would mismatch the directory the workflow itself will be loaded
-// from. See SP-119 for the workspace-aware flow.
+// from.
 func workflowRequiresApproval(agent *Agent, workflowName string) bool {
 	return WorkflowRequiresApprovalIn(automate.DirIn(agent.GetWorkspaceRoot()), workflowName)
 }

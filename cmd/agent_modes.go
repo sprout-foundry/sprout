@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -127,22 +128,38 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		// Determine port strategy.
 		//
-		// Daemon mode (no explicit port): use the single-port supervisor on
-		// the unified daemon port (56000) so all daemons compete for one
-		// stable port.  This is the "primary" instance users bookmark.
+		// IN VARIANT: The daemon serves ALL workspaces from a single port.
+		//   When daemon mode is active and no explicit --web-port is given,
+		//   the port is always DaemonPort (56000).  The daemon handles
+		//   multiple workspaces by routing internally per-workspace via
+		//   clientContext / chat_sessions — there are NO folder-scoped
+		//   daemon ports.  The single-port supervisor handles leadership
+		//   election so exactly one daemon process serves 56000; additional
+		//   daemon instances attach to the leader.
 		//
 		// Non-daemon interactive (no explicit port): each instance gets its
-		// own unique port so browser windows can connect independently.
-		// We scan from 56001 (DaemonPort+1) for a free port.
+		// own dynamic port (starting at 56001 = DaemonPort+1) so that
+		// separate browser windows can connect independently.  This is
+		// intentional: non-daemon instances are short-lived and do not share
+		// a persistent port.
 		//
 		// Explicit --web-port N: always start directly on that port,
-		// regardless of daemon mode.
+		// regardless of daemon mode (user override).
+		//
+		// GUARD: daemon mode NEVER falls into the FindAvailablePort path.
+		//   If daemonMode is true and webPort is 0, the port is set to
+		//   webui.DaemonPort unconditionally below.
 		port := webPort
 		if port == 0 {
 			if daemonMode {
+				// Daemon mode: always use the single shared DaemonPort.
+				// This path is mutually exclusive with the dynamic-port branch
+				// — if daemonMode is true, FindAvailablePort is never called.
 				port = webui.DaemonPort
 			} else {
-				// Non-daemon: find a free dynamic port.
+				// Non-daemon interactive: find a free dynamic port so each
+				// instance gets its own browser window.  This path is only
+				// reachable when daemonMode is false.
 				dynamicPort, dynErr := webui.FindAvailablePort(webui.DaemonPort + 1)
 				if dynErr != nil {
 					console.GlyphWarning.Fprintf(os.Stderr, "Could not find a dynamic port: %v; web UI disabled", dynErr)
@@ -300,6 +317,36 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				console.GlyphInfo.Printf("Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 			}
 		}
+
+		// SP-136 P2: idle reaping for auto-started daemons.
+		// When SPROUT_DAEMON_IDLE_TIMEOUT is a positive duration, the daemon
+		// self-terminates after the web UI has had no active clients and no
+		// active queries for that long. Auto-start (cmd/daemon_autostart.go)
+		// sets this on daemons it spawns; explicitly-started daemons
+		// (sprout agent -d) are unaffected unless the operator opts in.
+		if daemonMode && webServer != nil {
+			if idleTimeout, perr := time.ParseDuration(os.Getenv("SPROUT_DAEMON_IDLE_TIMEOUT")); perr == nil && idleTimeout > 0 {
+				go reapIdleDaemon(ctx, cancel, webServer, idleTimeout)
+			}
+		}
+
+		// SP-136 P3: the daemon hosts the embedding socket so CLI processes
+		// route embedding ops through it (one model load, one index writer).
+		if daemonMode {
+			embedSrv := startDaemonEmbeddingServer(ctx, true)
+			if embedSrv != nil {
+				defer embedSrv.Close()
+			}
+		}
+
+		// SP-136 P4: the daemon hosts the agent socket so the CLI can run
+		// one-shot queries through the daemon-owned agent.
+		if daemonMode {
+			agentSrv := startDaemonAgentServer(ctx, true, chatAgent)
+			if agentSrv != nil {
+				defer agentSrv.Close()
+			}
+		}
 	}
 
 	// Setup signal handling with buffered channel for multiple signals
@@ -448,6 +495,25 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return fmt.Errorf("failed to update config for direct mode: %w", err)
 		}
 
+		// SP-048-4: When the direct-mode run has a terminal on stderr
+		// (workflow coordinator invoked with shared stdout/stderr but no
+		// stdin), start the status footer and terminal tool subscriber
+		// so the user sees the same tool timeline and footer as the
+		// interactive CLI. The footer is TTY-gated internally; we gate
+		// the subscriber too so agent_message rendering through the
+		// subscriber only activates when there is a real terminal.
+		if chatAgent != nil && !daemonMode && term.IsTerminal(int(os.Stderr.Fd())) {
+			footerSource := &agentFooterSource{agent: chatAgent}
+			footer := console.NewStatusFooter(os.Stderr, footerSource)
+			console.RegisterGlobalStatusFooter(footer)
+			footer.Start()
+			defer footer.Stop()
+
+			subCtx, cancelSub := context.WithCancel(ctx)
+			defer cancelSub()
+			_ = cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+		}
+
 		// Direct mode
 		var query string
 		if len(args) > 0 {
@@ -472,6 +538,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		query, err = workflow.ResolveWorkflowInitialPrompt(query, workflowConfig)
 		if err != nil {
 			return fmt.Errorf("failed to resolve workflow initial prompt: %w", err)
+		}
+
+		// SP-136 P4: one-shot CLI-on-daemon. Plain (non-workflow) one-shot
+		// queries route through the daemon's agent socket when it is
+		// available; the daemon owns the agent. Falls back to in-process
+		// when the socket is unreachable.
+		if query != "" && workflowConfig == nil && !daemonMode {
+			if handled, derr := tryDaemonOneShot(ctx, query, outputFormatJSON); handled {
+				return derr
+			}
 		}
 		hasLoop := workflowConfig != nil && workflowConfig.Loop != nil
 		if query == "" && !hasLoop && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {

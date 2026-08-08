@@ -116,7 +116,9 @@ describe('SemanticSearchResults', () => {
 
     const icon = container!.querySelector('.search-duplicate-hint-icon');
     expect(icon).not.toBeNull();
-    expect(icon!.textContent).toContain('⚠️');
+    // The warning is rendered as a TriangleAlert lucide SVG icon rather
+    // than the legacy '⚠️' text glyph.
+    expect(icon!.querySelector('svg')).not.toBeNull();
   });
 
   it('preserves original order within each cluster', async () => {

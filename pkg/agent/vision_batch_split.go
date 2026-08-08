@@ -1,11 +1,10 @@
-// Package agent — SP-103-D2: batch splitting with fallback.
+// Package agent — batch splitting with fallback.
 //
 // Provides proactive batch splitting for vision images to avoid provider
 // 400 (context overflow) errors. The splitter considers both image count
 // and total payload bytes, routing overflow images to the existing OCR
 // fallback path so the model still gets text descriptions of images that
 // exceed the provider's inline limits.
-
 package agent
 
 import api "github.com/sprout-foundry/sprout/pkg/agent_api"

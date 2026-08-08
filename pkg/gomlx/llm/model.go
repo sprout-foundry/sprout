@@ -16,13 +16,21 @@ import (
 // the generation loop (prefill → decode) and delegates the forward pass to
 // the Architecture implementation.
 type Model struct {
-	cfg         ModelConfig
-	stream      *mlx.Stream
-	arch        Architecture
-	tokenizer   *Tokenizer
-	cache       *KVCache
-	mu          sync.Mutex
-	closed      bool
+	cfg       ModelConfig
+	stream    *mlx.Stream
+	arch      Architecture
+	tokenizer *Tokenizer
+	mu        sync.Mutex
+	closed    bool
+
+	// Thinking-block state. Qwen3.5 emits <think>...</think> before the real
+	// answer when thinking is enabled (the default per its chat template).
+	// shouldFilterToken hides the block from callbacks unless ThinkingTokens
+	// is set. State lives here (guarded by mu, which Generate holds for the
+	// whole run) so multi-token generation tracks the open/close boundary.
+	thinkID      int
+	endThinkID   int
+	inThinkBlock bool
 }
 
 // NewModel creates a Model from a HuggingFace model directory containing
@@ -93,6 +101,7 @@ func NewModel(modelDir string) (*Model, error) {
 		arch:      arch,
 		tokenizer: tok,
 	}
+	m.initThinking()
 
 	log.Printf("llm: %s loaded on GPU", cfg)
 	return m, nil
@@ -151,9 +160,23 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 		arch:      arch,
 		tokenizer: tok,
 	}
+	m.initThinking()
 
 	log.Printf("llm: %s loaded on GPU", cfg)
 	return m, nil
+}
+
+// initThinking resolves the Qwen3.5 thinking-block tokens (<think>, </think>)
+// from the tokenizer. Models without them (plain qwen3) leave the IDs as 0,
+// which makes shouldFilterToken a no-op for thinking — correct, because those
+// models never emit the block.
+func (m *Model) initThinking() {
+	if m.tokenizer == nil {
+		return
+	}
+	m.thinkID = m.tokenizer.IDOf("<think>")
+	m.endThinkID = m.tokenizer.IDOf("</think>")
+	m.inThinkBlock = false
 }
 
 // GenerateConfig controls text generation behavior.
@@ -202,6 +225,13 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	if m.cfg.BOSTokenID > 0 {
 		tokenIDs = append([]int{m.cfg.BOSTokenID}, tokenIDs...)
 	}
+
+	// The Qwen3.5 chat template may open a <think> block in the prompt.
+	// Whether the model is mid-thinking is determined by the prompt tokens:
+	// a <think> whose closing </think> never appears means the model will
+	// continue the block (filter it). An empty <think>\n\n</think>\n\n pair
+	// (thinking disabled) leaves the model answering directly — no filter.
+	m.inThinkBlock = promptEndsInsideThink(tokenIDs, m.thinkID, m.endThinkID)
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -348,19 +378,49 @@ func (m *Model) makeIDsArray(ids []int) *mlx.Array {
 	return arr
 }
 
+// promptEndsInsideThink reports whether the token stream ends inside an open
+// <think> block: the last <think> comes after the last </think> (or there is
+// no close at all). Used to seed inThinkBlock for the generation run.
+func promptEndsInsideThink(tokenIDs []int, thinkID, endThinkID int) bool {
+	lastThink := -1
+	lastEnd := -1
+	for i, id := range tokenIDs {
+		if id == thinkID {
+			lastThink = i
+		} else if id == endThinkID {
+			lastEnd = i
+		}
+	}
+	if thinkID == 0 {
+		return false // model has no thinking tokens
+	}
+	return lastThink > lastEnd
+}
+
 // shouldFilterToken returns true if the token should be hidden from the caller.
-// Used to filter thinking-mode tokens when ThinkingTokens is false.
+// Qwen3.5 emits a <think>...</think> block before the answer when thinking is
+// enabled (the chat template default). When ThinkingTokens is false, every
+// token inside the block is filtered and the open/close markers themselves are
+// dropped. State (inThinkBlock) lives on the Model, which Generate owns for the
+// whole run under mu.
 func (m *Model) shouldFilterToken(tokenID int, genCfg GenerateConfig) bool {
 	// Never surface the EOS token to callbacks: it terminates generation and
 	// decoding it would inject <|im_end|> (or similar) into the output text.
 	if tokenID == m.cfg.EOSTokenID {
 		return true
 	}
-	if genCfg.ThinkingTokens {
-		return false
+
+	if tokenID == m.thinkID {
+		m.inThinkBlock = true
+		return true // drop the <think> marker itself
 	}
-	// Qwen3 thinking mode: tokens between <think> and </think> are filtered.
-	// For now, we don't implement thinking token detection — this is a stub
-	// that returns false. A full implementation would track state.
+	if tokenID == m.endThinkID {
+		m.inThinkBlock = false
+		return true // drop the </think> marker itself
+	}
+
+	if m.inThinkBlock && !genCfg.ThinkingTokens {
+		return true // inside the thinking block — hide unless asked for it
+	}
 	return false
 }

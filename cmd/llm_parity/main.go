@@ -3,48 +3,88 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"os"
+	"runtime"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
+// Dumps the hidden state after each layer for a fixed prompt so the parity
+// script (scripts/llm_parity.py) can compare layer-by-layer with mlx-lm.
+// This isolates whether linear (DeltaNet) or full-attention layers diverge.
+//
+// Usage: llm_parity <model-dir> <dump-dir> ["prompt"]
 func main() {
-	modelDir := os.Getenv("HOME") + "/.cache/sprout/models/qwen3-0.6b"
-	model, err := llm.NewModel(modelDir)
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if len(os.Args) < 3 {
+		log.Fatalf("usage: %s <model-dir> <dump-dir> [prompt]", os.Args[0])
+	}
+	dir := os.Args[1]
+	dumpDir := os.Args[2]
+	prompt := "The capital of France is"
+	if len(os.Args) > 3 {
+		prompt = os.Args[3]
+	}
+
+	cfg, err := llm.LoadConfig(dir + "/config.json")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("config: %v", err)
 	}
-	defer model.Close()
-
-	prompt := "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n"
-	tokens := model.TokenizerEncode(prompt)
-	tokens = append([]int{model.BOSID()}, tokens...)
-	next := 223 // arbitrary token to test decode
-
-	maxDiff, fullTop5, cacheTop5, err := model.DebugDecodeComparison(tokens, next)
+	arch, err := qwen35.New(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("arch: %v", err)
 	}
-	fmt.Printf("max logit diff: %.4f (BF16 noise is expected ~0.1-0.5)\n", maxDiff)
-	fmt.Printf("full re-encode top-5: %v\n", fullTop5)
-	fmt.Printf("cache decode top-5:   %v\n", cacheTop5)
+	q := arch.(*qwen35.Qwen35)
 
-	// The correctness gate is token agreement, not exact logit equality:
-	// BF16 fused kernels use a different summation order than the manual path.
-	same := len(fullTop5) == len(cacheTop5)
-	for i := range fullTop5 {
-		if fullTop5[i] != cacheTop5[i] {
-			same = false
-		}
+	s, err := mlx.NewGPUStream()
+	if err != nil {
+		log.Fatal(err)
 	}
-	if same {
-		fmt.Println("PASS: cache decode top-5 tokens match full re-encode")
-	} else {
-		fmt.Println("FAIL: cache decode diverges at token level")
-		os.Exit(1)
+	defer s.Free()
+
+	// Load weights on the same thread/stream as the forward (thread-local).
+	if err := q.InitWeights(dir+"/model.safetensors", s); err != nil {
+		log.Fatalf("weights: %v", err)
 	}
+	defer q.FreeWeights()
+
+	tok, err := llm.LoadTokenizer(dir + "/tokenizer.json")
+	if err != nil {
+		log.Fatalf("tokenizer: %v", err)
+	}
+	toks := tok.Encode(prompt)
+	if len(toks) == 0 {
+		log.Fatalf("empty prompt")
+	}
+	log.Printf("prompt %q -> %d tokens", prompt, len(toks))
+
+	ids, err := idsArray(toks)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer ids.Free()
+
+	cache := llm.NewKVCache(cfg.NumLayers, s)
+	defer cache.Free()
+
+	if err := os.MkdirAll(dumpDir, 0o755); err != nil {
+		log.Fatal(err)
+	}
+	if err := q.DebugDumpLayers(ids, len(toks), cache, s, dumpDir); err != nil {
+		log.Fatalf("dump: %v", err)
+	}
+	log.Printf("dumped %d layers to %s", cfg.NumLayers, dumpDir)
+}
+
+func idsArray(toks []int) (*mlx.Array, error) {
+	data := make([]int64, len(toks))
+	for i, t := range toks {
+		data[i] = int64(t)
+	}
+	return mlx.NewArrayFromInt64(data, []int{1, len(toks)})
 }

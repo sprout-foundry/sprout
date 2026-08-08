@@ -113,6 +113,27 @@ func Quantize(w *Array, groupSize, bits int, mode string, s *Stream) ([]*Array, 
 	return out, nil
 }
 
+// Dequantize expands a quantized weight back to its full float representation
+// (the inverse of Quantize). w is the packed int32 weight [out, in*bits/32];
+// scales is [out, in/groupSize]; biases is [out, in/groupSize] or nil for
+// modes without bias. Returns the dequantized [out, in] array in the same
+// dtype as w's original scale factor (typically float32 or bfloat16).
+// Used for quantized embedding lookups where gather+dequantize on the
+// selected rows is cheaper than a full dequant + plain matmul.
+func Dequantize(w, scales, biases *Array, groupSize, bits int, mode string, s *Stream) (*Array, error) {
+	out := newOutput()
+	gs := C.mlx_optional_int{value: C.int(groupSize), has_value: true}
+	bs := C.mlx_optional_int{value: C.int(bits), has_value: true}
+	cMode := C.CString(mode)
+	defer C.free(unsafe.Pointer(cMode))
+	var biasH C.mlx_array
+	if biases != nil {
+		biasH = biases.cHandle()
+	}
+	rc := C.mlx_dequantize(&out, w.cHandle(), scales.cHandle(), biasH, gs, bs, cMode, C.mlx_array{}, C.mlx_optional_dtype{}, s.cHandle())
+	return wrapResult(out, rc, "dequantize")
+}
+
 // QuantizedMatMul computes x @ dequant(w)^T with weights quantized by
 // Quantize (or loaded from an MLX-format safetensors file). w is the packed
 // int32 weight [out, in*bits/32]; scales is [out, in/groupSize]; biases is
@@ -155,6 +176,31 @@ func Exp(a *Array, s *Stream) (*Array, error) {
 	out := newOutput()
 	rc := C.mlx_exp(&out, a.cHandle(), s.cHandle())
 	return wrapResult(out, rc, "exp")
+}
+
+// Log returns the elementwise natural logarithm.
+func Log(a *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_log(&out, a.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "log")
+}
+
+// Log1p returns the elementwise log(1 + x).
+func Log1p(a *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_log1p(&out, a.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "log1p")
+}
+
+// Softplus returns the elementwise softplus: log(1 + exp(x)), computed
+// stably as log1p(exp(x)). Used by the DeltaNet decay gate.
+func Softplus(a *Array, s *Stream) (*Array, error) {
+	ex, err := Exp(a, s)
+	if err != nil {
+		return nil, fmt.Errorf("softplus exp: %w", err)
+	}
+	defer ex.Free()
+	return Log1p(ex, s)
 }
 
 // Sqrt returns the elementwise square root.
@@ -205,5 +251,16 @@ func SliceUpdate(src, update *Array, start, stop []int, s *Stream) (*Array, erro
 	rc := C.mlx_slice_update(&out, src.cHandle(), update.cHandle(),
 		startPtr, C.size_t(len(start)), stopPtr, C.size_t(len(stop)), stridesPtr, C.size_t(len(strides)), s.cHandle())
 	return wrapResult(out, rc, "slice_update")
+}
+
+// Conv1D applies a 1D convolution. input is [B, L, C_in]; weight is
+// [C_out, C_in/groups, kernel]. stride/padding/dilation are as documented
+// for mlx_conv1d. For the DeltaNet block: groups == C_in (depthwise) and
+// C_out == C_in.
+func Conv1D(input, weight *Array, stride, padding, dilation, groups int, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_conv1d(&out, input.cHandle(), weight.cHandle(),
+		C.int(stride), C.int(padding), C.int(dilation), C.int(groups), s.cHandle())
+	return wrapResult(out, rc, "conv1d")
 }
 

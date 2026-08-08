@@ -30,9 +30,18 @@ type KVCache struct {
 }
 
 // KVCacheLayer holds the cached K and V for a single transformer layer.
+// For hybrid linear-attention layers (Qwen3.5 DeltaNet), K/V are nil and
+// State/ConvState hold the fixed-size recurrent state instead.
 type KVCacheLayer struct {
-	K *mlx.Array // [1, num_kv_heads, cached_len, head_dim]
-	V *mlx.Array // [1, num_kv_heads, cached_len, head_dim]
+	K *mlx.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
+	V *mlx.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
+
+	// DeltaNet (linear attention) state. State is [B, Hv, Dv, Dk] (the
+	// recurrent key/value memory); ConvState is [B, conv_kernel-1, conv_dim]
+	// (the trailing conv input rows). Both are fixed-size — they do NOT grow
+	// with sequence length.
+	State     *mlx.Array
+	ConvState *mlx.Array
 }
 
 // NewKVCache creates a cache for the given number of layers.
@@ -61,6 +70,8 @@ func (c *KVCache) Store(layerIdx int, k, v *mlx.Array) error {
 	if c.layers[layerIdx] != nil {
 		c.layers[layerIdx].K.Free()
 		c.layers[layerIdx].V.Free()
+		c.layers[layerIdx].State.Free()
+		c.layers[layerIdx].ConvState.Free()
 	}
 	c.layers[layerIdx] = &KVCacheLayer{K: k, V: v}
 	c.initialized[layerIdx] = true
@@ -111,6 +122,36 @@ func (c *KVCache) Get(layerIdx int) (*KVCacheLayer, error) {
 	return c.layers[layerIdx], nil
 }
 
+// StoreState writes the fixed-size DeltaNet recurrent state for a layer.
+// The cache takes ownership of the arrays.
+func (c *KVCache) StoreState(layerIdx int, state, convState *mlx.Array) error {
+	if layerIdx < 0 || layerIdx >= len(c.layers) {
+		return fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
+	}
+	if c.layers[layerIdx] != nil {
+		c.layers[layerIdx].State.Free()
+		c.layers[layerIdx].ConvState.Free()
+		c.layers[layerIdx].K.Free()
+		c.layers[layerIdx].V.Free()
+	}
+	c.layers[layerIdx] = &KVCacheLayer{State: state, ConvState: convState}
+	c.initialized[layerIdx] = true
+	return nil
+}
+
+// GetState returns the fixed-size DeltaNet recurrent state for a layer.
+// Returns nil, nil if the layer is not initialized.
+func (c *KVCache) GetState(layerIdx int) (*mlx.Array, *mlx.Array, error) {
+	if layerIdx < 0 || layerIdx >= len(c.layers) {
+		return nil, nil, fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
+	}
+	l := c.layers[layerIdx]
+	if l == nil {
+		return nil, nil, nil
+	}
+	return l.State, l.ConvState, nil
+}
+
 // CachedLen returns the number of cached tokens, or 0 if empty.
 func (c *KVCache) CachedLen() int {
 	if len(c.layers) == 0 || c.layers[0] == nil {
@@ -129,6 +170,8 @@ func (c *KVCache) Free() {
 		if layer != nil {
 			layer.K.Free()
 			layer.V.Free()
+			layer.State.Free()
+			layer.ConvState.Free()
 		}
 	}
 }

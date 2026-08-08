@@ -28,6 +28,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
+	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
 )
 
 // chatRequest mirrors the OpenAI chat-completions request body fields sprout
@@ -266,7 +267,7 @@ func main() {
 
 	name := "local"
 	if cfg := model.Config(); cfg.Arch != "" {
-		name = fmt.Sprintf("qwen3-local-%d-%d", cfg.HiddenSize, cfg.NumLayers)
+		name = fmt.Sprintf("%s-local-%d-%d", cfg.Arch, cfg.HiddenSize, cfg.NumLayers)
 	}
 
 	srv := &server{model: model, modelName: name}

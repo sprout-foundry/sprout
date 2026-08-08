@@ -140,6 +140,20 @@ func Abs(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
 // Exp returns errUnavailable on stub builds.
 func Exp(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
 
+// Log returns errUnavailable on stub builds.
+func Log(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Log1p returns errUnavailable on stub builds.
+func Log1p(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Softplus returns errUnavailable on stub builds.
+func Softplus(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Conv1D returns errUnavailable on stub builds.
+func Conv1D(input, weight *Array, stride, padding, dilation, groups int, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+
 // Sqrt returns errUnavailable on stub builds.
 func Sqrt(a *Array, s *Stream) (*Array, error)        { return nil, errUnavailable }
 func Rsqrt(a *Array, s *Stream) (*Array, error)     { return nil, errUnavailable }
@@ -221,6 +235,9 @@ func GatherAxis(a, indices *Array, axis int, sliceSizes []int, s *Stream) (*Arra
 // Concatenate returns errUnavailable on stub builds.
 func Concatenate(arrays []*Array, s *Stream) (*Array, error) { return nil, errUnavailable }
 
+// Stack returns errUnavailable on stub builds.
+func Stack(arrays []*Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
 // ConcatenateAxis returns errUnavailable on stub builds.
 func ConcatenateAxis(arrays []*Array, axis int, s *Stream) (*Array, error) {
 	return nil, errUnavailable
@@ -299,6 +316,9 @@ func (c *Closure) Compile(bool) (*Closure, error)    { return nil, errUnavailabl
 func (c *Closure) Free()                             {}
 
 func Quantize(*Array, int, int, string, *Stream) ([]*Array, error) {
+	return nil, errUnavailable
+}
+func Dequantize(*Array, *Array, *Array, int, int, string, *Stream) (*Array, error) {
 	return nil, errUnavailable
 }
 func QuantizedMatMul(*Array, *Array, *Array, *Array, bool, int, int, string, *Stream) (*Array, error) {

@@ -47,6 +47,16 @@ func SiLU(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
 	return mlx.Multiply(x, sig, s)
 }
 
+// Softplus computes log(1 + exp(x)) via log1p(exp(x)).
+func Softplus(x *mlx.Array, s *mlx.Stream) (*mlx.Array, error) {
+	exp, err := mlx.Exp(x, s)
+	if err != nil {
+		return nil, fmt.Errorf("softplus exp: %w", err)
+	}
+	defer exp.Free()
+	return mlx.Log1p(exp, s)
+}
+
 
 // ApplyRoPEFast applies fused rotary position embeddings using the MLX
 // mlx_fast_rope kernel — one Metal op instead of ~10. offset is the absolute

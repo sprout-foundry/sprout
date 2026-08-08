@@ -10,6 +10,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
+	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
 )
 
 func main() {

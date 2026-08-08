@@ -75,6 +75,30 @@ type GreedyArchitecture interface {
 	ForwardDecodeArgmax(tokenID int, pos int, cache *KVCache) (int, error)
 }
 
+// MTPArchitecture is an optional refinement implemented by architectures
+// with a multi-token prediction head (e.g. raw Qwen3.5 HF exports carry
+// mtp.* tensors; mlx-community conversions strip them). It enables
+// self-speculative decoding: a cheap 1-layer MTP head drafts k tokens, the
+// main model verifies them in ONE batched forward (~1 decode cost), and the
+// longest accepted prefix is emitted. Throughput win for large models where
+// the main model dominates per-token cost.
+type MTPArchitecture interface {
+	GreedyArchitecture
+
+	// MTPAvailable reports whether the loaded weights include an MTP head.
+	MTPAvailable() bool
+
+	// ForwardDecodeMTP runs one MTP-assisted decode round at position pos.
+	// nextToken is the token at position pos (just emitted); the KV cache
+	// holds positions 0..pos-1. It drafts k tokens with the MTP head,
+	// verifies them in ONE main-model batched forward, and returns the
+	// tokens to emit: accepted drafts followed by the main model's own next
+	// prediction (never empty). After the round the cache holds positions
+	// 0..pos+len(out)-1 and the next round decodes out[len(out)-1] at
+	// position pos+len(out).
+	ForwardDecodeMTP(nextToken int, pos int, cache *KVCache, k int) ([]int, error)
+}
+
 // ModelConfig holds architecture-independent configuration values. Every
 // decoder-only transformer shares these fields; architecture-specific values
 // (e.g. QK norm presence, bias presence) are encoded as booleans that the
@@ -111,6 +135,7 @@ type ModelConfig struct {
 	MRopeSection          []int    // mRoPE section sizes [T, H, W]
 	MRopeInterleaved      bool     // mRoPE interleaved vs half-split
 	MTPNumHiddenLayers    int      // multi-token prediction layers; absent from MLX conversions (configs ship mtp=none, no mtp tensors on disk) — an MTP-aware conversion + decode path would be required to use it
+	MTPUseDedicatedEmbeds bool     // MTP uses its own embedding table when true; shares the main embedding when false
 	WeightPrefix          string   // safetensors key prefix ("" or "model." for qwen3, "model.language_model." for qwen3_5)
 	LayerTypes            []string // optional per-layer type override; nil = derive from FullAttentionInterval
 }

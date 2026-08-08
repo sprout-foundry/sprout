@@ -4,6 +4,7 @@ package qwen35
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
@@ -28,9 +29,34 @@ func scaleRMSNorm(x *mlx.Array, s float32, stream *mlx.Stream) (*mlx.Array, erro
 
 // decayGate computes g = exp(-exp(A_log) * softplus(a + dt_bias)).
 // A_log and dt_bias are [Hv] (per-value-head); a is [B, S, Hv] (per-head).
+//
+// The whole chain runs in fp32, mirroring mlx-lm's compute_g
+// (mx.exp(-mx.exp(A_log.astype(mx.float32)) * nn.softplus(a + dt_bias))).
+// In the raw BF16 model a/A_log/dt_bias arrive as BF16; running the
+// exp/softplus in BF16 loses precision and diverges from the reference
+// kernel, which computes g in fp32 and only casts the recurrence output back
+// to the input dtype.
 func decayGate(aLog, a, dtBias *mlx.Array, stream *mlx.Stream) (*mlx.Array, error) {
-	// softplus(a + dt_bias)
-	added, err := mlx.Add(a, dtBias, stream)
+	aF32, err := mlx.AsType(a, mlx.Float32, stream)
+	if err != nil {
+		return nil, err
+	}
+	defer aF32.Free()
+
+	aLogF32, err := mlx.AsType(aLog, mlx.Float32, stream)
+	if err != nil {
+		return nil, err
+	}
+	defer aLogF32.Free()
+
+	dtBiasF32, err := mlx.AsType(dtBias, mlx.Float32, stream)
+	if err != nil {
+		return nil, err
+	}
+	defer dtBiasF32.Free()
+
+	// softplus(a + dt_bias) in fp32.
+	added, err := mlx.Add(aF32, dtBiasF32, stream)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +68,7 @@ func decayGate(aLog, a, dtBias *mlx.Array, stream *mlx.Stream) (*mlx.Array, erro
 	defer sp.Free()
 
 	// exp(A_log) — A_log is [Hv]; broadcasts over [B,S,Hv].
-	expALog, err := mlx.Exp(aLog, stream)
+	expALog, err := mlx.Exp(aLogF32, stream)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +81,7 @@ func decayGate(aLog, a, dtBias *mlx.Array, stream *mlx.Stream) (*mlx.Array, erro
 	}
 	defer mul.Free()
 
-	// -mul, then exp => g
+	// -mul, then exp => g (stays fp32 — the recurrence and kernel consume it).
 	neg, err := mlx.Negative(mul, stream)
 	if err != nil {
 		return nil, err
@@ -134,7 +160,7 @@ func freeAll(ys []*mlx.Array) {
 //	y_t = sum_dk(state * q_t)                  [B,Hv,Dv]
 func gatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*mlx.Array, *mlx.Array, error) {
 	// Fast path: one fused Metal kernel launch when available.
-	if mlx.Available() {
+	if mlx.Available() && os.Getenv("SPROUT_DELTA_OPS") == "" {
 		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, stream)
 		if err == nil {
 			return y, ns, nil

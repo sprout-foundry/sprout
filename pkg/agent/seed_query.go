@@ -326,6 +326,7 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// reservation fractions defined in context_budget.go so substitution
 	// fires earlier — by default at 0.70 instead of 0.85.
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
+	opts.SubstitutionTargetFraction = 0.50
 
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
@@ -346,14 +347,16 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
 
-		// SP-126: re-apply the effective context cap here as a defensive
-		// measure. The cap is also applied at the source (seed_provider.Info()),
-		// but this guard catches any path that bypasses ProviderInfo — future
-		// seed internal changes, mock providers in tests, etc. Reading from
-		// a.effectiveContextCap keeps the cap authoritative regardless of
-		// how contextSize reaches us.
-		if cap := a.effectiveContextCap; cap > 0 && (contextSize == 0 || contextSize > cap) {
+		// SP-126: clamp to the effective cap (user MaxContextTokens or native window).
+		// After a model switch, effectiveContextCap is refreshed by
+		// refreshEffectiveContextCap() so this uses the current model's cap.
+		if cap := a.effectiveContextCap; cap > 0 && contextSize > cap {
 			contextSize = cap
+		}
+		// When the provider reports no context info (contextSize == 0),
+		// fall back to the effective cap if we have one.
+		if contextSize == 0 {
+			contextSize = a.effectiveContextCap
 		}
 		a.state.SetMaxContextTokens(contextSize)
 

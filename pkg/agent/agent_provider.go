@@ -101,6 +101,7 @@ func (a *Agent) SelectProvider() error {
 
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 
 	return nil
 }

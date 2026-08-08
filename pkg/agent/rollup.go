@@ -47,12 +47,16 @@ const (
 	recentTurnsToPreserveDefault = 5
 
 	// rollupSourceCount is the number of source checkpoints folded into a
-	// single rollup at any level. Same N at every level for simplicity.
-	rollupSourceCount = 15
+	// single rollup at any level. Lowered from 15 so rollups fire more
+	// often, keeping the checkpoint list shorter. A high value lets the
+	// per-level list grow long before folding, which increases the
+	// substitution target during those intermediate stretches and forces
+	// the pruner to drop more summaries — creating a compaction churn loop.
+	rollupSourceCount = 10
 
 	// rollupTriggerCount is the per-level checkpoint count that triggers a
-	// rollup. Anything ≥ this number at level L (excluding the recency
-	// window at level 0) gets folded into a level-(L+1) entry.
+	// rollup. Must equal rollupSourceCount so the trigger fires exactly
+	// when there are enough entries to fold — never before.
 	rollupTriggerCount = rollupSourceCount
 
 	// rollupMaxLevel caps how deeply rollups stack. Beyond this depth we

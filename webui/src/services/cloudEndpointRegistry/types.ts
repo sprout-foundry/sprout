@@ -5,7 +5,7 @@
 /**
  * Endpoint classification categories for cloud mode.
  */
-export type EndpointCategory = 'wasm-local' | 'foundry-backend' | 'synthetic' | 'no-op';
+export type EndpointCategory = 'wasm-local' | 'foundry-backend' | 'synthetic' | 'no-op' | 'browser-git';
 
 /**
  * Cloud endpoint metadata.

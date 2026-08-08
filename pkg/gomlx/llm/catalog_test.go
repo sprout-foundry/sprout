@@ -53,3 +53,27 @@ func TestCatalogSizes(t *testing.T) {
 		}
 	}
 }
+
+// TestRecommendModelForRAM checks the pure-RAM recommendation (no disk check)
+// used by the download helper: 16 GB → 4B, 32 GB → 9B, tiny machine → 0.8B.
+func TestRecommendModelForRAM(t *testing.T) {
+	cases := []struct {
+		ram  uint64
+		want string
+	}{
+		{32 * 1024 * 1024 * 1024, "qwen3.5-9b"},
+		{16 * 1024 * 1024 * 1024, "qwen3.5-4b"},
+		{14 * 1024 * 1024 * 1024, "qwen3.5-4b"},
+		{8 * 1024 * 1024 * 1024, "qwen3.5-0.8b"},
+		{1 * 1024 * 1024 * 1024, "qwen3.5-0.8b"},
+	}
+	for _, tc := range cases {
+		m := RecommendModelForRAM(tc.ram)
+		if m == nil || m.Name != tc.want {
+			t.Fatalf("RecommendModelForRAM(%d) = %+v, want %s", tc.ram, m, tc.want)
+		}
+		if m.HFRepo == "" {
+			t.Fatalf("catalog entry %s missing HFRepo", m.Name)
+		}
+	}
+}

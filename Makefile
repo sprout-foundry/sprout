@@ -45,6 +45,11 @@ help:
 	@echo "                                         the workflow can't kill itself."
 	@echo "                                         Pass flags via AUTOMATE_ARGS=\"--yes --budget-usd 5\""
 	@echo ""
+	@echo "Local LLM (MLX):"
+	@echo "  make local-model              - Download the recommended model for this machine's RAM"
+	@echo "  make local-llm                - Build and run the local LLM server (auto-selects by RAM)"
+	@echo "  make local-llm-status         - Check if the local LLM server is up (curl /health)"
+	@echo ""
 	@echo "Version Management:"
 	@echo "  ./scripts/version-manager.sh build    - Build with version info"
 	@echo ""
@@ -293,6 +298,27 @@ automate-run: build
 	@echo "Renamed sprout → sprout-automate (covered by existing 'sprout-*' gitignore rule)"
 	@echo "Running workflow as sprout-automate (workflow=$(notdir $(WORKFLOW)), extra=$(AUTOMATE_ARGS))"
 	@./sprout-automate automate run $(notdir $(WORKFLOW)) $(AUTOMATE_ARGS)
+
+# ---------------------------------------------------------------------------
+# Local LLM (MLX) — see docs/LOCAL_LLM.md for the full guide.
+# ---------------------------------------------------------------------------
+
+# Download the model the catalog recommends for this machine's RAM.
+local-model:
+	@echo "Downloading recommended local model..."
+	cd pkg/gomlx && go run -tags mlx ../../cmd/llm_download
+
+# Build and run the local LLM server (auto-selects the best installed model
+# for this machine's RAM; serves OpenAI-compatible API on 127.0.0.1:18081).
+local-llm: 
+	@echo "Building local LLM server..."
+	go build -tags mlx -o llm_server ./cmd/llm_server
+	@echo "Starting local LLM server on http://127.0.0.1:18081 ..."
+	@./llm_server -port 18081
+
+# Check whether the local LLM server is up and which model it loaded.
+local-llm-status:
+	@curl -s -m 5 http://127.0.0.1:18081/health || echo "local LLM server is not running (start it with 'make local-llm')"
 
 # Build sprout binary with parallel compilation and cache
 build-parallel: prepare-grammars

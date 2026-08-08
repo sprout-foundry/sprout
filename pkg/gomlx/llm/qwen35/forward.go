@@ -9,7 +9,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
@@ -125,20 +124,27 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 
 	// Untied lm_head (9B+ models): the head is a separate projection outside
 	// the language_model.model.* namespace. In the mlx-community layout it
-	// lives at language_model.lm_head.*; in the raw-HF layout it is
-	// model.language_model.lm_head.*.
+	// lives at language_model.lm_head.*; in the raw-HF layout it can be
+	// either model.language_model.lm_head.* (4B) or top-level lm_head.* (9B).
 	if !q.cfg.UseTiedEmbeddings {
-		lmPrefix := "language_model.lm_head."
-		if strings.HasPrefix(prefix, "model.") {
-			lmPrefix = "model.language_model.lm_head."
+		candidates := []string{
+			"lm_head.",                            // raw HF 9B (top-level)
+			"model.language_model.lm_head.",       // raw HF 4B
+			"language_model.lm_head.",             // mlx-community
 		}
-		if sf.Has(lmPrefix + "weight") {
-			w.lmHead, err = llm.LoadLinear(sf, lmPrefix+"weight", s, q.cfg.Quantization)
-			if err != nil {
-				return fmt.Errorf("load lm_head: %w", err)
+		var lmPrefix string
+		for _, c := range candidates {
+			if sf.Has(c + "weight") {
+				lmPrefix = c
+				break
 			}
-		} else {
-			return fmt.Errorf("qwen35: tie_word_embeddings=false but no %slm_head.weight found", lmPrefix)
+		}
+		if lmPrefix == "" {
+			return fmt.Errorf("qwen35: tie_word_embeddings=false but no lm_head.weight found (tried %v)", candidates)
+		}
+		w.lmHead, err = llm.LoadLinear(sf, lmPrefix+"weight", s, q.cfg.Quantization)
+		if err != nil {
+			return fmt.Errorf("load lm_head: %w", err)
 		}
 	}
 

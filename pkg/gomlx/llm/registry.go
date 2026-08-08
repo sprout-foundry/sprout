@@ -36,6 +36,17 @@ func createArchitecture(cfg ModelConfig) (Architecture, error) {
 	return factory(cfg)
 }
 
+// ArchFactory returns the registered factory for a model type. Exported for
+// tools that build an Architecture directly (e.g. layer-parity debugging).
+func ArchFactory(modelType string) (ArchitectureFactory, error) {
+	factory, ok := architectureFactories[modelType]
+	if !ok {
+		return nil, fmt.Errorf("llm: unsupported architecture %q (registered: %v)",
+			modelType, registeredArchitectures())
+	}
+	return factory, nil
+}
+
 func registeredArchitectures() []string {
 	types := make([]string, 0, len(architectureFactories))
 	for k := range architectureFactories {

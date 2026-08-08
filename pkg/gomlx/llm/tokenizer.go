@@ -294,10 +294,14 @@ func getAllPairs(symbols []rune) []string {
 	return pairs
 }
 
-// preTokenize splits text into words, preserving whitespace.
+// preTokenize splits text into words, attaching each whitespace run to the
+// following word (GPT-2/Qwen BPE convention: "The capital" → ["The", " capital"]).
+// A bare " " must never be emitted as its own word — toBPESpace would encode
+// it as the standalone Ġ token (id 220) instead of the merged "Ġcapital".
 func preTokenize(text string) []string {
 	var words []string
 	var current strings.Builder
+	spacePending := false
 
 	for _, r := range text {
 		if unicode.IsSpace(r) {
@@ -305,9 +309,12 @@ func preTokenize(text string) []string {
 				words = append(words, current.String())
 				current.Reset()
 			}
-			// Attach space to next word
-			words = append(words, " ")
+			spacePending = true // attach to next word
 		} else {
+			if spacePending {
+				current.WriteString(" ")
+				spacePending = false
+			}
 			current.WriteRune(r)
 		}
 	}

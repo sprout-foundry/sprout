@@ -195,6 +195,33 @@ func (sf *SafetensorsFile) Has(name string) bool {
 	return ok
 }
 
+// DetectWeightPrefix returns the safetensors key prefix the model actually
+// uses. Different conversion pipelines store the same tensors under different
+// prefixes:
+//
+//	raw HF Qwen3.5 checkpoint:     model.language_model.layers.N.*
+//	mlx-community converted:       language_model.model.layers.N.*
+//	qwen3 / single-stream models:  model.layers.N.*
+//
+// The first candidate whose `embed_tokens.weight` (or `norm.weight`, for
+// models with tied embeddings) exists is returned. Candidates are probed in
+// order; callers pass the arch hint (e.g. "model.language_model.") first so
+// raw checkpoints match before the fallbacks.
+func (sf *SafetensorsFile) DetectWeightPrefix(candidates []string) string {
+	probes := []string{"embed_tokens.weight", "norm.weight", "layers.0.input_layernorm.weight"}
+	for _, cand := range candidates {
+		if cand == "" {
+			cand = ""
+		}
+		for _, probe := range probes {
+			if sf.Has(cand + probe) {
+				return cand
+			}
+		}
+	}
+	return ""
+}
+
 func parseSafetensorsHeader(headerBytes []byte) (map[string]safetensorEntry, error) {
 	result := make(map[string]safetensorEntry)
 	if err := json.Unmarshal(headerBytes, &result); err != nil {

@@ -97,10 +97,15 @@ func lastMLXError() string {
 
 // Dtype is an MLX array element type. Values match the mlx_dtype enum so they
 // pass straight through to the C API.
-type Dtype C.mlx_dtype
+// Dtype is the element type of an MLX array, aliased to tensor.Dtype so that
+// mlx.Array satisfies tensor.Array without adapter wrappers.
+// The actual type definition is in dtype.go (not this CGO file) because CGO
+// files cannot import non-C packages.
 
 // Dtype constants mirror the mlx_dtype enum order in array.h. Exported as
 // Dtype (not the C enum) so callers don't depend on cgo.
+// Dtype constants mirror the mlx_dtype enum order in array.h.
+// Dtype itself is defined in dtype.go as an alias for tensor.Dtype.
 const (
 	Bool      = Dtype(C.MLX_BOOL)
 	UInt8     = Dtype(C.MLX_UINT8)

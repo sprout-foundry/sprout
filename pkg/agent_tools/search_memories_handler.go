@@ -194,8 +194,8 @@ func SearchMemoriesByText(query string, topK int, threshold float64) ([]MemorySe
 			preview = preview[:117] + "..."
 		}
 
-	// Score based on name match + content match
-	score := scoreMemoryMatch(name, preview, content, queryWords)
+		// Score based on name match + content match
+		score := scoreMemoryMatch(name, preview, content, queryWords)
 
 		if score >= threshold {
 			results = append(results, MemorySearchResult{

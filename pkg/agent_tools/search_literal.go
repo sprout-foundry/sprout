@@ -35,9 +35,9 @@ type literalSearchOpts struct {
 	Pattern       string
 	FileGlob      string
 	CaseSensitive bool
-	MaxFiles     int // caps how many distinct matching files are returned
-	MaxPerFile   int // caps match lines kept per file (0 = unlimited)
-	MaxBytes     int // bounds retained match text as a memory valve
+	MaxFiles      int // caps how many distinct matching files are returned
+	MaxPerFile    int // caps match lines kept per file (0 = unlimited)
+	MaxBytes      int // bounds retained match text as a memory valve
 }
 
 // runLiteralSearch walks directory and returns structured regex matches.

@@ -33,6 +33,18 @@ vi.mock('lucide-react', () => ({
       height: size,
       'data-testid': 'x-icon',
     }),
+  Check: ({ size }: { size?: number }) =>
+    require('react').createElement('svg', {
+      width: size,
+      height: size,
+      'data-testid': 'check-icon',
+    }),
+  Star: ({ size }: { size?: number }) =>
+    require('react').createElement('svg', {
+      width: size,
+      height: size,
+      'data-testid': 'star-icon',
+    }),
 }));
 
 // ---------------------------------------------------------------------------

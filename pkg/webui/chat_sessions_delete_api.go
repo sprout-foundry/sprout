@@ -119,6 +119,10 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	ctx.CurrentQuery = ""
 
 	workspaceRoot := ctx.WorkspaceRoot
+	// Tombstone the chat so a query arriving after the map removal (but
+	// before the ActiveQuery recompute below) cannot start on a deleted
+	// chat. Cleared when a new chat with this ID is created.
+	ctx.DeletedChats[chatID] = struct{}{}
 	delete(ctx.ChatSessions, chatID)
 	ws.mutex.Unlock()
 

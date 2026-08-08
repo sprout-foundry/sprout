@@ -1,15 +1,7 @@
 package agent
 
-// Memory gate (SP-104-3): prevents OOM kills when subagents run memory-intensive
-// shell commands (e.g., vitest with jsdom workers).
-//
-// The gate reads available memory and applies a three-tier policy:
-//   - ≥ 16 GB: allow immediately
-//   - 8–16 GB: sleep 30s and retry (up to 5 times)
-//   - < 8 GB: refuse immediately
-//
-// Linux reads /proc/meminfo; macOS uses sysctl + vm_stat (best-effort).
-// On read failure the gate fails open (allows execution).
+// Memory gate: prevents OOM kills when subagents run memory-intensive shell commands.
+// Three-tier policy: ≥16 GB allow, 8–16 GB sleep+retry, <8 GB refuse. Fails open on read failure.
 
 import (
 	"fmt"
@@ -44,22 +36,17 @@ func (e *MemoryGateError) Error() string {
 	return fmt.Sprintf("memory gate: insufficient memory (%.1f GB available, %.1f GB required)", gb, reqGB)
 }
 
-// MemoryGate checks available system memory before allowing memory-intensive
-// operations. It is designed to prevent OOM kills when subagents run heavy
-// commands like vitest with jsdom workers.
+// MemoryGate checks available system memory before allowing memory-intensive operations.
 type MemoryGate struct {
-	// MinMemoryBytes is the hard minimum; below this the gate refuses
-	// immediately with no retries. Default: 8 GB.
+	// MinMemoryBytes is the hard minimum; below this the gate refuses immediately. Default: 8 GB.
 	MinMemoryBytes int64
-	// RetryMinBytes is the retry threshold; between MinMemoryBytes and this
-	// value the gate sleeps and retries. Default: 16 GB.
+	// RetryMinBytes is the retry threshold; between MinMemoryBytes and this value the gate sleeps and retries. Default: 16 GB.
 	RetryMinBytes int64
 	// RetrySleep is the duration to sleep between retries. Default: 30s.
 	RetrySleep time.Duration
 	// MaxRetries is the maximum number of retry attempts. Default: 5.
 	MaxRetries int
-	// readMem is an optional override for testing. When nil, the gate uses
-	// the platform-specific reader (readMemLinux or readMemDarwin).
+	// readMem is an optional override for testing. When nil, uses the platform-specific reader.
 	readMem func() (int64, error)
 }
 
@@ -71,9 +58,7 @@ const (
 	DefaultMaxRetries     = 5
 )
 
-// Check verifies that sufficient memory is available for the operation.
-//
-// Returns nil when memory is sufficient (or the check cannot be performed).
+// Check verifies that sufficient memory is available. Returns nil when sufficient or check fails (fail-open).
 // Returns *MemoryGateError when memory is below the threshold.
 func (g *MemoryGate) Check() error {
 	// Apply defaults for zero values.
@@ -165,9 +150,7 @@ func readMemAvailable() (int64, error) {
 	}
 }
 
-// readMemLinux reads MemAvailable from /proc/meminfo (in kB) and converts
-// to bytes. MemAvailable was added in kernel 3.14 and is preferred over
-// MemFree because it accounts for reclaimable cache/buffer pages.
+// readMemLinux reads MemAvailable from /proc/meminfo (in kB) and converts to bytes.
 func readMemLinux() (int64, error) {
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
@@ -187,15 +170,7 @@ func readMemLinux() (int64, error) {
 	return 0, agenterrors.NewAgent("memory_gate", "MemAvailable not found in /proc/meminfo", nil)
 }
 
-// readMemDarwin estimates available memory on macOS using vm_stat.
-//
-// macOS doesn't expose MemAvailable directly. We approximate by summing:
-//   - Pages free: completely unused physical pages
-//   - Pages speculative: clean cached pages eagerly reclaimed by macOS
-//   - Pages purgeable: app-allocated memory registered for purging
-//
-// This gives a much better picture than Pages free alone, which on a 16 GB
-// machine may report only 2-3 GB even when 10+ GB of cache is reclaimable.
+// readMemDarwin estimates available memory on macOS using vm_stat (free + speculative + purgeable pages).
 func readMemDarwin() (int64, error) {
 	freePages, err := getVMStatField("Pages free")
 	if err != nil {
@@ -215,10 +190,6 @@ func readMemDarwin() (int64, error) {
 }
 
 // getVMStatField parses an arbitrary named field from `vm_stat` output.
-//
-// vm_stat lines look like "Pages free: 123456." — each line ends with a
-// period. The function finds the line whose prefix matches fieldName+":"
-// and extracts the last numeric token.
 func getVMStatField(fieldName string) (int64, error) {
 	out, err := exec.Command("vm_stat").Output()
 	if err != nil {

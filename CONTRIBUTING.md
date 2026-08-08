@@ -25,6 +25,27 @@ make build-all
 The `make build-all` target builds everything in the right order. Use it to
 verify your changes compile cleanly before committing or opening a PR.
 
+### Pre-commit Hook
+
+A pre-commit hook (`scripts/pre-commit`) runs fast staged-file gates so
+unformatted Go / unformatted or lint-erroring frontend code can't sneak into
+commits (both have blocked CI in the past). Install it once after clone:
+
+```bash
+make install-hooks
+```
+
+The hook checks only **staged** files (sub-second for typical commits) and
+mirrors the CI gates:
+
+- `gofmt` on staged `*.go` files
+- `prettier --check` on staged `webui/src` files
+- `eslint` on staged `webui/src` `.ts`/`.tsx` files
+
+If `webui/node_modules` is missing the JS checks are skipped with a warning
+(not a block). Full gates (`make vet`, `make test-coverage`, `make build-all`)
+still run in CI and in the PR checklist below.
+
 ### Running Tests
 
 ```bash

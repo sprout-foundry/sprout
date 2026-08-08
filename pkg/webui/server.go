@@ -412,11 +412,31 @@ func (ws *ReactWebServer) GetDaemonRoot() string {
 	return ws.daemonRoot
 }
 
-// getActiveQueryCount returns the current number of active queries.
-func (ws *ReactWebServer) getActiveQueryCount() int {
+// ActiveQueryCount returns the current number of active queries.
+func (ws *ReactWebServer) ActiveQueryCount() int {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	return ws.activeQueries
+}
+
+// ActiveClientCount returns the number of client contexts whose LastSeenAt
+// is within staleAfter of now. Used by the daemon's idle-reaper (SP-136 P2)
+// to decide when no client has connected recently. A client counts as
+// "active" if it performed any request (health ping, chat message, API call)
+// inside the window — browsers that merely hold a WebSocket open without
+// traffic are NOT counted, which is the correct signal for reaping an
+// unattended daemon.
+func (ws *ReactWebServer) ActiveClientCount(staleAfter time.Duration) int {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	cutoff := time.Now().Add(-staleAfter)
+	n := 0
+	for _, ctx := range ws.clientContexts {
+		if ctx != nil && ctx.LastSeenAt.After(cutoff) {
+			n++
+		}
+	}
+	return n
 }
 
 // SetAgentEnforceSingleSession configures whether the WebSocket dispatcher

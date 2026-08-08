@@ -223,8 +223,9 @@ export class CloudAdapter implements APIAdapter {
     // + lightning-fs (IndexedDB). No server-side state required.
     if (urlPath.startsWith('/api/git/')) {
       const requestBody = await this.extractRequestBody(input);
+      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
       const { handleBrowserGitRequest } = await import('./browserGitHandler');
-      return handleBrowserGitRequest(urlPath, method, url, requestBody ?? undefined);
+      return handleBrowserGitRequest(urlPath, method, url, bodyStr);
     }
 
     // ── Stats endpoint translation ────────────────────────────────────

@@ -12,11 +12,50 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
+// defaultSubagentTimeout bounds a subagent run when the caller didn't set
+// an explicit timeout. Generous enough for locally-hosted models (which may
+// be slower than cloud APIs) while still bounding the worst case.
+const defaultSubagentTimeout = 30 * time.Minute
+
+// orchestratorSubagentTimeout bounds the orchestrator persona when it is
+// itself spawned as a subagent. It delegates to nested subagents and drives
+// multi-phase workflows, so a full hour avoids cutting it short
+// mid-delegation.
+const orchestratorSubagentTimeout = time.Hour
+
+// resolveSubagentTimeout returns the effective execution timeout for a
+// subagent run: an explicit caller-set timeout always wins; otherwise the
+// orchestrator persona (by canonical ID or alias) gets a full hour and every
+// other persona gets the 30-minute default. Alias resolution goes through
+// the config catalog so it stays in sync with the persona definitions.
+func (r *SubagentRunner) resolveSubagentTimeout(opts SubagentOptions) time.Duration {
+	if opts.Timeout > 0 {
+		return opts.Timeout
+	}
+	if r.isOrchestratorPersona(opts.Persona) {
+		return orchestratorSubagentTimeout
+	}
+	return defaultSubagentTimeout
+}
+
+// isOrchestratorPersona reports whether the given persona string resolves to
+// the canonical orchestrator persona (by ID or alias) via the config catalog.
+func (r *SubagentRunner) isOrchestratorPersona(persona string) bool {
+	if persona == "" {
+		return false
+	}
+	if r.shared == nil || r.shared.ConfigManager == nil {
+		return false
+	}
+	st := r.shared.ConfigManager.GetConfig().GetSubagentType(persona)
+	return st != nil && st.ID == personas.IDOrchestrator
+}
+
 // subagentRunContext holds all the state wired up during setupSubagentRun
-// so that runTask can remain a thin orchestrator. Closures (streaming
-// callback, terminal writer) capture fields from this struct.
+// so that runTask can remain a thin orchestrator.
 type subagentRunContext struct {
 	runCtx          context.Context
 	cancel          context.CancelFunc
@@ -36,8 +75,6 @@ type subagentRunContext struct {
 }
 
 // setupSubagentRun creates and configures a subagent for execution.
-// It returns a populated subagentRunContext on success, or an early-error
-// *SubagentResult on failure (e.g., createSubagent error).
 func (r *SubagentRunner) setupSubagentRun(
 	ctx context.Context,
 	taskID string,
@@ -56,8 +93,7 @@ func (r *SubagentRunner) setupSubagentRun(
 		runCtx, cancel = context.WithCancel(ctx)
 	}
 
-	// Create subagent, deriving its interrupt context from runCtx so
-	// cancellation propagates into the subagent's LLM calls.
+	// Create subagent, deriving its interrupt context from runCtx.
 	subAgent, err := r.createSubagent(opts, runCtx)
 	if err != nil {
 		cancel()
@@ -68,39 +104,28 @@ func (r *SubagentRunner) setupSubagentRun(
 		}
 	}
 
-	// SP-059 Phase 4: share the parent's clarification manager and assign
-	// this subagent a clarification ID (its taskID). Lets the subagent
-	// call request_clarification mid-run and route the user's response
-	// back to itself via the shared manager.
+	// Share the parent's clarification manager and assign this subagent a clarification ID.
 	if r.parentAgent != nil && r.parentAgent.clarificationManager != nil {
 		subAgent.clarificationManager = r.parentAgent.clarificationManager
 		subAgent.subagentID = taskID
 	}
 
-	// SP-051-2d: bump the process-wide active-subagent counter so the CLI
-	// status footer can show " · N sub" while subagents are running.
-	// Decremented on Run completion via the defer below.
+	// Bump the process-wide active-subagent counter for the CLI status footer.
 	IncrementActiveSubagents()
 
-	// Wire up per-LLM-call fleet budget tracking (SP-037-2c).
-	// This enables the subagent to debit tokens after each LLM call and
-	// truncate gracefully when the shared budget is exceeded mid-run.
+	// Wire up per-LLM-call fleet budget tracking.
 	if cumulativeTokens != nil && fleetBudgetLimit > 0 {
 		subAgent.SetFleetBudget(cumulativeTokens, fleetBudgetLimit)
 	}
 
-	// Propagate the parent's USD budget to this subagent so the cap is
-	// workflow-wide. Subagents share the same *FleetUsdBudget by
-	// reference, so debits accumulate in a single counter.
+	// Propagate the parent's USD budget to this subagent.
 	if r.parentAgent != nil {
 		if usd := r.parentAgent.GetFleetUsdBudget(); usd != nil {
 			subAgent.SetFleetUsdBudget(usd)
 		}
 	}
 
-	// Set up terminal output prefixing for subagent. Dim the prefix so the
-	// subagent's lines read as secondary to the primary's, but honor NO_COLOR /
-	// non-terminal output — otherwise raw escape codes leak into pipes/logs.
+	// Set up terminal output prefixing for subagent.
 	prefix := buildSubagentPrefix(opts.Persona, taskID)
 	dimGray := "\033[90m"
 	reset := "\033[0m"
@@ -109,19 +134,13 @@ func (r *SubagentRunner) setupSubagentRun(
 		reset = ""
 	}
 
-	// Create OutputRouter with the shared eventBus so subagent events
-	// (stream_chunk, agent_message, tool_log, etc.) are published to the
-	// event bus when in WebUI mode.
+	// Create OutputRouter with the shared eventBus for subagent events.
 	eventBus := r.shared.EventBus
 	router := NewOutputRouter(subAgent, eventBus)
 	subAgent.output.SetOutputRouter(router)
 
-	// SP-059 Phase 3a: capture a per-run progress log by subscribing to
-	// the shared event bus and filtering for subagent_activity events
-	// whose task_id matches this run. Without this the primary's LLM
-	// only sees the final stdout — no insight into *what* the subagent
-	// did along the way. Bounded to subagentProgressLogCap entries
-	// (head-trimmed) so a chatty subagent can't bloat the envelope.
+	// Capture a per-run progress log by subscribing to the shared event bus.
+	// Bounded to subagentProgressLogCap entries (head-trimmed).
 	var progressLog []SubagentProgressEntry
 	var progressMu sync.Mutex
 	stopProgress := make(chan struct{})
@@ -152,9 +171,7 @@ func (r *SubagentRunner) setupSubagentRun(
 					message, _ := data["message"].(string)
 					progressMu.Lock()
 					if len(progressLog) >= subagentProgressLogCap {
-						// Head-trim so the most recent entries are
-						// always visible. Cheap because slice header
-						// just moves; underlying array is reused.
+						// Head-trim so the most recent entries are always visible.
 						progressLog = progressLog[1:]
 					}
 					progressLog = append(progressLog, SubagentProgressEntry{
@@ -169,8 +186,6 @@ func (r *SubagentRunner) setupSubagentRun(
 	}
 
 	// Determine a mutex for thread-safe output across parallel subagents.
-	// Use the parent agent's output mutex if available; otherwise create
-	// one so parallel subagents don't interleave terminal output.
 	var outputMu *sync.Mutex
 	if r.parentAgent != nil && r.parentAgent.output != nil {
 		outputMu = r.parentAgent.output.GetOutputMutex()
@@ -180,17 +195,10 @@ func (r *SubagentRunner) setupSubagentRun(
 		subAgent.output.SetOutputMutex(outputMu)
 	}
 
-	// Line buffer for accumulating stream chunks. The mutex protects lineBuf
-	// across parallel subagents; stderr writes happen AFTER releasing it so a
-	// slow/full stderr pipe can't stall siblings holding lineBuf access.
-	// Per-line writes stay below PIPE_BUF, so byte-level interleaving is safe.
+	// Line buffer for accumulating stream chunks.
 	var lineBuf strings.Builder
 
-	// Capture task metadata for publishing subagent_activity events from the
-	// streaming callback. The subagent's LLM prose output normally goes to
-	// stream_chunk events which are depth-suppressed in the WebUI — publishing
-	// subagent_activity events alongside stderr writes ensures the
-	// SubagentActivityFeed shows the subagent's actual responses.
+	// Capture task metadata for publishing subagent_activity events.
 	subPersona := opts.Persona
 	subTaskID := taskID
 	subEventBus := eventBus
@@ -198,10 +206,8 @@ func (r *SubagentRunner) setupSubagentRun(
 	subAgent.EnableStreaming(func(chunk string) {
 		var pending []string
 		var rawLines []string // mirror of pending without ANSI/prefix formatting
-		// RouteStreamChunk holds outputMu (via TryLock) before calling this
-		// callback. Using TryLock here avoids re-entrancy deadlock: if the lock
-		// is already held by the router, proceed without it — the router
-		// serialises the write.
+		// RouteStreamChunk holds outputMu before calling this callback.
+		// Using TryLock avoids re-entrancy deadlock.
 		selfLocked := outputMu.TryLock()
 		lineBuf.WriteString(chunk)
 		for {
@@ -227,11 +233,7 @@ func (r *SubagentRunner) setupSubagentRun(
 		for _, line := range pending {
 			_, _ = os.Stderr.Write([]byte(line))
 		}
-		// Publish each complete line as a subagent_activity event so the
-		// SubagentActivityFeed in the WebUI shows the subagent's LLM prose
-		// output. The stream_chunk events are depth-suppressed for subagents
-		// (see handleStreamChunk in useWebSocketEventHandler.ts), so this is
-		// the only path that surfaces the subagent's actual response text.
+		// Publish each complete line as a subagent_activity event for the WebUI feed.
 		if subEventBus != nil {
 			for _, raw := range rawLines {
 				subEventBus.Publish(events.EventTypeSubagentActivity, events.SubagentActivityEvent(
@@ -247,7 +249,6 @@ func (r *SubagentRunner) setupSubagentRun(
 	})
 
 	// Terminal writer for complete messages (tool logs, agent messages).
-	// These bypass the line buffer and print immediately with prefix.
 	subAgent.output.SetTerminalWriter(func(message string) {
 		var pending []string
 		outputMu.Lock()
@@ -288,15 +289,7 @@ func (r *SubagentRunner) setupSubagentRun(
 		go r.monitorBudget(runCtx, subAgent, opts.MaxTokens, &budgetExceeded)
 	}
 
-	// Per-subagent progress monitoring: emit periodic activity events so
-	// callers (CLI footer, WebUI panel) can show live context usage and
-	// cost as the subagent runs. The runner-level ticker is cheap (one
-	// goroutine per active subagent) and converges on the same
-	// CurrentContextTokens / MaxContextTokens the parent's footer reads
-	// — so the subagent and primary token displays use the same source
-	// of truth. The event is suppressed when the subagent hasn't burned
-	// any tokens yet (typical of the first ~1s) so the first frame the
-	// user sees already has meaningful numbers.
+	// Per-subagent progress monitoring: emit periodic activity events.
 	go r.monitorProgress(runCtx, subAgent, taskID, opts.Persona)
 
 	rc := &subagentRunContext{
@@ -324,7 +317,6 @@ func (r *SubagentRunner) setupSubagentRun(
 
 // finalizeSubagentResult enriches the raw SubagentResult with metrics,
 // progress log, change tracker snapshot, and output-quality signals.
-// It also cleans up the active tracking map entry.
 func (r *SubagentRunner) finalizeSubagentResult(
 	rc *subagentRunContext,
 	result *SubagentResult,
@@ -333,13 +325,8 @@ func (r *SubagentRunner) finalizeSubagentResult(
 	startTime time.Time,
 	opts SubagentOptions,
 ) *SubagentResult {
-	// Flush any remaining buffered output. Use TryLock instead of blocking
-	// Lock: if the goroutine leaked (the 5-second grace above expired),
-	// it may still be holding outputMu inside its streaming callback. A
-	// blocking Lock here would hang runTask indefinitely — leaving
-	// DecrementActiveSubagents un-fired ("1 sub" badge stuck in the
-	// footer) and blocking the parent's tool result. Best-effort flush
-	// on cancellation is fine; any buffered bytes are cosmetic.
+	// Flush any remaining buffered output. Use TryLock to avoid deadlock
+	// if the goroutine leaked and still holds outputMu.
 	if rc.outputMu.TryLock() {
 		if rc.lineBuf.Len() > 0 {
 			remaining := strings.TrimSpace(rc.lineBuf.String())
@@ -373,16 +360,11 @@ func (r *SubagentRunner) finalizeSubagentResult(
 		result.Cancelled = cancelled
 		result.BudgetExceeded = rc.budgetExceeded.Load()
 		result.Truncated = subAgent.FleetBudgetExceeded()
-		// SP-059 Phase 2c: snapshot the subagent's change tracker so
-		// the parent can surface a structured FilesModified manifest
-		// to the LLM. Snapshot is a defensive copy (GetChanges returns
-		// a copy), safe to keep after the subagent is torn down.
+		// Snapshot the subagent's change tracker for the parent.
 		if tracker := subAgent.GetChangeTracker(); tracker != nil {
 			result.FileChanges = tracker.GetChanges()
 		}
-		// SP-059 Phase 3a: copy the captured progress log into the
-		// result. Snapshot under the mutex so a late event arriving
-		// after subAgent.ProcessQuery returned can't race the read.
+		// Copy the captured progress log into the result.
 		rc.progressMu.Lock()
 		if len(*rc.progressLog) > 0 {
 			result.ProgressLog = make([]SubagentProgressEntry, len(*rc.progressLog))
@@ -391,39 +373,17 @@ func (r *SubagentRunner) finalizeSubagentResult(
 		rc.progressMu.Unlock()
 
 		// Output quality signal: set OutputComplete so the orchestrator can
-		// distinguish "subagent did useful work" from "subagent ran but
-		// produced nothing actionable". The orchestrator LLM sees this as
-		// "output_complete" in the tool result envelope and can decide to
-		// retry or escalate.
+		// distinguish "subagent did useful work" from "produced nothing actionable".
 		result.OutputComplete = isOutputComplete(result)
 
-		// Diagnostic for "subagent completed without returning anything":
-		// when a subagent exits cleanly (no error, not cancelled, not
-		// budget-exceeded) but its output is empty or too brief to convey
-		// findings, the orchestrator gets nothing useful back. This Warn
-		// line is the ground truth for tuning Phase 2's substance
-		// thresholds — it tells us whether the issue is truly empty
-		// Output="" or just short Output like "I've reviewed the files."
-		// (which slips past the existing blank-retry check).
-		//
-		// 50 chars is deliberately aggressive for Phase 1: we want to catch
-		// ALL short outputs (including legitimate brief answers) so we can
-		// see the full distribution and tune Phase 2's threshold from real
-		// data. Some false positives are expected — this is observation only.
+		// Diagnostic: warn when a subagent exits cleanly but produces brief output.
 		if result.Error == nil && !result.Cancelled && !result.BudgetExceeded && !result.Truncated {
-			// len() counts bytes, not runes — CJK/emoji outputs (3-4 bytes/char)
-			// hit the threshold faster, so non-ASCII brief responses are more
-			// likely to trigger. Acceptable bias for Phase 1 data collection.
 			trimmed := strings.TrimSpace(result.Output)
 			if len(trimmed) < 50 {
 				preview := trimmed
-				// Safety guard: cap preview length. Dead code at threshold=50
-				// (preview can't exceed 50 bytes here), but retained so Phase 2
-				// can raise the threshold without re-introducing a truncation risk.
 				if len(preview) > 200 {
 					preview = preview[:200] + "..."
 				}
-				// Collapse newlines so the line stays grep-friendly.
 				preview = strings.Map(func(runeVal rune) rune {
 					if runeVal == '\n' || runeVal == '\r' {
 						return ' '
@@ -448,10 +408,7 @@ func (r *SubagentRunner) finalizeSubagentResult(
 	return result
 }
 
-// runTask executes a single subagent task.  When cumulativeTokens is non-nil
-// and fleetBudgetLimit > 0, the subagent will debit tokens to the shared
-// fleet tracker after each LLM call and truncate gracefully when the budget
-// is exceeded mid-run.
+// runTask executes a single subagent task.
 func (r *SubagentRunner) runTask(
 	ctx context.Context,
 	taskID string,
@@ -464,11 +421,12 @@ func (r *SubagentRunner) runTask(
 
 	// Apply a default timeout when the caller didn't set one explicitly.
 	// Without this, a hung subagent blocks the primary indefinitely — no
-	// caller in subagent_runners.go sets opts.Timeout. 20 minutes is
+	// caller in subagent_runners.go sets opts.Timeout. 30 minutes for most
+	// personas, 1 hour for the orchestrator (see resolveSubagentTimeout) —
 	// generous enough for locally-hosted models (which may be slower than
 	// cloud APIs) while still bounding the worst case.
 	if opts.Timeout <= 0 {
-		opts.Timeout = 20 * time.Minute
+		opts.Timeout = r.resolveSubagentTimeout(opts)
 	}
 
 	// Setup
@@ -519,9 +477,6 @@ func (r *SubagentRunner) runTask(
 	case <-rc.runCtx.Done():
 		// Cancelled or timed out
 		rc.cancel()
-		// Wait for goroutine to finish (with timeout).
-		// If the grace expires, the goroutine has leaked — log it so the
-		// operator can see why the agent appeared to pause.
 		select {
 		case result = <-done:
 		case <-time.After(5 * time.Second):

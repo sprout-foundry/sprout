@@ -1,4 +1,4 @@
-// Package agent: conversation state, tokens/cost, tasks, output, and file reading (split from agent_getters.go)
+// Package agent: conversation state, tokens/cost, tasks, output, and file reading.
 package agent
 
 import (
@@ -34,8 +34,7 @@ func (a *Agent) AddMessage(message api.Message) {
 	}
 }
 
-// GetContextTokens returns the current and max token counts for the active
-// model's context window. (0, 0) when state is unavailable. SP-048-3.
+// GetContextTokens returns the current and max token counts for the active model's context window.
 func (a *Agent) GetContextTokens() (used, limit int) {
 	if a == nil || a.state == nil {
 		return 0, 0

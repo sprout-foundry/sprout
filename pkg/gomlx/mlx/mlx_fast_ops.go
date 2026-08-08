@@ -248,6 +248,24 @@ func Concatenate(arrays []*Array, s *Stream) (*Array, error) {
 	return ConcatenateAxis(arrays, -1, s)
 }
 
+// Stack joins arrays along a NEW leading axis (axis 0). All inputs must
+// have identical shape; the result shape is [N, ...] + input shape.
+func Stack(arrays []*Array, s *Stream) (*Array, error) {
+	if len(arrays) == 0 {
+		return nil, fmt.Errorf("mlx: stack requires at least one array")
+	}
+	cHandles := make([]C.mlx_array, len(arrays))
+	for i, arr := range arrays {
+		cHandles[i] = arr.cHandle()
+	}
+	vec := C.mlx_vector_array_new_data(&cHandles[0], C.size_t(len(arrays)))
+	defer C.mlx_vector_array_free(vec)
+
+	out := newOutput()
+	rc := C.mlx_stack(&out, vec, s.cHandle())
+	return wrapResult(out, rc, "stack")
+}
+
 // ConcatenateAxis joins arrays along the given axis.
 func ConcatenateAxis(arrays []*Array, axis int, s *Stream) (*Array, error) {
 	if len(arrays) == 0 {

@@ -73,7 +73,7 @@ type GreedyArchitecture interface {
 // (e.g. QK norm presence, bias presence) are encoded as booleans that the
 // Architecture implementation reads.
 type ModelConfig struct {
-	Arch              string  // Architecture identifier: "qwen3", "llama", etc.
+	Arch              string  // Architecture identifier: "qwen3", "qwen3_5_text", etc.
 	VocabSize         int
 	HiddenSize        int
 	IntermediateSize  int
@@ -90,6 +90,28 @@ type ModelConfig struct {
 	UseTiedEmbeddings bool   // lm_head shares weights with embed_tokens
 	MaxPosition       int    // Maximum context length
 	Quantization      *QuantConfig // nil = full precision
+
+	// Hybrid linear-attention fields (Qwen3.5 / Qwen3-Next style). Zero for
+	// pure full-attention models like qwen3.
+	FullAttentionInterval int     // every Nth layer is full attention; others are linear (3:1 → 4)
+	LinearNumKeyHeads     int     // DeltaNet key heads
+	LinearNumValueHeads   int     // DeltaNet value heads
+	LinearKeyHeadDim      int     // DeltaNet key head dim
+	LinearValueHeadDim    int     // DeltaNet value head dim
+	LinearConvKernelDim   int     // DeltaNet conv kernel width
+	AttnOutputGate        bool    // o_proj(out * sigmoid(gate)) — gated attention output
+	PartialRotaryFactor   float32 // fraction of head dim rotated by RoPE (0.25 for qwen3_5)
+	MRopeSection          []int   // mRoPE section sizes [T, H, W]
+	MRopeInterleaved      bool    // mRoPE interleaved vs half-split
+	MTPNumHiddenLayers    int     // multi-token prediction layers (ignored for plain generation)
+	WeightPrefix          string  // safetensors key prefix ("" or "model." for qwen3, "model.language_model." for qwen3_5)
+	LayerTypes            []string // optional per-layer type override; nil = derive from FullAttentionInterval
+}
+
+// HybridLinearAttn reports whether the model has DeltaNet linear-attention
+// layers (Qwen3.5-style hybrid).
+func (c ModelConfig) HybridLinearAttn() bool {
+	return c.FullAttentionInterval > 0 && c.LinearNumKeyHeads > 0
 }
 
 // QuantConfig describes weight quantization for a model. It is set from the

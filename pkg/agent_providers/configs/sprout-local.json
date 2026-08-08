@@ -14,7 +14,7 @@
   "currency": "USD"
 },
   "defaults": {
-  "model": "qwen3_5_text-local-4096-32",
+  "model": "",
   "temperature": 0.7,
   "top_p": 1,
   "max_tokens": 512

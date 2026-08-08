@@ -162,6 +162,9 @@ func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
 	mux.HandleFunc("/api/hotkeys/preset", ws.handleAPIHotkeysPreset)
 	mux.HandleFunc("/api/computer-use/test", ws.handleAPIComputerUseTest)
+	mux.HandleFunc("/api/local-llm/status", ws.handleLocalLLMStatus)
+	mux.HandleFunc("/api/local-llm/start", ws.handleLocalLLMStart)
+	mux.HandleFunc("/api/local-llm/models", ws.handleLocalLLMModels)
 }
 
 func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {

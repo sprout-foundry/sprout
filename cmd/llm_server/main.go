@@ -7,7 +7,8 @@
 //
 // Usage:
 //
-//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -model ~/dev/llm-models/qwen3.5-9b-4bit -port 8080
+//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -port 8080   # auto-select model by RAM
+//	GO_QUANTIZE=4 go run -tags mlx ./cmd/llm_server -model ~/dev/llm-models/qwen3.5-4b-4bit -port 8080
 //
 // Then configure sprout with a provider whose endpoint is
 // http://127.0.0.1:8080/v1/chat/completions.
@@ -29,6 +30,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
 // chatRequest mirrors the OpenAI chat-completions request body fields sprout
@@ -258,14 +260,23 @@ func (s *server) handleModels(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	modelDir := flag.String("model", "", "path to the model directory (default: ~/dev/llm-models/qwen3.5-9b-4bit)")
+	modelDir := flag.String("model", "", "path to the model directory (default: auto-select from ~/dev/llm-models by RAM)")
 	port := flag.Int("port", 8080, "port to listen on")
 	maxTokens := flag.Int("max-tokens", 512, "cap on max_tokens per request (0 = honor client value)")
 	flag.Parse()
 
 	dir := *modelDir
 	if dir == "" {
-		dir = os.Getenv("HOME") + "/dev/llm-models/qwen3.5-9b-4bit"
+		// Auto-select the best installed model for this machine's RAM.
+		modelsRoot := os.Getenv("HOME") + "/dev/llm-models"
+		ram := mlx.TotalSystemRAM()
+		picked, err := llm.SelectModelForRAM(modelsRoot, ram)
+		if err != nil {
+			log.Fatalf("auto-select model: %v", err)
+		}
+		dir = picked.Dir
+		log.Printf("auto-selected %s (%.0f GB RAM, min %.1f GB)", picked.Name,
+			float64(ram)/1073741824, float64(picked.MinRAM)/1073741824)
 	}
 
 	log.Printf("loading model from %s ...", dir)

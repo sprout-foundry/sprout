@@ -41,7 +41,25 @@ export function useSecurityHandlers({
 }: UseSecurityHandlersOptions): UseSecurityHandlersReturn {
   const handleSecurityApprovalResponse = useCallback(
     (requestId: string, approved: boolean, action?: SecurityApprovalAction) => {
-      if (!eventsProvider.isConnected()) return;
+      if (!eventsProvider.isConnected()) {
+        // Never silently swallow a user decision. A silent return here
+        // leaves the server-side approval pending for the full timeout
+        // (DefaultTimeout = 30m) with the dialog open and zero feedback —
+        // the "approve hangs" symptom. Surface a visible error and keep
+        // the dialog open so the user can retry once the socket reconnects.
+        setState((prev) =>
+          prev.securityApprovalRequest?.requestId === requestId
+            ? {
+                securityApprovalRequest: {
+                  ...prev.securityApprovalRequest,
+                  deliveryError:
+                    'Connection lost — approval not delivered. Please retry once the connection is restored.',
+                },
+              }
+            : prev,
+        );
+        return;
+      }
       eventsProvider.sendEvent({
         type: 'security_approval_response',
         data: { request_id: requestId, approved, ...(action ? { action } : {}) },

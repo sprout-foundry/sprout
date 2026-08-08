@@ -196,7 +196,7 @@ function gpt2RegexSplit(s: string): string[] {
     }
 
     // Optional leading space before non-whitespace token.
-    let spaceStart = i;
+    const spaceStart = i;
     if (r === ' ' && i + 1 < runes.length) {
       const next = runes[i + 1];
       if (!isSpace(next)) {
@@ -222,12 +222,7 @@ function gpt2RegexSplit(s: string): string[] {
       result.push(runes.slice(spaceStart, i).join(''));
     } else {
       i++;
-      while (
-        i < runes.length &&
-        !isLetter(runes[i]) &&
-        !isNumber(runes[i]) &&
-        !isSpace(runes[i])
-      ) {
+      while (i < runes.length && !isLetter(runes[i]) && !isNumber(runes[i]) && !isSpace(runes[i])) {
         i++;
       }
       result.push(runes.slice(spaceStart, i).join(''));

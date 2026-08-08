@@ -1,42 +1,6 @@
 // recover_file tool: restores a file's tracked content from the
-// ChangeTracker's session buffer. Closes the loop between "we captured
-// original bytes" and "user/agent can put them back".
-//
-// The SP-061-2 consolidation rolled three behaviours into one tool via
-// the `scope` argument:
-//
-//   - scope="latest"        (default) Restore the file to the state
-//     immediately before its most-recent tracked
-//     change. The historical recover_file shape.
-//
-//   - scope="session_start" Restore to the EARLIEST captured original —
-//     the file as it was before the agent touched
-//     it at all this session. Replaces the
-//     revert_my_changes(file=…) scope.
-//
-//   - scope="bulk"          Treat `path` as a bulk entry's FilePath (a
-//     command label like "git checkout ." or a
-//     dir like "webui/src/"). Walks the entry's
-//     BulkItems and restores every packed file.
-//     Replaces the standalone recover_bulk tool.
-//
-// Selection rules:
-//   - Most-recent matching change for `path` wins for scope="latest"
-//     (the tracker records changes in append order).
-//   - Earliest matching change wins for scope="session_start".
-//   - The change must have a recoverable OriginalCode (non-empty,
-//     not the redacted sentinel, not the path-only sentinel).
-//   - For "create" entries (no original existed), recovery is a
-//     delete: removing a created file restores the workspace to
-//     pre-creation state.
-//
-// Safety:
-//   - Refuses paths outside the workspace root (no cross-workspace
-//     restores).
-//   - Refuses when the file would resolve to a directory or symlink
-//     target.
-//   - Returns a structured JSON result so the LLM can reason about
-//     success vs. why-it-couldn't.
+// ChangeTracker's session buffer. Supports scope="latest" (default),
+// scope="session_start", and scope="bulk".
 package agent
 
 import (

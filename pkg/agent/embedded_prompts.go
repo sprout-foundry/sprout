@@ -20,10 +20,7 @@ const agentsMdLargeTokenThreshold = 4000
 //go:embed prompts/system_prompt.md
 var systemPromptContent string
 
-// SP-125: lite prompt for Low-Context Mode (8K–64K context windows).
-// Selected by ContextProfile.SystemPromptPath at agent creation. Roughly
-// ~1K tokens vs the full prompt's ~6.6K — strips delegation/review/persona
-// sections that reference tools unavailable in LCM.
+// Lite prompt for Low-Context Mode (8K–64K context windows). ~1K tokens vs the full prompt's ~6.6K.
 //
 //go:embed prompts/system_prompt.lite.md
 var systemPromptLiteContent string
@@ -31,16 +28,12 @@ var systemPromptLiteContent string
 //go:embed prompts/planning_prompt.md
 var planningPromptContent string
 
-// SP-066 Phase 2 — dedicated rollup prompt template used by the background
-// rollup worker. Separate from the per-turn summarizer because its inputs
-// are already-summarized data, not raw conversation messages.
+// Rollup prompt template for the background rollup worker. Separate from the per-turn summarizer.
 //
 //go:embed prompts/rollup_prompt.md
 var rollupPromptContent string
 
-// GetEmbeddedRollupPrompt returns the rollup summarizer prompt embedded
-// from prompts/rollup_prompt.md. The body is used verbatim as the system
-// prompt for the rollup worker's LLM call.
+// GetEmbeddedRollupPrompt returns the rollup summarizer prompt.
 func GetEmbeddedRollupPrompt() string {
 	return rollupPromptContent
 }
@@ -56,38 +49,24 @@ var orchestratorGitPolicyAppend string
 
 // GetEmbeddedSystemPrompt returns the embedded system prompt
 func GetEmbeddedSystemPrompt() (string, error) {
-	// Extract the prompt content from the markdown
 	promptContent, err := extractSystemPrompt()
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
 
-	// Add discovered context files (AGENTS.md, Claude.md, etc.)
-	// Semi-static content — placed before the volatile timestamp so it does not
-	// invalidate the prompt-prefix cache for subsequent static content.
+	// Context files (AGENTS.md, etc.) - placed before volatile content to preserve prompt-prefix cache.
 	contextFiles, err := LoadContextFiles()
 	if err == nil && contextFiles != "" {
 		promptContent = promptContent + contextFiles
 	}
 
-	// Add memories (user preferences and learned patterns)
-	// Semi-static content — also placed before the volatile tail.
+	// Memories - also placed before the volatile tail.
 	memories := LoadMemoriesForPrompt()
 	if memories != "" {
 		promptContent = promptContent + memories
 	}
 
-	// Add the current working directory LAST among semi-static content.
-	// Volatile per-call content (cwd) is grouped at the tail to preserve
-	// prompt-prefix cache eligibility for the large static prefix. Providers
-	// like Anthropic cache prompt prefixes; placing cwd at the start would
-	// force a full re-process of every subsequent request.
-	//
-	// Note: date/time is NOT injected here. It lives in the user message
-	// (see injectUserMessageTimestamp in seed_query.go) because second-
-	// resolution timestamps invalidate the cached prefix on every request.
-	// The system prompt remains byte-identical across calls — that is the
-	// cache-eligibility invariant this section preserves.
+	// Cwd at the tail to preserve prompt-prefix cache eligibility. Timestamp lives in the user message.
 	cwdString := buildCurrentWorkingDirectorySection("")
 
 	promptContent = promptContent + cwdString
@@ -100,11 +79,7 @@ func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
 	return GetEmbeddedSystemPrompt()
 }
 
-// GetEmbeddedSystemPromptForProfile (SP-125) selects the full or lite system
-// prompt based on the resolved ContextProfile, then runs the standard
-// augmentation (context files, memories, timestamp). In LCM the lite prompt
-// (~1K tokens) replaces the full prompt (~6.6K). AGENTS.md is still injected
-// by the context-files step regardless of profile — conventions are mandatory.
+// GetEmbeddedSystemPromptForProfile selects the full or lite system prompt based on the ContextProfile.
 func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int, workspaceRoot string) (string, error) {
 	promptContent, err := extractSystemPromptForProfile(profile)
 	if err != nil {
@@ -113,9 +88,7 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 
 	contextFiles, err := LoadContextFiles()
 	if err == nil && contextFiles != "" {
-		// SP-125: AGENTS.md is always injected (project conventions are
-		// mandatory in every mode). In LCM only, warn once if the file is
-		// large so the user understands the context cost and can shrink it.
+		// AGENTS.md is always injected. In LCM, warn if the file is large.
 		if profile.Mode == configuration.ContextModeLowContext {
 			tokens := EstimateTokens(contextFiles)
 			if tokens > agentsMdLargeTokenThreshold {
@@ -142,15 +115,7 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 		promptContent = promptContent + memories
 	}
 
-	// Add the current working directory LAST among semi-static content.
-	// Grouped at the tail to preserve prompt-prefix cache eligibility for
-	// the static prefix.
-	//
-	// Note: date/time is NOT injected here. It lives in the user message
-	// (see injectUserMessageTimestamp in seed_query.go) because second-
-	// resolution timestamps invalidate the cached prefix on every request.
-	// The system prompt remains byte-identical across calls — that is the
-	// cache-eligibility invariant this section preserves.
+	// Cwd at the tail to preserve prompt-prefix cache. Timestamp lives in the user message.
 	cwdString := buildCurrentWorkingDirectorySection(workspaceRoot)
 
 	promptContent = promptContent + cwdString
@@ -158,12 +123,7 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 	return promptContent, nil
 }
 
-// buildCurrentWorkingDirectorySection formats the "Current Working Directory"
-// block injected at the tail of every system prompt. When workspaceRoot is
-// non-empty it is used directly; otherwise falls back to os.Getwd() then ".".
-// This ordering is intentional: workspaceRoot is the authoritative value in
-// daemon mode, while os.Getwd() is correct in CLI/test mode (where
-// workspaceRoot is empty).
+// buildCurrentWorkingDirectorySection formats the "Current Working Directory" block. Uses workspaceRoot if set, otherwise os.Getwd().
 func buildCurrentWorkingDirectorySection(workspaceRoot string) string {
 	cwd := workspaceRoot
 	if cwd == "" {
@@ -176,9 +136,7 @@ func buildCurrentWorkingDirectorySection(workspaceRoot string) string {
 	return fmt.Sprintf("\n\n## Current Working Directory\n\n`%s`\n\n---\n", cwd)
 }
 
-// extractSystemPromptForProfile selects the full or lite prompt content based
-// on the profile's SystemPromptPath. Falls back to the full prompt if the lite
-// marker isn't present or the lite content can't be extracted.
+// extractSystemPromptForProfile selects the full or lite prompt based on SystemPromptPath. Falls back to full prompt.
 func extractSystemPromptForProfile(profile configuration.ContextProfile) (string, error) {
 	if strings.HasSuffix(profile.SystemPromptPath, "lite.md") {
 		if content, err := extractFromContent(systemPromptLiteContent); err == nil {
@@ -220,20 +178,12 @@ func extractFromContent(source string) (string, error) {
 
 // GetEmbeddedPlanningPrompt returns the embedded planning prompt
 func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
-	// Extract the prompt content from the markdown
 	promptContent, err := extractPlanningPrompt()
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract planning prompt", err)
 	}
 
-	// NOTE: date/time used to be appended here. It was removed because the
-	// planning prompt is sent as the system prompt for one-shot planning
-	// calls, and the time-dependent block would invalidate the prefix cache
-	// on every invocation. The current timestamp now arrives as a
-	// `<current-time>` tag in the user message (see
-	// injectUserMessageTimestamp in seed_query.go) when this prompt is used
-	// in agent-style flows; for the WASM/CLI `sprout plan` one-shot path,
-	// callers can prepend a `<current-time>` tag themselves if needed.
+	// Timestamp removed from here to preserve prefix cache; it arrives in the user message instead.
 
 	// Add todo integration or not based on flag
 	todoIntegration := `
@@ -256,8 +206,6 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 
 // extractPlanningPrompt extracts the prompt content from the planning_prompt markdown
 func extractPlanningPrompt() (string, error) {
-	// The planning_prompt.md has the prompt content in a code block
-	// We'll extract everything between the ``` markers
 	const promptStart = "You are an autonomous planning and execution assistant."
 
 	startIdx := strings.Index(planningPromptContent, promptStart)

@@ -46,11 +46,10 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 //
 // This is the raw value — the cap (if any) is applied separately by
 // callers that want the effective cap. New code that wants the
-// effective cap should prefer Agent.GetEffectiveContextCap() (the
-// post-SP-126 entry point) or configuration.ResolveEffectiveContextCap
-// for one-shot lookups; this helper exists for callers that
-// specifically need the native value (e.g. when computing the
-// effective cap in the first place).
+// effective cap should prefer Agent.GetEffectiveContextCap() or
+// configuration.ResolveEffectiveContextCap for one-shot lookups;
+// this helper exists for callers that specifically need the native
+// value (e.g. when computing the effective cap in the first place).
 func (a *Agent) getNativeModelContextLimit() int {
 	c := a.getClient()
 	if c == nil {

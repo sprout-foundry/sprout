@@ -1,163 +1,220 @@
-# SP-134 — GPU Acceleration for Native macOS Embeddings (CoreML EP)
+# SP-134 — GPU Acceleration for Native macOS Embeddings (MLX)
 
 ## Problem
 
-Local embedding generation (EmbeddingGemma-300M via ONNX Runtime) is CPU-only
-in the native Go binary. A cold full-repo index (~12k units) takes ~30 min on
-an M1 Pro at ~6.5 units/s (q4). The WebUI already gets GPU via a browser
-WebGPU backend (`webui/src/services/onnxEmbeddingProvider.ts:46`, `~10x faster`
-claim; default flipped to `webgpu` in
-`webui/src/services/embeddingBackendController.ts:91`), but the native binary —
-the path the CLI and daemon use — has no acceleration.
+Local embedding generation (Jina Code v2 via ONNX Runtime) is CPU-only
+in the native Go binary. A cold full-repo index (~12k units) takes ~22 min on
+an M1 Pro at ~9 units/s (batch=32, seq=128). The WebUI already gets GPU via a
+browser WebGPU backend, but the native binary — the path the CLI and daemon
+use — has no acceleration.
 
-A prior attempt (documented at `pkg/embedding/embedding_models.go:345-349`,
-2026-08-05) called `AppendExecutionProviderCoreMLV2` on the dynamic-seq export:
-CoreML EP shattered the graph into 291 partitions of 1767 nodes and compile
-exhausted memory before producing one embedding. This spec scopes whether
-fixed-shape (seq-length-bucketed) exports + CoreML EP can make native macOS
-GPU/ANE acceleration work.
 ## Current State
 
-**Runtime plumbing (already exists).** `github.com/yalue/onnxruntime_go
-v1.30.1` → ORT 1.30.1 exposes `SessionOptions.AppendExecutionProviderCoreMLV2(
-options map[string]string)` (`onnxruntime_go.go:1957`), implemented via the
-generic `SessionOptionsAppendExecutionProvider(o, "CoreML", ...)` gated by a
-dlsym'd pointer for `OrtSessionOptionsAppendExecutionProvider_CoreML`
-(`setup_env.go:46-58`, darwin/ios only). Unsupported platforms return
-`ORT_NOT_IMPLEMENTED` ("...library does not support CoreML") — a clean fallback
-signal, not a crash. The binding has no build tags, so sprout must gate with
-`//go:build darwin` itself; the installed `onnxruntime_arm64.dylib` exports the
-old symbol, so V2 is callable today.
-`pkg/embedding/onnx_runtime.go:364-379` `SessionOption` carries only
-threads/arena/mem-pattern; `newSessionOptions` (~line 390) is where a CoreML
-option applies. `onnx_embedding_provider.go` creates one
-`DynamicAdvancedSession` per provider (line ~87), maxSeqLen 2048, batch chunks
-≤ 32 rows (`defaultBatchChunkSize`), attention budget `8<<20` cells,
-`ModelHash() = fileSHA256(modelPath)` (lines 522-546). `manifest.go:122`
-invalidates every index when `ModelHash` changes; `model_downloader.go:341`
-pins the q4 files by sha256.
-**The exports defeat CoreML EP even after bucketing (measured locally).**
-Parsed `model_q4.onnx` / `model_fp16.onnx` (onnx 1.22; IR v10, opset 21 +
-com.microsoft opset 1; inputs `input_ids[batch_size, sequence_length]`,
-`attention_mask[batch_size, total_sequence_length]` — two *different* symbolic
-params):
+**Model: Jina Code v2** (int8 quantized ONNX, 154 MB). The model was
+EmbeddingGemma-300M when this spec was originally written; it was switched
+to Jina Code v2 (SP-135) for code-specific retrieval quality. This changes
+the GPU acceleration story entirely — see the superseded CoreML findings
+below.
 
-| op (domain) | q4 | fp16 | CoreML EP builder? |
+**Runtime plumbing (already exists).** The provider interface
+(`pkg/embedding/provider.go:12`), shared provider cache
+(`pkg/embedding/shared_runtime.go`), batch chunking with attention budget
+(`pkg/embedding/onnx_embedding_provider.go:246-345`), and model downloader
+(`pkg/embedding/model_downloader.go:341`) are all model-agnostic. A new
+`EmbeddingProvider` implementation slots in cleanly.
+
+**The ONNX int8 model is not CoreML-EP compatible** (measured 2026-08-07).
+CoreML EP shatters the graph into 49 partitions because the int8-quantized
+ops (Cast → ReduceMean → Sub → Pow → Sqrt → Div chains for LayerNorm) fall
+back to CPU while attention/FFN go to GPU. The partition boundary overhead
+makes CoreML **2.0× slower** than CPU (4.0 vs 7.8 units/s). See "Superseded:
+CoreML EP Findings" at the bottom of this spec.
+
+## Spike Results: MLX (2026-08-07)
+
+A Python prototype implementing the Jina Code v2 forward pass in MLX
+(Apple's Metal-backed array framework) was validated against ONNX CPU output
+and benchmarked on an M1 Pro (16 GB, 8-core).
+
+### Correctness
+
+| Metric | Value |
+|---|---|
+| Average cosine similarity (MLX vs ONNX int8) | **0.994** |
+| Drift source | fp16 safetensors vs int8 quantization (expected) |
+| Gate (≥0.99) | **PASS** |
+
+The 0.994 cosine is the expected gap between fp16 weights (safetensors) and
+int8 dynamic quantization (ONNX). The ONNX int8 model itself drifts ~0.005
+from fp16, so MLX fp16 is actually *closer* to the reference model than the
+shipped ONNX int8 export. This drift does NOT invalidate the embedding index
+— the Jina thresholds in `constants.go` (dup 0.65, search 0.30) have wide
+separation margins (near-dup 0.756, unrelated 0.066).
+
+### Throughput
+
+| Workload | ONNX CPU | MLX Metal | Speedup |
 |---|---|---|---|
-| MatMulNBits (com.microsoft) | 170 | 0 | ❌ |
-| MultiHeadAttention (com.microsoft) | 24 | 24 | ❌ |
-| RotaryEmbedding (com.microsoft) | 48 | 48 | ❌ |
-| GatherBlockQuantized (com.microsoft) | 1 | 0 | ❌ |
-| SimplifiedLayerNormalization (ai.onnx) | 145 | 145 | ❌ (only `LayerNormalization` registered) |
-| Equal / Expand (ai.onnx) | 48/49 | 48/49 | ❌ |
+| **batch=32, seq=128 (index build)** | 9.2 u/s | **88.8 u/s** | **9.7×** |
+| batch=1, seq=30 (interactive query) | 22.5 u/s | 32.7 u/s | 1.5× |
 
-Ground truth is `op_builder_factory.cc` in
-`onnxruntime/core/providers/coreml/builders/` (main): registers
-LayerNormalization but **not** SimplifiedLayerNormalization, and none of the
-com.microsoft ops above. The fp16 graph's unsupported nodes (~314 of 1613
-after `onnxsim`, check_n=0) sit **inside every transformer block** (attention +
-layernorm), so even a fixed-shape fp16 export partitions at every layer and
-dispatches only FFN matmuls to ANE/GPU — the same shattering failure mode.
-Additional blockers:
-- **Vocab 262,144** (tokenizer.json) → embed table `[262144, 768]`. A
-  Gemma-class export was rejected with "CoreML does not support input dim >
-  16384" for `model.embed_tokens.weight {151936, 2048}`
-  (microsoft/onnxruntime#21271, Nov 2025). Must be spike-validated.
-- **Tooling friction**: `python -m onnxruntime.tools.make_dynamic_shape_fixed`
-  (onnxruntime.ai/docs/tutorials/mobile/helpers/make-dynamic-shape-fixed.html)
-  fails on these exports — onnx 1.22 has no schema for
-  SimplifiedLayerNormalization ("No Op registered ... domain_version 21").
-  Shape fixing must be manual (plain onnx, set input `dim_value`s).
-- **fp16 silent conversion**: CoreML's default `NeuralNetwork` format casts
-  fp32→fp16 (ym2132.github.io/ONNX_MLProgram_NN_exploration);
-  `ModelFormat: "MLProgram"` (macOS 12+) preserves precision. Moot for fp16
-  weights, fatal for q4's fp32 activations.
-- **No official Metal/MPS EP** in ORT (issue #21271 open Jul 2026;
-  onnxruntime-mlx experimental). CoreML EP is the only native-ORT GPU path.
-- **Bench reality** (xybrid.ai, M2): fixed-shape CNN 6.8×, dynamic transformer
-  ~1×, tiny models 0.2×; cold-start compile 1-5 s per model.
+**The 9.7× speedup on batch=32 is the critical number.** That's the actual
+indexing workload: the Go provider chunks into batches of 32
+(`defaultBatchChunkSize`), and real code units average ~128 tokens. A full
+~12k-unit repo index drops from **~22 min to ~2.3 min**.
+
+The batch=1 improvement is modest (1.5×) because GPU kernel launch overhead
+dominates for tiny inputs. Interactive single-query latency is already
+adequate (~30ms); the win is in batch throughput.
+
+### Memory
+
+MLX uses Apple's **unified memory** model — GPU and CPU share the same
+physical RAM, no PCIe transfer. On a 16 GB machine the model weights (~307 MB
+fp16 safetensors) plus working tensors for a batch=32 × seq=128 inference
+create transient memory spikes. The existing Go attention budget
+(`defaultBatchAttentionBudget = 8M cells`) already bounds this for ONNX;
+the MLX provider must apply the same budget discipline (see Plan Phase 2).
 
 ## Plan
 
-**Verdict: do NOT ship "bucket the existing export" as the fix.** Bucketing
-fixes dynamic-shape rejection but not unsupported-op partitioning. CoreML EP
-becomes viable only with a **re-export from source** using CoreML-friendly
-ops. Phase 0 below is a spike that decides.
+### Phase 1 — Python validation gate (DONE)
 
-### Phase 0 — Spike: fixed fp16 bucket on CoreML EP (no code changes)
+The prototype at `/tmp/sprout/mlx-proto-v3.py` implements the full forward
+pass and verifies correctness. This phase is complete.
 
-Scratch venv: fix `model_fp16.onnx` shapes manually to `[32, 256]` (both
-inputs), `onnxsim.simplify(m, check_n=0)`, then ORT session with
-`("CoreMLExecutionProvider", {"ModelFormat":"MLProgram","MLComputeUnits":"ALL",
-"RequireStaticInputShapes":"1","ModelCacheDirectory":"/tmp/coremlcache"})`.
-`ProfileComputePlan: "1"`; log partition count + which ops stay on CPU.
-Gate: **≥80% of FFN matmuls on ANE/GPU AND ≥1.5× faster than CPU fp16
-(~3.9 units/s)** on M1/M2/M3. Expect NO-GO per the registry analysis; record
-in `embeddings-bench/results/`. Also probe: does CoreML reject the
-`[262144, 768]` embed Gather (16384 limit)? Does batch stay dynamic if only
-seq is fixed?
+### Phase 2 — Go MLX provider (darwin/arm64 only)
 
-### Phase 1 — Re-export with CoreML-friendly ops (if Phase 0 fails)
+**Goal:** implement `pkg/embedding/mlx_provider.go` behind
+`//go:build darwin && arm64 && cgo`, providing a third
+`EmbeddingProvider` alongside `ONNXEmbeddingProvider` and
+`JinaONNXEmbeddingProvider`.
 
-New `scripts/export_embeddinggemma_buckets.py` (repo has one script today).
-Export from source (google/embeddinggemma-300m or a PyTorch port) with an op
-allowlist: **unfused attention** (MatMul/Add/Softmax/Erf/Mul/Transpose — all
-registered), **LayerNormalization** (not Simplified), rotary as plain
-MatMul/Add/Mul with cos/sin constants, **no** com.microsoft ops, fp16 weights.
-Output 5 bucket graphs `model_fp16_b{128,256,512,1024,2048}.onnx` (~655 KB
-each) sharing ONE `model_fp16.onnx_data` (~617 MB) via external-data relative
-path — no 5× disk. Verify `sentence_embedding` pooling unchanged per bucket;
-parity vs API ≥ 0.997 (reuse `pkg/embedding/parity_probe_test.go`). Pin
-sha256s in a new `EmbeddingGemma300MBucketConfig()` beside
-`model_downloader.go:341`.
+**Architecture:** MLX has no ONNX loader. The Go bindings
+(`github.com/luxfi/mlx`) expose low-level array ops (`MatMul`, `Add`,
+`Softmax`, etc.). The provider must implement the Jina Code v2 forward pass
+in Go, translating the validated Python prototype. The operations needed:
 
-### Phase 2 — Go integration (darwin-only, fallback-first)
+- Token + token-type embedding lookup (Gather)
+- Embedding LayerNorm
+- 12× transformer layers, each:
+  - Q/K/V linear projection + QK-LayerNorm
+  - Multi-head attention with ALiBi positional bias
+  - Post-attention LayerNorm (residual + dense)
+  - GEGLU FFN (split, GELU gate, multiply, down-project)
+  - Merge LayerNorm + FFN LayerNorm
+- Mean pooling + L2 normalization (already in Go, reusable)
 
-`pkg/embedding/onnx_runtime.go`: add `CoreML map[string]string` to
-`SessionOption`; in `newSessionOptions`, behind `//go:build darwin`, call
-`so.AppendExecutionProviderCoreMLV2(opts)`; on any error (incl.
-ORT_NOT_IMPLEMENTED) log and continue CPU-only. `onnx_embedding_provider.go`:
-replace the single dynamic session with a per-bucket session map keyed by
-bucket seq; pick smallest bucket ≥ batch max-seq; pad + mask. Pad cost is
-O(seq²): a 101-token unit in bucket 256 pays (256/101)² ≈ 6.4× attention —
-buckets 256/512 are the sweet spot for short code units. Keep ≤2 live sessions
-(LRU) to bound RSS (~617 MB each). `ModelHash`: hash the bucket set (all .onnx
-+ shared data) — any change invalidates all stores (one-time ~30 min rebuild;
-say so in release notes). `SPROUT_EMBEDDING_BACKEND=coreml|cpu` escape hatch.
-Threading: with CoreML active, intra-op threads serve only CPU-fallback nodes;
-keep the min(NumCPU,4) cap, revisit after Phase 0.
+**Weight format:** switch from ONNX int8 to safetensors fp16. The downloader
+gets a new `JinaCodeV2SafetensorsConfig()` (sibling to
+`JinaCodeV2Config()`). `ModelHash()` changes → manifest invalidation →
+one-time re-index. Note this in release notes.
 
-### Phase 3 — Rollout
+**Memory safety:** the existing attention budget
+(`defaultBatchAttentionBudget`) must carry over. MLX's unified memory means
+GPU allocations count against system RAM — a batch=32 × seq=2048 attention
+score tensor is ~4 GB. The budget caps this at ~400 MB by reducing batch
+rows for long sequences. Additionally, the provider should:
 
-Default ON for darwin/arm64 + macOS ≥ 12 when buckets present and CoreML EP
-initializes; CPU otherwise (non-darwin, Intel, disabled). Exit: `go test
-./pkg/embedding/`, index of this repo on M-series with `ProfileComputePlan`
-showing ANE/GPU capture, `make build-all`, `sprout diag` reporting the active
-backend.
+1. Check available RAM before loading weights (`syscall.Sysctl("hw.memsize")`
+   + reading vm_stat). On machines with <8 GB RAM, skip MLX and fall back
+   to ONNX CPU.
+2. Use `mx.eval()` to force eager evaluation per batch (MLX is lazy by
+   default — unbounded lazy graph buildup is the memory spike source).
+3. Cap concurrent batch sessions at 1 (no LRU needed — one model, one
+   stream).
+
+**Fallback chain:**
+```
+darwin/arm64 + ≥8GB RAM + MLX init OK → MLX Metal provider
+everything else → ONNX CPU provider (existing)
+```
+
+Any MLX init error (shared library missing, Metal unavailable, etc.)
+logs a warning and falls back to ONNX CPU. The `SPROUT_EMBEDDING_BACKEND=mlx|cpu`
+env var forces a specific backend for debugging.
+
+### Phase 3 — Concurrency and rollout
+
+**Concurrency model (DONE):** The MLX provider uses the same `inferenceGate`
+semaphore as the ONNX provider — a 2-permit pool that allows an interactive
+query to proceed while a background index build is mid-flight. The `RWMutex`
+guards only the `closed` flag (not inference), and `LockOSThread` +
+per-call `DefaultGPUStream()` handle MLX's thread-local stream requirement.
+
+This aligns with SP-136's daemon-first architecture: when the daemon lands,
+the MLX provider runs inside the daemon process. CLI clients proxy through
+the Unix socket (SP-136 Phase 3). The daemon's single inference gate
+coordinates all clients, and the 307 MB model stays resident in one process.
+
+**Rollout gate:** Default ON for darwin/arm64 + ≥8 GB RAM when safetensors
+weights are present and MLX initializes. CPU otherwise (non-darwin, Intel
+Mac, low-RAM, MLX lib missing). Exit criteria: `go test ./pkg/embedding/`,
+index of this repo on M-series showing 2×+ speedup vs ONNX CPU,
+`make build-all`, `sprout diag` reporting the active backend.
 
 ## Risks
 
-1. **Partition shattering persists** (highest): unsupported ops are inside
-   every block; re-exported graphs must be validated for contiguous CoreML
-   subgraphs. Phase 0 gate exists for this.
-2. **Compile memory exhaustion**: prior run OOM'd compiling 291 partitions.
-   `ModelCacheDirectory` compiles once per bucket and reuses .mlmodelc, but
-   the first compile per bucket may still be heavy on 8 GB machines.
-3. **macOS gates**: MLProgram needs macOS 12+; NeuralNetwork (10.15+)
-   silently fp16-casts. Intel Macs have no ANE — CoreML there ≈ CPU.
-4. **Vector compatibility**: CoreML compute may drift past the 0.997 parity
-   bar; run the parity probe on CoreML output before trusting stores.
-5. **Embedding-table dim limit** (16384 report): if the Gather is rejected the
-   head runs CPU — acceptable only if the body still offloads.
-6. **RAM/disk**: fp16 weights 617 MB; concurrent bucket sessions each load
-   weights — LRU cap is the mitigation.
-7. **ORT version drift**: binding pins 1.30.1; CoreML EP builders change
-   between releases. Pin and re-probe on upgrade.
+1. **MLX Go binding maturity** (highest): `github.com/luxfi/mlx` is a
+   community fork, not an Apple product. The Python `mlx` package is
+   Apple-official and well-supported; the Go bindings lag. Risk mitigation:
+   the Go port mirrors the validated Python prototype exactly; if the Go
+   bindings are unstable, the Python subprocess bridge (Phase 2-alt) is the
+   fallback.
+2. **Memory spikes on low-RAM machines**: MLX lazy evaluation can build up
+   large computation graphs before evaluating. `mx.eval()` per batch is the
+   mitigation, plus the RAM check gate. The prototype showed transient
+   spikes during batch=32 runs on a 16 GB machine — manageable but must be
+   bounded.
+3. **Vector compatibility**: MLX fp16 output drifts 0.006 from ONNX int8.
+   The embedding index stores ONNX int8 vectors; switching to MLX invalidates
+   all stores (new ModelHash). One-time ~2.3 min rebuild on M-series (the
+   fast path), longer on Intel.
+4. **fp16 vs int8 model size**: safetensors fp16 is 307 MB vs ONNX int8's
+   154 MB. Both are loaded into unified memory. On 8 GB machines this is
+   tight but feasible (the OS + sprout daemon use ~3 GB, leaving ~5 GB).
+5. **ALiBi implementation correctness**: the ALiBi bias tensor depends on
+   head slopes derived from a geometric sequence. An off-by-one in slope
+   computation silently degrades retrieval quality. The Python prototype
+   validates against ONNX output; the Go port must pass the same parity test.
+6. **MLX version drift**: Apple updates `mlx` frequently. Pin the pip/Go
+   module version and re-validate cosine parity on upgrade.
 
-## Out of scope
+## Phase 2-alt: Python subprocess bridge
+
+If the Go MLX bindings prove unstable, the fallback is a long-lived Python
+subprocess that loads the model once and serves embeddings over
+stdin/stdout (line-delimited JSON: text in → 768-dim float array out). The
+Go provider spawns it once, pipes texts, reads embeddings.
+
+Pros: uses Apple's official Python MLX (stable, well-tested), minimal Go
+code. Cons: requires Python + mlx installed on the user's Mac, subprocess
+management complexity, slightly higher latency for interactive queries.
+
+The subprocess approach is the pragmatic fallback if Phase 2's Go bindings
+hit showstopper bugs. It keeps the ONNX CPU path as the ultimate fallback.
+
+## Superseded: CoreML EP Findings (2026-08-07)
+
+CoreML Execution Provider was tested with the Jina Code v2 int8 ONNX model.
+Session creation succeeded (1131/1254 nodes supported, 49 partitions), but
+throughput was **2.0× slower than CPU** (4.0 vs 7.8 units/s at batch=1,
+seq=256). The int8 quantization's LayerNorm chains (Cast → ReduceMean → Sub
+→ Pow → Sqrt → Div) fall back to CPU, creating partition boundary overhead
+that dominates the GPU compute time. CoreML EP is not viable for this model.
+Results saved at `/tmp/sprout/coreml-spike-results.json`.
+
+The original CoreML spec (targeting EmbeddingGemma-300M) is fully
+superseded. Gemma's com.microsoft custom ops (MatMulNBits,
+MultiHeadAttention, RotaryEmbedding, SimplifiedLayerNormalization) caused
+graph shattering into 291 partitions. Jina's standard ops fixed the node
+support problem but the int8 quantization reintroduced fragmentation through
+unfused LayerNorm chains.
+
+## Out of Scope
 
 - Browser WebGPU (already shipping — keep as the low-effort GPU win).
-- MLX runtime (`onnxruntime-mlx`/mlx-lm): promising native Apple alternative,
-  not ORT and still experimental — separate spec if CoreML EP fails.
-- Linux/Windows GPU; non-embedding models (Gemma 3 2B generation) reuse the
-  SessionOption plumbing but are not covered here.
+- Linux/Windows GPU acceleration (no Metal; CUDA MLX is experimental).
+- Non-embedding models (Gemma 3 2B generation) — separate concern.
+- Re-exporting Jina with fused LayerNorm ops to improve CoreML compatibility
+  — not worth the effort given MLX's 9.7× win.

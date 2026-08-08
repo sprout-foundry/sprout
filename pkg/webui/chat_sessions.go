@@ -356,6 +356,16 @@ func (cc *webClientContext) getChatSession(chatID string) *chatSession {
 	return cc.ChatSessions[chatID]
 }
 
+// markChatCreated clears the deleted-chat tombstone for chatID. Call after
+// inserting a (re)created chat session into ChatSessions so it becomes
+// queryable again.
+func (cc *webClientContext) markChatCreated(chatID string) {
+	if cc.DeletedChats == nil {
+		cc.DeletedChats = map[string]struct{}{}
+	}
+	delete(cc.DeletedChats, chatID)
+}
+
 // getOrCreateChatSession returns the chat session with the given ID, creating
 // one if necessary. The auto-generated name follows the "Chat N" pattern.
 func (cc *webClientContext) getOrCreateChatSession(chatID string) *chatSession {
@@ -375,6 +385,7 @@ func (cc *webClientContext) getOrCreateChatSession(chatID string) *chatSession {
 	}
 	cs := newChatSession(chatID, name)
 	cc.ChatSessions[chatID] = cs
+	cc.markChatCreated(chatID)
 	return cs
 }
 
@@ -567,6 +578,12 @@ func (cc *webClientContext) getActiveChatID() string {
 
 // hasActiveQueryForChat checks whether the specified chat has a query running.
 // If chatID is empty, checks the active (default) chat.
+//
+// A chat that is absent from ChatSessions BUT in DeletedChats is treated as
+// having an active query — the delete handler removed it from the map and may
+// still be recomputing the top-level ActiveQuery flag. Without the tombstone,
+// a query arriving in that window would fall through to the (now false)
+// top-level flag and start a query on a chat that was just deleted.
 func (cc *webClientContext) hasActiveQueryForChat(chatID string) bool {
 	if cc.ChatSessions == nil {
 		return cc.ActiveQuery
@@ -576,6 +593,9 @@ func (cc *webClientContext) hasActiveQueryForChat(chatID string) bool {
 	}
 	cs, ok := cc.ChatSessions[chatID]
 	if !ok {
+		if _, deleted := cc.DeletedChats[chatID]; deleted {
+			return true // deleted chat — reject queries
+		}
 		return cc.ActiveQuery
 	}
 	cs.mu.Lock()

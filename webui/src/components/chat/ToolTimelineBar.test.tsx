@@ -54,11 +54,14 @@ function tool(overrides: Partial<ToolExecution> = {}): ToolExecution {
 }
 
 describe('ToolTimelineBar', () => {
-  it('renders nothing when there are no tool executions', () => {
+  it('renders an empty bar when there are no tool executions', () => {
     act(() => {
       root.render(createElement(ToolTimelineBar, { toolExecutions: [] }));
     });
-    expect(container.querySelector('.tool-timeline-bar')).toBeNull();
+    // The bar is always mounted; CSS collapses the empty state via
+    // :empty so rapid back-to-back tools don't churn the DOM.
+    expect(container.querySelector('.tool-timeline-bar')).not.toBeNull();
+    expect(container.querySelector('.tool-timeline-card')).toBeNull();
   });
 
   it('shows a spinner card for a running tool', () => {
@@ -103,18 +106,19 @@ describe('ToolTimelineBar', () => {
     // Initially visible
     expect(container.querySelector('.tool-timeline-card--completed')).not.toBeNull();
     // Advance past the 3s fade window — the card is gone, but the bar
-    // container stays mounted during the hide-grace window so rapid
-    // back-to-back tools don't churn the DOM (the visible flicker bug).
+    // container stays mounted so rapid back-to-back tools don't churn
+    // the DOM (the visible flicker bug). The empty state collapses via
+    // CSS :empty.
     act(() => {
       vi.advanceTimersByTime(3500);
     });
     expect(container.querySelector('.tool-timeline-card--completed')).toBeNull();
     expect(container.querySelector('.tool-timeline-bar')).not.toBeNull();
-    // After the hide-grace window the bar unmounts.
+    // The bar remains mounted even after the hide-grace window.
     act(() => {
       vi.advanceTimersByTime(4500);
     });
-    expect(container.querySelector('.tool-timeline-bar')).toBeNull();
+    expect(container.querySelector('.tool-timeline-bar')).not.toBeNull();
   });
 
   it('error tool sticks past the fade window', () => {

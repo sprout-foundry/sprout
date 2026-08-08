@@ -9,28 +9,17 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
-// highRiskApprovedForCommand decides whether a high-risk shell command
-// is permitted to execute. Delegates to RequestApproval which owns
-// surface selection, fallback, and 4-option outcome (SP-068 Phase 3).
-//
-// The ctx parameter is kept for signature stability across callers
-// (tool_security.go, tool_handlers_shell.go) but is not used.
+// highRiskApprovedForCommand decides whether a high-risk shell command is permitted.
+// Delegates to RequestApproval for surface selection and 4-option outcome.
 func (a *Agent) highRiskApprovedForCommand(_ context.Context, command string) bool {
 	args := map[string]interface{}{"command": command}
 	assessment := a.ResolveToolRisk("shell_command", args)
 	decision, err := a.RequestApproval(assessment, "shell_command", args)
-	// SP-124 Phase 3: the LLM analysis now renders above the 4-option
-	// picker at the moment of decision (via pkg/console/security_prompt.go),
-	// so CLI users see the recommendation BEFORE choosing. The earlier
-	// post-decision log here was redundant with that and ran after the
-	// user had already committed to an action — removed.
 	_ = decision.Analysis
 	return err == nil
 }
 
-// approvalDecisionFromCLIChoice maps the CLI prompt's typed choice onto
-// the shared security.ApprovalDecision so the post-prompt handling is
-// the same regardless of input surface.
+// approvalDecisionFromCLIChoice maps the CLI prompt's typed choice onto the shared ApprovalDecision.
 func approvalDecisionFromCLIChoice(c utils.ApprovalChoice) security.ApprovalDecision {
 	switch c {
 	case utils.ApprovalChoiceApproveOnce:
@@ -47,10 +36,7 @@ func approvalDecisionFromCLIChoice(c utils.ApprovalChoice) security.ApprovalDeci
 }
 
 // applyApprovalDecision performs the side-effects of the user's choice:
-// ApproveAlways persists the command to the allowlist; Elevate bumps the
-// session profile to permissive and prints a hint about /risk-profile
-// for permanent change. ApproveOnce and Deny have no side-effects beyond
-// the caller's approve/reject branching.
+// ApproveAlways persists the command; Elevate bumps the session profile.
 func (a *Agent) applyApprovalDecision(decision security.ApprovalDecision, command string) {
 	switch decision {
 	case security.ApprovalApproveAlways:

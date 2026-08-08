@@ -4,6 +4,7 @@
 
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { CloudAdapter, type CloudAdapterConfig } from './cloudAdapter';
+import { handleBrowserGitRequest } from './browserGitHandler';
 
 // Mock clientSession module
 vi.mock('./clientSession', () => ({
@@ -37,6 +38,8 @@ const mockWasmShell = {
   }),
   deleteFile: vi.fn(() => ''),
   runAgent: vi.fn(() => Promise.resolve({})),
+  steerAgent: vi.fn(() => ({ steered: true })),
+  stopAgent: vi.fn(() => {}),
 };
 vi.mock('./wasmShell', () => ({
   initWasmShell: vi.fn(() => Promise.resolve(mockWasmShell)),
@@ -58,6 +61,19 @@ vi.mock('./cloudWasmHandlers', async (importOriginal): Promise<typeof import('./
     ),
   };
 });
+
+// Mock browserGitHandler — git operations run in-browser via isomorphic-git
+// (IndexedDB-backed lightning-fs). jsdom has no IndexedDB, so the adapter
+// tests assert routing to the handler, not its execution.
+vi.mock('./browserGitHandler', () => ({
+  handleBrowserGitRequest: vi.fn(
+    async (_urlPath: string, _method: string, _fullUrl: string, _bodyStr?: string) =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+  ),
+}));
 
 // Polyfill Response for jsdom environment (jsdom lacks Response/fetch)
 if (typeof Response === 'undefined') {
@@ -721,14 +737,13 @@ describe('CloudAdapter', () => {
   });
 
   describe('fetch - Foundry backend proxying', () => {
-    it('should proxy git status endpoint to Foundry proxy', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: {} }), { status: 200 }));
-
+    it('should route git status endpoint to in-browser git handler (no fetch)', async () => {
+      // Git runs in-browser via isomorphic-git — never proxied to the backend.
       await adapter.fetch('/api/git/status', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      expect(handleBrowserGitRequest).toHaveBeenCalledWith('/api/git/status', 'GET', '/api/git/status', undefined);
     });
 
     it('should proxy stats endpoint to Foundry proxy', async () => {
@@ -1044,40 +1059,30 @@ describe('CloudAdapter', () => {
       expect(data).toMatchObject({ status: 'processing' });
     });
 
-    it('should translate POST /api/query/steer URL to /proxy/chat with steer flag', async () => {
-      // /api/query/steer still proxies to the chat backend (the WASM shell does
-      // not implement steering in-browser — that's a server-side concern).
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
-      await adapter.fetch('/api/query/steer', {
+    it('should route POST /api/query/steer to the WASM shell steerAgent (no fetch)', async () => {
+      // /api/query/steer is wasm-local — the in-browser agent implements
+      // steering through the persistent WASM agent. No platform proxy involved.
+      const response = await adapter.fetch('/api/query/steer', {
         method: 'POST',
         body: JSON.stringify({ query: 'adjust tone' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      // Platform hosts chat at /proxy/chat (not /api/proxy/chat) — see
-      // SP-CLOUD-4 and CHAT_ENDPOINT_MAP in cloudProxyRoutes.ts.
-      expect(call[0]).toBe('https://api.sprout.dev/proxy/chat');
-      const sentBody = JSON.parse(call[1]?.body as string);
-      expect(sentBody.steer).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockWasmShell.steerAgent).toHaveBeenCalledWith('adjust tone');
+      expect(response.ok).toBe(true);
     });
 
-    it('should translate POST /api/query/stop URL to /proxy/chat/stop', async () => {
-      // /api/query/stop still proxies to the chat backend.
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
-      await adapter.fetch('/api/query/stop', {
+    it('should route POST /api/query/stop to the WASM shell stopAgent (no fetch)', async () => {
+      // /api/query/stop is wasm-local — the WASM shell interrupts the
+      // in-browser agent loop directly. No platform proxy involved.
+      const response = await adapter.fetch('/api/query/stop', {
         method: 'POST',
         body: JSON.stringify({ chat_id: 'chat-123' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/proxy/chat/stop');
-      // Body should be passed through unchanged (no translation for stop)
-      const sentBody = JSON.parse(call[1]?.body as string);
-      expect(sentBody).toEqual({ chat_id: 'chat-123' });
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockWasmShell.stopAgent).toHaveBeenCalledTimes(1);
+      expect(response.ok).toBe(true);
     });
 
     it('should translate GET /api/query/status URL to /proxy/chat/status', async () => {
@@ -1204,134 +1209,130 @@ describe('CloudAdapter', () => {
   });
 
   describe('fetch - git endpoint translation', () => {
-    it('should translate GET /api/git/status to /api/proxy/git/status', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: {} }), { status: 200 }));
-
+    it('should route GET /api/git/status to the in-browser git handler (no fetch)', async () => {
+      // Git runs in-browser via isomorphic-git — never proxied to the backend.
       await adapter.fetch('/api/git/status', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      expect(handleBrowserGitRequest).toHaveBeenCalledWith('/api/git/status', 'GET', '/api/git/status', undefined);
     });
 
-    it('should translate POST /api/git/stage to /api/proxy/git/stage', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
+    it('should route POST /api/git/stage to the in-browser git handler with body', async () => {
       await adapter.fetch('/api/git/stage', {
         method: 'POST',
         body: JSON.stringify({ files: ['foo.txt'] }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/stage');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, method, fullUrl, bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/stage');
+      expect(method).toBe('POST');
+      expect(fullUrl).toBe('/api/git/stage');
+      expect(JSON.parse(bodyStr)).toEqual({ files: ['foo.txt'] });
     });
 
-    it('should translate POST /api/git/commit to /api/proxy/git/commit', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
+    it('should route POST /api/git/commit to the in-browser git handler with body', async () => {
       await adapter.fetch('/api/git/commit', {
         method: 'POST',
         body: JSON.stringify({ message: 'test commit' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/commit');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, method, , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/commit');
+      expect(method).toBe('POST');
+      expect(JSON.parse(bodyStr)).toEqual({ message: 'test commit' });
     });
 
-    it('should translate POST /api/git/branch/create to /api/proxy/git/branch/create', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
+    it('should route POST /api/git/branch/create to the in-browser git handler with body', async () => {
       await adapter.fetch('/api/git/branch/create', {
         method: 'POST',
         body: JSON.stringify({ name: 'new-branch' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/branch/create');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/branch/create');
+      expect(JSON.parse(bodyStr)).toEqual({ name: 'new-branch' });
     });
 
     it('should preserve query parameters for git diff', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ diff: '' }), { status: 200 }));
-
       await adapter.fetch('/api/git/diff?path=foo.txt&cached=false', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/diff?path=foo.txt&cached=false');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , fullUrl] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/diff');
+      expect(fullUrl).toBe('/api/git/diff?path=foo.txt&cached=false');
     });
 
     it('should preserve query parameters for git log', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ commits: [] }), { status: 200 }));
-
       await adapter.fetch('/api/git/log?limit=10&offset=0', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/log?limit=10&offset=0');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , fullUrl] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/log');
+      expect(fullUrl).toBe('/api/git/log?limit=10&offset=0');
     });
 
-    it('should translate nested git deep-review paths', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }));
-
+    it('should route nested git deep-review paths', async () => {
       await adapter.fetch('/api/git/deep-review/fix/start', {
         method: 'POST',
         body: JSON.stringify({ review_id: '123' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/deep-review/fix/start');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/deep-review/fix/start');
+      expect(JSON.parse(bodyStr)).toEqual({ review_id: '123' });
     });
 
-    it('should translate git deep-review/fix with POST', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
+    it('should route git deep-review/fix with POST', async () => {
       await adapter.fetch('/api/git/deep-review/fix', {
         method: 'POST',
         body: JSON.stringify({ fixes: [] }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/deep-review/fix');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, method, , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/deep-review/fix');
+      expect(method).toBe('POST');
+      expect(JSON.parse(bodyStr)).toEqual({ fixes: [] });
     });
 
-    it('should translate git deep-review/fix/status with GET', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'running' }), { status: 200 }));
-
+    it('should route git deep-review/fix/status with GET', async () => {
       await adapter.fetch('/api/git/deep-review/fix/status', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/deep-review/fix/status');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, method] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/deep-review/fix/status');
+      expect(method).toBe('GET');
     });
 
-    it('should include WebUI client ID header in git requests', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
+    it('should NOT include WebUI client ID header in git requests (in-browser, no fetch)', async () => {
       await adapter.fetch('/api/git/status', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
+      expect(mockFetch).not.toHaveBeenCalled();
+      // The browser git handler receives no headers — nothing is sent over the wire.
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
     });
 
-    it('should include credentials in git requests', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
+    it('should NOT include credentials in git requests (in-browser, no fetch)', async () => {
       await adapter.fetch('/api/git/status', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[1]?.credentials).toBe('include');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
     });
 
     it('should pass through POST body unchanged for git endpoints', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
       const requestBody = {
         files: ['foo.txt', 'bar.txt'],
         message: 'test commit',
@@ -1343,10 +1344,11 @@ describe('CloudAdapter', () => {
         body: JSON.stringify(requestBody),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      const sentBody = JSON.parse(call[1]?.body as string);
-      expect(sentBody).toEqual(requestBody);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/commit');
+      expect(JSON.parse(bodyStr)).toEqual(requestBody);
     });
 
     it('should NOT affect non-git endpoints (stats uses stats proxy)', async () => {
@@ -1356,9 +1358,9 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      // Should use stats proxy, not git proxy
+      // Should use stats proxy, not the in-browser git handler
       expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
-      expect(call[0]).not.toContain('/api/proxy/git');
+      expect(handleBrowserGitRequest).not.toHaveBeenCalled();
     });
 
     it('should NOT affect settings endpoints (they use settings proxy)', async () => {
@@ -1368,13 +1370,14 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      // Settings endpoints are handled by settings proxy, not git proxy
+      // Settings endpoints are handled by settings proxy, not the git handler
       expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
+      expect(handleBrowserGitRequest).not.toHaveBeenCalled();
     });
 
     it('should NOT affect chat endpoints (routes through WASM shell, not git proxy)', async () => {
       // POST /api/query no longer goes through the chat proxy — it routes
-      // through the WASM shell's runAgent. The "git proxy" route is for git
+      // through the WASM shell's runAgent. The git handler is for git
       // operations only; chat has its own WASM-based routing.
       await adapter.fetch('/api/query', {
         method: 'POST',
@@ -1389,90 +1392,72 @@ describe('CloudAdapter', () => {
       expect(mockWasmShell.runAgent.mock.calls[0][2]).toBe('test');
     });
 
-    it('should preserve existing headers in git requests', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
+    it('should route git checkout to the in-browser handler (custom headers are irrelevant)', async () => {
       const customHeaders = new Headers({
         'Content-Type': 'application/json',
         'X-Custom-Header': 'custom-value',
       });
 
-      await adapter.fetch('/api/git/status', {
-        method: 'GET',
-        headers: customHeaders,
-      });
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[1]?.headers?.get('Content-Type')).toBe('application/json');
-      expect(call[1]?.headers?.get('X-Custom-Header')).toBe('custom-value');
-      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
-    });
-
-    it('should translate git checkout', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
       await adapter.fetch('/api/git/checkout', {
         method: 'POST',
+        headers: customHeaders,
         body: JSON.stringify({ ref: 'main' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/checkout');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/checkout');
+      expect(JSON.parse(bodyStr)).toEqual({ ref: 'main' });
     });
 
-    it('should translate git worktree endpoints', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ worktrees: [] }), { status: 200 }));
-
+    it('should route git worktree endpoints', async () => {
       await adapter.fetch('/api/git/worktree/create', {
         method: 'POST',
         body: JSON.stringify({ path: '/tmp/worktree' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/worktree/create');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/worktree/create');
+      expect(JSON.parse(bodyStr)).toEqual({ path: '/tmp/worktree' });
     });
 
-    it('should translate git endpoint with Request object', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: {} }), { status: 200 }));
-
+    it('should route git endpoint with Request object', async () => {
       const request = new Request('/api/git/status', { method: 'GET' });
       await adapter.fetch(request);
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, method, fullUrl] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/status');
+      expect(method).toBe('GET');
+      expect(fullUrl).toBe('/api/git/status');
     });
 
-    it('should translate git endpoint with absolute URL string to Foundry backend', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: {} }), { status: 200 }));
-
+    it('should route git endpoint with absolute URL string to the in-browser handler', async () => {
       await adapter.fetch('https://other-host.example.com/api/git/status', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      // Should proxy to Foundry backend, NOT the other-host URL
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
-      expect(call[0]).not.toContain('other-host.example.com');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , fullUrl] = handleBrowserGitRequest.mock.calls[0];
+      // Path is matched from the URL; the handler receives the original absolute URL.
+      expect(urlPath).toBe('/api/git/status');
+      expect(fullUrl).toBe('https://other-host.example.com/api/git/status');
     });
 
-    it('should translate git endpoint with URL object to Foundry backend', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ diff: '' }), { status: 200 }));
-
+    it('should route git endpoint with URL object to the in-browser handler', async () => {
       await adapter.fetch(new URL('/api/git/diff?path=foo.txt', 'https://other-host.example.com'));
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      // Should proxy to Foundry backend with path and query params preserved
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/diff?path=foo.txt');
-      expect(call[0]).not.toContain('other-host.example.com');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , fullUrl] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/diff');
+      expect(fullUrl).toBe('https://other-host.example.com/api/git/diff?path=foo.txt');
     });
 
     it('should preserve body when Request object with POST is used for git endpoint', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
       const request = new Request('/api/git/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1480,12 +1465,12 @@ describe('CloudAdapter', () => {
       });
       await adapter.fetch(request);
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/commit');
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
+      const [urlPath, , , bodyStr] = handleBrowserGitRequest.mock.calls[0];
+      expect(urlPath).toBe('/api/git/commit');
       // Body from Request object should be preserved
-      const sentBody = JSON.parse(call[1]?.body as string);
-      expect(sentBody).toEqual({ message: 'test commit', files: ['a.ts'] });
+      expect(JSON.parse(bodyStr)).toEqual({ message: 'test commit', files: ['a.ts'] });
     });
   });
 
@@ -1697,14 +1682,13 @@ describe('CloudAdapter', () => {
       expect(mockWasmShell.runAgent.mock.calls[0][2]).toBe('test');
     });
 
-    it('should NOT affect git endpoints (should still use git proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: {} }), { status: 200 }));
-
+    it('should NOT affect git endpoints (routes through in-browser git handler, not stats proxy)', async () => {
       await adapter.fetch('/api/git/status', { method: 'GET' });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+      // Git endpoint must NOT be proxied (no fetch call) and must NOT use the
+      // stats proxy — it routes through the in-browser git handler.
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(handleBrowserGitRequest).toHaveBeenCalledTimes(1);
     });
 
     it('should NOT affect settings endpoints (should still use settings proxy)', async () => {

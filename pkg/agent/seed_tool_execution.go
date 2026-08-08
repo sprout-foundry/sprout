@@ -22,12 +22,7 @@ func logToolExecution(_ *Agent, _ string) {
 }
 
 // handleToolError wraps a handler error into a sanitized result string and
-// returns it along with the original error. Returning a non-nil error ensures
-// seed's circuit breaker failure tracking and success/error classification
-// work correctly, while the result string is sanitized for secret safety
-// and model context. Security cautions are published via PublishAgentMessage
-// for terminal rendering; the error is wrapped with SECURITY_CAUTION_REQUIRED
-// so the LLM receives the guidance in its tool result.
+// returns it along with the original error. Security cautions are published for terminal rendering.
 func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	if err == nil {
 		return "", nil
@@ -39,57 +34,38 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 
 	switch action {
 	case ActionEscalate:
-		// Security error (typed) — escalate to user/LLM.
-		// Task 3: telemetry — a caution was issued from the handler path.
 		if agent != nil {
 			agent.incrementSecurityCautionsIssued()
-		}
-		// Task 4: tier-aware guidance suffix parsed from the error message.
-		suffix := tierFromMessage(safeMsg)
-		if agent != nil {
 			agent.PublishAgentMessage("security_caution", safeMsg, nil)
-			// Task 2: audit-log the handler-level security block.
 			assessment := RiskAssessment{
 				Sources: []RiskSource{RiskSourceHandler},
 				Reason:  safeMsg,
 			}
 			agent.logSecurityDecision(toolName, nil, assessment, "blocked")
 		}
-		// Wrap the error itself (not just the result string) with the
-		// SECURITY_CAUTION_REQUIRED prefix. Seed's runWithTimeout discards
-		// the string return value when err != nil, overwriting result with
-		// handlerErr.Error(). By wrapping the error, the prefix and guidance
-		// survive into the tool result the LLM sees.
 		return "", agenterrors.NewSecurityError(
-			fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s. %s", safeMsg, suffix),
+			fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s. %s", safeMsg, tierFromMessage(safeMsg)),
 			err,
 		)
 
 	case ActionFail:
-		// Permanent/invalid input/context overflow — no retry.
 		if agent != nil {
 			agent.PublishAgentMessage("tool_error", fmt.Sprintf("Tool '%s' failed: %s", toolName, safeMsg), nil)
 		}
 		return fmt.Sprintf("Error: %s", safeMsg), err
 
 	default:
-		// ActionRetry — transient/rate-limited/unknown errors.
-		// Log and return as normal error for potential retry.
-		// Sub-classify so the LLM gets more context for its retry decision.
 		if agent != nil {
 			var label string
 			switch {
 			case agenterrors.IsRateLimited(err):
 				label = "Tool '" + toolName + "' failed (rate limited): " + safeMsg
-				// SP-094-6: publish a rate-limited event so the WebUI can
-				// show "rate-limited, retrying…" and gate the input.
 				provider := agent.GetProvider()
 				if te := agenterrors.AsTypedError(err); te != nil {
 					if p, ok := te.Details["provider"].(string); ok && p != "" {
 						provider = p
 					}
 				}
-				// Also check legacy AgentError metadata.
 				if provider == "" {
 					var ae *agenterrors.AgentError
 					if errors.As(err, &ae) && ae != nil {
@@ -114,9 +90,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	}
 }
 
-// isLocalProvider returns true if the provider runs locally and never sends
-// data outside the user's network. Secret redaction is skipped for these
-// providers since there's no off-network leakage risk.
+// isLocalProvider returns true if the provider runs locally and never sends data outside the network.
 func isLocalProvider(agent *Agent) bool {
 	if agent == nil {
 		return false
@@ -134,12 +108,8 @@ func isLocalProvider(agent *Agent) bool {
 	return false
 }
 
-// 1. Model-specific constraints (fetch_url truncation, analyze_image_content compaction)
-// 2. Universal truncation (50K cap)
-// 3. Secret redaction with elevation gate
-// 4. Duplicate embedding check for write tools
-// 5. TodoWrite event emission
-// Returns the final result string to show to the LLM.
+// postProcessResult applies model-specific constraints, truncation, secret redaction,
+// duplicate embedding check, and TodoWrite event emission. Returns the final result string.
 func postProcessResult(ctx context.Context, agent *Agent, toolName string, args map[string]interface{}, result string) string {
 	if result == "" {
 		return result

@@ -1499,3 +1499,49 @@ func TestCreateSubagent_DefaultMaxIterationsBounded(t *testing.T) {
 		t.Errorf("subagent maxIterations = %d, want >= 10 for real-world tasks", sub.maxIterations)
 	}
 }
+
+// TestResolveSubagentTimeout verifies the timeout resolution logic:
+// explicit timeouts always win, orchestrator persona (by ID or alias) gets 1 hour,
+// and all other personas get the 30-minute default.
+func TestResolveSubagentTimeout(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(parent, shared)
+
+	cases := []struct {
+		name string
+		opts SubagentOptions
+		want time.Duration
+	}{
+		{"default persona gets 30 minutes", SubagentOptions{Persona: "coder"}, defaultSubagentTimeout},
+		{"empty persona gets 30 minutes", SubagentOptions{}, defaultSubagentTimeout},
+		{"orchestrator canonical ID gets 1 hour", SubagentOptions{Persona: "orchestrator"}, orchestratorSubagentTimeout},
+		{"orchestrator alias gets 1 hour", SubagentOptions{Persona: "repo_orchestrator"}, orchestratorSubagentTimeout},
+		{"explicit timeout always wins", SubagentOptions{Persona: "orchestrator", Timeout: 5 * time.Minute}, 5 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runner.resolveSubagentTimeout(tc.opts); got != tc.want {
+				t.Errorf("resolveSubagentTimeout(%+v) = %v, want %v", tc.opts, got, tc.want)
+			}
+		})
+	}
+
+	// Defensive paths: a runner with nil shared state or a nil
+	// ConfigManager must fall back to the default timeout rather than
+	// panicking, even for the orchestrator persona.
+	if got := (&SubagentRunner{}).resolveSubagentTimeout(SubagentOptions{Persona: "orchestrator"}); got != defaultSubagentTimeout {
+		t.Errorf("resolveSubagentTimeout with nil shared = %v, want %v", got, defaultSubagentTimeout)
+	}
+	noConfigRunner := NewSubagentRunner(parent, &SharedState{})
+	if got := noConfigRunner.resolveSubagentTimeout(SubagentOptions{Persona: "orchestrator"}); got != defaultSubagentTimeout {
+		t.Errorf("resolveSubagentTimeout with nil ConfigManager = %v, want %v", got, defaultSubagentTimeout)
+	}
+}

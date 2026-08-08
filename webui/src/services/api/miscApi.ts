@@ -159,3 +159,13 @@ export async function getLocalLLMModels(fetchFn: typeof fetch): Promise<{ models
   if (!response.ok) throw new Error('Failed to get local LLM models');
   return response.json();
 }
+
+export async function downloadLocalLLMModel(fetchFn: typeof fetch, model?: string): Promise<{ status: string; model: string; pid: number; message: string }> {
+  const params = model ? `?model=${encodeURIComponent(model)}` : '';
+  const response = await fetchFn(`/api/local-llm/download${params}`, { method: 'POST' });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(String(data.message || data.error || `HTTP ${response.status}`));
+  }
+  return response.json();
+}

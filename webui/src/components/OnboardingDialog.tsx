@@ -1,4 +1,4 @@
-import { Check, Star, X } from 'lucide-react';
+import { Check, Download, Star, X } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
 import type { OnboardingProviderOption } from '../services/api';
@@ -41,6 +41,50 @@ function OnboardingDialog({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const comboboxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Local LLM state: track model download status for sprout-local provider
+  const [localLLMModelPresent, setLocalLLMModelPresent] = useState<boolean | null>(null);
+  const [downloadingModel, setDownloadingModel] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState('');
+
+  // Fetch local LLM status when sprout-local is selected
+  useEffect(() => {
+    if (onboarding.provider !== 'sprout-local') {
+      setLocalLLMModelPresent(null);
+      return;
+    }
+    let cancelled = false;
+    const checkStatus = async () => {
+      try {
+        const { ApiService } = await import('../services/api');
+        const status = await ApiService.getInstance().getLocalLLMStatus();
+        if (!cancelled) {
+          setLocalLLMModelPresent(status.model_present);
+        }
+      } catch {
+        if (!cancelled) setLocalLLMModelPresent(false);
+      }
+    };
+    checkStatus();
+    return () => { cancelled = true; };
+  }, [onboarding.provider]);
+
+  // Poll for download completion
+  useEffect(() => {
+    if (!downloadingModel || onboarding.provider !== 'sprout-local') return;
+    const interval = setInterval(async () => {
+      try {
+        const { ApiService } = await import('../services/api');
+        const status = await ApiService.getInstance().getLocalLLMStatus();
+        if (status.model_present) {
+          setLocalLLMModelPresent(true);
+          setDownloadingModel(false);
+          setDownloadMessage('');
+        }
+      } catch { /* ignore poll errors */ }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [downloadingModel, onboarding.provider]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -304,6 +348,37 @@ function OnboardingDialog({
             </div>
             {selectedProvider.id === 'sprout-local' && (
               <div className="onboarding-provider-caveats">
+                {localLLMModelPresent === false && (
+                  <div className="onboarding-download-section">
+                    <div className="onboarding-caveat-item">⚠ No model downloaded yet.</div>
+                    <button
+                      type="button"
+                      className="onboarding-download-btn"
+                      disabled={downloadingModel || onboarding.submitting}
+                      onClick={async () => {
+                        setDownloadingModel(true);
+                        setDownloadMessage('Starting download...');
+                        try {
+                          const { ApiService } = await import('../services/api');
+                          const result = await ApiService.getInstance().downloadLocalLLMModel();
+                          setDownloadMessage(result.message || 'Download in progress...');
+                        } catch (e) {
+                          setDownloadMessage(`Download failed: ${e instanceof Error ? e.message : String(e)}`);
+                          setDownloadingModel(false);
+                        }
+                      }}
+                    >
+                      <Download size={14} />
+                      {downloadingModel ? 'Downloading...' : 'Download recommended model (~2.5 GB)'}
+                    </button>
+                    {downloadMessage && (
+                      <div className="onboarding-caveat-item">{downloadMessage}</div>
+                    )}
+                  </div>
+                )}
+                {localLLMModelPresent === true && (
+                  <div className="onboarding-caveat-item">✓ Model downloaded and ready</div>
+                )}
                 <div className="onboarding-caveat-item">⚠ Slower than cloud (10–20 tok/s vs 50–100+)</div>
                 <div className="onboarding-caveat-item">⚠ Limited context (32K)</div>
                 <div className="onboarding-caveat-item">⚠ Best for simple tasks, edits, and offline work</div>

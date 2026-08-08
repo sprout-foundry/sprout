@@ -610,6 +610,15 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// (real provider instead of "editor").
 	ws.clearCachedAgent(clientID)
 
+	// Auto-start the local LLM server when sprout-local is selected so the
+	// agent has an endpoint to connect to. This is a no-op on non-Mac or
+	// when no model is downloaded.
+	if req.Provider == "sprout-local" {
+		if endpoint := ensureLocalLLMRunning(); endpoint != "" {
+			ws.log().Info("auto-started local LLM server", "endpoint", endpoint)
+		}
+	}
+
 	// Now create/get the agent with the newly configured provider.
 	clientAgent, err := ws.getClientAgent(clientID)
 	if err != nil || clientAgent == nil {

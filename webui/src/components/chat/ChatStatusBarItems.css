@@ -89,6 +89,15 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-error, #e06c75) 15%, transparent);
 }
 
+/* Offline badge — shows when a local/offline provider is active. */
+.chat-statusbar-offline {
+  color: var(--accent-info, var(--accent-primary, #61afef));
+  background: color-mix(in srgb, var(--accent-info, var(--accent-primary, #61afef)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-info, var(--accent-primary, #61afef)) 35%, transparent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 /* Active-persona chip — design-system "status pill" treatment: tinted
    background mixed from the persona color so the chip reads coherent
    with the chat-bubble badge and the subagent feed entries. The persona

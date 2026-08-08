@@ -45,6 +45,15 @@ func freePort(t *testing.T) int {
 	return 0
 }
 
+// shortSocketPath returns a Unix socket path short enough for macOS, where
+// sun_path is limited to 104 bytes. t.TempDir() paths on CI runners can
+// exceed that (e.g. /var/folders/<random>/T/TestName.../001/agent.sock),
+// which makes listen fail with "bind: invalid argument".
+func shortSocketPath(t *testing.T, name string) string {
+	t.Helper()
+	return filepath.Join(os.TempDir(), fmt.Sprintf("sprout-%s-%d.sock", name, os.Getpid()))
+}
+
 // ---------------------------------------------------------------------------
 // TestDaemonHelperProcess — spawned as a fake daemon by other tests
 //
@@ -269,9 +278,7 @@ func TestDetectDaemon_ClosedPort(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDetectDaemon_UnixSocket(t *testing.T) {
-
-	tmpDir := t.TempDir()
-	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	socketPath := shortSocketPath(t, "daemon")
 
 	// Create a Unix socket server serving /health with 200.
 	ln, err := net.Listen("unix", socketPath)
@@ -1340,7 +1347,7 @@ func TestStartDaemon_VerifySpawnCount(t *testing.T) {
 
 func TestEnsureDaemon_FastPath_UnixSocket(t *testing.T) {
 	tmpDir := t.TempDir()
-	socketPath := filepath.Join(tmpDir, "daemon.sock")
+	socketPath := shortSocketPath(t, "daemon")
 
 	// Unix socket server serving /health → 200.
 	ln, err := net.Listen("unix", socketPath)

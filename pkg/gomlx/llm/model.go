@@ -203,6 +203,12 @@ type GenerateConfig struct {
 	TopP              float32
 	TopK              int
 	RepetitionPenalty float32
+	// MaxMTPDrafts enables MTP-assisted self-speculative decoding on the
+	// greedy path when the architecture has a multi-token prediction head
+	// (raw Qwen3.5 HF exports). 0 disables it. The MTP head drafts up to
+	// this many tokens per round and the main model verifies them in one
+	// batched forward; accepted drafts emit extra tokens at ~1 decode cost.
+	MaxMTPDrafts int
 	// ThinkingTokens determines whether to include <think>...</think> blocks
 	// in the output. When false (default), thinking tokens are filtered.
 	ThinkingTokens bool
@@ -216,6 +222,7 @@ func DefaultGenerateConfig() GenerateConfig {
 		TopP:              0.95,
 		TopK:              20,
 		RepetitionPenalty: 1.1,
+		MaxMTPDrafts:      4,
 	}
 }
 
@@ -307,6 +314,8 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	// (argmax) and avoid transferring the full [vocab] logits vector each step.
 	greedyArch, greedyOK := m.arch.(GreedyArchitecture)
 	useGPUArgmax := greedyOK && genCfg.Temperature <= 0 && genCfg.RepetitionPenalty == 0
+	mtpArch, mtpOK := m.arch.(MTPArchitecture)
+	useMTP := useGPUArgmax && mtpOK && mtpArch.MTPAvailable() && genCfg.MaxMTPDrafts > 0 && genCfg.MaxTokens > 1
 
 	nextToken := 0
 	if useGPUArgmax {
@@ -327,6 +336,42 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 
 	// Decode loop using KV cache — each step processes only 1 new token
 	generated := []int{nextToken}
+	if useMTP {
+		// MTP-assisted self-speculative decoding: draft k tokens with the
+		// 1-layer MTP head, verify all in one batched main-model forward.
+		mtpDrafts := genCfg.MaxMTPDrafts
+		pos := len(tokenIDs) // position of nextToken (first generated token)
+		for i := 1; i < genCfg.MaxTokens; {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if nextToken == m.cfg.EOSTokenID {
+				break
+			}
+
+			out, err := mtpArch.ForwardDecodeMTP(nextToken, pos, cache, mtpDrafts)
+			if err != nil {
+				return fmt.Errorf("mtp decode: %w", err)
+			}
+			pos += len(out)
+			for _, t := range out {
+				if i >= genCfg.MaxTokens {
+					break
+				}
+				generated = append(generated, t)
+				if onToken != nil && !m.shouldFilterToken(t, genCfg) {
+					onToken(t)
+				}
+				i++
+				if t == m.cfg.EOSTokenID {
+					break
+				}
+			}
+			nextToken = out[len(out)-1]
+		}
+		return nil
+	}
+
 	for i := 1; i < genCfg.MaxTokens; i++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -419,15 +464,26 @@ func (m *Model) DecodeToken(id int) string {
 // Config returns the model's configuration.
 func (m *Model) Config() ModelConfig { return m.cfg }
 
+// MTPAvailable reports whether the loaded model has a multi-token
+// prediction head (raw Qwen3.5 HF exports with mtp.* weights). When true,
+// the greedy path uses MTP-assisted speculative decoding automatically
+// (GenerateConfig.MaxMTPDrafts > 0).
+func (m *Model) MTPAvailable() bool {
+	mtpArch, ok := m.arch.(MTPArchitecture)
+	return ok && mtpArch.MTPAvailable()
+}
+
 // ContextLength returns the effective context window the model can handle.
 // Local models advertise a huge native window (Qwen3.5 max_position_embeddings
 // is 262K), but a small quantized model goes stale/cogency-degrades long
 // before that. Sprout's context-profile auto-detection keys off this value:
-// reporting a bounded window (32K — the LCM design point) keeps small models
-// in Low-Context Mode, where the lite prompt + 8-tool allowlist + tighter
-// compaction keep them cogent. The server advertises this via /v1/models.
+// reporting a bounded window (64K — the design point for a 16GB-class machine)
+// keeps small models in Low-Context Mode, where the lite prompt + 8-tool
+// allowlist + tighter compaction keep them cogent. 32K proved too tight for
+// agentic work; 64K is the pragmatic midpoint between cogency and window.
+// The server advertises this via /v1/models.
 func (m *Model) ContextLength() int {
-	const localModelContextCap = 32_000
+	const localModelContextCap = 64_000
 	if m.cfg.MaxPosition <= 0 {
 		return localModelContextCap
 	}

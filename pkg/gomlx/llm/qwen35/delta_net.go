@@ -101,8 +101,27 @@ func (g *gatedDeltaNet) loadWeights(sf *llm.SafetensorsFile, name string, s *mlx
 	}
 
 	// conv1d.weight: [conv_dim, kernel, 1] (sanitized MLX layout, depthwise).
+	// Raw-HF exports store PyTorch layout [conv_dim, 1, kernel] — the kernel
+	// axis is last. MLX Conv1D expects [C_out, kernel, C_in/groups], so
+	// transpose the raw layout to the sanitized one (mlx-community
+	// conversions ship it already transposed).
 	if g.conv1d, err = sf.Get(name+".conv1d.weight", s); err != nil {
 		return fmt.Errorf("conv1d: %w", err)
+	}
+	shape := g.conv1d.Shape()
+	if len(shape) == 3 && shape[1] == 1 && shape[2] > 1 {
+		convT, tErr := mlx.TransposeAxes(g.conv1d, []int{0, 2, 1}, s)
+		if tErr != nil {
+			g.conv1d.Free()
+			return fmt.Errorf("transpose conv1d: %w", tErr)
+		}
+		if err := convT.Eval(); err != nil {
+			convT.Free()
+			g.conv1d.Free()
+			return fmt.Errorf("eval conv1d transpose: %w", err)
+		}
+		g.conv1d.Free()
+		g.conv1d = convT
 	}
 	if err := g.conv1d.Eval(); err != nil {
 		return fmt.Errorf("eval conv1d: %w", err)

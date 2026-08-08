@@ -40,6 +40,7 @@ type hfConfig struct {
 	LinearConvKernelDim   int         `json:"linear_conv_kernel_dim"`
 	AttnOutputGate        bool        `json:"attn_output_gate"`
 	MTPNumHiddenLayers    int         `json:"mtp_num_hidden_layers"`
+	MTPUseDedicatedEmbeds bool        `json:"mtp_use_dedicated_embeddings"`
 	LayerTypes            []string    `json:"layer_types"`
 	RopeParameters        *ropeParams `json:"rope_parameters"`
 
@@ -118,6 +119,7 @@ func LoadConfig(path string) (ModelConfig, error) {
 		LinearConvKernelDim:   raw.LinearConvKernelDim,
 		AttnOutputGate:        raw.AttnOutputGate,
 		MTPNumHiddenLayers:    raw.MTPNumHiddenLayers,
+		MTPUseDedicatedEmbeds: raw.MTPUseDedicatedEmbeds,
 		LayerTypes:            raw.LayerTypes,
 	}
 

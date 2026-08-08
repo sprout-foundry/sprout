@@ -24,9 +24,9 @@ type Embedding struct {
 	w  *mlx.Array // [vocab, hidden], nil when quantized
 	wT *mlx.Array // [hidden, vocab] full precision logits weight, nil when quantized
 
-	qW        *mlx.Array // packed int32 [vocab, hidden*bits/32]
-	qScales   *mlx.Array // [vocab, hidden/group_size]
-	qBiases   *mlx.Array // [vocab, hidden/group_size], optional
+	qW         *mlx.Array // packed int32 [vocab, hidden*bits/32]
+	qScales    *mlx.Array // [vocab, hidden/group_size]
+	qBiases    *mlx.Array // [vocab, hidden/group_size], optional
 	qGroupSize int
 	qBits      int
 	qMode      string

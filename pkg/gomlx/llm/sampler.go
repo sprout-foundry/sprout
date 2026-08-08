@@ -18,10 +18,10 @@ type logitHeapItem struct {
 // logitHeap implements heap.Interface as a max-heap over logitHeapItem.
 type logitHeap []logitHeapItem
 
-func (h logitHeap) Len() int            { return len(h) }
-func (h logitHeap) Less(i, j int) bool  { return h[i].value > h[j].value }
-func (h logitHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *logitHeap) Push(x any)         { *h = append(*h, x.(logitHeapItem)) }
+func (h logitHeap) Len() int           { return len(h) }
+func (h logitHeap) Less(i, j int) bool { return h[i].value > h[j].value }
+func (h logitHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *logitHeap) Push(x any)        { *h = append(*h, x.(logitHeapItem)) }
 func (h *logitHeap) Pop() any {
 	old := *h
 	n := len(old)

@@ -24,9 +24,9 @@ import (
 // (which checks layer 0) to decide Store vs Append is wrong — layers 1+ see
 // layer 0's length and incorrectly take the Append path.
 type KVCache struct {
-	layers    []*KVCacheLayer
+	layers      []*KVCacheLayer
 	initialized []bool
-	stream    *mlx.Stream
+	stream      *mlx.Stream
 }
 
 // KVCacheLayer holds the cached K and V for a single transformer layer.

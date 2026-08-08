@@ -14,17 +14,17 @@ import (
 // Qwen3.5 hybrid layers. Unlike full attention, it maintains a fixed-size
 // recurrent state (no KV cache growth with sequence length):
 //
-//   qkv = in_proj_qkv(x)                 [B, S, key_dim*2 + value_dim]
-//   z   = in_proj_z(x)                   [B, S, value_dim]
-//   b   = in_proj_b(x)                   [B, S, Hv]
-//   a   = in_proj_a(x)                   [B, S, Hv]
-//   conv = silu(conv1d(concat(conv_state, qkv)))   depthwise, kernel=4
-//   q,k,v = split(conv)
-//   q = rms_norm(q) * inv_scale^2 ; k = rms_norm(k) * inv_scale
-//   beta = sigmoid(b)
-//   g = exp(-exp(A_log) * softplus(a + dt_bias))
-//   y, state = gated_delta_update(q, k, v, g, beta, state)
-//   out = out_proj(rms_norm_gated(y, z))
+//	qkv = in_proj_qkv(x)                 [B, S, key_dim*2 + value_dim]
+//	z   = in_proj_z(x)                   [B, S, value_dim]
+//	b   = in_proj_b(x)                   [B, S, Hv]
+//	a   = in_proj_a(x)                   [B, S, Hv]
+//	conv = silu(conv1d(concat(conv_state, qkv)))   depthwise, kernel=4
+//	q,k,v = split(conv)
+//	q = rms_norm(q) * inv_scale^2 ; k = rms_norm(k) * inv_scale
+//	beta = sigmoid(b)
+//	g = exp(-exp(A_log) * softplus(a + dt_bias))
+//	y, state = gated_delta_update(q, k, v, g, beta, state)
+//	out = out_proj(rms_norm_gated(y, z))
 type gatedDeltaNet struct {
 	// Projections (shared llm.Linear: full-precision or quantized).
 	inProjQKV *llm.Linear // [hidden, key_dim*2 + value_dim]
@@ -32,7 +32,7 @@ type gatedDeltaNet struct {
 	inProjB   *llm.Linear // [hidden, Hv]
 	inProjA   *llm.Linear // [hidden, Hv]
 	outProj   *llm.Linear // [value_dim, hidden]
-	conv1d    *mlx.Array // [conv_dim, kernel, 1] (groups = conv_dim, depthwise)
+	conv1d    *mlx.Array  // [conv_dim, kernel, 1] (groups = conv_dim, depthwise)
 
 	norm *mlx.Array // [head_v_dim] — RMSNorm weight for the gated output norm
 

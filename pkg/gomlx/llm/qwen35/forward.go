@@ -60,7 +60,7 @@ type layerWeights struct {
 	inputNorm *mlx.Array // [hidden] — RMSNorm before attention
 	postNorm  *mlx.Array // [hidden] — RMSNorm before MLP
 
-	linearAttn *gatedDeltaNet // non-nil for linear layers
+	linearAttn *gatedDeltaNet   // non-nil for linear layers
 	selfAttn   *selfAttnWeights // non-nil for full layers
 
 	// MLP (SwiGLU) — shared by both layer kinds.

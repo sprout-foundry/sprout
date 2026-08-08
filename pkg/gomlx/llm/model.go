@@ -222,7 +222,7 @@ func DefaultGenerateConfig() GenerateConfig {
 		TopP:              0.95,
 		TopK:              20,
 		RepetitionPenalty: 1.1,
-		MaxMTPDrafts:      4,
+		MaxMTPDrafts:      0, // disabled by default; caller opts in
 	}
 }
 

@@ -165,6 +165,7 @@ func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/local-llm/status", ws.handleLocalLLMStatus)
 	mux.HandleFunc("/api/local-llm/start", ws.handleLocalLLMStart)
 	mux.HandleFunc("/api/local-llm/models", ws.handleLocalLLMModels)
+	mux.HandleFunc("/api/local-llm/download", ws.handleLocalLLMDownload)
 }
 
 func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {

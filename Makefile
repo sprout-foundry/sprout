@@ -25,6 +25,8 @@ help:
 	@echo "  make install          - Build and install to ~/.local/bin/sprout"
 	@echo "  make build-fast       - Fast incremental build (skips unchanged UI)"
 	@echo "  make build-version    - Build with version information"
+	@echo "  make build-llm-server  - Build local LLM server (mlx)"
+	@echo "  make build-llm-download - Build model download helper (mlx)"
 	@echo "  make build-ui         - Build React web UI only"
 	@echo "  make deploy-ui        - Build and deploy React UI (incremental)"
 	@echo "  make build-wasm       - Build WASM shell module"
@@ -310,11 +312,21 @@ local-model:
 
 # Build and run the local LLM server (auto-selects the best installed model
 # for this machine's RAM; serves OpenAI-compatible API on 127.0.0.1:18081).
-local-llm: 
+local-llm:
 	@echo "Building local LLM server..."
 	go build -tags mlx -o llm_server ./cmd/llm_server
 	@echo "Starting local LLM server on http://127.0.0.1:18081 ..."
 	@./llm_server -port 18081
+
+# Build the local LLM server binary (used by sprout's auto-discovery).
+build-llm-server:
+	@echo "Building llm_server binary..."
+	go build -tags mlx -o llm_server ./cmd/llm_server
+
+# Build the model download helper binary.
+build-llm-download:
+	@echo "Building llm_download binary..."
+	go build -tags mlx -o llm_download ./cmd/llm_download
 
 # Check whether the local LLM server is up and which model it loaded.
 local-llm-status:

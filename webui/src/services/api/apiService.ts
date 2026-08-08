@@ -122,6 +122,10 @@ class ApiService {
     return miscApi.getLocalLLMModels(clientFetch);
   }
 
+  async downloadLocalLLMModel(model?: string): Promise<{ status: string; model: string; pid: number; message: string }> {
+    return miscApi.downloadLocalLLMModel(clientFetch, model);
+  }
+
   async getProviderCredentials(): Promise<{
     storage_backend: string;
     providers: Array<{

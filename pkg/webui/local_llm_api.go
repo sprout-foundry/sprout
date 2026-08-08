@@ -263,3 +263,124 @@ func pickLocalModel(status *localLLMStatus) string {
 	}
 	return ""
 }
+
+// handleLocalLLMDownload handles POST /api/local-llm/download?model=<id>
+// Downloads a model using the llm_download binary. Returns immediately with
+// a job ID; the client polls /api/local-llm/status to see when the model
+// appears. Download runs as a detached background process.
+func (ws *ReactWebServer) handleLocalLLMDownload(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	status := getLocalLLMStatus()
+	if !status.Available {
+		writeJSONErr(w, http.StatusBadRequest, "not_available",
+			"Local LLM requires Apple Silicon (M-series Mac)")
+		return
+	}
+
+	modelID := r.URL.Query().Get("model")
+	if modelID == "" {
+		modelID = status.RecommendedModel
+	}
+
+	// Validate the model ID is in our catalog.
+	valid := false
+	for _, m := range catalogModels {
+		if m.ID == modelID {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		writeJSONErr(w, http.StatusBadRequest, "invalid_model",
+			fmt.Sprintf("Unknown model: %s", modelID))
+		return
+	}
+
+	binaryPath := findLocalLLMDownloadBinary()
+	if binaryPath == "" {
+		writeJSONErr(w, http.StatusNotFound, "binary_not_found",
+			"Model download binary not found. Build with: make build-llm-download")
+		return
+	}
+
+	// Launch download as a detached process so it survives the request.
+	cmd := exec.Command(binaryPath, "-model", modelID)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Start(); err != nil {
+		writeJSONErr(w, http.StatusInternalServerError, "download_failed",
+			fmt.Sprintf("Failed to start download: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"status":  "downloading",
+		"model":   modelID,
+		"pid":     cmd.Process.Pid,
+		"message": fmt.Sprintf("Downloading %s in the background. Check status to monitor progress.", modelID),
+	})
+}
+
+func findLocalLLMDownloadBinary() string {
+	for _, name := range []string{"llm_download", "sprout-llm-download"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+// ensureLocalLLMRunning starts the local LLM server if the platform supports
+// it and a model is available. Called when sprout-local is selected as the
+// provider. Returns the endpoint URL if running, or "" if not started.
+func ensureLocalLLMRunning() string {
+	status := getLocalLLMStatus()
+	if !status.Available || !status.ModelPresent {
+		return ""
+	}
+	if status.Running {
+		return status.Endpoint
+	}
+
+	binaryPath := findLocalLLMBinary()
+	if binaryPath == "" {
+		return ""
+	}
+	modelDir := pickLocalModel(status)
+	if modelDir == "" {
+		return ""
+	}
+
+	cmd := exec.Command(binaryPath, "-model", modelDir, "-port", "18081")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Env = append(os.Environ(), "GO_QUANTIZE=4")
+	if err := cmd.Start(); err != nil {
+		return ""
+	}
+
+	// Wait for health (model load can take 10-30s).
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	for i := 0; i < 60; i++ {
+		req, _ := http.NewRequestWithContext(ctx, "GET", localLLMEndpoint+"/health", nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				localLLMMu.Lock()
+				localLLMCached = nil
+				localLLMMu.Unlock()
+				return localLLMEndpoint
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ""
+		case <-time.After(time.Second):
+		}
+	}
+	return ""
+}

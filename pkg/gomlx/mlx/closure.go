@@ -32,7 +32,7 @@ type ClosureFunc func(inputs []*Array) ([]*Array, error)
 // on a vector of input arrays; Compile wraps it in a compiled closure.
 type Closure struct {
 	handle   C.mlx_closure
-	id       int // registry id carried in the C payload
+	id       int      // registry id carried in the C payload
 	template *Closure // for compiled closures: the traced source closure,
 	// kept alive because the first apply of a compiled closure runs the
 	// original body once on placeholder inputs to capture the graph.

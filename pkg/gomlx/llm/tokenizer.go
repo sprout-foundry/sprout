@@ -68,12 +68,18 @@ func LoadTokenizer(path string) (*Tokenizer, error) {
 		tok.specialTokens[at.Content] = at.ID
 	}
 
-	// Build merge ranks
+	// Build merge ranks. Merges are stored as flat "left right" strings
+	// (modern HF) or joined pairs (legacy, converted in UnmarshalJSON).
 	tok.encoder = &BPEDecoder{ranks: make(map[string]int)}
 	for i, merge := range raw.Model.Merges {
-		if len(merge) == 2 {
-			tok.encoder.ranks[merge[0]+merge[1]] = i
+		// A rank key is the concatenation of the two merge pieces with no
+		// separator. The flat form joins them with a single space; the
+		// legacy UnmarshalJSON already joined pairs with no space.
+		joined := merge
+		if parts := strings.SplitN(merge, " ", 2); len(parts) == 2 {
+			joined = parts[0] + parts[1]
 		}
+		tok.encoder.ranks[joined] = i
 	}
 
 	// Find special tokens
@@ -354,7 +360,40 @@ type hfTokenizer struct {
 type hfModel struct {
 	Type   string         `json:"type"`
 	Vocab  map[string]int `json:"vocab"`
-	Merges [][]string     `json:"merges"`
+	Merges []string       `json:"merges"`
+}
+
+// UnmarshalJSON accepts both the legacy tokenizer format (merges as
+// [][]string, each pair split later) and the modern flat format (merges as
+// []string like "Ġ Ġ"). Raw-HF Qwen3.5 exports ship the flat form.
+func (m *hfModel) UnmarshalJSON(data []byte) error {
+	var flat struct {
+		Type   string         `json:"type"`
+		Vocab  map[string]int `json:"vocab"`
+		Merges []string       `json:"merges"`
+	}
+	if err := json.Unmarshal(data, &flat); err == nil && len(flat.Merges) > 0 {
+		m.Type = flat.Type
+		m.Vocab = flat.Vocab
+		m.Merges = flat.Merges
+		return nil
+	}
+	var legacy struct {
+		Type   string         `json:"type"`
+		Vocab  map[string]int `json:"vocab"`
+		Merges [][]string     `json:"merges"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	m.Type = legacy.Type
+	m.Vocab = legacy.Vocab
+	for _, pair := range legacy.Merges {
+		if len(pair) == 2 {
+			m.Merges = append(m.Merges, pair[0]+pair[1])
+		}
+	}
+	return nil
 }
 
 type hfAddedToken struct {

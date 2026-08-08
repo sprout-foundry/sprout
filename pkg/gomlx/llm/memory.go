@@ -42,7 +42,15 @@ func weightBytesForModel(modelDir string) (int64, error) {
 // Returns nil when the model is small enough (or RAM is unknown — the gate
 // is advisory on stub/non-Metal builds). Returns an error with a clear
 // message when the machine is likely to run out of memory during generation.
+//
+// SPROUT_ALLOW_OVERWEIGHT=1 forces the gate open for power users on
+// swap-backed machines (e.g. validating a raw BF16 fine-tune before
+// quantizing it); the server still applies ApplyMemoryLimits so allocation
+// fails cleanly instead of wedging Metal.
 func ModelMemoryGate(modelDir string) error {
+	if os.Getenv("SPROUT_ALLOW_OVERWEIGHT") == "1" {
+		return nil
+	}
 	ram := mlx.TotalSystemRAM()
 	if ram == 0 {
 		return nil // can't measure — don't block

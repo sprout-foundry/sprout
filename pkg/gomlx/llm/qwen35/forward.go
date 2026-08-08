@@ -245,7 +245,18 @@ func freeArr(a *mlx.Array) {
 // ----------------------------------------------------------------------------
 
 func (q *Qwen35) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
-	logits, err := q.prefillInternal(ids, seqLen, cache)
+	return q.prefillAt(ids, seqLen, 0, cache)
+}
+
+// ForwardPrefillFrom prefills a delta sequence starting at an absolute
+// position, extending an existing cache. RoPE offsets start at startPos, so
+// a repeated prompt's shared prefix is not recomputed.
+func (q *Qwen35) ForwardPrefillFrom(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+	return q.prefillAt(ids, seqLen, startPos, cache)
+}
+
+func (q *Qwen35) prefillAt(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+	logits, err := q.prefillInternal(ids, seqLen, startPos, cache)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +264,7 @@ func (q *Qwen35) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) 
 	return q.logitsToFloat32(logits)
 }
 
-func (q *Qwen35) prefillInternal(ids *mlx.Array, seqLen int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen35) prefillInternal(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
 	s := q.stream
 
 	h, err := q.weights.embed.Lookup(ids, s)
@@ -267,7 +278,7 @@ func (q *Qwen35) prefillInternal(ids *mlx.Array, seqLen int, cache *llm.KVCache)
 	}
 
 	for i := 0; i < q.cfg.NumLayers; i++ {
-		out, err := q.forwardLayer(h, i, seqLen, 0, cache)
+		out, err := q.forwardLayer(h, i, seqLen, startPos, cache)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d: %w", i, err)
 		}

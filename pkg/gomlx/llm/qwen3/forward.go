@@ -230,7 +230,18 @@ func freeArr(a *mlx.Array) {
 
 // ForwardPrefill processes the full prompt sequence and returns last-position logits.
 func (q *Qwen3) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
-	logits, err := q.prefillInternal(ids, seqLen, cache)
+	return q.prefillAt(ids, seqLen, 0, cache)
+}
+
+// ForwardPrefillFrom prefills a delta sequence starting at an absolute
+// position, extending an existing cache. RoPE offsets start at startPos, so
+// a repeated prompt's shared prefix is not recomputed.
+func (q *Qwen3) ForwardPrefillFrom(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+	return q.prefillAt(ids, seqLen, startPos, cache)
+}
+
+func (q *Qwen3) prefillAt(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+	logits, err := q.prefillInternal(ids, seqLen, startPos, cache)
 	if err != nil {
 		return nil, err
 	}
@@ -238,9 +249,9 @@ func (q *Qwen3) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) (
 	return q.logitsToFloat32(logits)
 }
 
-// prefillInternal runs the forward pass over the full prompt, returning the
-// raw (BF16) logits array for the final position.
-func (q *Qwen3) prefillInternal(ids *mlx.Array, seqLen int, cache *llm.KVCache) (*mlx.Array, error) {
+// prefillInternal runs the forward pass over the prompt (or a delta at
+// startPos), returning the raw (BF16) logits array for the final position.
+func (q *Qwen3) prefillInternal(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
 	s := q.stream
 
 	h, err := llm.GatherAxis(q.weights.embedTokens, ids, 0, []int{1, q.cfg.HiddenSize}, s)
@@ -254,7 +265,7 @@ func (q *Qwen3) prefillInternal(ids *mlx.Array, seqLen int, cache *llm.KVCache) 
 	}
 
 	for i := 0; i < q.cfg.NumLayers; i++ {
-		out, err := q.forwardLayer(h, i, seqLen, 0, cache)
+		out, err := q.forwardLayer(h, i, seqLen, startPos, cache)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d: %w", i, err)
 		}

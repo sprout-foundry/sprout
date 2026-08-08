@@ -42,6 +42,13 @@ type Architecture interface {
 	// populated with keys/values from this pass for use in subsequent decode steps.
 	ForwardPrefill(ids *mlx.Array, seqLen int, cache *KVCache) ([]float32, error)
 
+	// ForwardPrefillFrom runs the forward pass over a delta sequence that
+	// extends an already-populated KV cache. startPos is the absolute
+	// position of the FIRST token in ids (which determines RoPE offsets).
+	// The cache must already contain startPos tokens. Used by prefix
+	// caching to skip re-prefilling a shared prompt on repeated requests.
+	ForwardPrefillFrom(ids *mlx.Array, seqLen, startPos int, cache *KVCache) ([]float32, error)
+
 	// ForwardDecode runs the forward pass for a single token at the given
 	// absolute position. Uses the KV cache to avoid recomputing past tokens.
 	// Returns logits [vocabSize] for that position.

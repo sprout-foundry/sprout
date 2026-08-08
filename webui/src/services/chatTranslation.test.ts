@@ -111,11 +111,23 @@ describe('translateRequestBody — chat translation edge cases (SP-015-R7)', () 
 
   it('omits all optional fields when absent', () => {
     const result = translateRequestBody('/api/query', { query: 'hello' });
-    expect(result.provider).toBeUndefined();
+    // provider defaults to 'platform' in cloud mode (BYOK routing) —
+    // see translateRequestBody in cloudProxyRoutes.ts.
+    expect(result.provider).toBe('platform');
     expect(result.model).toBeUndefined();
     expect(result.workspace_root).toBeUndefined();
     expect(result.system_prompt).toBeUndefined();
     expect(result.chat_id).toBeUndefined();
+  });
+
+  it('defaults provider to platform when absent', () => {
+    const result = translateRequestBody('/api/query', { query: 'hello' });
+    expect(result.provider).toBe('platform');
+  });
+
+  it('passes through explicit provider (BYOK)', () => {
+    const result = translateRequestBody('/api/query', { query: 'hello', provider: 'openai' });
+    expect(result.provider).toBe('openai');
   });
 
   // ── Stream flag ──────────────────────────────────────────────────

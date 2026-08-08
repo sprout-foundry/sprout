@@ -46,6 +46,8 @@ vi.mock('react-virtuoso', () => ({
 /* --- config/mode --- */
 vi.mock('../config/mode', () => ({
   supportsSSH: false,
+  supportsExport: true,
+  isCloud: false,
 }));
 
 /* --- services/apiAdapter --- */

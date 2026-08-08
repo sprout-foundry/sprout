@@ -154,9 +154,10 @@
   color: var(--text-secondary);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s var(--ease-out, ease),
-              background 0.15s var(--ease-out, ease),
-              color 0.15s var(--ease-out, ease);
+  transition:
+    opacity 0.15s var(--ease-out, ease),
+    background 0.15s var(--ease-out, ease),
+    color 0.15s var(--ease-out, ease);
   pointer-events: auto;
 }
 

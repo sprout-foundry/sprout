@@ -7,20 +7,8 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// IsShellCommandAllowlisted reports whether the user has previously chosen
-// "Always approve this command" for this exact command string (literal
-// match) or whether any user-defined glob pattern in
-// ApprovedShellCommandPatterns matches the command. Pattern matching uses
-// Go's path.Match glob syntax: `*` (any non-`/` sequence), `?` (single
-// char), `[abc]` (char class).
-//
-// Caveat: while `*` does not match `/`, character classes can — e.g.
-// `[^a-z]` or `[/.]` will match `/`. This is NOT a security hole because
-// the Critical tier still blocks regardless of both literal and pattern
-// matches; this short-circuit only applies to the High-risk
-// persona-cascade gate. Critical-tier enforcement happens at the call
-// site before this function is consulted (see risk_prompt.go and
-// tool_security.go), so no pattern can bypass a hard-blocked command.
+// IsShellCommandAllowlisted reports whether the command matches an approved literal or glob pattern.
+// Critical-tier commands are still blocked regardless of allowlist matches.
 func (a *Agent) IsShellCommandAllowlisted(command string) bool {
 	if a == nil || command == "" {
 		return false
@@ -99,12 +87,7 @@ func (a *Agent) PersistShellCommandPattern(pattern string) error {
 	})
 }
 
-// PersistShellCommandAskPolicy adds a "always ask" command policy rule for
-// the given command pattern to Config.CommandPolicies and saves to disk.
-// This is the persistence behind the "Always ask" approval dialog option
-// (SP-123-2b). The command is used as an exact-match pattern.
-//
-// Idempotent: re-adding an identical (pattern, ask) rule is a no-op.
+// PersistShellCommandAskPolicy adds a "always ask" command policy rule for the given command.
 func (a *Agent) PersistShellCommandAskPolicy(command string) error {
 	if a == nil {
 		return agenterrors.NewPermission("nil agent", nil)
@@ -133,14 +116,8 @@ func (a *Agent) PersistShellCommandAskPolicy(command string) error {
 	})
 }
 
-// ElevateSessionToPermissive sets the agent's transient risk-profile
-// override to "permissive" for the rest of this session. Used by the
-// "Elevate permissions" choice on the approval dialog. Does NOT persist
-// to disk — the user is expected to run `/risk-profile permissive` if
-// they want this to survive restart.
-//
-// Critical-tier ops (rm -rf /, fork bombs) still block; "permissive"
-// only widens the auto-approved set, it does not disable the cascade.
+// ElevateSessionToPermissive sets the transient risk-profile override to "permissive" for this session.
+// Critical-tier ops still block; "permissive" only widens the auto-approved set.
 func (a *Agent) ElevateSessionToPermissive() {
 	if a == nil {
 		return

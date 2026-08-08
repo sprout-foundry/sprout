@@ -337,6 +337,17 @@ fmt-check:
 		echo "✅ all Go files are gofmt-clean"; \
 	fi
 
+# Install the pre-commit hook (fast staged-file format/lint gates).
+# The hook runs gofmt/prettier/eslint on staged files only — it mirrors the
+# CI gates (fmt-check, format:check, lint) without the slow full-suite steps.
+# Run once after clone: `make install-hooks`.
+.PHONY: install-hooks
+install-hooks:
+	@mkdir -p .git/hooks
+	@cp scripts/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "✅ Installed pre-commit hook (.git/hooks/pre-commit) — staged-file gofmt/prettier/eslint gates"
+
 # Build React web UI only (doesn't deploy to Go static)
 # Root npm ci installs every workspace (packages/events, packages/ui, webui);
 # the @sprout/* packages are then built explicitly because their `prepare`

@@ -150,65 +150,65 @@ export default function EmbeddingSettingsTab({
 
       {/* Status Card — only relevant when the index is enabled */}
       {isEnabled && (
-      <div className="settings-card embedding-status-card">
-        <div className="embedding-status-header">
-          <Database size={16} />
-          <span className="embedding-status-title">Index Status</span>
+        <div className="settings-card embedding-status-card">
+          <div className="embedding-status-header">
+            <Database size={16} />
+            <span className="embedding-status-title">Index Status</span>
+          </div>
+          {status === null ? (
+            <div className="embedding-status-row">Unable to fetch status</div>
+          ) : status.building || isRebuilding ? (
+            <div className="embedding-status-row embedding-status-row--info">
+              <Loader2 size={14} className="spinning" />
+              <span>Building index...</span>
+            </div>
+          ) : status.initialized ? (
+            <div className="embedding-status-row embedding-status-row--success">
+              <CheckCircle2 size={14} />
+              <span>{status.record_count.toLocaleString()} functions indexed</span>
+            </div>
+          ) : status.available && status.init_error ? (
+            <div className="embedding-status-row embedding-status-row--error">
+              <AlertTriangle size={14} />
+              <span>Initialization failed: {status.init_error}</span>
+            </div>
+          ) : status.available ? (
+            <div className="embedding-status-row embedding-status-row--muted">
+              <AlertTriangle size={14} />
+              <span>Not initialized — will build on next startup or search</span>
+            </div>
+          ) : (
+            <div className="embedding-status-row embedding-status-row--error">
+              <XCircle size={14} />
+              <span>Failed to initialize embedding provider</span>
+            </div>
+          )}
         </div>
-        {status === null ? (
-          <div className="embedding-status-row">Unable to fetch status</div>
-        ) : status.building || isRebuilding ? (
-          <div className="embedding-status-row embedding-status-row--info">
-            <Loader2 size={14} className="spinning" />
-            <span>Building index...</span>
-          </div>
-        ) : status.initialized ? (
-          <div className="embedding-status-row embedding-status-row--success">
-            <CheckCircle2 size={14} />
-            <span>{status.record_count.toLocaleString()} functions indexed</span>
-          </div>
-        ) : status.available && status.init_error ? (
-          <div className="embedding-status-row embedding-status-row--error">
-            <AlertTriangle size={14} />
-            <span>Initialization failed: {status.init_error}</span>
-          </div>
-        ) : status.available ? (
-          <div className="embedding-status-row embedding-status-row--muted">
-            <AlertTriangle size={14} />
-            <span>Not initialized — will build on next startup or search</span>
-          </div>
-        ) : (
-          <div className="embedding-status-row embedding-status-row--error">
-            <XCircle size={14} />
-            <span>Failed to initialize embedding provider</span>
-          </div>
-        )}
-      </div>
       )}
 
       {/* Model Info — read from the backend, never hardcoded. Only shown when
           the index is enabled. */}
       {isEnabled && (
-      <div className="settings-card embedding-model-card">
-        {status?.model ? (
-          <>
+        <div className="settings-card embedding-model-card">
+          {status?.model ? (
+            <>
+              <div className="embedding-model-row">
+                <span className="embedding-model-label">Model:</span> {status.model.name}
+              </div>
+              <div className="embedding-model-row">
+                <span className="embedding-model-label">Quantization:</span> {status.model.quantization}
+              </div>
+              <div className="embedding-model-row">
+                <span className="embedding-model-label">Dimensions:</span> {status.model.dims}
+                {status.model.truncated && ` (truncated from ${status.model.full_dims})`}
+              </div>
+            </>
+          ) : (
             <div className="embedding-model-row">
-              <span className="embedding-model-label">Model:</span> {status.model.name}
+              <span className="embedding-model-label">Model:</span> unavailable
             </div>
-            <div className="embedding-model-row">
-              <span className="embedding-model-label">Quantization:</span> {status.model.quantization}
-            </div>
-            <div className="embedding-model-row">
-              <span className="embedding-model-label">Dimensions:</span> {status.model.dims}
-              {status.model.truncated && ` (truncated from ${status.model.full_dims})`}
-            </div>
-          </>
-        ) : (
-          <div className="embedding-model-row">
-            <span className="embedding-model-label">Model:</span> unavailable
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       )}
 
       {/* Configuration */}
@@ -217,52 +217,52 @@ export default function EmbeddingSettingsTab({
       {isEnabled && renderTextInput('embedding_index.max_results', 'Max duplicate results', '1 – 10')}
 
       {isEnabled && (
-      <div className="config-item">
-        <label htmlFor="setting-embedding-exclude-paths">Exclude paths</label>
-        <textarea
-          id="setting-embedding-exclude-paths"
-          className="styled-input styled-textarea"
-          rows={6}
-          value={excludeDraft}
-          placeholder={'node_modules\n.git\ndist'}
-          onChange={(e) => {
-            const next = e.target.value;
-            setExcludeDraft(next);
-            if (excludeSaveTimer.current) clearTimeout(excludeSaveTimer.current);
-            excludeSaveTimer.current = setTimeout(() => {
-              excludeSaveTimer.current = null;
-              commitExcludePaths(next);
-            }, 500);
-          }}
-          onBlur={() => {
-            if (excludeSaveTimer.current) {
-              clearTimeout(excludeSaveTimer.current);
-              excludeSaveTimer.current = null;
-            }
-            if (excludeDraft !== lastPersistedJoinedRef.current) {
-              commitExcludePaths(excludeDraft);
-            }
-          }}
-        />
-        <div className="config-help">
-          One path per line. Matching files are skipped when indexing. Lines are trimmed; blank lines are ignored.
+        <div className="config-item">
+          <label htmlFor="setting-embedding-exclude-paths">Exclude paths</label>
+          <textarea
+            id="setting-embedding-exclude-paths"
+            className="styled-input styled-textarea"
+            rows={6}
+            value={excludeDraft}
+            placeholder={'node_modules\n.git\ndist'}
+            onChange={(e) => {
+              const next = e.target.value;
+              setExcludeDraft(next);
+              if (excludeSaveTimer.current) clearTimeout(excludeSaveTimer.current);
+              excludeSaveTimer.current = setTimeout(() => {
+                excludeSaveTimer.current = null;
+                commitExcludePaths(next);
+              }, 500);
+            }}
+            onBlur={() => {
+              if (excludeSaveTimer.current) {
+                clearTimeout(excludeSaveTimer.current);
+                excludeSaveTimer.current = null;
+              }
+              if (excludeDraft !== lastPersistedJoinedRef.current) {
+                commitExcludePaths(excludeDraft);
+              }
+            }}
+          />
+          <div className="config-help">
+            One path per line. Matching files are skipped when indexing. Lines are trimmed; blank lines are ignored.
+          </div>
         </div>
-      </div>
       )}
 
       {isEnabled && (
-      <div className="embedding-action-row">
-        <button
-          className="settings-action-btn"
-          type="button"
-          onClick={handleRebuild}
-          disabled={isRebuilding || status?.building}
-        >
-          {isRebuilding || status?.building ? <Loader2 size={14} className="spinning" /> : <RefreshCw size={14} />}
-          {isRebuilding || status?.building ? 'Building...' : 'Rebuild Index'}
-        </button>
-        {error && <span className="embedding-action-error">{error}</span>}
-      </div>
+        <div className="embedding-action-row">
+          <button
+            className="settings-action-btn"
+            type="button"
+            onClick={handleRebuild}
+            disabled={isRebuilding || status?.building}
+          >
+            {isRebuilding || status?.building ? <Loader2 size={14} className="spinning" /> : <RefreshCw size={14} />}
+            {isRebuilding || status?.building ? 'Building...' : 'Rebuild Index'}
+          </button>
+          {error && <span className="embedding-action-error">{error}</span>}
+        </div>
       )}
     </div>
   );

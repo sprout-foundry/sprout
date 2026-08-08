@@ -20,6 +20,14 @@ import (
 // eliminating the need for this indirection.
 var RunSubagentFunc func(ctx context.Context, args map[string]any) (string, error)
 
+// subagentToolTimeout is the hard backstop for the run_subagent and
+// run_parallel_subagents tool calls. It deliberately exceeds the longest
+// internal subagent timeout (the orchestrator persona's 1-hour budget) so
+// the seed framework's per-tool deadline never truncates a subagent that is
+// still making progress — the subagent's own runCtx timeout fires first and
+// tears the run down gracefully.
+const subagentToolTimeout = 2 * time.Hour
+
 // runSubagentHandler implements ToolHandler for the run_subagent tool.
 // It delegates a single implementation task to a subagent, running an
 // in-process agent with a focused task and waiting for completion.
@@ -115,7 +123,7 @@ func (h *runSubagentHandler) Execute(ctx context.Context, env ToolEnv, args map[
 }
 
 func (h *runSubagentHandler) Aliases() []string      { return nil }
-func (h *runSubagentHandler) Timeout() time.Duration { return 30 * time.Minute }
+func (h *runSubagentHandler) Timeout() time.Duration { return subagentToolTimeout }
 func (h *runSubagentHandler) MaxResultSize() int     { return 0 }
 func (h *runSubagentHandler) SafeForParallel() bool  { return false }
 func (h *runSubagentHandler) Interactive() bool      { return false }

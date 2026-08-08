@@ -1,5 +1,4 @@
-// Extracted from tool_security.go — audit/logging helpers (SP-098).
-
+// Extracted from tool_security.go — audit/logging helpers.
 package agent
 
 import (

@@ -361,6 +361,7 @@ func (a *Agent) ResetFileReadsForNewTurn() {
 //  2. If the file doesn't exist, allow the write.
 //  3. If the agent hasn't read_file(path) this turn, REFUSE with ErrWriteStale.
 //  4. If the file was modified within the freshness window after the read, REFUSE.
+//
 // On nil Agent, the check is a no-op.
 func (a *Agent) checkWriteStaleness(path string) error {
 	if a == nil {
@@ -596,9 +597,9 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 				Error:        fmt.Sprintf("failed to delete file: %v", removeErr),
 			}
 		}
-	// Remove metadata for deleted file
-	a.fileMetadata.set(op.Path, WorkspaceFileMetadata{})
-	return SyncOpResult{
+		// Remove metadata for deleted file
+		a.fileMetadata.set(op.Path, WorkspaceFileMetadata{})
+		return SyncOpResult{
 			Accepted:     true,
 			ContainerSeq: 0,
 		}

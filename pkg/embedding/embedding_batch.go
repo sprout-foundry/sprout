@@ -60,6 +60,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		MaxBodyLen:     2000,
 		IndexFileLevel: true,
 		ManifestPath:   filepath.Join(m.indexDir, ".index.hnsw.manifest.json"),
+		IndexDir:       m.indexDir,
 	})
 
 	m.provider = provider

@@ -31,8 +31,8 @@ type Dtype int
 // mlx_dtype enum because these are never passed to C — they exist only so the
 // stub compiles the same set of exported names.
 const (
-	Bool      Dtype = iota
-	UInt8            // explicit iota on subsequent lines for godoc alignment
+	Bool  Dtype = iota
+	UInt8       // explicit iota on subsequent lines for godoc alignment
 	UInt16
 	UInt32
 	UInt64

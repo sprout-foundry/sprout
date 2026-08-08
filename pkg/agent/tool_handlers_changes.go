@@ -1,22 +1,5 @@
 // Agent-facing tools backed by the ChangeTracker's session buffer.
-//
-// After the SP-061-2 consolidation this file ships only two tools — the
-// rest were folded into options on these:
-//
-//   - list_changes
-//     Manifest of the session's changes, with three optional knobs:
-//     include_diff: bool        per-file unified diff (was show_my_change)
-//     group_by: "block"|""      activity-block summary (was summarize_my_session)
-//     include_persisted: bool   merge hot+warm history (was my_recent_changes)
-//     Plus the existing filters: since, tool, path_pattern.
-//
-//   - revert_my_changes
-//     Bulk undo by scope ("all" or "since"). The previous file= scope was
-//     removed because recover_file(scope="session_start") does the same
-//     thing with clearer semantics.
-//
-// Recovery of an individual file (or bulk entry, or session-start state)
-// lives in tool_handlers_recover.go.
+// Provides list_changes and revert_my_changes.
 package agent
 
 import (

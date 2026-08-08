@@ -58,7 +58,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 		if err == nil {
 			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s (lines %d-%d)", path, startLine, endLine), path)
-			// SP-046 §7: record the read so the staleness rule lets a
+			// Record the read so the staleness rule lets a
 			// subsequent write_file through. Range-read still counts —
 			// the agent knows enough of the file to write coherently.
 			a.RecordFileReadThisTurn(path)
@@ -85,7 +85,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 	if err == nil {
 		a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s", path), path)
-		// SP-046 §7: record the read so a subsequent write_file passes
+		// Record the read so a subsequent write_file passes
 		// the staleness check.
 		a.RecordFileReadThisTurn(path)
 	}
@@ -435,7 +435,7 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		}
 	}
 
-	// SP-046 §7 staleness rule: refuse the write if the agent hasn't read
+	// Staleness rule: refuse the write if the agent hasn't read
 	// the file this turn, or if it was modified after the last read.
 	// Returning the error before any side effects lets the agent react
 	// (re-read, then retry write) without leaving partial state.
@@ -443,7 +443,7 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		return "", err
 	}
 
-	// SP-072: route through diff-approval gate when enabled.
+	// Route through diff-approval gate when enabled.
 	if a.ShouldGateEdit(path) {
 		original, readErr := tools.ReadFile(ctx, path)
 		if readErr != nil && !os.IsNotExist(readErr) {
@@ -554,7 +554,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	a.Logger().Debug("Old string: %s\n", oldStr)
 	a.Logger().Debug("New string: %s\n", newStr)
 
-	// SP-072: route through diff-approval gate when enabled.
+	// Route through diff-approval gate when enabled.
 	if a.ShouldGateEdit(path) {
 		proposedContent := strings.Replace(originalContent, oldStr, newStr, 1)
 		proposal := EditProposal{Path: path, Original: originalContent, Proposed: proposedContent}
@@ -580,7 +580,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		a.Logger().Debug("edit-approval: %s\n", summary)
 	}
 
-	// SP-072: TrackFileEdit stores FULL file content (not fragments) so
+	// TrackFileEdit stores FULL file content (not fragments) so
 	// recovery/rollback restores the complete file rather than a single
 	// edit fragment. originalContent is the full file read above; the
 	// proposed content is the single-occurrence replacement matching

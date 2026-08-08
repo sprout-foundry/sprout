@@ -9,8 +9,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// lastRewindSnapshot holds the state before the most recent rewind
-// so a future "undo rewind" command (SP-071-2) can restore it.
+// lastRewindSnapshot holds the state before the most recent rewind for undo.
 var lastRewindSnapshot struct {
 	messages    []api.Message
 	checkpoints []TurnCheckpoint
@@ -18,7 +17,7 @@ var lastRewindSnapshot struct {
 
 // RewindOptions configures a rewind operation.
 type RewindOptions struct {
-	ToTurnIndex int  // 0-based: rewind to BEFORE this turn's messages (truncate at the start of this turn)
+	ToTurnIndex int  // 0-based: rewind to BEFORE this turn's messages
 	RevertFiles bool // default true: revert file changes from discarded turns
 }
 
@@ -32,38 +31,34 @@ type RewindResult struct {
 }
 
 // Rewind truncates the agent's message history and checkpoints back to a
-// prior turn, optionally reverting file changes made during the discarded
-// turns. The operation is undoable via the package-level lastRewindSnapshot.
+// prior turn, optionally reverting file changes. Undoable via lastRewindSnapshot.
 func (a *Agent) Rewind(opts RewindOptions) (*RewindResult, error) {
-	// 1. Validate inputs — checkpoints are already sorted by StartIndex
+	// 1. Validate inputs
 	checkpoints := a.copyTurnCheckpoints()
 	n := len(checkpoints)
 	if opts.ToTurnIndex < 0 || opts.ToTurnIndex >= n {
 		return nil, agenterrors.NewValidation(fmt.Sprintf("rewind: invalid turn index %d (have %d checkpoints, valid range [0, %d])", opts.ToTurnIndex, n, n-1), nil)
 	}
 
-	// 2. Snapshot before rewind (so rewind is undoable via SP-071-2)
+	// 2. Snapshot before rewind
 	msgs := a.GetMessages()
 	lastRewindSnapshot.messages = append([]api.Message(nil), msgs...)
 	lastRewindSnapshot.checkpoints = append([]TurnCheckpoint(nil), checkpoints...)
 
-	// 3. Find the target checkpoint at ToTurnIndex
+	// 3. Find the target checkpoint
 	target := checkpoints[opts.ToTurnIndex]
 
 	// 4. Determine the truncation point
 	startIndex := target.StartIndex
 
-	// 5. Count what will be discarded (includes the checkpoint at ToTurnIndex,
-	// which will be dropped in step 9 since its StartIndex == startIndex).
+	// 5. Count what will be discarded
 	discardedCheckpoints := checkpoints[opts.ToTurnIndex:]
 	turnsDiscarded := len(discardedCheckpoints)
 	messagesRemoved := len(msgs) - startIndex
 
-	// 6. Collect file changes from discarded checkpoints (in REVERSE order — last first).
-	// Build a deduplicated set keyed by absolute path so each file is only
-	// attempted once, preferring the most-recent checkpoint's entry.
+	// 6. Collect file changes from discarded checkpoints (reverse order, deduplicated).
 	seen := make(map[string]bool)
-	var filePaths []string // deduplicated paths in reverse-checkpoint order
+	var filePaths []string
 
 	for i := len(discardedCheckpoints) - 1; i >= 0; i-- {
 		cp := discardedCheckpoints[i]
@@ -80,7 +75,7 @@ func (a *Agent) Rewind(opts RewindOptions) (*RewindResult, error) {
 		}
 	}
 
-	// 7. Revert files if enabled (default true)
+	// 7. Revert files if enabled
 	var filesReverted []string
 	var filesSkipped []string
 
@@ -88,18 +83,11 @@ func (a *Agent) Rewind(opts RewindOptions) (*RewindResult, error) {
 		tracker := a.GetChangeTracker()
 
 		for _, abs := range filePaths {
-			// If tracker is nil or disabled, we can't verify or recover — skip
 			if tracker == nil || !tracker.IsEnabled() {
 				filesSkipped = append(filesSkipped, abs)
 				continue
 			}
 
-			// Call handleRecoverFile with scope="session_start" to restore
-			// the file to its state before the agent first touched it.
-			// handleRecoverFile has its own staleness guard that compares
-			// disk against the latest NewCode for this path — if the file
-			// was modified externally, it returns stale_skip and we log
-			// it as skipped.
 			result, err := handleRecoverFile(nil, a, map[string]interface{}{
 				"path":  abs,
 				"scope": "session_start",
@@ -122,7 +110,7 @@ func (a *Agent) Rewind(opts RewindOptions) (*RewindResult, error) {
 	copy(truncated, msgs[:startIndex])
 	a.SetMessages(truncated)
 
-	// 9. Drop orphaned checkpoints — keep only those with StartIndex < startIndex
+	// 9. Drop orphaned checkpoints
 	var remaining []TurnCheckpoint
 	for _, cp := range checkpoints {
 		if cp.StartIndex < startIndex {

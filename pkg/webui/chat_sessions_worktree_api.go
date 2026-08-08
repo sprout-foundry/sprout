@@ -444,6 +444,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 
 	cs := newChatSession(chatID, name)
 	ctx.ChatSessions[chatID] = cs
+	ctx.markChatCreated(chatID)
 	cs.setWorktreePath(worktreePath)
 
 	// Optionally switch the workspace root to the worktree.

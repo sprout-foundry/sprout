@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -124,6 +125,56 @@ func (m *EmbeddingManager) ModelHash() string {
 	return m.provider.ModelHash()
 }
 
+// Name returns the provider's human-readable name ("" before Init).
+func (m *EmbeddingManager) Name() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.provider == nil {
+		return ""
+	}
+	return m.provider.Name()
+}
+
+// Dimensions returns the embedding dimensionality (0 before Init).
+func (m *EmbeddingManager) Dimensions() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.provider == nil {
+		return 0
+	}
+	return m.provider.Dimensions()
+}
+
+// Embed embeds a single text with the manager's provider, initializing it
+// first. Used by the daemon socket service (SP-136 P3).
+func (m *EmbeddingManager) Embed(ctx context.Context, text string) ([]float32, error) {
+	if err := m.Init(ctx); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	provider := m.cachedProvider
+	m.mu.Unlock()
+	if provider == nil {
+		return nil, errors.New("embedding: provider not initialized")
+	}
+	return provider.Embed(ctx, text)
+}
+
+// EmbedBatch embeds multiple texts with the manager's provider, initializing
+// it first. The returned slice matches the input order.
+func (m *EmbeddingManager) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	if err := m.Init(ctx); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	provider := m.cachedProvider
+	m.mu.Unlock()
+	if provider == nil {
+		return nil, errors.New("embedding: provider not initialized")
+	}
+	return provider.EmbedBatch(ctx, texts)
+}
+
 func (m *EmbeddingManager) closeCh() <-chan struct{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -229,18 +280,51 @@ func sanitizeSlugName(name string) string {
 	return out
 }
 
+// SetProviderFactory installs a process-wide factory consulted by
+// EmbeddingManager.initLocked BEFORE falling back to in-process ONNX.
+//
+// SP-136 P3: a CLI that has a live daemon socket sets this to construct
+// RemoteEmbeddingProvider instances, so the daemon owns the model copy and
+// the CLI never loads its own 155MB model. If the factory returns an error
+// (socket unavailable), initLocked silently falls back to in-process ONNX —
+// sprout always works.
+func SetProviderFactory(f func(ctx context.Context) (EmbeddingProvider, error)) {
+	providerMu.Lock()
+	defer providerMu.Unlock()
+	providerFactory = f
+}
+
+var (
+	providerMu      sync.Mutex
+	providerFactory func(ctx context.Context) (EmbeddingProvider, error)
+)
+
 func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
 	return acquireSharedJinaProvider(ctx, DefaultModelDir(), JinaCodeV2Config())
 }
 
 // createProvider returns the best available embedding provider for this
-// platform. On Apple Silicon (darwin/arm64) with a GPU and sufficient RAM,
-// it tries the MLX Metal provider first (SP-134). On every other platform
-// it falls back to the ONNX CPU provider.
+// platform. When a process-wide remote factory is installed (SP-136 P3 — CLI
+// processes routing through the daemon socket), it is consulted FIRST and its
+// success short-circuits local provider selection. Otherwise: on Apple
+// Silicon (darwin/arm64) with a GPU and sufficient RAM, it tries the MLX
+// Metal provider first (SP-134); on every other platform it falls back to the
+// ONNX CPU provider.
 //
 // The SPROUT_EMBEDDING_BACKEND env var overrides the selection:
 // "mlx" forces MLX (fails if unavailable), "cpu" forces ONNX CPU.
 func (m *EmbeddingManager) createProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
+	providerMu.Lock()
+	factory := providerFactory
+	providerMu.Unlock()
+
+	if factory != nil {
+		if p, err := factory(ctx); err == nil && p != nil {
+			return p, nil, nil
+		}
+		// Remote unavailable — fall through to local selection.
+	}
+
 	backend := os.Getenv("SPROUT_EMBEDDING_BACKEND")
 
 	if backend != "cpu" && mlxProviderAvailable() {

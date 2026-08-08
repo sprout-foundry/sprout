@@ -228,18 +228,11 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     description: 'Cost detail (not available in browser mode)',
   },
   {
-    path: '/api/sessions/restore',
-    methods: ['POST'],
-    category: 'synthetic',
-    syntheticResponse: { error: 'Session restore not available in browser mode' },
-    description: 'Restore session (not available in browser mode)',
-  },
-  {
-    path: '/api/sessions',
+    path: '/api/sessions/search',
     methods: ['GET'],
     category: 'synthetic',
-    syntheticResponse: { sessions: [] },
-    description: 'Session list (not available in browser mode)',
+    syntheticResponse: { query: '', total: 0, results: [] },
+    description: 'Session search (not available in browser mode)',
   },
   {
     path: '/api/history/changelog',

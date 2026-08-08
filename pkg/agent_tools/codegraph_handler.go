@@ -286,11 +286,11 @@ func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
 	}
 	dbPath := filepath.Join(gitRoot, ".sprout", "codegraph.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-	// Trigger a background build so that subsequent calls have data.
-	triggerCodegraphBuild()
-	return nil, nil
-}
-// The store exists but may be stale. Refresh it in the background.
+		// Trigger a background build so that subsequent calls have data.
+		triggerCodegraphBuild()
+		return nil, nil
+	}
+	// The store exists but may be stale. Refresh it in the background.
 	triggerCodegraphRefresh()
 	return codegraph.NewStore("")
 }

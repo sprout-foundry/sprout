@@ -11,9 +11,11 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
@@ -200,11 +202,59 @@ func runWorkflowByPath(path string) error {
 	fmt.Fprintf(os.Stderr, "PID file: %s/automate/%s.json\n", sproutDir, sessionID)
 	fmt.Println()
 
-	// Wait for the process to complete
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("workflow failed: %w", err)
+	// Wait for the process to complete with signal forwarding.
+	// The child is in its own session (setProcessGroup), so terminal
+	// Ctrl+C never reaches it — we must forward SIGINT/SIGTERM.
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer signal.Stop(sigCh)
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
+	}()
+
+	for {
+		select {
+		case waitErr := <-waitDone:
+			// Child exited on its own.
+			if waitErr != nil {
+				return fmt.Errorf("workflow failed: %w", waitErr)
+			}
+			return nil
+		case sig := <-sigCh:
+			// First signal: forward to the child and keep waiting.
+			console.GlyphWarning.Printf("Received %v, forwarding to workflow (PID %d)...", sig, cmd.Process.Pid)
+			if err := cmd.Process.Signal(sig); err != nil {
+				if err == syscall.ESRCH {
+					// Child already exited — report its real result.
+					waitErr := <-waitDone
+					if waitErr != nil {
+						return fmt.Errorf("workflow failed: %w", waitErr)
+					}
+					return nil
+				}
+				console.GlyphWarning.Printf("Signal failed: %v — force quitting workflow (PID %d)...", err, cmd.Process.Pid)
+				cmd.Process.Kill()
+				<-waitDone
+				return fmt.Errorf("workflow force-quit")
+			}
+			// Wait for a second signal or the child to exit.
+			select {
+			case waitErr := <-waitDone:
+				if waitErr != nil {
+					return fmt.Errorf("workflow failed: %w", waitErr)
+				}
+				return nil
+			case <-sigCh:
+				// Second signal: force quit.
+				console.GlyphStopped.Printf("Force quitting workflow (PID %d)...", cmd.Process.Pid)
+				cmd.Process.Kill()
+				<-waitDone
+				return fmt.Errorf("workflow force-quit")
+			}
+		}
 	}
-	return nil
 }
 
 // buildAgentSubprocessArgs constructs the argument list for the sprout agent

@@ -145,6 +145,11 @@ export interface AppState {
       chainSubcommands?: string[];
       chainClassifications?: ('low' | 'moderate' | 'high')[];
     };
+    // Set when the user's response could not be delivered (WebSocket not
+    // open). The dialog stays open so the user can retry; this message
+    // explains why the first click appeared to do nothing. Cleared on the
+    // next successful send.
+    deliveryError?: string;
   } | null;
   securityPromptRequest: {
     requestId: string;

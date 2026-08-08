@@ -454,6 +454,23 @@
   line-height: 1.55;
 }
 
+/* Delivery failure banner — shown when the user's response could not be
+   sent (WebSocket down). Tinted error surface via color-mix so it
+   theme-switches; text uses --text-primary on the tinted panel, not the
+   accent foreground, because the panel is a warning surface rather than a
+   solid accent button. */
+.security-approval-delivery-error {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--accent-error) 30%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
 /* Risk type category label */
 .security-approval-risk-type {
   margin-top: var(--space-2);

@@ -1,4 +1,4 @@
-// Package agent: shell working directory and shell command history (split from agent_getters.go)
+// Package agent: shell working directory and shell command history.
 package agent
 
 import (
@@ -31,14 +31,8 @@ func (a *Agent) effectiveCwd() string {
 	return a.currentWorkspaceRoot()
 }
 
-// updateShellCwd parses a shell command string and updates the tracked
-// shell working directory when the command is a cd directive.
-// It handles: cd <path>, cd, cd -, cd ~, cd .., cd <path> &&/;/|| <more>.
-// It does NOT update for subshell cd (e.g., "(cd /path && ...)").
-//
-// cd targets are validated against the agent's workspace root and
-// session-allowlisted folders. Rejected targets leave the tracked
-// cwd unchanged and emit a user-visible rejection message.
+// updateShellCwd parses a shell command and updates the tracked CWD for cd directives.
+// Validates targets against the workspace root and allowlisted folders.
 func (a *Agent) updateShellCwd(cmd string) {
 	trimmed := strings.TrimSpace(cmd)
 
@@ -126,9 +120,7 @@ func (a *Agent) updateShellCwd(cmd string) {
 	tracker.SetWithPrev(resolved, current)
 }
 
-// writeCdRejectionMessage writes a user-visible rejection message when a
-// cd target is not allowed. The message includes the rejected target and
-// lists currently allowed cd targets for reference.
+// writeCdRejectionMessage writes a user-visible rejection message for disallowed cd targets.
 func (a *Agent) writeCdRejectionMessage(target, reason string) {
 	// Nil-safe: skip all output if agent is nil
 	if a == nil {
@@ -165,8 +157,7 @@ func (a *Agent) writeCdRejectionMessage(target, reason string) {
 		}
 	}
 
-	// Emit audit entry for the CD gate denial (SP-127 Phase 2.6).
-	// Only denied cd targets are audited — allowed ones are too noisy.
+	// Emit audit entry for the CD gate denial.
 	logger := a.GetAuditLogger()
 	if logger != nil {
 		sessionID := ""

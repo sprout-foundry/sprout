@@ -168,7 +168,7 @@ func (r *SubagentRunner) GetActiveSubagents() []*runningSubagent {
 // CancelSubagent cancels a specific running subagent by ID.
 // Cancels both the run context (truncates pending work) and the subagent
 // agent's interrupt signal (preempts the in-flight ProcessQuery loop,
-// which doesn't observe runCtx — see SP-059 Phase 1a).
+// which doesn't observe runCtx).
 func (r *SubagentRunner) CancelSubagent(id string) bool {
 	if val, ok := r.active.Load(id); ok {
 		if sub, ok := val.(*runningSubagent); ok {
@@ -197,12 +197,11 @@ func (r *SubagentRunner) CancelAll() {
 // first. Only if the primary's channel is full or unavailable does it
 // fall back to the deepest (most-recently-started) running subagent.
 //
-// Rationale (SP-094-8): The primary agent is what reads user steer
-// messages and decides whether to abort subagents, redirect them, or
-// fold the steer into its own plan. Routing to the subagent bypasses
-// this decision loop — the parent never sees "yes, commit and push"
-// until the subagent finishes, by which point the subagent may have
-// already taken destructive action.
+// The primary agent is what reads user steer messages and decides whether
+// to abort subagents, redirect them, or fold the steer into its own plan.
+// Routing to the subagent bypasses this decision loop — the parent never
+// sees "yes, commit and push" until the subagent finishes, by which point
+// the subagent may have already taken destructive action.
 //
 // Returns the target ID ("primary" or subagent ID) when delivery
 // succeeds, or ("", false) when no target is available.

@@ -30,9 +30,7 @@ type PauseState struct {
 	MessagesBefore []api.Message `json:"messages_before"`
 }
 
-// initSubManagers ensures all sub-managers are initialized.
-// This is called lazily to support tests that create bare Agent structs
-// with &Agent{} and then call methods that depend on sub-managers.
+// initSubManagers lazily initializes sub-managers for test compatibility with bare &Agent{}.
 func (a *Agent) initSubManagers() {
 	if a.state == nil {
 		a.state = NewAgentStateManager(false)
@@ -68,11 +66,7 @@ func (a *Agent) invalidateVisionCache() {
 	a.visionProbeMu.Unlock()
 }
 
-// LifetimeCtx returns a process-scoped context that outlives any single
-// turn. It is lazily initialized and cancelled in Shutdown(). Background
-// goroutines that must survive turn boundaries (e.g., wakeup watchers)
-// use this instead of the per-turn ctx so they can fire notifications
-// after the agent's current turn completes.
+// LifetimeCtx returns a lazily-initialized, process-scoped context for background goroutines.
 func (a *Agent) LifetimeCtx() context.Context {
 	if a == nil {
 		return context.Background()
@@ -86,25 +80,8 @@ func (a *Agent) LifetimeCtx() context.Context {
 	return a.lifetimeCtx
 }
 
-// refreshSystemPrompt re-derives the agent's system prompt for the
-// active provider and context profile. Used by setClient when the
-// config flag RefreshSystemPromptOnModelChange is true. Falls back
-// to no-op silently when prerequisites (workspaceRoot, configManager,
-// non-nil cfg) are missing — the prompt is already correct from
-// agent creation in that case, so a partial refresh would just
-// introduce noise.
-//
-// Re-resolution matches what initAgentFromResolvedProvider does at
-// agent creation: resolve the context profile against the current
-// model context window (so LCM auto-detection carries over to the
-// new model when its window is also below subagentContextThreshold),
-// then load the embedded prompt for that profile and re-apply any
-// configured SystemPromptText override.
-//
-// Both a.systemPrompt and a.baseSystemPrompt are updated — the base
-// prompt is the "persona cleared" snapshot SetSystemPrompt consults
-// indirectly via SetBaseSystemPrompt; leaving it stale would let a
-// later persona clear reintroduce the old model's prompt.
+// refreshSystemPrompt re-derives the system prompt for the active provider and context profile.
+// Used by setClient when RefreshSystemPromptOnModelChange is true. No-ops if prerequisites are missing.
 func (a *Agent) refreshSystemPrompt() {
 	if a == nil || a.configManager == nil || a.GetWorkspaceRoot() == "" {
 		return
@@ -141,10 +118,6 @@ type Agent struct {
 	client     api.ClientInterface
 	clientType api.ClientType
 	// clientMu protects client and clientType from concurrent access.
-	// SetProvider/SetModel swap these fields while the query loop
-	// (seed_query.go), metrics, rollup, and vision checks read them.
-	// Without synchronization the two-word interface value can tear,
-	// producing garbage pointers and intermittent crashes.
 	clientMu sync.RWMutex
 
 	systemPrompt     string
@@ -158,61 +131,36 @@ type Agent struct {
 
 	// Configuration
 	configManager *configuration.Manager
-	// workspaceRootMu protects workspaceRoot from concurrent SetWorkspaceRoot/GetWorkspaceRoot calls.
-	// Concurrent chat queries and session deletes both touch this field; without synchronization the
-	// string assignment can tear under the race detector.
+	// workspaceRootMu protects workspaceRoot from concurrent access.
 	workspaceRootMu sync.RWMutex
 	workspaceRoot   string
 	debug           bool
-	// contextProfile (SP-125) is the resolved set of context-engine
-	// levers (tool allowlist, prompt path, compaction trigger, etc.).
-	// Resolved once at agent creation by ResolveContextProfile and read
-	// by every call site that depends on it (conversation.go,
-	// embedded_prompts.go, context_budget.go, seed_query.go, rollup.go).
-	// Zero-value means full-context mode (all defaults).
+	// contextProfile is the resolved set of context-engine levers (tool allowlist, prompt path, compaction trigger, etc.).
+	// Resolved once at agent creation. Zero-value means full-context mode.
 	contextProfile configuration.ContextProfile
 
-	// effectiveContextCap (SP-126) is the resolved maximum number of
-	// context tokens sprout will use for any request in this session.
-	// Always equal to the smaller of (a) the model's native context
-	// window and (b) the user's configured MaxContextTokens cap. Zero
-	// means "no cap" — the native window flows through unconstrained.
-	//
-	// Resolved exactly once at agent creation by
-	// configuration.ResolveEffectiveContextCap and re-read by every
-	// call site that needs the ceiling (seed_provider.Info(),
-	// seed_query.OnIteration). Call sites MUST NEVER re-derive it
-	// from Config.MaxContextTokens and MUST NEVER call
-	// client.GetModelContextLimit() directly — those paths bypass the
-	// cap. Independent of ContextProfile: a 1M model can run in full
-	// mode with a 300K cap; a 32K model can run in LCM with no cap.
+	// effectiveContextCap is the resolved max context tokens for this session (min of native window and configured cap).
+	// Call sites must use this instead of Config.MaxContextTokens or client.GetModelContextLimit().
 	effectiveContextCap int
 
-	// Shell CWD tracking — updated by cd commands in handleShellCommand.
-	// Tools like commit use this instead of workspaceRoot when available,
-	// so that git operations run in the correct directory after the agent
-	// has changed directories via shell commands.
+	// Shell CWD tracking — updated by cd commands so git operations use the correct directory.
 	shellCwd *shellCwdTracker
 
 	// Input handling
 	inputInjectionChan  chan string
 	inputInjectionMutex sync.Mutex
 
-	// Notification queue for background task completions (SP-108).
+	// Notification queue for background task completions.
 	pendingNotifications []Notification
 	notifMu              sync.Mutex
 
-	// Wakeup budget tracking for auto-resume (SP-108).
+	// Wakeup budget tracking for auto-resume.
 	wakeupTokensConsumed int
 	wakeupResumeCount    int
 	wakeupDisabled       bool
 	wakeupMu             sync.Mutex
 
-	// lifetimeCtx is a process-scoped context for background goroutines
-	// that must outlive a single turn (e.g., wakeup watchers). It is
-	// cancelled in Shutdown(). Without this, watcher goroutines that
-	// used the per-turn runCtx were killed when the turn ended — so
-	// notifications for tasks completing after the turn never fired.
+	// lifetimeCtx is a process-scoped context for background goroutines that must outlive a single turn.
 	lifetimeCtx    context.Context
 	lifetimeCancel context.CancelFunc
 	lifetimeCtxSet bool
@@ -220,13 +168,8 @@ type Agent struct {
 	interruptMu     sync.Mutex // protects interruptCtx + interruptCancel
 	interruptCtx    context.Context
 	interruptCancel context.CancelFunc
-	// parentInterruptCtx is the base context the subagent's interrupt
-	// context should always derive from. For the primary agent this is
-	// nil (equivalent to context.Background()). For subagents it is the
-	// parent's runCtx passed to createSubagent, so that cancelling the
-	// parent (Ctrl+C, timeout) propagates into the subagent's LLM calls
-	// even after resetInterruptForNewQuery or ClearInterrupt replace the
-	// interruptCtx.
+	// parentInterruptCtx is the base context the subagent's interrupt context derives from.
+	// For subagents it's the parent's runCtx so cancellation propagates even after resetInterruptForNewQuery.
 	parentInterruptCtx context.Context
 
 	// Sub-managers — Agent coordinates through these interfaces
@@ -262,45 +205,30 @@ type Agent struct {
 	// Trace session for dataset collection
 	traceSession interface{}
 
-	// TerminalManager provides access to hidden PTY sessions for WebUI mode.
-	// When nil (CLI mode), shell commands use os/exec unchanged.
-	//
-	// webuiMu protects terminalManager from concurrent access: the webui
-	// server calls SetTerminalManager from getChatAgent on every query path,
-	// potentially from multiple goroutines (one per chat session), while the
-	// shell tool reads it via GetTerminalManager during tool execution.
+	// TerminalManager provides access to hidden PTY sessions for WebUI mode. nil = CLI mode (os/exec).
+	// webuiMu protects terminalManager from concurrent SetTerminalManager/GetTerminalManager access.
 	webuiMu         sync.RWMutex
 	terminalManager tools.TerminalAccess
 
 	// BackgroundProcessManager provides background shell execution for CLI mode.
-	// When nil AND terminalManager is nil, background shell features are unavailable.
 	// Lazy-initialized on first use when terminalManager is nil.
 	backgroundProcessManager *tools.BackgroundProcessManager
 
-	// passwordPrompter handles interactive password prompts for shell commands
-	// (sudo, passwd, ssh-keygen passphrase). When nil, password-requiring
-	// commands are blocked by the classifier as before. Set at startup based
-	// on the execution surface (WebUI prompter if event bus + clients, CLI
-	// prompter if TTY, nil otherwise).
+	// passwordPrompter handles interactive password prompts for shell commands (sudo, passwd, ssh-keygen).
+	// Set at startup based on the execution surface (WebUI prompter, CLI prompter, or nil).
 	passwordPrompter tools.PasswordPrompter
 
 	// automateApprovedMu guards automateApprovedWorkflows.
 	automateApprovedMu sync.Mutex
-	// automateApprovedWorkflows tracks workflow filenames the user has
-	// explicitly approved during this chat session. Subsequent run_automate
-	// calls for the same workflow (e.g. retry-after-failure kicked off by
-	// the primary agent) skip the intent-confirmation prompt — the user has
-	// already opted in once.
+	// automateApprovedWorkflows tracks workflows the user has approved this session (skip re-confirmation).
 	automateApprovedWorkflows map[string]struct{}
 
 	// computerUseMu guards computerUseSessionApproved and computerUseAppAllowlist.
 	computerUseMu sync.Mutex
-	// computerUseSessionApproved records whether the user has consented
-	// to computer-use actions during this chat session (SP-063 per-session
-	// opt-in). Reset when the session resets (ClearSessionOverrides).
+	// computerUseSessionApproved records whether the user has consented to computer-use actions this session.
+	// Reset when the session resets (ClearSessionOverrides).
 	computerUseSessionApproved bool
-	// computerUseAppAllowlist tracks apps the user has explicitly allowed
-	// for the rest of this session (SP-063-4h-prompt allow-always).
+	// computerUseAppAllowlist tracks apps the user has explicitly allowed for the rest of this session.
 	// Keys are bundle IDs (macOS) or "class:<window_class>" (Linux).
 	computerUseAppAllowlist map[string]bool
 
@@ -308,67 +236,47 @@ type Agent struct {
 	embeddingMu  sync.RWMutex // protects embeddingMgr
 	embeddingMgr *embedding.EmbeddingManager
 
-	// Vision processor for image/PDF/OCR analysis (SP-079-1).
-	// Lazily initialized on first GetVisionProcessor() call.
+	// Vision processor for image/PDF/OCR analysis. Lazily initialized on first GetVisionProcessor() call.
 	visionProcMu sync.RWMutex // protects visionProcessor
 	visionProc   *tools.VisionProcessor
 
-	// backgroundWg tracks background goroutines that use embeddingMgr or other
-	// resources. Shutdown() waits for these before closing resources.
+	// backgroundWg tracks background goroutines. Shutdown() waits for these before closing resources.
 	backgroundWg sync.WaitGroup
 
-	// shutdown records that Shutdown() has run, making it observable (the
-	// daemon releases agents asynchronously and needs to know when teardown
-	// completed) and the teardown itself genuinely once-only.
+	// shutdown records that Shutdown() has run, making it observable and ensuring teardown is once-only.
 	shutdown     atomic.Bool
 	shutdownOnce sync.Once
 
 	// SubagentRunner manages in-process subagent execution.
 	subagentRunner *SubagentRunner
 
-	// subagentDepth tracks the nesting depth of this agent.
-	// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
-	// Used to control tool availability and prevent excessive nesting.
+	// subagentDepth tracks the nesting depth of this agent. 0 = primary, 1 = orchestrator, 2 = coder/tester, etc.
 	subagentDepth int
 
 	// rootPersonaID tracks the persona of the top-level (depth 0) agent in the spawn chain.
-	// Propagated to subagents so that depth limits and spawn restrictions can be enforced
-	// based on the root persona (e.g., EA gets 3 levels, orchestrator gets 2).
+	// Propagated to subagents so depth limits and spawn restrictions can be enforced based on the root persona.
 	rootPersonaID string
 
-	// allowedTools restricts which tools this agent may use.
-	// When non-nil, only tools whose names (lowercased) are keys in this map
-	// can be invoked. Used to limit tool access for subagents.
+	// allowedTools restricts which tools this agent may use. When non-nil, only tools whose names (lowercased) are keys can be invoked.
 	allowedTools map[string]bool
 
-	// clarificationManager handles clarification requests from a subagent
-	// back to the parent / user. Shared by reference from the parent
-	// agent when this agent is spawned as a subagent; nil on root agents
-	// that haven't been wired by their event bus initializer.
+	// clarificationManager handles clarification requests from a subagent back to the parent/user.
+	// Shared by reference from the parent agent when spawned as a subagent; nil on root agents.
 	clarificationManager *ClarificationManager
 
-	// subagentID is this agent's identifier when acting as a subagent;
-	// empty for root agents. Used as the requester ID when calling
-	// request_clarification so the response routes back to the right
-	// subagent.
+	// subagentID is this agent's identifier when acting as a subagent; empty for root agents.
 	subagentID string
 
-	// riskProfileOverride is a transient (per-session) override for
-	// the risk cascade profile. Set by the --risk-profile CLI flag
-	// and by per-step risk_profile in workflow JSON. Empty means
-	// fall through to Config.RiskProfile, then to "default".
-	// See agent_getters.go:EvaluateOperationRisk for resolution.
+	// riskProfileOverride is a transient (per-session) override for the risk cascade profile.
+	// Set by --risk-profile CLI flag and per-step risk_profile in workflow JSON. Empty means fall through to Config.RiskProfile, then "default".
 	riskProfileOverride configuration.RiskProfile
 
-	// filesReadThisTurn tracks paths the agent called read_file on during
-	// the current turn. Used by the SP-046 staleness rule in
-	// checkWriteStaleness — see workspace_sync.go. Reset at turn boundaries
-	// via ResetFileReadsForNewTurn.
+	// filesReadThisTurn tracks paths the agent called read_file on during the current turn.
+	// Used by the staleness rule in checkWriteStaleness. Reset at turn boundaries.
 	filesReadThisTurn *turnFileTracker
 
-	// fileMetadata holds per-path WorkspaceFileMetadata populated by the
-	// platform-side sync layer. checkWriteStaleness consults it to refuse
-	// writes over files with pending unsynced browser edits.
+	// fileMetadata holds per-path WorkspaceFileMetadata populated by the platform-side sync layer.
+	// checkWriteStaleness consults it to refuse writes over files with pending unsynced browser edits.
 	fileMetadata *workspaceMetadataStore
 
 	fileReadsMu sync.Mutex
@@ -381,12 +289,7 @@ type Agent struct {
 	fleetBudgetLimit   int64
 	fleetBudgetTrunc   atomic.Bool
 
-	// Fleet USD budget — parallels fleetBudget but in dollars. Set by the
-	// workflow runner from cfg.Budget and propagated to subagents. When
-	// non-nil and limit > 0, each LLM response debits its cost to the
-	// shared budget. Crossing warn thresholds emits stdout/event notices;
-	// hitting the cap sets the same fleetBudgetTrunc flag the token path
-	// uses so the conversation loop stops gracefully in one place.
+	// Fleet USD budget — parallels fleetBudget but in dollars. Set by the workflow runner and propagated to subagents.
 	fleetUsdBudget *FleetUsdBudget
 
 	// budgetWarningCallback is invoked when the USD budget first crosses
@@ -397,25 +300,19 @@ type Agent struct {
 	// reached or surpassed. Same atomic-value pattern.
 	budgetExceededCallback atomic.Value // func(spent, limit float64)
 
-	// auditLogger records security decisions (blocks, approvals, loops) to a
-	// JSONL file for auditing. Set via SetAuditLogger; nil-safe everywhere.
-	// Stored as a value-backed pointer so tests can swap it freely.
+	// auditLogger records security decisions (blocks, approvals, loops) to a JSONL file for auditing.
 	auditLogger *tools.AuditLogger
 
 	// queryInProgress guards ProcessQuery against concurrent execution.
-	// When two frontends share the same Agent instance (CLI + WebUI in
-	// non-daemon mode), only one query can run at a time. The second caller
-	// gets ErrQueryInProgress and must retry or show a "busy" message.
+	// When two frontends share the same Agent instance, only one query can run at a time.
 	queryInProgress atomic.Bool
 
-	// Security telemetry counters (Task 3) — track post-caution LLM behavior.
+	// Security telemetry counters — track post-caution LLM behavior.
 	secCautionsIssued      atomic.Int64
 	secRetriesAfterCaution atomic.Int64
 	secLoopsDetected       atomic.Int64
 
-	// SP-066 Phase 2: background rollup worker. rollupW is lazily
-	// initialized via rollupOnce so existing tests that construct bare
-	// *Agent values continue to work without a constructor change.
+	// Background rollup worker. Lazily initialized via rollupOnce for test compatibility.
 	rollupOnce sync.Once
 	rollupW    *rollupWorker
 
@@ -427,62 +324,38 @@ type Agent struct {
 	visionProbeProvider string
 	visionProbeResult   *bool
 
-	// slashCommands holds the command registry for this agent. Set via
-	// SetSlashCommands after the registry is created in cmd/agent_mode_interactive.go.
-	// Used by the steer coordinator and WebUI to look up commands for mid-turn
-	// execution (SP-114 Phase 1).
-	slashCommands any // *commands.CommandRegistry — stored as any to avoid circular import
+	// slashCommands holds the command registry for this agent. Stored as any to avoid circular import.
+	slashCommands any
 
-	// Training data collection — opt-in session recording. The callback
-	// is wired from cmd/ (which imports both pkg/agent and pkg/training)
-	// to avoid a circular import. When trainingPushFn is non-nil and
-	// trainingEnabled is true, SaveStateScoped fires the callback in a
-	// goroutine after each save.
+	// Training data collection — opt-in session recording. Callback wired from cmd/ to avoid circular import.
 	trainingMu       sync.RWMutex
 	trainingEnabled  bool
 	trainingEndpoint string
 	trainingExclude  []string
 	trainingPushFn   func(state ConversationState, endpoint string, excludePaths []string) error
 
-	// securityAnalysisCache holds session-scoped LLM security analyses of
-	// shell commands. Populated lazily by AnalyzeShellCommand when an
-	// approval prompt fires for a CAUTION/DANGEROUS shell command. Cleared
-	// on Agent.Reset() / Clear() (match the lifecycle of similar state).
-	//
-	// SP-124. Nil until first use.
+	// securityAnalysisCache holds session-scoped LLM security analyses of shell commands.
+	// Populated lazily by AnalyzeShellCommand. Cleared on Agent.Reset() / Clear(). Nil until first use.
 	securityAnalysisCache *SecurityAnalysisCache
 
-	// securityAnalysisCacheMu guards securityAnalysisCache against
-	// concurrent lazy-init (getSecurityAnalysisCache) and reset
-	// (ClearSecurityAnalysisCache). The cache itself has its own RWMutex
-	// for map access; this mutex only protects the pointer.
+	// securityAnalysisCacheMu guards securityAnalysisCache against concurrent lazy-init and reset.
 	securityAnalysisCacheMu sync.Mutex
 }
 
-// InjectWebUIManagers replaces the agent's internal approval and ask-user
-// managers with the webui-owned instances.  This is called after the web
-// server is constructed so that security prompts and ask_user requests
-// created by the agent are routed through the same manager that the webui
-// handlers resolve responses on — eliminating the need for global singletons.
+// InjectWebUIManagers replaces the agent's internal approval and ask-user managers with the webui-owned instances.
 func (a *Agent) InjectWebUIManagers(approvalMgr *security.ApprovalManager, askUserMgr *tools.AskUserManager) {
 	a.security.SetApprovalMgr(approvalMgr)
 	a.security.SetAskUserMgr(askUserMgr)
 }
 
 // SetFleetBudget enables per-LLM-call fleet budget tracking for this agent.
-// When tracker is non-nil and limit > 0, each LLM call will debit its token
-// usage to the shared tracker. If the budget is exceeded, fleetBudgetTrunc
-// is set and the conversation loop will truncate gracefully.
 func (a *Agent) SetFleetBudget(tracker *atomic.Int64, limit int64) {
 	a.fleetBudgetTracker = tracker
 	a.fleetBudgetLimit = limit
 	a.fleetBudgetTrunc.Store(false)
 }
 
-// FleetBudgetExceeded reports whether the fleet budget was exceeded during
-// this agent's execution (mid-run truncation). Returns true if EITHER the
-// token budget or the USD budget tripped — both use the same truncation
-// flag because the downstream behavior is identical.
+// FleetBudgetExceeded reports whether the fleet budget was exceeded (mid-run truncation).
 func (a *Agent) FleetBudgetExceeded() bool {
 	return a.fleetBudgetTrunc.Load()
 }
@@ -524,7 +397,7 @@ func (a *Agent) SetBudgetExceededCallback(fn func(spent, limit float64)) {
 }
 
 // ---------------------------------------------------------------------------
-// SP-063-4h: Per-session app allowlist for destructive-app gate
+// Per-session app allowlist for destructive-app gate.
 // ---------------------------------------------------------------------------
 
 // IsAppAllowedForComputerUse reports whether the given app key is in the
@@ -554,7 +427,7 @@ func (a *Agent) AllowAppForComputerUse(key string) {
 }
 
 // ---------------------------------------------------------------------------
-// SP-114 Phase 1: Command Classification and Steer Allowlist
+// Command Classification and Steer Allowlist.
 // ---------------------------------------------------------------------------
 
 // SetSlashCommands stores the command registry on the agent.

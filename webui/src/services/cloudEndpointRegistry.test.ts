@@ -65,7 +65,13 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should have valid categories for all endpoints', () => {
-      const validCategories: EndpointCategory[] = ['wasm-local', 'foundry-backend', 'synthetic', 'no-op'];
+      const validCategories: EndpointCategory[] = [
+        'wasm-local',
+        'foundry-backend',
+        'synthetic',
+        'no-op',
+        'browser-git',
+      ];
       for (const endpoint of CLOUD_ENDPOINTS) {
         expect(validCategories).toContain(endpoint.category);
       }
@@ -123,10 +129,23 @@ describe('cloudEndpointRegistry', () => {
       }
     });
 
-    it('should classify foundry-backend endpoints correctly', () => {
+    it('should classify browser-git endpoints correctly', () => {
       const testCases = [
         { path: '/api/git/status', method: 'GET' },
         { path: '/api/git/checkout', method: 'POST' },
+        { path: '/api/git/commit', method: 'POST' },
+        { path: '/api/git/diff', method: 'GET' },
+      ];
+
+      for (const { path, method } of testCases) {
+        const result = classifyEndpoint(path, method);
+        expect(result).not.toBeNull();
+        expect(result?.category).toBe('browser-git');
+      }
+    });
+
+    it('should classify foundry-backend endpoints correctly', () => {
+      const testCases = [
         { path: '/api/stats', method: 'GET' },
         { path: '/api/settings', method: 'GET' },
         { path: '/api/settings', method: 'PUT' },
@@ -366,6 +385,12 @@ describe('cloudEndpointRegistry', () => {
       endpoints.forEach((e) => expect(e.category).toBe('synthetic'));
     });
 
+    it('should return all browser-git endpoints', () => {
+      const endpoints = getEndpointsByCategory('browser-git');
+      expect(endpoints.length).toBeGreaterThan(0);
+      endpoints.forEach((e) => expect(e.category).toBe('browser-git'));
+    });
+
     it('should return empty array for unknown category', () => {
       const endpoints = getEndpointsByCategory('unknown' as EndpointCategory);
       expect(endpoints).toEqual([]);
@@ -379,9 +404,9 @@ describe('cloudEndpointRegistry', () => {
       expect(isWasmLocalEndpoint('/api/delete', 'POST')).toBe(true);
     });
 
-    it('should return false for foundry-backend endpoints', () => {
+    it('should return false for browser-git endpoints', () => {
       expect(isWasmLocalEndpoint('/api/git/status', 'GET')).toBe(false);
-      expect(isWasmLocalEndpoint('/api/stats', 'GET')).toBe(false);
+      expect(isWasmLocalEndpoint('/api/git/commit', 'POST')).toBe(false);
     });
 
     it('should return true for /api/query POST (WASM-local in browser mode)', () => {
@@ -406,8 +431,12 @@ describe('cloudEndpointRegistry', () => {
 
   describe('isFoundryBackendEndpoint', () => {
     it('should return true for foundry-backend endpoints', () => {
-      expect(isFoundryBackendEndpoint('/api/git/status', 'GET')).toBe(true);
       expect(isFoundryBackendEndpoint('/api/stats', 'GET')).toBe(true);
+    });
+
+    it('should return false for browser-git endpoints (in-browser git, not proxied)', () => {
+      expect(isFoundryBackendEndpoint('/api/git/status', 'GET')).toBe(false);
+      expect(isFoundryBackendEndpoint('/api/git/commit', 'POST')).toBe(false);
     });
 
     it('should return false for /api/query POST (now WASM-local, not foundry-backend)', () => {
@@ -470,23 +499,26 @@ describe('cloudEndpointRegistry', () => {
       const wasmLocal = getEndpointsByCategory('wasm-local');
       const synthetic = getEndpointsByCategory('synthetic');
       const noOp = getEndpointsByCategory('no-op');
+      const browserGit = getEndpointsByCategory('browser-git');
 
-      // After the synthetic reclassification, foundry-backend is the
-      // smallest category. The registry is now: synthetic >> wasm-local
-      // > foundry-backend > no-op, which is the correct shape for a
-      // browser-mode SPA that intercepts most non-essential endpoints
-      // client-side.
+      // After the synthetic reclassification and in-browser git move,
+      // foundry-backend is a small category. The registry is now:
+      // synthetic >> wasm-local > browser-git > foundry-backend > no-op,
+      // which is the correct shape for a browser-mode SPA that intercepts
+      // most non-essential endpoints client-side and runs git in-browser.
       expect(foundryBackend.length).toBeGreaterThan(0);
-      // Sanity check: the four categories together account for all
+      // Sanity check: the five categories together account for all
       // registered endpoints.
-      expect(foundryBackend.length + wasmLocal.length + synthetic.length + noOp.length).toBe(CLOUD_ENDPOINTS.length);
+      expect(foundryBackend.length + wasmLocal.length + synthetic.length + noOp.length + browserGit.length).toBe(
+        CLOUD_ENDPOINTS.length,
+      );
     });
 
     it('should have a reasonable number of foundry-backend endpoints', () => {
       const foundryBackend = getEndpointsByCategory('foundry-backend');
       // After reclassification, foundry-backend is small and focused on
-      // git, stats, settings (core), and chat control (steer/stop/status).
-      expect(foundryBackend.length).toBeGreaterThan(15);
+      // stats, settings (core), and chat control (status).
+      expect(foundryBackend.length).toBeGreaterThan(10);
       expect(foundryBackend.length).toBeLessThan(50);
     });
   });
@@ -525,9 +557,9 @@ describe('cloudEndpointRegistry', () => {
 
         expect(result || getResult || postResult).not.toBeNull();
 
-        if (result) expect(result.category).toBe('foundry-backend');
-        if (getResult) expect(getResult.category).toBe('foundry-backend');
-        if (postResult) expect(postResult.category).toBe('foundry-backend');
+        if (result) expect(result.category).toBe('browser-git');
+        if (getResult) expect(getResult.category).toBe('browser-git');
+        if (postResult) expect(postResult.category).toBe('browser-git');
       }
     });
 

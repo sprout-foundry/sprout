@@ -1,8 +1,5 @@
 // Package agent provides the seed integration layer.
-//
-// seed_provider.go — sproutProvider implements seed/core.Provider by wrapping
-// api.ClientInterface, handling streaming, cost accumulation, fleet budget
-// tracking, and image attachment.
+// sproutProvider implements seed/core.Provider by wrapping api.ClientInterface.
 
 package agent
 
@@ -21,26 +18,18 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
-// ---------------------------------------------------------------------------
-// sproutProvider — implements seed/core.Provider by wrapping api.ClientInterface
-// ---------------------------------------------------------------------------
-
 // sproutProvider adapts sprout's ClientInterface to seed's Provider interface.
 type sproutProvider struct {
-	agent          *Agent
-	client         api.ClientInterface
-	pastedImages   map[string][]api.ImageData // path → image data (for multimodal attachment)
-	pastedImagesMu sync.RWMutex
-	tokenAnchor    tokenAnchor // see seed_provider_token_anchor.go
-	// maxTokensHint is the pre-computed max_tokens from the anchored estimate,
-	// set before each provider call so the GenericProvider doesn't need to
-	// re-derive it from the raw heuristic.
+	agent           *Agent
+	client          api.ClientInterface
+	pastedImages    map[string][]api.ImageData
+	pastedImagesMu  sync.RWMutex
+	tokenAnchor     tokenAnchor
 	maxTokensHint   int
 	maxTokensHintMu sync.RWMutex
 }
 
-// currentClient returns the agent's live client if available, otherwise returns the snapshot.
-// This ensures the provider uses the current model even after SetProvider/SetModel.
+// currentClient returns the agent's live client if available, otherwise the snapshot.
 func (sp *sproutProvider) currentClient() api.ClientInterface {
 	if sp.agent != nil {
 		if c := sp.agent.getClient(); c != nil {
@@ -62,8 +51,7 @@ func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider,
 	}, nil
 }
 
-// RegisterPastedImages associates extracted image data with file paths so
-// they can be attached to the first user message in each Chat request.
+// RegisterPastedImages associates extracted image data with file paths for multimodal attachment.
 func (sp *sproutProvider) RegisterPastedImages(images map[string][]api.ImageData) {
 	if images == nil {
 		return
@@ -158,11 +146,7 @@ func (sp *sproutProvider) clearProviderError() {
 	sp.agent.state.SetLastProviderError(nil)
 }
 
-// doChatWithRetry performs a chat request with exponential backoff retry,
-// fleet budget tracking, and error recording.
-//
-// Retries on ProviderError (retryable) and RateLimitError with exponential
-// backoff (2^attempt * 100ms base, capped at 10s). Max 3 retries.
+// doChatWithRetry performs a chat request with exponential backoff retry (max 3).
 func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	const maxRetries = 3
 	var lastErr error
@@ -210,8 +194,7 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 	return nil, lastErr
 }
 
-// doChatOnce performs a single chat request, attaching pasted images to the
-// first user message if the client supports vision.
+// doChatOnce performs a single chat request, attaching pasted images if supported.
 func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	var resp *core.ChatResponse
 	var err error
@@ -222,24 +205,13 @@ func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest)
 	}
 	if err == nil {
 		sp.accumulateResponseCost(resp)
-		// Anchor future EstimateTokens calls to this response's real
-		// prompt-token count, keyed to the exact pre-transform messages/tools
-		// req carried (matching what seed itself passes to EstimateTokens on
-		// later calls — see seed_provider_token_anchor.go).
 		sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	}
 	return resp, err
 }
 
-// accumulateResponseCost adds the provider-reported cost of a single
-// response to the agent's lifetime cost counter. seed's chat loop tracks
-// tokens (State.AddTokens) but never cost, so without this every footer
-// reads $0. We add cost here — once per successful LLM call — directly on
-// sprout's state, independent of seed's always-zero cost counter, so the
-// seedState.TotalCost() reconciliation in syncSeedStateToSprout can't double
-// count. The cost itself is captured at decode time (api.UsageCost), with a
-// provider-agnostic field-name fallback (api.CostFromJSON) so providers that
-// report cost under differing property names are all covered.
+// accumulateResponseCost adds the provider-reported cost to the agent's lifetime cost counter.
+// Also populates prompt/completion token breakdowns and debits the fleet USD budget.
 func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	if sp.agent == nil || sp.agent.state == nil || resp == nil {
 		return
@@ -266,18 +238,11 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	}
 	sp.agent.state.AddCostEntry(entry)
 
-	// Seed's conversation loop tracks total tokens but not prompt/completion
-	// breakdown or LLM call count. Populate them here so --output-json and
-	// the status footer report accurate per-call metrics.
 	sp.agent.state.SetPromptTokens(sp.agent.state.GetPromptTokens() + resp.Usage.PromptTokens)
 	sp.agent.state.SetCompletionTokens(sp.agent.state.GetCompletionTokens() + resp.Usage.CompletionTokens)
 	sp.agent.state.SetLLMCallCount(sp.agent.state.GetLLMCallCount() + 1)
 
-	// Debit the fleet USD budget so the workflow runner's budget display
-	// ($X of $Y) reflects primary-agent LLM calls, not just subagents.
-	// Per SP-113 Layer 4: only ChargedCost is debited — subscription and
-	// free providers (chargedCost == 0) must NOT consume the fleet budget
-	// because there is no marginal spend to protect against.
+	// Debit the fleet USD budget (only charged cost, not subscription/free).
 	if sp.agent.fleetUsdBudget != nil && chargedCost > 0 {
 		spent, crossed, justExceeded := sp.agent.fleetUsdBudget.Add(chargedCost)
 		_, limit := sp.agent.fleetUsdBudget.Snapshot()
@@ -294,7 +259,6 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 		}
 	}
 
-	// Keep existing cached token tracking
 	if n := resp.Usage.CachedTokens; n > 0 {
 		sp.agent.state.SetCachedTokens(sp.agent.state.GetCachedTokens() + n)
 	}
@@ -309,8 +273,6 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 }
 
 // resolveBillingType returns the billing model for the current provider.
-// It checks the embedded provider config for an explicit billing_type, then
-// falls back to heuristics (zai-coding → subscription, else pay_per_token).
 func (sp *sproutProvider) resolveBillingType() string {
 	if sp.agent == nil {
 		return BillingPayPerToken
@@ -328,12 +290,7 @@ func (sp *sproutProvider) resolveBillingType() string {
 	return BillingPayPerToken
 }
 
-// estimateCostFromPricing computes a cost estimate from token counts and the
-// current model's per-million pricing, used when the provider doesn't report
-// cost in its API response. Tries the live model registry first, then falls
-// back to the embedded provider catalog (which carries manually-curated
-// pricing for providers whose /v1/models endpoint omits cost fields, e.g.
-// DeepSeek). Returns 0 when no pricing data is available from either source.
+// estimateCostFromPricing computes a cost estimate from token counts and per-million pricing.
 func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens int) float64 {
 	if sp.agent == nil || sp.agent.client == nil {
 		return 0
@@ -343,7 +300,6 @@ func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens
 		return 0
 	}
 
-	// Primary path: live model registry / canonical adapter.
 	if models, err := api.GetModelsForProviderCtx(context.Background(), sp.agent.getClientType()); err == nil {
 		for _, m := range models {
 			if m.ID != model {
@@ -356,8 +312,6 @@ func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens
 		}
 	}
 
-	// Fallback: embedded provider catalog (curated pricing for providers
-	// whose live API doesn't report costs).
 	provider := sp.agent.GetProvider()
 	if inPerM, outPerM, _, ok := providercatalog.FindModelPricing(provider, model); ok {
 		return float64(promptTokens)/1e6*inPerM + float64(completionTokens)/1e6*outPerM
@@ -377,9 +331,7 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 	// Pre-compute max_tokens using the anchored token breakdown.
 	sp.computeMaxTokensHint(req)
 
-	// If the client supports max_tokens hints (GenericProvider), set the
-	// pre-computed value so buildChatRequest doesn't re-derive it from the
-	// raw heuristic.
+	// If the client supports max_tokens hints, set the pre-computed value.
 	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
 		h.SetMaxTokensHint(sp.getMaxTokensHint())
 	}
@@ -402,23 +354,12 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// Pre-compute max_tokens using the anchored token breakdown.
 	sp.computeMaxTokensHint(req)
 
-	// If the client supports max_tokens hints (GenericProvider), set the
-	// pre-computed value so buildChatRequest doesn't re-derive it from the
-	// raw heuristic.
+	// If the client supports max_tokens hints, set the pre-computed value.
 	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
 		h.SetMaxTokensHint(sp.getMaxTokensHint())
 	}
 
-	// Route every chunk through OutputRouter.RouteStreamChunk so it reaches
-	// BOTH paths:
-	//   - EventBus → stream_chunk events → WebUI (real-time streaming)
-	//   - streamingCallback → CLI terminal (character-by-character display)
-	//
-	// Previously the callback called the raw streamingCallback directly,
-	// which is a no-op for WebUI agents — so stream_chunk events were never
-	// published and the browser saw only the final query_completed payload.
-	// RouteStreamChunk publishes the event AND calls the callback, so both
-	// CLI and WebUI get every chunk with no duplication.
+	// Route every chunk through OutputRouter.RouteStreamChunk for both WebUI and CLI.
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
@@ -435,17 +376,8 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		return nil, err
 	}
 
-	// Reasoning-model fallback: some models (GLM-5, Qwen with thinking)
-	// stream their visible prose as reasoning_content, not content. The
-	// StreamingResponseBuilder moves reasoning to content in GetResponse(),
-	// but by then the streaming callback has already fired with contentType
-	// "reasoning" (hidden from terminal). The prose never reaches the
-	// terminal as inline text — it appears as a batch dump at turn end.
-	//
-	// Detect this case: if the streaming buffer is empty (no "assistant_text"
-	// chunks were streamed) but the response has non-empty content, stream
-	// it to the terminal line-by-line via RouteStreamChunk so the renderer
-	// formats each line with markdown as it emits (not one giant blob).
+	// Reasoning-model fallback: some models stream visible prose as reasoning_content.
+	// If the streaming buffer is empty but the response has content, stream it.
 	if resp != nil && len(resp.Choices) > 0 {
 		msgContent := resp.Choices[0].Message.Content
 		if sp.agent.output.GetStreamingBuffer().Len() == 0 && strings.TrimSpace(msgContent) != "" {
@@ -463,10 +395,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	return sproutResponseToSeed(resp), nil
 }
 
-// stampTurnTimestamp adds the current turn's fixed timestamp to the latest user
-// message without mutating the caller's slice. A zero timestamp or an already
-// stamped latest user message is returned unchanged so retries remain
-// byte-identical.
+// stampTurnTimestamp adds the current turn's fixed timestamp to the latest user message.
 func (sp *sproutProvider) stampTurnTimestamp(messages []core.Message) []core.Message {
 	if sp.agent == nil {
 		return messages
@@ -494,9 +423,7 @@ func (sp *sproutProvider) stampTurnTimestamp(messages []core.Message) []core.Mes
 	return messages
 }
 
-// attachPastedImages attaches previously registered image data to the first
-// user message in the request. This makes pasted images available to the
-// vision model through the seed request pipeline.
+// attachPastedImages attaches previously registered image data to the first user message.
 func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Message {
 	sp.pastedImagesMu.RLock()
 	defer sp.pastedImagesMu.RUnlock()
@@ -530,13 +457,7 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 	return out
 }
 
-// trackFleetBudgetForResponse debits the tokens from this LLM response to
-// the shared fleet budget tracker, if one is configured on the agent.  If
-// the budget is exceeded, it sets the truncation flag so the conversation
-// loop can stop gracefully.
-//
-// Returns FleetBudgetExceededError if the budget was just exceeded by this
-// call (i.e. the cumulative total went from under-limit to at/over-limit).
+// trackFleetBudgetForResponse debits tokens from this LLM response to the fleet budget tracker.
 func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) error {
 	if sp.agent == nil {
 		return nil
@@ -551,7 +472,6 @@ func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) er
 		return nil
 	}
 	newTotal := tracker.Add(tokens)
-	// Budget is exceeded when cumulative tokens reach or exceed the limit.
 	if newTotal >= limit && !sp.agent.fleetBudgetTrunc.Load() {
 		sp.agent.fleetBudgetTrunc.Store(true)
 		return FleetBudgetExceededError
@@ -567,23 +487,16 @@ func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*cor
 func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest, handler core.StreamHandler) error {
 	sproutReq := seedRequestToSprout(req)
 
-	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
 	messages = sp.stampTurnTimestamp(messages)
 
-	// Pre-compute max_tokens using the anchored token breakdown.
 	sp.computeMaxTokensHint(req)
 
-	// If the client supports max_tokens hints (GenericProvider), set the
-	// pre-computed value so buildChatRequest doesn't re-derive it from the
-	// raw heuristic.
 	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
 		h.SetMaxTokensHint(sp.getMaxTokensHint())
 	}
 
-	// Route through OutputRouter.RouteStreamChunk (same as doChatStream)
-	// and forward to the seed handler so both the EventBus/WebUI and the
-	// seed core's stream handling receive every chunk.
+	// Route through OutputRouter.RouteStreamChunk for both WebUI and seed handler.
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
 			handler.OnReasoning(content)
@@ -603,20 +516,13 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		handler.OnError(err)
 		return err
 	}
-	// Anchor future EstimateTokens calls to this response's real prompt-token
-	// count. Uses req.Messages/req.Tools (pre-transform), matching what seed
-	// itself passes to EstimateTokens on later calls — see
-	// seed_provider_token_anchor.go.
+	// Anchor future EstimateTokens calls to this response's real prompt-token count.
 	sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	handler.OnDone(sproutResponseToSeed(resp))
 	return nil
 }
 
-// doChatWithRetryStreaming performs a single streaming chat request with exponential
-// backoff retry, fleet budget tracking, and error recording.
-//
-// Retries on ProviderError (retryable) and RateLimitError with exponential
-// backoff (2^attempt * 100ms base, capped at 10s). Max 3 retries.
+// doChatWithRetryStreaming performs a streaming chat request with exponential backoff retry (max 3).
 func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	const maxRetries = 3
 	var lastErr error
@@ -666,11 +572,7 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 
 func (sp *sproutProvider) Info() core.ProviderInfo {
 	ctxLimit, _ := sp.currentClient().GetModelContextLimit()
-	// SP-126: apply the effective context cap so seed's internal budget
-	// math and the per-iteration OnIteration callback receive the capped
-	// value, not the model's native window. Reading from sp.agent rather
-	// than calling client.GetModelContextLimit() a second time keeps the
-	// cap authoritative for all downstream readers of this Info().
+	// Apply the effective context cap so seed's internal budget math receives the capped value.
 	if sp.agent != nil {
 		if cap := sp.agent.effectiveContextCap; cap > 0 && ctxLimit > cap {
 			ctxLimit = cap
@@ -690,38 +592,19 @@ func (sp *sproutProvider) GetModel() string {
 	return "unknown"
 }
 
+// EstimateTokens estimates the input token count for a chat request.
+// Uses the token anchor when available; falls back to the centralized estimator.
 func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 	if req == nil {
 		return 0
 	}
-	// Anchor to the last real Usage.PromptTokens count when the message
-	// prefix it was measured against still matches (see
-	// seed_provider_token_anchor.go): only the messages appended since that
-	// real measurement go through the heuristic, so heuristic error no
-	// longer compounds across a long conversation. Falls back to a full
-	// from-scratch heuristic estimate on the first call, after a tool-list
-	// change, or once compaction/substitution/masking has edited the
-	// anchored prefix.
+	// Anchor to the last real Usage.PromptTokens count when the message prefix still matches.
+	// Falls back to a full from-scratch heuristic estimate on the first call or after compaction.
 	if total, _, ok := sp.tokenAnchor.estimate(req.Messages, len(req.Tools)); ok {
 		return total
 	}
 
-	// Delegate to sprout's centralized estimator, which accounts for:
-	//   - per-message content + reasoning content (tiktoken-ish word/char hybrid)
-	//   - tool-call payloads (id + name + args + overhead)
-	//   - tool-result tool_call_id overhead
-	//   - image attachments
-	//   - per-message role/wrapper overhead
-	//   - tool catalog (200 tokens × len(tools))
-	//   - system-instruction buffer
-	//
-	// The previous "len(content) / 4" stub under-counted by an order of
-	// magnitude on tool-heavy iter-0 prompts (the entire tool catalog and
-	// every assistant tool_call payload went uncounted), making compaction
-	// triggers and max_tokens math both stale on every call.
-	//
-	// core.Message and core.Tool are type aliases for api.Message / api.Tool
-	// (see pkg/agent_api/types.go), so we can pass through directly.
+	// Delegate to sprout's centralized estimator.
 	return api.EstimateInputTokens(req.Messages, req.Tools)
 }
 
@@ -749,10 +632,7 @@ func (sp *sproutProvider) getContextLimit() int {
 	return 32000
 }
 
-// computeMaxTokensHint pre-computes max_tokens using the anchored token
-// breakdown when available. This lets the GenericProvider skip its own
-// (raw-heuristic-only) calculation and avoid double-counting estimation
-// error on the anchored portion.
+// computeMaxTokensHint pre-computes max_tokens using the anchored token breakdown when available.
 func (sp *sproutProvider) computeMaxTokensHint(req *core.ChatRequest) {
 	if req == nil {
 		sp.setMaxTokensHint(0)

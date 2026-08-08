@@ -372,6 +372,17 @@ Examples:
 			defer os.Unsetenv("SPROUT_DAEMON")
 		}
 
+		// SP-136 P2: lazily ensure a background daemon is running (async,
+		// best-effort). Skipped when SPROUT_DAEMON=0/1 or in daemon mode.
+		// The CLI proceeds in-process either way; later phases route work
+		// through the daemon.
+		stopDaemonKeepAlive := maybeAutoStartDaemon(cmd.Context(), daemonMode)
+		defer stopDaemonKeepAlive()
+
+		// SP-136 P3: route embedding operations through the daemon socket
+		// when available (falls back to in-process ONNX otherwise).
+		maybeEnableRemoteEmbedding(daemonMode)
+
 		// Propagate --mock-llm flag to the agent package before agent creation.
 		agent.UseMockLLM = agentMockLLM
 

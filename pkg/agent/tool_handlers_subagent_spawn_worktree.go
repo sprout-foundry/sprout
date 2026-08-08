@@ -1,9 +1,6 @@
 // Subagent spawn worktree helpers: file path validation, external workspace
 // approval, and workspace root override.
-//
-// Extracted from tool_handlers_subagent_spawn.go as part of SP-075's
-// large-file decomposition.
-
+// Extracted from tool_handlers_subagent_spawn.go for large-file decomposition.
 package agent
 
 import (

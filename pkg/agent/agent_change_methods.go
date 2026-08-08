@@ -1,3 +1,4 @@
+// Package agent: change tracking and revision management.
 package agent
 
 import (
@@ -9,35 +10,13 @@ import (
 )
 
 // EnableChangeTracking enables change tracking for this agent session.
-//
-// Session scoping: the FIRST call (tracker == nil) creates the tracker,
-// assigns the session's stable revisionID, and captures `instructions`
-// as the session's identity. Subsequent calls within the same session
-// (same Agent instance — e.g. every ProcessQuery in a daemon chat) do
-// NOT reset the buffer: they only ensure tracking is enabled and
-// re-prime the shell cache. The change buffer is therefore session-long,
-// matching what list_changes / recover_file / revert_my_changes promise
-// ("files you've created, modified, or deleted this session"). A genuine
-// reset happens only when a new Agent is constructed for a new chat.
-//
-// Side effect: primes the shell-mutation snapshot cache against the
-// agent's workspace root. This is the one-time cost (~280 ms on a
-// 5000-file workspace) that lets every subsequent shell_command be
-// tracked via a cheap stat-only diff. Without this prime the first
-// shell command's mutations would silently establish the baseline
-// (auto-prime in TrackShellTurn) and go un-recorded — fine for
-// read-only commands, but a real loss if the first shell does any
-// writes.
 func (a *Agent) EnableChangeTracking(instructions string) {
 	if a.debug {
 		a.Logger().Debug("DEBUG: EnableChangeTracking called (tracker nil: %v)\n", a.changeTracker == nil)
 	}
 
 	// Check the config gate BEFORE creating or enabling the tracker.
-	// When change_tracking.enabled is explicitly false, the entire
-	// subsystem stays dormant — no tracker is created, no shell walks,
-	// no revision history, no rollback/recover tools active. Default
-	// is enabled.
+	// When change_tracking.enabled is explicitly false, the entire subsystem stays dormant.
 	if !a.isChangeTrackingEnabledByConfig() {
 		if a.debug {
 			a.Logger().Debug("DEBUG: change tracking disabled by config (change_tracking.enabled = false)\n")
@@ -46,49 +25,31 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	}
 
 	if a.changeTracker == nil {
-		// First enable of this session — create the tracker with a
-		// stable revisionID + instructions that will persist for the
-		// life of this Agent.
+		// First enable of this session — create the tracker with a stable revisionID + instructions.
 		a.changeTracker = NewChangeTracker(a, instructions)
 		if a.debug {
 			a.Logger().Debug("DEBUG: Created new change tracker (session start)\n")
 		}
 	} else {
-		// Subsequent enable within the same session. Ensure enabled,
-		// but DO NOT Reset: the buffer must accumulate across queries
-		// so list_changes reflects the whole session, not just the
-		// current turn. (Reset would wipe prior turns' edits and make
-		// recover_file / revert_my_changes blind to earlier work.)
-		// instructions/revisionID stay pinned to the first call's
-		// values for revision-identity stability in history.
+		// Subsequent enable within the same session. Ensure enabled, but DO NOT Reset: the buffer must accumulate across queries.
 		a.changeTracker.Enable()
 		if a.debug {
 			a.Logger().Debug("DEBUG: Re-enabled existing change tracker (buffer preserved, %d entries)\n", a.GetChangeCount())
 		}
 	}
 
-	// Apply ChangeTrackingConfig: read the user/workspace setting and
-	// stamp it into the tracker so per-tracker overrides take effect
-	// before the prime walk runs.
+	// Apply ChangeTrackingConfig so per-tracker overrides take effect before the prime walk runs.
 	a.applyChangeTrackingConfig()
 
 	if root := a.effectiveCwd(); root != "" {
 		a.changeTracker.PrimeShellTracking(root)
 	}
 
-	// One-shot revision-history compaction. Runs in the background so
-	// the agent's startup isn't blocked by I/O over a large
-	// .sprout/revisions/ tree. Idempotent — only the FIRST agent in
-	// the process actually does the work (compactionMu serializes;
-	// subsequent calls find revisions already in their target tier and
-	// no-op cheaply). Errors are logged and swallowed; a failed pass
-	// just means disk usage stays where it was.
+	// One-shot revision-history compaction. Runs in the background so the agent's startup isn't blocked by I/O.
 	go a.compactRevisionHistoryAsync()
 }
 
-// compactRevisionHistoryAsync runs one pass of pkg/history.CompactRevisions
-// using the policy resolved from configuration. Designed to be called
-// in a goroutine — never blocks the caller.
+// compactRevisionHistoryAsync runs one pass of pkg/history.CompactRevisions using the policy resolved from configuration.
 func (a *Agent) compactRevisionHistoryAsync() {
 	var raw *configuration.RevisionRetentionConfig
 	if a.configManager != nil {
@@ -126,12 +87,7 @@ func (a *Agent) compactRevisionHistoryAsync() {
 	}
 }
 
-// applyChangeTrackingConfig reads the configuration.ChangeTracking
-// section (if present), resolves defaults, and stamps the values onto
-// the active changeTracker. Called from EnableChangeTracking before
-// PrimeShellTracking so the prime walk honors any custom budgets.
-// When the agent has no config manager (test path) or no
-// ChangeTracking override, defaults apply.
+// applyChangeTrackingConfig reads the configuration.ChangeTracking section and stamps the values onto the active changeTracker.
 func (a *Agent) applyChangeTrackingConfig() {
 	if a.changeTracker == nil {
 		return
@@ -156,22 +112,9 @@ func (a *Agent) applyChangeTrackingConfig() {
 	a.changeTracker.shellAutoSkipFileCountThreshold = resolved.AutoSkipFileCountThreshold
 }
 
-// isChangeTrackingEnabledByConfig reads the change_tracking.enabled
-// setting from configuration. The semantics are intentionally split
-// between test and production paths to preserve backward compatibility
-// with the dozens of existing tests that call EnableChangeTracking
-// without setting up a config manager:
-//
-//   - No config manager (test path) → true. Historical behavior is
-//     preserved; tracking is enabled.
-//   - Has config manager but no config or no change_tracking section
-//     → true. The default is enabled; the git-awareness guards protect
-//     committed work.
-//   - Has change_tracking.enabled set → use that explicit value.
+// isChangeTrackingEnabledByConfig reads the change_tracking.enabled setting. Defaults to true.
 func (a *Agent) isChangeTrackingEnabledByConfig() bool {
-	// No config manager (test path) → preserve historical behavior:
-	// tracking is enabled. This avoids breaking dozens of existing tests
-	// that call EnableChangeTracking without setting up a config.
+	// No config manager (test path) → preserve historical behavior: enabled.
 	if a.configManager == nil {
 		return true
 	}
@@ -212,14 +155,7 @@ func (a *Agent) GetChangeTracker() *ChangeTracker {
 	return a.changeTracker
 }
 
-// IsPathOutsideWorkspace reports whether the resolved absolute path of
-// `path` falls outside the agent's workspace root. Returns false (i.e.
-// treats the path as in-workspace) when the change tracker is nil or
-// disabled, mirroring the existing nil-agent / empty-root behaviour of
-// ChangeTracker.isOutsideWorkspace. This is the boundary guard shared
-// by recover_file / revert_my_changes so a crafted tracker entry can't
-// trick the recovery tools into writing (or deleting) files outside
-// the workspace.
+// IsPathOutsideWorkspace reports whether the resolved absolute path falls outside the agent's workspace root.
 func (a *Agent) IsPathOutsideWorkspace(path string) bool {
 	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
 		return false
@@ -276,28 +212,14 @@ func (a *Agent) ClearTrackedChanges() {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Public façade for the WebUI / external callers.
-//
-// These mirror the LLM-facing tools (list_changes, show_my_change,
-// revert_my_changes, summarize_my_session, my_recent_changes,
-// recover_file) but skip the registry's general-purpose execution
-// path — these handlers are pure operations on the in-memory tracker
-// and don't need security gates or circuit-breaker accounting. The
-// WebUI uses these so its JSON shape matches the model's exactly.
-// ---------------------------------------------------------------------------
 
-// ListChanges returns the session manifest. args may include
-// "since" (RFC3339), "tool", "path_pattern". Returns the raw JSON
-// string identical to what the LLM tool produces.
+// ListChanges returns the session manifest.
 func (a *Agent) ListChanges(args map[string]interface{}) (string, error) {
 	return handleListChanges(nil, a, args)
 }
 
 // ShowMyChange returns a unified diff JSON envelope for `path`.
-// After the SP-061-2 consolidation this is a thin wrapper around
-// list_changes(include_diff=true, path_pattern=path) — the standalone
-// show_my_change tool is gone.
 func (a *Agent) ShowMyChange(path string) (string, error) {
 	return handleListChanges(nil, a, map[string]interface{}{
 		"path_pattern": path,
@@ -305,9 +227,7 @@ func (a *Agent) ShowMyChange(path string) (string, error) {
 	})
 }
 
-// RevertMyChanges performs a bulk revert. The historical file= scope is
-// now served by recover_file(scope="session_start"); this method keeps
-// the old four-arg signature for back-compat and routes file= there.
+// RevertMyChanges performs a bulk revert.
 func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
 	if file != "" {
 		return handleRecoverFile(nil, a, map[string]interface{}{
@@ -342,8 +262,6 @@ func (a *Agent) MyRecentChanges(since string) (string, error) {
 }
 
 // RecoverFile restores one file from the tracker's session buffer.
-// scope is forwarded as-is to handleRecoverFile so callers can request
-// "latest" (default), "session_start", or "bulk".
 func (a *Agent) RecoverFile(path string) (string, error) {
 	return handleRecoverFile(nil, a, map[string]interface{}{"path": path})
 }
@@ -352,10 +270,7 @@ func (a *Agent) RecoverFile(path string) (string, error) {
 func (a *Agent) TrackFileWrite(filePath string, content string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
 		err := a.changeTracker.TrackFileWrite(filePath, content)
-		// Keep the shell-snapshot cache in sync so the next
-		// TrackShellTurn walk doesn't see this write as a stat
-		// mismatch and record a duplicate entry attributed to
-		// shell_command.
+		// Keep the shell-snapshot cache in sync to avoid duplicate entries.
 		a.changeTracker.SyncShellCacheForPath(filePath)
 		return err
 	}
@@ -380,44 +295,24 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 	return nil
 }
 
-// ---------------------------------------------------------------------------
 // Standalone (no-agent) query functions.
-//
-// These power the WebUI's changes panel when the daemon has no live
-// agent yet (e.g. the browser opened before any chat query ran). They
-// fall back to the persisted history store so the user still sees
-// cross-session change history from prior sessions.
-// ---------------------------------------------------------------------------
 
-// ListChangesPersistedOnly returns a session manifest built entirely
-// from the persisted history store — no live agent required. The JSON
-// shape matches list_changes so the frontend doesn't branch.
+// ListChangesPersistedOnly returns a session manifest from the persisted history store.
 func ListChangesPersistedOnly(args map[string]interface{}) (string, error) {
 	return handleListChangesPersistedOnly(args)
 }
 
-// ListChangesEmpty returns the disabled-tracker response: an empty
-// manifest with enabled=false. Used when no agent AND no persisted
-// history should be scanned (e.g. the diff endpoint, which is
-// meaningless without a tracker).
+// ListChangesEmpty returns the disabled-tracker response: an empty manifest.
 func ListChangesEmpty() string {
 	return `{"revision_id":"","enabled":false,"count":0,"files":[]}`
 }
 
-// SummarizeMySessionEmpty returns the disabled-tracker block-summary
-// response: an empty blocks list. Used when no agent is available.
+// SummarizeMySessionEmpty returns the disabled-tracker block-summary response.
 func SummarizeMySessionEmpty() string {
 	return `{"enabled":false,"blocks":[],"totals":{"changes":0,"files":0}}`
 }
 
-// MergeSubagentChanges merges a completed subagent's tracked changes
-// into this (primary) agent's ChangeTracker, tagging each entry with
-// "subagent:<persona>". This is the missing SP-059 Phase 2c step:
-// without it, list_changes / recover_file / revert_my_changes are
-// blind to subagent edits.
-//
-// No-op when the primary's tracking is disabled. The changes slice is
-// sourced from SubagentResult.FileChanges.
+// MergeSubagentChanges merges a completed subagent's tracked changes into this agent's ChangeTracker.
 func (a *Agent) MergeSubagentChanges(changes []TrackedFileChange, persona string) {
 	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
 		return

@@ -29,7 +29,7 @@
   "reasoning_content_field": ""
 },
   "models": {
-  "default_context_limit": 8192,
+  "default_context_limit": 32000,
   "default_model_patterns": [
   "qwen3_5_text-local-",
   "qwen3-local-"

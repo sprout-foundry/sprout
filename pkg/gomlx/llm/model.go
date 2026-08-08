@@ -419,6 +419,24 @@ func (m *Model) DecodeToken(id int) string {
 // Config returns the model's configuration.
 func (m *Model) Config() ModelConfig { return m.cfg }
 
+// ContextLength returns the effective context window the model can handle.
+// Local models advertise a huge native window (Qwen3.5 max_position_embeddings
+// is 262K), but a small quantized model goes stale/cogency-degrades long
+// before that. Sprout's context-profile auto-detection keys off this value:
+// reporting a bounded window (32K — the LCM design point) keeps small models
+// in Low-Context Mode, where the lite prompt + 8-tool allowlist + tighter
+// compaction keep them cogent. The server advertises this via /v1/models.
+func (m *Model) ContextLength() int {
+	const localModelContextCap = 32_000
+	if m.cfg.MaxPosition <= 0 {
+		return localModelContextCap
+	}
+	if m.cfg.MaxPosition < localModelContextCap {
+		return m.cfg.MaxPosition
+	}
+	return localModelContextCap
+}
+
 // BOSID returns the beginning-of-sequence token ID.
 func (m *Model) BOSID() int { return m.cfg.BOSTokenID }
 

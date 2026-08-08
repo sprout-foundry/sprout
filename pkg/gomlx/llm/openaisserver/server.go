@@ -28,6 +28,12 @@ type Model interface {
 	Generate(ctx context.Context, prompt string, genCfg llm.GenerateConfig, onToken func(tokenID int)) error
 	DecodeToken(id int) string
 	TokenizerEncode(text string) []int
+
+	// ContextLength returns the effective context window the model can
+	// handle (prompt + generated). The server advertises it via /v1/models
+	// so sprout's context-profile auto-detection (LCM for small windows)
+	// works without relying on a provider-side fallback.
+	ContextLength() int
 }
 
 // chatRequest mirrors the OpenAI chat-completions request body fields sprout
@@ -94,10 +100,11 @@ type streamDelta struct {
 }
 
 type modelInfo struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
+	ID             string `json:"id"`
+	Object         string `json:"object"`
+	Created        int64  `json:"created"`
+	OwnedBy        string `json:"owned_by"`
+	ContextLength  int    `json:"context_length,omitempty"`
 }
 
 type modelList struct {
@@ -262,10 +269,11 @@ func (s *Server) HandleModels(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(modelList{
 		Object: "list",
 		Data: []modelInfo{{
-			ID:      s.modelName,
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "sprout-local",
+			ID:            s.modelName,
+			Object:        "model",
+			Created:       time.Now().Unix(),
+			OwnedBy:       "sprout-local",
+			ContextLength: s.model.ContextLength(),
 		}},
 	})
 }

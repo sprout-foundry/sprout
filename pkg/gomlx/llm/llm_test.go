@@ -44,9 +44,9 @@ func TestGeneration(t *testing.T) {
 	}
 	defer model.Close()
 
-	prompt := "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nSay exactly: hello world<|im_end|>\n<|im_start|>assistant\n"
+	prompt := "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nSay exactly: hello world<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
 	cfg := llm.DefaultGenerateConfig()
-	cfg.MaxTokens = 30
+	cfg.MaxTokens = 120
 	cfg.Temperature = 0.0
 	cfg.RepetitionPenalty = 0.0 // GPU argmax path
 

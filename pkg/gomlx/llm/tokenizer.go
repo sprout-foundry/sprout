@@ -22,6 +22,11 @@ type Tokenizer struct {
 	eosID    int
 	padID    int
 	spaceTok string
+	// specialTokens maps every added token (atomic, not BPE-decomposed) to its
+	// ID. HuggingFace registers all added_tokens as single units regardless of
+	// the Special flag — <think>/</think> are added but not Special, and must
+	// still encode atomically or the model never sees the thinking boundary.
+	specialTokens map[string]int
 }
 
 // BPEDecoder handles the BPE merge ranking
@@ -52,12 +57,15 @@ func LoadTokenizer(path string) (*Tokenizer, error) {
 		tok.idToTok[id] = word
 	}
 
-	// Add special tokens from added_tokens (not in model.vocab)
+	// Register added tokens as atomic units. HF treats every added_tokens
+	// entry as a single token during encoding regardless of Special — Qwen3.5
+	// ships <think>/</think> with Special=false and they must still encode
+	// atomically or the thinking boundary is invisible to the model.
+	tok.specialTokens = make(map[string]int, len(raw.AddedTokens))
 	for _, at := range raw.AddedTokens {
-		if at.Special {
-			tok.vocab[at.Content] = at.ID
-			tok.idToTok[at.ID] = at.Content
-		}
+		tok.vocab[at.Content] = at.ID
+		tok.idToTok[at.ID] = at.Content
+		tok.specialTokens[at.Content] = at.ID
 	}
 
 	// Build merge ranks
@@ -98,14 +106,6 @@ func (t *Tokenizer) Encode(text string) []int {
 		return nil
 	}
 
-	// Build a set of special tokens for fast lookup
-	specialTokens := map[string]int{}
-	for id, tok := range t.idToTok {
-		if strings.HasPrefix(tok, "<|") && strings.HasSuffix(tok, "|>") {
-			specialTokens[tok] = id
-		}
-	}
-
 	// Split text on special tokens, keeping them
 	var tokenIDs []int
 	remaining := text
@@ -114,7 +114,7 @@ func (t *Tokenizer) Encode(text string) []int {
 		bestIdx := -1
 		bestTok := ""
 		bestID := -1
-		for tok, id := range specialTokens {
+		for tok, id := range t.specialTokens {
 			idx := strings.Index(remaining, tok)
 			if idx >= 0 && (bestIdx == -1 || idx < bestIdx) {
 				bestIdx = idx
@@ -364,6 +364,14 @@ type hfAddedToken struct {
 }
 
 // FormatChat applies the Qwen3 chat template to messages.
+//
+// Qwen3.5's reference template closes the think block when thinking is
+// disabled: <think>\n\n</think>\n\n. That tells the model to answer directly
+// instead of burning context on a reasoning essay — the right default for
+// small local models (keeps them cogent and within the context budget). If
+// a model emits a thinking block anyway, the generation loop still strips it
+// via shouldFilterToken. Models without thinking tokens (plain qwen3) ignore
+// the marker harmlessly.
 func (t *Tokenizer) FormatChat(messages []ChatMessage) string {
 	var sb strings.Builder
 	for _, msg := range messages {
@@ -373,7 +381,7 @@ func (t *Tokenizer) FormatChat(messages []ChatMessage) string {
 		sb.WriteString(msg.Content)
 		sb.WriteString("<|im_end|>\n")
 	}
-	sb.WriteString("<|im_start|>assistant\n")
+	sb.WriteString("<|im_start|>assistant\n<think>\n\n</think>\n\n")
 	return sb.String()
 }
 
@@ -386,6 +394,15 @@ type ChatMessage struct {
 // VocabSize returns the vocabulary size.
 func (t *Tokenizer) VocabSize() int {
 	return len(t.vocab)
+}
+
+// IDOf returns the token ID for an atomic (added) token, or 0 if the
+// tokenizer has no such token. Used to resolve <think>/</think>.
+func (t *Tokenizer) IDOf(content string) int {
+	if id, ok := t.specialTokens[content]; ok {
+		return id
+	}
+	return 0
 }
 
 // EOSID returns the end-of-sequence token ID the tokenizer detected

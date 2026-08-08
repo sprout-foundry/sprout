@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
@@ -42,10 +43,12 @@ func (q *Qwen35) Config() llm.ModelConfig { return q.cfg }
 func (q *Qwen35) SetStream(s *mlx.Stream) { q.stream = s }
 
 // weights holds every MLX array for the model. embed is the (possibly
-// quantized) word embedding; its Logits method is the tied lm_head.
+// quantized) word embedding. When UseTiedEmbeddings is set, embed.Logits is
+// the lm_head; otherwise lmHead holds the separate untied projection.
 type weights struct {
 	embed      *llm.Embedding
-	normWeight *mlx.Array // [hidden] — final RMSNorm
+	lmHead     *llm.Linear // non-nil when embeddings are untied
+	normWeight *mlx.Array  // [hidden] — final RMSNorm
 	layers     []layerWeights
 }
 
@@ -104,6 +107,25 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 		return fmt.Errorf("load embed_tokens: %w", err)
 	}
 
+	// Untied lm_head (9B+ models): the head is a separate projection outside
+	// the language_model.model.* namespace. In the mlx-community layout it
+	// lives at language_model.lm_head.*; in the raw-HF layout it is
+	// model.language_model.lm_head.*.
+	if !q.cfg.UseTiedEmbeddings {
+		lmPrefix := "language_model.lm_head."
+		if strings.HasPrefix(prefix, "model.") {
+			lmPrefix = "model.language_model.lm_head."
+		}
+		if sf.Has(lmPrefix + "weight") {
+			w.lmHead, err = llm.LoadLinear(sf, lmPrefix+"weight", s, q.cfg.Quantization)
+			if err != nil {
+				return fmt.Errorf("load lm_head: %w", err)
+			}
+		} else {
+			return fmt.Errorf("qwen35: tie_word_embeddings=false but no %slm_head.weight found", lmPrefix)
+		}
+	}
+
 	w.normWeight, err = sf.Get(prefix+"norm.weight", s)
 	if err != nil {
 		return fmt.Errorf("load final norm: %w", err)
@@ -115,11 +137,11 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 
 		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", s)
 		if err != nil {
-			return fmt.Errorf("layer %d input norm: %w", err)
+			return fmt.Errorf("layer %d input norm: %w", i, err)
 		}
 		lw.postNorm, err = sf.Get(p+".post_attention_layernorm.weight", s)
 		if err != nil {
-			return fmt.Errorf("layer %d post norm: %w", err)
+			return fmt.Errorf("layer %d post norm: %w", i, err)
 		}
 
 		if isLinearLayer(i, q.cfg.FullAttentionInterval) {
@@ -186,6 +208,9 @@ func (q *Qwen35) FreeWeights() {
 		return
 	}
 	q.weights.embed.Free()
+	if q.weights.lmHead != nil {
+		q.weights.lmHead.Free()
+	}
 	freeArr(q.weights.normWeight)
 	for i := range q.weights.layers {
 		lw := &q.weights.layers[i]
@@ -421,6 +446,10 @@ func (q *Qwen35) computeLogits(h *mlx.Array) (*mlx.Array, error) {
 	}
 	defer normed.Free()
 
+	if q.weights.lmHead != nil {
+		// Untied embeddings: separate lm_head projection.
+		return q.weights.lmHead.Forward(normed, s)
+	}
 	return q.weights.embed.Logits(normed, s)
 }
 

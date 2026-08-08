@@ -114,6 +114,9 @@ func NewArrayFromInt32(data []int32, shape []int) (*Array, error) {
 	return nil, errUnavailable
 }
 
+// NewScalarInt32 returns errUnavailable on stub builds.
+func NewScalarInt32(v int) (*Array, error) { return nil, errUnavailable }
+
 // --- op stubs --------------------------------------------------------------
 
 // Add returns errUnavailable on stub builds.
@@ -294,6 +297,10 @@ type MemoryStats struct {
 	Active, Cache, Peak, Limit, CacheLimit uint64
 }
 
+// TotalSystemRAM returns 0 on stub builds (the MLX runtime is absent, so no
+// unified-memory RAM gate can be evaluated).
+func TotalSystemRAM() uint64 { return 0 }
+
 func ActiveMemory() (uint64, error)             { return 0, errUnavailable }
 func CacheMemory() (uint64, error)              { return 0, errUnavailable }
 func PeakMemory() (uint64, error)               { return 0, errUnavailable }
@@ -322,5 +329,57 @@ func Dequantize(*Array, *Array, *Array, int, int, string, *Stream) (*Array, erro
 	return nil, errUnavailable
 }
 func QuantizedMatMul(*Array, *Array, *Array, *Array, bool, int, int, string, *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+
+// MetalKernel is unavailable on stub builds.
+type MetalKernel struct{}
+
+// MetalKernelConfig is unavailable on stub builds.
+type MetalKernelConfig struct{}
+
+// NewMetalKernel returns errUnavailable on stub builds.
+func NewMetalKernel(name string, inputNames, outputNames []string, source string, ensureRowContiguous, atomicOutputs bool) (*MetalKernel, error) {
+	return nil, errUnavailable
+}
+
+// Free is a no-op on stub builds.
+func (k *MetalKernel) Free() {}
+
+// NewMetalKernelConfig returns an empty config on stub builds.
+func NewMetalKernelConfig() *MetalKernelConfig { return &MetalKernelConfig{} }
+
+// Free is a no-op on stub builds.
+func (c *MetalKernelConfig) Free() {}
+
+// AddOutputArg returns errUnavailable on stub builds.
+func (c *MetalKernelConfig) AddOutputArg(shape []int, dtype Dtype) error { return errUnavailable }
+
+// SetGrid returns errUnavailable on stub builds.
+func (c *MetalKernelConfig) SetGrid(g1, g2, g3 int) error { return errUnavailable }
+
+// SetThreadGroup returns errUnavailable on stub builds.
+func (c *MetalKernelConfig) SetThreadGroup(t1, t2, t3 int) error { return errUnavailable }
+
+// SetInitValue returns errUnavailable on stub builds.
+func (c *MetalKernelConfig) SetInitValue(v float32) error { return errUnavailable }
+
+// AddTemplateArgDtype returns errUnavailable on stub builds.
+func (c *MetalKernelConfig) AddTemplateArgDtype(name string, dtype Dtype) error {
+	return errUnavailable
+}
+
+// AddTemplateArgInt returns errUnavailable on stub builds.
+func (c *MetalKernelConfig) AddTemplateArgInt(name string, value int) error {
+	return errUnavailable
+}
+
+// AddTemplateArgBool returns errUnavailable on stub builds.
+func (c *MetalKernelConfig) AddTemplateArgBool(name string, value bool) error {
+	return errUnavailable
+}
+
+// Apply returns errUnavailable on stub builds.
+func (k *MetalKernel) Apply(inputs []*Array, config *MetalKernelConfig, s *Stream) ([]*Array, error) {
 	return nil, errUnavailable
 }

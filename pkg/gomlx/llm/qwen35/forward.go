@@ -629,7 +629,6 @@ func (q *Qwen35) ForwardDecodeMTP(nextToken int, pos int, cache *llm.KVCache, k 
 		return nil, fmt.Errorf("mtp: k must be > 0")
 	}
 
-	// Draft k tokens with the MTP head (cheap: 1 layer each).
 	prevHidden := q.LastHidden()
 	drafts, err := q.MTPDraft(prevHidden, nextToken, k)
 	if err != nil {
@@ -638,7 +637,6 @@ func (q *Qwen35) ForwardDecodeMTP(nextToken int, pos int, cache *llm.KVCache, k 
 
 	snap := cache.SnapshotPrefix()
 
-	// Verify all k drafts in one batched main-model forward.
 	ids := append([]int{nextToken}, drafts...)
 	preds, err := q.ForwardPrefillArgmaxAll(ids, pos, cache)
 	if err != nil {
@@ -646,16 +644,15 @@ func (q *Qwen35) ForwardDecodeMTP(nextToken int, pos int, cache *llm.KVCache, k 
 		return nil, fmt.Errorf("mtp verify: %w", err)
 	}
 
-	// preds[i] is the main model's prediction for position pos+i+1
-	// (draft i predicts pos+i+1, so preds[i] == drafts[i] means accept).
 	accepted := 0
 	for accepted < k && preds[accepted] == drafts[accepted] {
 		accepted++
 	}
 
 	if accepted < k {
-		// Roll back the batched verify (rejected drafts left garbage K/V
-		// and advanced DeltaNet state) and re-run only the accepted prefix.
+		// Rejected drafts left wrong K/V and DeltaNet state in the cache.
+		// Restore the pre-verify snapshot and re-run only the accepted
+		// prefix through the full model to rebuild correct cache state.
 		if err := cache.RestorePrefix(snap); err != nil {
 			snap.Free()
 			return nil, fmt.Errorf("mtp rollback: %w", err)
@@ -676,12 +673,12 @@ func (q *Qwen35) ForwardDecodeMTP(nextToken int, pos int, cache *llm.KVCache, k 
 			return nil, fmt.Errorf("mtp re-run: %w", err)
 		}
 		rerunLogits.Free()
+	} else {
+		snap.Free()
 	}
 
 	out := make([]int, 0, accepted+1)
 	out = append(out, drafts[:accepted]...)
-	// The next token is the main model's own prediction at the first
-	// rejected position (or after the last draft when all accepted).
 	out = append(out, preds[accepted])
 	return out, nil
 }

@@ -1244,15 +1244,43 @@
         ]
       },
       {
+        "cached_input_cost": 0.206,
         "context_length": 256000,
         "description": "Qwen's latest 2.4-trillion-parameter MoE flagship model delivering a comprehensive leap in coding and professional work.",
         "id": "Qwen/Qwen3.8-Max",
         "input_cost": 1.65,
         "name": "Qwen/Qwen3.8-Max",
         "output_cost": 4.951,
-        "cached_input_cost": 0.206,
         "tags": [
           "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 131072,
+        "description": "The model prioritizes token efficiency and agentic inference at production scale, stretching what developers can achieve within limited token, latency, and serving-cost budgets.",
+        "id": "inclusionAI/Ling-3.0-flash",
+        "input_cost": 0.075,
+        "name": "inclusionAI/Ling-3.0-flash",
+        "output_cost": 0.22,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.27,
+        "context_length": 1048576,
+        "description": "Kimi K3 is Moonshot AI's 2.8T-parameter open-weight multimodal reasoning model. Built for complex coding, knowledge work, and long-horizon agentic workflows, it excels at navigating large repositories, calling tools, debugging, and iterating on images, logs, tests, and runtime feedback. Its architecture relies on KDA and Attention Residuals for computational efficiency.",
+        "id": "moonshotai/Kimi-K3",
+        "input_cost": 2.7,
+        "name": "moonshotai/Kimi-K3",
+        "output_cost": 13.5,
+        "tags": [
+          "tools",
+          "vision",
           "structured_output"
         ]
       }

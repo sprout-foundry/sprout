@@ -138,9 +138,9 @@
         "context_length": 262144,
         "description": "Moonshot Kimi K2.6 on confidential TEE compute",
         "id": "moonshotai/Kimi-K2.6-TEE",
-        "input_cost": 0.66,
+        "input_cost": 0.58,
         "name": "Kimi K2.6 (TEE)",
-        "output_cost": 3.5,
+        "output_cost": 3.4,
         "tags": [
           "vision",
           "tools",

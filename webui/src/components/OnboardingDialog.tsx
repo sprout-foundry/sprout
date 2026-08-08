@@ -240,6 +240,15 @@ function OnboardingDialog({
               data-testid="onboarding-provider-card"
             >
               <span className="onboarding-provider-name">{providerOption.name}</span>
+              {providerOption.id === 'sprout-local' && (
+                <span
+                  className="onboarding-offline-badge"
+                  title="Runs fully on-device — no API key, no network required"
+                  aria-label="Offline mode"
+                >
+                  Offline
+                </span>
+              )}
               {providerOption.has_credential && (
                 <span
                   className="onboarding-configured-badge"
@@ -293,6 +302,14 @@ function OnboardingDialog({
             <div className="onboarding-provider-summary-body">
               {selectedProvider.setup_hint || selectedProvider.description}
             </div>
+            {selectedProvider.id === 'sprout-local' && (
+              <div className="onboarding-provider-caveats">
+                <div className="onboarding-caveat-item">⚠ Slower than cloud (10–20 tok/s vs 50–100+)</div>
+                <div className="onboarding-caveat-item">⚠ Limited context (32K)</div>
+                <div className="onboarding-caveat-item">⚠ Best for simple tasks, edits, and offline work</div>
+                <div className="onboarding-caveat-item">✓ No API key, no network, zero cost</div>
+              </div>
+            )}
             <div className="onboarding-provider-links">
               {selectedProvider.docs_url && (
                 <a href={selectedProvider.docs_url} target="_blank" rel="noreferrer">

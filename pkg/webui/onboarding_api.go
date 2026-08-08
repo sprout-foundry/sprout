@@ -131,15 +131,27 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		RecommendedPrefixes: []string{},
 		RecommendedModelWhy: "Good default for high-performance inference use.",
 	},
+	"sprout-local": {
+		Description:         "Run fully offline on your Mac — no API key, no network. GPU-accelerated via Apple MLX with quantized Qwen3.5 models.",
+		SetupHint:           "No setup needed if a model is already downloaded. First use downloads a ~2–5 GB model automatically.",
+		DocsURL:             "",
+		SignupURL:            "",
+		APIKeyLabel:         "",
+		APIKeyHelp:          "",
+		Recommended:         false,
+		RecommendedPrefixes: []string{"qwen3.5-"},
+		RecommendedModelWhy: "Best speed-to-capability ratio for local hardware.",
+	},
 }
 
 var onboardingProviderOrder = map[string]int{
-	"zai":        0,
-	"minimax":    1,
-	"openrouter": 2,
-	"deepinfra":  3,
-	"chutes":     4,
-	"cerebras":   5,
+	"zai":          0,
+	"minimax":      1,
+	"openrouter":   2,
+	"deepinfra":    3,
+	"chutes":       4,
+	"cerebras":     5,
+	"sprout-local": 6,
 }
 
 func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {

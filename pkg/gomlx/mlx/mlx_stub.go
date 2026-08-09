@@ -69,6 +69,9 @@ func (a *Array) Eval() error { return errUnavailable }
 // Float32Data always returns errUnavailable on stub builds.
 func (a *Array) Float32Data() ([]float32, error) { return nil, errUnavailable }
 
+// RawBytes always returns errUnavailable on stub builds.
+func (a *Array) RawBytes() ([]byte, error) { return nil, errUnavailable }
+
 // Int64Data always returns errUnavailable on stub builds.
 func (a *Array) Int64Data() ([]int64, error) { return nil, errUnavailable }
 

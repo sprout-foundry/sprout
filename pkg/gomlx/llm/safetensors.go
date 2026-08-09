@@ -199,6 +199,34 @@ func (sf *SafetensorsFile) Has(name string) bool {
 	return ok
 }
 
+// Keys returns all tensor names in the safetensors file.
+func (sf *SafetensorsFile) Keys() []string {
+	if len(sf.header) > 0 {
+		keys := make([]string, 0, len(sf.header))
+		for k := range sf.header {
+			keys = append(keys, k)
+		}
+		return keys
+	}
+	// Sharded model — keys come from the weight map.
+	keys := make([]string, 0, len(sf.weightMap))
+	for k := range sf.weightMap {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// Close releases the mmap'd data backing the safetensors file.
+func (sf *SafetensorsFile) Close() error {
+	if sf == nil {
+		return nil
+	}
+	if sf.rawData != nil {
+		sf.rawData = nil
+	}
+	return nil
+}
+
 // DetectWeightPrefix returns the safetensors key prefix the model actually
 // uses. Different conversion pipelines store the same tensors under different
 // prefixes:

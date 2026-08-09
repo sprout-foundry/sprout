@@ -566,7 +566,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-08-06",
+    "last_verified": "2026-08-09",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -614,7 +614,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-08-06",
+    "last_verified": "2026-08-09",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -686,7 +686,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/",
-    "last_verified": "2026-08-01",
+    "last_verified": "2026-08-09",
     "models": [
       {
         "id": "mistral-large-latest",

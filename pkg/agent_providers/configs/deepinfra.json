@@ -380,6 +380,7 @@
       },
       {
         "context_length": 262144,
+        "description": "Qwen3.6 27B is a dense 27-billion-parameter language model from the Qwen Team at Alibaba, released in April 2026. It features hybrid multimodal capabilities, accepting text, image, and video inputs, and is optimized for agentic and general-purpose use with strong reasoning.",
         "id": "Qwen/Qwen3.6-27B",
         "input_cost": 0.32,
         "name": "Qwen/Qwen3.6-27B",
@@ -841,6 +842,7 @@
       },
       {
         "context_length": 131072,
+        "description": "Efficient, low-cost variant of Gemma 4. Gemma is a family of open models built by Google DeepMind. Gemma 4 models are multimodal, handling text and image input and generating text output.",
         "id": "google/gemma-4-E4B-it",
         "input_cost": 0.02,
         "name": "google/gemma-4-E4B-it",
@@ -1076,6 +1078,7 @@
       },
       {
         "context_length": 131072,
+        "description": "Turbo-speed serving variant of gpt-oss-120b, OpenAI's open-weight 117B-parameter Mixture-of-Experts (MoE) language model designed for high-reasoning, agentic, and general-purpose production use cases.",
         "id": "openai/gpt-oss-120b-Turbo",
         "input_cost": 0.15,
         "name": "openai/gpt-oss-120b-Turbo",

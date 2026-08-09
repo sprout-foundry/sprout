@@ -188,6 +188,11 @@ type Array struct {
 	backend *GGMLBackend
 	tensor  *C.struct_ggml_tensor
 	hasData bool
+	// alloc is the graph allocator that owns the backend buffer for this
+	// tensor's graph. Kept alive until Free() so the data persists.
+	alloc C.ggml_gallocr_t
+	// graph is the compute graph associated with this tensor's Eval.
+	graph *C.struct_ggml_cgraph
 }
 
 // Stream is a no-op for GGML (graph compute is synchronous).
@@ -267,25 +272,23 @@ func (a *Array) Eval() error {
 	ctx := g.ctxPtr()
 
 	// Build graph
-	graph := C.ggml_new_graph(ctx)
-	C.ggml_build_forward_expand(graph, a.tensor)
+	a.graph = C.ggml_new_graph(ctx)
+	C.ggml_build_forward_expand(a.graph, a.tensor)
 
-	// Allocate ALL tensors in the graph (inputs + intermediates + output)
-	buft := C.ggml_backend_get_default_buffer_type(g.backend)
-	alloc := C.ggml_gallocr_new(buft)
+	// Allocate ALL tensors in the graph (inputs + intermediates + output).
+	// Keep the allocator alive on the Array — freeing it would free the
+	// backend buffers, making the result unreadable.
+	a.alloc = C.ggml_gallocr_new(C.ggml_backend_get_default_buffer_type(g.backend))
 
-	if !C.ggml_gallocr_alloc_graph(alloc, graph) {
-		C.ggml_gallocr_free(alloc)
+	if !C.ggml_gallocr_alloc_graph(a.alloc, a.graph) {
 		return fmt.Errorf("ggml: graph allocation failed")
 	}
 
-	// After allocation, all tensors have backend buffers. Now walk the
-	// graph and set input data for any tensor registered with Go-side data.
+	// After allocation, all tensors have backend buffers. Set input data.
 	g.setRegisteredDataRecursive(a.tensor)
 
 	// Compute
-	status := C.ggml_backend_graph_compute(g.backend, graph)
-	C.ggml_gallocr_free(alloc) // safe to free after compute — data is in backend buffers
+	status := C.ggml_backend_graph_compute(g.backend, a.graph)
 	if status != C.GGML_STATUS_SUCCESS {
 		return fmt.Errorf("ggml: graph compute failed (status %d)", int(status))
 	}
@@ -312,11 +315,11 @@ func (g *GGMLBackend) setRegisteredDataRecursive(t *C.struct_ggml_tensor) {
 }
 
 func (a *Array) Free() {
-	if a.tensor != nil {
-		// GGML tensors are freed when the context is freed; individual frees
-		// are managed by the context arena. Set to nil so we don't double-use.
-		a.tensor = nil
+	if a.alloc != nil {
+		C.ggml_gallocr_free(a.alloc)
+		a.alloc = nil
 	}
+	a.tensor = nil
 }
 
 func (a *Array) Float32Data() ([]float32, error) {

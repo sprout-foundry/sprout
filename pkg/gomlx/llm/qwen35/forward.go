@@ -31,6 +31,11 @@ type Qwen35 struct {
 	weights    *weights
 	mtp        *mtpWeights // multi-token prediction head; nil when absent
 	lastHidden tensor.Array // retained [1,1,H] main-model hidden at the last processed position
+
+	// normPreAdded is true for mlx-community exports where sanitize() has
+	// already added 1 to the RMSNorm weights. When true, rmsNormQwen35
+	// uses plain multiplication instead of (1+w).
+	normPreAdded bool
 }
 
 func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
@@ -113,6 +118,9 @@ func (q *Qwen35) InitWeights(path string, s tensor.Stream) error {
 	if prefix == "" {
 		return fmt.Errorf("qwen35: no recognized weight prefix in %s", path)
 	}
+
+	// mlx-community sanitize() pre-adds 1 to norm weights; raw HF does not.
+	q.normPreAdded = prefix == "language_model.model."
 
 	w := &weights{
 		layers: make([]layerWeights, q.cfg.NumLayers),
@@ -719,15 +727,17 @@ func (q *Qwen35) makeOneTokenArray(tokenID int) tensor.Array {
 }
 
 // rmsNormQwen35 applies the Qwen3.5-weighted RMSNorm used by every
-// pre/post-attention norm in the main model AND the MTP head:
+// rmsNormQwen35 applies RMSNorm with weight scaling. The formula depends on
+// the model source:
 //
-//	rms_norm(x) * (1 + weight)
+//   - raw HF exports: rms_norm(x) * (1 + weight) — transformers stores the
+//     norm weight as a residual offset, and the runtime adds 1.
+//   - mlx-community exports: rms_norm(x) * weight — mlx-lm's sanitize() pre-
+//     adds the 1 during conversion, so the weight is already the final
+//     multiplier. Applying (1 + weight) here would double it.
 //
-// Qwen3.5 (like Qwen3/Qwen2.5) stores the norm weight as a residual offset,
-// not a plain multiplier. Plain `rms_norm(x) * weight` — the formula used by
-// older Llama-style models — silently halves the effective norm scale and
-// breaks generation on raw-HF weights. Verified against transformers'
-// Qwen3_5RMSNorm (output = rms_norm(x) * (1 + weight)).
+// Detection: mlx-community uses prefix "language_model.model."; raw HF uses
+// "model.language_model.".
 func (q *Qwen35) rmsNormQwen35(x, weight tensor.Array) (tensor.Array, error) {
 	s := q.stream
 	normed, err := llm.RMSNorm(x, nil, q.cfg.RMSNormEPS, q.backend, s)
@@ -736,7 +746,12 @@ func (q *Qwen35) rmsNormQwen35(x, weight tensor.Array) (tensor.Array, error) {
 	}
 	defer normed.Free()
 
-	// (1 + weight) — [H] broadcasts over [B, S, H].
+	if q.normPreAdded {
+		// mlx-community: weight already includes the +1
+		return q.backend.Multiply(normed, weight, s)
+	}
+
+	// raw HF: add 1 to weight
 	ones, err := q.backend.NewArrayFromFloat32([]float32{1}, []int{1})
 	if err != nil {
 		return nil, fmt.Errorf("ones: %w", err)

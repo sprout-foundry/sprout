@@ -47,6 +47,16 @@ func SiLU(x tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, erro
 	return b.Multiply(x, sig, s)
 }
 
+// SwiGLU computes SiLU(gate) * up. Used by both dense MLP and MoE expert FFN.
+func SwiGLU(up, gate tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
+	gateSilu, err := SiLU(gate, b, s)
+	if err != nil {
+		return nil, fmt.Errorf("swiglu silu: %w", err)
+	}
+	defer gateSilu.Free()
+	return b.Multiply(gateSilu, up, s)
+}
+
 // Softplus computes log(1 + exp(x)) via log1p(exp(x)).
 func Softplus(x tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	exp, err := b.Exp(x, s)

@@ -49,6 +49,7 @@ var catalogModels = []localLLMModel{
 	{ID: "qwen3.5-2b-4bit", Name: "Qwen3.5 2B (4-bit)", SizeHint: "~1.5 GB"},
 	{ID: "qwen3.5-4b-4bit", Name: "Qwen3.5 4B (4-bit)", SizeHint: "~2.5 GB"},
 	{ID: "qwen3.5-9b-4bit", Name: "Qwen3.5 9B (4-bit)", SizeHint: "~5.4 GB"},
+	{ID: "qwen3.6-35b-a3b-4bit", Name: "Qwen3.6 35B-A3B MoE (4-bit)", SizeHint: "~20 GB"},
 }
 
 // getLocalLLMStatus returns the cached status, refreshing if stale.

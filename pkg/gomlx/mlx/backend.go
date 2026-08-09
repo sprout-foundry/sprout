@@ -318,6 +318,18 @@ func (b *MetalBackend) QuantizedMatMul(x, w, scales tensor.Array, biases tensor.
 	return QuantizedMatMul(x.(*Array), w.(*Array), scales.(*Array), bs, transpose, groupSize, bits, mode, toStream(s))
 }
 
+func (b *MetalBackend) GatherQuantizedMatMul(x, w, scales, biases, lhsIndices, rhsIndices tensor.Array, transpose bool, groupSize, bits int, mode string, sortedIndices bool, s tensor.Stream) (tensor.Array, error) {
+	var bs *Array
+	if biases != nil {
+		bs = biases.(*Array)
+	}
+	var li *Array
+	if lhsIndices != nil {
+		li = lhsIndices.(*Array)
+	}
+	return GatherQuantizedMatMul(x.(*Array), w.(*Array), scales.(*Array), bs, li, rhsIndices.(*Array), transpose, groupSize, bits, mode, sortedIndices, toStream(s))
+}
+
 func (b *MetalBackend) Dequantize(w, scales, biases tensor.Array, groupSize, bits int, mode string, s tensor.Stream) (tensor.Array, error) {
 	var bs *Array
 	if biases != nil {

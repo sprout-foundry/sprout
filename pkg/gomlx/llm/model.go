@@ -629,7 +629,10 @@ func (m *Model) MTPAvailable() bool {
 // agentic work; 64K is the pragmatic midpoint between cogency and window.
 // The server advertises this via /v1/models.
 func (m *Model) ContextLength() int {
-	const localModelContextCap = 64_000
+	// 128K is the practical default for local inference. All models in the
+	// catalog fit within 16GB RAM at 128K thanks to the hybrid DeltaNet
+	// architecture (only 1/4 of layers have growing KV cache).
+	const localModelContextCap = 128_000
 	if m.cfg.MaxPosition <= 0 {
 		return localModelContextCap
 	}

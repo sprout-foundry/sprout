@@ -45,6 +45,8 @@ const localLLMEndpoint = "http://127.0.0.1:18081"
 // catalogModels is the static catalog of available local models. The backend
 // checks for their presence on disk; the UI uses this to show download actions.
 var catalogModels = []localLLMModel{
+	{ID: "qwen3.5-0.8b-4bit", Name: "Qwen3.5 0.8B (4-bit)", SizeHint: "~0.6 GB"},
+	{ID: "qwen3.5-2b-4bit", Name: "Qwen3.5 2B (4-bit)", SizeHint: "~1.5 GB"},
 	{ID: "qwen3.5-4b-4bit", Name: "Qwen3.5 4B (4-bit)", SizeHint: "~2.5 GB"},
 	{ID: "qwen3.5-9b-4bit", Name: "Qwen3.5 9B (4-bit)", SizeHint: "~5.4 GB"},
 }

@@ -21,11 +21,13 @@ type CatalogModel struct {
 // ModelCatalog lists the models the server knows how to serve, ordered by
 // size (largest first). Selection picks the largest model whose MinRAM fits
 // the machine. These map to mlx-community quantized releases; the 0.8B is the
-// safe fallback on small machines, the 4B is the balanced choice for 16 GB
-// class machines, and the 9B is only recommended with 32 GB+.
+// safe fallback on small machines, the 2B is a good speed/quality balance,
+// the 4B is the balanced choice for 16 GB class machines, and the 9B is only
+// recommended with 32 GB+.
 var ModelCatalog = []CatalogModel{
 	{Name: "qwen3.5-9b", Dir: "qwen3.5-9b-4bit", HFRepo: "mlx-community/Qwen3.5-9B-4bit", MinRAM: 30 * 1024 * 1024 * 1024},
 	{Name: "qwen3.5-4b", Dir: "qwen3.5-4b-4bit", HFRepo: "mlx-community/Qwen3.5-4B-4bit", MinRAM: 14 * 1024 * 1024 * 1024},
+	{Name: "qwen3.5-2b", Dir: "qwen3.5-2b-4bit", HFRepo: "mlx-community/Qwen3.5-2B-MLX-4bit", MinRAM: 8 * 1024 * 1024 * 1024},
 	{Name: "qwen3.5-0.8b", Dir: "qwen3.5-0.8b-4bit", HFRepo: "mlx-community/Qwen3.5-0.8B-4bit", MinRAM: 0},
 }
 

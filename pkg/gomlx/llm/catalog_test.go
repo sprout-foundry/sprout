@@ -55,7 +55,7 @@ func TestCatalogSizes(t *testing.T) {
 }
 
 // TestRecommendModelForRAM checks the pure-RAM recommendation (no disk check)
-// used by the download helper: 16 GB → 4B, 32 GB → 9B, tiny machine → 0.8B.
+// used by the download helper: 32 GB → 9B, 16 GB → 4B, 8 GB → 2B, tiny → 0.8B.
 func TestRecommendModelForRAM(t *testing.T) {
 	cases := []struct {
 		ram  uint64
@@ -64,7 +64,8 @@ func TestRecommendModelForRAM(t *testing.T) {
 		{32 * 1024 * 1024 * 1024, "qwen3.5-9b"},
 		{16 * 1024 * 1024 * 1024, "qwen3.5-4b"},
 		{14 * 1024 * 1024 * 1024, "qwen3.5-4b"},
-		{8 * 1024 * 1024 * 1024, "qwen3.5-0.8b"},
+		{8 * 1024 * 1024 * 1024, "qwen3.5-2b"},
+		{4 * 1024 * 1024 * 1024, "qwen3.5-0.8b"},
 		{1 * 1024 * 1024 * 1024, "qwen3.5-0.8b"},
 	}
 	for _, tc := range cases {

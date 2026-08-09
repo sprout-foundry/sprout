@@ -153,6 +153,27 @@ func QuantizedMatMul(x, w, scales *Array, biases *Array, transpose bool, groupSi
 	return wrapResult(out, rc, "quantized_matmul")
 }
 
+// GatherQuantizedMatMul computes x @ dequant(w[indices])^T per-expert.
+// w is [num_experts, out, in_packed], scales/biases are [num_experts, out, in/group].
+// rhs_indices selects which expert each token uses. Used for MoE inference.
+func GatherQuantizedMatMul(x, w, scales, biases *Array, lhsIndices, rhsIndices *Array, transpose bool, groupSize, bits int, mode string, sortedIndices bool, s *Stream) (*Array, error) {
+	out := newOutput()
+	gs := C.mlx_optional_int{value: C.int(groupSize), has_value: true}
+	bs := C.mlx_optional_int{value: C.int(bits), has_value: true}
+	cMode := C.CString(mode)
+	defer C.free(unsafe.Pointer(cMode))
+	var biasH C.mlx_array
+	if biases != nil {
+		biasH = biases.cHandle()
+	}
+	var lhsH C.mlx_array
+	if lhsIndices != nil {
+		lhsH = lhsIndices.cHandle()
+	}
+	rc := C.mlx_gather_qmm(&out, x.cHandle(), w.cHandle(), scales.cHandle(), biasH, lhsH, rhsIndices.cHandle(), C.bool(transpose), gs, bs, cMode, C.bool(sortedIndices), s.cHandle())
+	return wrapResult(out, rc, "gather_qmm")
+}
+
 // Maximum returns the elementwise max of a and b.
 func Maximum(a, b *Array, s *Stream) (*Array, error) {
 	out := newOutput()

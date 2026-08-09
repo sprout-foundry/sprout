@@ -183,6 +183,7 @@ type Backend interface {
 	// Quantization
 	Quantize(w Array, groupSize, bits int, mode string, s Stream) ([]Array, error)
 	QuantizedMatMul(x, w, scales Array, biases Array, transpose bool, groupSize, bits int, mode string, s Stream) (Array, error)
+	GatherQuantizedMatMul(x, w, scales, biases, lhsIndices, rhsIndices Array, transpose bool, groupSize, bits int, mode string, sortedIndices bool, s Stream) (Array, error)
 	Dequantize(w, scales, biases Array, groupSize, bits int, mode string, s Stream) (Array, error)
 
 	// Memory management

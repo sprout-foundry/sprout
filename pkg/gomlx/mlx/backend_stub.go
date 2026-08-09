@@ -71,6 +71,7 @@ func (b *stubBackend) ArgMaxAxis(tensor.Array, int, bool, tensor.Stream) (tensor
 func (b *stubBackend) Conv1D(tensor.Array, tensor.Array, int, int, int, int, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) Quantize(tensor.Array, int, int, string, tensor.Stream) ([]tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) QuantizedMatMul(tensor.Array, tensor.Array, tensor.Array, tensor.Array, bool, int, int, string, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
+func (b *stubBackend) GatherQuantizedMatMul(tensor.Array, tensor.Array, tensor.Array, tensor.Array, tensor.Array, tensor.Array, bool, int, int, string, bool, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) Dequantize(tensor.Array, tensor.Array, tensor.Array, int, int, string, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) SetCacheLimit(uint64) error { return errUnavailable }
 func (b *stubBackend) SetMemoryLimit(uint64) error { return errUnavailable }

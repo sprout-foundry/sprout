@@ -341,6 +341,46 @@ func (q *Qwen35) prefillAt(ids tensor.Array, seqLen, startPos int, cache *llm.KV
 }
 
 func (q *Qwen35) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
+	// Chunked prefill: process large sequences in segments to avoid
+	// exceeding Metal's maximum buffer size (~9.5GB on 16GB machines).
+	// Each chunk runs through all layers, attending to itself + cached K/V.
+	const prefillChunkSize = 4096
+
+	if seqLen <= prefillChunkSize || cache == nil {
+		return q.prefillInternalChunk(ids, seqLen, startPos, cache)
+	}
+
+	s := q.stream
+	idsShape := ids.Shape()
+
+	// Process all but the last chunk as cache-building passes.
+	// We don't need logits from these — just the KV cache extension.
+	for processed := 0; processed+prefillChunkSize < seqLen; processed += prefillChunkSize {
+		chunkLen := prefillChunkSize
+		chunkIDs, err := q.backend.Slice(ids, []int{0, processed}, []int{idsShape[0], processed + chunkLen}, []int{1, 1}, s)
+		if err != nil {
+			return nil, fmt.Errorf("prefill chunk slice at %d: %w", processed, err)
+		}
+		_, err = q.prefillInternalChunk(chunkIDs, chunkLen, startPos+processed, cache)
+		chunkIDs.Free()
+		if err != nil {
+			return nil, fmt.Errorf("prefill chunk at %d: %w", processed, err)
+		}
+	}
+
+	// Process the last chunk normally — its logits are at the final position.
+	lastChunkStart := ((seqLen - 1) / prefillChunkSize) * prefillChunkSize
+	lastChunkLen := seqLen - lastChunkStart
+	lastChunkIDs, err := q.backend.Slice(ids, []int{0, lastChunkStart}, []int{idsShape[0], seqLen}, []int{1, 1}, s)
+	if err != nil {
+		return nil, fmt.Errorf("last chunk slice: %w", err)
+	}
+	defer lastChunkIDs.Free()
+	return q.prefillInternalChunk(lastChunkIDs, lastChunkLen, startPos+lastChunkStart, cache)
+}
+
+// prefillInternalChunk runs the full model over a single chunk of tokens.
+func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 
 	h, err := q.weights.embed.Lookup(ids, q.backend, s)

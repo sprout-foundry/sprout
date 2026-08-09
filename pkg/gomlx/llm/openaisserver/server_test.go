@@ -264,6 +264,75 @@ func TestStreaming(t *testing.T) {
 	}
 }
 
+// TestStreamingToolCalls verifies that when tools are provided and the model
+// emits <tool_call> XML, the streamed deltas carry the parsed tool calls in
+// OpenAI format with finish_reason=tool_calls.
+func TestStreamingToolCalls(t *testing.T) {
+	f := newFake()
+	f.tokenText = map[int]string{
+		1: "<tool_call>\n<function=",
+		2: "shell_command>\n<parameter=command>ls -la</parameter>\n</function>\n</tool_call>\n",
+	}
+	f.tokens = []int{1, 2}
+	ts := newServer(t, f, 0)
+
+	body := `{"model":"local","messages":[{"role":"user","content":"list files"}],"stream":true,"tools":[{"type":"function","function":{"name":"shell_command","description":"run shell","parameters":{"type":"object","properties":{"command":{"type":"string"}}}}}]}`
+	resp := postChat(t, ts.URL, body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var chunks []streamChunk
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := strings.TrimPrefix(line, "data: ")
+		if payload == "[DONE]" {
+			continue
+		}
+		var c streamChunk
+		if err := json.Unmarshal([]byte(payload), &c); err != nil {
+			t.Fatalf("bad chunk %q: %v", payload, err)
+		}
+		chunks = append(chunks, c)
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	// Collect all deltas.
+	var toolCalls []streamToolCall
+	for _, c := range chunks {
+		toolCalls = append(toolCalls, c.Choices[0].Delta.ToolCalls...)
+	}
+	if len(toolCalls) == 0 {
+		t.Fatalf("no tool_calls in streamed deltas; chunks=%d", len(chunks))
+	}
+
+	tc := toolCalls[0]
+	if tc.Type != "function" {
+		t.Errorf("tool call type = %q, want function", tc.Type)
+	}
+	if tc.ID == "" {
+		t.Error("tool call ID is empty — sprout needs a non-empty ID")
+	}
+	if tc.Function.Name != "shell_command" {
+		t.Errorf("function name = %q, want shell_command", tc.Function.Name)
+	}
+	if !strings.Contains(tc.Function.Arguments, "ls -la") {
+		t.Errorf("arguments = %q, want ls -la", tc.Function.Arguments)
+	}
+
+	// Final chunk must have finish_reason=tool_calls.
+	last := chunks[len(chunks)-1]
+	if last.Choices[0].FinishReason == nil || *last.Choices[0].FinishReason != "tool_calls" {
+		t.Errorf("final finish_reason = %v, want tool_calls", last.Choices[0].FinishReason)
+	}
+}
+
 // TestStreamingGenerationError verifies a model failure mid-stream emits an
 // error chunk and still terminates with [DONE].
 func TestStreamingGenerationError(t *testing.T) {

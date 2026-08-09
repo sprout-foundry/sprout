@@ -165,6 +165,12 @@ func Negative(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable 
 func ArgMaxAxis(a *Array, axis int, keepdims bool, s *Stream) (*Array, error) {
 	return nil, errUnavailable
 }
+func ArgPartitionAxis(*Array, int, int, *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+func TakeAlongAxis(*Array, *Array, int, *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
 func ArgMax(a *Array, keepdims bool, s *Stream) (*Array, error) {
 	return nil, errUnavailable
 }

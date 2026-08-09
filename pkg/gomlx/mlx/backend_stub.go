@@ -68,6 +68,8 @@ func (b *stubBackend) FastRoPE(tensor.Array, int, bool, float64, float32, int, t
 func (b *stubBackend) GatherAxis(tensor.Array, tensor.Array, int, []int, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) ArgMax(tensor.Array, bool, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) ArgMaxAxis(tensor.Array, int, bool, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
+func (b *stubBackend) ArgPartitionAxis(tensor.Array, int, int, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
+func (b *stubBackend) TakeAlongAxis(tensor.Array, tensor.Array, int, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) Conv1D(tensor.Array, tensor.Array, int, int, int, int, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) Quantize(tensor.Array, int, int, string, tensor.Stream) ([]tensor.Array, error) { return nil, errUnavailable }
 func (b *stubBackend) QuantizedMatMul(tensor.Array, tensor.Array, tensor.Array, tensor.Array, bool, int, int, string, tensor.Stream) (tensor.Array, error) { return nil, errUnavailable }

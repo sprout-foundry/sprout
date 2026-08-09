@@ -929,3 +929,5 @@ func (g *GGMLBackend) SetCacheLimit(bytes uint64) error  { return nil }
 func (g *GGMLBackend) SetMemoryLimit(bytes uint64) error { return nil }
 func (g *GGMLBackend) ClearCache() error                 { return nil }
 func (g *GGMLBackend) TotalSystemRAM() uint64            { return 0 }
+
+func (b *GGMLBackend) EnableCompile() error { return nil }

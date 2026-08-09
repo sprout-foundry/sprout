@@ -17,22 +17,26 @@
 package tensor
 
 // Dtype is a tensor element type.
+// The integer values match the mlx_dtype C enum order exactly (see
+// mlx/c/array.h) so that Metal backend ops can cast directly without
+// a conversion table.
 type Dtype int
 
 const (
-	Bool    Dtype = iota // 0
-	UInt8                 // 1
-	UInt16                // 2
-	UInt32                // 3
-	UInt64                // 4
-	Int8                  // 5
-	Int16                 // 6
-	Int32                 // 7
-	Int64                 // 8
-	Float16               // 9
-	Float32               // 10
-	BFloat16              // 11
-	Complex64             // 12
+	Bool      Dtype = iota // 0  MLX_BOOL
+	UInt8                   // 1  MLX_UINT8
+	UInt16                  // 2  MLX_UINT16
+	UInt32                  // 3  MLX_UINT32
+	UInt64                  // 4  MLX_UINT64
+	Int8                    // 5  MLX_INT8
+	Int16                   // 6  MLX_INT16
+	Int32                   // 7  MLX_INT32
+	Int64                   // 8  MLX_INT64
+	Float16                 // 9  MLX_FLOAT16
+	Float32                 // 10 MLX_FLOAT32
+	Float64                 // 11 MLX_FLOAT64
+	BFloat16                // 12 MLX_BFLOAT16
+	Complex64               // 13 MLX_COMPLEX64
 )
 
 // Array is a multi-dimensional tensor handle. Concrete implementations

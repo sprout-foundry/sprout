@@ -50,6 +50,7 @@ type Array interface {
 	Eval() error
 	Free()
 	Float32Data() ([]float32, error)
+	RawBytes() ([]byte, error)
 	Int64Data() ([]int64, error)
 	Uint32Data() ([]uint32, error)
 }

@@ -270,7 +270,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	m.arch.SetStream(s)
 
 	// KV cache: prefill stores K/V, decode appends via per-token concat.
-	cache := NewKVCache(m.cfg.NumLayers, s)
+	cache := NewKVCache(m.cfg.NumLayers, s, m.backend)
 	defer cache.Free()
 
 	// Prefix caching: if this prompt shares a prefix with the previous one,

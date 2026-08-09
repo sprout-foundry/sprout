@@ -36,7 +36,7 @@ func (m *Model) DebugDecodeComparison(promptTokens []int, nextToken int) (maxDif
 	}
 
 	// Method 2: Cache prefill + decode
-	cache := NewKVCache(m.cfg.NumLayers, s)
+	cache := NewKVCache(m.cfg.NumLayers, s, m.backend)
 	defer cache.Free()
 
 	_, err = m.arch.ForwardPrefill(m.makeIDsArray(promptTokens), len(promptTokens), cache)

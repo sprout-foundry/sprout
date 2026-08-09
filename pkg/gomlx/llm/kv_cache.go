@@ -42,11 +42,12 @@ type KVCacheLayer struct {
 }
 
 // NewKVCache creates a cache for the given number of layers.
-func NewKVCache(numLayers int, s tensor.Stream) *KVCache {
+func NewKVCache(numLayers int, s tensor.Stream, backend tensor.Backend) *KVCache {
 	return &KVCache{
 		layers:      make([]*KVCacheLayer, numLayers),
 		initialized: make([]bool, numLayers),
 		stream:      s,
+		backend:     backend,
 	}
 }
 
@@ -244,10 +245,18 @@ func (c *KVCache) RestorePrefix(snap *KVCache) error {
 func (c *KVCache) Free() {
 	for _, layer := range c.layers {
 		if layer != nil {
-			layer.K.Free()
-			layer.V.Free()
-			layer.State.Free()
-			layer.ConvState.Free()
+			if layer.K != nil {
+				layer.K.Free()
+			}
+			if layer.V != nil {
+				layer.V.Free()
+			}
+			if layer.State != nil {
+				layer.State.Free()
+			}
+			if layer.ConvState != nil {
+				layer.ConvState.Free()
+			}
 		}
 	}
 }

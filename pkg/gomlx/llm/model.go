@@ -43,9 +43,16 @@ type Model struct {
 	prefixTokens []int
 }
 
-// minPrefixReuse is the smallest shared token prefix worth reusing. Below
-// this, a fresh full prefill is cheaper than the delta machinery.
-const minPrefixReuse = 8
+// minPrefixReuse is effectively disabled for hybrid DeltaNet architectures.
+// The DeltaNet recurrent state is sequence-dependent: restoring a cached
+// state from a different conversation (even with the same system prompt
+// prefix) corrupts the linear-attention layers. Full-attention K/V would
+// be safe to cache, but mixing cached full-attention K/V with fresh
+// DeltaNet state produces inconsistent attention across layers.
+//
+// To re-enable safely: scope the cache by conversation ID, or cache only
+// full-attention layers and rebuild DeltaNet state on each request.
+const minPrefixReuse = 1 << 30
 
 // maxPrefixLen caps the retained prefix so long histories don't pin memory
 // forever. Beyond this, caching is dropped for that request.

@@ -105,7 +105,10 @@
         "id": "aion-labs/aion-rp-llama-3.1-8b",
         "input_cost": 0.7999999999999999,
         "name": "AionLabs: Aion-RP 1.0 (8B)",
-        "output_cost": 1.5999999999999999
+        "output_cost": 1.5999999999999999,
+        "tags": [
+          "structured_output"
+        ]
       },
       {
         "context_length": 65536,
@@ -1402,7 +1405,10 @@
         "id": "meta-llama/llama-3.2-1b-instruct",
         "input_cost": 0.027,
         "name": "Meta: Llama 3.2 1B Instruct",
-        "output_cost": 0.201
+        "output_cost": 0.201,
+        "tags": [
+          "tools"
+        ]
       },
       {
         "context_length": 131072,
@@ -1545,7 +1551,11 @@
         "id": "minimax/minimax-m2-her",
         "input_cost": 0.3,
         "name": "MiniMax: MiniMax M2-her",
-        "output_cost": 1.2
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
       },
       {
         "cached_input_cost": 0.03,
@@ -1945,7 +1955,11 @@
         "id": "morph/morph-v3-fast",
         "input_cost": 0.7999999999999999,
         "name": "Morph: Morph V3 Fast",
-        "output_cost": 1.2
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
       },
       {
         "context_length": 262144,
@@ -3221,7 +3235,11 @@
         "id": "qwen/qwen-2.5-coder-32b-instruct",
         "input_cost": 0.66,
         "name": "Qwen2.5 Coder 32B Instruct",
-        "output_cost": 1
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
       },
       {
         "cached_input_cost": 0.052000000000000005,
@@ -3857,7 +3875,11 @@
         "id": "relace/relace-apply-3",
         "input_cost": 0.85,
         "name": "Relace: Relace Apply 3",
-        "output_cost": 1.25
+        "output_cost": 1.25,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
       },
       {
         "context_length": 256000,
@@ -4093,7 +4115,12 @@
         "id": "writer/palmyra-x5",
         "input_cost": 0.6,
         "name": "Writer: Palmyra X5",
-        "output_cost": 6
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       },
       {
         "cached_input_cost": 0.19999999999999998,

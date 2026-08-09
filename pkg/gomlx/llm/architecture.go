@@ -10,7 +10,7 @@
 package llm
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // Architecture implements the forward pass and weight management for a
@@ -27,34 +27,32 @@ import (
 // to use or ignore caching. Architectures that don't support caching (or during
 // prefill) receive a nil cache.
 type Architecture interface {
-	// InitWeights loads model weights from a safetensors file into MLX arrays.
+	// InitWeights loads model weights from a safetensors file into tensor arrays.
 	// Called once at model load time.
-	InitWeights(path string, s *mlx.Stream) error
+	InitWeights(path string, s tensor.Stream) error
 
-	// SetStream sets the MLX stream used for subsequent forward passes.
-	// Called before ForwardPrefill/ForwardDecode. MLX streams are
-	// thread-local, so this must be called on the same OS thread that
-	// runs the forward pass.
-	SetStream(s *mlx.Stream)
+	// SetStream sets the tensor stream used for subsequent forward passes.
+	// Called before ForwardPrefill/ForwardDecode.
+	SetStream(s tensor.Stream)
 
 	// ForwardPrefill runs the forward pass over a full sequence of tokens.
 	// Returns the logits for the last position. The KV cache (if non-nil) is
 	// populated with keys/values from this pass for use in subsequent decode steps.
-	ForwardPrefill(ids *mlx.Array, seqLen int, cache *KVCache) ([]float32, error)
+	ForwardPrefill(ids tensor.Array, seqLen int, cache *KVCache) ([]float32, error)
 
 	// ForwardPrefillFrom runs the forward pass over a delta sequence that
 	// extends an already-populated KV cache. startPos is the absolute
 	// position of the FIRST token in ids (which determines RoPE offsets).
 	// The cache must already contain startPos tokens. Used by prefix
 	// caching to skip re-prefilling a shared prompt on repeated requests.
-	ForwardPrefillFrom(ids *mlx.Array, seqLen, startPos int, cache *KVCache) ([]float32, error)
+	ForwardPrefillFrom(ids tensor.Array, seqLen, startPos int, cache *KVCache) ([]float32, error)
 
 	// ForwardDecode runs the forward pass for a single token at the given
 	// absolute position. Uses the KV cache to avoid recomputing past tokens.
 	// Returns logits [vocabSize] for that position.
 	ForwardDecode(tokenID int, pos int, cache *KVCache) ([]float32, error)
 
-	// FreeWeights releases all MLX arrays held by the architecture.
+	// FreeWeights releases all tensor arrays held by the architecture.
 	FreeWeights()
 
 	// Config returns the model's configuration.
@@ -160,20 +158,20 @@ type QuantConfig struct {
 // Architecture-specific weights (e.g. QK norm) are stored in the architecture
 // implementation's own weight structs.
 type DecoderLayerWeights struct {
-	InputNorm *mlx.Array // [hidden_size] — RMSNorm/LayerNorm before attention
-	QProj     *mlx.Array // [hidden_size, num_heads * head_dim] or [num_heads*head_dim, hidden_size]
-	KProj     *mlx.Array
-	VProj     *mlx.Array
-	OProj     *mlx.Array
-	QNorm     *mlx.Array // [head_dim] — optional, Qwen3-style per-head norm
-	KNorm     *mlx.Array // [head_dim] — optional, Qwen3-style per-head norm
-	PostNorm  *mlx.Array // [hidden_size] — norm after attention, before FFN
-	GateProj  *mlx.Array // [intermediate_size, hidden_size]
-	UpProj    *mlx.Array // [intermediate_size, hidden_size]
-	DownProj  *mlx.Array // [hidden_size, intermediate_size]
+	InputNorm tensor.Array // [hidden_size] — RMSNorm/LayerNorm before attention
+	QProj     tensor.Array // [hidden_size, num_heads * head_dim] or [num_heads*head_dim, hidden_size]
+	KProj     tensor.Array
+	VProj     tensor.Array
+	OProj     tensor.Array
+	QNorm     tensor.Array // [head_dim] — optional, Qwen3-style per-head norm
+	KNorm     tensor.Array // [head_dim] — optional, Qwen3-style per-head norm
+	PostNorm  tensor.Array // [hidden_size] — norm after attention, before FFN
+	GateProj  tensor.Array // [intermediate_size, hidden_size]
+	UpProj    tensor.Array // [intermediate_size, hidden_size]
+	DownProj  tensor.Array // [hidden_size, intermediate_size]
 	// Optional biases
-	QBias *mlx.Array
-	KBias *mlx.Array
-	VBias *mlx.Array
-	OBias *mlx.Array
+	QBias tensor.Array
+	KBias tensor.Array
+	VBias tensor.Array
+	OBias tensor.Array
 }

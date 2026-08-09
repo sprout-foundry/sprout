@@ -7,8 +7,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
 // DebugDecodeComparison runs one decode step both ways — full re-encode and
@@ -22,7 +20,7 @@ func (m *Model) DebugDecodeComparison(promptTokens []int, nextToken int) (maxDif
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	s, err := mlx.DefaultGPUStream()
+	s, err := m.backend.DefaultGPUStream()
 	if err != nil {
 		return 0, nil, nil, err
 	}

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // hfConfig is the raw HuggingFace config.json structure. Only fields used by
@@ -197,8 +197,8 @@ func (c ModelConfig) String() string {
 		c.Arch, kind, c.HiddenSize, c.NumLayers, c.NumHeads, c.NumKVHeads, c.HeadDim, c.VocabSize)
 }
 
-// freeArr releases an MLX array if non-nil (nil-safe, matching Array.Free).
-func freeArr(a *mlx.Array) {
+// freeArr releases a tensor array if non-nil (nil-safe, matching Array.Free).
+func freeArr(a tensor.Array) {
 	if a != nil {
 		a.Free()
 	}

@@ -176,6 +176,8 @@ type Backend interface {
 	GatherAxis(a, indices Array, axis int, sliceSizes []int, s Stream) (Array, error)
 	ArgMax(a Array, keepdims bool, s Stream) (Array, error)
 	ArgMaxAxis(a Array, axis int, keepdims bool, s Stream) (Array, error)
+	ArgPartitionAxis(a Array, kth, axis int, s Stream) (Array, error)
+	TakeAlongAxis(a, indices Array, axis int, s Stream) (Array, error)
 
 	// Convolution
 	Conv1D(input, weight Array, stride, padding, dilation, groups int, s Stream) (Array, error)

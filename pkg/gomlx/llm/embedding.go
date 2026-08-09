@@ -140,6 +140,38 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 		}, nil
 	}
 
+	if quant != nil && !sf.Has(base+".scales") {
+		// Quantize at load time (GO_QUANTIZE path). The tied lm_head logits
+		// projection uses the embedding, so quantizing here also speeds up
+		// the logits matmul.
+		w, err := sf.Get(name, s)
+		if err != nil {
+			return nil, fmt.Errorf("embedding %s: %w", base, err)
+		}
+		defer w.Free()
+		parts, err := b.Quantize(w, quant.GroupSize, quant.Bits, quant.Mode, s)
+		if err != nil {
+			return nil, fmt.Errorf("quantize embedding %s: %w", base, err)
+		}
+		for _, p := range parts {
+			if err := p.Eval(); err != nil {
+				for _, q := range parts { q.Free() }
+				return nil, fmt.Errorf("eval quantized embedding %s: %w", base, err)
+			}
+		}
+		e := &Embedding{
+			qW:         parts[0],
+			qScales:    parts[1],
+			qGroupSize: quant.GroupSize,
+			qBits:      quant.Bits,
+			qMode:      quant.Mode,
+		}
+		if len(parts) > 2 {
+			e.qBiases = parts[2]
+		}
+		return e, nil
+	}
+
 	w, err := sf.Get(name, s)
 	if err != nil {
 		return nil, fmt.Errorf("embedding %s: %w", name, err)

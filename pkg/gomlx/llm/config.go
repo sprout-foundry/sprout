@@ -25,7 +25,7 @@ type hfConfig struct {
 	RopeTheta         float64      `json:"rope_theta"`
 	VocabSize         int          `json:"vocab_size"`
 	BOSTokenID        int          `json:"bos_token_id"`
-	EOSTokenID        int          `json:"eos_token_id"`
+	EOSTokenID        json.RawMessage `json:"eos_token_id"`
 	TieWordEmbeddings bool         `json:"tie_word_embeddings"`
 	AttentionBias     bool         `json:"attention_bias"`
 	MaxPositionEmbeds int          `json:"max_position_embeddings"`
@@ -114,7 +114,7 @@ func LoadConfig(path string) (ModelConfig, error) {
 		RMSNormEPS:        float32(raw.RMSNormEPS),
 		RopeTheta:         raw.RopeTheta,
 		BOSTokenID:        raw.BOSTokenID,
-		EOSTokenID:        raw.EOSTokenID,
+		EOSTokenID:        eosTokenID(raw.EOSTokenID),
 		UseAttentionBias:  raw.AttentionBias,
 		UseTiedEmbeddings: raw.TieWordEmbeddings,
 		MaxPosition:       raw.MaxPositionEmbeds,
@@ -171,6 +171,9 @@ func LoadConfig(path string) (ModelConfig, error) {
 	case "qwen3_5_text":
 		cfg.UseQKNorm = true
 		cfg.WeightPrefix = "model.language_model."
+	case "qwen3_5_moe_text":
+		cfg.UseQKNorm = true
+		cfg.WeightPrefix = "model.language_model."
 	default:
 		cfg.WeightPrefix = "model."
 	}
@@ -215,4 +218,24 @@ func freeArr(a tensor.Array) {
 	if a != nil {
 		a.Free()
 	}
+}
+
+// eosTokenID extracts a single EOS token ID from the raw JSON field, which
+// may be an int (e.g. 151643) or an array (e.g. [248046, 248044]). Takes the
+// first element of an array.
+func eosTokenID(raw json.RawMessage) int {
+	if len(raw) == 0 {
+		return 0
+	}
+	// Try as int first
+	var i int
+	if json.Unmarshal(raw, &i) == nil {
+		return i
+	}
+	// Try as array — take first element
+	var arr []int
+	if json.Unmarshal(raw, &arr) == nil && len(arr) > 0 {
+		return arr[0]
+	}
+	return 0
 }

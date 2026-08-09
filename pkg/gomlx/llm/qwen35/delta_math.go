@@ -7,24 +7,24 @@ import (
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // scaleRMSNorm applies MLX rms_norm (no weight, eps=1e-6) then scales by s.
 // Used for the q/k normalization in DeltaNet, which normalizes over the
 // head dimension with per-head scale.
-func scaleRMSNorm(x *mlx.Array, s float32, stream *mlx.Stream) (*mlx.Array, error) {
-	n, err := llm.RMSNorm(x, nil, 1e-6, stream)
+func scaleRMSNorm(x tensor.Array, s float32, b tensor.Backend, stream tensor.Stream) (tensor.Array, error) {
+	n, err := llm.RMSNorm(x, nil, 1e-6, b, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer n.Free()
-	scalar, err := mlx.NewArrayFromFloat32([]float32{s}, []int{1})
+	scalar, err := b.NewArrayFromFloat32([]float32{s}, []int{1})
 	if err != nil {
 		return nil, err
 	}
 	defer scalar.Free()
-	return mlx.Multiply(n, scalar, stream)
+	return b.Multiply(n, scalar, stream)
 }
 
 // decayGate computes g = exp(-exp(A_log) * softplus(a + dt_bias)).
@@ -36,100 +36,100 @@ func scaleRMSNorm(x *mlx.Array, s float32, stream *mlx.Stream) (*mlx.Array, erro
 // exp/softplus in BF16 loses precision and diverges from the reference
 // kernel, which computes g in fp32 and only casts the recurrence output back
 // to the input dtype.
-func decayGate(aLog, a, dtBias *mlx.Array, stream *mlx.Stream) (*mlx.Array, error) {
-	aF32, err := mlx.AsType(a, mlx.Float32, stream)
+func decayGate(aLog, a, dtBias tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, error) {
+	aF32, err := b.AsType(a, tensor.Float32, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer aF32.Free()
 
-	aLogF32, err := mlx.AsType(aLog, mlx.Float32, stream)
+	aLogF32, err := b.AsType(aLog, tensor.Float32, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer aLogF32.Free()
 
-	dtBiasF32, err := mlx.AsType(dtBias, mlx.Float32, stream)
+	dtBiasF32, err := b.AsType(dtBias, tensor.Float32, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer dtBiasF32.Free()
 
 	// softplus(a + dt_bias) in fp32.
-	added, err := mlx.Add(aF32, dtBiasF32, stream)
+	added, err := b.Add(aF32, dtBiasF32, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer added.Free()
-	sp, err := llm.Softplus(added, stream)
+	sp, err := llm.Softplus(added, b, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer sp.Free()
 
 	// exp(A_log) — A_log is [Hv]; broadcasts over [B,S,Hv].
-	expALog, err := mlx.Exp(aLogF32, stream)
+	expALog, err := b.Exp(aLogF32, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer expALog.Free()
 
 	// exp(A_log) * softplus(a + dt_bias)
-	mul, err := mlx.Multiply(expALog, sp, stream)
+	mul, err := b.Multiply(expALog, sp, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer mul.Free()
 
 	// -mul, then exp => g (stays fp32 — the recurrence and kernel consume it).
-	neg, err := mlx.Negative(mul, stream)
+	neg, err := b.Negative(mul, stream)
 	if err != nil {
 		return nil, err
 	}
 	defer neg.Free()
-	return mlx.Exp(neg, stream)
+	return b.Exp(neg, stream)
 }
 
 // rmsNormGated computes out = rms_norm(y, w, eps) * silu(z), with the silu and
 // the product evaluated in fp32, mirroring mlx-lm's Qwen3NextRMSNormGated
 // (_precise_swiglu). y and z are [B, S, Hv, Dv]; w is [head_v_dim] and
 // broadcasts over the Hv axis. The result is cast back to y's dtype.
-func rmsNormGated(y, z, w *mlx.Array, stream *mlx.Stream) (*mlx.Array, error) {
+func rmsNormGated(y, z, w tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, error) {
 	// x = rms_norm(y, w, eps) — weight [Dv] broadcasts over Hv.
-	x, err := mlx.FastRMSNorm(y, w, 1e-6, stream)
+	x, err := b.FastRMSNorm(y, w, 1e-6, stream)
 	if err != nil {
 		return nil, fmt.Errorf("rms_norm: %w", err)
 	}
 	defer x.Free()
 
 	// gate = silu(z) computed in fp32.
-	zF32, err := mlx.AsType(z, mlx.Float32, stream)
+	zF32, err := b.AsType(z, tensor.Float32, stream)
 	if err != nil {
 		return nil, fmt.Errorf("z->fp32: %w", err)
 	}
 	defer zF32.Free()
-	gate, err := llm.SiLU(zF32, stream)
+	gate, err := llm.SiLU(zF32, b, stream)
 	if err != nil {
 		return nil, fmt.Errorf("silu: %w", err)
 	}
 	defer gate.Free()
 
 	// x in fp32, product, cast back to y's dtype.
-	xF32, err := mlx.AsType(x, mlx.Float32, stream)
+	xF32, err := b.AsType(x, tensor.Float32, stream)
 	if err != nil {
 		return nil, fmt.Errorf("x->fp32: %w", err)
 	}
 	defer xF32.Free()
-	prod, err := mlx.Multiply(gate, xF32, stream)
+	prod, err := b.Multiply(gate, xF32, stream)
 	if err != nil {
 		return nil, fmt.Errorf("gated mul: %w", err)
 	}
 	defer prod.Free()
-	return mlx.AsType(prod, y.Dtype(), stream)
+	return b.AsType(prod, y.Dtype(), stream)
 }
 
 // freeAll releases every array in ys. Safe on nil/empty slices.
-func freeAll(ys []*mlx.Array) {
+func freeAll(ys []tensor.Array) {
 	for _, a := range ys {
 		a.Free()
 	}
@@ -158,23 +158,23 @@ func freeAll(ys []*mlx.Array) {
 //	delta = (v_t - kv_mem) * beta_t            [B,Hv,Dv]
 //	state = state + k_t * delta                [B,Hv,Dv,Dk]
 //	y_t = sum_dk(state * q_t)                  [B,Hv,Dv]
-func gatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*mlx.Array, *mlx.Array, error) {
+func gatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
 	// Fast path: one fused Metal kernel launch when available.
-	if mlx.Available() && os.Getenv("SPROUT_DELTA_OPS") == "" {
-		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, stream)
+	if b.Available() && os.Getenv("SPROUT_DELTA_OPS") == "" {
+		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, b, stream)
 		if err == nil {
 			return y, ns, nil
 		}
 		// Fall through to the sequential ops loop on any kernel error
 		// (uncompilable shape, Metal hiccup, etc.).
 	}
-	return gatedDeltaUpdateOps(q, k, v, g, beta, state, stream)
+	return gatedDeltaUpdateOps(q, k, v, g, beta, state, b, stream)
 }
 
 // gatedDeltaUpdateOps is the exact sequential per-step scan. It mirrors
 // mlx-lm's gated_delta_ops reference implementation (matches the fused GPU
 // kernel's math) and is used when Metal is unavailable.
-func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*mlx.Array, *mlx.Array, error) {
+func gatedDeltaUpdateOps(q, k, v, g, beta, state tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
 	qs := q.Shape()
 	B, S, Hk, Dk := qs[0], qs[1], qs[2], qs[3]
 	vs := v.Shape()
@@ -183,15 +183,15 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 	// Broadcast q/k from Hk to Hv heads (repeat factor Hv/Hk), matching
 	// gated_delta_ops.
 	repeat := Hv / Hk
-	var qR, kR *mlx.Array
+	var qR, kR tensor.Array
 	var err error
 	if repeat > 1 {
-		qR, err = mlx.RepeatAxis(q, repeat, 2, stream)
+		qR, err = b.RepeatAxis(q, repeat, 2, stream)
 		if err != nil {
 			return nil, nil, fmt.Errorf("repeat q: %w", err)
 		}
 		defer qR.Free()
-		kR, err = mlx.RepeatAxis(k, repeat, 2, stream)
+		kR, err = b.RepeatAxis(k, repeat, 2, stream)
 		if err != nil {
 			return nil, nil, fmt.Errorf("repeat k: %w", err)
 		}
@@ -200,24 +200,24 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 		qR, kR = q, k
 	}
 
-	var cur *mlx.Array
+	var cur tensor.Array
 	curOwned := false
 	if state != nil {
 		cur = state // borrowed: caller owns it
 	} else {
 		// The recurrence accumulates; the MLX reference uses an fp32 state even
 		// when q/k/v are bf16. A bf16 state would destroy delta-rule precision.
-		cur, err = mlx.Zeros([]int{B, Hv, Dv, Dk}, mlx.Float32, stream)
+		cur, err = b.Zeros([]int{B, Hv, Dv, Dk}, tensor.Float32, stream)
 		if err != nil {
 			return nil, nil, fmt.Errorf("zero state: %w", err)
 		}
 		curOwned = true
 	}
 
-	ys := make([]*mlx.Array, 0, S)
+	ys := make([]tensor.Array, 0, S)
 	for t := 0; t < S; t++ {
 		// qR/kR are [B, S, Hv, Dk] after the repeat — slice with Hv, not Hk.
-		qt, err := sliceStep(qR, t, B, Hv, Dk, stream)
+		qt, err := sliceStep(qR, t, B, Hv, Dk, b, stream)
 		if err != nil {
 			freeAll(ys)
 			if curOwned {
@@ -225,7 +225,7 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 			}
 			return nil, nil, err
 		}
-		kt, err := sliceStep(kR, t, B, Hv, Dk, stream)
+		kt, err := sliceStep(kR, t, B, Hv, Dk, b, stream)
 		if err != nil {
 			qt.Free()
 			freeAll(ys)
@@ -234,7 +234,7 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 			}
 			return nil, nil, err
 		}
-		vt, err := sliceStep(v, t, B, Hv, Dv, stream)
+		vt, err := sliceStep(v, t, B, Hv, Dv, b, stream)
 		if err != nil {
 			qt.Free()
 			kt.Free()
@@ -244,7 +244,7 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 			}
 			return nil, nil, err
 		}
-		gt, err := sliceHead(g, t, B, Hv, stream)
+		gt, err := sliceHead(g, t, B, Hv, b, stream)
 		if err != nil {
 			qt.Free()
 			kt.Free()
@@ -255,7 +255,7 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 			}
 			return nil, nil, err
 		}
-		bt, err := sliceHead(beta, t, B, Hv, stream)
+		bt, err := sliceHead(beta, t, B, Hv, b, stream)
 		if err != nil {
 			qt.Free()
 			kt.Free()
@@ -268,7 +268,7 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 			return nil, nil, err
 		}
 
-		yt, next, err := gatedDeltaStep(cur, qt, kt, vt, gt, bt, B, Hv, Dv, Dk, stream)
+		yt, next, err := gatedDeltaStep(cur, qt, kt, vt, gt, bt, B, Hv, Dv, Dk, b, stream)
 		qt.Free()
 		kt.Free()
 		vt.Free()
@@ -292,7 +292,7 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 	}
 
 	// Concatenate [B,1,Hv,Dv] steps into [B,S,Hv,Dv].
-	y, err := mlx.ConcatenateAxis(ys, 1, stream)
+	y, err := b.ConcatenateAxis(ys, 1, stream)
 	freeAll(ys)
 	if err != nil {
 		return nil, nil, fmt.Errorf("concat y: %w", err)
@@ -301,13 +301,13 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream)
 }
 
 // sliceStep slices a [B, S, H, D] tensor at position t → [B, 1, H, D].
-func sliceStep(x *mlx.Array, t, B, H, D int, stream *mlx.Stream) (*mlx.Array, error) {
-	return mlx.Slice(x, []int{0, t, 0, 0}, []int{B, t + 1, H, D}, []int{1, 1, 1, 1}, stream)
+func sliceStep(x tensor.Array, t, B, H, D int, b tensor.Backend, stream tensor.Stream) (tensor.Array, error) {
+	return b.Slice(x, []int{0, t, 0, 0}, []int{B, t + 1, H, D}, []int{1, 1, 1, 1}, stream)
 }
 
 // sliceHead slices a [B, S, H] tensor at position t → [B, 1, H].
-func sliceHead(x *mlx.Array, t, B, H int, stream *mlx.Stream) (*mlx.Array, error) {
-	return mlx.Slice(x, []int{0, t, 0}, []int{B, t + 1, H}, []int{1, 1, 1}, stream)
+func sliceHead(x tensor.Array, t, B, H int, b tensor.Backend, stream tensor.Stream) (tensor.Array, error) {
+	return b.Slice(x, []int{0, t, 0}, []int{B, t + 1, H}, []int{1, 1, 1}, stream)
 }
 
 // gatedDeltaStep performs one recurrent step. Inputs are per-step:
@@ -319,76 +319,76 @@ func sliceHead(x *mlx.Array, t, B, H int, stream *mlx.Stream) (*mlx.Array, error
 //
 // Returns y [B, 1, Hv, Dv] and the updated state [B, Hv, Dv, Dk]. Both are
 // freshly allocated and owned by the caller.
-func gatedDeltaStep(state, q, k, v, g, beta *mlx.Array, B, Hv, Dv, Dk int, stream *mlx.Stream) (*mlx.Array, *mlx.Array, error) {
+func gatedDeltaStep(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
 	// g_t [B,1,Hv] → [B,1,Hv,1,1] to broadcast with state [B,Hv,Dv,Dk].
-	g5, err := mlx.Reshape(g, []int{B, 1, Hv, 1, 1}, stream)
+	g5, err := b.Reshape(g, []int{B, 1, Hv, 1, 1}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("g reshape: %w", err)
 	}
 	defer g5.Free()
 
 	// Reshape state to [B,1,Hv,Dv,Dk] and broadcast g5 over it.
-	s5, err := mlx.Reshape(state, []int{B, 1, Hv, Dv, Dk}, stream)
+	s5, err := b.Reshape(state, []int{B, 1, Hv, Dv, Dk}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("state reshape: %w", err)
 	}
 	defer s5.Free()
 
-	decayed, err := mlx.Multiply(s5, g5, stream)
+	decayed, err := b.Multiply(s5, g5, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("decay mul: %w", err)
 	}
 	defer decayed.Free()
 
 	// k_t [B,1,Hv,Dk] → [B,1,Hv,1,Dk]
-	k5, err := mlx.Reshape(k, []int{B, 1, Hv, 1, Dk}, stream)
+	k5, err := b.Reshape(k, []int{B, 1, Hv, 1, Dk}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("k reshape: %w", err)
 	}
 	defer k5.Free()
 
 	// kv_mem = sum_dk(decayed * k_t) → [B,1,Hv,Dv]
-	prod, err := mlx.Multiply(decayed, k5, stream)
+	prod, err := b.Multiply(decayed, k5, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("kv_mem prod: %w", err)
 	}
 	defer prod.Free()
-	kvMem, err := mlx.Sum(prod, []int{4}, false, stream)
+	kvMem, err := b.Sum(prod, []int{4}, false, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("kv_mem sum: %w", err)
 	}
 	defer kvMem.Free()
 
 	// delta = (v_t - kv_mem) * beta_t → [B,1,Hv,Dv]
-	diff, err := mlx.Subtract(v, kvMem, stream)
+	diff, err := b.Subtract(v, kvMem, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("v - kv_mem: %w", err)
 	}
 	defer diff.Free()
 	// beta [B,1,Hv] → [B,1,Hv,1]
-	b4, err := mlx.Reshape(beta, []int{B, 1, Hv, 1}, stream)
+	b4, err := b.Reshape(beta, []int{B, 1, Hv, 1}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("beta reshape: %w", err)
 	}
 	defer b4.Free()
-	delta, err := mlx.Multiply(diff, b4, stream)
+	delta, err := b.Multiply(diff, b4, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("delta mul: %w", err)
 	}
 	defer delta.Free()
 
 	// state += k_t * delta → [B,1,Hv,Dv,Dk] (delta [B,1,Hv,Dv] → [B,1,Hv,Dv,1])
-	d5, err := mlx.Reshape(delta, []int{B, 1, Hv, Dv, 1}, stream)
+	d5, err := b.Reshape(delta, []int{B, 1, Hv, Dv, 1}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("delta reshape: %w", err)
 	}
 	defer d5.Free()
-	outer, err := mlx.Multiply(k5, d5, stream)
+	outer, err := b.Multiply(k5, d5, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("outer: %w", err)
 	}
 	defer outer.Free()
-	next5, err := mlx.Add(decayed, outer, stream)
+	next5, err := b.Add(decayed, outer, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("state add: %w", err)
 	}
@@ -396,31 +396,31 @@ func gatedDeltaStep(state, q, k, v, g, beta *mlx.Array, B, Hv, Dv, Dk int, strea
 
 	// y = sum_dk(state * q_t) → [B,1,Hv,Dv]
 	// q_t [B,1,Hv,Dk] → [B,1,Hv,1,Dk]
-	q5, err := mlx.Reshape(q, []int{B, 1, Hv, 1, Dk}, stream)
+	q5, err := b.Reshape(q, []int{B, 1, Hv, 1, Dk}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("q reshape: %w", err)
 	}
 	defer q5.Free()
-	yProd, err := mlx.Multiply(next5, q5, stream)
+	yProd, err := b.Multiply(next5, q5, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("y prod: %w", err)
 	}
 	defer yProd.Free()
-	y, err := mlx.Sum(yProd, []int{4}, false, stream)
+	y, err := b.Sum(yProd, []int{4}, false, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("y sum: %w", err)
 	}
 
 	// The reference casts y back to q's dtype (bf16) before the gated norm
 	// and quantized out_proj — y would otherwise stay fp32 (state dtype).
-	yCast, err := mlx.AsType(y, q.Dtype(), stream)
+	yCast, err := b.AsType(y, q.Dtype(), stream)
 	y.Free()
 	if err != nil {
 		return nil, nil, fmt.Errorf("y dtype: %w", err)
 	}
 
 	// next (a reshape of next5) and y are fresh arrays; the caller owns both.
-	next, err := mlx.Reshape(next5, []int{B, Hv, Dv, Dk}, stream)
+	next, err := b.Reshape(next5, []int{B, Hv, Dv, Dk}, stream)
 	if err != nil {
 		yCast.Free()
 		return nil, nil, fmt.Errorf("state unflatten: %w", err)

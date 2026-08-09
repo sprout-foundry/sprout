@@ -7,7 +7,7 @@ import (
 	"math"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // gatedDeltaNet implements the Gated DeltaNet linear-attention block used by
@@ -32,18 +32,18 @@ type gatedDeltaNet struct {
 	inProjB   *llm.Linear // [hidden, Hv]
 	inProjA   *llm.Linear // [hidden, Hv]
 	outProj   *llm.Linear // [value_dim, hidden]
-	conv1d    *mlx.Array  // [conv_dim, kernel, 1] (groups = conv_dim, depthwise)
+	conv1d    tensor.Array  // [conv_dim, kernel, 1] (groups = conv_dim, depthwise)
 
-	norm *mlx.Array // [head_v_dim] — RMSNorm weight for the gated output norm
+	norm tensor.Array // [head_v_dim] — RMSNorm weight for the gated output norm
 
-	ALog   *mlx.Array // [Hv] — log decay constant (fp32, NOT quantized)
-	DTBias *mlx.Array // [Hv] — decay bias (ones)
+	ALog   tensor.Array // [Hv] — log decay constant (fp32, NOT quantized)
+	DTBias tensor.Array // [Hv] — decay bias (ones)
 
 	keyDim   int
 	valueDim int
 	numK     int // linear_num_key_heads
 	numV     int // linear_num_value_heads
-	headK    int // linear_key_head_dim
+	headDim      int // linear_key_head_dim
 	headV    int // linear_value_head_dim
 	convDim  int
 	convK    int // linear_conv_kernel_dim
@@ -57,7 +57,7 @@ func newGatedDeltaNet(cfg llm.ModelConfig) *gatedDeltaNet {
 		valueDim: valueDim,
 		numK:     cfg.LinearNumKeyHeads,
 		numV:     cfg.LinearNumValueHeads,
-		headK:    cfg.LinearKeyHeadDim,
+		headDim:    cfg.LinearKeyHeadDim,
 		headV:    cfg.LinearValueHeadDim,
 		convDim:  keyDim*2 + valueDim,
 		convK:    cfg.LinearConvKernelDim,
@@ -80,23 +80,23 @@ func (g *gatedDeltaNet) free() {
 // loadWeights loads the linear_attn.* tensors for a layer. Name is the
 // per-layer prefix WITHOUT the trailing ".linear_attn" (e.g.
 // "model.language_model.layers.0").
-func (g *gatedDeltaNet) loadWeights(sf *llm.SafetensorsFile, name string, s *mlx.Stream, quant *llm.QuantConfig) error {
+func (g *gatedDeltaNet) loadWeights(sf *llm.SafetensorsFile, name string, b tensor.Backend, s tensor.Stream, quant *llm.QuantConfig) error {
 	// name is the full linear_attn key prefix (e.g.
 	// "language_model.model.layers.0.linear_attn").
 	var err error
-	if g.inProjQKV, err = llm.LoadLinear(sf, name+".in_proj_qkv.weight", s, quant); err != nil {
+	if g.inProjQKV, err = llm.LoadLinear(sf, name+".in_proj_qkv.weight", b, s, quant); err != nil {
 		return fmt.Errorf("in_proj_qkv: %w", err)
 	}
-	if g.inProjZ, err = llm.LoadLinear(sf, name+".in_proj_z.weight", s, quant); err != nil {
+	if g.inProjZ, err = llm.LoadLinear(sf, name+".in_proj_z.weight", b, s, quant); err != nil {
 		return fmt.Errorf("in_proj_z: %w", err)
 	}
-	if g.inProjB, err = llm.LoadLinear(sf, name+".in_proj_b.weight", s, quant); err != nil {
+	if g.inProjB, err = llm.LoadLinear(sf, name+".in_proj_b.weight", b, s, quant); err != nil {
 		return fmt.Errorf("in_proj_b: %w", err)
 	}
-	if g.inProjA, err = llm.LoadLinear(sf, name+".in_proj_a.weight", s, quant); err != nil {
+	if g.inProjA, err = llm.LoadLinear(sf, name+".in_proj_a.weight", b, s, quant); err != nil {
 		return fmt.Errorf("in_proj_a: %w", err)
 	}
-	if g.outProj, err = llm.LoadLinear(sf, name+".out_proj.weight", s, quant); err != nil {
+	if g.outProj, err = llm.LoadLinear(sf, name+".out_proj.weight", b, s, quant); err != nil {
 		return fmt.Errorf("out_proj: %w", err)
 	}
 
@@ -110,7 +110,7 @@ func (g *gatedDeltaNet) loadWeights(sf *llm.SafetensorsFile, name string, s *mlx
 	}
 	shape := g.conv1d.Shape()
 	if len(shape) == 3 && shape[1] == 1 && shape[2] > 1 {
-		convT, tErr := mlx.TransposeAxes(g.conv1d, []int{0, 2, 1}, s)
+		convT, tErr := b.TransposeAxes(g.conv1d, []int{0, 2, 1}, s)
 		if tErr != nil {
 			g.conv1d.Free()
 			return fmt.Errorf("transpose conv1d: %w", tErr)
@@ -153,40 +153,40 @@ func (g *gatedDeltaNet) loadWeights(sf *llm.SafetensorsFile, name string, s *mlx
 // ConvState [B, convK-1, convDim]); it is populated on prefill and updated
 // in place per token on decode. When cache is nil the block is stateless
 // (used by the parity path for full-sequence re-encode).
-func (g *gatedDeltaNet) forward(x *mlx.Array, cache *llm.KVCache, layerIdx, seqLen int, s *mlx.Stream) (*mlx.Array, error) {
+func (g *gatedDeltaNet) forward(x tensor.Array, cache *llm.KVCache, layerIdx, seqLen int, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	shape := x.Shape()
 	B, S := shape[0], shape[1]
 	if S == 0 || B == 0 {
 		return nil, fmt.Errorf("delta_net: bad input shape %v", x.Shape())
 	}
 
-	qkv, err := g.inProjQKV.Forward(x, s)
+	qkv, err := g.inProjQKV.Forward(x, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("in_proj_qkv: %w", err)
 	}
 	defer qkv.Free()
 
-	z, err := g.inProjZ.Forward(x, s)
+	z, err := g.inProjZ.Forward(x, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("in_proj_z: %w", err)
 	}
 	defer z.Free()
 
-	b, err := g.inProjB.Forward(x, s)
+	bOut, err := g.inProjB.Forward(x, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("in_proj_b: %w", err)
 	}
-	defer b.Free()
+	defer bOut.Free()
 
-	a, err := g.inProjA.Forward(x, s)
+	a, err := g.inProjA.Forward(x, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("in_proj_a: %w", err)
 	}
 	defer a.Free()
 
 	// Convolution: concat cached conv rows with qkv, run depthwise silu-conv.
-	var convInput *mlx.Array
-	var state, convState *mlx.Array
+	var convInput tensor.Array
+	var state, convState tensor.Array
 	if cache != nil {
 		state, convState, err = cache.GetState(layerIdx)
 		if err != nil {
@@ -195,33 +195,33 @@ func (g *gatedDeltaNet) forward(x *mlx.Array, cache *llm.KVCache, layerIdx, seqL
 	}
 
 	if convState != nil {
-		convInput, err = mlx.ConcatenateAxis([]*mlx.Array{convState, qkv}, 1, s)
+		convInput, err = b.ConcatenateAxis([]tensor.Array{convState, qkv}, 1, s)
 		if err != nil {
 			return nil, fmt.Errorf("conv concat: %w", err)
 		}
 		defer convInput.Free()
 	} else {
 		// First call: pad the conv window with zeros.
-		pad, err := mlx.Zeros([]int{B, g.convK - 1, g.convDim}, qkv.Dtype(), s)
+		pad, err := b.Zeros([]int{B, g.convK - 1, g.convDim}, qkv.Dtype(), s)
 		if err != nil {
 			return nil, fmt.Errorf("conv pad: %w", err)
 		}
 		defer pad.Free()
-		convInput, err = mlx.ConcatenateAxis([]*mlx.Array{pad, qkv}, 1, s)
+		convInput, err = b.ConcatenateAxis([]tensor.Array{pad, qkv}, 1, s)
 		if err != nil {
 			return nil, fmt.Errorf("conv pad concat: %w", err)
 		}
 		defer convInput.Free()
 	}
 
-	convOut, err := mlx.Conv1D(convInput, g.conv1d, 1, 0, 1, g.convDim, s)
+	convOut, err := b.Conv1D(convInput, g.conv1d, 1, 0, 1, g.convDim, s)
 	if err != nil {
 		return nil, fmt.Errorf("conv1d: %w", err)
 	}
 	defer convOut.Free()
 
 	// silu(conv) — the conv output is the "conv feature" gating.
-	convOut, err = llm.SiLU(convOut, s)
+	convOut, err = llm.SiLU(convOut, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("conv silu: %w", err)
 	}
@@ -229,7 +229,7 @@ func (g *gatedDeltaNet) forward(x *mlx.Array, cache *llm.KVCache, layerIdx, seqL
 
 	// Split conv output into q, k, v: q/k have numK heads, v has numV heads.
 	// conv_out is [B, S, conv_dim]; key_dim is the first chunk.
-	qkvSplit, err := mlx.SplitAxis(convOut, []int{g.keyDim, 2 * g.keyDim}, 2, s)
+	qkvSplit, err := b.SplitAxis(convOut, []int{g.keyDim, 2 * g.keyDim}, 2, s)
 	if err != nil {
 		return nil, fmt.Errorf("conv split: %w", err)
 	}
@@ -243,50 +243,50 @@ func (g *gatedDeltaNet) forward(x *mlx.Array, cache *llm.KVCache, layerIdx, seqL
 	}
 
 	// q/k/v: reshape to [B, S, H, D]
-	q2d, err := mlx.Reshape(qkvSplit[0], []int{B, S, g.numK, g.headK}, s)
+	q2d, err := b.Reshape(qkvSplit[0], []int{B, S, g.numK, g.headDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q reshape: %w", err)
 	}
 	defer q2d.Free()
-	k2d, err := mlx.Reshape(qkvSplit[1], []int{B, S, g.numK, g.headK}, s)
+	k2d, err := b.Reshape(qkvSplit[1], []int{B, S, g.numK, g.headDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("k reshape: %w", err)
 	}
 	defer k2d.Free()
-	v2d, err := mlx.Reshape(qkvSplit[2], []int{B, S, g.numV, g.headV}, s)
+	v2d, err := b.Reshape(qkvSplit[2], []int{B, S, g.numV, g.headV}, s)
 	if err != nil {
 		return nil, fmt.Errorf("v reshape: %w", err)
 	}
 	defer v2d.Free()
 
 	// Scale-normalized q/k (rms_norm with no weight, then scale).
-	invScale := 1.0 / sqrt(float64(g.headK))
-	q2d, err = scaleRMSNorm(q2d, float32(invScale*invScale), s)
+	invScale := 1.0 / sqrt(float64(g.headDim))
+	q2d, err = scaleRMSNorm(q2d, float32(invScale*invScale), b, s)
 	if err != nil {
 		return nil, fmt.Errorf("q rmsnorm: %w", err)
 	}
 	defer q2d.Free()
-	k2d, err = scaleRMSNorm(k2d, float32(invScale), s)
+	k2d, err = scaleRMSNorm(k2d, float32(invScale), b, s)
 	if err != nil {
 		return nil, fmt.Errorf("k rmsnorm: %w", err)
 	}
 	defer k2d.Free()
 
 	// beta = sigmoid(b); g = exp(-exp(A_log) * softplus(a + dt_bias))
-	beta, err := mlx.Sigmoid(b, s)
+	beta, err := b.Sigmoid(bOut, s)
 	if err != nil {
 		return nil, fmt.Errorf("beta sigmoid: %w", err)
 	}
 	defer beta.Free()
 
-	decay, err := decayGate(g.ALog, a, g.DTBias, s)
+	decay, err := decayGate(g.ALog, a, g.DTBias, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("decay gate: %w", err)
 	}
 	defer decay.Free()
 
 	// Recurrent update.
-	y, newState, err := gatedDeltaUpdate(q2d, k2d, v2d, decay, beta, state, s)
+	y, newState, err := gatedDeltaUpdate(q2d, k2d, v2d, decay, beta, state, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("gated delta update: %w", err)
 	}
@@ -296,7 +296,7 @@ func (g *gatedDeltaNet) forward(x *mlx.Array, cache *llm.KVCache, layerIdx, seqL
 		// Persist the new recurrent state + trailing conv rows. The cache
 		// takes ownership of both arrays — do not Free them here.
 		nKeep := g.convK - 1
-		convTail, err := mlx.Slice(convInput, []int{0, S, 0}, []int{B, S + nKeep, g.convDim}, []int{1, 1, 1}, s)
+		convTail, err := b.Slice(convInput, []int{0, S, 0}, []int{B, S + nKeep, g.convDim}, []int{1, 1, 1}, s)
 		if err != nil {
 			return nil, fmt.Errorf("conv tail: %w", err)
 		}
@@ -311,25 +311,25 @@ func (g *gatedDeltaNet) forward(x *mlx.Array, cache *llm.KVCache, layerIdx, seqL
 	}
 
 	// Gated output norm: out = rms_norm(y) * silu(z), then project.
-	zReshaped, err := mlx.Reshape(z, []int{B, S, g.numV, g.headV}, s)
+	zReshaped, err := b.Reshape(z, []int{B, S, g.numV, g.headV}, s)
 	if err != nil {
 		return nil, fmt.Errorf("z reshape: %w", err)
 	}
 	defer zReshaped.Free()
 
-	out, err := rmsNormGated(y, zReshaped, g.norm, s)
+	out, err := rmsNormGated(y, zReshaped, g.norm, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("norm gated: %w", err)
 	}
 	defer out.Free()
 
-	outFlat, err := mlx.Reshape(out, []int{B, S, g.valueDim}, s)
+	outFlat, err := b.Reshape(out, []int{B, S, g.valueDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("out flatten: %w", err)
 	}
 	defer outFlat.Free()
 
-	return g.outProj.Forward(outFlat, s)
+	return g.outProj.Forward(outFlat, b, s)
 }
 
 func sqrt(x float64) float64 { return math.Sqrt(x) }

@@ -5,12 +5,13 @@ package llm
 import (
 	"fmt"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
-// ArchitectureFactory creates an Architecture instance from a ModelConfig.
-// Factories are registered at init time by each architecture package.
-type ArchitectureFactory func(cfg ModelConfig) (Architecture, error)
+// ArchitectureFactory creates an Architecture instance from a ModelConfig and
+// a tensor.Backend. Factories are registered at init time by each architecture
+// package.
+type ArchitectureFactory func(cfg ModelConfig, backend tensor.Backend) (Architecture, error)
 
 // architectureFactories maps model_type → factory. Each architecture package
 // (e.g. qwen3) registers its factory in an init() function.
@@ -27,13 +28,13 @@ func RegisterArchitecture(modelType string, factory ArchitectureFactory) {
 }
 
 // createArchitecture looks up the factory for cfg.Arch and creates an instance.
-func createArchitecture(cfg ModelConfig) (Architecture, error) {
+func createArchitecture(cfg ModelConfig, backend tensor.Backend) (Architecture, error) {
 	factory, ok := architectureFactories[cfg.Arch]
 	if !ok {
 		return nil, fmt.Errorf("llm: unsupported architecture %q (registered: %v)",
 			cfg.Arch, registeredArchitectures())
 	}
-	return factory(cfg)
+	return factory(cfg, backend)
 }
 
 // ArchFactory returns the registered factory for a model type. Exported for
@@ -54,7 +55,3 @@ func registeredArchitectures() []string {
 	}
 	return types
 }
-
-// _ ensures the mlx package is referenced even if the interface doesn't use
-// it directly (it does via ForwardPrefill/ForwardDecode signatures).
-var _ = mlx.Available

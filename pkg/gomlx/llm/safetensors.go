@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // safetensorEntry is the metadata for one tensor in a safetensors file.
@@ -140,11 +141,11 @@ func openSingleSafetensors(path string) (*SafetensorsFile, error) {
 	return &SafetensorsFile{header: headerMap, rawData: rawData}, nil
 }
 
-// Get loads a tensor by name as a native-dtype MLX array. BF16 and F16 weights
+// Get loads a tensor by name as a native-dtype tensor.Array. BF16 and F16 weights
 // are loaded directly without conversion to float32 — MLX Metal kernels handle
 // these dtypes natively at full speed, keeping memory usage and bandwidth at
 // the native (half-precision) level.
-func (sf *SafetensorsFile) Get(name string, s *mlx.Stream) (*mlx.Array, error) {
+func (sf *SafetensorsFile) Get(name string, s tensor.Stream) (tensor.Array, error) {
 	if sf.weightMap != nil {
 		shardFile, ok := sf.weightMap[name]
 		if !ok {
@@ -166,23 +167,26 @@ func (sf *SafetensorsFile) Get(name string, s *mlx.Stream) (*mlx.Array, error) {
 	end := entry.DataOffsets[1]
 	rawBytes := sf.rawData[start:end]
 
-	var dtype mlx.Dtype
+	var dtype tensor.Dtype
 	switch entry.DType {
 	case "BF16":
-		dtype = mlx.BFloat16
+		dtype = tensor.BFloat16
 	case "F16":
-		dtype = mlx.Float16
+		dtype = tensor.Float16
 	case "F32":
-		dtype = mlx.Float32
+		dtype = tensor.Float32
 	case "U32":
-		dtype = mlx.UInt32
+		dtype = tensor.UInt32
 	case "I32":
-		dtype = mlx.Int32
+		dtype = tensor.Int32
 	default:
 		return nil, fmt.Errorf("safetensors: %q has unsupported dtype %s", name, entry.DType)
 	}
 
-	return mlx.NewArrayFromBytes(rawBytes, entry.Shape, dtype)
+	// Use the mlx package directly for array creation since this is a
+	// low-level loader that doesn't have a backend reference. The created
+	// *mlx.Array satisfies tensor.Array.
+	return mlx.NewArrayFromBytes(rawBytes, entry.Shape, mlx.Dtype(dtype))
 }
 
 // Has reports whether a tensor exists in the file (or any shard).

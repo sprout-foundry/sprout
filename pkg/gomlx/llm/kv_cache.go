@@ -5,7 +5,7 @@ package llm
 import (
 	"fmt"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // KVCache stores key and value tensors across decode steps so that each
@@ -19,38 +19,40 @@ import (
 // Memory: at seq=2048, each layer stores 2 tensors of
 // [1, 8, 2048, 128] * 4 bytes (fp32) = 16 MB. For 28 layers: ~900 MB.
 // With fp16 (future): ~450 MB.
-// CacheState tracks whether a layer has been initialized in the cache.
-// During prefill, each layer stores its K/V in sequence. Using CachedLen()
-// (which checks layer 0) to decide Store vs Append is wrong — layers 1+ see
-// layer 0's length and incorrectly take the Append path.
 type KVCache struct {
 	layers      []*KVCacheLayer
 	initialized []bool
-	stream      *mlx.Stream
+	stream      tensor.Stream
+	backend     tensor.Backend
 }
 
 // KVCacheLayer holds the cached K and V for a single transformer layer.
 // For hybrid linear-attention layers (Qwen3.5 DeltaNet), K/V are nil and
 // State/ConvState hold the fixed-size recurrent state instead.
 type KVCacheLayer struct {
-	K *mlx.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
-	V *mlx.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
+	K tensor.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
+	V tensor.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
 
 	// DeltaNet (linear attention) state. State is [B, Hv, Dv, Dk] (the
 	// recurrent key/value memory); ConvState is [B, conv_kernel-1, conv_dim]
 	// (the trailing conv input rows). Both are fixed-size — they do NOT grow
 	// with sequence length.
-	State     *mlx.Array
-	ConvState *mlx.Array
+	State     tensor.Array
+	ConvState tensor.Array
 }
 
 // NewKVCache creates a cache for the given number of layers.
-func NewKVCache(numLayers int, s *mlx.Stream) *KVCache {
+func NewKVCache(numLayers int, s tensor.Stream) *KVCache {
 	return &KVCache{
 		layers:      make([]*KVCacheLayer, numLayers),
 		initialized: make([]bool, numLayers),
 		stream:      s,
 	}
+}
+
+// SetBackend sets the backend used for tensor operations in the cache.
+func (c *KVCache) SetBackend(b tensor.Backend) {
+	c.backend = b
 }
 
 // IsInitialized reports whether a layer's cache has been populated.
@@ -63,7 +65,7 @@ func (c *KVCache) IsInitialized(layerIdx int) bool {
 
 // Store writes the initial K/V tensors for a layer during prefill. The cache
 // takes ownership of the arrays — do not Free them after calling Store.
-func (c *KVCache) Store(layerIdx int, k, v *mlx.Array) error {
+func (c *KVCache) Store(layerIdx int, k, v tensor.Array) error {
 	if layerIdx < 0 || layerIdx >= len(c.layers) {
 		return fmt.Errorf("kv_cache: layer index %d out of range [0, %d)", layerIdx, len(c.layers))
 	}
@@ -81,7 +83,7 @@ func (c *KVCache) Store(layerIdx int, k, v *mlx.Array) error {
 // Append concatenates new K/V (single token) to the cache for a layer.
 // newK and newV must be [1, num_kv_heads, 1, head_dim]. The cache frees
 // the old arrays and stores the concatenated result.
-func (c *KVCache) Append(layerIdx int, newK, newV *mlx.Array) error {
+func (c *KVCache) Append(layerIdx int, newK, newV tensor.Array) error {
 	if layerIdx < 0 || layerIdx >= len(c.layers) {
 		return fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
 	}
@@ -97,11 +99,11 @@ func (c *KVCache) Append(layerIdx int, newK, newV *mlx.Array) error {
 	defer newV.Free()
 
 	// Concatenate along the sequence axis (axis=2)
-	concatK, err := mlx.ConcatenateAxis([]*mlx.Array{cached.K, newK}, 2, c.stream)
+	concatK, err := c.backend.ConcatenateAxis([]tensor.Array{cached.K, newK}, 2, c.stream)
 	if err != nil {
 		return fmt.Errorf("kv_cache: concat K: %w", err)
 	}
-	concatV, err := mlx.ConcatenateAxis([]*mlx.Array{cached.V, newV}, 2, c.stream)
+	concatV, err := c.backend.ConcatenateAxis([]tensor.Array{cached.V, newV}, 2, c.stream)
 	if err != nil {
 		concatK.Free()
 		return fmt.Errorf("kv_cache: concat V: %w", err)
@@ -124,7 +126,7 @@ func (c *KVCache) Get(layerIdx int) (*KVCacheLayer, error) {
 
 // StoreState writes the fixed-size DeltaNet recurrent state for a layer.
 // The cache takes ownership of the arrays.
-func (c *KVCache) StoreState(layerIdx int, state, convState *mlx.Array) error {
+func (c *KVCache) StoreState(layerIdx int, state, convState tensor.Array) error {
 	if layerIdx < 0 || layerIdx >= len(c.layers) {
 		return fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
 	}
@@ -141,7 +143,7 @@ func (c *KVCache) StoreState(layerIdx int, state, convState *mlx.Array) error {
 
 // GetState returns the fixed-size DeltaNet recurrent state for a layer.
 // Returns nil, nil if the layer is not initialized.
-func (c *KVCache) GetState(layerIdx int) (*mlx.Array, *mlx.Array, error) {
+func (c *KVCache) GetState(layerIdx int) (tensor.Array, tensor.Array, error) {
 	if layerIdx < 0 || layerIdx >= len(c.layers) {
 		return nil, nil, fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
 	}
@@ -175,6 +177,7 @@ func (c *KVCache) SnapshotPrefix() *KVCache {
 		layers:      make([]*KVCacheLayer, len(c.layers)),
 		initialized: make([]bool, len(c.initialized)),
 		stream:      c.stream,
+		backend:     c.backend,
 	}
 	for i, l := range c.layers {
 		if l == nil {
@@ -182,16 +185,16 @@ func (c *KVCache) SnapshotPrefix() *KVCache {
 		}
 		cp := &KVCacheLayer{}
 		if l.K != nil {
-			cp.K = mlx.RetainArray(l.K)
+			cp.K = c.backend.RetainArray(l.K)
 		}
 		if l.V != nil {
-			cp.V = mlx.RetainArray(l.V)
+			cp.V = c.backend.RetainArray(l.V)
 		}
 		if l.State != nil {
-			cp.State = mlx.RetainArray(l.State)
+			cp.State = c.backend.RetainArray(l.State)
 		}
 		if l.ConvState != nil {
-			cp.ConvState = mlx.RetainArray(l.ConvState)
+			cp.ConvState = c.backend.RetainArray(l.ConvState)
 		}
 		snap.layers[i] = cp
 		snap.initialized[i] = c.initialized[i]
@@ -220,16 +223,16 @@ func (c *KVCache) RestorePrefix(snap *KVCache) error {
 		}
 		cp := &KVCacheLayer{}
 		if l.K != nil {
-			cp.K = mlx.RetainArray(l.K)
+			cp.K = c.backend.RetainArray(l.K)
 		}
 		if l.V != nil {
-			cp.V = mlx.RetainArray(l.V)
+			cp.V = c.backend.RetainArray(l.V)
 		}
 		if l.State != nil {
-			cp.State = mlx.RetainArray(l.State)
+			cp.State = c.backend.RetainArray(l.State)
 		}
 		if l.ConvState != nil {
-			cp.ConvState = mlx.RetainArray(l.ConvState)
+			cp.ConvState = c.backend.RetainArray(l.ConvState)
 		}
 		c.layers[i] = cp
 		c.initialized[i] = snap.initialized[i]
@@ -237,7 +240,7 @@ func (c *KVCache) RestorePrefix(snap *KVCache) error {
 	return nil
 }
 
-// Free releases all MLX arrays held by the cache.
+// Free releases all arrays held by the cache.
 func (c *KVCache) Free() {
 	for _, layer := range c.layers {
 		if layer != nil {

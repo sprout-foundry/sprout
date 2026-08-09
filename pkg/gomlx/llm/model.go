@@ -9,15 +9,16 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
-// Model is a local LLM running on the Apple Silicon GPU via MLX. It drives
+// Model is a local LLM running on the GPU via a tensor.Backend. It drives
 // the generation loop (prefill → decode) and delegates the forward pass to
 // the Architecture implementation.
 type Model struct {
 	cfg       ModelConfig
-	stream    *mlx.Stream
+	backend   tensor.Backend
+	stream    tensor.Stream
 	arch      Architecture
 	tokenizer *Tokenizer
 	mu        sync.Mutex
@@ -54,8 +55,9 @@ const maxPrefixLen = 4096
 // config.json, model.safetensors, and tokenizer.json. The architecture is
 // auto-detected from config.json.
 func NewModel(modelDir string) (*Model, error) {
-	if !mlx.Available() {
-		return nil, fmt.Errorf("llm: MLX GPU not available")
+	backend := tensor.DetectBackend()
+	if backend == nil || !backend.Available() {
+		return nil, fmt.Errorf("llm: no GPU backend available")
 	}
 
 	// SP-134 RAM gate: refuse to load a model whose weights already threaten
@@ -73,7 +75,7 @@ func NewModel(modelDir string) (*Model, error) {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 
-	arch, err := createArchitecture(cfg)
+	arch, err := createArchitecture(cfg, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +100,7 @@ func NewModel(modelDir string) (*Model, error) {
 	// the thread-local default stream) stay consistent.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	loadStream, err := mlx.DefaultStream()
+	loadStream, err := backend.DefaultStream()
 	if err != nil {
 		return nil, fmt.Errorf("create load stream: %w", err)
 	}
@@ -114,6 +116,7 @@ func NewModel(modelDir string) (*Model, error) {
 
 	m := &Model{
 		cfg:       cfg,
+		backend:   backend,
 		stream:    nil, // created per Generate call on the inference thread
 		arch:      arch,
 		tokenizer: tok,
@@ -128,8 +131,9 @@ func NewModel(modelDir string) (*Model, error) {
 // callers flexibility for non-standard layouts. modelPath is the safetensors
 // file, configPath is config.json, tokenizerPath is tokenizer.json.
 func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, error) {
-	if !mlx.Available() {
-		return nil, fmt.Errorf("llm: MLX GPU not available")
+	backend := tensor.DetectBackend()
+	if backend == nil || !backend.Available() {
+		return nil, fmt.Errorf("llm: no GPU backend available")
 	}
 
 	cfg, err := LoadConfig(configPath)
@@ -137,7 +141,7 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 
-	arch, err := createArchitecture(cfg)
+	arch, err := createArchitecture(cfg, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +160,7 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 	// Pin to this OS thread for the whole load; see NewModel for why.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	loadStream, err := mlx.DefaultStream()
+	loadStream, err := backend.DefaultStream()
 	if err != nil {
 		return nil, fmt.Errorf("create load stream: %w", err)
 	}
@@ -166,14 +170,11 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 		return nil, fmt.Errorf("load weights: %w", err)
 	}
 
-	// InitWeights released the safetensors file blob (potentially ~1.2GB).
-	// Run one explicit GC so the reclaimed memory is usable before the first
-	// generation; otherwise the pre-collection heap size sets the first GC
-	// threshold at ~2x that size and memory appears to leak during generation.
 	runtime.GC()
 
 	m := &Model{
 		cfg:       cfg,
+		backend:   backend,
 		arch:      arch,
 		tokenizer: tok,
 	}
@@ -260,7 +261,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	s, err := mlx.NewGPUStream()
+	s, err := m.backend.NewGPUStream()
 	if err != nil {
 		return fmt.Errorf("get GPU stream: %w", err)
 	}
@@ -496,13 +497,13 @@ func (m *Model) ContextLength() int {
 // BOSID returns the beginning-of-sequence token ID.
 func (m *Model) BOSID() int { return m.cfg.BOSTokenID }
 
-// makeIDsArray converts token IDs to an MLX int64 array [1, seqLen].
-func (m *Model) makeIDsArray(ids []int) *mlx.Array {
+// makeIDsArray converts token IDs to a tensor int64 array [1, seqLen].
+func (m *Model) makeIDsArray(ids []int) tensor.Array {
 	data := make([]int64, len(ids))
 	for i, id := range ids {
 		data[i] = int64(id)
 	}
-	arr, _ := mlx.NewArrayFromInt64(data, []int{1, len(ids)})
+	arr, _ := m.backend.NewArrayFromInt64(data, []int{1, len(ids)})
 	return arr
 }
 

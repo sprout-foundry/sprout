@@ -13,9 +13,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -125,8 +125,19 @@ type streamChoice struct {
 }
 
 type streamDelta struct {
-	Role    string `json:"role,omitempty"`
-	Content string `json:"content,omitempty"`
+	Role      string            `json:"role,omitempty"`
+	Content   string            `json:"content,omitempty"`
+	ToolCalls []streamToolCall  `json:"tool_calls,omitempty"`
+}
+
+// streamToolCall mirrors OpenAI's streaming tool_call delta. Index is
+// required for incremental assembly; we always emit the complete call in
+// one chunk so Index is always 0.
+type streamToolCall struct {
+	Index    int              `json:"index"`
+	ID       string           `json:"id,omitempty"`
+	Type     string           `json:"type,omitempty"`
+	Function toolCallFunction `json:"function,omitempty"`
 }
 
 type modelInfo struct {
@@ -188,6 +199,7 @@ func (s *Server) HandleChat(w http.ResponseWriter, r *http.Request) {
 	for i, m := range req.Messages {
 		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
 	}
+	log.Printf("HandleChat: %d messages, stream=%v, tools=%d, prompt_tokens_est=%d", len(msgs), req.Stream, len(req.Tools), promptTokenEstimate(req.Messages))
 
 	// If tools are provided, inject them into the system prompt using the
 	// Qwen3.5 tool-calling template. The fine-tuned model was trained with
@@ -222,12 +234,10 @@ func (s *Server) HandleChat(w http.ResponseWriter, r *http.Request) {
 		cfg.TopP = float32(*req.TopP)
 	}
 
-	// When tools are provided, always use non-streaming internally so we can
-	// parse the complete tool_call output. Sprout handles both streaming and
-	// non-streaming responses; the tool_call XML must be complete before we
-	// can parse it, so incremental streaming isn't viable.
-	hasTools := len(req.Tools) > 0
-	if req.Stream && !hasTools {
+	// When tools are provided, stream normally but track output for tool-call
+	// parsing. The finish_reason is set based on whether tool calls were found.
+	_ = len(req.Tools) // tool-call parsing happens in streamChat
+	if req.Stream {
 		s.streamChat(w, r, prompt, cfg, req)
 		return
 	}
@@ -303,17 +313,17 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, prompt strin
 		return
 	}
 
-	// Stream token-by-token. Buffer the output to detect tool calls.
-	// If the model emits a <tool_call>, we convert it to the OpenAI
-	// tool_calls delta format instead of streaming it as content.
+	// Stream token-by-token. When tools are present, buffer the output and
+	// send it in one batch at the end so we can detect and strip tool_call
+	// XML. When no tools, stream normally for real-time token display.
+	hasTools := len(req.Tools) > 0
 	var outputBuf strings.Builder
 	err := s.model.Generate(r.Context(), prompt, cfg, func(tokenID int) {
 		tok := s.model.DecodeToken(tokenID)
-		outputBuf.WriteString(tok)
-		// Stream content as-is; tool call parsing happens post-hoc.
-		// (Full streaming tool-call support would require incremental XML
-		// parsing, which is complex. For now we stream raw text and let
-		// the non-streaming parser handle tool calls in the final chunk.)
+		if hasTools {
+			outputBuf.WriteString(tok)
+			return // buffer for tool-call parsing
+		}
 		_ = send(streamChunk{
 			ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
 			Choices: []streamChoice{{Index: 0, Delta: streamDelta{Content: tok}, FinishReason: nil}},
@@ -323,11 +333,49 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, prompt strin
 		_ = send(map[string]string{"error": err.Error()})
 	}
 
-	// Check if the output contains tool calls
-	_, toolCalls := parseToolCalls(outputBuf.String())
+	// Parse buffered output for tool calls (when tools were provided)
 	finish := "stop"
-	if len(toolCalls) > 0 {
-		finish = "tool_calls"
+	if hasTools {
+		content, toolCalls := parseToolCalls(outputBuf.String())
+		if len(toolCalls) > 0 {
+			finish = "tool_calls"
+			// Send content (text before tool calls) as a delta if non-empty
+			if content != "" {
+				_ = send(streamChunk{
+					ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
+					Choices: []streamChoice{{Index: 0, Delta: streamDelta{Content: content}, FinishReason: nil}},
+				})
+			}
+			// Send the parsed tool calls in OpenAI streaming format so sprout's
+			// StreamingResponseBuilder can assemble them.
+			deltas := make([]streamToolCall, 0, len(toolCalls))
+			for _, tc := range toolCalls {
+				deltas = append(deltas, streamToolCall{
+					Index:    0,
+					ID:       tc.ID,
+					Type:     tc.Type,
+					Function: tc.Function,
+				})
+			}
+			_ = send(streamChunk{
+				ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
+				Choices: []streamChoice{{Index: 0, Delta: streamDelta{ToolCalls: deltas}, FinishReason: nil}},
+			})
+		} else {
+			// No tool calls — send the buffered text as content
+			text := outputBuf.String()
+			if text != "" {
+				_ = send(streamChunk{
+					ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
+					Choices: []streamChoice{{Index: 0, Delta: streamDelta{Content: text}, FinishReason: nil}},
+				})
+			}
+		}
+	} else {
+		_, toolCalls := parseToolCalls(outputBuf.String())
+		if len(toolCalls) > 0 {
+			finish = "tool_calls"
+		}
 	}
 	_ = send(streamChunk{
 		ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
@@ -463,7 +511,7 @@ func parseToolCalls(text string) (content string, toolCalls []toolCallChunk) {
 
 		argsJSON, _ := json.Marshal(params)
 		toolCalls = append(toolCalls, toolCallChunk{
-			ID:   "call_" + strconv.Itoa(i),
+			ID:   fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), i),
 			Type: "function",
 			Function: toolCallFunction{
 				Name:      funcName,
@@ -473,4 +521,13 @@ func parseToolCalls(text string) (content string, toolCalls []toolCallChunk) {
 	}
 
 	return content, toolCalls
+}
+
+// promptTokenEstimate gives a rough prompt-size estimate for logging (4 chars/token).
+func promptTokenEstimate(msgs []chatMessage) int {
+	total := 0
+	for _, m := range msgs {
+		total += len(m.Content) / 4
+	}
+	return total
 }

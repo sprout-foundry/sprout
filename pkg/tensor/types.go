@@ -194,4 +194,7 @@ type Backend interface {
 	SetMemoryLimit(bytes uint64) error
 	ClearCache() error
 	TotalSystemRAM() uint64
+
+	// Compilation
+	EnableCompile() error
 }

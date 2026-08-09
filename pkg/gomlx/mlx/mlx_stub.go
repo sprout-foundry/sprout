@@ -395,3 +395,5 @@ func (c *MetalKernelConfig) AddTemplateArgBool(name string, value bool) error {
 func (k *MetalKernel) Apply(inputs []*Array, config *MetalKernelConfig, s *Stream) ([]*Array, error) {
 	return nil, errUnavailable
 }
+
+func EnableCompile() error { return errUnavailable }

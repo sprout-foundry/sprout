@@ -344,10 +344,45 @@ func (a *Array) Eval() error {
 	return checkRC(C.mlx_array_eval(a.cHandle()), "eval")
 }
 
+// RawBytes returns the raw underlying bytes of the array. Evaluates first.
+// The bytes are copied so the caller owns the memory.
+func (a *Array) RawBytes() ([]byte, error) {
+	if err := a.Eval(); err != nil {
+		return nil, err
+	}
+	n := int(C.mlx_array_size(a.cHandle()))
+	if n == 0 {
+		return []byte{}, nil
+	}
+	dt := a.Dtype()
+	elemSize := dtypeByteSize(dt)
+	totalBytes := n * elemSize
+	ptr := C.mlx_array_data_uint8(a.cHandle())
+	if ptr == nil {
+		return nil, errors.New("mlx: data pointer is null (eval failed?)")
+	}
+	out := make([]byte, totalBytes)
+	backed := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), totalBytes)
+	copy(out, backed)
+	return out, nil
+}
+
+func dtypeByteSize(dt Dtype) int {
+	switch dt {
+	case Bool, UInt8, Int8:
+		return 1
+	case UInt16, Int16, Float16, BFloat16:
+		return 2
+	case UInt32, Int32, Float32:
+		return 4
+	case UInt64, Int64, Float64:
+		return 8
+	default:
+		return 4
+	}
+}
+
 // Float32Data returns the array's data as a float32 slice. It evaluates the
-// array first (MLX only exposes a data pointer once the array is materialized)
-// and copies out into a freshly allocated Go slice so the caller owns the
-// memory. Panics if the array's dtype is not float32.
 func (a *Array) Float32Data() ([]float32, error) {
 	if got := a.Dtype(); got != Float32 {
 		return nil, fmt.Errorf("mlx: Float32Data on %v array", got)

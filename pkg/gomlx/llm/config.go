@@ -41,6 +41,14 @@ type hfConfig struct {
 	AttnOutputGate        bool        `json:"attn_output_gate"`
 	MTPNumHiddenLayers    int         `json:"mtp_num_hidden_layers"`
 	MTPUseDedicatedEmbeds bool        `json:"mtp_use_dedicated_embeddings"`
+
+	// MoE fields (Qwen3.6-35B-A3B and similar MoE models)
+	NumExperts            int  `json:"num_experts"`
+	NumExpertsPerTok      int  `json:"num_experts_per_tok"`
+	MoEIntermediateSize   int  `json:"moe_intermediate_size"`
+	SharedExpertInterSize int  `json:"shared_expert_intermediate_size"`
+	NormTopkProb          bool `json:"norm_topk_prob"`
+
 	LayerTypes            []string    `json:"layer_types"`
 	RopeParameters        *ropeParams `json:"rope_parameters"`
 
@@ -120,6 +128,11 @@ func LoadConfig(path string) (ModelConfig, error) {
 		AttnOutputGate:        raw.AttnOutputGate,
 		MTPNumHiddenLayers:    raw.MTPNumHiddenLayers,
 		MTPUseDedicatedEmbeds: raw.MTPUseDedicatedEmbeds,
+		NumExperts:            raw.NumExperts,
+		NumExpertsPerTok:      raw.NumExpertsPerTok,
+		MoEIntermediateSize:   raw.MoEIntermediateSize,
+		SharedExpertInterSize: raw.SharedExpertInterSize,
+		NormTopkProb:          raw.NormTopkProb,
 		LayerTypes:            raw.LayerTypes,
 	}
 

@@ -61,7 +61,8 @@ func TestRecommendModelForRAM(t *testing.T) {
 		ram  uint64
 		want string
 	}{
-		{32 * 1024 * 1024 * 1024, "qwen3.5-9b"},
+		{32 * 1024 * 1024 * 1024, "qwen3.6-35b-a3b"},
+		{31 * 1024 * 1024 * 1024, "qwen3.5-9b"},
 		{16 * 1024 * 1024 * 1024, "qwen3.5-4b"},
 		{14 * 1024 * 1024 * 1024, "qwen3.5-4b"},
 		{8 * 1024 * 1024 * 1024, "qwen3.5-2b"},

@@ -132,10 +132,15 @@ type ModelConfig struct {
 	PartialRotaryFactor   float32  // fraction of head dim rotated by RoPE (0.25 for qwen3_5)
 	MRopeSection          []int    // mRoPE section sizes [T, H, W]
 	MRopeInterleaved      bool     // mRoPE interleaved vs half-split
-	MTPNumHiddenLayers    int      // multi-token prediction layers; absent from MLX conversions (configs ship mtp=none, no mtp tensors on disk) — an MTP-aware conversion + decode path would be required to use it
-	MTPUseDedicatedEmbeds bool     // MTP uses its own embedding table when true; shares the main embedding when false
-	WeightPrefix          string   // safetensors key prefix ("" or "model." for qwen3, "model.language_model." for qwen3_5)
-	LayerTypes            []string // optional per-layer type override; nil = derive from FullAttentionInterval
+	MTPNumHiddenLayers    int      // multi-token prediction layers
+	MTPUseDedicatedEmbeds bool     // MTP uses its own embedding table when true
+	NumExperts            int      // MoE: total number of experts (0 = dense model)
+	NumExpertsPerTok      int      // MoE: active experts per token
+	MoEIntermediateSize   int      // MoE: intermediate size per expert
+	SharedExpertInterSize int      // MoE: shared expert intermediate size
+	NormTopkProb          bool     // MoE: normalize top-k probabilities
+	WeightPrefix          string   // safetensors key prefix
+	LayerTypes            []string // optional per-layer type override
 }
 
 // HybridLinearAttn reports whether the model has DeltaNet linear-attention

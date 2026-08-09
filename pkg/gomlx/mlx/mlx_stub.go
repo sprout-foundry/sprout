@@ -331,6 +331,9 @@ func Dequantize(*Array, *Array, *Array, int, int, string, *Stream) (*Array, erro
 func QuantizedMatMul(*Array, *Array, *Array, *Array, bool, int, int, string, *Stream) (*Array, error) {
 	return nil, errUnavailable
 }
+func GatherQuantizedMatMul(*Array, *Array, *Array, *Array, *Array, *Array, bool, int, int, string, bool, *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
 
 // MetalKernel is unavailable on stub builds.
 type MetalKernel struct{}

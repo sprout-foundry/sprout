@@ -16,6 +16,7 @@ import (
 
 func init() {
 	llm.RegisterArchitecture("qwen3_5_text", New)
+	llm.RegisterArchitecture("qwen3_5_moe_text", New)
 }
 
 // Qwen35 implements the Qwen3.5 hybrid architecture: a 3:1 mix of Gated
@@ -84,10 +85,12 @@ type layerWeights struct {
 	linearAttn *gatedDeltaNet   // non-nil for linear layers
 	selfAttn   *selfAttnWeights // non-nil for full layers
 
-	// MLP (SwiGLU) — shared by both layer kinds.
+	// MLP — dense SwiGLU (gateProj/upProj/downProj) OR MoE (moe).
+	// When moe is non-nil, the dense projections are nil.
 	gateProj *llm.Linear // [in, intermediate]
 	upProj   *llm.Linear
 	downProj *llm.Linear
+	moe      *sparseMoeBlock // non-nil for MoE layers
 }
 
 type selfAttnWeights struct {
@@ -210,18 +213,32 @@ func (q *Qwen35) InitWeights(path string, s tensor.Stream) error {
 			lw.selfAttn = sa
 		}
 
-		// MLP (shared by both layer kinds).
-		lw.gateProj, err = llm.LoadLinear(sf, p+".mlp.gate_proj.weight", q.backend, s, q.cfg.Quantization)
-		if err != nil {
-			return fmt.Errorf("layer %d gate_proj: %w", i, err)
-		}
-		lw.upProj, err = llm.LoadLinear(sf, p+".mlp.up_proj.weight", q.backend, s, q.cfg.Quantization)
-		if err != nil {
-			return fmt.Errorf("layer %d up_proj: %w", i, err)
-		}
-		lw.downProj, err = llm.LoadLinear(sf, p+".mlp.down_proj.weight", q.backend, s, q.cfg.Quantization)
-		if err != nil {
-			return fmt.Errorf("layer %d down_proj: %w", i, err)
+		// MLP: dense SwiGLU or MoE sparse block.
+		if q.cfg.NumExperts > 0 {
+			// MoE layer
+			moe := &sparseMoeBlock{
+				numExperts:       q.cfg.NumExperts,
+				numExpertsPerTok: q.cfg.NumExpertsPerTok,
+				normTopkProb:     q.cfg.NormTopkProb,
+			}
+			if err := moe.loadWeights(sf, p, q.backend, s, q.cfg.Quantization); err != nil {
+				return fmt.Errorf("layer %d moe: %w", i, err)
+			}
+			lw.moe = moe
+		} else {
+			// Dense SwiGLU
+			lw.gateProj, err = llm.LoadLinear(sf, p+".mlp.gate_proj.weight", q.backend, s, q.cfg.Quantization)
+			if err != nil {
+				return fmt.Errorf("layer %d gate_proj: %w", i, err)
+			}
+			lw.upProj, err = llm.LoadLinear(sf, p+".mlp.up_proj.weight", q.backend, s, q.cfg.Quantization)
+			if err != nil {
+				return fmt.Errorf("layer %d up_proj: %w", i, err)
+			}
+			lw.downProj, err = llm.LoadLinear(sf, p+".mlp.down_proj.weight", q.backend, s, q.cfg.Quantization)
+			if err != nil {
+				return fmt.Errorf("layer %d down_proj: %w", i, err)
+			}
 		}
 	}
 
@@ -273,9 +290,18 @@ func (q *Qwen35) FreeWeights() {
 			freeArr(lw.selfAttn.qNorm)
 			freeArr(lw.selfAttn.kNorm)
 		}
-		lw.gateProj.Free()
-		lw.upProj.Free()
-		lw.downProj.Free()
+		if lw.gateProj != nil {
+			lw.gateProj.Free()
+		}
+		if lw.upProj != nil {
+			lw.upProj.Free()
+		}
+		if lw.downProj != nil {
+			lw.downProj.Free()
+		}
+		if lw.moe != nil {
+			lw.moe.free()
+		}
 	}
 	if q.mtp != nil {
 		q.mtp.Free()
@@ -821,7 +847,13 @@ func (q *Qwen35) forwardLayer(h tensor.Array, layerIdx, seqLen, startPos int, ca
 	}
 	defer normed2.Free()
 
-	ffnOut, err := q.swiglu(normed2, lw)
+	// MLP: dispatch to MoE or dense SwiGLU
+	var ffnOut tensor.Array
+	if lw.moe != nil {
+		ffnOut, err = lw.moe.forward(normed2, q)
+	} else {
+		ffnOut, err = q.swiglu(normed2, lw)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("ffn: %w", err)
 	}

@@ -476,7 +476,7 @@ func convertToolMessages(msgs []llm.ChatMessage, raw []chatMessage) []llm.ChatMe
 //	<parameter=key2>value2</parameter>
 //	</function>
 //	</tool_call>
-var toolCallRe = regexp.MustCompile(`(?s)<tool_call>\s*<function=(\w+)>\s*(.*?)</function>\s*</tool_call>`)
+var toolCallRe = regexp.MustCompile(`(?s)<tool_call>[\s\n]*<function=(\w+)>\s*(.*?)(?:</function>[\s\n]*(?:</tool_call>)?|$)`)
 
 func parseToolCalls(text string) (content string, toolCalls []toolCallChunk) {
 	matches := toolCallRe.FindAllStringSubmatchIndex(text, -1)

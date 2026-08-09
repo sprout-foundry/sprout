@@ -476,7 +476,7 @@ func convertToolMessages(msgs []llm.ChatMessage, raw []chatMessage) []llm.ChatMe
 //	<parameter=key2>value2</parameter>
 //	</function>
 //	</tool_call>
-var toolCallRe = regexp.MustCompile(`(?s)<tool_call>[\s\n]*<function=(\w+)>\s*(.*?)(?:</function>[\s\n]*(?:</tool_call>)?|$)`)
+var toolCallRe = regexp.MustCompile(`(?s)<tool_call>[\s\n]*(?:<function=|=?\s*)(\w+)>[\s\n]*(.*?)(?:</function>[\s\n]*(?:</tool_call>)?|<tool_call>|$)`)
 
 func parseToolCalls(text string) (content string, toolCalls []toolCallChunk) {
 	matches := toolCallRe.FindAllStringSubmatchIndex(text, -1)
@@ -484,7 +484,7 @@ func parseToolCalls(text string) (content string, toolCalls []toolCallChunk) {
 		return text, nil
 	}
 
-	paramRe := regexp.MustCompile(`(?s)<parameter=(\w+)>\s*(.*?)</parameter>`)
+	paramRe := regexp.MustCompile(`(?s)<parameter=(\w+)>\s*(.*?)(?:</parameter>|<parameter=|</function>|</tool_call>|$)`)
 
 	// Extract text before the first tool call as content
 	if matches[0][0] > 0 {
@@ -497,7 +497,8 @@ func parseToolCalls(text string) (content string, toolCalls []toolCallChunk) {
 
 		// Parse <parameter=key>value</parameter> blocks
 		params := map[string]interface{}{}
-		for _, pm := range paramRe.FindAllStringSubmatch(paramsBlock, -1) {
+		paramMatches := paramRe.FindAllStringSubmatch(paramsBlock, -1)
+		for _, pm := range paramMatches {
 			key := pm[1]
 			val := strings.TrimSpace(pm[2])
 			// Try to parse as JSON (numbers, booleans, arrays)
@@ -506,6 +507,25 @@ func parseToolCalls(text string) (content string, toolCalls []toolCallChunk) {
 				params[key] = parsed
 			} else {
 				params[key] = val
+			}
+		}
+
+		// Handle malformed output where content appears before the first
+		// <parameter= tag (model omits the opening tag for large content).
+		// The bare text between the function name and the first <parameter=
+		// is likely the "content" parameter for write_file/edit_file.
+		if len(paramMatches) > 0 {
+			firstParamStart := strings.Index(paramsBlock, "<parameter=")
+			if firstParamStart > 0 {
+				bareContent := strings.TrimSpace(paramsBlock[:firstParamStart])
+				if bareContent != "" {
+					// Strip trailing </parameter> if the model closed the bare tag
+					bareContent = strings.TrimSuffix(bareContent, "</parameter>")
+					bareContent = strings.TrimSpace(bareContent)
+					if _, exists := params["content"]; !exists && len(bareContent) > 10 {
+						params["content"] = bareContent
+					}
+				}
 			}
 		}
 

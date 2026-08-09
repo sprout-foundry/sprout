@@ -6928,6 +6928,16 @@
       "offline": true,
       "models": [
         {
+          "id": "qwen3.5-2b-4bit",
+          "name": "Qwen3.5 2B (4-bit)",
+          "description": "Good speed/quality balance \u2014 ~49 tok/s on M1 Pro. Fits in 8 GB RAM.",
+          "context_length": 32000,
+          "tags": [
+            "local",
+            "quantized"
+          ]
+        },
+        {
           "id": "qwen3.5-4b-4bit",
           "name": "Qwen3.5 4B (4-bit)",
           "description": "Quantized Qwen3.5 4B \u2014 hybrid DeltaNet architecture, 32K context. ~13 tok/s on M1 Pro.",

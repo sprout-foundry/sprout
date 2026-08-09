@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // gatedDeltaKernelSource is the fused Metal kernel for the Gated DeltaNet
@@ -149,35 +150,42 @@ func getDeltaKernel(dk, dv, hk, hv int, inT, stT mlx.Dtype) (*mlx.MetalKernel, e
 //
 // Returns y [B,S,Hv,Dv] (cast to q's dtype) and the final state
 // [B,Hv,Dv,Dk] (cast to state's dtype — fp32 in practice).
-func fusedGatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Stream) (*mlx.Array, *mlx.Array, error) {
-	qs := q.Shape()
+func fusedGatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, backend tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
+	// Cast to concrete mlx types for Metal kernel access.
+	qM := q.(*mlx.Array)
+	kM := k.(*mlx.Array)
+	vM := v.(*mlx.Array)
+	gM := g.(*mlx.Array)
+	betaM := beta.(*mlx.Array)
+	var stateM *mlx.Array
+	if state != nil {
+		stateM = state.(*mlx.Array)
+	}
+	mlxStream := stream.(*mlx.Stream)
+
+	qs := qM.Shape()
 	B, S, Hk, Dk := qs[0], qs[1], qs[2], qs[3]
-	vs := v.Shape()
+	vs := vM.Shape()
 	Hv, Dv := vs[2], vs[3]
 	stT := mlx.Float32
-	if state != nil {
-		stT = state.Dtype()
+	if stateM != nil {
+		stT = stateM.Dtype()
 	}
 
-	kernel, err := getDeltaKernel(Dk, Dv, Hk, Hv, q.Dtype(), stT)
+	kernel, err := getDeltaKernel(Dk, Dv, Hk, Hv, qM.Dtype(), stT)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// State: fp32 zeros when nil (matches the sequential path).
-	cur := state
+	cur := stateM
 	if cur == nil {
-		cur, err = mlx.Zeros([]int{B, Hv, Dv, Dk}, mlx.Float32, stream)
+		cur, err = mlx.Zeros([]int{B, Hv, Dv, Dk}, mlx.Float32, mlxStream)
 		if err != nil {
 			return nil, nil, fmt.Errorf("zero state: %w", err)
 		}
-		// The apply graph retains its own reference to cur; the Go handle is
-		// released once the kernel launch has consumed it.
 		defer cur.Free()
 	}
 
-	// T is a scalar int32 sequence length (matches the reference's Python-int
-	// scalar input; MLX treats 0-dim int32 arrays as by-value kernel args).
 	tArr, err := mlx.NewScalarInt32(S)
 	if err != nil {
 		return nil, nil, fmt.Errorf("T scalar: %w", err)
@@ -186,7 +194,7 @@ func fusedGatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Strea
 
 	cfg := mlx.NewMetalKernelConfig()
 	defer cfg.Free()
-	if err := cfg.AddOutputArg([]int{B, S, Hv, Dv}, q.Dtype()); err != nil {
+	if err := cfg.AddOutputArg([]int{B, S, Hv, Dv}, qM.Dtype()); err != nil {
 		return nil, nil, err
 	}
 	if err := cfg.AddOutputArg([]int{B, Hv, Dv, Dk}, stT); err != nil {
@@ -198,7 +206,7 @@ func fusedGatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Strea
 	if err := cfg.SetThreadGroup(32, 4, 1); err != nil {
 		return nil, nil, err
 	}
-	for name, val := range map[string]mlx.Dtype{"InT": q.Dtype(), "StT": stT} {
+	for name, val := range map[string]mlx.Dtype{"InT": qM.Dtype(), "StT": stT} {
 		if err := cfg.AddTemplateArgDtype(name, val); err != nil {
 			return nil, nil, err
 		}
@@ -209,7 +217,7 @@ func fusedGatedDeltaUpdate(q, k, v, g, beta, state *mlx.Array, stream *mlx.Strea
 		}
 	}
 
-	outs, err := kernel.Apply([]*mlx.Array{q, k, v, g, beta, cur, tArr}, cfg, stream)
+	outs, err := kernel.Apply([]*mlx.Array{qM, kM, vM, gM, betaM, cur, tArr}, cfg, mlxStream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("gated delta kernel: %w", err)
 	}

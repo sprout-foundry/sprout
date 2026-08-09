@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // mtpWeights holds the multi-token prediction (MTP) module. Qwen3.5 models
@@ -24,11 +24,11 @@ import (
 // present only in raw-HF exports (mlx-community conversions strip them); the
 // module is a no-op (nil) on models without them.
 type mtpWeights struct {
-	preFCHiddenNorm    *mlx.Array   // [hidden] RMSNorm on prev hidden
-	preFCEmbeddingNorm *mlx.Array   // [hidden] RMSNorm on next-token embedding
+	preFCHiddenNorm    tensor.Array   // [hidden] RMSNorm on prev hidden
+	preFCEmbeddingNorm tensor.Array   // [hidden] RMSNorm on next-token embedding
 	fc                 *llm.Linear  // [hidden, 2*hidden]
 	layer              layerWeights // one full-attention decoder layer
-	norm               *mlx.Array   // [hidden] final RMSNorm before head
+	norm               tensor.Array   // [hidden] final RMSNorm before head
 }
 
 // hasMTPWeights reports whether the safetensors file contains MTP tensors.
@@ -40,7 +40,7 @@ func hasMTPWeights(sf *llm.SafetensorsFile) bool {
 
 // loadMTPWeights loads the MTP module from the top-level `mtp.` namespace.
 // Returns (nil, nil) when the file has no MTP tensors.
-func loadMTPWeights(sf *llm.SafetensorsFile, s *mlx.Stream, quant *llm.QuantConfig) (*mtpWeights, error) {
+func loadMTPWeights(sf *llm.SafetensorsFile, backend tensor.Backend, s tensor.Stream, quant *llm.QuantConfig) (*mtpWeights, error) {
 	if !hasMTPWeights(sf) {
 		return nil, nil
 	}
@@ -57,7 +57,7 @@ func loadMTPWeights(sf *llm.SafetensorsFile, s *mlx.Stream, quant *llm.QuantConf
 	}
 	// fc is [H, 2H]. Raw-HF exports carry it as BF16; a quantized export
 	// would carry the packed triplet — respect the model's quant config.
-	m.fc, err = llm.LoadLinear(sf, "mtp.fc.weight", s, quant)
+	m.fc, err = llm.LoadLinear(sf, "mtp.fc.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp fc: %w", err)
 	}
@@ -78,19 +78,19 @@ func loadMTPWeights(sf *llm.SafetensorsFile, s *mlx.Stream, quant *llm.QuantConf
 		return nil, fmt.Errorf("mtp layer post norm: %w", err)
 	}
 	sa := &selfAttnWeights{}
-	sa.qProj, err = llm.LoadLinear(sf, p+".self_attn.q_proj.weight", s, quant)
+	sa.qProj, err = llm.LoadLinear(sf, p+".self_attn.q_proj.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp q_proj: %w", err)
 	}
-	sa.kProj, err = llm.LoadLinear(sf, p+".self_attn.k_proj.weight", s, quant)
+	sa.kProj, err = llm.LoadLinear(sf, p+".self_attn.k_proj.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp k_proj: %w", err)
 	}
-	sa.vProj, err = llm.LoadLinear(sf, p+".self_attn.v_proj.weight", s, quant)
+	sa.vProj, err = llm.LoadLinear(sf, p+".self_attn.v_proj.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp v_proj: %w", err)
 	}
-	sa.oProj, err = llm.LoadLinear(sf, p+".self_attn.o_proj.weight", s, quant)
+	sa.oProj, err = llm.LoadLinear(sf, p+".self_attn.o_proj.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp o_proj: %w", err)
 	}
@@ -104,15 +104,15 @@ func loadMTPWeights(sf *llm.SafetensorsFile, s *mlx.Stream, quant *llm.QuantConf
 	}
 	lw.selfAttn = sa
 
-	lw.gateProj, err = llm.LoadLinear(sf, p+".mlp.gate_proj.weight", s, quant)
+	lw.gateProj, err = llm.LoadLinear(sf, p+".mlp.gate_proj.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp gate_proj: %w", err)
 	}
-	lw.upProj, err = llm.LoadLinear(sf, p+".mlp.up_proj.weight", s, quant)
+	lw.upProj, err = llm.LoadLinear(sf, p+".mlp.up_proj.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp up_proj: %w", err)
 	}
-	lw.downProj, err = llm.LoadLinear(sf, p+".mlp.down_proj.weight", s, quant)
+	lw.downProj, err = llm.LoadLinear(sf, p+".mlp.down_proj.weight", backend, s, quant)
 	if err != nil {
 		return nil, fmt.Errorf("mtp down_proj: %w", err)
 	}
@@ -165,7 +165,7 @@ func (m *mtpWeights) Free() {
 //
 // Returns logits [1, 1, vocab] predicting the token at position t+2.
 // The MTP decoder layer attends over a single position with no KV history.
-func (m *mtpWeights) forward(q *Qwen35, prevHidden, nextEmb *mlx.Array) (*mlx.Array, error) {
+func (m *mtpWeights) forward(q *Qwen35, prevHidden, nextEmb tensor.Array) (tensor.Array, error) {
 	logits, _, err := m.forwardStep(q, prevHidden, nextEmb)
 	if err != nil {
 		return nil, err
@@ -182,19 +182,19 @@ func (m *mtpWeights) forward(q *Qwen35, prevHidden, nextEmb *mlx.Array) (*mlx.Ar
 //
 // Returns K draft token IDs predicting positions t+2..t+K+1. All
 // intermediate MLX arrays are freed.
-func (m *mtpWeights) draftChain(q *Qwen35, prevHidden *mlx.Array, nextToken int, k int) ([]int, error) {
+func (m *mtpWeights) draftChain(q *Qwen35, prevHidden tensor.Array, nextToken int, k int) ([]int, error) {
 	drafts := make([]int, 0, k)
 	curHidden := prevHidden // borrowed — owned by caller
 	curTok := nextToken
 
 	for i := 0; i < k; i++ {
-		emb, err := q.weights.embed.Lookup(q.makeOneTokenArray(curTok), q.stream)
+		emb, err := q.weights.embed.Lookup(q.makeOneTokenArray(curTok), q.backend, q.stream)
 		if err != nil {
 			return nil, fmt.Errorf("mtp draft %d lookup: %w", i, err)
 		}
 		// GatherAxis adds the indices' shape as leading dims, so a [1,1] ids
 		// array yields [1,1,1,H] — squeeze axis 2 to match prevHidden [1,1,H].
-		emb, err = mlx.SqueezeAxis(emb, 2, q.stream)
+		emb, err = q.backend.SqueezeAxis(emb, 2, q.stream)
 		if err != nil {
 			emb.Free()
 			return nil, fmt.Errorf("mtp draft %d squeeze: %w", i, err)
@@ -235,7 +235,7 @@ func (m *mtpWeights) draftChain(q *Qwen35, prevHidden *mlx.Array, nextToken int,
 // [1, 1, H]. The hidden state is used to chain drafts: the next MTP step
 // feeds the previous step's layer output as prevHidden (DeepSeek-V3 style
 // self-referential drafting). Caller frees both.
-func (m *mtpWeights) forwardStep(q *Qwen35, prevHidden, nextEmb *mlx.Array) (*mlx.Array, *mlx.Array, error) {
+func (m *mtpWeights) forwardStep(q *Qwen35, prevHidden, nextEmb tensor.Array) (tensor.Array, tensor.Array, error) {
 	s := q.stream
 
 	// e' = pre_fc_norm_embedding(next_emb)
@@ -253,13 +253,13 @@ func (m *mtpWeights) forwardStep(q *Qwen35, prevHidden, nextEmb *mlx.Array) (*ml
 	defer hNorm.Free()
 
 	// x = fc(concat([e', h'], dim=-1))
-	cat, err := mlx.ConcatenateAxis([]*mlx.Array{eNorm, hNorm}, -1, s)
+	cat, err := q.backend.ConcatenateAxis([]tensor.Array{eNorm, hNorm}, -1, s)
 	if err != nil {
 		return nil, nil, fmt.Errorf("mtp concat: %w", err)
 	}
 	defer cat.Free()
 
-	x, err := m.fc.Forward(cat, s)
+	x, err := m.fc.Forward(cat, q.backend, s)
 	if err != nil {
 		return nil, nil, fmt.Errorf("mtp fc: %w", err)
 	}
@@ -278,7 +278,7 @@ func (m *mtpWeights) forwardStep(q *Qwen35, prevHidden, nextEmb *mlx.Array) (*ml
 	}
 	defer attnOut.Free()
 
-	res1, err := mlx.Add(x, attnOut, s)
+	res1, err := q.backend.Add(x, attnOut, s)
 	if err != nil {
 		return nil, nil, fmt.Errorf("mtp attn residual: %w", err)
 	}
@@ -296,7 +296,7 @@ func (m *mtpWeights) forwardStep(q *Qwen35, prevHidden, nextEmb *mlx.Array) (*ml
 	}
 	defer ffnOut.Free()
 
-	layerOut, err := mlx.Add(res1, ffnOut, s)
+	layerOut, err := q.backend.Add(res1, ffnOut, s)
 	if err != nil {
 		return nil, nil, fmt.Errorf("mtp layer residual: %w", err)
 	}

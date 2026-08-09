@@ -9,22 +9,22 @@ import (
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // DebugDumpLayers runs the prefill forward pass and writes each layer's
 // hidden state to dir/layer-NN.bin as raw float32. Used by the parity tool
 // to compare layer-by-layer with mlx-lm and isolate which layer kind
 // (linear DeltaNet vs full attention) diverges. Debug-only.
-func (q *Qwen35) DebugDumpLayers(ids *mlx.Array, seqLen int, cache *llm.KVCache, s *mlx.Stream, dir string) error {
+func (q *Qwen35) DebugDumpLayers(ids tensor.Array, seqLen int, cache *llm.KVCache, s tensor.Stream, dir string) error {
 	q.stream = s
 
-	h, err := q.weights.embed.Lookup(ids, s)
+	h, err := q.weights.embed.Lookup(ids, q.backend, s)
 	if err != nil {
 		return fmt.Errorf("embedding lookup: %w", err)
 	}
 	defer h.Free()
-	h, err = mlx.SqueezeAxis(h, 2, s)
+	h, err = q.backend.SqueezeAxis(h, 2, s)
 	if err != nil {
 		return fmt.Errorf("squeeze embedding: %w", err)
 	}
@@ -38,7 +38,7 @@ func (q *Qwen35) DebugDumpLayers(ids *mlx.Array, seqLen int, cache *llm.KVCache,
 		h = out
 
 		// Cast to fp32 for the dump (Float32Data requires Float32 dtype).
-		f32Arr, err := mlx.AsType(h, mlx.Float32, s)
+		f32Arr, err := q.backend.AsType(h, tensor.Float32, s)
 		if err != nil {
 			return fmt.Errorf("layer %d cast: %w", i, err)
 		}

@@ -25,6 +25,23 @@ func ArgMaxAxis(a *Array, axis int, keepdims bool, s *Stream) (*Array, error) {
 	return wrapResult(out, rc, "argmax_axis")
 }
 
+// ArgPartitionAxis returns indices that partition the array along axis so that
+// the element at kth is in sorted position, with smaller elements before it.
+// Used for top-k expert routing in MoE.
+func ArgPartitionAxis(a *Array, kth, axis int, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_argpartition_axis(&out, a.cHandle(), C.int(kth), C.int(axis), s.cHandle())
+	return wrapResult(out, rc, "argpartition_axis")
+}
+
+// TakeAlongAxis gathers elements from a using indices along the given axis.
+// Used for MoE top-k score extraction.
+func TakeAlongAxis(a, indices *Array, axis int, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_take_along_axis(&out, a.cHandle(), indices.cHandle(), C.int(axis), s.cHandle())
+	return wrapResult(out, rc, "take_along_axis")
+}
+
 // ArgMax returns the index of the maximum value over the flattened array.
 func ArgMax(a *Array, keepdims bool, s *Stream) (*Array, error) {
 	out := newOutput()

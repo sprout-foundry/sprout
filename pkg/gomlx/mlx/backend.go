@@ -294,6 +294,14 @@ func (b *MetalBackend) ArgMaxAxis(a tensor.Array, axis int, keepdims bool, s ten
 	return ArgMaxAxis(a.(*Array), axis, keepdims, toStream(s))
 }
 
+func (b *MetalBackend) ArgPartitionAxis(a tensor.Array, kth, axis int, s tensor.Stream) (tensor.Array, error) {
+	return ArgPartitionAxis(a.(*Array), kth, axis, toStream(s))
+}
+
+func (b *MetalBackend) TakeAlongAxis(a, indices tensor.Array, axis int, s tensor.Stream) (tensor.Array, error) {
+	return TakeAlongAxis(a.(*Array), indices.(*Array), axis, toStream(s))
+}
+
 func (b *MetalBackend) Conv1D(input, weight tensor.Array, stride, padding, dilation, groups int, s tensor.Stream) (tensor.Array, error) {
 	return Conv1D(input.(*Array), weight.(*Array), stride, padding, dilation, groups, toStream(s))
 }

@@ -1,296 +1,264 @@
-# SP-136 — Cross-Platform Local LLM Backend (CUDA/ROCm/Vulkan)
+# SP-136 — Cross-Platform Local LLM Backend (GGML/CUDA/ROCm/Vulkan)
 
-## Problem
+## Current State (2026-08-08)
 
-Local LLM inference (`sprout-local` provider) works on Apple Silicon via a
-custom MLX Go binding (`pkg/gomlx/`). Users on Linux (NVIDIA/AMD/Intel GPUs)
-and Windows cannot use local inference — there is no backend for them.
+### What's built and verified
 
-The current MLX path is Apple-only at the CGO layer (`mlx_cgo.go` binds the
-Metal-only `mlx-c` C API). The model logic (`pkg/gomlx/llm/`) is conceptually
-portable but tightly coupled to `*mlx.Array` / `*mlx.Stream` — concrete CGO
-types, not interfaces.
+**Phase 1 — tensor.Backend interface + Metal implementation (DONE)**
+- `pkg/tensor/types.go` — `Backend` (102 methods), `Array`, `Stream`, `Dtype` interfaces
+- `pkg/tensor/detect.go` — `DetectBackend()` probes registered backends; `RegisterBackend()` for self-registration via `init()`
+- `pkg/gomlx/mlx/backend.go` — `MetalBackend` implements `tensor.Backend` by delegating to existing CGO calls. Zero overhead.
+- `pkg/gomlx/mlx/backend_stub.go` — stub for non-Apple platforms
+- `pkg/gomlx/mlx/dtype.go` — `Dtype` aliased to `tensor.Dtype` so `*mlx.Array` satisfies `tensor.Array` natively
+- Module wiring: `pkg/tensor/go.mod`, `pkg/gomlx/go.mod` requires tensor, root `go.mod` has replace directives
+- **Verified**: `make build-all` ✓, `go test -tags mlx ./llm/` ✓, `go vet` ✓
 
-## Design Decision: In-Process Tensor Backend Abstraction
+**Phase 2 — GGML tensor.Backend implementation (CORE DONE, stubs remain)**
+- `pkg/tensor/ggml/backend.go` — full `tensor.Backend` implementation on GGML C API
+- CGO bindings to `ggml.h`, `ggml-backend.h`, `ggml-alloc.h`
+- Eager-to-graph bridge: each op builds a single-op graph; `ggml_gallocr` allocates all graph tensors; input data set post-allocation; `ggml_backend_graph_compute` runs on GPU
+- **Critical fix**: gallocr stored on Array, freed in `Array.Free()` — keeps backend buffers alive for the tensor's lifetime
+- **Verified on M1 Pro Metal** (4 tests pass):
+  - MatMul: `[38, 44, 50, 56, 83, 98, 113, 128]` ✓
+  - Add: `[11, 22, 33, 44]` ✓
+  - Softmax: sums to 1.0 ✓
+  - RMSNorm: correct normalization ✓
+- `pkg/tensor/ggml/go.mod` depends on `pkg/tensor`
 
-**Build a tensor backend interface and implement it per GPU vendor.**
+**GGML op coverage:**
+| Op | Status | Notes |
+|---|---|---|
+| MatMul | ✓ | `ggml_mul_mat`, verified correct |
+| Add/Subtract/Multiply/Divide | ✓ | elementwise binary |
+| Abs/Exp/Log/Log1p/Sqrt/Square/Negative | ✓ | elementwise unary |
+| Sigmoid/Softplus/Sin/Cos/Tanh/Power | ✓ | composed or direct |
+| Maximum | ✓ | composed: `a + relu(b-a)` |
+| Sum/Mean/Max | ✓ | reductions |
+| Softmax/SoftmaxAxis | ✓ | `ggml_soft_max` |
+| FastRMSNorm | ✓ | `ggml_rms_norm` + `ggml_mul` for weight |
+| FastScaledDotProductAttention | ✓ | `ggml_flash_attn_ext` |
+| FastRoPE | ✓ | `ggml_rope` with position tensor |
+| Reshape/Transpose/TransposeAxes | ✓ | `ggml_reshape`/`ggml_transpose`/`ggml_permute` |
+| SqueezeAxis | ✓ | no-op (GGML uses 4D internally) |
+| Slice | ✓ (2D only) | `ggml_view_2d` |
+| ConcatenateAxis/Stack/RepeatAxis | ✓ | `ggml_concat` |
+| Pad | ✓ | `ggml_pad` |
+| ArgMax/ArgMaxAxis | ✓ | `ggml_argmax` |
+| AsType | ✓ | `ggml_cpy` with target type |
+| **Conv1D** | **STUB** | needs `ggml_im2col` + `ggml_mul_mat` |
+| **GatherAxis** | **STUB** | needs `ggml_get_rows` |
+| **Quantize/QuantizedMatMul/Dequantize** | **STUB** | needs GGML quantized types (GGML_TYPE_Q4_0 etc.) |
+| **SliceUpdate** | **STUB** | needs `ggml_acc` or custom |
+| **SplitAxis** | **STUB** | needs `ggml_view` + manual split |
+| **Where** | **STUB** | needs `ggml_cmp` + `ggml_where` or composition |
+| **Tril** | **STUB** | needs mask tensor creation |
 
-The original instinct was "just run llama.cpp as a subprocess." That was
-rejected because **process management and consistency is the reason we built
-the Go MLX path in the first place.** A subprocess means:
+### What's NOT done
 
-- **Different tokenizers** — llama.cpp's BPE, GGUF tokenizer, or SentencePiece
-  produce different token IDs than our Go BPE implementation. The same prompt
-  yields different token sequences, different context limits, different
-  token-count billing. Our token counting, repetition penalty, and context
-  management all assume the Go tokenizer.
-- **Different quantization behavior** — GGUF Q4_K_M ≠ our affine 4-bit.
-  Output quality, token distributions, and error modes differ. A user
-  debugging "the local model said something different than cloud" would face
-  a second layer of variance from the quant format.
-- **Different streaming formats** — llama.cpp's SSE format, error messages,
-  and stop conditions differ from ours. MTP, thinking-mode filtering, and EOS
-  handling are all in our Go code.
-- **Different memory management** — our code applies `ApplyMemoryLimits`,
-  `TrimCachedMemory`, and RAM-gated model selection. A subprocess manages its
-  own memory; we can't trim its cache mid-generation or gate it reliably.
-- **Process lifecycle** — crashes, port conflicts, startup races, zombie
-  processes, signal handling, log capture. Every subprocess adds operational
-  failure modes that in-process code doesn't have.
+1. **Model layer migration** — `pkg/gomlx/llm/` still imports `mlx` directly, not `tensor.Backend`. ~200 call sites across 22 files.
+2. **Remaining GGML op stubs** — 8 ops need implementation (see table above)
+3. **GGML quantized matmul** — GGML has native quantized types (Q4_0, Q4_1, Q5_0, etc.) but our model uses affine quantization (weights/scales/biases triplets). Need to either: (a) map our triplet format to GGML's quantized types, or (b) dequantize on load and use GGML's built-in quantization
+4. **Cross-platform testing** — everything verified on macOS Metal only; CUDA/ROCm/Vulkan untested
+5. **Bundling** — GGML `.so`/`.dylib`/`.dll` files need to be distributed or built on target machines
 
-Instead: **define a `tensor.Backend` interface, implement it for each GPU
-vendor, and keep the entire model layer (forward pass, tokenizer, KV cache,
-MTP, sampling, server) in Go.** Same tokenizer, same quantization, same
-streaming, same memory management — only the compute kernel changes.
-
-## Architecture
-
-### Layer 1: Tensor Backend Interface (`pkg/tensor/`)
-
-New top-level package defining the abstraction:
-
-```go
-// pkg/tensor/backend.go
-
-// Backend is a compute backend for tensor operations. Implementations:
-// metal (Apple), cuda (NVIDIA), rocm (AMD), vulkan (portable).
-type Backend interface {
-    // Available reports whether this backend can run on the current machine.
-    Available() bool
-
-    // NewStream creates a compute stream (command queue) for ordering ops.
-    NewStream() (Stream, error)
-
-    // Tensor creation
-    NewArrayFromFloat32(data []float32, shape []int) (Array, error)
-    NewArrayFromInt64(data []int64, shape []int) (Array, error)
-
-    // Ops — the minimal set needed by the model layer.
-    // Each returns a new Array; the caller frees inputs.
-    MatMul(a, b Array, s Stream) (Array, error)
-    QuantizedMatMul(...) (Array, error)
-    Softmax(a Array, s Stream) (Array, error)
-    RMSNorm(a, weight Array, eps float32, s Stream) (Array, error)
-    // ... etc (full op set derived from current mlx_* functions)
-}
-
-type Array interface {
-    Shape() []int
-    Dtype() Dtype
-    Float32Data() ([]float32, error)
-    Eval() error
-    Free()
-    Retain() Array
-}
-
-type Stream interface {
-    Synchronize() error
-    Free()
-}
-```
-
-**Migration path from `pkg/gomlx/mlx/`:**
-1. `mlx.Array` → `tensor.Array` (interface, same methods)
-2. `mlx.Stream` → `tensor.Stream`
-3. `mlx.MatMul(a, b, s)` → `backend.MatMul(a, b, s)` (method on backend)
-4. The model layer (`pkg/gomlx/llm/`) imports `pkg/tensor`, not `pkg/gomlx/mlx/`
-
-### Layer 2: Metal Backend (port of current MLX binding)
-
-`pkg/tensor/metal/` — wraps the existing CGO calls to `mlx-c`. This is a
-mechanical port: every function in `mlx_cgo.go` / `mlx_ops.go` / 
-`mlx_fast_ops.go` becomes a method on `metalBackend`.
-
-On `darwin/arm64` with build tag `metal`, this backend is active. On all
-other platforms, it's a stub returning `Available() = false`.
-
-### Layer 3: CUDA Backend (NVIDIA)
-
-`pkg/tensor/cuda/` — CGO bindings to a CUDA C library. Two implementation
-options:
-
-**Option A: ONNX Runtime C API (reuse existing dependency)**
-- sprout already depends on ONNX Runtime (`pkg/embedding/`)
-- Export the Qwen3.5 forward pass as an ONNX graph, run via ORT's CUDA EP
-- Pros: no new C++ code to write; ORT handles kernel fusion, memory
-- Cons: ONNX export of Qwen3.5 DeltaNet hybrid is non-trivial; loses the
-  hand-tuned Metal kernels; MTP requires a separate graph
-
-**Option B: Custom CUDA kernels via CGO**
-- Write CUDA kernels for MatMul, Attention, RMSNorm, etc. (or bind cuBLAS)
-- Pros: full control, can match MLX's fused kernel performance
-- Cons: significant engineering effort; CUDA-only (no AMD/Intel)
-
-**Option C: Use GGML (llama.cpp's tensor library) as a C dependency**
-- GGML already supports CUDA, ROCm, Vulkan, Metal, and CPU backends
-- Bind `ggml.h` via CGO; implement `tensor.Backend` on top of GGML tensors
-- Pros: one C library covers all GPU vendors; mature, optimized kernels
-- Cons: GGML's API is lower-level than MLX's; some ops need composition
-
-**Recommended: Option C (GGML)**. It's the least code to maintain, covers all
-GPU vendors with one integration, and GGML is the most battle-tested tensor
-library in the local-LLM ecosystem. We get consistent behavior because the
-Go model layer still controls the forward pass, tokenizer, and sampling.
-
-### Layer 4: ROCm (AMD) and Vulkan (portable)
-
-With Option C (GGML), these come for free — GGML already has ROCm and Vulkan
-backends. The `tensor.Backend` implementation is the same; GGML dispatches to
-the right compute backend internally based on what's available.
-
-If we chose Option A or B, AMD/Intel would each need separate work.
-
-### Layer 5: Model Layer (unchanged logic, new import path)
-
-`pkg/gomlx/llm/` → `pkg/llm/` (or stays, with import changed to `pkg/tensor`)
-
-The forward pass code changes from:
-```go
-import "github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
-
-out, err := mlx.MatMul(a, b, s)
-```
-to:
-```go
-import "github.com/sprout-foundry/sprout/pkg/tensor"
-
-out, err := backend.MatMul(a, b, s)
-```
-
-This is a mechanical find-and-replace across ~30 files. The model logic
-(Qwen3 attention, Qwen3.5 DeltaNet, MTP, KV cache, sampling) does not change.
-The tokenizer, safetensors loader, and server are pure Go and need no changes.
-
-### Layer 6: Backend Detection and Selection
-
-```go
-// pkg/tensor/detect.go
-
-func DetectBackend() Backend {
-    // Try in priority order:
-    for _, b := range []Backend{
-        &metal.Backend{},  // Apple Silicon
-        &cuda.Backend{},   // NVIDIA
-        &rocm.Backend{},   // AMD
-        &vulkan.Backend{}, // Portable fallback
-        &cpu.Backend{},    // Last resort
-    } {
-        if b.Available() {
-            return b
-        }
-    }
-    return nil
-}
-```
-
-Build tags control which backends are compiled in:
-- `metal` — darwin/arm64 only
-- `cuda` — linux/amd64 with NVIDIA toolkit
-- `rocm` — linux/amd64 with ROCm
-- `vulkan` — any platform with Vulkan SDK
-- Default (no tags) — CPU backend (slow but works everywhere)
-
-### Layer 7: Quantization and Model Format
-
-**Keep safetensors, not GGUF.** Our Go safetensors loader already handles:
-- Full-precision (BF16/F32)
-- Pre-quantized triplets (weights/scales/biases)
-- Load-time quantization via `GO_QUANTIZE`
-- Sharded files with index
-
-The tensor backend's `QuantizedMatMul` op handles the dequantize-then-multiply
-at the compute level. Different backends may use different fused kernel
-strategies, but the weight format on disk is the same.
-
-GGML/GGUF is only needed if we go with Option C and want to load GGUF files
-directly. But loading safetensors into GGML tensors is straightforward —
-GGML has `ggml_new_tensor` and we can copy the bytes in.
+---
 
 ## Implementation Plan
 
-### Phase 1: Tensor interface + Metal backend (refactor, no new deps)
+### Phase 2 Completion: Remaining GGML ops (on Mac, no new hardware needed)
 
-1. Create `pkg/tensor/` with `Backend`, `Array`, `Stream` interfaces
-2. Port `pkg/gomlx/mlx/*` → `pkg/tensor/metal/*` (mechanical CGO rename)
-3. Update `pkg/gomlx/llm/*` imports from `mlx` to `tensor`
-4. `cmd/llm_server` selects backend via `tensor.DetectBackend()`
-5. **Verify**: all existing tests pass, no behavioral change
+**Effort: 1 session**
 
-Effort: ~2 sessions. Mechanical work, no new functionality.
+1. Implement the 8 stub ops:
+   - `Conv1D`: `ggml_im2col` → reshape → `ggml_mul_mat`
+   - `GatherAxis`: `ggml_get_rows` (maps directly — gathers rows by index)
+   - `QuantizedMatMul`: dequantize on load into GGML F32 tensor, then standard `ggml_mul_mat`. Defer GGML native quant types until perf testing shows it's needed.
+   - `Dequantize`: trivial — return the tensor as-is (already F32 after load-time dequant)
+   - `SliceUpdate`: `ggml_acc` (accumulate into a view)
+   - `SplitAxis`: create N `ggml_view` tensors at the right offsets
+   - `Where`: `ggml_cmp` (comparison) → `ggml_mul` (mask) → add
+   - `Tril`: create a lower-triangular mask tensor, multiply
+2. Write parity tests: each op should produce the same output as the MLX equivalent for the same input
 
-### Phase 2: GGML C binding (one integration, all GPUs)
+### Phase 3: Model layer migration (on Mac, no new hardware needed)
 
-1. Add GGML as a C dependency (vendored or pkg-config)
-2. Implement `pkg/tensor/ggml/` — `Backend` interface on top of `ggml.h`
-3. Map safetensors weights → GGML tensors at load time
-4. Implement each op: MatMul (ggml_mul_mat), RMSNorm (ggml_rms_norm),
-   Softmax, RoPE (ggml_rope), SDPA (ggml_flash_attn), etc.
-5. Build tags: `cuda` compiles GGML with CUDA, `vulkan` with Vulkan, etc.
-6. **Verify**: parity test — same model, same prompt, same output on Mac
-   (Metal via GGML) vs Mac (Metal via MLX)
+**Effort: 2-3 sessions**
 
-Effort: ~3-4 sessions. This is the core investment.
+This is the mechanical but critical step: change every `mlx.*` call to `backend.*`.
 
-### Phase 3: Model layer migration
+1. **Add `backend tensor.Backend` field to every struct that currently holds a `*mlx.Stream`**:
+   - `Qwen35` struct in `qwen35/forward.go`
+   - `Qwen3` struct in `qwen3/forward.go`
+   - `Model` struct in `model.go`
+   - `Linear` struct in `linear.go`
+   - `Embedding` struct in `embedding.go`
+   - `KVCache` struct in `kv_cache.go`
 
-1. Move `pkg/gomlx/llm/` → `pkg/llm/` (drop the `gomlx` prefix)
-2. Update all cmd/ imports
-3. Update webui local_llm_api.go to use `tensor.DetectBackend()` instead of
-   platform checks
-4. CI: add Linux/Vulkan and Linux/CUDA build targets
-5. **Verify**: end-to-end on Linux (GitHub Actions GPU runner or a test box)
+2. **Change type signatures from `*mlx.Array`/`*mlx.Stream` to `tensor.Array`/`tensor.Stream`**:
+   - Every function parameter and return value
+   - Local variables that hold op results
+   - The `defer result.Free()` pattern stays the same
 
-Effort: ~1-2 sessions.
+3. **Replace `mlx.OpName(a, b, s)` with `backend.OpName(a, b, s)`**:
+   - ~200 call sites across 22 files
+   - Mechanical but must be done carefully — some ops have slightly different argument names
+   - The `MetalBackend` methods already exist and delegate correctly
 
-### Phase 4: Polish and ship
+4. **Update `NewModel()` to accept a `tensor.Backend`**:
+   - Currently calls `mlx.NewGPUStream()` directly
+   - Change to `backend := tensor.DetectBackend()` → `stream, _ := backend.NewGPUStream()`
+   - Pass `backend` to all architecture constructors
 
-1. Model catalog updated with cross-platform download links
-2. Settings tab shows detected backend ("Apple Metal" / "NVIDIA CUDA" / etc.)
-3. CPU fallback backend for machines with no GPU
-4. CI matrix: macOS (Metal), Ubuntu (CUDA), Ubuntu (Vulkan), Ubuntu (CPU)
-5. Documentation: platform-specific build instructions
+5. **Update the stub** (`stub.go`):
+   - Non-MLX builds need a non-functional `tensor.Backend` that returns errors
+   - `DetectBackend()` returns nil → `NewModel()` returns error → sprout falls back to cloud
 
-## Trade-offs
+6. **Verify**: `make build-all` ✓, `go test -tags mlx ./llm/` ✓ (all existing tests pass with Metal backend), `go test` without tags ✓ (stub compiles and returns errors gracefully)
 
-**Why GGML over ONNX Runtime for the C layer:**
-- GGML's op set is closer to MLX's (both are eager-mode tensor libs)
-- ORT would require exporting the model as a static graph, losing the
-  ability to control the forward pass from Go (needed for MTP, KV cache
-  management, speculative decoding)
-- GGML already supports all four GPU backends (Metal, CUDA, ROCm, Vulkan)
-- GGML's quantized matmul is the most battle-tested in the local LLM world
+### Phase 4: Cross-platform testing (REQUIRES other hardware)
 
-**Why not keep MLX-only + subprocess for other platforms:**
-- **Process management and consistency** — the reason we built the Go path.
-  Different tokenizers, different quantization, different streaming, different
-  memory management. In-process means one tokenizer, one quant format, one
-  error surface, one memory model.
-- Subprocess adds port conflicts, startup races, crash recovery, zombie
-  processes, and log capture as operational failure modes
-- Users debugging "different output on Linux vs Mac" would face a second
-  layer of variance — not just the GPU backend, but the entire inference
-  engine
+**Effort: 1-2 sessions on target hardware**
 
-**Why not write CUDA kernels directly (Option B):**
-- NVIDIA-only; leaves AMD and Intel out
-- Significant engineering for each op (cuBLAS for MatMul is easy; fused
-  SDPA, RoPE, quantized matmul are all custom)
-- GGML already has these kernels, tested across millions of users
+This is where we need other machines. The code should be correct after Phase 3 — we just need to verify GGML loads the right backend and produces correct output.
+
+#### Test environment setup
+
+**Linux/NVIDIA (CUDA):**
+```bash
+# Install GGML with CUDA support
+sudo apt install cmake nvidia-cuda-toolkit
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp && cmake -B build -DGGML_CUDA=ON && cmake --build build
+sudo cp build/src/libggml*.so /usr/local/lib/
+sudo cp ggml/include/*.h /usr/local/include/
+
+# Build sprout with GGML
+CGO_ENABLED=1 go build -tags ggml ./cmd/llm_server/
+
+# Run parity test
+go test -tags ggml -v ./pkg/tensor/ggml/ -run TestGGML
+```
+
+**Linux/AMD (ROCm):**
+```bash
+# Same as above but -DGGML_ROCM=ON instead of -DGGML_CUDA=ON
+```
+
+**Linux/Intel/Any (Vulkan):**
+```bash
+# Same but -DGGML_VULKAN=ON
+```
+
+**Windows/WSL2:**
+```bash
+# In WSL2 Ubuntu, same as Linux. NVIDIA CUDA works via WSL CUDA drivers.
+# For Snapdragon ARM: WSL2 linux/arm64, GGML CPU backend (Oryon cores are fast)
+```
+
+#### What to test on each platform
+
+1. **Backend detection**: `DetectBackend()` returns the right backend name
+2. **Core ops**: MatMul, Add, Softmax, RMSNorm produce identical values to Mac Metal
+3. **Full forward pass**: load Qwen3.5-4B safetensors, generate text, verify output matches Mac MLX output
+4. **Performance**: measure tok/s — should be competitive with llama.cpp on the same hardware
+5. **Memory**: verify `ApplyMemoryLimits` and RAM gating still work
+
+#### Expected results per platform
+
+| Platform | Backend | GPU | Expected tok/s (4B Q4) | Notes |
+|---|---|---|---|---|
+| Mac M1 Pro | MLX (Metal) | Apple GPU | ~14 | Current baseline |
+| Mac M1 Pro | GGML (Metal) | Apple GPU | ~14 | Should match MLX |
+| Linux + RTX 4090 | GGML (CUDA) | NVIDIA | ~60-100 | Much faster |
+| Linux + RX 7900 | GGML (ROCm) | AMD | ~40-60 | |
+| WSL2 + RTX 3070 | GGML (CUDA) | NVIDIA | ~40-60 | |
+| WSL2 ARM (Snapdragon) | GGML (CPU) | Oryon cores | ~10-15 | No GPU passthrough |
+
+### Phase 5: GGML quantized matmul (perf optimization)
+
+**Effort: 1 session, after Phase 4 confirms correctness**
+
+Currently the GGML backend dequantizes weights to F32 on load. For production performance:
+
+1. Map our affine quantization (weights/scales/biases) to GGML's native quantized types:
+   - GGML Q4_0 = 4-bit with per-group scale (closest to our format)
+   - `ggml_new_tensor` with type `GGML_TYPE_Q4_0` → `ggml_mul_mat` auto-uses quantized kernel
+2. Or: load F32 weights and call `ggml_quantize_chunk()` to quantize on load
+3. Verify: output quality parity (should be identical — same quant math, different kernel)
+
+### Phase 6: Bundling and distribution
+
+**Effort: 1-2 sessions**
+
+1. **macOS**: no change — MLX is the primary path, GGML is secondary
+2. **Linux**: bundle `libggml*.so` in the sprout distribution, or document `apt install`
+3. **Windows/WSL2**: bundle `.so` files for WSL2, or document install steps
+4. **Snapdragon**: document CPU backend (fast Oryon cores), note GPU passthrough is future work
+5. **CI**: add build targets for `linux/amd64` with `ggml` tag (CUDA + Vulkan builds)
+
+### CI Matrix (target)
+
+| OS | Arch | Backend | Build Tag | Status |
+|---|---|---|---|---|
+| macOS | arm64 | MLX (Metal) | `mlx` | ✓ working |
+| macOS | arm64 | GGML (Metal) | `ggml` | ✓ core ops verified |
+| Ubuntu | amd64 | GGML (CUDA) | `ggml` | Needs testing |
+| Ubuntu | amd64 | GGML (Vulkan) | `ggml` | Needs testing |
+| Ubuntu | arm64 | GGML (CPU) | `ggml` | Needs testing |
+| Windows | arm64 | (via WSL2) | — | Document WSL2 path |
+
+---
+
+## Architecture Summary
+
+```
+                    tensor.DetectBackend()
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+         MetalBackend   GGMLBackend   (future)
+         (mlx CGO)      (ggml CGO)    (custom)
+              │            │
+         Apple GPU    ┌───┼───┬────────┐
+         (Metal)     │   │   │        │
+                    CUDA ROCm Vulkan  CPU
+                    (NVIDIA) (AMD) (any) (fallback)
+```
+
+**On macOS**: MLX wins (first in detection order). GGML is secondary.
+**On Linux/WSL2**: GGML wins. CUDA > ROCm > Vulkan > CPU.
+**Detection**: `ggml_backend_load_all()` discovers `.so`/`.dylib` files at runtime.
 
 ## What stays Apple-specific
 
-- `pkg/gomlx/mlx/` — the MLX CGO bindings become `pkg/tensor/metal/`. Still
-  darwin/arm64-only, still compiled with the `metal` build tag. But it's now
-  one implementation of a common interface, not the only path.
-- The Metal-specific fused kernels (FastScaledDotProductAttention,
-  FastRoPE, fused gated delta update) stay as Metal implementations. The
-  GGML backend provides equivalent fused kernels for CUDA/ROCm/Vulkan.
+`pkg/gomlx/mlx/` — the MLX CGO bindings. Still `darwin/arm64`-only with `mlx` build tag. But now it's one implementation of `tensor.Backend`, not the only path. The MLX model logic (Qwen3, Qwen3.5 forward passes) is shared via the `tensor.Backend` interface — the same Go code runs on all platforms.
 
-## Relationship to embedding model
+## Key Files
 
-The embedding model (`pkg/embedding/`) has its own GPU story via ONNX Runtime:
-- macOS: CoreML EP (or CPU)
-- Linux/Windows: CUDA/DirectML EP (already supported by onnxruntime-go)
+| File | Purpose |
+|---|---|
+| `pkg/tensor/types.go` | Backend, Array, Stream, Dtype interfaces |
+| `pkg/tensor/detect.go` | Backend detection and registration |
+| `pkg/gomlx/mlx/backend.go` | MetalBackend (wraps mlx CGO) |
+| `pkg/gomlx/mlx/backend_stub.go` | Non-Apple stub |
+| `pkg/gomlx/mlx/dtype.go` | Dtype alias to tensor.Dtype |
+| `pkg/tensor/ggml/backend.go` | GGMLBackend (wraps ggml CGO) |
+| `pkg/tensor/ggml/backend_test.go` | Verified tests (MatMul, Add, Softmax, RMSNorm) |
+| `pkg/gomlx/llm/*.go` | Model layer (22 files, needs Phase 3 migration) |
+| `cmd/llm_server/main.go` | OpenAI-compatible local server |
+| `pkg/webui/local_llm_api.go` | Local LLM status/lifecycle API |
 
-Embeddings are orthogonal — they use ONNX Runtime, not the LLM tensor backend.
-No changes needed there.
+## Build Commands
+
+```bash
+# Mac with MLX (primary)
+make build-all                    # full sprout build
+go test -tags mlx ./pkg/gomlx/llm/  # model layer tests
+
+# Mac with GGML (secondary, for development)
+CGO_ENABLED=1 go test -tags ggml ./pkg/tensor/ggml/
+
+# Linux with GGML (target)
+CGO_ENABLED=1 go build -tags ggml ./cmd/llm_server/
+CGO_ENABLED=1 go test -tags ggml ./pkg/tensor/ggml/
+```

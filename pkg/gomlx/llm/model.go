@@ -255,6 +255,13 @@ type GenerateConfig struct {
 	// this many tokens per round and the main model verifies them in one
 	// batched forward; accepted drafts emit extra tokens at ~1 decode cost.
 	MaxMTPDrafts int
+	// PromptLookupMaxDrafts enables prompt-lookup speculative decoding.
+	// When >0, the generation loop searches for n-gram matches between the
+	// recent context and the remaining prompt, proposes matching tokens as
+	// candidates, and verifies them in a single batched forward pass. Free
+	// speedup when the model echoes context (code, file contents, patterns).
+	// 0 disables it. Recommended: 4-8.
+	PromptLookupMaxDrafts int
 	// ThinkingTokens determines whether to include <think>...</think> blocks
 	// in the output. When false (default), thinking tokens are filtered.
 	ThinkingTokens bool
@@ -362,6 +369,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	useGPUArgmax := greedyOK && genCfg.Temperature <= 0 && genCfg.RepetitionPenalty == 0
 	mtpArch, mtpOK := m.arch.(MTPArchitecture)
 	useMTP := useGPUArgmax && mtpOK && mtpArch.MTPAvailable() && genCfg.MaxMTPDrafts > 0 && genCfg.MaxTokens > 1
+	usePromptLookup := useGPUArgmax && !useMTP && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
 
 	nextToken := 0
 	if useGPUArgmax {
@@ -414,6 +422,98 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 				}
 			}
 			nextToken = out[len(out)-1]
+		}
+		return nil
+	}
+
+	if usePromptLookup {
+		verifyArch, canVerify := m.arch.(interface {
+			ForwardPrefillArgmaxAll(ids []int, startPos int, cache *KVCache) ([]int, error)
+		})
+		maxDraft := genCfg.PromptLookupMaxDrafts
+		ngGramSize := 3
+		pos := len(tokenIDs)
+		allTokens := append(append([]int{}, tokenIDs...), nextToken)
+
+		for i := 1; i < genCfg.MaxTokens; {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if nextToken == m.cfg.EOSTokenID {
+				break
+			}
+
+			candidates := findPromptLookupCandidates(allTokens, ngGramSize, maxDraft)
+			if len(candidates) == 0 || !canVerify {
+				t, err := greedyArch.ForwardDecodeArgmax(nextToken, pos, cache)
+				if err != nil {
+					return fmt.Errorf("decode step %d: %w", i, err)
+				}
+				pos++
+				nextToken = t
+				allTokens = append(allTokens, nextToken)
+				generated = append(generated, nextToken)
+				if onToken != nil && !m.shouldFilterToken(nextToken, genCfg) {
+					onToken(nextToken)
+				}
+				i++
+				continue
+			}
+
+			// Batched verify: feed [nextToken, candidates...] through the model.
+			// predictions[j] = what the model thinks follows verifyIDs[j].
+			// Take a snapshot before verify so we can rollback on rejection.
+			snap := cache.SnapshotPrefix()
+			verifyIDs := append([]int{nextToken}, candidates...)
+			predictions, err := verifyArch.ForwardPrefillArgmaxAll(verifyIDs, pos, cache)
+			if err != nil {
+				snap.Free()
+				return fmt.Errorf("prompt-lookup verify: %w", err)
+			}
+
+			// Accept tokens where model prediction matches the candidate.
+			accepted := 0
+			newNext := predictions[0]
+			for j := 0; j < len(candidates) && j+1 < len(predictions); j++ {
+				if predictions[j] != candidates[j] {
+					break
+				}
+				accepted++
+				newNext = predictions[j+1]
+			}
+
+			if accepted < len(candidates) {
+				// Rollback: restore snapshot and re-run accepted prefix only.
+				cache.RestorePrefix(snap)
+				snap.Free()
+				if accepted > 0 {
+					rerunIDs := append([]int{nextToken}, candidates[:accepted]...)
+					verifyArch.ForwardPrefillArgmaxAll(rerunIDs, pos, cache)
+				}
+				pos += accepted
+			} else {
+				snap.Free()
+				pos += len(verifyIDs)
+			}
+
+			// Emit accepted tokens + the model's next prediction.
+			for j := 0; j < accepted && i < genCfg.MaxTokens; j++ {
+				generated = append(generated, candidates[j])
+				allTokens = append(allTokens, candidates[j])
+				if onToken != nil && !m.shouldFilterToken(candidates[j], genCfg) {
+					onToken(candidates[j])
+				}
+				i++
+			}
+			nextToken = newNext
+			allTokens = append(allTokens, nextToken)
+			if i < genCfg.MaxTokens {
+				generated = append(generated, nextToken)
+				if onToken != nil && !m.shouldFilterToken(nextToken, genCfg) {
+					onToken(nextToken)
+				}
+				i++
+			}
 		}
 		return nil
 	}
@@ -582,6 +682,36 @@ func longestCommonPrefix(a, b []int) int {
 		i++
 	}
 	return i
+}
+
+// findPromptLookupCandidates searches the token sequence for an n-gram match
+// with the last nGramSize tokens. If found, returns up to maxDraft tokens
+// that follow the match. This predicts what the model will likely echo from
+// context (code patterns, file contents, repetitive structures).
+func findPromptLookupCandidates(tokens []int, nGramSize, maxDraft int) []int {
+	if len(tokens) < nGramSize+1 {
+		return nil
+	}
+	tail := tokens[len(tokens)-nGramSize:]
+	for i := len(tokens) - nGramSize - 1; i >= nGramSize-1; i-- {
+		match := true
+		for j := 0; j < nGramSize; j++ {
+			if tokens[i-nGramSize+1+j] != tail[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			candidates := []int{}
+			for j := i + 1; j < len(tokens)-nGramSize && len(candidates) < maxDraft; j++ {
+				candidates = append(candidates, tokens[j])
+			}
+			if len(candidates) > 0 {
+				return candidates
+			}
+		}
+	}
+	return nil
 }
 
 // shouldFilterToken returns true if the token should be hidden from the caller.

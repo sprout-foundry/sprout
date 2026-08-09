@@ -220,6 +220,13 @@ func (m *Model) warmupAndPreCache() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
+	// Enable MLX graph compilation. MLX traces ops within each eval()
+	// boundary and fuses them into fewer Metal kernels, reducing kernel
+	// launch overhead and memory round-trips.
+	if err := m.backend.EnableCompile(); err != nil {
+		log.Printf("llm: enable_compile failed (continuing without): %v", err)
+	}
+
 	s, err := m.backend.NewGPUStream()
 	if err != nil {
 		log.Printf("llm: warmup skipped (no GPU stream): %v", err)

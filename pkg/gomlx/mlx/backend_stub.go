@@ -79,3 +79,5 @@ func (b *stubBackend) SetCacheLimit(uint64) error { return errUnavailable }
 func (b *stubBackend) SetMemoryLimit(uint64) error { return errUnavailable }
 func (b *stubBackend) ClearCache() error { return errUnavailable }
 func (b *stubBackend) TotalSystemRAM() uint64 { return 0 }
+
+func (b *stubBackend) EnableCompile() error { return errUnavailable }

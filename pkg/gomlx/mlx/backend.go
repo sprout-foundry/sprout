@@ -362,3 +362,5 @@ func toStream(s tensor.Stream) *Stream {
 	}
 	return s.(*Stream)
 }
+
+func (b *MetalBackend) EnableCompile() error { return EnableCompile() }

@@ -28,6 +28,7 @@ package mlx
 #cgo LDFLAGS: -L/opt/homebrew/lib -lmlx -lmlxc
 
 #include <mlx/c/array.h>
+#include <mlx/c/compile.h>
 #include <mlx/c/device.h>
 #include <mlx/c/error.h>
 #include <mlx/c/ops.h>
@@ -571,4 +572,14 @@ func (s *Stream) Free() {
 		C.mlx_device_free(s.dev)
 		s.dev.ctx = nil
 	}
+}
+
+// EnableCompile globally enables MLX graph compilation. When enabled, MLX
+// traces ops within each eval() boundary and fuses them into fewer Metal
+// kernels. This is the Go equivalent of Python's mx.enable_compile().
+func EnableCompile() error {
+	if rc := C.mlx_enable_compile(); rc != 0 {
+		return fmt.Errorf("mlx: enable_compile: %s", lastMLXError())
+	}
+	return nil
 }

@@ -71,10 +71,19 @@ func (c *KVCache) Store(layerIdx int, k, v tensor.Array) error {
 		return fmt.Errorf("kv_cache: layer index %d out of range [0, %d)", layerIdx, len(c.layers))
 	}
 	if c.layers[layerIdx] != nil {
-		c.layers[layerIdx].K.Free()
-		c.layers[layerIdx].V.Free()
-		c.layers[layerIdx].State.Free()
-		c.layers[layerIdx].ConvState.Free()
+		l := c.layers[layerIdx]
+		if l.K != nil {
+			l.K.Free()
+		}
+		if l.V != nil {
+			l.V.Free()
+		}
+		if l.State != nil {
+			l.State.Free()
+		}
+		if l.ConvState != nil {
+			l.ConvState.Free()
+		}
 	}
 	c.layers[layerIdx] = &KVCacheLayer{K: k, V: v}
 	c.initialized[layerIdx] = true
@@ -132,10 +141,19 @@ func (c *KVCache) StoreState(layerIdx int, state, convState tensor.Array) error 
 		return fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
 	}
 	if c.layers[layerIdx] != nil {
-		c.layers[layerIdx].State.Free()
-		c.layers[layerIdx].ConvState.Free()
-		c.layers[layerIdx].K.Free()
-		c.layers[layerIdx].V.Free()
+		l := c.layers[layerIdx]
+		if l.State != nil {
+			l.State.Free()
+		}
+		if l.ConvState != nil {
+			l.ConvState.Free()
+		}
+		if l.K != nil {
+			l.K.Free()
+		}
+		if l.V != nil {
+			l.V.Free()
+		}
 	}
 	c.layers[layerIdx] = &KVCacheLayer{State: state, ConvState: convState}
 	c.initialized[layerIdx] = true
@@ -217,10 +235,19 @@ func (c *KVCache) RestorePrefix(snap *KVCache) error {
 			continue
 		}
 		if c.layers[i] != nil {
-			c.layers[i].K.Free()
-			c.layers[i].V.Free()
-			c.layers[i].State.Free()
-			c.layers[i].ConvState.Free()
+			cl := c.layers[i]
+			if cl.K != nil {
+				cl.K.Free()
+			}
+			if cl.V != nil {
+				cl.V.Free()
+			}
+			if cl.State != nil {
+				cl.State.Free()
+			}
+			if cl.ConvState != nil {
+				cl.ConvState.Free()
+			}
 		}
 		cp := &KVCacheLayer{}
 		if l.K != nil {

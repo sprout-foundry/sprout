@@ -27,12 +27,28 @@ func TestGGMLMatMul(t *testing.T) {
 	b := getBackend(t)
 	s, _ := b.DefaultGPUStream()
 
-	// A [2,3] @ B [3,4] = C [2,4]
-	aData := []float32{1, 2, 3, 4, 5, 6}
-	bData := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	// GGML mul_mat(ctx, a, b) computes b @ a^T where a->ne[0] == b->ne[0].
+	// For result = a @ b in standard notation:
+	//   a: ne[0]=K, ne[1]=M  (row-major [M,K] maps to ne[0]=K, ne[1]=M)
+	//   b: ne[0]=K, ne[1]=N  (row-major [K,N] needs K contiguous)
+	// Result: ne[0]=M, ne[1]=N
+	//
+	// M=2, K=3, N=4
+	aData := []float32{1, 2, 3, 4, 5, 6} // [M=2, K=3]
+	bData := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12} // [K=3, N=4]
 
+	// Create with GGML layout: A ne[0]=K=3, ne[1]=M=2
 	a, _ := b.NewArrayFromFloat32(aData, []int{3, 2})
-	bb, _ := b.NewArrayFromFloat32(bData, []int{4, 3})
+	// B ne[0]=K=3, ne[1]=N=4 — but our data is row-major [K,N] which has N contiguous.
+	// GGML ne[0] is contiguous, so ne[0]=N. We need ne[0]=K.
+	// Transpose the data.
+	bTrans := make([]float32, len(bData))
+	for k := 0; k < 3; k++ {
+		for n := 0; n < 4; n++ {
+			bTrans[n*3+k] = bData[k*4+n] // [N,K] layout with K contiguous
+		}
+	}
+	bb, _ := b.NewArrayFromFloat32(bTrans, []int{3, 4}) // ne[0]=K=3, ne[1]=N=4
 
 	result, err := b.MatMul(a, bb, s)
 	if err != nil {
@@ -43,10 +59,21 @@ func TestGGMLMatMul(t *testing.T) {
 		t.Fatalf("Float32Data: %v", err)
 	}
 
-	// Expected (column-major result from GGML, but we read via Float32Data
-	// which uses ggml_backend_tensor_get — this returns raw bytes in GGML's
-	// ne layout). For a [3,2] @ [4,3] = result with ne[0]=2, ne[1]=4.
-	t.Logf("Result shape: %v, data: %v", result.Shape(), data)
+	// Result ne[0]=M=2, ne[1]=N=4 (column-major). Convert to row-major.
+	// Expected: [38, 44, 50, 56, 83, 98, 113, 128]
+	expected := []float32{38, 44, 50, 56, 83, 98, 113, 128}
+	out := make([]float32, 8)
+	for m := 0; m < 2; m++ {
+		for n := 0; n < 4; n++ {
+			out[m*4+n] = data[m+n*2] // col-major to row-major
+		}
+	}
+	for i, v := range out {
+		if v != expected[i] {
+			t.Errorf("out[%d] = %f, expected %f", i, v, expected[i])
+		}
+	}
+	t.Logf("MatMul result: %v", out)
 }
 
 func TestGGMLAdd(t *testing.T) {

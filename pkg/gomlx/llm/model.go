@@ -122,6 +122,7 @@ func NewModel(modelDir string) (*Model, error) {
 		tokenizer: tok,
 	}
 	m.initThinking()
+	m.warmupAndPreCache()
 
 	log.Printf("llm: %s loaded on GPU", cfg)
 	return m, nil
@@ -179,6 +180,7 @@ func NewModelFromFiles(modelPath, configPath, tokenizerPath string) (*Model, err
 		tokenizer: tok,
 	}
 	m.initThinking()
+	m.warmupAndPreCache()
 
 	log.Printf("llm: %s loaded on GPU", cfg)
 	return m, nil
@@ -195,6 +197,49 @@ func (m *Model) initThinking() {
 	m.thinkID = m.tokenizer.IDOf("<think>")
 	m.endThinkID = m.tokenizer.IDOf("</think>")
 	m.inThinkBlock = false
+}
+
+// warmupAndPreCache compiles Metal kernels with a dummy forward pass so the
+// first real query doesn't pay ~1-2s of shader compilation latency. MLX
+// lazy-compiles Metal kernels on first use; without warmup, the user's first
+// query stalls while kernels compile.
+//
+// Note: we can't pre-fill the system prompt KV cache here because MLX arrays
+// are thread-local — the warmup runs on the load thread, but Generate creates
+// a fresh GPU stream on the calling thread. The prefix cache is populated
+// on the first Generate call instead (the existing prefix-cache logic
+// handles this transparently).
+func (m *Model) warmupAndPreCache() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	s, err := m.backend.NewGPUStream()
+	if err != nil {
+		log.Printf("llm: warmup skipped (no GPU stream): %v", err)
+		return
+	}
+	defer s.Free()
+	m.stream = s
+	m.arch.SetStream(s)
+
+	// Warmup: run a tiny prefill + decode to compile all Metal kernels.
+	dummyTokens := m.tokenizer.Encode("Hello")
+	if m.cfg.BOSTokenID > 0 {
+		dummyTokens = append([]int{m.cfg.BOSTokenID}, dummyTokens...)
+	}
+	warmupCache := NewKVCache(m.cfg.NumLayers, s, m.backend)
+	if _, err := m.arch.ForwardPrefill(m.makeIDsArray(dummyTokens), len(dummyTokens), warmupCache); err != nil {
+		log.Printf("llm: warmup prefill failed: %v", err)
+		warmupCache.Free()
+		return
+	}
+	// One decode step to compile decode-path kernels (concat, argmax, etc.)
+	if greedy, ok := m.arch.(GreedyArchitecture); ok {
+		_, _ = greedy.ForwardDecodeArgmax(dummyTokens[len(dummyTokens)-1], len(dummyTokens), warmupCache)
+	}
+	warmupCache.Free()
+
+	log.Printf("llm: warmup complete (Metal kernels compiled)")
 }
 
 // GenerateConfig controls text generation behavior.

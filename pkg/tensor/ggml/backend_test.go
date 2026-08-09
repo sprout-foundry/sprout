@@ -159,3 +159,160 @@ func TestGGMLRMSNorm(t *testing.T) {
 		}
 	}
 }
+
+func TestGGMLSubtract(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	a, _ := b.NewArrayFromFloat32([]float32{10, 20, 30, 40}, []int{4})
+	bb, _ := b.NewArrayFromFloat32([]float32{1, 2, 3, 4}, []int{4})
+
+	result, err := b.Subtract(a, bb, s)
+	if err != nil {
+		t.Fatalf("Subtract: %v", err)
+	}
+	data, _ := result.Float32Data()
+	expected := []float32{9, 18, 27, 36}
+	for i, v := range data {
+		if v != expected[i] {
+			t.Errorf("data[%d] = %f, expected %f", i, v, expected[i])
+		}
+	}
+}
+
+func TestGGMLMultiply(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	a, _ := b.NewArrayFromFloat32([]float32{2, 3, 4, 5}, []int{4})
+	bb, _ := b.NewArrayFromFloat32([]float32{10, 20, 30, 40}, []int{4})
+
+	result, err := b.Multiply(a, bb, s)
+	if err != nil {
+		t.Fatalf("Multiply: %v", err)
+	}
+	data, _ := result.Float32Data()
+	expected := []float32{20, 60, 120, 200}
+	for i, v := range data {
+		if v != expected[i] {
+			t.Errorf("data[%d] = %f, expected %f", i, v, expected[i])
+		}
+	}
+}
+
+func TestGGMLExp(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	a, _ := b.NewArrayFromFloat32([]float32{0, 1, 2}, []int{3})
+	result, err := b.Exp(a, s)
+	if err != nil {
+		t.Fatalf("Exp: %v", err)
+	}
+	data, _ := result.Float32Data()
+	// exp(0)=1, exp(1)≈2.718, exp(2)≈7.389
+	if abs(data[0]-1.0) > 0.001 {
+		t.Errorf("exp(0) = %f, expected 1.0", data[0])
+	}
+	if abs(data[1]-2.718281) > 0.01 {
+		t.Errorf("exp(1) = %f, expected ~2.718", data[1])
+	}
+	if abs(data[2]-7.389056) > 0.01 {
+		t.Errorf("exp(2) = %f, expected ~7.389", data[2])
+	}
+}
+
+func TestGGMLSigmoid(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	a, _ := b.NewArrayFromFloat32([]float32{0, 100, -100}, []int{3})
+	result, err := b.Sigmoid(a, s)
+	if err != nil {
+		t.Fatalf("Sigmoid: %v", err)
+	}
+	data, _ := result.Float32Data()
+	// sigmoid(0) = 0.5, sigmoid(100) ≈ 1.0, sigmoid(-100) ≈ 0.0
+	if abs(data[0]-0.5) > 0.001 {
+		t.Errorf("sigmoid(0) = %f, expected 0.5", data[0])
+	}
+	if data[1] < 0.99 {
+		t.Errorf("sigmoid(100) = %f, expected ~1.0", data[1])
+	}
+	if data[2] > 0.01 {
+		t.Errorf("sigmoid(-100) = %f, expected ~0.0", data[2])
+	}
+}
+
+func TestGGMLConcat(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	a, _ := b.NewArrayFromFloat32([]float32{1, 2}, []int{2})
+	bb, _ := b.NewArrayFromFloat32([]float32{3, 4, 5}, []int{3})
+
+	result, err := b.ConcatenateAxis([]tensor.Array{a, bb}, 0, s)
+	if err != nil {
+		t.Fatalf("Concat: %v", err)
+	}
+	data, _ := result.Float32Data()
+	expected := []float32{1, 2, 3, 4, 5}
+	if len(data) != 5 {
+		t.Fatalf("len = %d, expected 5", len(data))
+	}
+	for i, v := range data {
+		if v != expected[i] {
+			t.Errorf("data[%d] = %f, expected %f", i, v, expected[i])
+		}
+	}
+}
+
+func TestGGMLGather(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	// Gather rows [10,20,30,40] by indices [0,2,3] → [10,30,40]
+	data, _ := b.NewArrayFromFloat32([]float32{10, 20, 30, 40}, []int{1, 4})
+	indices, _ := b.NewArrayFromInt32([]int32{0, 2, 3}, []int{3})
+
+	result, err := b.GatherAxis(data, indices, 0, nil, s)
+	if err != nil {
+		t.Fatalf("GatherAxis: %v", err)
+	}
+	out, _ := result.Float32Data()
+	// ggml_get_rows returns [ne0, n_indices] → row-major [1, 3]
+	if len(out) != 3 {
+		t.Fatalf("len = %d, expected 3", len(out))
+	}
+	expected := []float32{10, 30, 40}
+	for i, v := range out {
+		if v != expected[i] {
+			t.Errorf("out[%d] = %f, expected %f", i, v, expected[i])
+		}
+	}
+}
+
+func TestGGMLSqrt(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	a, _ := b.NewArrayFromFloat32([]float32{0, 1, 4, 9, 16}, []int{5})
+	result, err := b.Sqrt(a, s)
+	if err != nil {
+		t.Fatalf("Sqrt: %v", err)
+	}
+	data, _ := result.Float32Data()
+	expected := []float32{0, 1, 2, 3, 4}
+	for i, v := range data {
+		if abs(v-expected[i]) > 0.001 {
+			t.Errorf("sqrt[%d] = %f, expected %f", i, v, expected[i])
+		}
+	}
+}
+
+func abs(x float32) float32 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}

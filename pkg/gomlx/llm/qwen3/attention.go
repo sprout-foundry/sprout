@@ -9,47 +9,48 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
-func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen3) attention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 	cfg := q.cfg
 
-	q2d, err := lw.qProj.Forward(h, s)
+	q2d, err := lw.qProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("q proj: %w", err)
 	}
 	defer q2d.Free()
 
-	k2d, err := lw.kProj.Forward(h, s)
+	k2d, err := lw.kProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("k proj: %w", err)
 	}
 	defer k2d.Free()
 
-	v2d, err := lw.vProj.Forward(h, s)
+	v2d, err := lw.vProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("v proj: %w", err)
 	}
 	defer v2d.Free()
 
-	qR, err := mlx.Reshape(q2d, []int{1, seqLen, cfg.NumHeads, cfg.HeadDim}, s)
+	qR, err := q.backend.Reshape(q2d, []int{1, seqLen, cfg.NumHeads, cfg.HeadDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q reshape: %w", err)
 	}
 	defer qR.Free()
 
-	kR, err := mlx.Reshape(k2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
+	kR, err := q.backend.Reshape(k2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("k reshape: %w", err)
 	}
 
-	vR, err := mlx.Reshape(v2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
+	vR, err := q.backend.Reshape(v2d, []int{1, seqLen, cfg.NumKVHeads, cfg.HeadDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("v reshape: %w", err)
 	}
 
-	qNormed, err := llm.RMSNorm(qR, lw.qNorm, cfg.RMSNormEPS, s)
+	qNormed, err := llm.RMSNorm(qR, lw.qNorm, cfg.RMSNormEPS, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("q norm: %w", err)
 	}
@@ -57,55 +58,55 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	qR.Free()
 	qR = qNormed
 
-	kNormed, err := llm.RMSNorm(kR, lw.kNorm, cfg.RMSNormEPS, s)
+	kNormed, err := llm.RMSNorm(kR, lw.kNorm, cfg.RMSNormEPS, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("k norm: %w", err)
 	}
 	kR.Free()
 	kR = kNormed
 
-	qT, err := mlx.TransposeAxes(qR, []int{0, 2, 1, 3}, s)
+	qT, err := q.backend.TransposeAxes(qR, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q transpose: %w", err)
 	}
 	defer qT.Free()
 
-	kT, err := mlx.TransposeAxes(kR, []int{0, 2, 1, 3}, s)
+	kT, err := q.backend.TransposeAxes(kR, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("k transpose: %w", err)
 	}
 	defer kT.Free()
 
-	vT, err := mlx.TransposeAxes(vR, []int{0, 2, 1, 3}, s)
+	vT, err := q.backend.TransposeAxes(vR, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("v transpose: %w", err)
 	}
 	defer vT.Free()
 
-	qRot, err := llm.ApplyRoPEFast(qT, startPos, cfg.HeadDim, cfg.RopeTheta, s)
+	qRot, err := llm.ApplyRoPEFast(qT, startPos, cfg.HeadDim, cfg.RopeTheta, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("q rope: %w", err)
 	}
 	defer qRot.Free()
 
-	kRot, err := llm.ApplyRoPEFast(kT, startPos, cfg.HeadDim, cfg.RopeTheta, s)
+	kRot, err := llm.ApplyRoPEFast(kT, startPos, cfg.HeadDim, cfg.RopeTheta, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("k rope: %w", err)
 	}
 	defer kRot.Free()
 
-	var kForAttn, vForAttn *mlx.Array
+	var kForAttn, vForAttn tensor.Array
 
 	if cache != nil && cache.IsInitialized(layerIdx) {
 		cached, err := cache.Get(layerIdx)
 		if err != nil {
 			return nil, err
 		}
-		newK, err := mlx.ConcatenateAxis([]*mlx.Array{cached.K, kRot}, 2, s)
+		newK, err := q.backend.ConcatenateAxis([]tensor.Array{cached.K, kRot}, 2, s)
 		if err != nil {
 			return nil, fmt.Errorf("concat K: %w", err)
 		}
-		newV, err := mlx.ConcatenateAxis([]*mlx.Array{cached.V, vT}, 2, s)
+		newV, err := q.backend.ConcatenateAxis([]tensor.Array{cached.V, vT}, 2, s)
 		if err != nil {
 			newK.Free()
 			return nil, fmt.Errorf("concat V: %w", err)
@@ -119,8 +120,8 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 	} else if cache != nil {
 		kForAttn = kRot
 		vForAttn = vT
-		kRetained := mlx.RetainArray(kRot)
-		vRetained := mlx.RetainArray(vT)
+		kRetained := q.backend.RetainArray(kRot)
+		vRetained := q.backend.RetainArray(vT)
 		if err := cache.Store(layerIdx, kRetained, vRetained); err != nil {
 			kRetained.Free()
 			vRetained.Free()
@@ -131,13 +132,13 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 		vForAttn = vT
 	}
 
-	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
+	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("k expand: %w", err)
 	}
 	defer kExp.Free()
 
-	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
+	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("v expand: %w", err)
 	}
@@ -153,34 +154,34 @@ func (q *Qwen3) attention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, star
 		maskMode = "causal"
 	}
 	scale := float32(1.0 / math.Sqrt(float64(cfg.HeadDim)))
-	ctx, err := mlx.FastScaledDotProductAttention(qRot, kExp, vExp, scale, maskMode, nil, nil, s)
+	ctx, err := q.backend.FastScaledDotProductAttention(qRot, kExp, vExp, scale, maskMode, nil, nil, s)
 	if err != nil {
 		return nil, fmt.Errorf("fused attention: %w", err)
 	}
 	defer ctx.Free()
 
-	ctxT, err := mlx.TransposeAxes(ctx, []int{0, 2, 1, 3}, s)
+	ctxT, err := q.backend.TransposeAxes(ctx, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("ctx transpose: %w", err)
 	}
 	defer ctxT.Free()
 
-	ctxFlat, err := mlx.Reshape(ctxT, []int{1, seqLen, cfg.NumHeads * cfg.HeadDim}, s)
+	ctxFlat, err := q.backend.Reshape(ctxT, []int{1, seqLen, cfg.NumHeads * cfg.HeadDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("ctx reshape: %w", err)
 	}
 	defer ctxFlat.Free()
 
-	return lw.oProj.Forward(ctxFlat, s)
+	return lw.oProj.Forward(ctxFlat, q.backend, s)
 }
 
 // swiglu computes the MLP block: silu(h @ gate) * (h @ up) @ down.
 // When the MLX compiled-graph path is available it runs the per-layer MLP as
 // one compiled closure instead of ~5 eager kernel launches per token.
-func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights, layerIdx int) (*mlx.Array, error) {
+func (q *Qwen3) swiglu(h tensor.Array, lw *layerWeights, layerIdx int) (tensor.Array, error) {
 	if useCompiledFFN() {
 		if c := q.swigluClosure(layerIdx); c != nil {
-			out, err := c.Apply([]*mlx.Array{h})
+			out, err := c.Apply([]*mlx.Array{h.(*mlx.Array)})
 			if err != nil {
 				return nil, fmt.Errorf("compiled ffn: %w", err)
 			}
@@ -196,31 +197,31 @@ func (q *Qwen3) swiglu(h *mlx.Array, lw *layerWeights, layerIdx int) (*mlx.Array
 
 	s := q.stream
 
-	gate, err := lw.gateProj.Forward(h, s)
+	gate, err := lw.gateProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate proj: %w", err)
 	}
 	defer gate.Free()
 
-	up, err := lw.upProj.Forward(h, s)
+	up, err := lw.upProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("up proj: %w", err)
 	}
 	defer up.Free()
 
-	gateSilu, err := llm.SiLU(gate, s)
+	gateSilu, err := llm.SiLU(gate, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("silu: %w", err)
 	}
 	defer gateSilu.Free()
 
-	gated, err := mlx.Multiply(gateSilu, up, s)
+	gated, err := q.backend.Multiply(gateSilu, up, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate multiply: %w", err)
 	}
 	defer gated.Free()
 
-	return lw.downProj.Forward(gated, s)
+	return lw.downProj.Forward(gated, q.backend, s)
 }
 
 // useCompiledFFN gates the compiled-graph MLP path. Measured on M1 Pro:
@@ -259,31 +260,31 @@ func (q *Qwen3) swigluClosure(layerIdx int) *mlx.Closure {
 	lw := &q.weights.layers[layerIdx]
 	fn := func(inputs []*mlx.Array) ([]*mlx.Array, error) {
 		h := inputs[0]
-		gate, err := lw.gateProj.Forward(h, s)
+		gate, err := lw.gateProj.Forward(h, q.backend, s)
 		if err != nil {
 			return nil, err
 		}
 		defer gate.Free()
-		up, err := lw.upProj.Forward(h, s)
+		up, err := lw.upProj.Forward(h, q.backend, s)
 		if err != nil {
 			return nil, err
 		}
 		defer up.Free()
-		gateSilu, err := llm.SiLU(gate, s)
+		gateSilu, err := llm.SiLU(gate, q.backend, s)
 		if err != nil {
 			return nil, err
 		}
 		defer gateSilu.Free()
-		gated, err := mlx.Multiply(gateSilu, up, s)
+		gated, err := q.backend.Multiply(gateSilu, up, s)
 		if err != nil {
 			return nil, err
 		}
 		defer gated.Free()
-		out, err := lw.downProj.Forward(gated, s)
+		out, err := lw.downProj.Forward(gated, q.backend, s)
 		if err != nil {
 			return nil, err
 		}
-		return []*mlx.Array{out}, nil
+		return []*mlx.Array{out.(*mlx.Array)}, nil
 	}
 
 	plain, err := mlx.NewClosure(fn)

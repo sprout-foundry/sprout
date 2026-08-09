@@ -11,7 +11,7 @@ import (
 	"runtime"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 func init() {
@@ -26,13 +26,14 @@ func init() {
 // (attn_output_gate) — differences from plain qwen3.
 type Qwen35 struct {
 	cfg        llm.ModelConfig
-	stream     *mlx.Stream
+	backend    tensor.Backend
+	stream     tensor.Stream
 	weights    *weights
 	mtp        *mtpWeights // multi-token prediction head; nil when absent
-	lastHidden *mlx.Array  // retained [1,1,H] main-model hidden at the last processed position
+	lastHidden tensor.Array // retained [1,1,H] main-model hidden at the last processed position
 }
 
-func New(cfg llm.ModelConfig) (llm.Architecture, error) {
+func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
 	if cfg.LinearConvKernelDim == 0 {
 		cfg.LinearConvKernelDim = 4
 	}
@@ -50,12 +51,12 @@ func New(cfg llm.ModelConfig) (llm.Architecture, error) {
 			log.Printf("qwen35: forcing %d-bit quantization at load", n)
 		}
 	}
-	return &Qwen35{cfg: cfg}, nil
+	return &Qwen35{cfg: cfg, backend: backend}, nil
 }
 
 func (q *Qwen35) Config() llm.ModelConfig { return q.cfg }
 
-func (q *Qwen35) SetStream(s *mlx.Stream) { q.stream = s }
+func (q *Qwen35) SetStream(s tensor.Stream) { q.stream = s }
 
 // weights holds every MLX array for the model. embed is the (possibly
 // quantized) word embedding. When UseTiedEmbeddings is set, embed.Logits is
@@ -63,7 +64,7 @@ func (q *Qwen35) SetStream(s *mlx.Stream) { q.stream = s }
 type weights struct {
 	embed      *llm.Embedding
 	lmHead     *llm.Linear // non-nil when embeddings are untied
-	normWeight *mlx.Array  // [hidden] — final RMSNorm
+	normWeight tensor.Array  // [hidden] — final RMSNorm
 	layers     []layerWeights
 }
 
@@ -72,8 +73,8 @@ type weights struct {
 // a full-attention block. Which one is populated is decided per layer by
 // full_attention_interval: layers with (idx+1) % interval == 0 are full.
 type layerWeights struct {
-	inputNorm *mlx.Array // [hidden] — RMSNorm before attention
-	postNorm  *mlx.Array // [hidden] — RMSNorm before MLP
+	inputNorm tensor.Array // [hidden] — RMSNorm before attention
+	postNorm  tensor.Array // [hidden] — RMSNorm before MLP
 
 	linearAttn *gatedDeltaNet   // non-nil for linear layers
 	selfAttn   *selfAttnWeights // non-nil for full layers
@@ -89,8 +90,8 @@ type selfAttnWeights struct {
 	kProj *llm.Linear
 	vProj *llm.Linear
 	oProj *llm.Linear
-	qNorm *mlx.Array // [num_heads * head_dim]
-	kNorm *mlx.Array // [num_kv_heads * head_dim]
+	qNorm tensor.Array // [num_heads * head_dim]
+	kNorm tensor.Array // [num_kv_heads * head_dim]
 }
 
 // isLinearLayer reports whether layerIdx uses DeltaNet linear attention.
@@ -101,7 +102,7 @@ func isLinearLayer(layerIdx, interval int) bool {
 
 // InitWeights loads the safetensors file(s), auto-detecting the weight key
 // prefix (raw HF `model.language_model.` vs mlx-community `language_model.model.`).
-func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
+func (q *Qwen35) InitWeights(path string, s tensor.Stream) error {
 	sf, err := llm.OpenSafetensors(path)
 	if err != nil {
 		return err
@@ -117,7 +118,7 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 		layers: make([]layerWeights, q.cfg.NumLayers),
 	}
 
-	w.embed, err = llm.LoadEmbedding(sf, prefix+"embed_tokens.weight", s, q.cfg.Quantization)
+	w.embed, err = llm.LoadEmbedding(sf, prefix+"embed_tokens.weight", q.backend, s, q.cfg.Quantization)
 	if err != nil {
 		return fmt.Errorf("load embed_tokens: %w", err)
 	}
@@ -142,7 +143,7 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 		if lmPrefix == "" {
 			return fmt.Errorf("qwen35: tie_word_embeddings=false but no lm_head.weight found (tried %v)", candidates)
 		}
-		w.lmHead, err = llm.LoadLinear(sf, lmPrefix+"weight", s, q.cfg.Quantization)
+		w.lmHead, err = llm.LoadLinear(sf, lmPrefix+"weight", q.backend, s, q.cfg.Quantization)
 		if err != nil {
 			return fmt.Errorf("load lm_head: %w", err)
 		}
@@ -168,25 +169,25 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 
 		if isLinearLayer(i, q.cfg.FullAttentionInterval) {
 			dn := newGatedDeltaNet(q.cfg)
-			if err := dn.loadWeights(sf, p+".linear_attn", s, q.cfg.Quantization); err != nil {
+			if err := dn.loadWeights(sf, p+".linear_attn", q.backend, s, q.cfg.Quantization); err != nil {
 				return fmt.Errorf("layer %d linear_attn: %w", i, err)
 			}
 			lw.linearAttn = dn
 		} else {
 			sa := &selfAttnWeights{}
-			sa.qProj, err = llm.LoadLinear(sf, p+".self_attn.q_proj.weight", s, q.cfg.Quantization)
+			sa.qProj, err = llm.LoadLinear(sf, p+".self_attn.q_proj.weight", q.backend, s, q.cfg.Quantization)
 			if err != nil {
 				return fmt.Errorf("layer %d q_proj: %w", i, err)
 			}
-			sa.kProj, err = llm.LoadLinear(sf, p+".self_attn.k_proj.weight", s, q.cfg.Quantization)
+			sa.kProj, err = llm.LoadLinear(sf, p+".self_attn.k_proj.weight", q.backend, s, q.cfg.Quantization)
 			if err != nil {
 				return fmt.Errorf("layer %d k_proj: %w", i, err)
 			}
-			sa.vProj, err = llm.LoadLinear(sf, p+".self_attn.v_proj.weight", s, q.cfg.Quantization)
+			sa.vProj, err = llm.LoadLinear(sf, p+".self_attn.v_proj.weight", q.backend, s, q.cfg.Quantization)
 			if err != nil {
 				return fmt.Errorf("layer %d v_proj: %w", i, err)
 			}
-			sa.oProj, err = llm.LoadLinear(sf, p+".self_attn.o_proj.weight", s, q.cfg.Quantization)
+			sa.oProj, err = llm.LoadLinear(sf, p+".self_attn.o_proj.weight", q.backend, s, q.cfg.Quantization)
 			if err != nil {
 				return fmt.Errorf("layer %d o_proj: %w", i, err)
 			}
@@ -202,15 +203,15 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 		}
 
 		// MLP (shared by both layer kinds).
-		lw.gateProj, err = llm.LoadLinear(sf, p+".mlp.gate_proj.weight", s, q.cfg.Quantization)
+		lw.gateProj, err = llm.LoadLinear(sf, p+".mlp.gate_proj.weight", q.backend, s, q.cfg.Quantization)
 		if err != nil {
 			return fmt.Errorf("layer %d gate_proj: %w", i, err)
 		}
-		lw.upProj, err = llm.LoadLinear(sf, p+".mlp.up_proj.weight", s, q.cfg.Quantization)
+		lw.upProj, err = llm.LoadLinear(sf, p+".mlp.up_proj.weight", q.backend, s, q.cfg.Quantization)
 		if err != nil {
 			return fmt.Errorf("layer %d up_proj: %w", i, err)
 		}
-		lw.downProj, err = llm.LoadLinear(sf, p+".mlp.down_proj.weight", s, q.cfg.Quantization)
+		lw.downProj, err = llm.LoadLinear(sf, p+".mlp.down_proj.weight", q.backend, s, q.cfg.Quantization)
 		if err != nil {
 			return fmt.Errorf("layer %d down_proj: %w", i, err)
 		}
@@ -220,7 +221,7 @@ func (q *Qwen35) InitWeights(path string, s *mlx.Stream) error {
 
 	// MTP head (multi-token prediction). Raw-HF Qwen3.5 exports carry mtp.*
 	// tensors; mlx-community conversions strip them, so mtp stays nil there.
-	q.mtp, err = loadMTPWeights(sf, s, q.cfg.Quantization)
+	q.mtp, err = loadMTPWeights(sf, q.backend, s, q.cfg.Quantization)
 	if err != nil {
 		return fmt.Errorf("load mtp: %w", err)
 	}
@@ -275,7 +276,7 @@ func (q *Qwen35) FreeWeights() {
 	q.weights = nil
 }
 
-func freeArr(a *mlx.Array) {
+func freeArr(a tensor.Array) {
 	if a != nil {
 		a.Free()
 	}
@@ -285,18 +286,18 @@ func freeArr(a *mlx.Array) {
 // Forward passes
 // ----------------------------------------------------------------------------
 
-func (q *Qwen35) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
+func (q *Qwen35) ForwardPrefill(ids tensor.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
 	return q.prefillAt(ids, seqLen, 0, cache)
 }
 
 // ForwardPrefillFrom prefills a delta sequence starting at an absolute
 // position, extending an existing cache. RoPE offsets start at startPos, so
 // a repeated prompt's shared prefix is not recomputed.
-func (q *Qwen35) ForwardPrefillFrom(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+func (q *Qwen35) ForwardPrefillFrom(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
 	return q.prefillAt(ids, seqLen, startPos, cache)
 }
 
-func (q *Qwen35) prefillAt(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+func (q *Qwen35) prefillAt(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
 	logits, err := q.prefillInternal(ids, seqLen, startPos, cache)
 	if err != nil {
 		return nil, err
@@ -305,15 +306,15 @@ func (q *Qwen35) prefillAt(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCa
 	return q.logitsToFloat32(logits)
 }
 
-func (q *Qwen35) prefillInternal(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen35) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 
-	h, err := q.weights.embed.Lookup(ids, s)
+	h, err := q.weights.embed.Lookup(ids, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("embedding lookup: %w", err)
 	}
 	defer h.Free()
-	h, err = mlx.SqueezeAxis(h, 2, s)
+	h, err = q.backend.SqueezeAxis(h, 2, s)
 	if err != nil {
 		return nil, fmt.Errorf("squeeze embedding: %w", err)
 	}
@@ -348,15 +349,15 @@ func (q *Qwen35) prefillInternal(ids *mlx.Array, seqLen, startPos int, cache *ll
 // state (post-MLP residual, [1, seqLen, hidden], f32) to dumpDir/layer-NN.bin
 // plus dumpDir/prefill.logits.bin. Used only by the parity harness to compare
 // against mlx-lm layer by layer. Call on the locked inference thread.
-func (q *Qwen35) DebugDumpPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache, dumpDir string) error {
+func (q *Qwen35) DebugDumpPrefill(ids tensor.Array, seqLen int, cache *llm.KVCache, dumpDir string) error {
 	s := q.stream
 
-	h, err := q.weights.embed.Lookup(ids, s)
+	h, err := q.weights.embed.Lookup(ids, q.backend, s)
 	if err != nil {
 		return fmt.Errorf("embedding lookup: %w", err)
 	}
 	defer h.Free()
-	h, err = mlx.SqueezeAxis(h, 2, s)
+	h, err = q.backend.SqueezeAxis(h, 2, s)
 	if err != nil {
 		return fmt.Errorf("squeeze embedding: %w", err)
 	}
@@ -368,7 +369,7 @@ func (q *Qwen35) DebugDumpPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache
 		}
 		h.Free()
 		h = out
-		if err := dumpArrayF32(h, fmt.Sprintf("%s/layer-%02d.bin", dumpDir, i), s); err != nil {
+		if err := dumpArrayF32(h, fmt.Sprintf("%s/layer-%02d.bin", dumpDir, i), q.backend, s); err != nil {
 			return err
 		}
 	}
@@ -382,7 +383,7 @@ func (q *Qwen35) DebugDumpPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache
 	if err := s.Synchronize(); err != nil {
 		return fmt.Errorf("synchronize: %w", err)
 	}
-	return dumpArrayF32(logits, dumpDir+"/prefill.logits.bin", s)
+	return dumpArrayF32(logits, dumpDir+"/prefill.logits.bin", q.backend, s)
 }
 
 func (q *Qwen35) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]float32, error) {
@@ -396,16 +397,16 @@ func (q *Qwen35) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]floa
 
 // dumpArrayF32 writes an array's Float32 data to path (evaluates it first).
 // For BF16 arrays the cast to Float32 happens through AsType on stream s.
-func dumpArrayF32(a *mlx.Array, path string, s *mlx.Stream) error {
+func dumpArrayF32(a tensor.Array, path string, backend tensor.Backend, s tensor.Stream) error {
 	var data []float32
-	if a.Dtype() == mlx.Float32 {
+	if a.Dtype() == tensor.Float32 {
 		d, err := a.Float32Data()
 		if err != nil {
 			return fmt.Errorf("dump %s: %w", path, err)
 		}
 		data = d
 	} else {
-		f32, err := mlx.AsType(a, mlx.Float32, s)
+		f32, err := backend.AsType(a, tensor.Float32, s)
 		if err != nil {
 			return fmt.Errorf("cast %s: %w", path, err)
 		}
@@ -432,22 +433,22 @@ func (q *Qwen35) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (
 	return q.logitsToArgmax(logits)
 }
 
-func (q *Qwen35) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen35) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 
 	idData := []int64{int64(tokenID)}
-	idsArr, err := mlx.NewArrayFromInt64(idData, []int{1, 1})
+	idsArr, err := q.backend.NewArrayFromInt64(idData, []int{1, 1})
 	if err != nil {
 		return nil, fmt.Errorf("create ids: %w", err)
 	}
 	defer idsArr.Free()
 
-	h, err := q.weights.embed.Lookup(idsArr, s)
+	h, err := q.weights.embed.Lookup(idsArr, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("embedding lookup: %w", err)
 	}
 	defer h.Free()
-	h, err = mlx.SqueezeAxis(h, 2, s)
+	h, err = q.backend.SqueezeAxis(h, 2, s)
 	if err != nil {
 		return nil, fmt.Errorf("squeeze embedding: %w", err)
 	}
@@ -478,14 +479,14 @@ func (q *Qwen35) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (*mlx.
 	return logits, nil
 }
 
-func (q *Qwen35) logitsToFloat32(logits *mlx.Array) ([]float32, error) {
+func (q *Qwen35) logitsToFloat32(logits tensor.Array) ([]float32, error) {
 	return logits.Float32Data()
 }
 
-func (q *Qwen35) logitsToArgmax(logits *mlx.Array) (int, error) {
+func (q *Qwen35) logitsToArgmax(logits tensor.Array) (int, error) {
 	// The logits array is [1, 1, vocab]; the flattened argmax is exactly the
 	// vocab argmax.
-	idxArr, err := mlx.ArgMax(logits, false, q.stream)
+	idxArr, err := q.backend.ArgMax(logits, false, q.stream)
 	if err != nil {
 		return 0, fmt.Errorf("argmax: %w", err)
 	}
@@ -503,23 +504,23 @@ func (q *Qwen35) logitsToArgmax(logits *mlx.Array) (int, error) {
 // setLastHidden retains the hidden state at the LAST position of h
 // ([1, seqLen, H] -> [1, 1, H]) so the MTP head can chain a draft from the
 // previous main-model position. Replaces any previously retained hidden.
-func (q *Qwen35) setLastHidden(h *mlx.Array, seqLen int) error {
+func (q *Qwen35) setLastHidden(h tensor.Array, seqLen int) error {
 	if q.lastHidden != nil {
 		q.lastHidden.Free()
 		q.lastHidden = nil
 	}
-	var last *mlx.Array
+	var last tensor.Array
 	if seqLen > 1 {
 		start := []int{0, seqLen - 1, 0}
 		stop := []int{1, seqLen, q.cfg.HiddenSize}
 		strides := []int{1, 1, 1}
-		sliced, err := mlx.Slice(h, start, stop, strides, q.stream)
+		sliced, err := q.backend.Slice(h, start, stop, strides, q.stream)
 		if err != nil {
 			return fmt.Errorf("slice last hidden: %w", err)
 		}
 		last = sliced
 	} else {
-		last = mlx.RetainArray(h)
+		last = q.backend.RetainArray(h)
 	}
 	q.lastHidden = last
 	return nil
@@ -527,7 +528,7 @@ func (q *Qwen35) setLastHidden(h *mlx.Array, seqLen int) error {
 
 // LastHidden returns the retained main-model hidden state at the last
 // processed position. The caller must not free it.
-func (q *Qwen35) LastHidden() *mlx.Array { return q.lastHidden }
+func (q *Qwen35) LastHidden() tensor.Array { return q.lastHidden }
 
 // MTPAvailable reports whether the loaded weights include a multi-token
 // prediction head (raw Qwen3.5 HF exports; mlx-community conversions strip
@@ -539,7 +540,7 @@ func (q *Qwen35) MTPAvailable() bool { return q.mtp != nil }
 // The chain reuses each MTP step's decoder-layer output as the next step's
 // prevHidden (DeepSeek-V3 self-referential drafting). prevHidden must be a
 // retained array owned by the caller; it is not freed here.
-func (q *Qwen35) MTPDraft(prevHidden *mlx.Array, nextToken int, k int) ([]int, error) {
+func (q *Qwen35) MTPDraft(prevHidden tensor.Array, nextToken int, k int) ([]int, error) {
 	if q.mtp == nil {
 		return nil, fmt.Errorf("mtp: head not loaded")
 	}
@@ -560,18 +561,18 @@ func (q *Qwen35) ForwardPrefillArgmaxAll(ids []int, startPos int, cache *llm.KVC
 	for i, id := range ids {
 		idData[i] = int64(id)
 	}
-	idsArr, err := mlx.NewArrayFromInt64(idData, []int{1, seqLen})
+	idsArr, err := q.backend.NewArrayFromInt64(idData, []int{1, seqLen})
 	if err != nil {
 		return nil, fmt.Errorf("create ids: %w", err)
 	}
 	defer idsArr.Free()
 
-	h, err := q.weights.embed.Lookup(idsArr, q.stream)
+	h, err := q.weights.embed.Lookup(idsArr, q.backend, q.stream)
 	if err != nil {
 		return nil, fmt.Errorf("embedding lookup: %w", err)
 	}
 	defer h.Free()
-	h, err = mlx.SqueezeAxis(h, 2, q.stream)
+	h, err = q.backend.SqueezeAxis(h, 2, q.stream)
 	if err != nil {
 		return nil, fmt.Errorf("squeeze embedding: %w", err)
 	}
@@ -601,7 +602,7 @@ func (q *Qwen35) ForwardPrefillArgmaxAll(ids []int, startPos int, cache *llm.KVC
 		return nil, fmt.Errorf("synchronize: %w", err)
 	}
 
-	idxArr, err := mlx.ArgMaxAxis(logits, 2, false, q.stream)
+	idxArr, err := q.backend.ArgMaxAxis(logits, 2, false, q.stream)
 	if err != nil {
 		return nil, fmt.Errorf("argmax axis: %w", err)
 	}
@@ -669,7 +670,7 @@ func (q *Qwen35) ForwardDecodeMTP(nextToken int, pos int, cache *llm.KVCache, k 
 		for i, id := range prefix {
 			idData[i] = int64(id)
 		}
-		idsArr, err := mlx.NewArrayFromInt64(idData, []int{1, len(prefix)})
+		idsArr, err := q.backend.NewArrayFromInt64(idData, []int{1, len(prefix)})
 		if err != nil {
 			return nil, fmt.Errorf("mtp re-run ids: %w", err)
 		}
@@ -689,7 +690,7 @@ func (q *Qwen35) ForwardDecodeMTP(nextToken int, pos int, cache *llm.KVCache, k 
 	return out, nil
 }
 
-func (q *Qwen35) computeLogits(h *mlx.Array) (*mlx.Array, error) {
+func (q *Qwen35) computeLogits(h tensor.Array) (tensor.Array, error) {
 	normed, err := q.rmsNormQwen35(h, q.weights.normWeight)
 	if err != nil {
 		return nil, fmt.Errorf("final norm: %w", err)
@@ -702,18 +703,18 @@ func (q *Qwen35) computeLogits(h *mlx.Array) (*mlx.Array, error) {
 // hidden state. Used by the main model (after its final RMSNorm) and by the
 // MTP head (after its own mtp.norm — the main model's final norm must NOT
 // be applied again).
-func (q *Qwen35) headOnlyLogits(normed *mlx.Array) (*mlx.Array, error) {
+func (q *Qwen35) headOnlyLogits(normed tensor.Array) (tensor.Array, error) {
 	if q.weights.lmHead != nil {
 		// Untied embeddings: separate lm_head projection.
-		return q.weights.lmHead.Forward(normed, q.stream)
+		return q.weights.lmHead.Forward(normed, q.backend, q.stream)
 	}
-	return q.weights.embed.Logits(normed, q.stream)
+	return q.weights.embed.Logits(normed, q.backend, q.stream)
 }
 
 // makeOneTokenArray builds a [1, 1] int64 array for a single token id. The
 // caller frees the result.
-func (q *Qwen35) makeOneTokenArray(tokenID int) *mlx.Array {
-	arr, _ := mlx.NewArrayFromInt64([]int64{int64(tokenID)}, []int{1, 1})
+func (q *Qwen35) makeOneTokenArray(tokenID int) tensor.Array {
+	arr, _ := q.backend.NewArrayFromInt64([]int64{int64(tokenID)}, []int{1, 1})
 	return arr
 }
 
@@ -727,36 +728,36 @@ func (q *Qwen35) makeOneTokenArray(tokenID int) *mlx.Array {
 // older Llama-style models — silently halves the effective norm scale and
 // breaks generation on raw-HF weights. Verified against transformers'
 // Qwen3_5RMSNorm (output = rms_norm(x) * (1 + weight)).
-func (q *Qwen35) rmsNormQwen35(x, weight *mlx.Array) (*mlx.Array, error) {
+func (q *Qwen35) rmsNormQwen35(x, weight tensor.Array) (tensor.Array, error) {
 	s := q.stream
-	normed, err := llm.RMSNorm(x, nil, q.cfg.RMSNormEPS, s)
+	normed, err := llm.RMSNorm(x, nil, q.cfg.RMSNormEPS, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("rms norm: %w", err)
 	}
 	defer normed.Free()
 
 	// (1 + weight) — [H] broadcasts over [B, S, H].
-	ones, err := mlx.NewArrayFromFloat32([]float32{1}, []int{1})
+	ones, err := q.backend.NewArrayFromFloat32([]float32{1}, []int{1})
 	if err != nil {
 		return nil, fmt.Errorf("ones: %w", err)
 	}
 	defer ones.Free()
-	scale, err := mlx.Add(weight, ones, s)
+	scale, err := q.backend.Add(weight, ones, s)
 	if err != nil {
 		return nil, fmt.Errorf("1+w: %w", err)
 	}
 	defer scale.Free()
 
-	return mlx.Multiply(normed, scale, s)
+	return q.backend.Multiply(normed, scale, s)
 }
 
-func (q *Qwen35) computeLogitsLast(h *mlx.Array, seqLen int) (*mlx.Array, error) {
+func (q *Qwen35) computeLogitsLast(h tensor.Array, seqLen int) (tensor.Array, error) {
 	s := q.stream
 	if seqLen > 1 {
 		start := []int{0, seqLen - 1, 0}
 		stop := []int{1, seqLen, q.cfg.HiddenSize}
 		strides := []int{1, 1, 1}
-		sliced, err := mlx.Slice(h, start, stop, strides, s)
+		sliced, err := q.backend.Slice(h, start, stop, strides, s)
 		if err != nil {
 			return nil, fmt.Errorf("slice last position: %w", err)
 		}
@@ -769,7 +770,7 @@ func (q *Qwen35) computeLogitsLast(h *mlx.Array, seqLen int) (*mlx.Array, error)
 // forwardLayer dispatches per layer: DeltaNet linear attention for
 // (layerIdx+1)%interval != 0, full attention otherwise. Both paths share the
 // same pre/post RMSNorm and SwiGLU MLP.
-func (q *Qwen35) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen35) forwardLayer(h tensor.Array, layerIdx, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 	lw := &q.weights.layers[layerIdx]
 
@@ -779,9 +780,9 @@ func (q *Qwen35) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cach
 	}
 	defer normed.Free()
 
-	var attnOut *mlx.Array
+	var attnOut tensor.Array
 	if lw.linearAttn != nil {
-		attnOut, err = lw.linearAttn.forward(normed, cache, layerIdx, seqLen, s)
+		attnOut, err = lw.linearAttn.forward(normed, cache, layerIdx, seqLen, q.backend, s)
 		if err != nil {
 			return nil, fmt.Errorf("linear attention: %w", err)
 		}
@@ -793,7 +794,7 @@ func (q *Qwen35) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cach
 	}
 	defer attnOut.Free()
 
-	residual1, err := mlx.Add(h, attnOut, s)
+	residual1, err := q.backend.Add(h, attnOut, s)
 	if err != nil {
 		return nil, fmt.Errorf("attn residual: %w", err)
 	}
@@ -811,13 +812,13 @@ func (q *Qwen35) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cach
 	}
 	defer ffnOut.Free()
 
-	return mlx.Add(residual1, ffnOut, s)
+	return q.backend.Add(residual1, ffnOut, s)
 }
 
 // fullAttention is Qwen3-style GQA with two qwen3.5 differences: the Q
 // projection is 2× the head count (carrying the output gate in the second
 // half) and RoPE rotates only partial_rotary_factor of the head dim.
-func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen35) fullAttention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 	cfg := q.cfg
 	sa := lw.selfAttn
@@ -831,60 +832,60 @@ func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen,
 	// is the output gate. A flat [0:outDim]/[outDim:2*outDim] split would
 	// interleave whole heads into the wrong halves — reshape first, then
 	// slice the last axis, then flatten the gate back.
-	qFull, err := sa.qProj.Forward(h, s)
+	qFull, err := sa.qProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("q proj: %w", err)
 	}
 	defer qFull.Free()
 
-	qFull4, err := mlx.Reshape(qFull, []int{1, seqLen, cfg.NumHeads, 2 * headDim}, s)
+	qFull4, err := q.backend.Reshape(qFull, []int{1, seqLen, cfg.NumHeads, 2 * headDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q reshape4: %w", err)
 	}
 	defer qFull4.Free()
 
-	q2d, err := mlx.Slice(qFull4, []int{0, 0, 0, 0}, []int{1, seqLen, cfg.NumHeads, headDim}, []int{1, 1, 1, 1}, s)
+	q2d, err := q.backend.Slice(qFull4, []int{0, 0, 0, 0}, []int{1, seqLen, cfg.NumHeads, headDim}, []int{1, 1, 1, 1}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q slice: %w", err)
 	}
 	defer q2d.Free()
 
-	gate4, err := mlx.Slice(qFull4, []int{0, 0, 0, headDim}, []int{1, seqLen, cfg.NumHeads, 2 * headDim}, []int{1, 1, 1, 1}, s)
+	gate4, err := q.backend.Slice(qFull4, []int{0, 0, 0, headDim}, []int{1, seqLen, cfg.NumHeads, 2 * headDim}, []int{1, 1, 1, 1}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q gate slice: %w", err)
 	}
 	defer gate4.Free()
-	qGate, err := mlx.Reshape(gate4, []int{1, seqLen, outDim}, s)
+	qGate, err := q.backend.Reshape(gate4, []int{1, seqLen, outDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q gate flatten: %w", err)
 	}
 	defer qGate.Free()
 
-	k2d, err := sa.kProj.Forward(h, s)
+	k2d, err := sa.kProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("k proj: %w", err)
 	}
 	defer k2d.Free()
 
-	v2d, err := sa.vProj.Forward(h, s)
+	v2d, err := sa.vProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("v proj: %w", err)
 	}
 	defer v2d.Free()
 
-	qR, err := mlx.Reshape(q2d, []int{1, seqLen, cfg.NumHeads, headDim}, s)
+	qR, err := q.backend.Reshape(q2d, []int{1, seqLen, cfg.NumHeads, headDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q reshape: %w", err)
 	}
 	defer qR.Free()
 
-	kR, err := mlx.Reshape(k2d, []int{1, seqLen, cfg.NumKVHeads, headDim}, s)
+	kR, err := q.backend.Reshape(k2d, []int{1, seqLen, cfg.NumKVHeads, headDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("k reshape: %w", err)
 	}
 	defer kR.Free()
 
-	vR, err := mlx.Reshape(v2d, []int{1, seqLen, cfg.NumKVHeads, headDim}, s)
+	vR, err := q.backend.Reshape(v2d, []int{1, seqLen, cfg.NumKVHeads, headDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("v reshape: %w", err)
 	}
@@ -904,19 +905,19 @@ func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen,
 	defer kNormed.Free()
 	kR = kNormed
 
-	qT, err := mlx.TransposeAxes(qR, []int{0, 2, 1, 3}, s)
+	qT, err := q.backend.TransposeAxes(qR, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("q transpose: %w", err)
 	}
 	defer qT.Free()
 
-	kT, err := mlx.TransposeAxes(kR, []int{0, 2, 1, 3}, s)
+	kT, err := q.backend.TransposeAxes(kR, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("k transpose: %w", err)
 	}
 	defer kT.Free()
 
-	vT, err := mlx.TransposeAxes(vR, []int{0, 2, 1, 3}, s)
+	vT, err := q.backend.TransposeAxes(vR, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("v transpose: %w", err)
 	}
@@ -924,29 +925,29 @@ func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen,
 
 	// Partial RoPE: rotate only partialRotaryFactor of the head dim.
 	ropeDims := int(float64(headDim) * float64(cfg.PartialRotaryFactor))
-	qRot, err := llm.ApplyRoPEFast(qT, startPos, ropeDims, cfg.RopeTheta, s)
+	qRot, err := llm.ApplyRoPEFast(qT, startPos, ropeDims, cfg.RopeTheta, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("q rope: %w", err)
 	}
 	defer qRot.Free()
 
-	kRot, err := llm.ApplyRoPEFast(kT, startPos, ropeDims, cfg.RopeTheta, s)
+	kRot, err := llm.ApplyRoPEFast(kT, startPos, ropeDims, cfg.RopeTheta, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("k rope: %w", err)
 	}
 	defer kRot.Free()
 
-	var kForAttn, vForAttn *mlx.Array
+	var kForAttn, vForAttn tensor.Array
 	if cache != nil && cache.IsInitialized(layerIdx) {
 		cached, err := cache.Get(layerIdx)
 		if err != nil {
 			return nil, err
 		}
-		newK, err := mlx.ConcatenateAxis([]*mlx.Array{cached.K, kRot}, 2, s)
+		newK, err := q.backend.ConcatenateAxis([]tensor.Array{cached.K, kRot}, 2, s)
 		if err != nil {
 			return nil, fmt.Errorf("concat K: %w", err)
 		}
-		newV, err := mlx.ConcatenateAxis([]*mlx.Array{cached.V, vT}, 2, s)
+		newV, err := q.backend.ConcatenateAxis([]tensor.Array{cached.V, vT}, 2, s)
 		if err != nil {
 			newK.Free()
 			return nil, fmt.Errorf("concat V: %w", err)
@@ -960,8 +961,8 @@ func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen,
 	} else if cache != nil {
 		kForAttn = kRot
 		vForAttn = vT
-		kRetained := mlx.RetainArray(kRot)
-		vRetained := mlx.RetainArray(vT)
+		kRetained := q.backend.RetainArray(kRot)
+		vRetained := q.backend.RetainArray(vT)
 		if err := cache.Store(layerIdx, kRetained, vRetained); err != nil {
 			kRetained.Free()
 			vRetained.Free()
@@ -973,13 +974,13 @@ func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen,
 	}
 
 	// Expand K/V to num_heads and run fused SDPA.
-	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
+	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("expand K heads: %w", err)
 	}
 	defer kExp.Free()
 
-	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, s)
+	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("expand V heads: %w", err)
 	}
@@ -990,19 +991,19 @@ func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen,
 		maskMode = "causal"
 	}
 	scale := float32(1.0 / sqrt(float64(headDim)))
-	ctx, err := mlx.FastScaledDotProductAttention(qT, kExp, vExp, scale, maskMode, nil, nil, s)
+	ctx, err := q.backend.FastScaledDotProductAttention(qT, kExp, vExp, scale, maskMode, nil, nil, s)
 	if err != nil {
 		return nil, fmt.Errorf("fused attention: %w", err)
 	}
 	defer ctx.Free()
 
-	ctxT, err := mlx.TransposeAxes(ctx, []int{0, 2, 1, 3}, s)
+	ctxT, err := q.backend.TransposeAxes(ctx, []int{0, 2, 1, 3}, s)
 	if err != nil {
 		return nil, fmt.Errorf("ctx transpose: %w", err)
 	}
 	defer ctxT.Free()
 
-	ctxFlat, err := mlx.Reshape(ctxT, []int{1, seqLen, outDim}, s)
+	ctxFlat, err := q.backend.Reshape(ctxT, []int{1, seqLen, outDim}, s)
 	if err != nil {
 		return nil, fmt.Errorf("ctx reshape: %w", err)
 	}
@@ -1010,48 +1011,48 @@ func (q *Qwen35) fullAttention(h *mlx.Array, lw *layerWeights, layerIdx, seqLen,
 
 	// attn_output_gate: gate the attention output BEFORE o_proj (the gate is
 	// num_heads*head_dim wide, matching the attention output, not hidden).
-	gateSig, err := mlx.Sigmoid(qGate, s)
+	gateSig, err := q.backend.Sigmoid(qGate, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate sigmoid: %w", err)
 	}
 	defer gateSig.Free()
 
-	gated, err := mlx.Multiply(ctxFlat, gateSig, s)
+	gated, err := q.backend.Multiply(ctxFlat, gateSig, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate multiply: %w", err)
 	}
 	defer gated.Free()
 
-	return sa.oProj.Forward(gated, s)
+	return sa.oProj.Forward(gated, q.backend, s)
 }
 
 // swiglu is the SwiGLU MLP shared by both layer kinds.
-func (q *Qwen35) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
+func (q *Qwen35) swiglu(h tensor.Array, lw *layerWeights) (tensor.Array, error) {
 	s := q.stream
 
-	gate, err := lw.gateProj.Forward(h, s)
+	gate, err := lw.gateProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate proj: %w", err)
 	}
 	defer gate.Free()
 
-	up, err := lw.upProj.Forward(h, s)
+	up, err := lw.upProj.Forward(h, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("up proj: %w", err)
 	}
 	defer up.Free()
 
-	gateSilu, err := llm.SiLU(gate, s)
+	gateSilu, err := llm.SiLU(gate, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("silu: %w", err)
 	}
 	defer gateSilu.Free()
 
-	gated, err := mlx.Multiply(gateSilu, up, s)
+	gated, err := q.backend.Multiply(gateSilu, up, s)
 	if err != nil {
 		return nil, fmt.Errorf("gate multiply: %w", err)
 	}
 	defer gated.Free()
 
-	return lw.downProj.Forward(gated, s)
+	return lw.downProj.Forward(gated, q.backend, s)
 }

@@ -12,6 +12,6 @@ import (
 // touching every call site in this package.
 type linear = llm.Linear
 
-func loadLinear(sf *llm.SafetensorsFile, name string, s tensor.Stream, quant *llm.QuantConfig) (*linear, error) {
-	return llm.LoadLinear(sf, name, s, quant)
+func loadLinear(sf *llm.SafetensorsFile, name string, b tensor.Backend, s tensor.Stream, quant *llm.QuantConfig) (*linear, error) {
+	return llm.LoadLinear(sf, name, b, s, quant)
 }

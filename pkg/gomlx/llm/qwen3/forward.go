@@ -20,6 +20,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 func init() {
@@ -28,7 +29,8 @@ func init() {
 
 type Qwen3 struct {
 	cfg     llm.ModelConfig
-	stream  *mlx.Stream
+	backend tensor.Backend
+	stream  tensor.Stream
 	weights *weights
 
 	// mlxSwigluClosures are compiled per-layer MLP closures, created lazily
@@ -36,10 +38,10 @@ type Qwen3 struct {
 	// stream used at trace time). Keyed by stream pointer so a fresh per-call
 	// stream triggers recompilation.
 	mlxSwigluClosures []*mlx.Closure
-	mlxSwigluStream   *mlx.Stream
+	mlxSwigluStream   tensor.Stream
 }
 
-func New(cfg llm.ModelConfig) (llm.Architecture, error) {
+func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
 	if cfg.HeadDim == 0 {
 		cfg.HeadDim = cfg.HiddenSize / cfg.NumHeads
 	}
@@ -58,18 +60,18 @@ func New(cfg llm.ModelConfig) (llm.Architecture, error) {
 			log.Printf("qwen3: forcing %d-bit quantization at load", n)
 		}
 	}
-	return &Qwen3{cfg: cfg}, nil
+	return &Qwen3{cfg: cfg, backend: backend}, nil
 }
 
 type weights struct {
-	embedTokens  *mlx.Array
-	embedTokensT *mlx.Array // transposed [hidden, vocab], cached at load
+	embedTokens  tensor.Array
+	embedTokensT tensor.Array // transposed [hidden, vocab], cached at load
 	layers       []layerWeights
-	normWeight   *mlx.Array
+	normWeight   tensor.Array
 }
 
 type layerWeights struct {
-	inputNorm *mlx.Array
+	inputNorm tensor.Array
 	// Projections dispatch between full-precision and quantized matmul in
 	// Forward (see linear.go). Quantized weights stay in [out, in] PyTorch
 	// layout; full precision is pre-transposed [in, out].
@@ -77,9 +79,9 @@ type layerWeights struct {
 	kProj    *linear // [hidden, num_kv_heads*head_dim]
 	vProj    *linear // [hidden, num_kv_heads*head_dim]
 	oProj    *linear // [num_heads*head_dim, hidden]
-	qNorm    *mlx.Array
-	kNorm    *mlx.Array
-	postNorm *mlx.Array
+	qNorm    tensor.Array
+	kNorm    tensor.Array
+	postNorm tensor.Array
 	gateProj *linear // [hidden, intermediate]
 	upProj   *linear // [hidden, intermediate]
 	downProj *linear // [intermediate, hidden]
@@ -87,7 +89,7 @@ type layerWeights struct {
 
 func (q *Qwen3) Config() llm.ModelConfig { return q.cfg }
 
-func (q *Qwen3) SetStream(s *mlx.Stream) { q.stream = s }
+func (q *Qwen3) SetStream(s tensor.Stream) { q.stream = s }
 
 // loadLinearT loads a weight from safetensors and returns it pre-transposed
 // into [in, out] layout for direct MatMul in the forward pass. The transpose
@@ -95,12 +97,12 @@ func (q *Qwen3) SetStream(s *mlx.Stream) { q.stream = s }
 // buffer — lazy transposes would bind to the loading thread's stream and fail
 // with "no Stream in current thread" when first evaluated during generation
 // on a different OS thread.
-func loadLinearT(sf *llm.SafetensorsFile, name string, s *mlx.Stream) (*mlx.Array, error) {
+func loadLinearT(sf *llm.SafetensorsFile, name string, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	w, err := sf.Get(name, s)
 	if err != nil {
 		return nil, err
 	}
-	wT, err := mlx.Transpose(w, s)
+	wT, err := b.Transpose(w, s)
 	if err != nil {
 		w.Free()
 		return nil, fmt.Errorf("transpose %s: %w", name, err)
@@ -113,7 +115,7 @@ func loadLinearT(sf *llm.SafetensorsFile, name string, s *mlx.Stream) (*mlx.Arra
 	return wT, nil
 }
 
-func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
+func (q *Qwen3) InitWeights(path string, s tensor.Stream) error {
 	q.stream = s
 
 	sf, err := llm.OpenSafetensors(path)
@@ -127,7 +129,7 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 	if err != nil {
 		return fmt.Errorf("load embed_tokens: %w", err)
 	}
-	w.embedTokensT, err = mlx.Transpose(w.embedTokens, s)
+	w.embedTokensT, err = q.backend.Transpose(w.embedTokens, s)
 	if err != nil {
 		return fmt.Errorf("transpose embed_tokens: %w", err)
 	}
@@ -145,41 +147,41 @@ func (q *Qwen3) InitWeights(path string, s *mlx.Stream) error {
 		p := fmt.Sprintf("model.layers.%d", i)
 		quant := q.cfg.Quantization
 
-		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", s)
+		lw.inputNorm, err = sf.Get(p + ".input_layernorm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d input_norm: %w", i, err)
 		}
-		if lw.qProj, err = loadLinear(sf, p+".self_attn.q_proj.weight", s, quant); err != nil {
+		if lw.qProj, err = loadLinear(sf, p+".self_attn.q_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d q_proj: %w", i, err)
 		}
-		if lw.kProj, err = loadLinear(sf, p+".self_attn.k_proj.weight", s, quant); err != nil {
+		if lw.kProj, err = loadLinear(sf, p+".self_attn.k_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d k_proj: %w", i, err)
 		}
-		if lw.vProj, err = loadLinear(sf, p+".self_attn.v_proj.weight", s, quant); err != nil {
+		if lw.vProj, err = loadLinear(sf, p+".self_attn.v_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d v_proj: %w", i, err)
 		}
-		if lw.oProj, err = loadLinear(sf, p+".self_attn.o_proj.weight", s, quant); err != nil {
+		if lw.oProj, err = loadLinear(sf, p+".self_attn.o_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d o_proj: %w", i, err)
 		}
-		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", s)
+		lw.qNorm, err = sf.Get(p + ".self_attn.q_norm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d q_norm: %w", i, err)
 		}
-		lw.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", s)
+		lw.kNorm, err = sf.Get(p + ".self_attn.k_norm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d k_norm: %w", i, err)
 		}
-		lw.postNorm, err = sf.Get(p+".post_attention_layernorm.weight", s)
+		lw.postNorm, err = sf.Get(p + ".post_attention_layernorm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d post_norm: %w", i, err)
 		}
-		if lw.gateProj, err = loadLinear(sf, p+".mlp.gate_proj.weight", s, quant); err != nil {
+		if lw.gateProj, err = loadLinear(sf, p+".mlp.gate_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d gate_proj: %w", i, err)
 		}
-		if lw.upProj, err = loadLinear(sf, p+".mlp.up_proj.weight", s, quant); err != nil {
+		if lw.upProj, err = loadLinear(sf, p+".mlp.up_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d up_proj: %w", i, err)
 		}
-		if lw.downProj, err = loadLinear(sf, p+".mlp.down_proj.weight", s, quant); err != nil {
+		if lw.downProj, err = loadLinear(sf, p+".mlp.down_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d down_proj: %w", i, err)
 		}
 	}
@@ -205,42 +207,36 @@ func (q *Qwen3) FreeWeights() {
 	if q.weights == nil {
 		return
 	}
-	freeArr(q.weights.embedTokens)
-	freeArr(q.weights.normWeight)
+	q.weights.embedTokens.Free()
+	q.weights.normWeight.Free()
 	for i := range q.weights.layers {
-		freeArr(q.weights.layers[i].inputNorm)
+		q.weights.layers[i].inputNorm.Free()
 		q.weights.layers[i].qProj.Free()
 		q.weights.layers[i].kProj.Free()
 		q.weights.layers[i].vProj.Free()
 		q.weights.layers[i].oProj.Free()
-		freeArr(q.weights.layers[i].qNorm)
-		freeArr(q.weights.layers[i].kNorm)
-		freeArr(q.weights.layers[i].postNorm)
+		q.weights.layers[i].qNorm.Free()
+		q.weights.layers[i].kNorm.Free()
+		q.weights.layers[i].postNorm.Free()
 		q.weights.layers[i].gateProj.Free()
 		q.weights.layers[i].upProj.Free()
 		q.weights.layers[i].downProj.Free()
 	}
 }
 
-func freeArr(a *mlx.Array) {
-	if a != nil {
-		a.Free()
-	}
-}
-
 // ForwardPrefill processes the full prompt sequence and returns last-position logits.
-func (q *Qwen3) ForwardPrefill(ids *mlx.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
+func (q *Qwen3) ForwardPrefill(ids tensor.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
 	return q.prefillAt(ids, seqLen, 0, cache)
 }
 
 // ForwardPrefillFrom prefills a delta sequence starting at an absolute
 // position, extending an existing cache. RoPE offsets start at startPos, so
 // a repeated prompt's shared prefix is not recomputed.
-func (q *Qwen3) ForwardPrefillFrom(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+func (q *Qwen3) ForwardPrefillFrom(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
 	return q.prefillAt(ids, seqLen, startPos, cache)
 }
 
-func (q *Qwen3) prefillAt(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
+func (q *Qwen3) prefillAt(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
 	logits, err := q.prefillInternal(ids, seqLen, startPos, cache)
 	if err != nil {
 		return nil, err
@@ -251,15 +247,15 @@ func (q *Qwen3) prefillAt(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCac
 
 // prefillInternal runs the forward pass over the prompt (or a delta at
 // startPos), returning the raw (BF16) logits array for the final position.
-func (q *Qwen3) prefillInternal(ids *mlx.Array, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen3) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 
-	h, err := llm.GatherAxis(q.weights.embedTokens, ids, 0, []int{1, q.cfg.HiddenSize}, s)
+	h, err := llm.GatherAxis(q.weights.embedTokens, ids, 0, []int{1, q.cfg.HiddenSize}, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("embedding lookup: %w", err)
 	}
 	defer h.Free()
-	h, err = mlx.SqueezeAxis(h, 2, s)
+	h, err = q.backend.SqueezeAxis(h, 2, s)
 	if err != nil {
 		return nil, fmt.Errorf("squeeze embedding: %w", err)
 	}
@@ -308,22 +304,22 @@ func (q *Qwen3) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (i
 
 // decodeInternal runs the forward pass for a single token, returning the raw
 // (BF16) logits array.
-func (q *Qwen3) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen3) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 
 	idData := []int64{int64(tokenID)}
-	idsArr, err := mlx.NewArrayFromInt64(idData, []int{1, 1})
+	idsArr, err := q.backend.NewArrayFromInt64(idData, []int{1, 1})
 	if err != nil {
 		return nil, fmt.Errorf("create ids: %w", err)
 	}
 	defer idsArr.Free()
 
-	h, err := llm.GatherAxis(q.weights.embedTokens, idsArr, 0, []int{1, q.cfg.HiddenSize}, s)
+	h, err := llm.GatherAxis(q.weights.embedTokens, idsArr, 0, []int{1, q.cfg.HiddenSize}, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("embedding lookup: %w", err)
 	}
 	defer h.Free()
-	h, err = mlx.SqueezeAxis(h, 2, s)
+	h, err = q.backend.SqueezeAxis(h, 2, s)
 	if err != nil {
 		return nil, fmt.Errorf("squeeze embedding: %w", err)
 	}
@@ -344,9 +340,9 @@ func (q *Qwen3) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (*mlx.A
 }
 
 // logitsToFloat32 casts a BF16 logits array to FP32 and reads it into a Go slice.
-func (q *Qwen3) logitsToFloat32(logits *mlx.Array) ([]float32, error) {
+func (q *Qwen3) logitsToFloat32(logits tensor.Array) ([]float32, error) {
 	s := q.stream
-	logitsF32, err := mlx.AsType(logits, mlx.Float32, s)
+	logitsF32, err := q.backend.AsType(logits, tensor.Float32, s)
 	if err != nil {
 		return nil, fmt.Errorf("cast logits: %w", err)
 	}
@@ -357,8 +353,8 @@ func (q *Qwen3) logitsToFloat32(logits *mlx.Array) ([]float32, error) {
 // logitsToArgmax computes the argmax of a logits array on the GPU and returns
 // the token ID. The logits array is [1, 1, vocab]; the flattened argmax is
 // exactly the vocab argmax.
-func (q *Qwen3) logitsToArgmax(logits *mlx.Array) (int, error) {
-	idxArr, err := mlx.ArgMax(logits, false, q.stream)
+func (q *Qwen3) logitsToArgmax(logits tensor.Array) (int, error) {
+	idxArr, err := q.backend.ArgMax(logits, false, q.stream)
 	if err != nil {
 		return 0, fmt.Errorf("argmax: %w", err)
 	}
@@ -376,26 +372,26 @@ func (q *Qwen3) logitsToArgmax(logits *mlx.Array) (int, error) {
 	return int(data[0]), nil
 }
 
-func (q *Qwen3) computeLogits(h *mlx.Array) (*mlx.Array, error) {
+func (q *Qwen3) computeLogits(h tensor.Array) (tensor.Array, error) {
 	s := q.stream
-	normed, err := llm.RMSNorm(h, q.weights.normWeight, q.cfg.RMSNormEPS, s)
+	normed, err := llm.RMSNorm(h, q.weights.normWeight, q.cfg.RMSNormEPS, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("final norm: %w", err)
 	}
 	defer normed.Free()
 
-	return mlx.MatMul(normed, q.weights.embedTokensT, s)
+	return q.backend.MatMul(normed, q.weights.embedTokensT, s)
 }
 
 // computeLogitsLast slices h to the final position, then projects to vocab.
 // The prefill only needs the last token's logits to sample the first output.
-func (q *Qwen3) computeLogitsLast(h *mlx.Array, seqLen int) (*mlx.Array, error) {
+func (q *Qwen3) computeLogitsLast(h tensor.Array, seqLen int) (tensor.Array, error) {
 	s := q.stream
 	if seqLen > 1 {
 		start := []int{0, seqLen - 1, 0}
 		stop := []int{1, seqLen, q.cfg.HiddenSize}
 		strides := []int{1, 1, 1}
-		sliced, err := mlx.Slice(h, start, stop, strides, s)
+		sliced, err := q.backend.Slice(h, start, stop, strides, s)
 		if err != nil {
 			return nil, fmt.Errorf("slice last position: %w", err)
 		}
@@ -405,11 +401,11 @@ func (q *Qwen3) computeLogitsLast(h *mlx.Array, seqLen int) (*mlx.Array, error) 
 	return q.computeLogits(h)
 }
 
-func (q *Qwen3) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cache *llm.KVCache) (*mlx.Array, error) {
+func (q *Qwen3) forwardLayer(h tensor.Array, layerIdx, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := q.stream
 	lw := &q.weights.layers[layerIdx]
 
-	normed, err := llm.RMSNorm(h, lw.inputNorm, q.cfg.RMSNormEPS, s)
+	normed, err := llm.RMSNorm(h, lw.inputNorm, q.cfg.RMSNormEPS, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("input norm: %w", err)
 	}
@@ -421,13 +417,13 @@ func (q *Qwen3) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cache
 	}
 	defer attnOut.Free()
 
-	residual1, err := mlx.Add(h, attnOut, s)
+	residual1, err := q.backend.Add(h, attnOut, s)
 	if err != nil {
 		return nil, fmt.Errorf("attn residual: %w", err)
 	}
 	defer residual1.Free()
 
-	normed2, err := llm.RMSNorm(residual1, lw.postNorm, q.cfg.RMSNormEPS, s)
+	normed2, err := llm.RMSNorm(residual1, lw.postNorm, q.cfg.RMSNormEPS, q.backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("post norm: %w", err)
 	}
@@ -439,7 +435,7 @@ func (q *Qwen3) forwardLayer(h *mlx.Array, layerIdx, seqLen, startPos int, cache
 	}
 	defer ffnOut.Free()
 
-	return mlx.Add(residual1, ffnOut, s)
+	return q.backend.Add(residual1, ffnOut, s)
 }
 
 // attention computes grouped-query attention with QK norm and RoPE.

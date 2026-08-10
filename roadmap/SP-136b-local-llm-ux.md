@@ -77,6 +77,7 @@ everything else**.
 - `pkg/agent_providers/generic_provider.go` — lazy server start on connection error
 
 ### Phase 5: Daemon mode integration
+**Status: DONE (committed b218d4d64)**
 - When sprout daemon starts, optionally pre-load the local model
 - Server lifecycle tied to daemon lifecycle (idle timeout reaps both)
 - WebUI shows local model status (model name, tok/s, memory)

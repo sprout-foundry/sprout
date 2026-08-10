@@ -46,7 +46,7 @@ const localLLMEndpoint = "http://127.0.0.1:18081"
 // catalogModels is the static catalog of available local models. The backend
 // checks for their presence on disk; the UI uses this to show download actions.
 var catalogModels = []localLLMModel{
-	{ID: "gemma-4-e2b-5bit", Name: "Gemma4 2B (5-bit MLX)", SizeHint: "~3.5 GB"},
+	{ID: "gemma-4-e2b-it-4bit", Name: "Gemma4 2B (4-bit MLX)", SizeHint: "~3.3 GB"},
 }
 
 // getLocalLLMStatus returns the cached status, refreshing if stale.
@@ -68,7 +68,7 @@ func probeLocalLLMStatus() *localLLMStatus {
 	status := &localLLMStatus{
 		Platform:         runtime.GOOS + "-" + runtime.GOARCH,
 		Endpoint:         localLLMEndpoint,
-		RecommendedModel: "gemma-4-e2b-5bit",
+		RecommendedModel: "gemma-4-e2b-it-4bit",
 		Models:           catalogModels,
 	}
 

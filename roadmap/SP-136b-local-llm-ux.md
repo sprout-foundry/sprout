@@ -88,7 +88,11 @@ everything else**.
 
 | Model | Dir | HF Repo | Notes |
 |-------|-----|---------|-------|
-| Gemma4 e2b (5-bit) | gemma-4-e2b-5bit | mlx-community/gemma-4-e2b-5bit | Default for all machines |
+| Gemma4 e2b (4-bit) | gemma-4-e2b-it-4bit | mlx-community/gemma-4-e2b-it-4bit | Default for all machines |
+
+NOTE: 5-bit quantization (`gemma-4-e2b-5bit`) produces garbage output
+through the Go server — the 5-bit affine quantized matmul path needs
+debugging. Using 4-bit (verified working) as the interim default.
 
 ## Future Work: Per-hardware model mapping
 

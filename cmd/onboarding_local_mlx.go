@@ -44,18 +44,25 @@ func onboardingLocal() (string, bool) {
 
 	// List available models and highlight the recommended one.
 	models := localmodel.ListModels()
-	rec := llm.RecommendModelForRAM(ram)
+	rec := localmodel.RecommendedModel(ram)
 
 	fmt.Println("Available models:")
 	var items []console.SelectItem
 	for i, m := range models {
-		status := "Not downloaded"
+		var label string
 		if m.Installed {
-			status = fmt.Sprintf("✓ Installed (%.1f GB)", float64(m.Size)/1073741824)
+			label = fmt.Sprintf("%s  —  ✓ %.1f GB", m.Name, float64(m.Size)/1073741824)
+			if m.IsTuned {
+				label += "  [sprout-tuned]"
+			}
+			if m.QuantBits != "" {
+				label += fmt.Sprintf("  (%s)", m.QuantBits)
+			}
+		} else {
+			label = fmt.Sprintf("%s  —  download %.0f+ GB", m.Name, float64(m.MinRAM))
 		}
-		label := fmt.Sprintf("%s  —  %s", m.Name, status)
 		if rec != nil && m.Name == rec.Name {
-			label = "★ " + label + "  [recommended for your RAM]"
+			label = "★ " + label + "  [recommended]"
 		}
 		items = append(items, console.SelectItem{
 			Label: label,

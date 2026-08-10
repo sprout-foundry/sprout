@@ -71,7 +71,12 @@ func FastRoPE(x *Array, dims int, traditional bool, base float64, scale float32,
 	if freqs != nil {
 		f = freqs.cHandle()
 	}
-	opt := C.mlx_optional_float{value: C.float(base), has_value: C.bool(true)}
+	// When freqs are provided, base must not have a value (MLX constraint).
+	hasBase := C.bool(true)
+	if freqs != nil {
+		hasBase = C.bool(false)
+	}
+	opt := C.mlx_optional_float{value: C.float(base), has_value: hasBase}
 	rc := C.mlx_fast_rope(&out, x.cHandle(), C.int(dims), C.bool(traditional), opt, C.float(scale), C.int(offset), f, s.cHandle())
 	return wrapResult(out, rc, "fast_rope")
 }

@@ -4,6 +4,7 @@ package gemma4
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/tensor"
@@ -40,6 +41,11 @@ func (g *Gemma4) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *
 	if err != nil { return nil, fmt.Errorf("embed scale: %w", err) }
 	defer h.Free()
 
+	// Debug: dump embedding for comparison with mlx-lm
+	if os.Getenv("GEMMA4_DEBUG") != "" {
+		dumpArrayF32(h, "embed_scaled", g.backend, s)
+	}
+
 	// Per-layer input embeddings
 	var perLayerInputs []tensor.Array
 	if g.cfg.HiddenSizePerLayerInput > 0 {
@@ -75,6 +81,9 @@ func (g *Gemma4) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *
 		if err != nil { return nil, fmt.Errorf("layer %d: %w", i, err) }
 		h.Free()
 		h = out
+		if os.Getenv("GEMMA4_DEBUG") != "" && i == 0 {
+			dumpArrayF32(h, "layer_0_out", g.backend, s)
+		}
 	}
 
 	// Final norm + logits

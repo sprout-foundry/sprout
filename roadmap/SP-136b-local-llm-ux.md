@@ -30,7 +30,7 @@ everything else**.
 ## Implementation Plan
 
 ### Phase 1: Server lifecycle (`pkg/localmodel/server.go`)
-**Status: IN PROGRESS**
+**Status: DONE (committed 0e5d780bf)**
 
 - `EnsureServer(ctx, port, modelDir)` — health check → spawn if needed → wait for healthy
 - `HealthCheck(port)` — GET /health on the server port
@@ -43,6 +43,7 @@ everything else**.
 - `pkg/localmodel/server_platform.go` — `detachedSysProcAttr()` per-OS
 
 ### Phase 2: Model management (`pkg/localmodel/model.go`)
+**Status: DONE (committed 0e5d780bf)**
 - `ListModels()` — scan models dir + catalog, return installed + available
 - `EnsureModel(ctx, catalogEntry, modelsDir, progressFn)` — download if missing
 - Download via `hf download` subprocess with progress parsing
@@ -52,6 +53,7 @@ everything else**.
 - `pkg/localmodel/model.go` — model listing, download, recommendation
 
 ### Phase 3: Onboarding integration (`cmd/onboarding_local.go`)
+**Status: DONE (committed 0e5d780bf)**
 - `sprout-local` appears in the provider picker as "Local (Offline)"
 - When selected:
   1. Show hardware info and recommended model
@@ -65,6 +67,7 @@ everything else**.
 - `cmd/onboarding.go` — add sprout-local to provider list
 
 ### Phase 4: Agent integration (`cmd/agent_execution.go`)
+**Status: DONE (committed 0e5d780bf)**
 - When `sprout-local` is the active provider and no server responds: auto-start it
 - Cache the running model path so server restarts use the same model
 - Handle server death gracefully: detect on next request, restart

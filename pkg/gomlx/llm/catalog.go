@@ -19,17 +19,16 @@ type CatalogModel struct {
 	MinRAM uint64 // minimum total RAM (bytes) for this to be the pick
 }
 
-// ModelCatalog lists downloadable models, ordered by size (largest first).
-// Selection picks the largest model whose MinRAM fits the machine. These map
-// to mlx-community quantized releases; the 0.8B is the safe fallback on small
-// machines, the 2B is a good speed/quality balance, the 4B is the balanced
-// choice for 16 GB class machines, and the 9B is only recommended with 32 GB+.
+// ModelCatalog lists downloadable models. Currently a single hardcoded model
+// (Gemma4 e2b 5-bit) until per-hardware model mapping is finalized (see
+// SP-136b Future Work).
 var ModelCatalog = []CatalogModel{
-	{Name: "qwen3.6-35b-a3b", Dir: "qwen3.6-35b-a3b-4bit", HFRepo: "mlx-community/Qwen3.6-35B-A3B-4bit", MinRAM: 32 * 1024 * 1024 * 1024},
-	{Name: "qwen3.5-9b", Dir: "qwen3.5-9b-4bit", HFRepo: "mlx-community/Qwen3.5-9B-4bit", MinRAM: 30 * 1024 * 1024 * 1024},
-	{Name: "qwen3.5-4b", Dir: "qwen3.5-4b-4bit", HFRepo: "mlx-community/Qwen3.5-4B-4bit", MinRAM: 14 * 1024 * 1024 * 1024},
-	{Name: "qwen3.5-2b", Dir: "qwen3.5-2b-4bit", HFRepo: "mlx-community/Qwen3.5-2B-MLX-4bit", MinRAM: 8 * 1024 * 1024 * 1024},
-	{Name: "qwen3.5-0.8b", Dir: "qwen3.5-0.8b-4bit", HFRepo: "mlx-community/Qwen3.5-0.8B-4bit", MinRAM: 0},
+	{
+		Name:   "gemma4-e2b",
+		Dir:    "gemma-4-e2b-5bit",
+		HFRepo: "mlx-community/gemma-4-e2b-5bit",
+		MinRAM: 0, // fits on 8GB+
+	},
 }
 
 // InstalledModel describes a model directory found on disk. Unlike

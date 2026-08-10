@@ -84,14 +84,32 @@ everything else**.
 
 ## Catalog (current)
 
-| Model | Dir | HF Repo | Min RAM | Status |
-|-------|-----|---------|---------|--------|
-| Qwen3.5-0.8B | qwen3.5-0.8b-4bit | mlx-community/Qwen3.5-0.8B-4bit | 0 GB | Downloaded |
-| Qwen3.5-2B | qwen3.5-2b-4bit | mlx-community/Qwen3.5-2B-MLX-4bit | 8 GB | Downloaded |
-| Qwen3.5-4B | qwen3.5-4b-4bit | mlx-community/Qwen3.5-4B-4bit | 14 GB | Downloaded |
-| Qwen3.5-9B | qwen3.5-9b-4bit | mlx-community/Qwen3.5-9B-4bit | 30 GB | Not downloaded |
+**Interim**: single hardcoded model until per-hardware mapping is finalized.
 
-Default on 16GB M1 Pro: **Qwen3.5-4B** (4-bit, ~2.5GB GPU memory).
+| Model | Dir | HF Repo | Notes |
+|-------|-----|---------|-------|
+| Gemma4 e2b (5-bit) | gemma-4-e2b-5bit | mlx-community/gemma-4-e2b-5bit | Default for all machines |
+
+## Future Work: Per-hardware model mapping
+
+The catalog currently hardcodes a single model (Gemma4 e2b 5-bit) for all
+machines. Before PR to main, we need to finalize the model lineup and map
+the right model + quantization to each hardware tier:
+
+1. **Benchmark candidate models** (Gemma4 e2b/e4b, Qwen3.5 0.8B/2B/4B/9B,
+   sprout-tuned variants) across hardware tiers
+2. **Decide per-tier defaults** — likely:
+   - 8 GB: smallest viable model (e2b q5 or q4)
+   - 16 GB: balanced model (e4b q4 or tuned 4b q5)
+   - 32 GB: largest model (9B q4 or tuned 4b q8)
+3. **Wire sprout-tuned models** into the catalog with proper HF repos once
+   they're published
+4. **Implement Gemma4 architecture** in Go (`pkg/gomlx/llm/gemma4/`) so
+   the native server can serve Gemma4 models without mlx-lm subprocess
+5. **Update `ModelCatalog`** with the finalized per-tier entries
+
+This work is blocked on: (a) final model selection from the user,
+(b) Gemma4 Go architecture implementation, (c) sprout-tuned model publication.
 
 ## Performance Reality
 

@@ -43,16 +43,13 @@ type Model struct {
 	prefixTokens []int
 }
 
-// minPrefixReuse is effectively disabled for hybrid DeltaNet architectures.
-// The DeltaNet recurrent state is sequence-dependent: restoring a cached
-// state from a different conversation (even with the same system prompt
-// prefix) corrupts the linear-attention layers. Full-attention K/V would
-// be safe to cache, but mixing cached full-attention K/V with fresh
-// DeltaNet state produces inconsistent attention across layers.
-//
-// To re-enable safely: scope the cache by conversation ID, or cache only
-// full-attention layers and rebuild DeltaNet state on each request.
-const minPrefixReuse = 1 << 30
+// minPrefixReuse is the smallest shared token prefix worth reusing.
+// The prefix cache is safe for DeltaNet architectures ONLY when the entire
+// cached prefix is a true prefix of the new request (multi-turn continuation
+// of the same conversation). Partial overlaps (e.g., a subagent sharing
+// just the system prompt) would restore stale DeltaNet state. The check
+// in Generate uses `shared == len(m.prefixTokens)` to enforce this.
+const minPrefixReuse = 8
 
 // maxPrefixLen caps the retained prefix so long histories don't pin memory
 // forever. Beyond this, caching is dropped for that request.
@@ -344,7 +341,13 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	// recomputing shared history (multi-turn conversations).
 	shared := longestCommonPrefix(tokenIDs, m.prefixTokens)
 	var logits []float32
-	if shared >= minPrefixReuse && shared < len(tokenIDs) && m.prefixCache != nil {
+	// Only reuse the prefix cache when the ENTIRE cached prefix is a true
+	// prefix of the new request. This ensures multi-turn conversations
+	// (same system prompt + growing history) get the cache hit, while
+	// subagents or different conversations (partial overlap) get a fresh
+	// prefill. The DeltaNet recurrent state is sequence-dependent, so a
+	// partial overlap would corrupt the linear-attention layers.
+	if shared >= minPrefixReuse && shared == len(m.prefixTokens) && shared < len(tokenIDs) && m.prefixCache != nil {
 		if err := cache.RestorePrefix(m.prefixCache); err != nil {
 			return fmt.Errorf("restore prefix: %w", err)
 		}

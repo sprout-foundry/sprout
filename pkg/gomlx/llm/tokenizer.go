@@ -150,12 +150,14 @@ func (t *Tokenizer) Encode(text string) []int {
 
 // encodeBPE applies BPE to regular (non-special) text.
 func (t *Tokenizer) encodeBPE(text string) []int {
-	// Pre-tokenize: split into words on whitespace/punctuation, keeping delimiters
+	// Gemma/SentencePiece: \n is a standalone vocab token. Check and emit directly.
+	if _, hasNewline := t.vocab["\n"]; hasNewline {
+		return t.encodeGemma(text)
+	}
+	// Standard BPE (Qwen/GPT-2 style)
 	words := preTokenize(text)
-
 	var tokenIDs []int
 	for _, word := range words {
-		// Convert to BPE space-encoding: leading space becomes Ġ
 		bpeWord := toBPESpace(word)
 		tokens := t.bpe(bpeWord)
 		for _, tokStr := range tokens {
@@ -164,8 +166,65 @@ func (t *Tokenizer) encodeBPE(text string) []int {
 			}
 		}
 	}
-
 	return tokenIDs
+}
+
+// encodeGemma handles Gemma/SentencePiece-style tokenization where spaces
+// are replaced with ▁ (U+2581) and \n is a standalone token.
+func (t *Tokenizer) encodeGemma(text string) []int {
+	var tokenIDs []int
+	for _, r := range text {
+		var bpeWord string
+		if r == '\n' {
+			bpeWord = "\n"
+		} else if r == ' ' {
+			bpeWord = "▁"
+		} else {
+			bpeWord = string(r)
+		}
+		// Try direct vocab lookup first
+		if id, ok := t.vocab[bpeWord]; ok {
+			tokenIDs = append(tokenIDs, id)
+			continue
+		}
+		// BPE merge
+		tokens := t.bpe(bpeWord)
+		for _, tokStr := range tokens {
+			if id, ok := t.vocab[tokStr]; ok {
+				tokenIDs = append(tokenIDs, id)
+			}
+		}
+	}
+	// Post-process: merge consecutive BPE tokens that form multi-char vocab entries
+	// This handles cases like ▁i▁s needing to be one token
+	return t.mergeGemmaTokens(tokenIDs)
+}
+
+// mergeGemmaTokens applies a second pass of BPE merging on the tokenized
+// output for Gemma's SentencePiece-style merges.
+func (t *Tokenizer) mergeGemmaTokens(ids []int) []int {
+	if len(ids) < 2 {
+		return ids
+	}
+	// Convert IDs back to strings, then run BPE
+	var tokens []string
+	for _, id := range ids {
+		if s, ok := t.idToTok[id]; ok {
+			tokens = append(tokens, s)
+		}
+	}
+	// Re-merge the full sequence
+	merged := t.bpe(strings.Join(tokens, ""))
+	var result []int
+	for _, tokStr := range merged {
+		if id, ok := t.vocab[tokStr]; ok {
+			result = append(result, id)
+		}
+	}
+	if len(result) == 0 {
+		return ids // fallback
+	}
+	return result
 }
 
 // Decode converts token IDs back to text.

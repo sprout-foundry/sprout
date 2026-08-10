@@ -203,6 +203,7 @@ func LoadConfig(path string) (ModelConfig, error) {
 	case "gemma4_text":
 		cfg.WeightPrefix = "language_model.model."
 		cfg.BOSTokenID = 0 // Gemma doesn't use BOS prepending
+		cfg.StopTokenIDs = []int{106} // <turn|> — end of turn marker
 		if cfg.GlobalHeadDim == 0 {
 			cfg.GlobalHeadDim = cfg.HeadDim
 		}

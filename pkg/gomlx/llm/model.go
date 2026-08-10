@@ -291,6 +291,21 @@ func DefaultGenerateConfig() GenerateConfig {
 }
 
 // Generate runs the autoregressive generation loop. It calls onToken for each
+// isStopToken reports whether the token should terminate generation.
+// Checks EOS and any architecture-specific StopTokenIDs (e.g. Gemma4's <turn|>).
+func (m *Model) isStopToken(tokenID int) bool {
+	if tokenID == m.cfg.EOSTokenID {
+		return true
+	}
+	for _, t := range m.cfg.StopTokenIDs {
+		if tokenID == t {
+			return true
+		}
+	}
+	return false
+}
+
+// Generate drives the autoregressive generation loop, calling onToken for each
 // generated token ID (after filtering thinking tokens if applicable).
 // Returns when EOS is produced, maxTokens is reached, or context is cancelled.
 func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConfig, onToken func(tokenID int)) error {
@@ -416,7 +431,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if nextToken == m.cfg.EOSTokenID {
+			if m.isStopToken(nextToken) {
 				break
 			}
 
@@ -434,7 +449,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 					onToken(t)
 				}
 				i++
-				if t == m.cfg.EOSTokenID {
+				if m.isStopToken(t) {
 					break
 				}
 			}
@@ -456,7 +471,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if nextToken == m.cfg.EOSTokenID {
+			if m.isStopToken(nextToken) {
 				break
 			}
 
@@ -539,7 +554,7 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if nextToken == m.cfg.EOSTokenID {
+		if m.isStopToken(nextToken) {
 			break
 		}
 
@@ -743,7 +758,7 @@ func findPromptLookupCandidates(tokens []int, nGramSize, maxDraft int) []int {
 func (m *Model) shouldFilterToken(tokenID int, genCfg GenerateConfig) bool {
 	// Never surface the EOS token to callbacks: it terminates generation and
 	// decoding it would inject <|im_end|> (or similar) into the output text.
-	if tokenID == m.cfg.EOSTokenID {
+	if m.isStopToken(tokenID) {
 		return true
 	}
 

@@ -404,7 +404,8 @@ func toBPESpace(word string) string {
 
 // fromBPESpace converts BPE space-encoding back to regular text.
 func fromBPESpace(token string) string {
-	s := strings.ReplaceAll(token, "Ġ", " ")
+	s := strings.ReplaceAll(token, "▁", " ")  // Gemma SentencePiece space
+	s = strings.ReplaceAll(s, "Ġ", " ")       // GPT-2/Qwen BPE space
 	s = strings.ReplaceAll(s, "Ċ", "\n")
 	s = strings.ReplaceAll(s, "đ", "\t")
 	return s

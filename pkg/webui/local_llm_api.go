@@ -5,6 +5,7 @@ package webui
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -81,31 +82,34 @@ func probeLocalLLMStatus() *localLLMStatus {
 		return status
 	}
 
-	// Check for downloaded models.
+	// Check for downloaded models. Use the same directory as the localmodel
+	// package and llm_server (~/dev/llm-models), checking the legacy
+	// ~/.cache/sprout/models path as a fallback.
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return status
 	}
-	modelCacheDir := filepath.Join(home, ".cache", "sprout", "models")
-	status.ModelDir = modelCacheDir
+	primaryDir := filepath.Join(home, "dev", "llm-models")
+	legacyDir := filepath.Join(home, ".cache", "sprout", "models")
+	status.ModelDir = primaryDir
 
-	for i, m := range status.Models {
-		modelPath := filepath.Join(modelCacheDir, m.ID)
-		if _, err := os.Stat(filepath.Join(modelPath, "config.json")); err == nil {
-			status.Models[i].Present = true
-			status.ModelPresent = true
-		}
-	}
-
-	// Also check the legacy llm-models path.
-	if !status.ModelPresent {
-		legacyDir := filepath.Join(home, "dev", "llm-models")
-		for _, m := range status.Models {
-			if _, err := os.Stat(filepath.Join(legacyDir, m.ID, "config.json")); err == nil {
-				status.ModelPresent = true
-				break
+	checkModel := func(dir string) bool {
+		any := false
+		for i, m := range status.Models {
+			modelPath := filepath.Join(dir, m.ID)
+			if _, err := os.Stat(filepath.Join(modelPath, "config.json")); err == nil {
+				status.Models[i].Present = true
+				any = true
 			}
 		}
+		return any
+	}
+
+	if checkModel(primaryDir) {
+		status.ModelPresent = true
+	} else if checkModel(legacyDir) {
+		status.ModelPresent = true
+		status.ModelDir = legacyDir
 	}
 
 	// Health check the local server.
@@ -246,22 +250,27 @@ func findLocalLLMBinary() string {
 			return path
 		}
 	}
+	// Check next to the sprout executable.
+	if exe, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(exe), "llm_server")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
 	return ""
 }
 
 func pickLocalModel(status *localLLMStatus) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	modelCacheDir := filepath.Join(home, ".cache", "sprout", "models")
 	for _, m := range status.Models {
 		if !m.Present {
 			continue
 		}
-		path := filepath.Join(modelCacheDir, m.ID)
-		if _, err := os.Stat(filepath.Join(path, "config.json")); err == nil {
-			return path
+		// Try primary path, then legacy.
+		for _, base := range []string{status.ModelDir, filepath.Join(os.Getenv("HOME"), ".cache", "sprout", "models")} {
+			path := filepath.Join(base, m.ID)
+			if _, err := os.Stat(filepath.Join(path, "config.json")); err == nil {
+				return path
+			}
 		}
 	}
 	return ""
@@ -386,4 +395,26 @@ func ensureLocalLLMRunning() string {
 		}
 	}
 	return ""
+}
+
+// stopLocalLLMServer attempts a graceful shutdown of the local LLM server
+// via POST /shutdown. Best-effort: if the server doesn't respond, the
+// detached process continues running. Called during daemon Shutdown().
+func stopLocalLLMServer(log *slog.Logger) {
+	if log == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "POST", localLLMEndpoint+"/shutdown", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Debug("local LLM server not stopped (likely not running)", "err", err)
+		return
+	}
+	resp.Body.Close()
+	localLLMMu.Lock()
+	localLLMCached = nil
+	localLLMMu.Unlock()
+	log.Info("local LLM server stopped")
 }

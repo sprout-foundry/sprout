@@ -1,7 +1,7 @@
 {
   "chutes": {
     "source": "https://api.chutes.com/v1/models",
-    "last_verified": "2026-08-08",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -72,7 +72,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-08-08",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -566,7 +566,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-08-09",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -614,7 +614,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-08-09",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -686,7 +686,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/",
-    "last_verified": "2026-08-09",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -817,7 +817,7 @@
   },
   "ollama-cloud": {
     "source": "https://api.ollama-cloud.com/v1/models",
-    "last_verified": "2026-08-06",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -918,7 +918,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-08-07",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "gpt-5",
@@ -1457,7 +1457,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-08-07",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -3704,7 +3704,7 @@
   },
   "zai": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-07",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "glm-4.5v",
@@ -3780,7 +3780,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-08",
+    "last_verified": "2026-08-10",
     "models": [
       {
         "id": "glm-4.5",

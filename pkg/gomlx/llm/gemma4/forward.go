@@ -12,16 +12,25 @@ import (
 
 func (g *Gemma4) ForwardPrefill(ids tensor.Array, seqLen int, cache *llm.KVCache) ([]float32, error) {
 	logits, err := g.forwardInternal(ids, seqLen, 0, cache)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer logits.Free()
-	return logits.Float32Data()
+	// Slice to last position: [1, seqLen, vocab] -> [1, 1, vocab]
+	last, err := g.backend.Slice(logits, []int{0, seqLen - 1, 0}, []int{1, seqLen, g.cfg.VocabSize}, []int{1, 1, 1}, g.stream)
+	if err != nil { return nil, fmt.Errorf("slice last logits: %w", err) }
+	defer last.Free()
+	return last.Float32Data()
 }
 
 func (g *Gemma4) ForwardPrefillFrom(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) ([]float32, error) {
 	logits, err := g.forwardInternal(ids, seqLen, startPos, cache)
 	if err != nil { return nil, err }
 	defer logits.Free()
-	return logits.Float32Data()
+	last, err := g.backend.Slice(logits, []int{0, seqLen - 1, 0}, []int{1, seqLen, g.cfg.VocabSize}, []int{1, 1, 1}, g.stream)
+	if err != nil { return nil, fmt.Errorf("slice last logits: %w", err) }
+	defer last.Free()
+	return last.Float32Data()
 }
 
 func (g *Gemma4) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
@@ -424,6 +433,9 @@ func s2(v float32, b tensor.Backend) (tensor.Array, error) {
 // Decode methods
 
 func (g *Gemma4) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]float32, error) {
+	if os.Getenv("GEMMA4_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[gemma4] ForwardDecode tokenID=%d pos=%d\n", tokenID, pos)
+	}
 	logits, err := g.decodeInternal(tokenID, pos, cache)
 	if err != nil { return nil, err }
 	defer logits.Free()
@@ -431,6 +443,9 @@ func (g *Gemma4) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]floa
 }
 
 func (g *Gemma4) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (int, error) {
+	if os.Getenv("GEMMA4_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[gemma4] decode tokenID=%d pos=%d\n", tokenID, pos)
+	}
 	logits, err := g.decodeInternal(tokenID, pos, cache)
 	if err != nil { return 0, err }
 	defer logits.Free()
@@ -451,6 +466,10 @@ func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 
 	h, err := g.weights.embed.Lookup(idsArr, g.backend, s)
 	if err != nil { return nil, err }
+	if os.Getenv("GEMMA4_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[gemma4] decode_embed_raw shape=%v ids=%v\n", h.Shape(), []int64{int64(tokenID)})
+		dumpArrayF32(h, "decode_embed_raw_pre_scale", g.backend, s)
+	}
 	defer h.Free()
 	h, err = g.backend.SqueezeAxis(h, 2, s)
 	if err != nil { return nil, err }
@@ -459,6 +478,10 @@ func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 	h, err = g.backend.Multiply(h, scaleArr, s)
 	if err != nil { return nil, err }
 	defer h.Free()
+
+	if os.Getenv("GEMMA4_DEBUG") != "" {
+		dumpArrayF32(h, "decode_embed", g.backend, s)
+	}
 
 	// Per-layer inputs for decode
 	var perLayerInputs []tensor.Array
@@ -491,6 +514,14 @@ func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 		h = out
 		if os.Getenv("GEMMA4_DEBUG") != "" && i < 6 {
 			dumpArrayF32(h, fmt.Sprintf("decode_layer_%d", i), g.backend, s)
+			// Check for NaN
+			if data, err := h.Float32Data(); err == nil {
+				nanCount := 0
+				for _, v := range data { if v != v { nanCount++ } }
+				if nanCount > 0 {
+					fmt.Fprintf(os.Stderr, "[gemma4] decode_layer_%d: %d NaN values!\n", i, nanCount)
+				}
+			}
 		}
 	}
 

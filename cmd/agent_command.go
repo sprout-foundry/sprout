@@ -108,6 +108,14 @@ func createChatAgent() (*agent.Agent, error) {
 	// so the subsequent NewAgent() call picks up the fresh configuration.
 	maybeRunOnboarding()
 
+	// If using the local provider, ensure the server is running.
+	if isLocalProvider() {
+		if err := ensureLocalServerRunning(); err != nil {
+			console.GlyphWarning.Printf("Local AI server: %v", err)
+			// Continue anyway — the error will surface on first chat request
+		}
+	}
+
 	var chatAgent *agent.Agent
 	var err error
 

@@ -153,6 +153,7 @@ type ModelConfig struct {
 	UseDoubleWideMLP        bool    // KV-shared layers use 2x intermediate size
 	AttentionKEqV           bool    // full-attention layers share K=V
 	RopeTraditional         bool    // RoPE traditional (GPT-NeoX style)
+	StopTokenIDs            []int   // additional stop tokens beyond EOS
 }
 
 // HybridLinearAttn reports whether the model has DeltaNet linear-attention

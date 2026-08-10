@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/gemma4"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
 	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
 )

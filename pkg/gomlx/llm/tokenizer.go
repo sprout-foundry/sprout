@@ -472,6 +472,30 @@ type hfAddedToken struct {
 // via shouldFilterToken. Models without thinking tokens (plain qwen3) ignore
 // the marker harmlessly.
 func (t *Tokenizer) FormatChat(messages []ChatMessage) string {
+	// Gemma uses a different chat format than Qwen
+	if _, isGemma := t.vocab["<|turn>"]; isGemma {
+		return t.formatGemmaChat(messages)
+	}
+	return t.formatQwenChat(messages)
+}
+
+func (t *Tokenizer) formatGemmaChat(messages []ChatMessage) string {
+	var sb strings.Builder
+	for _, msg := range messages {
+		role := msg.Role
+		if role == "user" {
+			sb.WriteString("<|turn>user\n")
+		} else {
+			sb.WriteString("<|turn>model\n")
+		}
+		sb.WriteString(msg.Content)
+		sb.WriteString("<turn|>\n")
+	}
+	sb.WriteString("<|turn>model\n")
+	return sb.String()
+}
+
+func (t *Tokenizer) formatQwenChat(messages []ChatMessage) string {
 	var sb strings.Builder
 	for _, msg := range messages {
 		sb.WriteString("<|im_start|>")

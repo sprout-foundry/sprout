@@ -567,10 +567,6 @@ func (q *Qwen35) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 		h.Free()
 		return nil, err
 	}
-	if err := s.Synchronize(); err != nil {
-		logits.Free()
-		return nil, fmt.Errorf("synchronize: %w", err)
-	}
 	return logits, nil
 }
 
@@ -827,18 +823,13 @@ func (q *Qwen35) makeOneTokenArray(tokenID int) tensor.Array {
 // "model.language_model.".
 func (q *Qwen35) rmsNormQwen35(x, weight tensor.Array) (tensor.Array, error) {
 	s := q.stream
-	normed, err := llm.RMSNorm(x, nil, q.cfg.RMSNormEPS, q.backend, s)
-	if err != nil {
-		return nil, fmt.Errorf("rms norm: %w", err)
-	}
-	defer normed.Free()
 
 	if q.normPreAdded {
-		// mlx-community: weight already includes the +1
-		return q.backend.Multiply(normed, weight, s)
+		// mlx-community: weight already includes the +1. One fused kernel.
+		return llm.RMSNorm(x, weight, q.cfg.RMSNormEPS, q.backend, s)
 	}
 
-	// raw HF: add 1 to weight
+	// raw HF: add 1 to weight, then fused norm. Two kernels.
 	ones, err := q.backend.NewArrayFromFloat32([]float32{1}, []int{1})
 	if err != nil {
 		return nil, fmt.Errorf("ones: %w", err)
@@ -850,7 +841,7 @@ func (q *Qwen35) rmsNormQwen35(x, weight tensor.Array) (tensor.Array, error) {
 	}
 	defer scale.Free()
 
-	return q.backend.Multiply(normed, scale, s)
+	return llm.RMSNorm(x, scale, q.cfg.RMSNormEPS, q.backend, s)
 }
 
 func (q *Qwen35) computeLogitsLast(h tensor.Array, seqLen int) (tensor.Array, error) {
@@ -1134,7 +1125,9 @@ func (q *Qwen35) fullAttention(h tensor.Array, lw *layerWeights, layerIdx, seqLe
 	return sa.oProj.Forward(gated, q.backend, s)
 }
 
-// swiglu is the SwiGLU MLP shared by both layer kinds.
+// swiglu is the SwiGLU MLP shared by both layer kinds. When Metal is
+// available it uses a single fused kernel (silu+mul in fp32); otherwise it
+// falls back to the multi-op path.
 func (q *Qwen35) swiglu(h tensor.Array, lw *layerWeights) (tensor.Array, error) {
 	s := q.stream
 
@@ -1149,6 +1142,14 @@ func (q *Qwen35) swiglu(h tensor.Array, lw *layerWeights) (tensor.Array, error) 
 		return nil, fmt.Errorf("up proj: %w", err)
 	}
 	defer up.Free()
+
+	if q.backend.Available() {
+		out, err := fusedSwiglu(h, gate, up, q.backend, s)
+		if err == nil {
+			return lw.downProj.Forward(out, q.backend, s)
+		}
+		log.Printf("qwen35: fused swiglu failed, falling back: %v", err)
+	}
 
 	gateSilu, err := llm.SiLU(gate, q.backend, s)
 	if err != nil {

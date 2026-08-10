@@ -604,7 +604,7 @@ func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIn
 		return
 	}
 
-	a.RecordTurnCheckpointAsync(queryStartIndex, endIndex)
+	a.RecordTurnCheckpoint(queryStartIndex, endIndex)
 }
 
 // syncSeedStateToSprout merges seed's state back into sprout's state manager.

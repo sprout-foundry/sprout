@@ -37,6 +37,10 @@ type Qwen35 struct {
 	// already added 1 to the RMSNorm weights. When true, rmsNormQwen35
 	// uses plain multiplication instead of (1+w).
 	normPreAdded bool
+
+	// compiledDecoder caches the compiled decode closure (experimental).
+	// nil unless SPROUT_COMPILED_DECODE=1 and the model has no DeltaNet layers.
+	compiledDecoder *compiledDecoder
 }
 
 func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
@@ -499,6 +503,23 @@ func dumpArrayF32(a tensor.Array, path string, backend tensor.Backend, s tensor.
 }
 
 func (q *Qwen35) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (int, error) {
+	// Compiled decode path (experimental): fuses ops into fewer Metal kernels.
+	// Only available for full-attention models (no DeltaNet). Falls back to
+	// eager on error or when DeltaNet layers are present.
+	if useCompiledDecode() && q.compiledDecoder == nil && q.cfg.FullAttentionInterval <= 1 {
+		dec, err := q.compileDecodeClosure(cache)
+		if err == nil {
+			q.compiledDecoder = dec
+		}
+	}
+	if q.compiledDecoder != nil {
+		tok, err := q.forwardDecodeCompiled(tokenID, pos, cache)
+		if err == nil {
+			return tok, nil
+		}
+		// Fall through to eager on error
+	}
+
 	logits, err := q.decodeInternal(tokenID, pos, cache)
 	if err != nil {
 		return 0, err

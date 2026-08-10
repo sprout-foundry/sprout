@@ -29,14 +29,17 @@ func scaleRMSNorm(x tensor.Array, s float32, b tensor.Backend, stream tensor.Str
 
 // decayGate computes g = exp(-exp(A_log) * softplus(a + dt_bias)).
 // A_log and dt_bias are [Hv] (per-value-head); a is [B, S, Hv] (per-head).
-//
-// The whole chain runs in fp32, mirroring mlx-lm's compute_g
-// (mx.exp(-mx.exp(A_log.astype(mx.float32)) * nn.softplus(a + dt_bias))).
-// In the raw BF16 model a/A_log/dt_bias arrive as BF16; running the
-// exp/softplus in BF16 loses precision and diverges from the reference
-// kernel, which computes g in fp32 and only casts the recurrence output back
-// to the input dtype.
+// When Metal is available it uses a single fused kernel; otherwise falls back
+// to the multi-op fp32 path.
 func decayGate(aLog, a, dtBias tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, error) {
+	// Fast path: single fused Metal kernel.
+	if b.Available() {
+		g, err := fusedComputeG(aLog, a, dtBias, b, stream)
+		if err == nil {
+			return g, nil
+		}
+	}
+
 	aF32, err := b.AsType(a, tensor.Float32, stream)
 	if err != nil {
 		return nil, err

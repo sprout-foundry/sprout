@@ -81,8 +81,8 @@ func (g *Gemma4) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *
 		if err != nil { return nil, fmt.Errorf("layer %d: %w", i, err) }
 		h.Free()
 		h = out
-		if os.Getenv("GEMMA4_DEBUG") != "" && i == 0 {
-			dumpArrayF32(h, "layer_0_out", g.backend, s)
+		if os.Getenv("GEMMA4_DEBUG") != "" && (i == 0 || i == 4 || i == 14) {
+			dumpArrayF32(h, fmt.Sprintf("layer_%d_out", i), g.backend, s)
 		}
 	}
 
@@ -90,7 +90,18 @@ func (g *Gemma4) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *
 	normed, err := g.gemmaRMSNorm(h, g.weights.norm)
 	if err != nil { return nil, fmt.Errorf("final norm: %w", err) }
 	defer normed.Free()
-	return g.computeLogits(normed)
+	logits, err := g.computeLogits(normed)
+	if err != nil { return nil, err }
+	if os.Getenv("GEMMA4_DEBUG") != "" {
+		lastPos := seqLen - 1
+		sliced, _ := g.backend.Slice(logits, []int{0, lastPos, 0}, []int{1, lastPos + 1, g.cfg.VocabSize}, []int{1, 1, 1}, s)
+		argmax, _ := g.backend.ArgMaxAxis(sliced, 2, false, s)
+		sliced.Free()
+		argmaxData, _ := argmax.Uint32Data()
+		fmt.Fprintf(os.Stderr, "[gemma4] prefill argmax[%d]: %d (expected 236778)\n", lastPos, argmaxData[0])
+		argmax.Free()
+	}
+	return logits, nil
 }
 
 func (g *Gemma4) computePerLayerInputs(ids, h tensor.Array) (tensor.Array, error) {
@@ -356,7 +367,7 @@ func (g *Gemma4) applyRoPE(x tensor.Array, isFull bool, offset, headDim int) (te
 	if isFull {
 		// Full attention: proportional RoPE with partial_rotary_factor=0.25, rope_theta=1000000
 		rotatedDims := int(float64(headDim) * 0.25)
-		return llm.ApplyRoPEFast(x, offset, rotatedDims, 1000000.0, g.backend, s)
+		return llm.ApplyProportionalRoPE(x, offset, headDim, rotatedDims, 1000000.0, g.backend, s)
 	}
 	// Sliding attention: standard RoPE with full rotation, rope_theta=10000
 	return llm.ApplyRoPEFast(x, offset, headDim, 10000.0, g.backend, s)
@@ -478,6 +489,9 @@ func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 		if err != nil { return nil, fmt.Errorf("layer %d: %w", i, err) }
 		h.Free()
 		h = out
+		if os.Getenv("GEMMA4_DEBUG") != "" && i < 6 {
+			dumpArrayF32(h, fmt.Sprintf("decode_layer_%d", i), g.backend, s)
+		}
 	}
 
 	normed, err := g.gemmaRMSNorm(h, g.weights.norm)

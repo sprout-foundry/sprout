@@ -266,16 +266,11 @@ func freeIfNotNil(a tensor.Array) {
 // keep alias for consistency
 var freeIfNIL = freeIfNotNil
 
-// gemmaRMSNorm applies RMSNorm with weight (Gemma adds 1 to the weight).
+// gemmaRMSNorm applies RMSNorm with weight. Gemma4's norm weights from
+// mlx-community are already the final multiplier (no +1 needed, unlike
+// raw HF Qwen3.5 exports).
 func (g *Gemma4) gemmaRMSNorm(x, weight tensor.Array) (tensor.Array, error) {
-	s := g.stream
-	ones, err := g.backend.NewArrayFromFloat32([]float32{1}, []int{1})
-	if err != nil { return nil, err }
-	defer ones.Free()
-	scale, err := g.backend.Add(weight, ones, s)
-	if err != nil { return nil, err }
-	defer scale.Free()
-	return llm.RMSNorm(x, scale, g.cfg.RMSNormEPS, g.backend, s)
+	return llm.RMSNorm(x, weight, g.cfg.RMSNormEPS, g.backend, g.stream)
 }
 
 // rmsNormNoScale applies RMSNorm without a weight (for v_norm).

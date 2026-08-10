@@ -79,6 +79,28 @@ func ApplyRoPEFast(x tensor.Array, offset, headDim int, ropeTheta float64, b ten
 	return rotated, nil
 }
 
+// ApplyProportionalRoPE applies Gemma4's proportional RoPE. The frequencies
+// are base^(2i/dims) for rotated dims and +inf for the rest, matching
+// ProportionalRoPE in mlx-lm.
+func ApplyProportionalRoPE(x tensor.Array, offset, dims, rotatedDims int, base float64, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
+	numFreqs := dims / 2
+	rotatedFreqs := rotatedDims / 2
+	freqs := make([]float32, numFreqs)
+	for i := 0; i < rotatedFreqs; i++ {
+		exp := 2.0 * float64(i) / float64(dims)
+		freqs[i] = float32(math.Pow(base, exp))
+	}
+	for i := rotatedFreqs; i < numFreqs; i++ {
+		freqs[i] = float32(math.Inf(1))
+	}
+	freqsArr, err := b.NewArrayFromFloat32(freqs, []int{numFreqs})
+	if err != nil {
+		return nil, err
+	}
+	defer freqsArr.Free()
+	return b.FastRoPE(x, dims, false, 0, 1.0, offset, freqsArr, s)
+}
+
 func ApplyCausalMask(scores tensor.Array, seqLen, startPos, cachedLen int, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	totalLen := cachedLen + seqLen
 	maskData := make([]float32, seqLen*totalLen)

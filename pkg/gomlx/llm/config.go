@@ -52,6 +52,20 @@ type hfConfig struct {
 	LayerTypes            []string    `json:"layer_types"`
 	RopeParameters        *ropeParams `json:"rope_parameters"`
 
+	// Gemma4 fields
+	GlobalHeadDim               int                `json:"global_head_dim"`
+	SlidingWindow               int                `json:"sliding_window"`
+	SlidingWindowPattern        int                `json:"sliding_window_pattern"`
+	NumKVSharedLayers           int                `json:"num_kv_shared_layers"`
+	HiddenSizePerLayerInput     int                `json:"hidden_size_per_layer_input"`
+	VocabSizePerLayerInput      int                `json:"vocab_size_per_layer_input"`
+	FinalLogitSoftcapping       float64            `json:"final_logit_softcapping"`
+	UseDoubleWideMLP            bool               `json:"use_double_wide_mlp"`
+	AttentionKEqV               bool               `json:"attention_k_eq_v"`
+	RopeTraditional             bool               `json:"rope_traditional"`
+	FullAttnRopeParams          map[string]any     `json:"-"` // parsed from rope_parameters dict
+	SlidingAttnRopeParams       map[string]any     `json:"-"`
+
 	// TextConfig carries the nested text-model config for multimodal
 	// wrappers (e.g. qwen3_5 wraps qwen3_5_text).
 	TextConfig *json.RawMessage `json:"text_config"`
@@ -134,6 +148,18 @@ func LoadConfig(path string) (ModelConfig, error) {
 		SharedExpertInterSize: raw.SharedExpertInterSize,
 		NormTopkProb:          raw.NormTopkProb,
 		LayerTypes:            raw.LayerTypes,
+
+		// Gemma4 fields
+		GlobalHeadDim:           raw.GlobalHeadDim,
+		SlidingWindow:           raw.SlidingWindow,
+		SlidingWindowPattern:    raw.SlidingWindowPattern,
+		NumKVSharedLayers:       raw.NumKVSharedLayers,
+		HiddenSizePerLayerInput: raw.HiddenSizePerLayerInput,
+		VocabSizePerLayerInput:  raw.VocabSizePerLayerInput,
+		FinalLogitSoftcap:       raw.FinalLogitSoftcapping,
+		UseDoubleWideMLP:        raw.UseDoubleWideMLP,
+		AttentionKEqV:           raw.AttentionKEqV,
+		RopeTraditional:         raw.RopeTraditional,
 	}
 
 	// mRoPE parameters from the rope_parameters section.
@@ -174,6 +200,25 @@ func LoadConfig(path string) (ModelConfig, error) {
 	case "qwen3_5_moe_text":
 		cfg.UseQKNorm = true
 		cfg.WeightPrefix = "model.language_model."
+	case "gemma4_text":
+		cfg.WeightPrefix = "language_model.model."
+		if cfg.GlobalHeadDim == 0 {
+			cfg.GlobalHeadDim = cfg.HeadDim
+		}
+		if cfg.SlidingWindowPattern == 0 {
+			cfg.SlidingWindowPattern = 5
+		}
+		// Generate layer_types if not present in config
+		if len(cfg.LayerTypes) == 0 && cfg.NumLayers > 0 {
+			cfg.LayerTypes = make([]string, cfg.NumLayers)
+			for i := range cfg.LayerTypes {
+				if (i+1)%cfg.SlidingWindowPattern == 0 {
+					cfg.LayerTypes[i] = "full_attention"
+				} else {
+					cfg.LayerTypes[i] = "sliding_attention"
+				}
+			}
+		}
 	default:
 		cfg.WeightPrefix = "model."
 	}

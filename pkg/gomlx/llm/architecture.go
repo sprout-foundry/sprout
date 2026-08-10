@@ -141,6 +141,18 @@ type ModelConfig struct {
 	NormTopkProb          bool     // MoE: normalize top-k probabilities
 	WeightPrefix          string   // safetensors key prefix
 	LayerTypes            []string // optional per-layer type override
+
+	// Gemma4 fields
+	GlobalHeadDim           int     // head_dim for full-attention layers (usually 2x)
+	SlidingWindow           int     // sliding window size (e.g. 512)
+	SlidingWindowPattern    int     // every Nth layer is full attention (e.g. 5)
+	NumKVSharedLayers       int     // last N layers share KV (no k/v proj)
+	HiddenSizePerLayerInput int     // per-layer embedding dim (e.g. 256)
+	VocabSizePerLayerInput  int     // vocab for per-layer embeddings
+	FinalLogitSoftcap       float64 // tanh(logits/softcap)*softcap (0 = disabled)
+	UseDoubleWideMLP        bool    // KV-shared layers use 2x intermediate size
+	AttentionKEqV           bool    // full-attention layers share K=V
+	RopeTraditional         bool    // RoPE traditional (GPT-NeoX style)
 }
 
 // HybridLinearAttn reports whether the model has DeltaNet linear-attention

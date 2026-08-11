@@ -35,6 +35,7 @@ export interface CMViewSettings {
   whitespaceRenderingMode: 'none' | 'boundary' | 'all';
   inlayHintsEnabled: boolean;
   signatureHelpEnabled: boolean;
+  aiCompletionsEnabled: boolean;
 }
 
 export interface CMViewKeymaps {
@@ -161,6 +162,7 @@ const DEFAULT_CM_SETTINGS: CMViewSettings = {
   whitespaceRenderingMode: 'none',
   inlayHintsEnabled: false,
   signatureHelpEnabled: false,
+  aiCompletionsEnabled: true,
 };
 
 const DEFAULT_CM_KEYMAPS: CMViewKeymaps = {

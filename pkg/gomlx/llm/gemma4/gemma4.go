@@ -24,10 +24,22 @@ type Gemma4 struct {
 	prevKVs    []int // previous_kvs: for each layer, which layer's KV to reuse
 
 	// Precomputed scales
-	embedScale             float32
-	embedPerLayerScale     float32
-	perLayerInputScale     float32
+	embedScale              float32
+	embedPerLayerScale      float32
+	perLayerInputScale      float32
 	perLayerProjectionScale float32
+
+	// Pre-allocated scalar arrays (avoid per-token CGO allocation overhead)
+	scaleEmbedArr              tensor.Array
+	scaleEmbedPerLayerArr      tensor.Array
+	scalePerLayerInputArr      tensor.Array
+	scalePerLayerProjectionArr tensor.Array
+	// Softcap scalars (only used when FinalLogitSoftcap > 0)
+	scaleInvSoftcap tensor.Array
+	scaleSoftcap    tensor.Array
+	// Pre-computed proportional RoPE frequency table for full-attention layers.
+	// Avoids allocating a new [numFreqs] array on every forward pass.
+	propRoPEFreqs tensor.Array
 }
 
 func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
@@ -37,6 +49,52 @@ func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) 
 	g.embedPerLayerScale = float32(math.Sqrt(float64(cfg.HiddenSizePerLayerInput)))
 	g.perLayerInputScale = float32(math.Pow(2.0, -0.5))
 	g.perLayerProjectionScale = float32(math.Pow(float64(cfg.HiddenSize), -0.5))
+
+	// Pre-allocate scalar arrays to avoid per-token CGO allocation overhead.
+	// These are small [1] float32 arrays — allocated here on the default
+	// stream and retained for the model's lifetime.
+	arr, err := backend.NewArrayFromFloat32([]float32{g.embedScale}, []int{1})
+	if err != nil { return nil, err }
+	g.scaleEmbedArr = arr
+	arr, err = backend.NewArrayFromFloat32([]float32{g.embedPerLayerScale}, []int{1})
+	if err != nil { return nil, err }
+	g.scaleEmbedPerLayerArr = arr
+	arr, err = backend.NewArrayFromFloat32([]float32{g.perLayerInputScale}, []int{1})
+	if err != nil { return nil, err }
+	g.scalePerLayerInputArr = arr
+	arr, err = backend.NewArrayFromFloat32([]float32{g.perLayerProjectionScale}, []int{1})
+	if err != nil { return nil, err }
+	g.scalePerLayerProjectionArr = arr
+
+	// Softcap scalars: only allocated when the model uses logit softcap
+	if cfg.FinalLogitSoftcap > 0 {
+		softcap := float32(cfg.FinalLogitSoftcap)
+		arr, err = backend.NewArrayFromFloat32([]float32{1.0 / softcap}, []int{1})
+		if err != nil { return nil, err }
+		g.scaleInvSoftcap = arr
+		arr, err = backend.NewArrayFromFloat32([]float32{softcap}, []int{1})
+		if err != nil { return nil, err }
+		g.scaleSoftcap = arr
+	}
+
+	// Pre-compute proportional RoPE frequency table for full-attention layers.
+	// base^(2i/dims) for rotated dims, +inf for the rest.
+	if cfg.GlobalHeadDim > 0 {
+		fullHeadDim := cfg.GlobalHeadDim
+		rotatedDims := fullHeadDim / 4 // partial_rotary_factor=0.25
+		numFreqs := fullHeadDim / 2
+		rotatedFreqs := rotatedDims / 2
+		freqs := make([]float32, numFreqs)
+		for i := 0; i < rotatedFreqs; i++ {
+			freqs[i] = float32(math.Pow(1000000.0, 2.0*float64(i)/float64(fullHeadDim)))
+		}
+		for i := rotatedFreqs; i < numFreqs; i++ {
+			freqs[i] = float32(math.Inf(1))
+		}
+		arr, err = backend.NewArrayFromFloat32(freqs, []int{numFreqs})
+		if err != nil { return nil, err }
+		g.propRoPEFreqs = arr
+	}
 
 	// Copy layer types
 	g.layerTypes = make([]string, cfg.NumLayers)
@@ -257,6 +315,13 @@ func (g *Gemma4) FreeWeights() {
 		if lw.perLayerProjection != nil { lw.perLayerProjection.Free() }
 	}
 	g.weights = nil
+	if g.scaleEmbedArr != nil { g.scaleEmbedArr.Free() }
+	if g.scaleEmbedPerLayerArr != nil { g.scaleEmbedPerLayerArr.Free() }
+	if g.scalePerLayerInputArr != nil { g.scalePerLayerInputArr.Free() }
+	if g.scalePerLayerProjectionArr != nil { g.scalePerLayerProjectionArr.Free() }
+	if g.scaleInvSoftcap != nil { g.scaleInvSoftcap.Free() }
+	if g.scaleSoftcap != nil { g.scaleSoftcap.Free() }
+	if g.propRoPEFreqs != nil { g.propRoPEFreqs.Free() }
 }
 
 func freeIfNotNil(a tensor.Array) {

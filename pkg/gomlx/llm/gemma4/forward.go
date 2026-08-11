@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
@@ -42,11 +43,8 @@ func (g *Gemma4) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *
 	defer h.Free()
 	h, err = g.backend.SqueezeAxis(h, 2, s)
 	if err != nil { return nil, fmt.Errorf("squeeze: %w", err) }
-	// Apply embed scale
-	scaleArr, err := g.backend.NewArrayFromFloat32([]float32{g.embedScale}, []int{1})
-	if err != nil { return nil, err }
-	h, err = g.backend.Multiply(h, scaleArr, s)
-	scaleArr.Free()
+	// Apply embed scale (uses pre-allocated array to avoid per-call CGO overhead)
+	h, err = g.backend.Multiply(h, g.scaleEmbedArr, s)
 	if err != nil { return nil, fmt.Errorf("embed scale: %w", err) }
 	defer h.Free()
 
@@ -120,10 +118,7 @@ func (g *Gemma4) computePerLayerInputs(ids, h tensor.Array) (tensor.Array, error
 	if err != nil { return nil, err }
 	pli, err = g.backend.SqueezeAxis(pli, 2, s)
 	if err != nil { pli.Free(); return nil, err }
-	scaleArr, err := g.backend.NewArrayFromFloat32([]float32{g.embedPerLayerScale}, []int{1})
-	if err != nil { pli.Free(); return nil, err }
-	pli, err = g.backend.Multiply(pli, scaleArr, s)
-	scaleArr.Free()
+	pli, err = g.backend.Multiply(pli, g.scaleEmbedPerLayerArr, s)
 	if err != nil { return nil, err }
 	// Reshape to [B, S, NumLayers, PerLayerDim]
 	pli, err = g.backend.Reshape(pli, []int{1, pli.Shape()[1], g.cfg.NumLayers, g.cfg.HiddenSizePerLayerInput}, s)
@@ -133,10 +128,7 @@ func (g *Gemma4) computePerLayerInputs(ids, h tensor.Array) (tensor.Array, error
 	proj, err := g.weights.perLayerProj.Forward(h, g.backend, s)
 	if err != nil { return nil, err }
 	defer proj.Free()
-	projScale, err := g.backend.NewArrayFromFloat32([]float32{g.perLayerProjectionScale}, []int{1})
-	if err != nil { return nil, err }
-	defer projScale.Free()
-	proj, err = g.backend.Multiply(proj, projScale, s)
+	proj, err = g.backend.Multiply(proj, g.scalePerLayerProjectionArr, s)
 	if err != nil { return nil, err }
 	proj, err = g.backend.Reshape(proj, []int{1, h.Shape()[1], g.cfg.NumLayers, g.cfg.HiddenSizePerLayerInput}, s)
 	if err != nil { return nil, err }
@@ -148,10 +140,7 @@ func (g *Gemma4) computePerLayerInputs(ids, h tensor.Array) (tensor.Array, error
 	if err != nil { return nil, err }
 	pli.Free()
 	defer summed.Free()
-	ilScale, err := g.backend.NewArrayFromFloat32([]float32{g.perLayerInputScale}, []int{1})
-	if err != nil { return nil, err }
-	defer ilScale.Free()
-	return g.backend.Multiply(summed, ilScale, s)
+	return g.backend.Multiply(summed, g.scalePerLayerInputArr, s)
 }
 
 func (g *Gemma4) forwardLayer(h tensor.Array, layerIdx, seqLen, startPos int, cache *llm.KVCache, perLayerInputs []tensor.Array, intermediateKVs []struct{ k, v tensor.Array }) (tensor.Array, tensor.Array, error) {
@@ -202,8 +191,15 @@ func (g *Gemma4) forwardLayer(h tensor.Array, layerIdx, seqLen, startPos int, ca
 		gate, err := lw.perLayerInputGate.Forward(h2, g.backend, s)
 		if err != nil { return nil, nil, fmt.Errorf("per-layer gate: %w", err) }
 		defer gate.Free()
-		gate, err = geluApprox(gate, g.backend, s)
-		if err != nil { return nil, nil, fmt.Errorf("per-layer gelu: %w", err) }
+		// GELU via C shim (1 CGO call instead of ~15)
+		mlxGate := gate.(*mlx.Array)
+		mlxStream := s.(*mlx.Stream)
+		if geluOut, err := mlx.Gemma4GELU(mlxGate, mlxStream); err == nil {
+			gate = geluOut
+		} else {
+			gate, err = geluApprox(gate, g.backend, s)
+			if err != nil { return nil, nil, fmt.Errorf("per-layer gelu: %w", err) }
+		}
 		defer gate.Free()
 		gate, err = g.backend.Multiply(gate, perLayerInput, s)
 		if err != nil { return nil, nil, fmt.Errorf("per-layer mul: %w", err) }
@@ -294,20 +290,16 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 		vT2 := vT
 		g.backend.RetainArray(vT2)
 
-		// Cache update
-		if cache != nil && cache.IsInitialized(layerIdx) {
-			cached, err := cache.Get(layerIdx)
-			if err != nil { return nil, nil, err }
-			newK, err := g.backend.ConcatenateAxis([]tensor.Array{cached.K, kRot}, 2, s)
-			if err != nil { return nil, nil, err }
-			newV, err := g.backend.ConcatenateAxis([]tensor.Array{cached.V, vT2}, 2, s)
-			if err != nil { newK.Free(); return nil, nil, err }
-			cached.K.Free()
-			cached.V.Free()
-			cached.K = newK
-			cached.V = newV
-			kForAttn = newK
-			vForAttn = newV
+		// Cache update: use AppendFast for decode (pre-allocated buffer +
+		// slice_update avoids the growing ConcatenateAxis dependency chain).
+		// During prefill (seqLen > 1), fall through to the Store path below.
+		if cache != nil && cache.IsInitialized(layerIdx) && seqLen == 1 {
+			kf, vf, err := cache.AppendFast(layerIdx, kRot, vT2, startPos)
+			if err != nil {
+				return nil, nil, fmt.Errorf("append_fast: %w", err)
+			}
+			kForAttn = kf
+			vForAttn = vf
 		} else if cache != nil {
 			kForAttn = kRot
 			vForAttn = vT2
@@ -341,20 +333,13 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 	if err != nil { return nil, nil, err }
 	defer qRot.Free()
 
-	// Expand KV heads
-	kExp, err := llm.ExpandKVHeads(kForAttn, numHeads, numKVHeads, g.backend, s)
-	if err != nil { return nil, nil, err }
-	defer kExp.Free()
-	vExp, err := llm.ExpandKVHeads(vForAttn, numHeads, numKVHeads, g.backend, s)
-	if err != nil { return nil, nil, err }
-	defer vExp.Free()
-
 	// Attention — scale=1.0 for Gemma4
+	// No ExpandKVHeads needed: MLX's SDPA natively handles GQA (numKVHeads < numHeads).
 	maskMode := ""
 	if seqLen > 1 {
 		maskMode = "causal"
 	}
-	ctx, err := g.backend.FastScaledDotProductAttention(qRot, kExp, vExp, 1.0, maskMode, nil, nil, s)
+	ctx, err := g.backend.FastScaledDotProductAttention(qRot, kForAttn, vForAttn, 1.0, maskMode, nil, nil, s)
 	if err != nil { return nil, nil, err }
 	defer ctx.Free()
 
@@ -374,11 +359,8 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 func (g *Gemma4) applyRoPE(x tensor.Array, isFull bool, offset, headDim int) (tensor.Array, error) {
 	s := g.stream
 	if isFull {
-		// Full attention: proportional RoPE with partial_rotary_factor=0.25, rope_theta=1000000
-		rotatedDims := int(float64(headDim) * 0.25)
-		return llm.ApplyProportionalRoPE(x, offset, headDim, rotatedDims, 1000000.0, g.backend, s)
+		return g.backend.FastRoPE(x, headDim, false, 0, 1.0, offset, g.propRoPEFreqs, s)
 	}
-	// Sliding attention: standard RoPE with full rotation, rope_theta=10000
 	return llm.ApplyRoPEFast(x, offset, headDim, 10000.0, g.backend, s)
 }
 
@@ -390,14 +372,23 @@ func (g *Gemma4) mlp(h tensor.Array, lw *layerWeights) (tensor.Array, error) {
 	up, err := lw.upProj.Forward(h, g.backend, s)
 	if err != nil { return nil, err }
 	defer up.Free()
-	// GeGLU: gelu_approx(gate) * up
-	gateAct, err := geluApprox(gate, g.backend, s)
-	if err != nil { return nil, err }
-	defer gateAct.Free()
-	mul, err := g.backend.Multiply(gateAct, up, s)
-	if err != nil { return nil, err }
-	defer mul.Free()
-	return lw.downProj.Forward(mul, g.backend, s)
+	// GeGLU via C shim (1 CGO call instead of ~15)
+	mlxGate := gate.(*mlx.Array)
+	mlxUp := up.(*mlx.Array)
+	mlxStream := s.(*mlx.Stream)
+	gegluOut, err := mlx.Gemma4GeGLU(mlxGate, mlxUp, mlxStream)
+	if err != nil {
+		// Fall back to eager path
+		gateAct, err := geluApprox(gate, g.backend, s)
+		if err != nil { return nil, err }
+		defer gateAct.Free()
+		mul, err := g.backend.Multiply(gateAct, up, s)
+		if err != nil { return nil, err }
+		defer mul.Free()
+		return lw.downProj.Forward(mul, g.backend, s)
+	}
+	defer gegluOut.Free()
+	return lw.downProj.Forward(gegluOut, g.backend, s)
 }
 
 func (g *Gemma4) computeLogits(h tensor.Array) (tensor.Array, error) {
@@ -405,29 +396,18 @@ func (g *Gemma4) computeLogits(h tensor.Array) (tensor.Array, error) {
 	logits, err := g.weights.embed.Logits(h, g.backend, s)
 	if err != nil { return nil, fmt.Errorf("logits: %w", err) }
 	if g.cfg.FinalLogitSoftcap > 0 {
-		softcap := float32(g.cfg.FinalLogitSoftcap)
-		invSoftcap, err := s2(1.0/softcap, g.backend)
-		if err != nil { logits.Free(); return nil, err }
-		defer invSoftcap.Free()
-		scaled, err := g.backend.Multiply(logits, invSoftcap, s)
+		scaled, err := g.backend.Multiply(logits, g.scaleInvSoftcap, s)
 		if err != nil { logits.Free(); return nil, err }
 		logits.Free()
 		tanh, err := g.backend.Tanh(scaled, s)
 		scaled.Free()
 		if err != nil { return nil, err }
-		softcapArr, err := s2(softcap, g.backend)
-		if err != nil { tanh.Free(); return nil, err }
-		defer softcapArr.Free()
-		out, err := g.backend.Multiply(tanh, softcapArr, s)
+		out, err := g.backend.Multiply(tanh, g.scaleSoftcap, s)
 		tanh.Free()
 		if err != nil { return nil, err }
 		return out, nil
 	}
 	return logits, nil
-}
-
-func s2(v float32, b tensor.Backend) (tensor.Array, error) {
-	return b.NewArrayFromFloat32([]float32{v}, []int{1})
 }
 
 // Decode methods
@@ -443,9 +423,6 @@ func (g *Gemma4) ForwardDecode(tokenID int, pos int, cache *llm.KVCache) ([]floa
 }
 
 func (g *Gemma4) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (int, error) {
-	if os.Getenv("GEMMA4_DEBUG") != "" {
-		fmt.Fprintf(os.Stderr, "[gemma4] decode tokenID=%d pos=%d\n", tokenID, pos)
-	}
 	logits, err := g.decodeInternal(tokenID, pos, cache)
 	if err != nil { return 0, err }
 	defer logits.Free()
@@ -456,6 +433,39 @@ func (g *Gemma4) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (
 	if err != nil { return 0, err }
 	if len(data) == 0 { return 0, fmt.Errorf("argmax empty") }
 	return int(data[0]), nil
+}
+
+// ForwardPrefillArgmaxAll runs the model over a short sequence of token IDs
+// and returns the argmax token at EVERY position. Used for prompt-lookup
+// speculative decoding to batch-verify candidate tokens in one forward pass.
+func (g *Gemma4) ForwardPrefillArgmaxAll(ids []int, startPos int, cache *llm.KVCache) ([]int, error) {
+	seqLen := len(ids)
+	idData := make([]int64, seqLen)
+	for i, id := range ids {
+		idData[i] = int64(id)
+	}
+	idsArr, err := g.backend.NewArrayFromInt64(idData, []int{1, seqLen})
+	if err != nil { return nil, fmt.Errorf("create ids: %w", err) }
+	defer idsArr.Free()
+
+	logits, err := g.forwardInternal(idsArr, seqLen, startPos, cache)
+	if err != nil { return nil, err }
+	defer logits.Free()
+	if err := g.stream.Synchronize(); err != nil { return nil, fmt.Errorf("synchronize: %w", err) }
+
+	idxArr, err := g.backend.ArgMaxAxis(logits, 2, false, g.stream)
+	if err != nil { return nil, fmt.Errorf("argmax axis: %w", err) }
+	defer idxArr.Free()
+	data, err := idxArr.Uint32Data()
+	if err != nil { return nil, fmt.Errorf("read argmax: %w", err) }
+	if len(data) != seqLen {
+		return nil, fmt.Errorf("argmax length mismatch: got %d, want %d", len(data), seqLen)
+	}
+	result := make([]int, seqLen)
+	for i, v := range data {
+		result[i] = int(v)
+	}
+	return result, nil
 }
 
 func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tensor.Array, error) {
@@ -473,9 +483,7 @@ func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 	defer h.Free()
 	h, err = g.backend.SqueezeAxis(h, 2, s)
 	if err != nil { return nil, err }
-	scaleArr, _ := g.backend.NewArrayFromFloat32([]float32{g.embedScale}, []int{1})
-	defer scaleArr.Free()
-	h, err = g.backend.Multiply(h, scaleArr, s)
+	h, err = g.backend.Multiply(h, g.scaleEmbedArr, s)
 	if err != nil { return nil, err }
 	defer h.Free()
 

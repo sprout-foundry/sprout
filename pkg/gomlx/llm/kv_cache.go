@@ -30,8 +30,17 @@ type KVCache struct {
 // For hybrid linear-attention layers (Qwen3.5 DeltaNet), K/V are nil and
 // State/ConvState hold the fixed-size recurrent state instead.
 type KVCacheLayer struct {
-	K tensor.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
-	V tensor.Array // [1, num_kv_heads, cached_len, head_dim] — full attention
+	K tensor.Array // [1, num_kv_heads, cached_len, head_dim] — full attention or buffer
+	V tensor.Array // [1, num_kv_heads, cached_len, head_dim] — full attention or buffer
+
+	// Pre-allocated buffers used by AppendFast. KBuf and VBuf share the same
+	// handle as K/V when AppendFast is active (buffered mode). When nil,
+	// K/V hold the raw tensors directly (prefill-only path).
+	KBuf tensor.Array // [1, num_kv_heads, capacity, head_dim]
+	VBuf tensor.Array
+
+	// Offset is the number of valid tokens in the buffer (for AppendFast).
+	Offset int
 
 	// DeltaNet (linear attention) state. State is [B, Hv, Dv, Dk] (the
 	// recurrent key/value memory); ConvState is [B, conv_kernel-1, conv_dim]
@@ -126,6 +135,200 @@ func (c *KVCache) Append(layerIdx int, newK, newV tensor.Array) error {
 	return nil
 }
 
+// appendFastStep is the buffer growth step (matching MLX's KVCache.step).
+const appendFastStep = 256
+
+// AppendFast writes new K/V into a pre-allocated buffer using slice_update,
+// avoiding the growing ConcatenateAxis dependency chain that slows down
+// MLX's lazy graph evaluation over many decode steps.
+//
+// On each call:
+//   - If the buffer doesn't exist yet or seqIdx exceeds capacity, a new
+//     pre-allocated buffer is created (current size + step headroom).
+//   - If data already exists in the buffer, it's copied into the new buffer.
+//   - The new K/V are written at position seqIdx via SliceUpdate.
+//   - Slice views [:seqIdx+1] of K and V are returned for the attention op.
+//
+// newK and newV must be [1, num_kv_heads, 1, head_dim].
+// seqIdx is the sequence position where the new token goes (starts at
+// the first post-prefill position, i.e., the prompt length).
+func (c *KVCache) AppendFast(layerIdx int, newK, newV tensor.Array, seqIdx int) (kView, vView tensor.Array, err error) {
+	if layerIdx < 0 || layerIdx >= len(c.layers) {
+		return nil, nil, fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
+	}
+	defer func() {
+		if err != nil {
+			if kView != nil {
+				kView.Free()
+			}
+			if vView != nil {
+				vView.Free()
+			}
+		}
+	}()
+
+	layer := c.layers[layerIdx]
+	if layer == nil {
+		return nil, nil, fmt.Errorf("kv_cache: layer %d not initialized", layerIdx)
+	}
+
+	// Determine current capacity from KBuf (buffered) or K (raw).
+	var curBuf tensor.Array
+	var capacity int
+	if layer.KBuf != nil {
+		curBuf = layer.KBuf
+		// capacity from the buffer
+		capacity = curBuf.Shape()[2]
+	} else if layer.K != nil {
+		curBuf = layer.K
+		capacity = curBuf.Shape()[2]
+	} else {
+		return nil, nil, fmt.Errorf("kv_cache: layer %d has no K data", layerIdx)
+	}
+
+	// Buffer shape: [1, num_kv_heads, capacity, head_dim]
+	kShape := curBuf.Shape()
+	if len(kShape) != 4 {
+		return nil, nil, fmt.Errorf("kv_cache: K has unexpected shape %v", kShape)
+	}
+	headDim := kShape[3]
+	numKVHeads := kShape[1]
+
+	// Check if we need to grow the buffer
+	newSize := seqIdx + 1 + appendFastStep
+	if seqIdx >= capacity {
+		// Grow: allocate new buffer with extra capacity
+		newShape := []int{1, numKVHeads, newSize, headDim}
+		dtype := curBuf.Dtype()
+
+		newKBuf, err := c.backend.Zeros(newShape, dtype, c.stream)
+		if err != nil {
+			return nil, nil, fmt.Errorf("kv_cache: allocate K buffer: %w", err)
+		}
+		newVBuf, err := c.backend.Zeros(newShape, dtype, c.stream)
+		if err != nil {
+			newKBuf.Free()
+			return nil, nil, fmt.Errorf("kv_cache: allocate V buffer: %w", err)
+		}
+
+		// Copy existing data into new buffer if any
+		validLen := capacity
+		if layer.Offset > 0 && layer.Offset < capacity {
+			validLen = layer.Offset
+		}
+		if validLen > 0 {
+			// Slice existing data [0:validLen]
+			existingK, err := c.backend.Slice(curBuf, []int{0, 0, 0, 0}, []int{1, numKVHeads, validLen, headDim}, []int{1, 1, 1, 1}, c.stream)
+			if err != nil {
+				newKBuf.Free()
+				newVBuf.Free()
+				return nil, nil, fmt.Errorf("kv_cache: slice existing K: %w", err)
+			}
+			updatedK, err := c.backend.SliceUpdate(newKBuf, existingK, []int{0, 0, 0, 0}, []int{1, numKVHeads, validLen, headDim}, c.stream)
+			if err != nil {
+				existingK.Free()
+				newKBuf.Free()
+				newVBuf.Free()
+				return nil, nil, fmt.Errorf("kv_cache: copy existing K: %w", err)
+			}
+			existingK.Free()
+			newKBuf.Free() // SliceUpdate returned a new array; free the original Zeros() buffer
+			newKBuf = updatedK
+
+			var existingV tensor.Array
+			if layer.VBuf != nil {
+				existingV, err = c.backend.Slice(layer.VBuf, []int{0, 0, 0, 0}, []int{1, numKVHeads, validLen, headDim}, []int{1, 1, 1, 1}, c.stream)
+			} else {
+				existingV, err = c.backend.Slice(layer.V, []int{0, 0, 0, 0}, []int{1, numKVHeads, validLen, headDim}, []int{1, 1, 1, 1}, c.stream)
+			}
+			if err != nil {
+				newKBuf.Free()
+				newVBuf.Free()
+				return nil, nil, fmt.Errorf("kv_cache: slice existing V: %w", err)
+			}
+			updatedV, err := c.backend.SliceUpdate(newVBuf, existingV, []int{0, 0, 0, 0}, []int{1, numKVHeads, validLen, headDim}, c.stream)
+			if err != nil {
+				existingV.Free()
+				newKBuf.Free()
+				newVBuf.Free()
+				return nil, nil, fmt.Errorf("kv_cache: copy existing V: %w", err)
+			}
+			existingV.Free()
+			newVBuf.Free() // SliceUpdate returned a new array; free the original Zeros() buffer
+			newVBuf = updatedV
+		}
+
+		// Free old buffer
+		if layer.KBuf != nil {
+			layer.KBuf.Free()
+		} else if layer.K != nil {
+			layer.K.Free()
+		}
+		if layer.VBuf != nil {
+			layer.VBuf.Free()
+		} else if layer.V != nil {
+			layer.V.Free()
+		}
+
+		layer.KBuf = newKBuf
+		layer.VBuf = newVBuf
+		layer.K = newKBuf
+		layer.V = newVBuf
+		layer.Offset = validLen
+		capacity = newSize
+	} else {
+		// First buffered call — convert from raw K/V to buffered mode
+		// (K/V from prefill become the initial buffer)
+		if layer.KBuf == nil {
+			layer.KBuf = layer.K
+			layer.VBuf = layer.V
+			layer.K = layer.KBuf
+			layer.V = layer.VBuf
+			layer.Offset = capacity
+		}
+	}
+
+	// Write new K/V at seqIdx using SliceUpdate
+	// newK shape: [1, num_kv_heads, 1, head_dim]
+	start := []int{0, 0, seqIdx, 0}
+	stop := []int{1, numKVHeads, seqIdx + 1, headDim}
+
+	updatedK, err := c.backend.SliceUpdate(layer.KBuf, newK, start, stop, c.stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kv_cache: slice_update K at %d: %w", seqIdx, err)
+	}
+	oldK := layer.KBuf
+	layer.KBuf = updatedK
+	oldK.Free() // Free the old buffer; SliceUpdate returned a new array
+	layer.K = layer.KBuf
+
+	updatedV, err := c.backend.SliceUpdate(layer.VBuf, newV, start, stop, c.stream)
+	if err != nil {
+		updatedK.Free()
+		return nil, nil, fmt.Errorf("kv_cache: slice_update V at %d: %w", seqIdx, err)
+	}
+	oldV := layer.VBuf
+	layer.VBuf = updatedV
+	oldV.Free() // Free the old buffer; SliceUpdate returned a new array
+	layer.V = layer.VBuf
+
+	layer.Offset = seqIdx + 1
+
+	// Return view of [0:seqIdx+1] for attention
+	endPos := seqIdx + 1
+	kView, err = c.backend.Slice(layer.KBuf, []int{0, 0, 0, 0}, []int{1, numKVHeads, endPos, headDim}, []int{1, 1, 1, 1}, c.stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kv_cache: slice K view: %w", err)
+	}
+	vView, err = c.backend.Slice(layer.VBuf, []int{0, 0, 0, 0}, []int{1, numKVHeads, endPos, headDim}, []int{1, 1, 1, 1}, c.stream)
+	if err != nil {
+		kView.Free()
+		return nil, nil, fmt.Errorf("kv_cache: slice V view: %w", err)
+	}
+
+	return kView, vView, nil
+}
+
 // Get returns the cached K/V for a layer, or nil if not cached.
 func (c *KVCache) Get(layerIdx int) (*KVCacheLayer, error) {
 	if layerIdx < 0 || layerIdx >= len(c.layers) {
@@ -174,11 +377,23 @@ func (c *KVCache) GetState(layerIdx int) (tensor.Array, tensor.Array, error) {
 }
 
 // CachedLen returns the number of cached tokens, or 0 if empty.
+// For buffered layers (AppendFast path), uses Offset which tracks the
+// number of valid tokens. For raw tensors (prefill-only / concat path),
+// reads the sequence dimension from the shape.
 func (c *KVCache) CachedLen() int {
 	if len(c.layers) == 0 || c.layers[0] == nil {
 		return 0
 	}
-	shape := c.layers[0].K.Shape() // [1, num_kv_heads, seq, head_dim]
+	l := c.layers[0]
+	// Buffered mode: use the offset (valid token count)
+	if l.KBuf != nil {
+		return l.Offset
+	}
+	// Raw tensor: read from shape [1, num_kv_heads, seq, head_dim]
+	if l.K == nil {
+		return 0
+	}
+	shape := l.K.Shape()
 	if len(shape) < 3 {
 		return 0
 	}
@@ -272,10 +487,14 @@ func (c *KVCache) RestorePrefix(snap *KVCache) error {
 func (c *KVCache) Free() {
 	for _, layer := range c.layers {
 		if layer != nil {
-			if layer.K != nil {
+			if layer.KBuf != nil {
+				layer.KBuf.Free()
+			} else if layer.K != nil {
 				layer.K.Free()
 			}
-			if layer.V != nil {
+			if layer.VBuf != nil {
+				layer.VBuf.Free()
+			} else if layer.V != nil {
 				layer.V.Free()
 			}
 			if layer.State != nil {

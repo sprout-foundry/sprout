@@ -339,13 +339,20 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	s, err := m.backend.NewGPUStream()
+	s, err := m.backend.DefaultGPUStream()
 	if err != nil {
 		return fmt.Errorf("get GPU stream: %w", err)
 	}
 	defer s.Free()
 	m.stream = s
 	m.arch.SetStream(s)
+
+	// Re-enable MLX compilation on this thread — enable_compile was called
+	// during warmupAndPreCache on the load thread, but MLX's compile state
+	// may be per-thread. Without this, decode runs uncompiled (~2x slower).
+	if err := m.backend.EnableCompile(); err != nil {
+		log.Printf("llm: enable_compile on gen thread: %v", err)
+	}
 
 	// KV cache: prefill stores K/V, decode appends via per-token concat.
 	cache := NewKVCache(m.cfg.NumLayers, s, m.backend)

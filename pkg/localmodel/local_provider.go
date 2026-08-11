@@ -133,7 +133,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	}
 	elapsed := time.Since(start).Seconds()
 
-	content, toolCalls := parseLocalToolCalls(text)
+	content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, text)
 	promptTokens := len(model.TokenizerEncode(prompt))
 	completionTokens := len(model.TokenizerEncode(text))
 	p.recordTPS(completionTokens, elapsed)
@@ -194,7 +194,7 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 	elapsed := time.Since(start).Seconds()
 
 	if hasTools {
-		content, toolCalls := parseLocalToolCalls(outputBuf.String())
+		content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, outputBuf.String())
 		if content != "" && callback != nil {
 			callback(content, "content")
 		}
@@ -314,26 +314,56 @@ func (p *LocalProvider) Close() error {
 
 // --- prompt building and tool-call parsing ---
 
+// buildPrompt constructs the full prompt from messages and tools, using
+// the model's native chat template (via FormatChat) and architecture-
+// specific tool prompt formatting.
 func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) string {
+	arch := model.Config().Arch
 	msgs := make([]llm.ChatMessage, len(messages))
 	for i, m := range messages {
 		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
 		if m.Role == "tool" {
-			msgs[i].Role = "user"
-			msgs[i].Content = "<tool_response>\n" + m.Content + "\n</tool_response>"
+			msgs[i] = convertToolResponse(arch, m.Content)
 		}
 		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			msgs[i].Content = formatAssistantToolCalls(m.ToolCalls)
+			msgs[i].Content = formatAssistantToolCalls(arch, m.ToolCalls)
 		}
 	}
 	prompt := model.FormatChat(msgs)
 	if len(tools) > 0 {
-		prompt = formatToolsPrompt(tools) + prompt
+		// Some architectures (e.g. LFM2) embed tools into the system
+		// prompt via the chat template; for those, FormatChat already
+		// handles it if we pass tools in the message content. Qwen-based
+		// models need explicit tool-prompt injection before the conversation.
+		if toolPrompt := formatToolsPrompt(arch, tools); toolPrompt != "" {
+			prompt = toolPrompt + prompt
+		}
 	}
 	return prompt
 }
 
-func formatAssistantToolCalls(toolCalls []api.ToolCall) string {
+// convertToolResponse formats a tool result message for the given architecture.
+func convertToolResponse(arch, content string) llm.ChatMessage {
+	switch arch {
+	case "lfm2":
+		return llm.ChatMessage{Role: "user", Content: content}
+	default:
+		return llm.ChatMessage{Role: "user", Content: "<tool_response>\n" + content + "\n</tool_response>"}
+	}
+}
+
+// formatAssistantToolCalls converts prior assistant tool_calls into the
+// model's native text format for conversation history.
+func formatAssistantToolCalls(arch string, toolCalls []api.ToolCall) string {
+	switch arch {
+	case "lfm2":
+		return formatLFM2AssistantToolCalls(toolCalls)
+	default:
+		return formatQwenAssistantToolCalls(toolCalls)
+	}
+}
+
+func formatQwenAssistantToolCalls(toolCalls []api.ToolCall) string {
 	var sb strings.Builder
 	for _, tc := range toolCalls {
 		sb.WriteString("<tool_call>\n<function=")
@@ -354,7 +384,49 @@ func formatAssistantToolCalls(toolCalls []api.ToolCall) string {
 	return sb.String()
 }
 
-func parseLocalToolCalls(text string) (string, []api.ToolCall) {
+func formatLFM2AssistantToolCalls(toolCalls []api.ToolCall) string {
+	var calls []string
+	for _, tc := range toolCalls {
+		var args map[string]interface{}
+		if json.Unmarshal([]byte(tc.Function.Arguments), &args) == nil {
+			var pairs []string
+			for k, v := range args {
+				pairs = append(pairs, fmt.Sprintf("%s=%s", k, lfm2FormatValue(v)))
+			}
+			calls = append(calls, fmt.Sprintf("%s(%s)", tc.Function.Name, strings.Join(pairs, ", ")))
+		} else {
+			calls = append(calls, tc.Function.Name+"()")
+		}
+	}
+	return "<|tool_call_start|>[" + strings.Join(calls, ", ") + "]<|tool_call_end|>"
+}
+
+func lfm2FormatValue(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return "'" + strings.ReplaceAll(val, "'", "\\'") + "'"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// parseLocalToolCalls parses tool calls from model output using the
+// architecture-appropriate parser. Returns content with tool calls
+// stripped, and the parsed tool calls in OpenAI format.
+func parseLocalToolCalls(arch, text string) (string, []api.ToolCall) {
+	switch arch {
+	case "lfm2":
+		calls, remaining, ok := api.RecoverLFM2ToolCalls(text)
+		if !ok {
+			return text, nil
+		}
+		return remaining, calls
+	default:
+		return parseQwenToolCalls(text)
+	}
+}
+
+func parseQwenToolCalls(text string) (string, []api.ToolCall) {
 	if !strings.Contains(text, "<tool_call>") && !strings.Contains(text, "<function=") {
 		return text, nil
 	}
@@ -423,7 +495,27 @@ func parseLocalToolCalls(text string) (string, []api.ToolCall) {
 	return content, calls
 }
 
-func formatToolsPrompt(tools []api.Tool) string {
+// formatToolsPrompt builds the tool-calling system prompt for the given
+// architecture. Returns empty string for architectures that handle tools
+// via the chat template itself (e.g. LFM2 embeds tools in the system prompt).
+func formatToolsPrompt(arch string, tools []api.Tool) string {
+	switch arch {
+	case "lfm2":
+		// LFM2 tools are injected into the system prompt as JSON.
+		// The chat template's {% if tools %} block handles formatting.
+		// We prepend the tool list as part of the system message.
+		var toolJSONs []string
+		for _, tool := range tools {
+			j, _ := json.Marshal(tool)
+			toolJSONs = append(toolJSONs, string(j))
+		}
+		return "<|im_start|>system\nList of tools: [" + strings.Join(toolJSONs, ", ") + "]<|im_end|>\n"
+	default:
+		return formatQwenToolsPrompt(tools)
+	}
+}
+
+func formatQwenToolsPrompt(tools []api.Tool) string {
 	var sb strings.Builder
 	sb.WriteString("<|im_start|>system\n# Tools\n\nYou have access to the following functions:\n\n<tools>")
 	for _, tool := range tools {

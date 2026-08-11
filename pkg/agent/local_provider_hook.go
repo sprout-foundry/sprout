@@ -23,11 +23,24 @@ func init() {
 		if providerID != string(api.SproutLocalClientType) {
 			return nil
 		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		defer cancel()
-
-		return localmodel.EnsureServerForProviderWithCheck(ctx, providerID)
+		return ensureLocalServer()
 	}
 	providers.LocalActivityHook = localmodel.TouchActivity
+}
+
+// ensureLocalServer starts the local LLM server if it's not already running.
+// Used both by the provider hook (on connection error) and by
+// EnsureLocalServer (proactive start during provider switch).
+func ensureLocalServer() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	return localmodel.EnsureServerForProviderWithCheck(ctx, string(api.SproutLocalClientType))
+}
+
+// EnsureLocalServer starts the local LLM server for the sprout-local
+// provider. Called proactively when the user switches to sprout-local
+// so the first chat request doesn't hit a connection-refused error.
+// Returns nil if the server is already running.
+func (a *Agent) EnsureLocalServer() error {
+	return ensureLocalServer()
 }

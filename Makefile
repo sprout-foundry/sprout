@@ -251,12 +251,20 @@ build: prepare-grammars
 	GO111MODULE=on go build -tags grammar_blobs_external -o sprout .
 	@echo "Build completed"
 
-# Install sprout binary to all common locations
+# Install sprout binary and llm_server (if built) to common locations
 install: build
 	@echo "Installing sprout..."
 	@mkdir -p ~/.local/bin ~/go/bin
 	cp sprout ~/.local/bin/sprout
 	cp sprout ~/go/bin/sprout 2>/dev/null || true
+	@# Copy llm_server alongside sprout if it exists (built via make build-llm-server)
+	@if [ -f llm_server ]; then \
+		cp llm_server ~/.local/bin/llm_server 2>/dev/null || true; \
+		cp llm_server ~/go/bin/llm_server 2>/dev/null || true; \
+		echo "Installed llm_server alongside sprout"; \
+	else \
+		echo "Note: llm_server not built — run 'make build-llm-server' for local LLM support"; \
+	fi
 	@echo "Install completed"
 
 # Run an automate workflow under a renamed binary so the workflow's own

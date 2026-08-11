@@ -40,14 +40,16 @@ func useCompiledDecode() bool {
 // Only the token embedding and cache arrays are passed as inputs.
 //
 // Input layout (1 + numLayers*arraysPerLayer):
-//   [0]: hidden state [1, 1, H] (embedding of current token)
-//   For each full-attn layer: k_cache [1, numKVHeads, seq, headDim], v_cache [1, numKVHeads, seq, headDim]
-//   For each DeltaNet layer: state [1, Hv, Dv, Dk], convState [1, convKernel-1, convDim]
+//
+//	[0]: hidden state [1, 1, H] (embedding of current token)
+//	For each full-attn layer: k_cache [1, numKVHeads, seq, headDim], v_cache [1, numKVHeads, seq, headDim]
+//	For each DeltaNet layer: state [1, Hv, Dv, Dk], convState [1, convKernel-1, convDim]
 //
 // Output layout:
-//   [0]: logits [1, 1, vocab] (for argmax)
-//   For each full-attn layer: updated k_cache, v_cache (with new token appended)
-//   For each DeltaNet layer: updated state, convState
+//
+//	[0]: logits [1, 1, vocab] (for argmax)
+//	For each full-attn layer: updated k_cache, v_cache (with new token appended)
+//	For each DeltaNet layer: updated state, convState
 func (q *Qwen35) compileDecodeClosure(cache *llm.KVCache) (*compiledDecoder, error) {
 	cfg := q.cfg
 	s := q.stream

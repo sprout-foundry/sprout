@@ -17,14 +17,14 @@ import (
 
 // localLLMStatus describes the current state of the local LLM engine.
 type localLLMStatus struct {
-	Available     bool   `json:"available"`       // MLX available + platform supported
-	Running       bool   `json:"running"`         // server process is alive and healthy
-	ModelPresent  bool   `json:"model_present"`   // at least one model is downloaded
-	ModelDir      string `json:"model_dir"`       // path to model cache
-	Platform      string `json:"platform"`        // "darwin-arm64", "other"
-	Endpoint      string `json:"endpoint"`        // http://127.0.0.1:18081
-	RecommendedModel string `json:"recommended_model"`
-	Models        []localLLMModel `json:"models"`
+	Available        bool            `json:"available"`     // MLX available + platform supported
+	Running          bool            `json:"running"`       // server process is alive and healthy
+	ModelPresent     bool            `json:"model_present"` // at least one model is downloaded
+	ModelDir         string          `json:"model_dir"`     // path to model cache
+	Platform         string          `json:"platform"`      // "darwin-arm64", "other"
+	Endpoint         string          `json:"endpoint"`      // http://127.0.0.1:18081
+	RecommendedModel string          `json:"recommended_model"`
+	Models           []localLLMModel `json:"models"`
 }
 
 type localLLMModel struct {
@@ -35,8 +35,8 @@ type localLLMModel struct {
 }
 
 var (
-	localLLMMu       sync.Mutex
-	localLLMCached   *localLLMStatus
+	localLLMMu        sync.Mutex
+	localLLMCached    *localLLMStatus
 	localLLMLastCheck time.Time
 )
 
@@ -153,7 +153,7 @@ func (ws *ReactWebServer) handleLocalLLMStart(w http.ResponseWriter, r *http.Req
 	}
 	if status.Running {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"status":  "already_running",
+			"status":   "already_running",
 			"endpoint": status.Endpoint,
 		})
 		return
@@ -233,9 +233,9 @@ func (ws *ReactWebServer) handleLocalLLMModels(w http.ResponseWriter, r *http.Re
 	}
 	status := getLocalLLMStatus()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"models":           status.Models,
-		"recommended":      status.RecommendedModel,
-		"model_dir":        status.ModelDir,
+		"models":      status.Models,
+		"recommended": status.RecommendedModel,
+		"model_dir":   status.ModelDir,
 	})
 }
 

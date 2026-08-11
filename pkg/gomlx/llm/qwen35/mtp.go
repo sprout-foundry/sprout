@@ -24,11 +24,11 @@ import (
 // present only in raw-HF exports (mlx-community conversions strip them); the
 // module is a no-op (nil) on models without them.
 type mtpWeights struct {
-	preFCHiddenNorm    tensor.Array   // [hidden] RMSNorm on prev hidden
-	preFCEmbeddingNorm tensor.Array   // [hidden] RMSNorm on next-token embedding
+	preFCHiddenNorm    tensor.Array // [hidden] RMSNorm on prev hidden
+	preFCEmbeddingNorm tensor.Array // [hidden] RMSNorm on next-token embedding
 	fc                 *llm.Linear  // [hidden, 2*hidden]
 	layer              layerWeights // one full-attention decoder layer
-	norm               tensor.Array   // [hidden] final RMSNorm before head
+	norm               tensor.Array // [hidden] final RMSNorm before head
 }
 
 // hasMTPWeights reports whether the safetensors file contains MTP tensors.

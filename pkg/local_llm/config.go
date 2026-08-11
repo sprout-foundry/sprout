@@ -19,17 +19,17 @@ import (
 // ModelConfig holds the architecture constants for a Qwen3-family model.
 // Values are loaded from the model's config.json at init time.
 type ModelConfig struct {
-	VocabSize       int
-	HiddenSize      int
+	VocabSize        int
+	HiddenSize       int
 	IntermediateSize int
-	NumLayers       int
-	NumHeads        int
-	NumKVHeads      int
-	HeadDim         int
-	RMSNormEPS      float32
-	RopeTheta       float64
-	BOSTokenID      int
-	EOSTokenID      int
+	NumLayers        int
+	NumHeads         int
+	NumKVHeads       int
+	HeadDim          int
+	RMSNormEPS       float32
+	RopeTheta        float64
+	BOSTokenID       int
+	EOSTokenID       int
 }
 
 // Qwen3_0_6B returns the config for the Qwen3-0.6B model.

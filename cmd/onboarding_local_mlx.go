@@ -10,8 +10,8 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 

@@ -135,7 +135,7 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		Description:         "Run fully offline on your Mac — no API key, no network. GPU-accelerated via Apple MLX with quantized Qwen3.5 models.",
 		SetupHint:           "No setup needed if a model is already downloaded. First use downloads a ~2–5 GB model automatically.",
 		DocsURL:             "",
-		SignupURL:            "",
+		SignupURL:           "",
 		APIKeyLabel:         "",
 		APIKeyHelp:          "",
 		Recommended:         false,

@@ -12,7 +12,7 @@ package mlx
 #include <mlx/c/ops.h>
 #include <mlx/c/stream.h>
 
-static int gemma4_shim_geglu(mlx_array* out,
+int gemma4_shim_geglu(mlx_array* out,
                              const mlx_array gate,
                              const mlx_array up,
                              const mlx_stream s) {
@@ -60,7 +60,7 @@ done:
     return rc;
 }
 
-static int gemma4_shim_gelu(mlx_array* out,
+int gemma4_shim_gelu(mlx_array* out,
                             const mlx_array x,
                             const mlx_stream s) {
     mlx_array c044715 = mlx_array_new_float(0.044715f);

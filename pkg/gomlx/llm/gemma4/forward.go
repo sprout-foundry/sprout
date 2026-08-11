@@ -516,22 +516,15 @@ func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 		}
 	}()
 
+	// Use Go forward path for each layer (1 CGO call per op, but Go GC
+	// manages intermediates efficiently). The C layer shim was prototyped
+	// but leaks ~1400 intermediates per decode step without per-layer eval
+	// (which kills performance). See gemma4_layer_shim.go for the C code.
 	for i := 0; i < g.cfg.NumLayers; i++ {
 		out, _, err := g.forwardLayer(h, i, 1, pos, cache, perLayerInputs, intermediateKVs)
 		if err != nil { return nil, fmt.Errorf("layer %d: %w", i, err) }
 		h.Free()
 		h = out
-		if os.Getenv("GEMMA4_DEBUG") != "" && i < 6 {
-			dumpArrayF32(h, fmt.Sprintf("decode_layer_%d", i), g.backend, s)
-			// Check for NaN
-			if data, err := h.Float32Data(); err == nil {
-				nanCount := 0
-				for _, v := range data { if v != v { nanCount++ } }
-				if nanCount > 0 {
-					fmt.Fprintf(os.Stderr, "[gemma4] decode_layer_%d: %d NaN values!\n", i, nanCount)
-				}
-			}
-		}
 	}
 
 	normed, err := g.gemmaRMSNorm(h, g.weights.norm)

@@ -28,18 +28,6 @@ import (
 	"time"
 )
 
-// DefaultPort is the port the local LLM server listens on. Matches the
-// sprout-local provider config endpoint.
-const DefaultPort = 18081
-
-// DefaultModelsDir is where downloaded models are stored.
-var DefaultModelsDir = func() string {
-	if h, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(h, "dev", "llm-models")
-	}
-	return filepath.Join(os.TempDir(), "llm-models")
-}()
-
 // ServerStatus describes the state of the local LLM server.
 type ServerStatus struct {
 	Running bool   `json:"running"`

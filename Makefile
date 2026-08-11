@@ -245,10 +245,15 @@ test-coverage: prepare-grammars
 	echo "Coverage check passed: $${total_coverage}% >= $${min_coverage}%"'
 
 # Build sprout binary
-# Optimized: uses build cache and parallel compilation
+# On Apple Silicon, includes the mlx tag for in-process local LLM support.
+BUILD_TAGS := grammar_blobs_external
+ifeq ($(shell uname -s)-$(shell uname -m), Darwin-arm64)
+	BUILD_TAGS := grammar_blobs_external,mlx
+endif
+
 build: prepare-grammars
-	@echo "Building sprout..."
-	GO111MODULE=on go build -tags grammar_blobs_external -o sprout .
+	@echo "Building sprout (tags: $(BUILD_TAGS))..."
+	GO111MODULE=on go build -tags $(BUILD_TAGS) -o sprout .
 	@echo "Build completed"
 
 # Install sprout binary and llm_server (if built) to common locations
@@ -342,8 +347,8 @@ local-llm-status:
 
 # Build sprout binary with parallel compilation and cache
 build-parallel: prepare-grammars
-	@echo "Building sprout (parallel)..."
-	GO111MODULE=on GOFLAGS="-p=8" go build -tags grammar_blobs_external -o sprout .
+	@echo "Building sprout (parallel, tags: $(BUILD_TAGS))..."
+	GO111MODULE=on GOFLAGS="-p=8" go build -tags $(BUILD_TAGS) -o sprout .
 	@echo "Build completed"
 
 # Build with version information

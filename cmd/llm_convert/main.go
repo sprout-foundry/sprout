@@ -62,7 +62,9 @@ func main() {
 
 	// Open the raw safetensors and quantize each weight.
 	stream, err := backend.DefaultStream()
-	if err != nil { log.Fatalf("stream: %v", err) }
+	if err != nil {
+		log.Fatalf("stream: %v", err)
+	}
 
 	sf, err := llm.OpenSafetensors(filepath.Join(*input, "model.safetensors"))
 
@@ -266,8 +268,8 @@ func writeSafetensors(f *os.File, queue []pending, b tensor.Backend, s tensor.St
 
 		sz := dataSize(p.arr)
 		header[p.name] = map[string]interface{}{
-			"dtype":       dt,
-			"shape":       shapeIface,
+			"dtype":        dt,
+			"shape":        shapeIface,
 			"data_offsets": []uint64{offset, offset + uint64(sz)},
 		}
 		offset += uint64(sz)

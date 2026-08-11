@@ -55,9 +55,9 @@ const computeGKernelSource = `
 `
 
 var (
-	fusedKernelsMu  sync.Mutex
-	swigluKernel    *mlx.MetalKernel
-	computeGKernel  *mlx.MetalKernel
+	fusedKernelsMu sync.Mutex
+	swigluKernel   *mlx.MetalKernel
+	computeGKernel *mlx.MetalKernel
 )
 
 func getSwigluKernel(dtype mlx.Dtype) (*mlx.MetalKernel, error) {

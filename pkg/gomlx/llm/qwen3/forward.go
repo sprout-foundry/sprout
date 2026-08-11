@@ -147,7 +147,7 @@ func (q *Qwen3) InitWeights(path string, s tensor.Stream) error {
 		p := fmt.Sprintf("model.layers.%d", i)
 		quant := q.cfg.Quantization
 
-		lw.inputNorm, err = sf.Get(p + ".input_layernorm.weight", s)
+		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d input_norm: %w", i, err)
 		}
@@ -163,15 +163,15 @@ func (q *Qwen3) InitWeights(path string, s tensor.Stream) error {
 		if lw.oProj, err = loadLinear(sf, p+".self_attn.o_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d o_proj: %w", i, err)
 		}
-		lw.qNorm, err = sf.Get(p + ".self_attn.q_norm.weight", s)
+		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d q_norm: %w", i, err)
 		}
-		lw.kNorm, err = sf.Get(p + ".self_attn.k_norm.weight", s)
+		lw.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d k_norm: %w", i, err)
 		}
-		lw.postNorm, err = sf.Get(p + ".post_attention_layernorm.weight", s)
+		lw.postNorm, err = sf.Get(p+".post_attention_layernorm.weight", s)
 		if err != nil {
 			return fmt.Errorf("load layer %d post_norm: %w", i, err)
 		}

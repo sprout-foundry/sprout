@@ -187,7 +187,9 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 		}
 		for _, p := range parts {
 			if err := p.Eval(); err != nil {
-				for _, q := range parts { q.Free() }
+				for _, q := range parts {
+					q.Free()
+				}
 				return nil, fmt.Errorf("eval quantized embedding %s: %w", base, err)
 			}
 		}

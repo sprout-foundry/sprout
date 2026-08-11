@@ -340,14 +340,14 @@ func fromBPESpace(token string) string {
 
 // HuggingFace tokenizer.json structures
 type hfTokenizer struct {
-	Model      hfModel      `json:"model"`
+	Model       hfModel        `json:"model"`
 	AddedTokens []hfAddedToken `json:"added_tokens"`
 }
 
 type hfModel struct {
-	Type   string            `json:"type"`
-	Vocab  map[string]int    `json:"vocab"`
-	Merges [][]string        `json:"merges"`
+	Type   string         `json:"type"`
+	Vocab  map[string]int `json:"vocab"`
+	Merges [][]string     `json:"merges"`
 }
 
 type hfAddedToken struct {

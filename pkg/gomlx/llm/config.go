@@ -13,34 +13,34 @@ import (
 // hfConfig is the raw HuggingFace config.json structure. Only fields used by
 // supported architectures are included; unknown fields are silently ignored.
 type hfConfig struct {
-	Architectures     []string     `json:"architectures"`
-	ModelType         string       `json:"model_type"`
-	HiddenSize        int          `json:"hidden_size"`
-	IntermediateSize  int          `json:"intermediate_size"`
-	NumHiddenLayers   int          `json:"num_hidden_layers"`
-	NumAttentionHeads int          `json:"num_attention_heads"`
-	NumKVHeads        int          `json:"num_key_value_heads"`
-	HeadDim           int          `json:"head_dim"`
-	RMSNormEPS        float64      `json:"rms_norm_eps"`
-	RopeTheta         float64      `json:"rope_theta"`
-	VocabSize         int          `json:"vocab_size"`
-	BOSTokenID        int          `json:"bos_token_id"`
+	Architectures     []string        `json:"architectures"`
+	ModelType         string          `json:"model_type"`
+	HiddenSize        int             `json:"hidden_size"`
+	IntermediateSize  int             `json:"intermediate_size"`
+	NumHiddenLayers   int             `json:"num_hidden_layers"`
+	NumAttentionHeads int             `json:"num_attention_heads"`
+	NumKVHeads        int             `json:"num_key_value_heads"`
+	HeadDim           int             `json:"head_dim"`
+	RMSNormEPS        float64         `json:"rms_norm_eps"`
+	RopeTheta         float64         `json:"rope_theta"`
+	VocabSize         int             `json:"vocab_size"`
+	BOSTokenID        int             `json:"bos_token_id"`
 	EOSTokenID        json.RawMessage `json:"eos_token_id"`
-	TieWordEmbeddings bool         `json:"tie_word_embeddings"`
-	AttentionBias     bool         `json:"attention_bias"`
-	MaxPositionEmbeds int          `json:"max_position_embeddings"`
-	Quantization      *quantConfig `json:"quantization"`
+	TieWordEmbeddings bool            `json:"tie_word_embeddings"`
+	AttentionBias     bool            `json:"attention_bias"`
+	MaxPositionEmbeds int             `json:"max_position_embeddings"`
+	Quantization      *quantConfig    `json:"quantization"`
 
 	// Hybrid linear-attention fields (Qwen3.5 / Qwen3-Next style).
-	FullAttentionInterval int         `json:"full_attention_interval"`
-	LinearNumKeyHeads     int         `json:"linear_num_key_heads"`
-	LinearNumValueHeads   int         `json:"linear_num_value_heads"`
-	LinearKeyHeadDim      int         `json:"linear_key_head_dim"`
-	LinearValueHeadDim    int         `json:"linear_value_head_dim"`
-	LinearConvKernelDim   int         `json:"linear_conv_kernel_dim"`
-	AttnOutputGate        bool        `json:"attn_output_gate"`
-	MTPNumHiddenLayers    int         `json:"mtp_num_hidden_layers"`
-	MTPUseDedicatedEmbeds bool        `json:"mtp_use_dedicated_embeddings"`
+	FullAttentionInterval int  `json:"full_attention_interval"`
+	LinearNumKeyHeads     int  `json:"linear_num_key_heads"`
+	LinearNumValueHeads   int  `json:"linear_num_value_heads"`
+	LinearKeyHeadDim      int  `json:"linear_key_head_dim"`
+	LinearValueHeadDim    int  `json:"linear_value_head_dim"`
+	LinearConvKernelDim   int  `json:"linear_conv_kernel_dim"`
+	AttnOutputGate        bool `json:"attn_output_gate"`
+	MTPNumHiddenLayers    int  `json:"mtp_num_hidden_layers"`
+	MTPUseDedicatedEmbeds bool `json:"mtp_use_dedicated_embeddings"`
 
 	// MoE fields (Qwen3.6-35B-A3B and similar MoE models)
 	NumExperts            int  `json:"num_experts"`
@@ -49,22 +49,22 @@ type hfConfig struct {
 	SharedExpertInterSize int  `json:"shared_expert_intermediate_size"`
 	NormTopkProb          bool `json:"norm_topk_prob"`
 
-	LayerTypes            []string    `json:"layer_types"`
-	RopeParameters        *ropeParams `json:"rope_parameters"`
+	LayerTypes     []string    `json:"layer_types"`
+	RopeParameters *ropeParams `json:"rope_parameters"`
 
 	// Gemma4 fields
-	GlobalHeadDim               int                `json:"global_head_dim"`
-	SlidingWindow               int                `json:"sliding_window"`
-	SlidingWindowPattern        int                `json:"sliding_window_pattern"`
-	NumKVSharedLayers           int                `json:"num_kv_shared_layers"`
-	HiddenSizePerLayerInput     int                `json:"hidden_size_per_layer_input"`
-	VocabSizePerLayerInput      int                `json:"vocab_size_per_layer_input"`
-	FinalLogitSoftcapping       float64            `json:"final_logit_softcapping"`
-	UseDoubleWideMLP            bool               `json:"use_double_wide_mlp"`
-	AttentionKEqV               bool               `json:"attention_k_eq_v"`
-	RopeTraditional             bool               `json:"rope_traditional"`
-	FullAttnRopeParams          map[string]any     `json:"-"` // parsed from rope_parameters dict
-	SlidingAttnRopeParams       map[string]any     `json:"-"`
+	GlobalHeadDim           int            `json:"global_head_dim"`
+	SlidingWindow           int            `json:"sliding_window"`
+	SlidingWindowPattern    int            `json:"sliding_window_pattern"`
+	NumKVSharedLayers       int            `json:"num_kv_shared_layers"`
+	HiddenSizePerLayerInput int            `json:"hidden_size_per_layer_input"`
+	VocabSizePerLayerInput  int            `json:"vocab_size_per_layer_input"`
+	FinalLogitSoftcapping   float64        `json:"final_logit_softcapping"`
+	UseDoubleWideMLP        bool           `json:"use_double_wide_mlp"`
+	AttentionKEqV           bool           `json:"attention_k_eq_v"`
+	RopeTraditional         bool           `json:"rope_traditional"`
+	FullAttnRopeParams      map[string]any `json:"-"` // parsed from rope_parameters dict
+	SlidingAttnRopeParams   map[string]any `json:"-"`
 
 	// TextConfig carries the nested text-model config for multimodal
 	// wrappers (e.g. qwen3_5 wraps qwen3_5_text).
@@ -202,7 +202,7 @@ func LoadConfig(path string) (ModelConfig, error) {
 		cfg.WeightPrefix = "model.language_model."
 	case "gemma4_text":
 		cfg.WeightPrefix = "language_model.model."
-		cfg.BOSTokenID = 0 // Gemma doesn't use BOS prepending
+		cfg.BOSTokenID = 0            // Gemma doesn't use BOS prepending
 		cfg.StopTokenIDs = []int{106} // <turn|> — end of turn marker
 		if cfg.GlobalHeadDim == 0 {
 			cfg.GlobalHeadDim = cfg.HeadDim

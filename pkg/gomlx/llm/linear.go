@@ -37,13 +37,13 @@ type Linear struct {
 func (l *Linear) IsQuantized() bool { return l.qW != nil }
 
 // Accessors for MoE gather_qmm (need raw quantized weight tensors).
-func (l *Linear) QW() tensor.Array         { return l.qW }
-func (l *Linear) QScales() tensor.Array    { return l.qScales }
-func (l *Linear) QBiases() tensor.Array    { return l.qBiases }
-func (l *Linear) QGroupSize() int          { return l.qGroupSize }
-func (l *Linear) QBits() int               { return l.qBits }
-func (l *Linear) QMode() string            { return l.qMode }
-func (l *Linear) WT() tensor.Array         { return l.wT }
+func (l *Linear) QW() tensor.Array      { return l.qW }
+func (l *Linear) QScales() tensor.Array { return l.qScales }
+func (l *Linear) QBiases() tensor.Array { return l.qBiases }
+func (l *Linear) QGroupSize() int       { return l.qGroupSize }
+func (l *Linear) QBits() int            { return l.qBits }
+func (l *Linear) QMode() string         { return l.qMode }
+func (l *Linear) WT() tensor.Array      { return l.wT }
 
 // NumExperts returns the number of experts from the weight's first dimension.
 // For non-MoE (2D) weights, returns 0.

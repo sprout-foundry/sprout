@@ -34,7 +34,7 @@ func TestGGMLMatMul(t *testing.T) {
 	// Result: ne[0]=M, ne[1]=N
 	//
 	// M=2, K=3, N=4
-	aData := []float32{1, 2, 3, 4, 5, 6} // [M=2, K=3]
+	aData := []float32{1, 2, 3, 4, 5, 6}                      // [M=2, K=3]
 	bData := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12} // [K=3, N=4]
 
 	// Create with GGML layout: A ne[0]=K=3, ne[1]=M=2

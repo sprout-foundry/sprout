@@ -16,12 +16,12 @@ import (
 // It holds the model weights and a stream for executing operations.
 // Generate runs the autoregressive loop: prefill → decode tokens one at a time.
 type Model struct {
-	cfg      ModelConfig
-	stream   *mlx.Stream
-	weights  *weights
+	cfg       ModelConfig
+	stream    *mlx.Stream
+	weights   *weights
 	tokenizer *Tokenizer
-	mu       sync.Mutex
-	closed   bool
+	mu        sync.Mutex
+	closed    bool
 }
 
 // NewModel loads the Qwen3-0.6B model from the given model and tokenizer paths.

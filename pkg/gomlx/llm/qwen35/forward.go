@@ -30,7 +30,7 @@ type Qwen35 struct {
 	backend    tensor.Backend
 	stream     tensor.Stream
 	weights    *weights
-	mtp        *mtpWeights // multi-token prediction head; nil when absent
+	mtp        *mtpWeights  // multi-token prediction head; nil when absent
 	lastHidden tensor.Array // retained [1,1,H] main-model hidden at the last processed position
 
 	// normPreAdded is true for mlx-community exports where sanitize() has
@@ -73,8 +73,8 @@ func (q *Qwen35) SetStream(s tensor.Stream) { q.stream = s }
 // the lm_head; otherwise lmHead holds the separate untied projection.
 type weights struct {
 	embed      *llm.Embedding
-	lmHead     *llm.Linear // non-nil when embeddings are untied
-	normWeight tensor.Array  // [hidden] — final RMSNorm
+	lmHead     *llm.Linear  // non-nil when embeddings are untied
+	normWeight tensor.Array // [hidden] — final RMSNorm
 	layers     []layerWeights
 }
 
@@ -144,9 +144,9 @@ func (q *Qwen35) InitWeights(path string, s tensor.Stream) error {
 	// either model.language_model.lm_head.* (4B) or top-level lm_head.* (9B).
 	if !q.cfg.UseTiedEmbeddings {
 		candidates := []string{
-			"lm_head.",                            // raw HF 9B (top-level)
-			"model.language_model.lm_head.",       // raw HF 4B
-			"language_model.lm_head.",             // mlx-community
+			"lm_head.",                      // raw HF 9B (top-level)
+			"model.language_model.lm_head.", // raw HF 4B
+			"language_model.lm_head.",       // mlx-community
 		}
 		var lmPrefix string
 		for _, c := range candidates {

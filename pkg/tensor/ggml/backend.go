@@ -360,7 +360,7 @@ func (a *Array) Uint32Data() ([]uint32, error) {
 
 // ── tensor.Backend: capability ─────────────────────────────────────
 
-func (g *GGMLBackend) NewGPUStream() (tensor.Stream, error)  { return Stream{}, nil }
+func (g *GGMLBackend) NewGPUStream() (tensor.Stream, error)     { return Stream{}, nil }
 func (g *GGMLBackend) DefaultGPUStream() (tensor.Stream, error) { return Stream{}, nil }
 func (g *GGMLBackend) DefaultStream() (tensor.Stream, error)    { return Stream{}, nil }
 
@@ -882,11 +882,11 @@ func (g *GGMLBackend) Conv1D(input, weight tensor.Array, stride, padding, dilati
 	w := weight.(*Array).tensor
 	x := input.(*Array).tensor
 	result := C.ggml_im2col(ctx, w, x,
-		C.int(stride), 1,     // s0, s1
-		C.int(padding), 0,    // p0, p1
-		C.int(dilation), 1,   // d0, d1
-		false,                 // is_2D = false (1D conv)
-		C.GGML_TYPE_F32)      // dst_type
+		C.int(stride), 1, // s0, s1
+		C.int(padding), 0, // p0, p1
+		C.int(dilation), 1, // d0, d1
+		false,           // is_2D = false (1D conv)
+		C.GGML_TYPE_F32) // dst_type
 	// im2col output multiplied by weight gives the convolution result
 	output := C.ggml_mul_mat(ctx, w, result)
 	return &Array{backend: g, tensor: output, hasData: false}, nil

@@ -32,6 +32,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerSearchRoutes(mux)
 	ws.registerChangesRoutes(mux)
 	ws.registerAutomateRoutes(mux)
+	ws.registerCompletionRoutes(mux)
 
 	return mux
 }
@@ -264,4 +265,8 @@ func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/search/semantic", ws.handleAPISemanticSearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
+}
+
+func (ws *ReactWebServer) registerCompletionRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/completion", ws.handleAPICompletion)
 }

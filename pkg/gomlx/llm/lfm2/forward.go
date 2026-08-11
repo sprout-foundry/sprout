@@ -68,6 +68,49 @@ func (l *LFM2) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (in
 	return int(data[0]), nil
 }
 
+// ForwardPrefillArgmaxAll runs the model over a short sequence and returns
+// the argmax prediction at every position. Used for prompt-lookup speculative
+// decoding to batch-verify candidate tokens in one forward pass.
+func (l *LFM2) ForwardPrefillArgmaxAll(ids []int, startPos int, cache *llm.KVCache) ([]int, error) {
+	seqLen := len(ids)
+	idData := make([]int64, seqLen)
+	for i, id := range ids {
+		idData[i] = int64(id)
+	}
+	idsArr, err := l.backend.NewArrayFromInt64(idData, []int{1, seqLen})
+	if err != nil {
+		return nil, fmt.Errorf("create ids: %w", err)
+	}
+	defer idsArr.Free()
+
+	logits, err := l.forwardInternal(idsArr, seqLen, startPos, cache)
+	if err != nil {
+		return nil, err
+	}
+	defer logits.Free()
+	if err := l.stream.Synchronize(); err != nil {
+		return nil, fmt.Errorf("synchronize: %w", err)
+	}
+
+	idxArr, err := l.backend.ArgMaxAxis(logits, 2, false, l.stream)
+	if err != nil {
+		return nil, fmt.Errorf("argmax axis: %w", err)
+	}
+	defer idxArr.Free()
+	data, err := idxArr.Uint32Data()
+	if err != nil {
+		return nil, fmt.Errorf("read argmax: %w", err)
+	}
+	if len(data) != seqLen {
+		return nil, fmt.Errorf("argmax length mismatch: got %d, want %d", len(data), seqLen)
+	}
+	result := make([]int, seqLen)
+	for i, v := range data {
+		result[i] = int(v)
+	}
+	return result, nil
+}
+
 // forwardInternal runs the model over a sequence (prefill or delta-prefill).
 func (l *LFM2) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
 	s := l.stream

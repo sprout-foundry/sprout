@@ -221,6 +221,9 @@ func (s *Server) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := llm.DefaultGenerateConfig()
+	// Enable speculative decoding for speed (free when the model echoes
+	// context: code, file contents, repetitive patterns).
+	cfg.PromptLookupMaxDrafts = 4
 	if req.MaxTokens != nil && *req.MaxTokens > 0 {
 		cfg.MaxTokens = *req.MaxTokens
 	}
@@ -229,6 +232,12 @@ func (s *Server) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Temperature != nil {
 		cfg.Temperature = float32(*req.Temperature)
+		// Greedy (temperature=0): disable repetition penalty so the GPU
+		// argmax fast path activates (avoids transferring full vocab logits
+		// to CPU every token).
+		if *req.Temperature <= 0 {
+			cfg.RepetitionPenalty = 0
+		}
 	}
 	if req.TopP != nil {
 		cfg.TopP = float32(*req.TopP)

@@ -404,10 +404,6 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 
 	nextToken := 0
 	if useGPUArgmax {
-		// The prefill above already computed logits and populated the cache.
-		// Do NOT re-run prefill via ForwardPrefillArgmax — it would re-run all
-		// layers on an already-initialized KV cache. Argmax the CPU copy
-		// (608KB, one-time) instead; decode steps stay on the GPU argmax path.
 		nextToken = argmax(logits)
 	} else {
 		if genCfg.RepetitionPenalty != 0 {

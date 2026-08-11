@@ -249,6 +249,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     whitespaceRenderingMode: settings.whitespaceRenderingMode,
     inlayHintsEnabled: settings.inlayHintsEnabled,
     signatureHelpEnabled: settings.signatureHelpEnabled,
+    aiCompletionsEnabled: settings.aiCompletionsEnabled,
   };
 
   // Resolve language for the current buffer. The CM extensions builder
@@ -390,6 +391,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onGoToWorkspaceSymbol: () => semantic.setShowGoToWorkspaceSymbol(true),
     onToggleInlayHints: settings.onToggleInlayHints,
     onToggleSignatureHelp: settings.onToggleSignatureHelp,
+    onToggleAiCompletions: settings.onToggleAiCompletions,
     onCycleTabSize: settings.onCycleTabSize,
     onZoomIn: settings.onZoomIn,
     onZoomOut: settings.onZoomOut,
@@ -482,6 +484,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       whitespaceRenderingMode,
       inlayHintsEnabled: settings.inlayHintsEnabled,
       signatureHelpEnabled: settings.signatureHelpEnabled,
+      aiCompletionsEnabled: settings.aiCompletionsEnabled,
     }),
     [
       buffer,
@@ -496,6 +499,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       whitespaceRenderingMode,
       settings.inlayHintsEnabled,
       settings.signatureHelpEnabled,
+      settings.aiCompletionsEnabled,
     ],
   );
 

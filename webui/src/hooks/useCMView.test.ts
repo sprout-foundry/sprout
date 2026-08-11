@@ -97,6 +97,7 @@ const baseSettings: CMViewSettings = {
   whitespaceRenderingMode: 'none',
   inlayHintsEnabled: false,
   signatureHelpEnabled: false,
+  aiCompletionsEnabled: false,
 };
 
 interface RenderResult {

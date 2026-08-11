@@ -22,6 +22,8 @@ interface EditorSettingsContextValue {
   setFormatOnSaveEnabled: (enabled: boolean) => void;
   maxPanes: number; // Configurable max panes for UI (capped at MAX_PANES)
   setMaxPanes: (n: number) => void;
+  aiCompletionsEnabled: boolean;
+  setAiCompletionsEnabled: (enabled: boolean) => void;
 }
 
 const EditorSettingsContext = createContext<EditorSettingsContextValue | null>(null);
@@ -97,6 +99,23 @@ export const EditorSettingsProvider: React.FC<EditorSettingsProviderProps> = ({ 
     }
   });
 
+  const [aiCompletionsEnabled, setAiCompletionsEnabledState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('editor.ai-completions') !== 'false';
+    } catch (err) {
+      return true;
+    }
+  });
+
+  const setAiCompletionsEnabled = useCallback((enabled: boolean) => {
+    setAiCompletionsEnabledState(enabled);
+    try {
+      localStorage.setItem('editor.ai-completions', String(enabled));
+    } catch (err) {
+      // Ignore localStorage errors
+    }
+  }, []);
+
   const setMaxPanes = useCallback((n: number) => {
     // Clamp to range [2, MAX_PANES]
     const clamped = Math.max(2, Math.min(MAX_PANES, n));
@@ -119,6 +138,8 @@ export const EditorSettingsProvider: React.FC<EditorSettingsProviderProps> = ({ 
       setFormatOnSaveEnabled,
       maxPanes,
       setMaxPanes,
+      aiCompletionsEnabled,
+      setAiCompletionsEnabled,
     }),
     [
       isAutoSaveEnabled,
@@ -130,6 +151,8 @@ export const EditorSettingsProvider: React.FC<EditorSettingsProviderProps> = ({ 
       setFormatOnSaveEnabled,
       maxPanes,
       setMaxPanes,
+      aiCompletionsEnabled,
+      setAiCompletionsEnabled,
     ],
   );
 

@@ -85,13 +85,20 @@ func HealthCheck(port int) (*ServerStatus, error) {
 // The modelDir must be an absolute path to a directory containing a valid
 // model (config.json, tokenizer.json, *.safetensors).
 func EnsureServer(ctx context.Context, port int, modelDir string) (*ServerStatus, error) {
+	return EnsureServerWithBackend(ctx, port, modelDir, "")
+}
+
+// EnsureServerWithBackend is like EnsureServer but lets the caller specify
+// which server backend to use: "gomlx" (default, Go-native) or "mlx_lm"
+// (Python mlx_lm.server, needed for models without a Go architecture).
+func EnsureServerWithBackend(ctx context.Context, port int, modelDir, backend string) (*ServerStatus, error) {
 	// Fast path: server already running and healthy.
 	if status, err := HealthCheck(port); err == nil && status.Healthy {
 		return status, nil
 	}
 
 	// Spawn the server as a detached background process.
-	if err := spawnServer(port, modelDir); err != nil {
+	if err := spawnServer(port, modelDir, backend); err != nil {
 		return nil, fmt.Errorf("spawn local server: %w", err)
 	}
 
@@ -109,10 +116,19 @@ func EnsureServer(ctx context.Context, port int, modelDir string) (*ServerStatus
 	return nil, fmt.Errorf("local server did not become healthy within 60s")
 }
 
-// spawnServer launches the llm_server binary as a detached process. The
-// binary is expected to be in the same directory as the sprout binary, or
-// on PATH.
-func spawnServer(port int, modelDir string) error {
+// spawnServer launches the appropriate server binary as a detached process.
+// For "gomlx" backend (default), uses the Go-native llm_server.
+// For "mlx_lm" backend, uses Python mlx_lm.server (needed for models without
+// a Go architecture implementation like LFM2).
+func spawnServer(port int, modelDir string, backend string) error {
+	if backend == "mlx_lm" {
+		return spawnMLXServer(port, modelDir)
+	}
+	return spawnGoServer(port, modelDir)
+}
+
+// spawnGoServer launches the Go-native llm_server binary.
+func spawnGoServer(port int, modelDir string) error {
 	binary, err := findServerBinary()
 	if err != nil {
 		return err
@@ -125,13 +141,35 @@ func spawnServer(port int, modelDir string) error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.Stdin = nil
-	// Detach from the parent process group so the server survives CLI exit.
 	cmd.SysProcAttr = detachedSysProcAttr()
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
-	// Release the process so it doesn't become a zombie when the parent exits.
+	_ = cmd.Process.Release()
+	return nil
+}
+
+// spawnMLXServer launches Python's mlx_lm.server for models that don't have
+// a Go architecture implementation.
+func spawnMLXServer(port int, modelDir string) error {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		return fmt.Errorf("python3 not found — required for mlx_lm backend")
+	}
+
+	cmd := exec.Command(python, "-m", "mlx_lm.server",
+		"--model", modelDir,
+		"--port", fmt.Sprintf("%d", port),
+	)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+	cmd.SysProcAttr = detachedSysProcAttr()
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start mlx_lm server: %w", err)
+	}
 	_ = cmd.Process.Release()
 	return nil
 }
@@ -155,15 +193,38 @@ func findServerBinary() (string, error) {
 // EnsureServerHealth checks if the server is running and starts it if not,
 // using the given model directory. Convenience wrapper for agent integration.
 func EnsureServerHealth(ctx context.Context, modelDir string) error {
+	return EnsureServerHealthWithBackend(ctx, modelDir, "")
+}
+
+// EnsureServerHealthWithBackend is like EnsureServerHealth but specifies
+// the server backend ("gomlx" or "mlx_lm").
+func EnsureServerHealthWithBackend(ctx context.Context, modelDir, backend string) error {
 	status, err := HealthCheck(DefaultPort)
 	if err == nil && status.Healthy {
 		return nil
 	}
-	return spawnAndWait(ctx, modelDir)
+	if err := spawnServer(DefaultPort, modelDir, backend); err != nil {
+		return fmt.Errorf("spawn local server: %w", err)
+	}
+	for i := 0; i < 60; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+		if status, err := HealthCheck(DefaultPort); err == nil && status.Healthy {
+			return nil
+		}
+	}
+	return fmt.Errorf("local server did not become healthy within 60s")
 }
 
 func spawnAndWait(ctx context.Context, modelDir string) error {
-	if err := spawnServer(DefaultPort, modelDir); err != nil {
+	return spawnAndWaitWithBackend(ctx, modelDir, "")
+}
+
+func spawnAndWaitWithBackend(ctx context.Context, modelDir, backend string) error {
+	if err := spawnServer(DefaultPort, modelDir, backend); err != nil {
 		return fmt.Errorf("spawn local server: %w", err)
 	}
 	for i := 0; i < 60; i++ {

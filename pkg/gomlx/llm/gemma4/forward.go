@@ -290,9 +290,10 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 		vT2 := vT
 		g.backend.RetainArray(vT2)
 
-		// Cache update: use AppendFast for decode (pre-allocated buffer +
-		// slice_update avoids the growing ConcatenateAxis dependency chain).
-		// During prefill (seqLen > 1), fall through to the Store path below.
+		// Cache update:
+		// - Decode (seqLen==1, cache initialized): AppendFast into pre-allocated buffer
+		// - Delta prefill (seqLen>1, cache initialized via RestorePrefix): Append (concat)
+		// - Initial prefill (seqLen>1, cache NOT initialized): Store
 		if cache != nil && cache.IsInitialized(layerIdx) && seqLen == 1 {
 			kf, vf, err := cache.AppendFast(layerIdx, kRot, vT2, startPos)
 			if err != nil {
@@ -300,6 +301,13 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 			}
 			kForAttn = kf
 			vForAttn = vf
+		} else if cache != nil && cache.IsInitialized(layerIdx) {
+			if err := cache.Append(layerIdx, kRot, vT2); err != nil {
+				return nil, nil, fmt.Errorf("cache append: %w", err)
+			}
+			cached, _ := cache.Get(layerIdx)
+			kForAttn = cached.K
+			vForAttn = cached.V
 		} else if cache != nil {
 			kForAttn = kRot
 			vForAttn = vT2

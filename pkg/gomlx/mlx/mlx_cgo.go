@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 // Package mlx is a thin CGO wrapper around Apple's MLX C API
 // (github.com/ml-explore/mlx-c), exposing just the ~30 functions needed to

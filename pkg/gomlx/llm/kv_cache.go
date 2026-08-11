@@ -451,10 +451,18 @@ func (c *KVCache) RestorePrefix(snap *KVCache) error {
 		}
 		if c.layers[i] != nil {
 			cl := c.layers[i]
-			if cl.K != nil {
+			// In buffered mode (AppendFast), K==KBuf and V==VBuf — free via
+			// KBuf/VBuf to avoid stale pointers, then clear K/V separately.
+			if cl.KBuf != nil {
+				cl.KBuf.Free()
+				cl.KBuf = nil
+			} else if cl.K != nil {
 				cl.K.Free()
 			}
-			if cl.V != nil {
+			if cl.VBuf != nil {
+				cl.VBuf.Free()
+				cl.VBuf = nil
+			} else if cl.V != nil {
 				cl.V.Free()
 			}
 			if cl.State != nil {

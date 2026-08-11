@@ -76,6 +76,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true, "streaming_response", err)
 				return nil, agenterrors.NewNetwork("chat request failed", err)
 			}
+			api.RecoverInlineToolCalls(response, tools)
 			return response, nil
 		}
 
@@ -95,6 +96,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 	}
 
 	// Success - don't log the request
+	api.RecoverInlineToolCalls(response, tools)
 	return response, nil
 }
 

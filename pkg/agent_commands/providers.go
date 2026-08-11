@@ -416,10 +416,16 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 	console.GlyphSuccess.Printf("Provider switched to: %s", getProviderDisplayName(provider))
 	console.GlyphInfo.Printf("Using model: %s", model)
 
-	// For local providers, proactively start the LLM server in the background
-	// so the first chat request doesn't hit a connection-refused error.
+	// For local providers, proactively start the LLM server so the first
+	// chat request doesn't hit a connection-refused error.
 	if provider == api.SproutLocalClientType {
 		console.GlyphDim.Print("Starting local model server...")
+		if err := chatAgent.EnsureLocalServer(); err != nil {
+			console.GlyphWarning.Printf("Could not start local model server: %v", err)
+			console.GlyphInfo.Print("The server will start automatically on your first request.")
+		} else {
+			console.GlyphSuccess.Print("Local model server ready.")
+		}
 	}
 
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {

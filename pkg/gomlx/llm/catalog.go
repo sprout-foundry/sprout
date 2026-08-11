@@ -19,10 +19,15 @@ type CatalogModel struct {
 	MinRAM uint64 // minimum total RAM (bytes) for this to be the pick
 }
 
-// ModelCatalog lists downloadable models. Currently a single hardcoded model
-// (Gemma4 e2b 5-bit) until per-hardware model mapping is finalized (see
-// SP-136b Future Work).
+// ModelCatalog lists downloadable models, ordered from largest to smallest
+// by recommended RAM. SelectModelForRAM picks the first that fits.
 var ModelCatalog = []CatalogModel{
+	{
+		Name:   "lfm2.5-2.6b",
+		Dir:    "lfm2.5-2.6b-mlx/4bit",
+		HFRepo: "LiquidAI/LFM2.5-2.6B-MLX",
+		MinRAM: 8 * 1024 * 1024 * 1024, // 8GB
+	},
 	{
 		Name:   "gemma4-e2b",
 		Dir:    "gemma-4-e2b-it-4bit",

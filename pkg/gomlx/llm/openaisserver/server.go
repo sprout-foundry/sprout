@@ -42,13 +42,13 @@ type Model interface {
 // chatRequest mirrors the OpenAI chat-completions request body fields sprout
 // sends. Unknown fields are ignored.
 type chatRequest struct {
-	Model       string          `json:"model"`
-	Messages    []chatMessage   `json:"messages"`
-	Stream      bool            `json:"stream"`
-	Temperature *float64        `json:"temperature"`
-	TopP        *float64        `json:"top_p"`
-	MaxTokens   *int            `json:"max_tokens"`
-	Tools       []toolDef       `json:"tools,omitempty"`
+	Model       string        `json:"model"`
+	Messages    []chatMessage `json:"messages"`
+	Stream      bool          `json:"stream"`
+	Temperature *float64      `json:"temperature"`
+	TopP        *float64      `json:"top_p"`
+	MaxTokens   *int          `json:"max_tokens"`
+	Tools       []toolDef     `json:"tools,omitempty"`
 }
 
 type toolDef struct {
@@ -125,9 +125,9 @@ type streamChoice struct {
 }
 
 type streamDelta struct {
-	Role      string            `json:"role,omitempty"`
-	Content   string            `json:"content,omitempty"`
-	ToolCalls []streamToolCall  `json:"tool_calls,omitempty"`
+	Role      string           `json:"role,omitempty"`
+	Content   string           `json:"content,omitempty"`
+	ToolCalls []streamToolCall `json:"tool_calls,omitempty"`
 }
 
 // streamToolCall mirrors OpenAI's streaming tool_call delta. Index is

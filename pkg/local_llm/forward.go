@@ -312,4 +312,3 @@ func (m *Model) swiglu(h *mlx.Array, lw *layerWeights) (*mlx.Array, error) {
 
 	return linearNoBias(gated, lw.downProj, s)
 }
-

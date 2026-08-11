@@ -27,12 +27,12 @@ import (
 //	out = out_proj(rms_norm_gated(y, z))
 type gatedDeltaNet struct {
 	// Projections (shared llm.Linear: full-precision or quantized).
-	inProjQKV *llm.Linear // [hidden, key_dim*2 + value_dim]
-	inProjZ   *llm.Linear // [hidden, value_dim]
-	inProjB   *llm.Linear // [hidden, Hv]
-	inProjA   *llm.Linear // [hidden, Hv]
-	outProj   *llm.Linear // [value_dim, hidden]
-	conv1d    tensor.Array  // [conv_dim, kernel, 1] (groups = conv_dim, depthwise)
+	inProjQKV *llm.Linear  // [hidden, key_dim*2 + value_dim]
+	inProjZ   *llm.Linear  // [hidden, value_dim]
+	inProjB   *llm.Linear  // [hidden, Hv]
+	inProjA   *llm.Linear  // [hidden, Hv]
+	outProj   *llm.Linear  // [value_dim, hidden]
+	conv1d    tensor.Array // [conv_dim, kernel, 1] (groups = conv_dim, depthwise)
 
 	norm tensor.Array // [head_v_dim] — RMSNorm weight for the gated output norm
 
@@ -43,7 +43,7 @@ type gatedDeltaNet struct {
 	valueDim int
 	numK     int // linear_num_key_heads
 	numV     int // linear_num_value_heads
-	headDim      int // linear_key_head_dim
+	headDim  int // linear_key_head_dim
 	headV    int // linear_value_head_dim
 	convDim  int
 	convK    int // linear_conv_kernel_dim
@@ -57,7 +57,7 @@ func newGatedDeltaNet(cfg llm.ModelConfig) *gatedDeltaNet {
 		valueDim: valueDim,
 		numK:     cfg.LinearNumKeyHeads,
 		numV:     cfg.LinearNumValueHeads,
-		headDim:    cfg.LinearKeyHeadDim,
+		headDim:  cfg.LinearKeyHeadDim,
 		headV:    cfg.LinearValueHeadDim,
 		convDim:  keyDim*2 + valueDim,
 		convK:    cfg.LinearConvKernelDim,

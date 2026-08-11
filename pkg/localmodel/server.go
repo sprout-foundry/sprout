@@ -42,13 +42,13 @@ var DefaultModelsDir = func() string {
 
 // ServerStatus describes the state of the local LLM server.
 type ServerStatus struct {
-	Running   bool   `json:"running"`
-	Port      int    `json:"port"`
-	Model     string `json:"model"`
-	Healthy   bool   `json:"healthy"`
-	URL       string `json:"url"`
-	PID       int    `json:"pid,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Running bool   `json:"running"`
+	Port    int    `json:"port"`
+	Model   string `json:"model"`
+	Healthy bool   `json:"healthy"`
+	URL     string `json:"url"`
+	PID     int    `json:"pid,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // HealthCheck pings the server's /health endpoint. Returns nil if the

@@ -21,8 +21,8 @@ func init() {
 // concrete *mlx.Array / *mlx.Stream.
 type MetalBackend struct{}
 
-func (*MetalBackend) Name() string      { return "metal" }
-func (*MetalBackend) Available() bool    { return gpuAvailable }
+func (*MetalBackend) Name() string    { return "metal" }
+func (*MetalBackend) Available() bool { return gpuAvailable }
 
 func (b *MetalBackend) NewGPUStream() (tensor.Stream, error) {
 	s, err := NewGPUStream()

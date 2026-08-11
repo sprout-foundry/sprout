@@ -21,13 +21,13 @@ func init() {
 // no per-layer gating, no KV sharing, no sliding window, no proportional
 // RoPE, no DeltaNet.
 type LFM2 struct {
-	cfg           llm.ModelConfig
-	backend       tensor.Backend
-	stream        tensor.Stream
-	weights       *weights
-	isAttnLayer   []bool
-	headDim       int
-	attnScale     float32
+	cfg         llm.ModelConfig
+	backend     tensor.Backend
+	stream      tensor.Stream
+	weights     *weights
+	isAttnLayer []bool
+	headDim     int
+	attnScale   float32
 }
 
 func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
@@ -53,13 +53,13 @@ func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) 
 	}, nil
 }
 
-func (l *LFM2) Config() llm.ModelConfig  { return l.cfg }
+func (l *LFM2) Config() llm.ModelConfig   { return l.cfg }
 func (l *LFM2) SetStream(s tensor.Stream) { l.stream = s }
 
 type weights struct {
-	embed        *llm.Embedding
+	embed         *llm.Embedding
 	embeddingNorm tensor.Array
-	layers       []layerWeights
+	layers        []layerWeights
 }
 
 type layerWeights struct {
@@ -72,12 +72,12 @@ type layerWeights struct {
 	outProj    *llm.Linear
 
 	// Attention layer weights (nil for conv layers)
-	qProj   *llm.Linear
-	kProj   *llm.Linear
-	vProj   *llm.Linear
-	oProj   *llm.Linear
-	qNorm   tensor.Array // [head_dim]
-	kNorm   tensor.Array // [head_dim]
+	qProj *llm.Linear
+	kProj *llm.Linear
+	vProj *llm.Linear
+	oProj *llm.Linear
+	qNorm tensor.Array // [head_dim]
+	kNorm tensor.Array // [head_dim]
 
 	// FFN weights (all layers)
 	w1 *llm.Linear

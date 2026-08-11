@@ -419,7 +419,13 @@ type Gemma4LayerConfig struct {
 	RMSEps         float32
 }
 
-func b2i(b bool) int  { if b { return 1 } else { return 0 } }
+func b2i(b bool) int {
+	if b {
+		return 1
+	} else {
+		return 0
+	}
+}
 
 // Gemma4KVLayer runs a full decoder layer with its own K/V projections in
 // a single CGO call. Returns (output hidden state, new K cache, new V cache).

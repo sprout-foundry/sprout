@@ -93,3 +93,31 @@ func (c *Config) SetReviewProvider(provider string) {
 func (c *Config) SetReviewModel(model string) {
 	c.ReviewModel = model
 }
+
+// GetCompletionProvider returns the configured provider for code completions.
+// Returns an empty string if no explicit completion provider is set; callers
+// should fall back to the main provider.
+func (c *Config) GetCompletionProvider() string {
+	return c.CompletionProvider
+}
+
+// GetCompletionModel returns the configured model for code completions.
+// If not explicitly set, falls back to the provider's default model.
+func (c *Config) GetCompletionModel() string {
+	if c.CompletionModel != "" {
+		return c.CompletionModel
+	}
+	// Use the provider for completions
+	provider := c.GetCompletionProvider()
+	return c.GetModelForProvider(provider)
+}
+
+// SetCompletionProvider sets the provider for code completions
+func (c *Config) SetCompletionProvider(provider string) {
+	c.CompletionProvider = provider
+}
+
+// SetCompletionModel sets the model for code completions
+func (c *Config) SetCompletionModel(model string) {
+	c.CompletionModel = model
+}

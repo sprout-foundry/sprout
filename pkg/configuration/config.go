@@ -170,6 +170,10 @@ type Config struct {
 	ReviewProvider string `json:"review_provider,omitempty"` // Provider for review commands (defaults to LastUsedProvider)
 	ReviewModel    string `json:"review_model,omitempty"`    // Model for review commands (defaults to provider's default model)
 
+	// Completion Configuration
+	CompletionProvider string `json:"completion_provider,omitempty"` // Provider for code completions (defaults to LastUsedProvider)
+	CompletionModel    string `json:"completion_model,omitempty"`    // Model for code completions (defaults to provider's default model)
+
 	// VisionFallbackToOCR enables transparent fallback to the OCR model when
 	// the primary vision model fails after retries. Default: true.
 	VisionFallbackToOCR bool `json:"vision_fallback_to_ocr,omitempty"`

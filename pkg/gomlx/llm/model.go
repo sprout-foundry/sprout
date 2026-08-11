@@ -224,7 +224,7 @@ func (m *Model) warmupAndPreCache() {
 		log.Printf("llm: enable_compile failed (continuing without): %v", err)
 	}
 
-	s, err := m.backend.NewGPUStream()
+	s, err := m.backend.DefaultGPUStream()
 	if err != nil {
 		log.Printf("llm: warmup skipped (no GPU stream): %v", err)
 		return
@@ -343,7 +343,6 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	if err != nil {
 		return fmt.Errorf("get GPU stream: %w", err)
 	}
-	defer s.Free()
 	m.stream = s
 	m.arch.SetStream(s)
 
@@ -626,6 +625,10 @@ func (m *Model) Close() error {
 		m.prefixCache = nil
 	}
 	m.prefixTokens = nil
+	if m.stream != nil {
+		m.stream.Free()
+		m.stream = nil
+	}
 	m.arch.FreeWeights()
 	return nil
 }

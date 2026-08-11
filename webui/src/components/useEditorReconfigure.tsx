@@ -333,7 +333,6 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     const ext = aiCompletionsEnabled
       ? aiCompletionsExtension(
           () => buffer?.file?.path,
-          () => view.state.doc.toString(),
           resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
             .languageId,
         )

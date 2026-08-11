@@ -35,7 +35,11 @@ type CompletionResult struct {
 }
 
 // GenerateCompletion generates a code completion using chat-formatted FIM.
-func GenerateCompletion(client api.ClientInterface, req CompletionRequest) (*CompletionResult, error) {
+//
+// The caller's context is honored (e.g. r.Context() from an HTTP handler) so
+// that an aborted request cancels the in-flight LLM call; a timeout is layered
+// on top to bound total generation time.
+func GenerateCompletion(ctx context.Context, client api.ClientInterface, req CompletionRequest) (*CompletionResult, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client is required")
 	}
@@ -56,7 +60,7 @@ func GenerateCompletion(client api.ClientInterface, req CompletionRequest) (*Com
 		{Role: "user", Content: buildUserPrompt(req)},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, completionTimeout)
 	defer cancel()
 
 	resp, err := client.SendChatRequest(ctx, messages, nil, "", false)

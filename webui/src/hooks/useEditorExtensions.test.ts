@@ -122,6 +122,10 @@ vi.mock('@codemirror/state', () => ({
     tabSize: { of: (...a) => mockTabSizeOf(...a) },
   },
   Compartment: MockCompartment,
+  Annotation: { define: () => ({}) },
+  Prec: { highest: (...a: unknown[]) => `prec-highest-${a.length}`, lowest: (...a: unknown[]) => `prec-lowest-${a.length}` },
+  StateEffect: { define: <T,>() => ({ of: (v: T) => ({ is: () => false, value: v }) }) },
+  StateField: { define: () => 'mock-statefield' },
 }));
 vi.mock('@codemirror/theme-one-dark', () => ({
   oneDarkHighlightStyle: 'cm-oneDarkHighlightStyle',
@@ -129,7 +133,16 @@ vi.mock('@codemirror/theme-one-dark', () => ({
 vi.mock('@codemirror/view', () => ({
   EditorView: {
     theme: (...a) => mockEditorViewTheme(...a),
+    baseTheme: (...a) => mockEditorViewTheme(...a),
     lineWrapping: 'cm-lineWrapping',
+    decorations: { from: () => 'mock-decorations-from' },
+  },
+  ViewPlugin: { fromClass: (...a: unknown[]) => `mock-viewplugin-${a.length}` },
+  WidgetType: class MockWidgetType {},
+  Decoration: {
+    widget: (...a: unknown[]) => ({ range: (...r: unknown[]) => `mock-decoration-${a.length}-${r.length}` }),
+    set: (...a: unknown[]) => `mock-decoration-set-${a.length}`,
+    none: 'mock-decoration-none',
   },
   keymap: { of: (...a) => mockKeymapOf(...a) },
   lineNumbers: (...a) => mockLineNumbers(...a),
@@ -210,6 +223,9 @@ vi.mock('../extensions/searchPanel', () => ({
 vi.mock('../extensions/signatureHelp', () => ({
   signatureHelpExtension: (...a) => mockSignatureHelpExtension(...a),
 }));
+vi.mock('../extensions/aiCompletions', () => ({
+  aiCompletionsExtension: (...a: unknown[]) => [`mock-aiCompletions-${a.length}`],
+}));
 vi.mock('../extensions/snippets', () => ({
   tabExpandSnippets: (...a) => mockTabExpandSnippets(...a),
 }));
@@ -284,6 +300,7 @@ function buildOpts(opts = {}) {
     whitespaceRenderingMode: 'none',
     inlayHintsEnabled: false,
     signatureHelpEnabled: false,
+  aiCompletionsEnabled: false,
     languageId: 'typescript',
     themePack: { mode: 'dark', editorSyntaxStyle: 'default' },
     customHighlightStyle: null,
@@ -303,6 +320,7 @@ function buildOpts(opts = {}) {
       whitespaceRenderingMode: o.whitespaceRenderingMode,
       inlayHintsEnabled: o.inlayHintsEnabled,
       signatureHelpEnabled: o.signatureHelpEnabled,
+      aiCompletionsEnabled: o.aiCompletionsEnabled,
     },
     theme: { themePack: o.themePack, customHighlightStyle: o.customHighlightStyle },
     buffer: {
@@ -353,9 +371,9 @@ describe('compartment creation', () => {
     expect(compartments.history).toBeDefined();
   });
 
-  it('returns exactly 14 compartment properties', () => {
+  it('returns exactly 15 compartment properties', () => {
     const { compartments } = renderHook();
-    expect(Object.keys(compartments).length).toBe(14);
+    expect(Object.keys(compartments).length).toBe(15);
   });
 
   it('uses createEmmetCompartment and createAutoCloseTagCompartment helpers', () => {

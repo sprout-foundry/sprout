@@ -900,6 +900,7 @@ const baseSettingsForIntegration: CMViewSettings = {
   whitespaceRenderingMode: 'none',
   inlayHintsEnabled: false,
   signatureHelpEnabled: false,
+  aiCompletionsEnabled: false,
 };
 
 function renderCursorIntegrationHarness(opts: {

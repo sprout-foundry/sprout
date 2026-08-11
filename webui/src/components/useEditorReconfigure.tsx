@@ -18,6 +18,7 @@ import type { Compartment, Extension } from '@codemirror/state';
 import { EditorView as CMEditorView, lineNumbers } from '@codemirror/view';
 import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
 import { useEffect, useRef } from 'react';
+import { aiCompletionsExtension } from '../extensions/aiCompletions';
 import { inlayHintsExtension } from '../extensions/inlayHints';
 import { resolveLanguageId, getLanguageExtensions } from '../extensions/languageRegistry';
 import { buildLSPPluginExtensions } from '../extensions/lspExtensions';
@@ -49,6 +50,7 @@ export interface UseEditorReconfigureOptions {
     relativeLineNumbers: Compartment;
     inlayHints: Compartment;
     signatureHelp: Compartment;
+    aiCompletions: Compartment;
   };
   hotkeys: unknown;
   keymapsRef: React.MutableRefObject<{ customKeymap: Extension } | null>;
@@ -61,6 +63,7 @@ export interface UseEditorReconfigureOptions {
   whitespaceRenderingMode: WhitespaceRenderingMode;
   inlayHintsEnabled: boolean;
   signatureHelpEnabled: boolean;
+  aiCompletionsEnabled: boolean;
 }
 
 /**
@@ -85,6 +88,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     whitespaceRenderingMode,
     inlayHintsEnabled,
     signatureHelpEnabled,
+    aiCompletionsEnabled,
   } = options;
 
   // ---------------------------------------------------------------------------
@@ -311,6 +315,35 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     });
   }, [
     signatureHelpEnabled,
+    buffer?.id,
+    buffer?.file?.path,
+    buffer?.languageOverride,
+    buffer?.file?.ext,
+    buffer?.file?.name,
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // AI completions compartment sync
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const ext = aiCompletionsEnabled
+      ? aiCompletionsExtension(
+          () => buffer?.file?.path,
+          () => view.state.doc.toString(),
+          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
+            .languageId,
+        )
+      : [];
+
+    view.dispatch({
+      effects: compartments.aiCompletions.reconfigure(ext),
+    });
+  }, [
+    aiCompletionsEnabled,
     buffer?.id,
     buffer?.file?.path,
     buffer?.languageOverride,

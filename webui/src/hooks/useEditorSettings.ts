@@ -59,6 +59,7 @@ export interface UseEditorSettingsReturn {
   lineEnding: LineEnding;
   inlayHintsEnabled: boolean;
   signatureHelpEnabled: boolean;
+  aiCompletionsEnabled: boolean;
 
   // Ref mirrors
   wordWrapRef: React.MutableRefObject<boolean>;
@@ -68,6 +69,7 @@ export interface UseEditorSettingsReturn {
   indentManuallySetRef: React.MutableRefObject<boolean>;
   inlayHintsEnabledRef: React.MutableRefObject<boolean>;
   signatureHelpEnabledRef: React.MutableRefObject<boolean>;
+  aiCompletionsEnabledRef: React.MutableRefObject<boolean>;
 
   // Setters for external use (e.g., file loading, buffer changes)
   setEditorTabSize: (v: number) => void;
@@ -86,6 +88,7 @@ export interface UseEditorSettingsReturn {
   onCycleWhitespaceRendering: () => WhitespaceRenderingMode;
   onToggleInlayHints: () => void;
   onToggleSignatureHelp: () => void;
+  onToggleAiCompletions: () => void;
 }
 
 export interface EditorSettingsCompartments {
@@ -229,6 +232,7 @@ export function useEditorSettings(
   const relativeLineNumbers = useBooleanSetting('editor:relative-line-numbers-enabled', false);
   const inlayHints = useBooleanSetting('editor:inlay-hints-enabled', true);
   const signatureHelp = useBooleanSetting('editor:signature-help-enabled', true);
+  const aiCompletions = useBooleanSetting('editor:ai-completions-enabled', true);
 
   // Re-export under the historical names so callers don't need to change.
   const wordWrapEnabled = wordWrap.value;
@@ -241,6 +245,8 @@ export function useEditorSettings(
   const inlayHintsEnabledRef = inlayHints.ref;
   const signatureHelpEnabled = signatureHelp.value;
   const signatureHelpEnabledRef = signatureHelp.ref;
+  const aiCompletionsEnabled = aiCompletions.value;
+  const aiCompletionsEnabledRef = aiCompletions.ref;
 
   const [editorFontSize, setEditorFontSize] = useState<number>(getStoredFontSize);
 
@@ -404,6 +410,7 @@ export function useEditorSettings(
 
   const onToggleInlayHints = inlayHints.toggle;
   const onToggleSignatureHelp = signatureHelp.toggle;
+  const onToggleAiCompletions = aiCompletions.toggle;
 
   return {
     // State
@@ -418,6 +425,7 @@ export function useEditorSettings(
     lineEnding,
     inlayHintsEnabled,
     signatureHelpEnabled,
+    aiCompletionsEnabled,
 
     // Ref mirrors
     wordWrapRef,
@@ -427,6 +435,7 @@ export function useEditorSettings(
     indentManuallySetRef,
     inlayHintsEnabledRef,
     signatureHelpEnabledRef,
+    aiCompletionsEnabledRef,
 
     // Setters
     setEditorTabSize,
@@ -445,5 +454,6 @@ export function useEditorSettings(
     onCycleWhitespaceRendering,
     onToggleInlayHints,
     onToggleSignatureHelp,
+    onToggleAiCompletions,
   };
 }

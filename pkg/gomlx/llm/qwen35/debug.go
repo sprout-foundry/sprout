@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 package qwen35
 

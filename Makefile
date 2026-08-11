@@ -245,11 +245,8 @@ test-coverage: prepare-grammars
 	echo "Coverage check passed: $${total_coverage}% >= $${min_coverage}%"'
 
 # Build sprout binary
-# On Apple Silicon, includes the mlx tag for in-process local LLM support.
+# MLX is now auto-included on Darwin-arm64 via build constraints (no tag needed).
 BUILD_TAGS := grammar_blobs_external
-ifeq ($(shell uname -s)-$(shell uname -m), Darwin-arm64)
-	BUILD_TAGS := grammar_blobs_external,mlx
-endif
 
 build: prepare-grammars
 	@echo "Building sprout (tags: $(BUILD_TAGS))..."

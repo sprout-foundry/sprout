@@ -46,6 +46,7 @@ export interface UseEditorEventsOptions {
   onGoToWorkspaceSymbol?: () => void;
   onToggleInlayHints?: () => void;
   onToggleSignatureHelp?: () => void;
+  onToggleAiCompletions?: () => void;
   onCycleTabSize?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -185,6 +186,8 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         optionsRef.current.onToggleInlayHints?.();
       } else if (e.type === 'editor-toggle-signature-help') {
         optionsRef.current.onToggleSignatureHelp?.();
+      } else if (e.type === 'editor-toggle-ai-completions') {
+        optionsRef.current.onToggleAiCompletions?.();
       } else if (e.type === 'editor-cycle-tab-size') {
         optionsRef.current.onCycleTabSize?.();
       } else if (e.type === 'editor-zoom-in') {

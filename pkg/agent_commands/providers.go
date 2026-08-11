@@ -12,6 +12,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
@@ -263,6 +264,11 @@ func (p *ProvidersCommand) isProviderReady(configManager *configuration.Manager,
 		return true
 	}
 
+	// Local providers that don't need API keys or cloud credentials.
+	if provider == api.SproutLocalClientType {
+		return true
+	}
+
 	// Built-in providers that are available without API keys
 	if api.IsProviderAvailable(provider) {
 		return true
@@ -409,6 +415,13 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 
 	console.GlyphSuccess.Printf("Provider switched to: %s", getProviderDisplayName(provider))
 	console.GlyphInfo.Printf("Using model: %s", model)
+
+	// For local providers, proactively start the LLM server in the background
+	// so the first chat request doesn't hit a connection-refused error.
+	if provider == api.SproutLocalClientType {
+		console.GlyphDim.Print("Starting local model server...")
+	}
+
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
 		fmt.Println()
 		console.GlyphInfo.Print(note)
@@ -492,6 +505,19 @@ func getProviderDisplayName(provider api.ClientType) string {
 	case api.TestClientType:
 		return "Test (CI/Mock)"
 	default:
+		// Known generated providers get their display name from the provider
+		// registry, which has "Local (Offline)" for sprout-local and others.
+		if displayName, ok := providerDisplayNameFromRegistry(provider); ok {
+			return displayName
+		}
 		return string(provider)
 	}
+}
+
+// providerDisplayNameFromRegistry looks up a provider's display name from
+// the agent_providers package's generated display-name map.
+func providerDisplayNameFromRegistry(provider api.ClientType) (string, bool) {
+	names := providers.ProviderDisplayNames()
+	name, ok := names[string(provider)]
+	return name, ok
 }

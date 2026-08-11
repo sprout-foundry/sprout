@@ -283,7 +283,6 @@ func (a *Agent) SetSessionName(name string) {
 			return
 		}
 	}
-	a.shiftTurnCheckpoints(1)
 	a.state.AddMessage(api.Message{Role: "system", Content: pattern + name})
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"strings"
@@ -61,6 +62,20 @@ func (a *Agent) getNativeModelContextLimit() int {
 		return 32000
 	}
 	return limit
+}
+
+// refreshEffectiveContextCap recomputes the agent's effective context cap
+// from the current client and config. Call this after any provider/model switch
+// so that OnIteration clamping, compaction triggers, and the UI footer all
+// see the correct value.
+func (a *Agent) refreshEffectiveContextCap() {
+	cfg := a.configManager.GetConfig()
+	nativeWindow := a.getNativeModelContextLimit()
+	cap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
+	if capErr != nil {
+		a.Logger().Debug("[context-cap] refresh failed (user cap below minimum): %v; falling back to native window", capErr)
+	}
+	a.effectiveContextCap = cap
 }
 
 // getModelContextLimit returns the maximum context window for a model from the API,

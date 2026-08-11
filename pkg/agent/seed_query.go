@@ -310,6 +310,7 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// before emitting any user-visible text. computeCompactionTriggerFraction subtracts the
 	// reservation fractions so substitution fires earlier — by default at 0.70 instead of 0.85.
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
+	opts.SubstitutionTargetFraction = 0.50
 
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
@@ -328,9 +329,16 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
 
-		// Re-apply the effective context cap as a defensive measure.
-		if cap := a.effectiveContextCap; cap > 0 && (contextSize == 0 || contextSize > cap) {
+		// SP-126: clamp to the effective cap (user MaxContextTokens or native window).
+		// After a model switch, effectiveContextCap is refreshed by
+		// refreshEffectiveContextCap() so this uses the current model's cap.
+		if cap := a.effectiveContextCap; cap > 0 && contextSize > cap {
 			contextSize = cap
+		}
+		// When the provider reports no context info (contextSize == 0),
+		// fall back to the effective cap if we have one.
+		if contextSize == 0 {
+			contextSize = a.effectiveContextCap
 		}
 		a.state.SetMaxContextTokens(contextSize)
 
@@ -596,7 +604,7 @@ func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIn
 		return
 	}
 
-	a.RecordTurnCheckpointAsync(queryStartIndex, endIndex)
+	a.RecordTurnCheckpoint(queryStartIndex, endIndex)
 }
 
 // syncSeedStateToSprout merges seed's state back into sprout's state manager.

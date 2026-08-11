@@ -291,17 +291,10 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 		g.backend.RetainArray(vT2)
 
 		// Cache update:
-		// - Decode (seqLen==1, cache initialized): AppendFast into pre-allocated buffer
-		// - Delta prefill (seqLen>1, cache initialized via RestorePrefix): Append (concat)
-		// - Initial prefill (seqLen>1, cache NOT initialized): Store
-		if cache != nil && cache.IsInitialized(layerIdx) && seqLen == 1 {
-			kf, vf, err := cache.AppendFast(layerIdx, kRot, vT2, startPos)
-			if err != nil {
-				return nil, nil, fmt.Errorf("append_fast: %w", err)
-			}
-			kForAttn = kf
-			vForAttn = vf
-		} else if cache != nil && cache.IsInitialized(layerIdx) {
+		// - Initialized + any seqLen: Append (concat) — handles both
+		//   single-token decode and multi-token delta prefill
+		// - Not initialized: Store (first prefill)
+		if cache != nil && cache.IsInitialized(layerIdx) {
 			if err := cache.Append(layerIdx, kRot, vT2); err != nil {
 				return nil, nil, fmt.Errorf("cache append: %w", err)
 			}

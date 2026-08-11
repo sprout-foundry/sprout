@@ -221,6 +221,11 @@ func LoadConfig(path string) (ModelConfig, error) {
 				}
 			}
 		}
+	case "lfm2":
+		cfg.WeightPrefix = "model."
+		if len(cfg.LayerTypes) > 0 && cfg.NumLayers > 0 {
+			// LayerTypes already loaded from config; no override needed
+		}
 	default:
 		cfg.WeightPrefix = "model."
 	}

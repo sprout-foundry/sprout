@@ -25,7 +25,7 @@ type CatalogModel struct {
 var ModelCatalog = []CatalogModel{
 	{
 		Name:   "lfm2.5-2.6b",
-		Dir:    "lfm2.5-2.6b-mlx/4bit",
+		Dir:    "lfm2.5-2.6b-mlx/5bit",
 		HFRepo: "LiquidAI/LFM2.5-2.6B-MLX",
 		MinRAM: 8 * 1024 * 1024 * 1024, // 8GB
 	},

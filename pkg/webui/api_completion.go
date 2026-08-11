@@ -84,7 +84,7 @@ func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	result, err := codecompletion.GenerateCompletion(client, codecompletion.CompletionRequest{
+	result, err := codecompletion.GenerateCompletion(r.Context(), client, codecompletion.CompletionRequest{
 		Prefix:    req.Prefix,
 		Suffix:    req.Suffix,
 		Language:  req.Language,

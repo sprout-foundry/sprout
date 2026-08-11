@@ -23,7 +23,6 @@
 import { Annotation, Prec, StateEffect, StateField, type Extension } from '@codemirror/state';
 import {
   Decoration,
-  type DecorationSet,
   EditorView,
   ViewPlugin,
   type ViewUpdate,
@@ -90,10 +89,18 @@ const aiCompletionState = StateField.define<AiCompletionSuggestion | null>({
     return value;
   },
   provide: (field) =>
-    EditorView.decorations.from(
-      field,
-      (suggestion) => (view) => (suggestion ? decorationsFromSuggestion(suggestion, view) : Decoration.none),
-    ),
+    EditorView.decorations.from(field, (suggestion) => {
+      if (!suggestion) return Decoration.none;
+      // The position is already clamped to the document when the suggestion is
+      // installed in fetchCompletion; CM6 also clamps widget positions past
+      // the document end, so no view is needed here.
+      const widget = Decoration.widget({
+        widget: new GhostTextWidget(suggestion.text),
+        block: false, // inline ghost text, not a block widget
+        side: 1, // render after the cursor
+      });
+      return Decoration.set([widget.range(suggestion.pos)]);
+    }),
 });
 
 // ── Widget ─────────────────────────────────────────────────────────
@@ -125,17 +132,6 @@ class GhostTextWidget extends WidgetType {
   }
 }
 
-/** Convert the active suggestion into a single inline widget decoration. */
-function decorationsFromSuggestion(suggestion: AiCompletionSuggestion, view: EditorView): DecorationSet {
-  const pos = Math.min(suggestion.pos, view.state.doc.length);
-  const widget = Decoration.widget({
-    widget: new GhostTextWidget(suggestion.text),
-    block: false, // inline ghost text, not a block widget
-    side: 1, // render after the cursor
-  });
-  return Decoration.set([widget.range(pos)]);
-}
-
 // ── Suppression helpers ──────────────────────────────────────────────
 
 /** True when we should not fetch a completion for this prefix. */
@@ -157,22 +153,15 @@ function shouldSuppress(prefix: string): boolean {
 class AICompletionsPlugin {
   private view: EditorView | null;
   private readonly getFilePath: () => string | undefined;
-  private readonly getContent: () => string;
   private readonly languageId: string | undefined;
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
   private abortController: AbortController | null = null;
   private generation = 0;
   private destroyed = false;
 
-  constructor(
-    view: EditorView,
-    getFilePath: () => string | undefined,
-    getContent: () => string,
-    languageId: string | undefined,
-  ) {
+  constructor(view: EditorView, getFilePath: () => string | undefined, languageId: string | undefined) {
     this.view = view;
     this.getFilePath = getFilePath;
-    this.getContent = getContent;
     this.languageId = languageId;
     // Offer a completion shortly after the editor opens (guards in
     // `shouldSuppress` keep this quiet for empty/new files).
@@ -298,10 +287,15 @@ function acceptCompletion(view: EditorView): boolean {
   // usually accepting the popup's selected item, not the ghost text.
   if (view.dom.querySelector('.cm-tooltip-autocomplete')) return false;
 
-  const pos = Math.min(suggestion.pos, view.state.doc.length);
+  // Only accept if the cursor is still at the suggestion position. The
+  // StateField normally clears itself on selection changes, but this guard
+  // covers any edge case where the cursor moved without the field clearing.
+  const currentPos = view.state.selection.main.head;
+  if (currentPos !== suggestion.pos) return false;
+
   view.dispatch({
-    changes: { from: pos, insert: suggestion.text },
-    selection: { anchor: pos + suggestion.text.length },
+    changes: { from: suggestion.pos, insert: suggestion.text },
+    selection: { anchor: suggestion.pos + suggestion.text.length },
     effects: clearAiCompletion.of(null),
     scrollIntoView: true,
     userEvent: 'input.complete',
@@ -348,13 +342,11 @@ const aiCompletionsTheme = EditorView.baseTheme({
  * Creates a CodeMirror 6 extension for AI ghost-text completions.
  *
  * @param getFilePath - A getter function that returns the current file path.
- * @param getContent - A getter function that returns the current document content.
  * @param languageId - The language identifier (e.g., "go", "typescript").
  * @returns Extension bundle containing theme, state, keymap, and ViewPlugin.
  */
 export function aiCompletionsExtension(
   getFilePath: () => string | undefined,
-  getContent: () => string,
   languageId: string | null | undefined,
 ): Extension[] {
   return [
@@ -371,7 +363,7 @@ export function aiCompletionsExtension(
     ViewPlugin.fromClass(
       class extends AICompletionsPlugin {
         constructor(view: EditorView) {
-          super(view, getFilePath, getContent, languageId ?? undefined);
+          super(view, getFilePath, languageId ?? undefined);
         }
       },
     ),

@@ -5501,6 +5501,50 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 131072,
+        "description": "Muse Glimmer 30B is a dense, open-weight multimodal model from Meta Superintelligence Labs, distilled from Muse Spark and optimized for autonomous agents on consumer hardware. It is suited for long-horizon agentic and coding workflows, with multi-step reasoning, reliable tool use, failure recovery, image understanding, and multilingual support across more than 100 languages.",
+        "id": "meta/muse-glimmer-30b",
+        "input_cost": 0.35,
+        "name": "Meta: Muse Glimmer 30B",
+        "output_cost": 1.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 262144,
+        "description": "Sakana Namazu is a Japanese-specialized reasoning model from Sakana AI, based on Kimi K2.6 with additional training for Japanese language and business contexts. It is suited for Japanese instruction following, business writing, mathematics, coding, research, and multi-step agent workflows.",
+        "id": "sakana/sakana-namazu",
+        "input_cost": 0.95,
+        "name": "Sakana: Sakana Namazu",
+        "output_cost": 4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.006,
+        "context_length": 524288,
+        "description": "Solar Pro 4 is a large language model from Upstage. It is suited for agentic workflows, office productivity, document-intensive work, and coding.",
+        "id": "upstage/solar-pro4",
+        "input_cost": 0.03,
+        "name": "Upstage: Solar Pro 4",
+        "output_cost": 0.12,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

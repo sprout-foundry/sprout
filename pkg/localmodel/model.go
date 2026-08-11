@@ -2,6 +2,7 @@ package localmodel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,15 +15,16 @@ import (
 // ModelStatus describes a model from the user's perspective — either a
 // downloadable catalog entry or an installed model discovered on disk.
 type ModelStatus struct {
-	Name      string `json:"name"`
-	Dir       string `json:"dir"`
-	HFRepo    string `json:"hf_repo"`
-	MinRAM    uint64 `json:"min_ram_gb"`
-	Installed bool   `json:"installed"`
-	Size      int64  `json:"size_bytes"`
-	IsTuned   bool   `json:"is_tuned"`
-	ParamSize string `json:"param_size"`
-	QuantBits string `json:"quant_bits"`
+	Name          string `json:"name"`
+	Dir           string `json:"dir"`
+	HFRepo        string `json:"hf_repo"`
+	MinRAM        uint64 `json:"min_ram_gb"`
+	Installed     bool   `json:"installed"`
+	Size          int64  `json:"size_bytes"`
+	IsTuned       bool   `json:"is_tuned"`
+	ParamSize     string `json:"param_size"`
+	QuantBits     string `json:"quant_bits"`
+	ServerBackend string `json:"server_backend,omitempty"`
 }
 
 // ProgressCallback is called during model download with bytes downloaded
@@ -63,12 +65,13 @@ func ListModels() []ModelStatus {
 			installedOnDisk = hasModelWeights(dir)
 		}
 		statuses = append(statuses, ModelStatus{
-			Name:      m.Name,
-			Dir:       dir,
-			HFRepo:    m.HFRepo,
-			MinRAM:    m.MinRAM / (1024 * 1024 * 1024),
-			Installed: installedOnDisk,
-			ParamSize: llm.ExtractParamSize(m.Name),
+			Name:          m.Name,
+			Dir:           dir,
+			HFRepo:        m.HFRepo,
+			MinRAM:        m.MinRAM / (1024 * 1024 * 1024),
+			Installed:     installedOnDisk,
+			ParamSize:     llm.ExtractParamSize(m.Name),
+			ServerBackend: m.ServerBackend,
 		})
 		seen[m.Name] = true
 	}
@@ -148,7 +151,54 @@ func EnsureModel(ctx context.Context, status ModelStatus, progressFn ProgressCal
 		return "", fmt.Errorf("download failed: %w", err)
 	}
 
+	patchTokenizerConfig(dest)
+
 	return dest, nil
+}
+
+// patchTokenizerConfig patches tokenizer_config.json for models whose chat
+// template tool-call format isn't auto-detected by mlx_lm's inference logic.
+// Currently handles LFM2 models (need tool_parser_type=pythonic).
+func patchTokenizerConfig(modelDir string) {
+	configPath := filepath.Join(modelDir, "config.json")
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return
+	}
+
+	var cfg struct {
+		ModelType string `json:"model_type"`
+	}
+	if json.Unmarshal(configData, &cfg) != nil {
+		return
+	}
+
+	var toolParser string
+	switch cfg.ModelType {
+	case "lfm2":
+		toolParser = "pythonic"
+	default:
+		return
+	}
+
+	tokPath := filepath.Join(modelDir, "tokenizer_config.json")
+	tokData, err := os.ReadFile(tokPath)
+	if err != nil {
+		return
+	}
+	var tokConfig map[string]interface{}
+	if json.Unmarshal(tokData, &tokConfig) != nil {
+		return
+	}
+	if existing, ok := tokConfig["tool_parser_type"].(string); ok && existing == toolParser {
+		return
+	}
+	tokConfig["tool_parser_type"] = toolParser
+	patched, err := json.MarshalIndent(tokConfig, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(tokPath, patched, 0o644)
 }
 
 func parseDownloadProgress(r interface{ Read([]byte) (int, error) }, fn ProgressCallback) {

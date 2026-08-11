@@ -18,6 +18,7 @@ type ModelStatus struct {
 	Name          string `json:"name"`
 	Dir           string `json:"dir"`
 	HFRepo        string `json:"hf_repo"`
+	HFInclude     string `json:"hf_include,omitempty"`
 	MinRAM        uint64 `json:"min_ram_gb"`
 	Installed     bool   `json:"installed"`
 	Size          int64  `json:"size_bytes"`
@@ -68,6 +69,7 @@ func ListModels() []ModelStatus {
 			Name:          m.Name,
 			Dir:           dir,
 			HFRepo:        m.HFRepo,
+			HFInclude:     m.HFInclude,
 			MinRAM:        m.MinRAM / (1024 * 1024 * 1024),
 			Installed:     installedOnDisk,
 			ParamSize:     llm.ExtractParamSize(m.Name),
@@ -130,7 +132,19 @@ func EnsureModel(ctx context.Context, status ModelStatus, progressFn ProgressCal
 		return "", fmt.Errorf("create models dir: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, bin, "download", status.HFRepo, "--local-dir", dest)
+	// When HFInclude is set, files are downloaded with their repo path
+	// prefix preserved. Download to the parent of dest so the include
+	// subdir lands correctly under dest.
+	localDir := dest
+	if status.HFInclude != "" {
+		localDir = filepath.Dir(dest)
+	}
+	args := []string{"download", status.HFRepo}
+	if status.HFInclude != "" {
+		args = append(args, "--include", status.HFInclude)
+	}
+	args = append(args, "--local-dir", localDir)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return "", fmt.Errorf("pipe stderr: %w", err)

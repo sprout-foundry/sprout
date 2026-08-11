@@ -157,14 +157,43 @@ func loadQuantizedTriplet(sf *SafetensorsFile, name string, b tensor.Backend, s 
 			return nil, err
 		}
 	}
+
+	// Infer actual packed bits from weight/scales shape ratio. MLX models
+	// may mix packing widths (e.g. 5-bit config but embedding stored as
+	// 6-bit). MLX ops validate bits against the shape, so we must pass the
+	// correct value, not the config's nominal bits.
+	bits := inferQuantBits(w.Shape(), scales.Shape(), quant.GroupSize, quant.Bits)
+
 	return &Linear{
 		qW:         w,
 		qScales:    scales,
 		qBiases:    biases,
 		qGroupSize: quant.GroupSize,
-		qBits:      quant.Bits,
+		qBits:      bits,
 		qMode:      quant.Mode,
 	}, nil
+}
+
+// inferQuantBits derives the actual packed bits from the weight and scales
+// shapes. MLX stores quantized weights as uint32 with packed_dim =
+// in_dim * bits / 32. When the config's nominal bits doesn't match the
+// actual packing (common with 5-bit models where the embedding uses 6-bit
+// packing), use the shape-derived value.
+func inferQuantBits(weightShape, scalesShape []int, groupSize, configBits int) int {
+	if len(weightShape) < 2 || len(scalesShape) < 2 || groupSize == 0 {
+		return configBits
+	}
+	packedDim := weightShape[1]
+	numGroups := scalesShape[1]
+	inDim := numGroups * groupSize
+	if inDim == 0 {
+		return configBits
+	}
+	shapeBits := packedDim * 32 / inDim
+	if shapeBits <= 0 {
+		return configBits
+	}
+	return shapeBits
 }
 
 // quantizeLinear runs MLX quantization on a full-precision weight and

@@ -13,20 +13,22 @@ import (
 // HuggingFace repo to download it from; MinRAM is the minimum physical RAM
 // (bytes) at which the model is the recommended choice.
 type CatalogModel struct {
-	Name   string // canonical name (e.g. "qwen3.5-4b")
-	Dir    string // directory name under the models root
-	HFRepo string // HuggingFace repo (mlx-community layout)
-	MinRAM uint64 // minimum total RAM (bytes) for this to be the pick
+	Name          string // canonical name (e.g. "qwen3.5-4b")
+	Dir           string // directory name under the models root
+	HFRepo        string // HuggingFace repo (mlx-community layout)
+	MinRAM        uint64 // minimum total RAM (bytes) for this to be the pick
+	ServerBackend string // "gomlx" (Go native) or "mlx_lm" (Python mlx_lm.server); empty defaults to "gomlx"
 }
 
 // ModelCatalog lists downloadable models, ordered from largest to smallest
 // by recommended RAM. SelectModelForRAM picks the first that fits.
 var ModelCatalog = []CatalogModel{
 	{
-		Name:   "lfm2.5-2.6b",
-		Dir:    "lfm2.5-2.6b-mlx/4bit",
-		HFRepo: "LiquidAI/LFM2.5-2.6B-MLX",
-		MinRAM: 8 * 1024 * 1024 * 1024, // 8GB
+		Name:          "lfm2.5-2.6b",
+		Dir:           "lfm2.5-2.6b-mlx/4bit",
+		HFRepo:        "LiquidAI/LFM2.5-2.6B-MLX",
+		MinRAM:        8 * 1024 * 1024 * 1024, // 8GB
+		ServerBackend: "mlx_lm",
 	},
 	{
 		Name:   "gemma4-e2b",

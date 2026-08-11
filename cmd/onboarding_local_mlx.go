@@ -134,7 +134,7 @@ func onboardingLocal() (string, bool) {
 	srvCtx, srvCancel := context.WithTimeout(ctx, 60*time.Second)
 	defer srvCancel()
 
-	_, err = localmodel.EnsureServer(srvCtx, localmodel.DefaultPort, selected.Dir)
+	_, err = localmodel.EnsureServerWithBackend(srvCtx, localmodel.DefaultPort, selected.Dir, selected.ServerBackend)
 	if err != nil {
 		console.GlyphWarning.Printf("Could not start local server: %v", err)
 		console.GlyphInfo.Printf("You can start it manually: llm_server -model %s", selected.Dir)
@@ -174,6 +174,7 @@ func getLocalModelPath() string {
 
 func ensureLocalServerRunning() error {
 	modelPath := getLocalModelPath()
+	backend := ""
 	if modelPath == "" {
 		ram := mlx.TotalSystemRAM()
 		picked, err := llm.SelectModelForRAM(localmodel.DefaultModelsDir, ram)
@@ -181,12 +182,13 @@ func ensureLocalServerRunning() error {
 			return fmt.Errorf("no local model available — run onboarding first")
 		}
 		modelPath = picked.Dir
+		backend = picked.ServerBackend
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	return localmodel.EnsureServerHealth(ctx, modelPath)
+	return localmodel.EnsureServerHealthWithBackend(ctx, modelPath, backend)
 }
 
 func localProgressBar(pct, width int) string {

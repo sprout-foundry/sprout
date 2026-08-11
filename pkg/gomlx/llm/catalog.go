@@ -24,11 +24,10 @@ type CatalogModel struct {
 // by recommended RAM. SelectModelForRAM picks the first that fits.
 var ModelCatalog = []CatalogModel{
 	{
-		Name:          "lfm2.5-2.6b",
-		Dir:           "lfm2.5-2.6b-mlx/4bit",
-		HFRepo:        "LiquidAI/LFM2.5-2.6B-MLX",
-		MinRAM:        8 * 1024 * 1024 * 1024, // 8GB
-		ServerBackend: "mlx_lm",
+		Name:   "lfm2.5-2.6b",
+		Dir:    "lfm2.5-2.6b-mlx/4bit",
+		HFRepo: "LiquidAI/LFM2.5-2.6B-MLX",
+		MinRAM: 8 * 1024 * 1024 * 1024, // 8GB
 	},
 	{
 		Name:   "gemma4-e2b",

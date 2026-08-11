@@ -49,8 +49,19 @@ func (e *Embedding) EmbeddingShape() int {
 // ids is typically [1, seqLen]. For quantized embeddings it gathers the
 // packed + scale + bias rows and dequantizes them (matches mlx-lm's
 // QuantizedEmbedding.__call__: mx.dequantize(weight[x], scales[x], biases[x])).
+//
+// For non-standard bit widths (e.g. 5-bit) where MLX's dequantize rejects
+// the gathered rows, we dequantize the full table at load time instead
+// (see LoadEmbedding's fallback path).
 func (e *Embedding) Lookup(ids tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	if e.qW == nil {
+		// Full precision path (also used when 5-bit embedding was
+		// pre-dequantized at load time).
+		if e.w != nil {
+			return b.GatherAxis(e.w, ids, 0, []int{1, e.w.Shape()[1]}, s)
+		}
+	}
+	if e.w != nil {
 		return b.GatherAxis(e.w, ids, 0, []int{1, e.w.Shape()[1]}, s)
 	}
 
@@ -130,13 +141,34 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 				return nil, fmt.Errorf("embedding %s.biases: %w", base, err)
 			}
 		}
+
+		// For bit widths where MLX's per-row dequantize fails (e.g. 5-bit
+		// affine), dequantize the full embedding table now via
+		// QuantizedMatMul with an identity matrix. This trades memory
+		// for a working embedding lookup. The logits path still uses the
+		// quantized weights via QuantizedMatMul for speed.
+		actualBits := inferQuantBits(w.Shape(), scales.Shape(), quant.GroupSize, quant.Bits)
+		var fullPrecW tensor.Array
+		if actualBits != 2 && actualBits != 3 && actualBits != 4 && actualBits != 6 && actualBits != 8 {
+			fullPrecW, err = dequantizeFullTable(w, scales, biases, actualBits, quant.GroupSize, quant.Mode, b, s)
+			if err != nil {
+				w.Free()
+				scales.Free()
+				if biases != nil {
+					biases.Free()
+				}
+				return nil, fmt.Errorf("embedding %s full dequantize: %w", base, err)
+			}
+		}
+
 		return &Embedding{
 			qW:         w,
 			qScales:    scales,
 			qBiases:    biases,
 			qGroupSize: quant.GroupSize,
-			qBits:      quant.Bits,
+			qBits:      actualBits,
 			qMode:      quant.Mode,
+			w:          fullPrecW,
 		}, nil
 	}
 
@@ -188,4 +220,73 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 		return nil, fmt.Errorf("eval embedding %s: %w", name, err)
 	}
 	return &Embedding{w: w, wT: wT}, nil
+}
+
+// dequantizeFullTable dequantizes the entire embedding table using
+// QuantizedMatMul. Since QuantizedMatMul fuses the dequantize step
+// internally (unlike the standalone Dequantize op which rejects certain
+// bit widths), we multiply with a [1, vocab] one-hot-like identity to
+// extract the full table. In practice we just call Dequantize on the full
+// table — MLX's shape check passes when scales/biases match the full matrix
+// rather than gathered slices. If that still fails, we use the quantized
+// matmul path with a proper identity matrix.
+func dequantizeFullTable(w, scales, biases tensor.Array, bits, groupSize int, mode string, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
+	// Try full-table Dequantize first (cheapest).
+	if biases != nil {
+		out, err := b.Dequantize(w, scales, biases, groupSize, bits, mode, s)
+		if err == nil {
+			if err := out.Eval(); err == nil {
+				return out, nil
+			}
+			out.Free()
+		}
+	}
+
+	// Fall back: QuantizedMatMul with identity. w is [vocab, packed_hidden],
+	// transpose=true means the matmul does x @ dequant(w)^T. We want
+	// dequant(w) directly. With transpose=true and x=I[hidden,hidden],
+	// result = I @ dequant(w)^T = dequant(w)^T. We'd then transpose back.
+	// Instead, use transpose=false and craft x = I[vocab,vocab]... but that's
+	// huge. Better: just dequantize via the matmul with x being all token IDs
+	// — but that's the embedding lookup itself.
+	//
+	// Simplest working approach: create identity [hidden, hidden] and use
+	// transpose=true to get dequant(w)^T, then transpose back.
+	hidden := scales.Shape()[1] * groupSize
+	vocab := w.Shape()[0]
+	_ = vocab
+
+	eyeData := make([]float32, hidden*hidden)
+	for i := 0; i < hidden; i++ {
+		eyeData[i*hidden+i] = 1.0
+	}
+	eye, err := b.NewArrayFromFloat32(eyeData, []int{1, hidden, hidden})
+	if err != nil {
+		return nil, fmt.Errorf("create identity: %w", err)
+	}
+	defer eye.Free()
+
+	// w^T dequantized via matmul: result = [1, hidden, vocab]
+	dqT, err := b.QuantizedMatMul(eye, w, scales, biases, true, groupSize, bits, mode, s)
+	if err != nil {
+		return nil, fmt.Errorf("quantized matmul dequantize: %w", err)
+	}
+	if err := dqT.Eval(); err != nil {
+		dqT.Free()
+		return nil, fmt.Errorf("eval dequantized: %w", err)
+	}
+
+	// Transpose [1, hidden, vocab] → [vocab, hidden] (drop batch dim)
+	result, err := b.TransposeAxes(dqT, []int{2, 0, 1}, s)
+	if err != nil {
+		dqT.Free()
+		return nil, fmt.Errorf("transpose dequantized: %w", err)
+	}
+	dqT.Free()
+	// Reshape to [vocab, hidden]
+	result, err = b.Reshape(result, []int{vocab, hidden}, s)
+	if err != nil {
+		return nil, fmt.Errorf("reshape dequantized: %w", err)
+	}
+	return result, nil
 }

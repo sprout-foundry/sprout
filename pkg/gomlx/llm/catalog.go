@@ -16,6 +16,7 @@ type CatalogModel struct {
 	Name          string // canonical name (e.g. "qwen3.5-4b")
 	Dir           string // directory name under the models root
 	HFRepo        string // HuggingFace repo (mlx-community layout)
+	HFInclude     string // glob pattern for hf download --include (e.g. "5bit/*"); empty downloads everything
 	MinRAM        uint64 // minimum total RAM (bytes) for this to be the pick
 	ServerBackend string // "gomlx" (Go native) or "mlx_lm" (Python mlx_lm.server); empty defaults to "gomlx"
 }
@@ -24,10 +25,11 @@ type CatalogModel struct {
 // by recommended RAM. SelectModelForRAM picks the first that fits.
 var ModelCatalog = []CatalogModel{
 	{
-		Name:   "lfm2.5-2.6b",
-		Dir:    "lfm2.5-2.6b-mlx/5bit",
-		HFRepo: "LiquidAI/LFM2.5-2.6B-MLX",
-		MinRAM: 8 * 1024 * 1024 * 1024, // 8GB
+		Name:      "lfm2.5-2.6b",
+		Dir:       "lfm2.5-2.6b-mlx/5bit",
+		HFRepo:    "LiquidAI/LFM2.5-2.6B-MLX",
+		HFInclude: "5bit/*",
+		MinRAM:    8 * 1024 * 1024 * 1024, // 8GB
 	},
 	{
 		Name:   "gemma4-e2b",

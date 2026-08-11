@@ -74,7 +74,7 @@ func (c *hintRecordingClient) SetMaxTokensHint(tokens int) { c.hint = tokens }
 
 func TestGenerateCompletion_HappyPath(t *testing.T) {
 	client := &mockCompletionClient{response: completionResponse("fmt.Println(\"hi\")", 12)}
-	result, err := GenerateCompletion(client, CompletionRequest{
+	result, err := GenerateCompletion(context.Background(), client, CompletionRequest{
 		Prefix:   "package main\n\nfunc main() {\n\t",
 		Suffix:   "\n}",
 		Language: "go",
@@ -86,35 +86,35 @@ func TestGenerateCompletion_HappyPath(t *testing.T) {
 }
 
 func TestGenerateCompletion_NilClient(t *testing.T) {
-	_, err := GenerateCompletion(nil, CompletionRequest{Prefix: "x"})
+	_, err := GenerateCompletion(context.Background(), nil, CompletionRequest{Prefix: "x"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "client is required")
 }
 
 func TestGenerateCompletion_EmptyPrefix(t *testing.T) {
 	client := &mockCompletionClient{}
-	_, err := GenerateCompletion(client, CompletionRequest{Prefix: "   "})
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{Prefix: "   "})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "prefix is required")
 }
 
 func TestGenerateCompletion_ClientError(t *testing.T) {
 	client := &mockCompletionClient{err: fmt.Errorf("boom")}
-	_, err := GenerateCompletion(client, CompletionRequest{Prefix: "package main\n"})
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{Prefix: "package main\n"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "generating completion")
 }
 
 func TestGenerateCompletion_EmptyChoices(t *testing.T) {
 	client := &mockCompletionClient{}
-	_, err := GenerateCompletion(client, CompletionRequest{Prefix: "package main\n"})
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{Prefix: "package main\n"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no response from model for completion")
 }
 
 func TestGenerateCompletion_EmptyTextReturnsEmptyResult(t *testing.T) {
 	client := &mockCompletionClient{response: completionResponse("   ", 7)}
-	result, err := GenerateCompletion(client, CompletionRequest{Prefix: "package main\n"})
+	result, err := GenerateCompletion(context.Background(), client, CompletionRequest{Prefix: "package main\n"})
 	require.NoError(t, err)
 	assert.Equal(t, "", result.Text)
 	assert.Equal(t, 7, result.TokensUsed)
@@ -122,14 +122,14 @@ func TestGenerateCompletion_EmptyTextReturnsEmptyResult(t *testing.T) {
 
 func TestGenerateCompletion_StripsCodeFences(t *testing.T) {
 	client := &mockCompletionClient{response: completionResponse("```go\nfmt.Println(\"hi\")\n```", 5)}
-	result, err := GenerateCompletion(client, CompletionRequest{Prefix: "package main\n"})
+	result, err := GenerateCompletion(context.Background(), client, CompletionRequest{Prefix: "package main\n"})
 	require.NoError(t, err)
 	assert.Equal(t, "fmt.Println(\"hi\")", result.Text)
 }
 
 func TestGenerateCompletion_EmptySuffixUsesSimplePrompt(t *testing.T) {
 	client := &mockCompletionClient{response: completionResponse("fmt.Println(\"hi\")", 5)}
-	_, err := GenerateCompletion(client, CompletionRequest{
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{
 		Prefix:   "package main\n\nfunc main() {\n\t",
 		Suffix:   "",
 		Language: "go",
@@ -144,7 +144,7 @@ func TestGenerateCompletion_EmptySuffixUsesSimplePrompt(t *testing.T) {
 
 func TestGenerateCompletion_ShortSuffixUsesFIMPrompt(t *testing.T) {
 	client := &mockCompletionClient{response: completionResponse("fmt.Println(\"hi\")", 5)}
-	_, err := GenerateCompletion(client, CompletionRequest{
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{
 		Prefix:   "package main\n\nfunc main() {\n\t",
 		Suffix:   "\n}",
 		Language: "go",
@@ -159,7 +159,7 @@ func TestGenerateCompletion_ShortSuffixUsesFIMPrompt(t *testing.T) {
 
 func TestGenerateCompletion_LongSuffixUsesFIMPrompt(t *testing.T) {
 	client := &mockCompletionClient{response: completionResponse("fmt.Println(\"hi\")", 5)}
-	_, err := GenerateCompletion(client, CompletionRequest{
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{
 		Prefix:   "package main\n\nfunc main() {\n\t",
 		Suffix:   "\n\tdefer close()\n}",
 		Language: "go",
@@ -176,14 +176,14 @@ func TestGenerateCompletion_LongSuffixUsesFIMPrompt(t *testing.T) {
 
 func TestGenerateCompletion_MaxTokensHint(t *testing.T) {
 	client := &hintRecordingClient{mockCompletionClient: &mockCompletionClient{response: completionResponse("x", 1)}}
-	_, err := GenerateCompletion(client, CompletionRequest{Prefix: "package main\n", MaxTokens: 128})
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{Prefix: "package main\n", MaxTokens: 128})
 	require.NoError(t, err)
 	assert.Equal(t, 128, client.hint)
 }
 
 func TestGenerateCompletion_DefaultMaxTokens(t *testing.T) {
 	client := &hintRecordingClient{mockCompletionClient: &mockCompletionClient{response: completionResponse("x", 1)}}
-	_, err := GenerateCompletion(client, CompletionRequest{Prefix: "package main\n"})
+	_, err := GenerateCompletion(context.Background(), client, CompletionRequest{Prefix: "package main\n"})
 	require.NoError(t, err)
 	assert.Equal(t, 128, client.hint)
 }

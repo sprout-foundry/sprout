@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/codecompletion"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
@@ -48,16 +49,39 @@ func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	clientType, err := configManager.GetProvider()
-	if err != nil {
-		writeJSONErr(w, http.StatusInternalServerError, "failed_to_resolve_provider", fmt.Sprintf("Failed to resolve provider: %v", err))
-		return
+	var clientType api.ClientType
+	var model string
+	var client api.ClientInterface
+	cfg := configManager.GetConfig()
+
+	// Try the completion-specific provider/model first (e.g. a cheap local
+	// Ollama model). If it is not configured or cannot be reached, fall back
+	// to the main provider.
+	if completionProvider := cfg.GetCompletionProvider(); completionProvider != "" {
+		if ct, mapErr := configManager.MapStringToClientType(completionProvider); mapErr == nil {
+			clientType = ct
+			model = cfg.GetCompletionModel()
+			if cl, createErr := factory.CreateProviderClient(clientType, model); createErr == nil {
+				client = cl
+			}
+		}
 	}
-	model := configManager.GetModelForProvider(clientType)
-	client, err := factory.CreateProviderClient(clientType, model)
-	if err != nil {
-		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_provider_client", fmt.Sprintf("Failed to create provider client: %v", err))
-		return
+
+	// No completion provider configured, or it failed to create — use the main provider.
+	if client == nil {
+		var resolveErr error
+		clientType, resolveErr = configManager.GetProvider()
+		if resolveErr != nil {
+			writeJSONErr(w, http.StatusInternalServerError, "failed_to_resolve_provider", fmt.Sprintf("Failed to resolve provider: %v", resolveErr))
+			return
+		}
+		model = configManager.GetModelForProvider(clientType)
+		var createErr error
+		client, createErr = factory.CreateProviderClient(clientType, model)
+		if createErr != nil {
+			writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_provider_client", fmt.Sprintf("Failed to create provider client: %v", createErr))
+			return
+		}
 	}
 
 	result, err := codecompletion.GenerateCompletion(client, codecompletion.CompletionRequest{
@@ -73,8 +97,8 @@ func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Req
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"completion":  result.Text,
-		"provider":    agentInst.GetProvider(),
-		"model":       agentInst.GetModel(),
+		"provider":    client.GetProvider(),
+		"model":       client.GetModel(),
 		"tokens_used": result.TokensUsed,
 	})
 }

@@ -1,4 +1,4 @@
-//go:build !darwin || !arm64 || !cgo || !mlx
+//go:build !darwin || !arm64 || !cgo
 
 // This is the non-Apple/non-cgo stub for the mlx package. It mirrors the
 // public API declared in mlx_cgo.go and mlx_ops.go but every function returns

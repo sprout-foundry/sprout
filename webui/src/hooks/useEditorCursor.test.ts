@@ -134,6 +134,14 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   vi.clearAllMocks();
+  // Make rAF synchronous so the throttled cursor/content updates flush
+  // within act() blocks. The production hook uses rAF to coalesce rapid
+  // updates; tests need the flush to be immediate.
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    cb(performance.now());
+    return 0;
+  });
+  vi.stubGlobal('cancelAnimationFrame', () => {});
 });
 
 afterEach(() => {
@@ -141,6 +149,7 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
+  vi.unstubAllGlobals();
 });
 
 /**

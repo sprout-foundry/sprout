@@ -250,12 +250,12 @@ func TestApplyTerminalWidthChangeResetsRedrawState(t *testing.T) {
 	})
 
 	// On resize, the handler moves up to the top of the reflowed content
-	// block and clears to end of screen (catching stale wrapped copies
-	// of the old prompt that the terminal reflowed above the cursor).
-	// With oldContentLength=10 and newWidth=6, the old content occupies
-	// ceil(10/6)=2 rows after reflow, so we move up 1 row before clearing.
-	if !strings.HasPrefix(output, "\r\033[1A\033[J") {
-		t.Fatalf("expected resize redraw to move up and clear-to-end-of-screen, got %q", output)
+	// block and clears to end of screen. With oldContentLength=10 and
+	// newWidth=6, the prompt content occupies ceil(10/6)=2 rows → 1 up.
+	// The footer (2 rows padded to oldWidth=10) also wraps: ceil(10/6)=2
+	// rows per footer line → (2-1)*2 = 2 overflow rows. Total up = 3.
+	if !strings.HasPrefix(output, "\r\033[3A\033[J") {
+		t.Fatalf("expected resize redraw to move up 3 rows and clear-to-end-of-screen, got %q", output)
 	}
 	if ir.terminalWidth != 6 {
 		t.Fatalf("unexpected terminal width: %d", ir.terminalWidth)

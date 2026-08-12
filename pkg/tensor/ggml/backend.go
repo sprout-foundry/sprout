@@ -191,6 +191,21 @@ ggml_backend_buffer_t ggml_pin_tensor(ggml_backend_t b, struct ggml_tensor * t) 
     return buf;
 }
 
+// Copy src into dst backend-to-backend, but only when the layouts genuinely
+// agree — ggml_backend_tensor_copy asserts rather than returning an error, so
+// the preconditions are checked here and 0 is returned to signal "use the
+// slow path" instead of aborting the process.
+int ggml_copy_tensor_checked(struct ggml_tensor * src, struct ggml_tensor * dst) {
+    if (!src || !dst || src->type != dst->type) return 0;
+    for (int i = 0; i < GGML_MAX_DIMS; i++) {
+        if (src->ne[i] != dst->ne[i]) return 0;
+    }
+    if (!ggml_is_contiguous(src) || !ggml_is_contiguous(dst)) return 0;
+    if (ggml_nbytes(src) != ggml_nbytes(dst)) return 0;
+    ggml_backend_tensor_copy(src, dst);
+    return 1;
+}
+
 // Release a pinned buffer and detach the tensor from it.
 void ggml_unpin_tensor(ggml_backend_buffer_t buf, struct ggml_tensor * t) {
     if (t) { t->buffer = NULL; t->data = NULL; }
@@ -1061,33 +1076,47 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 		return nil, fmt.Errorf("ggml: graph compute failed (status %d)", int(status))
 	}
 
-	// Read the computed result into Go memory, then free the graph allocator.
-	resultNbytes := int(C.tensor_nbytes(compute))
-	resultData := make([]byte, resultNbytes)
-	if resultNbytes > 0 {
-		C.ggml_backend_tensor_get(compute, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
-	}
 	// Capture the shape and type BEFORE freeing the temp context (the
 	// contiguous tensor may live there).
+	resultNbytes := int(C.tensor_nbytes(compute))
 	resultShape := g.tensorShape(compute)
 	resultType := compute._type
+
+	// Create a FRESH leaf tensor in the main context and move the result into
+	// it. This Array owns its buffer; freeing it can't hurt other arrays.
+	// The move goes buffer-to-buffer: staging it through a Go []byte per op
+	// made evalOp the largest single source of garbage in the process, and GC
+	// was costing ~30% of decode in a CPU profile.
+	leaf := createTensor(g, resultShape, resultType)
+	if leaf == nil {
+		C.ggml_gallocr_free(alloc)
+		C.ggml_free(tempCtx)
+		return nil, fmt.Errorf("ggml: evalOp result tensor creation failed")
+	}
+	var resultData []byte
+	if resultNbytes > 0 {
+		if err := g.pinTensorData(leaf, nil); err != nil {
+			C.ggml_gallocr_free(alloc)
+			C.ggml_free(tempCtx)
+			return nil, err
+		}
+		if C.ggml_copy_tensor_checked(compute, leaf) == 0 {
+			// Layouts disagree; fall back to staging through Go memory.
+			resultData = make([]byte, resultNbytes)
+			C.ggml_backend_tensor_get(compute, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
+			C.ggml_backend_tensor_set(leaf, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
+		}
+	}
 	C.ggml_gallocr_free(alloc)
 	C.ggml_free(tempCtx)
 
-	// Create a FRESH leaf tensor in the main context and pin the result into
-	// it. This Array owns its buffer; freeing it can't hurt other arrays.
-	leaf := createTensor(g, resultShape, resultType)
-	if leaf == nil {
-		return nil, fmt.Errorf("ggml: evalOp result tensor creation failed")
-	}
-	if resultNbytes > 0 {
-		if err := g.pinTensorData(leaf, resultData); err != nil {
-			return nil, err
-		}
-	}
 	arr := g.newArray(leaf)
 	arr.logicalShape = resultShape
 	if statsEnabled {
+		if resultData == nil && resultNbytes > 0 {
+			resultData = make([]byte, resultNbytes)
+			C.ggml_backend_tensor_get(leaf, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
+		}
 		logResultStats(C.GoString(C.tensor_op_name(opResult)), resultShape, resultType, resultData)
 	}
 	// Propagate logicalShape from the primary input for RANK-PRESERVING ops
@@ -1324,10 +1353,57 @@ func (g *GGMLBackend) Sum(a tensor.Array, axes []int, keepdims bool, s tensor.St
 	if len(axes) == 0 {
 		return g.evalOp(C.ggml_sum(g.ctxPtr(), a.(*Array).tensor))
 	}
+	shape := a.Shape()
+
+	// Reducing only the innermost axis is the hot path — DeltaNet sums over
+	// Dk on every step and the MoE router reduces over -1 — and it maps
+	// exactly onto ggml_sum_rows, which reduces ne[0]. Taking the Go path
+	// here instead costs a full readback per call and showed up as ~15% of
+	// decode in a CPU profile.
+	if len(axes) == 1 && len(shape) <= 4 && a.Dtype() == tensor.Float32 {
+		ax := axes[0]
+		if ax < 0 {
+			ax += len(shape)
+		}
+		if ax == len(shape)-1 {
+			ls := make([]int, 0, len(shape))
+			for i, d := range shape {
+				switch {
+				case i != ax:
+					ls = append(ls, d)
+				case keepdims:
+					ls = append(ls, 1)
+				}
+			}
+			if len(ls) == 0 {
+				ls = []int{1}
+			}
+			node := C.ggml_sum_rows(g.ctxPtr(), a.(*Array).tensor)
+			if !keepdims {
+				// sum_rows reduces ne[0] but leaves it in place as a 1, while
+				// dropping the axis in row-major terms shifts every remaining
+				// dim down one slot. Without this reshape the ne of the result
+				// is offset by one against its logical shape, and the next op
+				// fails ggml_can_repeat.
+				ne := [4]C.int64_t{1, 1, 1, 1}
+				for i := range ls {
+					ne[i] = C.int64_t(ls[len(ls)-1-i])
+				}
+				node = C.ggml_reshape_4d(g.ctxPtr(), node, ne[0], ne[1], ne[2], ne[3])
+			}
+			out, err := g.evalOp(node)
+			if err != nil {
+				return nil, err
+			}
+			out.logicalShape = ls
+			g.registerArray(out)
+			return out, nil
+		}
+	}
+
 	if err := a.Eval(); err != nil {
 		return nil, err
 	}
-	shape := a.Shape()
 	data, err := g.readDataAsFloat32(a.(*Array))
 	if err != nil {
 		return nil, fmt.Errorf("ggml: Sum read: %w", err)

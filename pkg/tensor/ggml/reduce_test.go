@@ -93,3 +93,55 @@ func refSum(data []float32, shape, axes []int, keepdims bool) []float32 {
 	}
 	return out
 }
+
+// DeltaNet sums the innermost axis of [B,Hv,Dv,Dk] with keepdims=false and
+// immediately subtracts the result from a [B,Hv,Dv] tensor. Checking the
+// values alone is not enough: a reduction can produce the right numbers with
+// an ne that is offset by one against its logical shape, which only fails
+// later when the next op tries to broadcast against it.
+func TestSumLastAxisIsUsableDownstream(t *testing.T) {
+	g := &GGMLBackend{}
+	if !g.Available() {
+		t.Skip("GGML backend not available")
+	}
+	var b tensor.Backend = g
+	s, _ := b.DefaultGPUStream()
+
+	const B, Hv, Dv, Dk = 1, 3, 4, 5
+	prod := iotaF32(B * Hv * Dv * Dk)
+	x, _ := b.NewArrayFromFloat32(prod, []int{B, Hv, Dv, Dk})
+	defer x.Free()
+
+	summed, err := b.Sum(x, []int{3}, false, s)
+	if err != nil {
+		t.Fatalf("Sum: %v", err)
+	}
+	defer summed.Free()
+	if got := summed.Shape(); !equalInts(got, []int{B, Hv, Dv}) {
+		t.Fatalf("shape = %v, want [%d %d %d]", got, B, Hv, Dv)
+	}
+
+	v := fill(B*Hv*Dv, 7)
+	y, _ := b.NewArrayFromFloat32(v, []int{B, Hv, Dv})
+	defer y.Free()
+
+	diff, err := b.Subtract(y, summed, s)
+	if err != nil {
+		t.Fatalf("Subtract after Sum: %v", err)
+	}
+	defer diff.Free()
+
+	out, err := diff.Float32Data()
+	if err != nil {
+		t.Fatalf("Float32Data: %v", err)
+	}
+	want := make([]float32, B*Hv*Dv)
+	for i := range want {
+		var acc float32
+		for k := 0; k < Dk; k++ {
+			acc += prod[i*Dk+k]
+		}
+		want[i] = v[i] - acc
+	}
+	checkClose(t, out, want, 1e-4, "Subtract(v, Sum(prod))")
+}

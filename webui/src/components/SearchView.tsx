@@ -230,8 +230,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
           </label>
           <input
             type="range"
-            min="0.5"
-            max="0.95"
+            min="0.10"
+            max="0.80"
             step="0.05"
             value={semanticThreshold}
             onChange={(e) => setSemanticThreshold(parseFloat(e.target.value))}

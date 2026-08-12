@@ -82,35 +82,23 @@ func ListModels() []ModelStatus {
 }
 
 // RecommendedModel returns the best model for the machine's RAM that is
-// already installed, preferring sprout-tuned variants.
+// already installed, preferring sprout-tuned variants. Delegates to
+// llm.SelectModelForRAM so this shares the same RAM-gate and quant
+// preference (mlx-q5 > q5 > q8 > unquantized) logic as onboarding and
+// the standalone server — see preferTunedQuant.
 func RecommendedModel(ramBytes uint64) *ModelStatus {
-	// First: tuned installed model that fits
-	if rec := llm.RecommendModelForRAM(ramBytes); rec != nil {
-		for _, s := range ListModels() {
-			if s.IsTuned && s.Installed && s.ParamSize == llm.ExtractParamSize(rec.Name) {
-				return &s
-			}
-		}
+	picked, err := llm.SelectModelForRAM(DefaultModelsDir, ramBytes)
+	if err != nil || picked == nil {
+		return nil
 	}
-
-	// Second: any installed model that the RAM selector picks
-	if rec := llm.RecommendModelForRAM(ramBytes); rec != nil {
-		for _, s := range ListModels() {
-			if s.Name == rec.Name && s.Installed {
-				return &s
-			}
-		}
+	return &ModelStatus{
+		Name:          picked.Name,
+		Dir:           picked.Dir,
+		HFRepo:        picked.HFRepo,
+		Installed:     true,
+		ParamSize:     llm.ExtractParamSize(picked.Name),
+		ServerBackend: picked.ServerBackend,
 	}
-
-	// Fall back: recommend download
-	if rec := llm.RecommendModelForRAM(ramBytes); rec != nil {
-		for _, s := range ListModels() {
-			if s.Name == rec.Name {
-				return &s
-			}
-		}
-	}
-	return nil
 }
 
 // EnsureModel downloads a model if it's not already installed.

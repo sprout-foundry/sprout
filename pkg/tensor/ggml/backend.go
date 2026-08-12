@@ -211,6 +211,15 @@ ggml_backend_buffer_t ggml_pin_tensor(ggml_backend_t b, struct ggml_tensor * t) 
     return buf;
 }
 
+// ggml validates mul_mat operands with GGML_ASSERT, which aborts the whole
+// process on a shape mismatch. Check first so a caller error surfaces as a Go
+// error with the shapes in it instead of killing the server.
+int ggml_can_mul_mat_check(const struct ggml_tensor * a, const struct ggml_tensor * b) {
+    return (a->ne[0] == b->ne[0])
+        && (b->ne[2] % a->ne[2] == 0)
+        && (b->ne[3] % a->ne[3] == 0);
+}
+
 // Copy src into dst backend-to-backend, but only when the layouts genuinely
 // agree — ggml_backend_tensor_copy asserts rather than returning an error, so
 // the preconditions are checked here and 0 is returned to signal "use the
@@ -542,12 +551,13 @@ func (g *GGMLBackend) ensureInit() error {
 	return g.initErr
 }
 
-// pickThreadCount chooses the CPU thread count. Raising it past 4 helps a
-// single large matmul in isolation (1.94x at 8 threads on a 12-core
-// Snapdragon X Elite) but loses badly end to end: a decode step is ~1400
-// mostly-small ops, each its own graph_compute, so the OpenMP fork/join
-// barrier is paid per op and 8 threads measured ~1.5x SLOWER per token than
-// 4. Cap at 4 and let SPROUT_GGML_THREADS override for experiments.
+// pickThreadCount chooses the CPU thread count. Measured end to end on a
+// 12-core Snapdragon X Elite (Qwen3.5-4B): 4 threads 4.28 tok/s, 6 threads
+// 4.33, 8 threads 0.56, 12 threads 0.44. The collapse past 6 is
+// oversubscription — ggml's OpenMP workers spin by default, and together with
+// Go's own runtime threads they swamp the cores. Streaming memory bandwidth
+// also saturates by 4 threads here (107 GB/s), so there is nothing to win.
+// Cap at 4; SPROUT_GGML_THREADS overrides for experiments.
 const maxAutoThreads = 4
 
 func pickThreadCount() int {
@@ -1741,10 +1751,16 @@ func (g *GGMLBackend) MatMul(a, b tensor.Array, s tensor.Stream) (tensor.Array, 
 	if tB._type != C.GGML_TYPE_F32 && tB._type != C.GGML_TYPE_F16 && tB._type != C.GGML_TYPE_BF16 {
 		// Quantized weight (Q4_0 etc.) — already in [ne0=K, ne1=N] layout.
 		// ggml_mul_mat(w, x) = x @ w^T = [M, N]. No transpose needed.
+		if C.ggml_can_mul_mat_check(tB, tA) == 0 {
+			return nil, fmt.Errorf("ggml: MatMul shapes incompatible: a=%v b=%v (quantized b must be [out, in])", a.Shape(), b.Shape())
+		}
 		result = C.ggml_mul_mat(ctx, tB, tA)
 	} else {
 		// F32 weight — transpose B to align inner dims, then mul_mat.
 		tBt := C.ggml_cont(ctx, C.ggml_transpose(ctx, tB))
+		if C.ggml_can_mul_mat_check(tBt, tA) == 0 {
+			return nil, fmt.Errorf("ggml: MatMul shapes incompatible: a=%v b=%v (float b must be pre-transposed to [in, out])", a.Shape(), b.Shape())
+		}
 		result = C.ggml_mul_mat(ctx, tBt, tA)
 	}
 	if result == nil {

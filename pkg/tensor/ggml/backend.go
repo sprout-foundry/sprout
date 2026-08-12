@@ -331,6 +331,7 @@ func init() {
 // are never being freed. SPROUT_GGML_LEAK=1 reports it periodically.
 var (
 	batchOps     int64
+	opHist       sync.Map // op name -> *int64, cumulative; leak mode only
 	batchFlushes int64
 	batchForced  int64
 	livePins     int64
@@ -343,6 +344,26 @@ func startLeakReporter() {
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
+			type oc struct {
+				name string
+				n    int64
+			}
+			var ops []oc
+			var total int64
+			opHist.Range(func(k, v any) bool {
+				n := atomic.LoadInt64(v.(*int64))
+				ops = append(ops, oc{k.(string), n})
+				total += n
+				return true
+			})
+			sort.Slice(ops, func(i, j int) bool { return ops[i].n > ops[j].n })
+			for i, e := range ops {
+				if i >= 12 {
+					break
+				}
+				fmt.Printf("ggml: op %-14s %8d  %4.1f%%\n", e.name, e.n, 100*float64(e.n)/float64(total))
+			}
+			fmt.Printf("ggml: total ops=%d\n", total)
 			o, f, fo := atomic.LoadInt64(&batchOps), atomic.LoadInt64(&batchFlushes), atomic.LoadInt64(&batchForced)
 			if f > 0 {
 				fmt.Printf("ggml: batch ops=%d flushes=%d (%.1f ops/flush, %d hit the limit)\n", o, f, float64(o)/float64(f), fo)
@@ -1401,6 +1422,8 @@ func (g *GGMLBackend) enqueueOp(opResult *C.struct_ggml_tensor) (*Array, error) 
 	if int(C.tensor_nbytes(compute)) > 0 {
 		if leakEnabled {
 			g.pinOrigin = C.GoString(C.tensor_op_name(opResult))
+			c, _ := opHist.LoadOrStore(g.pinOrigin, new(int64))
+			atomic.AddInt64(c.(*int64), 1)
 		}
 		if err := g.pinTensorData(compute, nil); err != nil {
 			return nil, err

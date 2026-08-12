@@ -1053,7 +1053,7 @@ func (q *Qwen35) fullAttention(h tensor.Array, lw *layerWeights, layerIdx, seqLe
 		maskMode = "causal"
 	}
 	scale := float32(1.0 / sqrt(float64(headDim)))
-	ctx, err := q.backend.FastScaledDotProductAttention(qT, kForAttn, vForAttn, scale, maskMode, nil, nil, s)
+	ctx, err := q.backend.FastScaledDotProductAttention(qRot, kForAttn, vForAttn, scale, maskMode, nil, nil, s)
 	if err != nil {
 		return nil, fmt.Errorf("fused attention: %w", err)
 	}

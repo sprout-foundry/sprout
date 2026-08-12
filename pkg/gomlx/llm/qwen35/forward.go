@@ -402,14 +402,16 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 		h = out
 	}
 
+	// setLastHidden takes its own reference, so this pass must still release
+	// the one it holds. h is final here; the loop above frees each earlier h.
+	defer h.Free()
+
 	if err := q.setLastHidden(h, seqLen); err != nil {
-		h.Free()
 		return nil, err
 	}
 
 	logits, err := q.computeLogitsLast(h, seqLen)
 	if err != nil {
-		h.Free()
 		return nil, err
 	}
 	if err := s.Synchronize(); err != nil {
@@ -536,14 +538,14 @@ func (q *Qwen35) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 		h = out
 	}
 
+	defer h.Free()
+
 	if err := q.setLastHidden(h, 1); err != nil {
-		h.Free()
 		return nil, err
 	}
 
 	logits, err := q.computeLogits(h)
 	if err != nil {
-		h.Free()
 		return nil, err
 	}
 	return logits, nil
@@ -656,15 +658,15 @@ func (q *Qwen35) ForwardPrefillArgmaxAll(ids []int, startPos int, cache *llm.KVC
 		h = out
 	}
 
+	defer h.Free()
+
 	if err := q.setLastHidden(h, seqLen); err != nil {
-		h.Free()
 		return nil, err
 	}
 
 	// Logits at every position: [1, seqLen, vocab].
 	logits, err := q.computeLogits(h)
 	if err != nil {
-		h.Free()
 		return nil, err
 	}
 	defer logits.Free()

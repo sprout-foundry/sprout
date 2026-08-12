@@ -361,51 +361,42 @@ func (f *StatusFooter) Resize() {
 		return
 	}
 
-	// Reset the scroll region temporarily so we can address rows by
-	// absolute number without the terminal clamping us inside the OLD
-	// (now-stale) scroll area. Then clear the previous footer rows.
+	// Reset the scroll region, clear stale footer content, then
+	// re-apply the scroll region and redraw.
 	//
 	// Footer content is padded to the terminal width at draw time. When
 	// the terminal shrinks, those padded rows wrap across multiple
-	// physical rows. The terminal reflows everything, so the old footer
-	// content is now somewhere in the middle of the screen. We clear
-	// from a computed top row (based on the NEW terminal height minus
-	// the footer's reserved rows minus wrapped overflow) to the end of
-	// the screen, then redraw fresh content at the new bottom.
+	// physical rows. The terminal reflows everything, making precise
+	// row calculations unreliable. Instead, we clear a generous region
+	// at the bottom of the screen (footer rows × max wrap ratio + slack)
+	// to guarantee all stale copies are wiped before redrawing.
 	if oldRows > 1 {
+		// Reset the scroll region first so we can address the full screen.
 		fmt.Fprint(f.w, "\033[r")
-		fmt.Fprint(f.w, "\0337")
 		f.mu.Lock()
-		steerWasActive := f.steerActive
 		lastHint := f.lastHintRows
 		lastSteer := f.lastSteerRows
 		oldCols := f.lastCols
 		f.mu.Unlock()
 
-		// Compute the footer's reserved rows in the NEW layout.
 		newCols, newRows := f.terminalSize()
 		reserved := 2 + lastSteer + lastHint
 		if newRows < reserved+1 {
 			newRows = reserved + 1
 		}
 
-		// Topmost footer row in the new layout.
-		topRow := newRows - reserved
-
-		// Extend the clear range upward to catch wrapped overflow from
-		// the old wider content.
+		// Compute wrapped overflow: each padded footer row wraps to
+		// ceil(oldCols/newCols) rows at the new width.
 		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
-		topRow -= overflow
 
-		if topRow < 1 {
-			topRow = 1
+		// Clear from (newRows - reserved - overflow) to end of screen.
+		// This catches the footer's current rows AND any wrapped overflow
+		// from the old wider content that the terminal reflowed upward.
+		clearTop := newRows - reserved - overflow
+		if clearTop < 1 {
+			clearTop = 1
 		}
-
-		_ = steerWasActive // consumed below via lastSteer in drawLocked
-
-		// Clear from the topmost row to the end of the screen.
-		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
-		fmt.Fprint(f.w, "\0338")
+		fmt.Fprintf(f.w, "\033[%d;1H\033[J", clearTop)
 	}
 
 	f.applyScrollRegionLocked()

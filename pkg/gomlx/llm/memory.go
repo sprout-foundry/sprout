@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
 
 package llm
 
@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // weightBytesForModel returns the on-disk size of the model's safetensors
@@ -51,7 +51,13 @@ func ModelMemoryGate(modelDir string) error {
 	if os.Getenv("SPROUT_ALLOW_OVERWEIGHT") == "1" {
 		return nil
 	}
-	ram := mlx.TotalSystemRAM()
+	backend := tensor.DetectBackend()
+	var ram uint64
+	if backend != nil {
+		ram = backend.TotalSystemRAM()
+	} else {
+		ram = 8 * 1024 * 1024 * 1024 // 8 GB fallback
+	}
 	if ram == 0 {
 		return nil // can't measure — don't block
 	}
@@ -75,23 +81,27 @@ func ModelMemoryGate(modelDir string) error {
 	return nil
 }
 
-// ApplyMemoryLimits configures MLX's allocator for long-running server use on
-// a RAM-constrained machine. It sets:
+// ApplyMemoryLimits configures the tensor backend's allocator for long-running
+// server use on a RAM-constrained machine. It sets:
 //
 //   - an active-memory soft limit (fail fast with an error instead of
 //     blocking the process in a Metal cond wait when the KV cache or an
 //     activation tensor would exceed available RAM), and
 //   - a pooled-buffer cache limit (return freed buffers to the OS instead of
-//     letting MLX's cache grow without bound — MLX pools every freed buffer
-//     by default, which makes long-running generation look like a leak).
+//     letting the cache grow without bound — the runtime pools every freed
+//     buffer by default, which makes long-running generation look like a leak).
 //
-// Limits are sized off physical RAM (or left at MLX defaults when RAM can't
+// Limits are sized off physical RAM (or left at defaults when RAM can't
 // be measured, e.g. stub builds). A minimum margin keeps the OS and other
 // processes alive while the model generates.
 func ApplyMemoryLimits() error {
-	ram := mlx.TotalSystemRAM()
+	backend := tensor.DetectBackend()
+	if backend == nil {
+		return nil
+	}
+	ram := backend.TotalSystemRAM()
 	if ram == 0 {
-		return nil // can't size limits — leave MLX defaults
+		return nil // can't size limits — leave defaults
 	}
 
 	// Keep at least ~3 GB for the OS and the rest of the system. The active
@@ -105,22 +115,26 @@ func ApplyMemoryLimits() error {
 	if half := ram / 2; active < half {
 		active = half
 	}
-	if err := mlx.SetMemoryLimit(active); err != nil {
-		return fmt.Errorf("set MLX memory limit: %w", err)
+	if err := backend.SetMemoryLimit(active); err != nil {
+		return fmt.Errorf("set memory limit: %w", err)
 	}
 
 	// Cap pooled buffers at ~1.5 GB so long server runs return freed
 	// workspace to the OS between requests instead of accumulating it.
 	const cacheCap = 1536 * 1024 * 1024
-	if err := mlx.SetCacheLimit(cacheCap); err != nil {
-		return fmt.Errorf("set MLX cache limit: %w", err)
+	if err := backend.SetCacheLimit(cacheCap); err != nil {
+		return fmt.Errorf("set cache limit: %w", err)
 	}
 	return nil
 }
 
-// TrimCachedMemory returns MLX pooled buffers to the OS. Call after a request
+// TrimCachedMemory returns pooled buffers to the OS. Call after a request
 // completes so the next request starts from a clean slate instead of the
-// previous request's pooled cache (which MLX otherwise keeps forever).
+// previous request's pooled cache.
 func TrimCachedMemory() error {
-	return mlx.ClearCache()
+	backend := tensor.DetectBackend()
+	if backend == nil {
+		return nil
+	}
+	return backend.ClearCache()
 }

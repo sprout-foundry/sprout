@@ -141,6 +141,8 @@ struct ggml_tensor * get_src(struct ggml_tensor * t, int i) {
 }
 
 // Get total system RAM in bytes via sysconf.
+size_t ggml_ctx_used(struct ggml_context * ctx) { return ggml_used_mem(ctx); }
+
 size_t ggml_sysconf_page_size() { return (size_t)sysconf(_SC_PAGESIZE); }
 size_t ggml_sysconf_phys_pages() { return (size_t)sysconf(_SC_PHYS_PAGES); }
 
@@ -206,6 +208,30 @@ int ggml_copy_tensor_checked(struct ggml_tensor * src, struct ggml_tensor * dst)
     return 1;
 }
 
+// Allocate a buffer of an explicit size and bind the tensor into it. Sizing
+// by bucket rather than by exact need is what lets buffers be pooled.
+ggml_backend_buffer_t ggml_pin_tensor_sized(ggml_backend_t b, struct ggml_tensor * t, size_t size) {
+    ggml_backend_buffer_t buf = ggml_backend_alloc_buffer(b, size);
+    if (!buf) return NULL;
+    if (ggml_backend_tensor_alloc(buf, t, ggml_backend_buffer_get_base(buf)) != GGML_STATUS_SUCCESS) {
+        ggml_backend_buffer_free(buf);
+        return NULL;
+    }
+    return buf;
+}
+
+// Bind a tensor into an existing buffer, so a released buffer can be reused
+// for a later tensor of no greater size instead of going back to malloc.
+int ggml_bind_tensor(ggml_backend_buffer_t buf, struct ggml_tensor * t) {
+    if (!buf || !t) return 0;
+    return ggml_backend_tensor_alloc(buf, t, ggml_backend_buffer_get_base(buf)) == GGML_STATUS_SUCCESS;
+}
+
+// Detach a tensor from its buffer without freeing the buffer.
+void ggml_unbind_tensor(struct ggml_tensor * t) {
+    if (t) { t->buffer = NULL; t->data = NULL; }
+}
+
 // Release a pinned buffer and detach the tensor from it.
 void ggml_unpin_tensor(ggml_backend_buffer_t buf, struct ggml_tensor * t) {
     if (t) { t->buffer = NULL; t->data = NULL; }
@@ -235,9 +261,11 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/sprout-foundry/sprout/pkg/tensor"
@@ -247,6 +275,57 @@ func init() {
 	tensor.RegisterBackend(&GGMLBackend{})
 	debugEnabled = os.Getenv("SPROUT_GGML_DEBUG") != ""
 	statsEnabled = os.Getenv("SPROUT_GGML_STATS") != ""
+	if os.Getenv("SPROUT_GGML_LEAK") != "" {
+		leakEnabled = true
+		startLeakReporter()
+	}
+}
+
+// livePins counts tensors currently holding a pinned buffer. A forward pass
+// should return to its starting count; a per-request climb means op results
+// are never being freed. SPROUT_GGML_LEAK=1 reports it periodically.
+var (
+	livePins     int64
+	livePinBytes int64
+	leakBackend  *GGMLBackend
+	leakEnabled  bool
+)
+
+func startLeakReporter() {
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			fmt.Printf("ggml: live pinned tensors=%d bytes=%.1fMB\n",
+				atomic.LoadInt64(&livePins), float64(atomic.LoadInt64(&livePinBytes))/1e6)
+			if leakBackend != nil {
+				fmt.Printf("ggml: main ctx used=%.1fMB of 512MB\n",
+					float64(C.ggml_ctx_used(leakBackend.ctxPtr()))/1e6)
+				var arrays int
+				leakBackend.arrayMap.Range(func(_, _ any) bool { arrays++; return true })
+				fmt.Printf("ggml: arrayMap entries=%d\n", arrays)
+				hist := map[string]int{}
+				leakBackend.pinned.Range(func(_, v any) bool {
+					hist[v.(pinnedBuf).origin]++
+					return true
+				})
+				type kv struct {
+					k string
+					n int
+				}
+				var rows []kv
+				for k, n := range hist {
+					rows = append(rows, kv{k, n})
+				}
+				sort.Slice(rows, func(i, j int) bool { return rows[i].n > rows[j].n })
+				for i, r := range rows {
+					if i >= 6 {
+						break
+					}
+					fmt.Printf("ggml:   origin %-16s %d\n", r.k, r.n)
+				}
+			}
+		}
+	}()
 }
 
 // tempArenaBytes sizes the reusable arena that holds one op's graph
@@ -312,6 +391,18 @@ type GGMLBackend struct {
 	// tempMu serialises use of the shared per-op graph arena.
 	tempMu sync.Mutex
 
+	// pinOrigin labels the next pin with the op that produced it, for leak
+	// diagnosis. Written only under tempMu.
+	pinOrigin string
+
+	// bufPool recycles released backend buffers by capacity bucket. Every op
+	// result gets its own buffer, so without reuse a decode step performs
+	// thousands of malloc/free pairs; glibc's heap fragments under that and
+	// allocation alone grew to ~35% of decode time in a CPU profile.
+	bufMu   sync.Mutex
+	bufPool map[int][]unsafe.Pointer
+	bufHeld int
+
 	// pinned maps C tensor pointers to the dedicated backend buffer holding
 	// their data. Leaf tensors own their buffer for life, so their contents
 	// survive across graph allocations and are uploaded exactly once.
@@ -344,14 +435,28 @@ func (g *GGMLBackend) pinTensorData(t *C.struct_ggml_tensor, data []byte) error 
 		return fmt.Errorf("ggml: pin of %d bytes exceeds tensor nbytes %d (ne=[%d %d %d %d] type=%d)",
 			len(data), nbytes, int64(t.ne[0]), int64(t.ne[1]), int64(t.ne[2]), int64(t.ne[3]), int(t._type))
 	}
-	buf := C.ggml_pin_tensor(g.backend, t)
+
+	capacity := bufCapacityFor(nbytes)
+	var buf C.ggml_backend_buffer_t
+	if reused, ok := g.bufPoolGet(capacity); ok {
+		if C.ggml_bind_tensor(reused, t) != 0 {
+			buf = reused
+		} else {
+			C.ggml_unpin_tensor(reused, nil)
+		}
+	}
 	if buf == nil {
-		return fmt.Errorf("ggml: failed to allocate %d-byte buffer for tensor", nbytes)
+		buf = C.ggml_pin_tensor_sized(g.backend, t, C.size_t(capacity))
+		if buf == nil {
+			return fmt.Errorf("ggml: failed to allocate %d-byte buffer for tensor", capacity)
+		}
 	}
 	if len(data) > 0 {
 		C.ggml_backend_tensor_set(t, unsafe.Pointer(&data[0]), 0, C.size_t(len(data)))
 	}
-	g.pinned.Store(uintptr(unsafe.Pointer(t)), unsafe.Pointer(buf))
+	g.pinned.Store(uintptr(unsafe.Pointer(t)), pinnedBuf{buf: unsafe.Pointer(buf), capacity: capacity, origin: g.pinOrigin})
+	atomic.AddInt64(&livePins, 1)
+	atomic.AddInt64(&livePinBytes, int64(capacity))
 	return nil
 }
 
@@ -368,16 +473,19 @@ func (g *GGMLBackend) cpuFeatures() (dotprod, i8mm, neon bool) {
 	return feat("ggml_cpu_has_dotprod"), feat("ggml_cpu_has_matmul_int8"), feat("ggml_cpu_has_neon")
 }
 
-// unpin releases a tensor's pinned buffer. Used for the short-lived inputs
-// that ops build themselves (RoPE positions, attention masks), which would
-// otherwise accumulate one buffer per call.
+// unpin returns a tensor's pinned buffer to the pool. Used for the
+// short-lived inputs that ops build themselves (RoPE positions, attention
+// masks) and for every op result when its last Array is freed.
 func (g *GGMLBackend) unpin(t *C.struct_ggml_tensor) {
 	if t == nil {
 		return
 	}
-	key := uintptr(unsafe.Pointer(t))
-	if v, ok := g.pinned.LoadAndDelete(key); ok {
-		C.ggml_unpin_tensor(C.ggml_backend_buffer_t(v.(unsafe.Pointer)), t)
+	if v, ok := g.pinned.LoadAndDelete(uintptr(unsafe.Pointer(t))); ok {
+		pb := v.(pinnedBuf)
+		C.ggml_unbind_tensor(t)
+		atomic.AddInt64(&livePins, -1)
+		atomic.AddInt64(&livePinBytes, -int64(pb.capacity))
+		g.bufPoolPut(C.ggml_backend_buffer_t(pb.buf), pb.capacity)
 	}
 }
 
@@ -398,6 +506,7 @@ func (g *GGMLBackend) ensureInit() error {
 		g.backend = b
 		g.ctx = unsafe.Pointer(ctx)
 		g.name = C.GoString(C.backend_name(b))
+		leakBackend = g
 		g.threads = pickThreadCount()
 		if C.ggml_set_threads(b, C.int(g.threads)) == 0 {
 			g.threads = 0
@@ -466,6 +575,62 @@ type Array struct {
 	// every op, so the last wrapper to be freed must evict them — otherwise a
 	// forward pass retains every intermediate it ever produced.
 	refs *int32
+}
+
+// pinnedBuf is a tensor's backend buffer plus the bucket capacity it was
+// allocated at, which is what it must be returned to.
+type pinnedBuf struct {
+	buf      unsafe.Pointer
+	capacity int
+	origin   string
+}
+
+// bufPoolMaxBytes caps how much memory the recycler holds. Past this, buffers
+// are returned to the allocator rather than retained.
+const bufPoolMaxBytes = 512 << 20
+
+// bufCapacityFor rounds an allocation up to a power-of-two bucket (with a
+// floor, since most op results are small) so that differently-sized results
+// can share buffers. The op graph repeats every token, so a handful of
+// buckets covers essentially every allocation after the first step.
+func bufCapacityFor(nbytes int) int {
+	const minCap = 4096
+	c := minCap
+	for c < nbytes+64 {
+		c <<= 1
+	}
+	return c
+}
+
+func (g *GGMLBackend) bufPoolGet(capacity int) (C.ggml_backend_buffer_t, bool) {
+	g.bufMu.Lock()
+	defer g.bufMu.Unlock()
+	free := g.bufPool[capacity]
+	if len(free) == 0 {
+		return nil, false
+	}
+	p := free[len(free)-1]
+	g.bufPool[capacity] = free[:len(free)-1]
+	g.bufHeld -= capacity
+	return C.ggml_backend_buffer_t(p), true
+}
+
+func (g *GGMLBackend) bufPoolPut(buf C.ggml_backend_buffer_t, capacity int) {
+	if buf == nil {
+		return
+	}
+	g.bufMu.Lock()
+	if g.bufHeld+capacity > bufPoolMaxBytes {
+		g.bufMu.Unlock()
+		C.ggml_unpin_tensor(buf, nil)
+		return
+	}
+	if g.bufPool == nil {
+		g.bufPool = make(map[int][]unsafe.Pointer)
+	}
+	g.bufPool[capacity] = append(g.bufPool[capacity], unsafe.Pointer(buf))
+	g.bufHeld += capacity
+	g.bufMu.Unlock()
 }
 
 // newArray wraps a freshly created C tensor with a reference count of one.
@@ -1092,6 +1257,10 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 		C.ggml_gallocr_free(alloc)
 		C.ggml_free(tempCtx)
 		return nil, fmt.Errorf("ggml: evalOp result tensor creation failed")
+	}
+	if leakEnabled {
+		// C.GoString allocates; only pay it when diagnosing a leak.
+		g.pinOrigin = C.GoString(C.tensor_op_name(opResult))
 	}
 	var resultData []byte
 	if resultNbytes > 0 {

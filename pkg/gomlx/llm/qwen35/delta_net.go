@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
 
 package qwen35
 
@@ -105,7 +105,7 @@ func (g *gatedDeltaNet) loadWeights(sf *llm.SafetensorsFile, name string, b tens
 	// axis is last. MLX Conv1D expects [C_out, kernel, C_in/groups], so
 	// transpose the raw layout to the sanitized one (mlx-community
 	// conversions ship it already transposed).
-	if g.conv1d, err = sf.Get(name+".conv1d.weight", s); err != nil {
+	if g.conv1d, err = sf.Get(name+".conv1d.weight", b, s); err != nil {
 		return fmt.Errorf("conv1d: %w", err)
 	}
 	shape := g.conv1d.Shape()
@@ -128,18 +128,18 @@ func (g *gatedDeltaNet) loadWeights(sf *llm.SafetensorsFile, name string, b tens
 	}
 
 	// norm.weight: [head_v_dim] — the gated output RMSNorm.
-	if g.norm, err = sf.Get(name+".norm.weight", s); err != nil {
+	if g.norm, err = sf.Get(name+".norm.weight", b, s); err != nil {
 		return fmt.Errorf("norm: %w", err)
 	}
 
 	// A_log and dt_bias are tiny [Hv] buffers; never quantized, always fp32.
-	if g.ALog, err = sf.Get(name+".A_log", s); err != nil {
+	if g.ALog, err = sf.Get(name+".A_log", b, s); err != nil {
 		return fmt.Errorf("A_log: %w", err)
 	}
 	if err := g.ALog.Eval(); err != nil {
 		return fmt.Errorf("eval A_log: %w", err)
 	}
-	if g.DTBias, err = sf.Get(name+".dt_bias", s); err != nil {
+	if g.DTBias, err = sf.Get(name+".dt_bias", b, s); err != nil {
 		return fmt.Errorf("dt_bias: %w", err)
 	}
 	if err := g.DTBias.Eval(); err != nil {
@@ -284,7 +284,6 @@ func (g *gatedDeltaNet) forward(x tensor.Array, cache *llm.KVCache, layerIdx, se
 		return nil, fmt.Errorf("decay gate: %w", err)
 	}
 	defer decay.Free()
-
 	// Recurrent update.
 	y, newState, err := gatedDeltaUpdate(q2d, k2d, v2d, decay, beta, state, b, s)
 	if err != nil {

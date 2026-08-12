@@ -449,10 +449,16 @@ describe('EditorCore', () => {
         expect(areEditorCorePropsEqual(prev, next)).toBe(false);
       });
 
-      it('different localContent', () => {
-        const prev = makeProps({ localContent: '' });
-        const next = makeProps({ localContent: 'hello' });
+      it('different localContent (markdown preview active — should re-render)', () => {
+        const prev = makeProps({ localContent: '', markdownPreviewMode: 'split', isMarkdownFile: true });
+        const next = makeProps({ localContent: 'hello', markdownPreviewMode: 'split', isMarkdownFile: true });
         expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
+
+      it('different localContent (no markdown preview — should NOT re-render)', () => {
+        const prev = makeProps({ localContent: '', markdownPreviewMode: 'off', isMarkdownFile: false });
+        const next = makeProps({ localContent: 'hello', markdownPreviewMode: 'off', isMarkdownFile: false });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(true);
       });
 
       it('different reconfigureOptions reference', () => {

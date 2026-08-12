@@ -10,7 +10,7 @@
  */
 
 import type { ViewUpdate } from '@codemirror/view';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import type { CMViewAPI } from './useCMView';
 import { debugLog } from '../utils/log';
@@ -64,6 +64,47 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
   const [cursorPosition, setCursorPosition] = useState<CursorPosition>({ line: 1, column: 0 });
 
+  // rAF throttle: coalesce multiple cursor moves within a single frame into
+  // one React state update. Without this, rapid cursor movement (arrow keys,
+  // click+drag, or typing bursts) fires setCursorPosition on every keydown,
+  // each triggering a full EditorPane re-render that races with CodeMirror's
+  // own DOM updates — the cursor visually jumps back to a stale position
+  // before the next render commits.
+  const pendingCursorRef = useRef<CursorPosition | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+  const isScheduledRef = useRef(false);
+
+  const flushCursor = useCallback(() => {
+    rafIdRef.current = null;
+    isScheduledRef.current = false;
+    const next = pendingCursorRef.current;
+    if (next) {
+      pendingCursorRef.current = null;
+      setCursorPosition(next);
+    }
+  }, []);
+
+  const scheduleCursorUpdate = useCallback(
+    (pos: CursorPosition) => {
+      pendingCursorRef.current = pos;
+      if (!isScheduledRef.current) {
+        isScheduledRef.current = true;
+        rafIdRef.current = requestAnimationFrame(flushCursor);
+      }
+    },
+    [flushCursor],
+  );
+
+  // Cancel any pending rAF on unmount.
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
+
   const handleCursorUpdate = useCallback(
     (update: ViewUpdate) => {
       // Skip cursor position saves during external content replacements
@@ -83,9 +124,9 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
             const lineObj = update.state.doc.lineAt(selection.head);
             const line = lineObj.number; // 1-based line number
             const column = selection.head - lineObj.from; // 0-based column offset within line
-            // Always a fresh object so React never bails out on this update —
-            // this is the only place the footer's live Ln/Col reads from.
-            setCursorPosition({ line, column });
+            // Throttle React state updates: coalesce within a frame so rapid
+            // cursor moves don't trigger per-keystroke re-renders.
+            scheduleCursorUpdate({ line, column });
 
             const buf = bufferRef.current;
             if (buf) {
@@ -113,7 +154,7 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
         }
       }
     },
-    [bufferRef, updateBufferCursor, cmViewApiRef],
+    [bufferRef, updateBufferCursor, cmViewApiRef, scheduleCursorUpdate],
   );
 
   return { selectionInfo, setSelectionInfo, cursorPosition, handleCursorUpdate };

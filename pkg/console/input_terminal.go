@@ -30,7 +30,16 @@ func (ir *InputReader) processPendingResize(resizeCh <-chan os.Signal, parser *E
 func (ir *InputReader) handleResize() bool {
 	oldWidth := ir.terminalWidth
 	ir.updateTerminalWidth()
-	return ir.applyTerminalWidthChange(oldWidth, ir.terminalWidth)
+	changed := ir.applyTerminalWidthChange(oldWidth, ir.terminalWidth)
+	// Notify resize subscribers (e.g. the active turn renderer) so width-
+	// dependent consumers update their snapshots. This is needed when the
+	// resize arrives while the input reader is processing a SIGWINCH that
+	// the footer's watcher might not have fired yet (two independent
+	// handlers, order is not guaranteed).
+	if changed {
+		notifyResizeSubscribers()
+	}
+	return changed
 }
 
 func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {

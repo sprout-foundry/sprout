@@ -82,6 +82,10 @@ type StatusFooter struct {
 	winchStop chan struct{}
 	winchDone chan struct{}
 
+	// resizePollerStop halts the platform resize watcher (SIGWINCH on Unix,
+	// poll timer on Windows). Stored so Stop can clean it up.
+	resizePollerStop func()
+
 	// proseStreaming is set by the AssistantTurnRenderer while prose
 	// chunks are actively being written. When true, Refresh() skips
 	// the draw to avoid DEC save/restore (\0337/\0338) racing with
@@ -201,6 +205,15 @@ func (f *StatusFooter) Start() {
 
 	if !wasActive {
 		go f.watchResize(stopCh, doneCh)
+		// On platforms without SIGWINCH (Windows), watchResize is a no-op.
+		// Start a polling-based resize detector that calls Resize() +
+		// notifyResizeSubscribers() on a timer. The stop function is stored
+		// and invoked from Stop().
+		f.mu.Lock()
+		f.resizePollerStop = startResizePoller(func() {
+			f.Resize()
+		})
+		f.mu.Unlock()
 	}
 }
 
@@ -391,11 +404,16 @@ func (f *StatusFooter) Stop() {
 	doneCh := f.winchDone
 	f.winchStop = nil
 	f.winchDone = nil
+	pollerStop := f.resizePollerStop
+	f.resizePollerStop = nil
 	f.mu.Unlock()
 
 	if stopCh != nil {
 		close(stopCh)
 		<-doneCh
+	}
+	if pollerStop != nil {
+		pollerStop()
 	}
 
 	_, rows := f.terminalSize()
@@ -452,6 +470,10 @@ func (f *StatusFooter) Stop() {
 // re-applies the scroll region + redraws the footer. Exits when stopCh
 // is closed. On platforms without SIGWINCH (Windows, js/wasm) the goroutine
 // just waits for stopCh and never fires Resize.
+//
+// After its own Resize, it calls notifyResizeSubscribers so the active
+// turn renderer and any other width-dependent consumers update their
+// width snapshots.
 func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 	defer close(doneCh)
 	sig := resizeSignal()
@@ -468,6 +490,7 @@ func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 			return
 		case <-ch:
 			f.Resize()
+			notifyResizeSubscribers()
 		}
 	}
 }

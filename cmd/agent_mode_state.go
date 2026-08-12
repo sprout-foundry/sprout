@@ -16,6 +16,13 @@ import (
 // callback. Safe because only one turn is active at a time in a CLI REPL.
 var currentTurnRenderer atomic.Pointer[console.AssistantTurnRenderer]
 
+// currentResizeUnsub holds the deregistration function for the active turn's
+// resize subscriber. When the terminal is resized mid-turn, the subscriber
+// calls SetTerminalWidth on the active renderer so tables and horizontal rules
+// use the current width instead of the stale snapshot from beginTurn. Cleared
+// in endTurn.
+var currentResizeUnsub atomic.Pointer[func()]
+
 // firstProseChunk tracks whether the streaming callback has emitted the
 // first prose chunk of the current turn. It's used by the streaming
 // callback to inject a single `\n` between the activity-indicator's
@@ -34,9 +41,10 @@ var firstProseChunk atomic.Bool
 // constructing the renderer and storing it, to avoid forgetting the
 // firstProseChunk reset.
 func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
+	width := GetTerminalWidth()
 	r := console.NewAssistantTurnRenderer(
-		GetTerminalWidth(),
-		console.NewMarkdownFormatter(true, true),
+		width,
+		console.NewMarkdownFormatter(true, true).SetWidth(width),
 	)
 	// Wire the status footer so the renderer can suppress its refresh
 	// during active prose streaming — the root cause of the "scattered
@@ -46,6 +54,15 @@ func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
 	}
 	currentTurnRenderer.Store(r)
 	firstProseChunk.Store(false)
+	// Subscribe to terminal resize events so the renderer's width snapshot
+	// (and its markdown formatter's table column clamping) updates live
+	// when the terminal is resized mid-turn. Without this, tables and
+	// horizontal rules use the stale width captured at turn start, causing
+	// overflow or excessive padding after a resize.
+	unsub := console.RegisterResizeSubscriber(func(width int) {
+		r.SetTerminalWidth(width)
+	})
+	currentResizeUnsub.Store(&unsub)
 	if router := chatAgent.OutputRouter(); router != nil {
 		router.SetExternalWriteHook(r.OnExternalWrite)
 	}
@@ -63,6 +80,11 @@ func endTurn(chatAgent *agent.Agent, r *console.AssistantTurnRenderer) {
 	if router := chatAgent.OutputRouter(); router != nil {
 		router.SetExternalWriteHook(nil)
 		router.SetReasoningCallback(nil)
+	}
+	// Deregister the resize subscriber before finalizing so a late resize
+	// doesn't update a renderer that's about to be torn down.
+	if unsub := currentResizeUnsub.Swap(nil); unsub != nil {
+		(*unsub)()
 	}
 	r.FinalizeAtTurnEnd()
 	currentTurnRenderer.Store(nil)

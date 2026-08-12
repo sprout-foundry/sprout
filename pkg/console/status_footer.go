@@ -367,11 +367,11 @@ func (f *StatusFooter) Resize() {
 	//
 	// Footer content is padded to the terminal width at draw time. When
 	// the terminal shrinks, those padded rows wrap across multiple
-	// physical rows — so \033[K (clear to end of line) on the footer's
-	// known row positions doesn't clear the wrapped overflow that now
-	// sits above them. We position at the topmost footer row and use
-	// \033[J (clear to end of screen) to wipe everything from the
-	// topmost footer row downward, then redraw fresh content.
+	// physical rows. The terminal reflows everything, so the old footer
+	// content is now somewhere in the middle of the screen. We clear
+	// from a computed top row (based on the NEW terminal height minus
+	// the footer's reserved rows minus wrapped overflow) to the end of
+	// the screen, then redraw fresh content at the new bottom.
 	if oldRows > 1 {
 		fmt.Fprint(f.w, "\033[r")
 		fmt.Fprint(f.w, "\0337")
@@ -382,36 +382,28 @@ func (f *StatusFooter) Resize() {
 		oldCols := f.lastCols
 		f.mu.Unlock()
 
-		// Determine the topmost row the footer occupied (including
-		// steer panel rows). Content is at oldRows and oldRows-1;
-		// steer adds up to lastSteer rows above that; hint adds 1.
-		topRow := oldRows - 1
-		if lastHint > 0 && oldRows > 2 {
-			topRow = oldRows - 2
-		}
-		if steerWasActive && lastSteer > 0 {
-			steerTop := steerRowFor(oldRows, lastSteer, lastHint, 0)
-			if steerTop < topRow {
-				topRow = steerTop
-			}
+		// Compute the footer's reserved rows in the NEW layout.
+		newCols, newRows := f.terminalSize()
+		reserved := 2 + lastSteer + lastHint
+		if newRows < reserved+1 {
+			newRows = reserved + 1
 		}
 
-		// Extend the clear range upward to catch wrapped overflow.
-		// Each footer row padded to oldCols wraps to ceil(oldCols/newCols)
-		// rows at the new width. The overflow appears above the footer's
-		// known row positions.
-		newCols, _ := f.terminalSize()
-		footerRows := 2 + lastSteer + lastHint
-		overflow := f.computeOverflowRows(oldCols, newCols, footerRows)
+		// Topmost footer row in the new layout.
+		topRow := newRows - reserved
+
+		// Extend the clear range upward to catch wrapped overflow from
+		// the old wider content.
+		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
 		topRow -= overflow
 
 		if topRow < 1 {
 			topRow = 1
 		}
 
-		// Clear from the topmost footer row (including overflow) to the
-		// end of the screen. \033[J wipes everything below the cursor,
-		// catching all stale wrapped copies in one pass.
+		_ = steerWasActive // consumed below via lastSteer in drawLocked
+
+		// Clear from the topmost row to the end of the screen.
 		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
 		fmt.Fprint(f.w, "\0338")
 	}
@@ -478,30 +470,19 @@ func (f *StatusFooter) Stop() {
 
 	_, rows := f.terminalSize()
 	if rows > 1 {
-		// Clear all pinned footer rows. Use \033[J (clear to end of screen)
-		// from the topmost footer row to catch any wrapped overflow from
-		// content padded to a previous (wider) terminal width.
 		f.mu.Lock()
-		hintWasActive := f.lastHintRows > 0
-		steerWasActive := f.steerActive
 		lastSteer := f.lastSteerRows
 		lastHint := f.lastHintRows
 		oldCols := f.lastCols
 		f.mu.Unlock()
-		topRow := rows - 1
-		if hintWasActive {
-			topRow = rows - 2
-		}
-		if steerWasActive && lastSteer > 0 {
-			steerTop := steerRowFor(rows, lastSteer, lastHint, 0)
-			if steerTop < topRow {
-				topRow = steerTop
-			}
-		}
+
+		// Compute the footer's reserved rows.
+		reserved := 2 + lastSteer + lastHint
+		topRow := rows - reserved
+
 		// Extend upward for wrapped overflow (same logic as Resize).
 		newCols, _ := f.terminalSize()
-		footerRows := 2 + lastSteer + lastHint
-		overflow := f.computeOverflowRows(oldCols, newCols, footerRows)
+		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
 		topRow -= overflow
 		if topRow < 1 {
 			topRow = 1

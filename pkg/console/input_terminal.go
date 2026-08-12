@@ -51,51 +51,34 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 		return false
 	}
 
-	// Save the old rendered content width before resetting tracking state.
-	// The terminal has already reflowed the on-screen content to the new
-	// width, so a row that fit on one line at the old width may now wrap
-	// across multiple physical rows. We need to know how many rows the
-	// OLD content occupies at the NEW width so we can move the cursor up
-	// far enough to clear all stale wrapped copies before redrawing.
+	// Compute how many physical rows the OLD content occupies at the
+	// new width. The terminal has already reflowed the on-screen rows,
+	// so a prompt that fit on one line at the old width may now wrap
+	// across multiple rows. We set lastVisualRows to this count so
+	// refreshInputLine's clear loop (which uses max(current, previous)
+	// rows) will clear all stale wrapped copies before redrawing.
 	oldContentLength := ir.lastLineLength
-
-	ir.terminalWidth = newWidth
-	ir.lastLineLength = 0
-	ir.currentPhysicalLine = 0
-	ir.lastVisualRows = 0
-	ir.lastWrapPending = false
-
-	// Compute how many physical rows the old content occupies after the
-	// terminal's reflow to the new (typically smaller) width.
 	reflowedRows := 1
 	if oldContentLength > 0 && newWidth > 0 {
 		reflowedRows = (oldContentLength-1)/newWidth + 1
 	}
 
-	// Also account for the footer's padded rows wrapping. The footer
-	// content (rule + content + optional steer/hint rows) was padded to
-	// oldWidth and now wraps at newWidth. Each footer row produces
-	// ceil(oldWidth/newWidth) - 1 extra rows of overflow. Without
-	// clearing these, the old footer content stacks above the prompt.
-	footerOverflow := 0
-	if oldWidth > newWidth && oldWidth > 0 {
-		rowsPerFooterLine := (oldWidth-1)/newWidth + 1
-		// Conservative: assume 2 footer rows (rule + content). The
-		// footer's own Resize handler does the precise computation.
-		footerOverflow = (rowsPerFooterLine - 1) * 2
-	}
+	ir.terminalWidth = newWidth
+	ir.lastLineLength = 0
+	// After the terminal's reflow, the cursor is at the bottom of the
+	// reflowed prompt block. Set currentPhysicalLine and lastVisualRows
+	// so refreshInputLine's clear loop moves up to the TOP of the block
+	// before clearing each row. Without this, the clear loop stays at
+	// the cursor's current row and misses stale wrapped copies above.
+	ir.currentPhysicalLine = reflowedRows - 1
+	ir.lastVisualRows = reflowedRows
+	ir.lastWrapPending = false
 
-	totalClearUp := reflowedRows - 1 + footerOverflow
-
-	LockOutput()
-	// Move to column 0, then up to the top of the stale content block
-	// (prompt reflow + footer overflow). Clear to end of screen.
-	fmt.Print("\r")
-	if totalClearUp > 0 {
-		fmt.Printf("\033[%dA", totalClearUp)
-	}
-	fmt.Print("\033[J")
-	UnlockOutput()
+	// Redraw in place. refreshInputLine will move up lastVisualRows
+	// lines, clear each one with \033[K (per-line clear, NOT \033[J
+	// which would wipe the footer below), then redraw the prompt.
+	// The footer's own SIGWINCH handler (watchResize → Resize) takes
+	// care of clearing and redrawing the footer rows independently.
 	ir.Refresh()
 	return true
 }

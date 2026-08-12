@@ -51,21 +51,38 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 		return false
 	}
 
+	// Save the old rendered content width before resetting tracking state.
+	// The terminal has already reflowed the on-screen content to the new
+	// width, so a row that fit on one line at the old width may now wrap
+	// across multiple physical rows. We need to know how many rows the
+	// OLD content occupies at the NEW width so we can move the cursor up
+	// far enough to clear all stale wrapped copies before redrawing.
+	oldContentLength := ir.lastLineLength
+
 	ir.terminalWidth = newWidth
 	ir.lastLineLength = 0
 	ir.currentPhysicalLine = 0
 	ir.lastVisualRows = 0
 	ir.lastWrapPending = false
 
-	// After a resize the terminal re-soft-wraps the on-screen rows to the new
-	// width, so our captured geometry is stale and the block's top row can't be
-	// located reliably without a cursor-position query. Clear from the cursor to
-	// the end of the screen (dropping any stale wrapped rows below) and redraw
-	// the prompt+line fresh in place. This avoids the extra blank line the prior
-	// "\r CLEAR \n" inserted on every resize; rows above the cursor are left to
-	// the terminal's own reflow.
+	// Compute how many physical rows the old content occupies after the
+	// terminal's reflow to the new (typically smaller) width.
+	reflowedRows := 1
+	if oldContentLength > 0 && newWidth > 0 {
+		reflowedRows = (oldContentLength-1)/newWidth + 1
+	}
+
 	LockOutput()
-	fmt.Print("\r\033[J")
+	// Move to column 0, then up to the top of the reflowed content block.
+	// Without this upward move, \033[J only clears from the cursor's
+	// post-reflow position downward, leaving stale wrapped copies of the
+	// old prompt above — the duplicated-prompt symptom on terminal shrink.
+	fmt.Print("\r")
+	if reflowedRows > 1 {
+		fmt.Printf("\033[%dA", reflowedRows-1)
+	}
+	// Clear from the top of the block to the end of the screen.
+	fmt.Print("\033[J")
 	UnlockOutput()
 	ir.Refresh()
 	return true

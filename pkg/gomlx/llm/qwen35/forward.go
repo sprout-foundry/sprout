@@ -37,10 +37,6 @@ type Qwen35 struct {
 	// already added 1 to the RMSNorm weights. When true, rmsNormQwen35
 	// uses plain multiplication instead of (1+w).
 	normPreAdded bool
-
-	// compiledDecoder caches the compiled decode closure (experimental).
-	// nil unless SPROUT_COMPILED_DECODE=1 and the model has no DeltaNet layers.
-	compiledDecoder *compiledDecoder
 }
 
 func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
@@ -503,23 +499,6 @@ func dumpArrayF32(a tensor.Array, path string, backend tensor.Backend, s tensor.
 }
 
 func (q *Qwen35) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (int, error) {
-	// Compiled decode path (experimental): fuses ops into fewer Metal kernels.
-	// Only available for full-attention models (no DeltaNet). Falls back to
-	// eager on error or when DeltaNet layers are present.
-	if useCompiledDecode() && q.compiledDecoder == nil && q.cfg.FullAttentionInterval <= 1 {
-		dec, err := q.compileDecodeClosure(cache)
-		if err == nil {
-			q.compiledDecoder = dec
-		}
-	}
-	if q.compiledDecoder != nil {
-		tok, err := q.forwardDecodeCompiled(tokenID, pos, cache)
-		if err == nil {
-			return tok, nil
-		}
-		// Fall through to eager on error
-	}
-
 	logits, err := q.decodeInternal(tokenID, pos, cache)
 	if err != nil {
 		return 0, err
@@ -1037,26 +1016,19 @@ func (q *Qwen35) fullAttention(h tensor.Array, lw *layerWeights, layerIdx, seqLe
 	defer kRot.Free()
 
 	var kForAttn, vForAttn tensor.Array
+	var kWindow, vWindow tensor.Array
 	if cache != nil && cache.IsInitialized(layerIdx) {
-		cached, err := cache.Get(layerIdx)
+		// AppendWindow writes one position into a geometrically grown buffer
+		// instead of concatenating, so per-token cost does not scale with
+		// sequence length. The returned views borrow the cache's buffers.
+		kw, vw, err := cache.AppendWindow(layerIdx, q.backend.RetainArray(kRot), q.backend.RetainArray(vT))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cache append: %w", err)
 		}
-		newK, err := q.backend.ConcatenateAxis([]tensor.Array{cached.K, kRot}, 2, s)
-		if err != nil {
-			return nil, fmt.Errorf("concat K: %w", err)
-		}
-		newV, err := q.backend.ConcatenateAxis([]tensor.Array{cached.V, vT}, 2, s)
-		if err != nil {
-			newK.Free()
-			return nil, fmt.Errorf("concat V: %w", err)
-		}
-		cached.K.Free()
-		cached.V.Free()
-		cached.K = newK
-		cached.V = newV
-		kForAttn = newK
-		vForAttn = newV
+		kForAttn, vForAttn = kw, vw
+		kWindow, vWindow = kw, vw
+		defer kWindow.Free()
+		defer vWindow.Free()
 	} else if cache != nil {
 		kForAttn = kRot
 		vForAttn = vT
@@ -1072,25 +1044,16 @@ func (q *Qwen35) fullAttention(h tensor.Array, lw *layerWeights, layerIdx, seqLe
 		vForAttn = vT
 	}
 
-	// Expand K/V to num_heads and run fused SDPA.
-	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
-	if err != nil {
-		return nil, fmt.Errorf("expand K heads: %w", err)
-	}
-	defer kExp.Free()
-
-	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
-	if err != nil {
-		return nil, fmt.Errorf("expand V heads: %w", err)
-	}
-	defer vExp.Free()
-
+	// No ExpandKVHeads: MLX's SDPA handles GQA natively. Materializing the
+	// KV heads up to NumHeads would allocate and copy the whole cache
+	// (NumHeads/NumKVHeads)x per layer per token, which dominates decode
+	// cost at long context.
 	maskMode := ""
 	if seqLen > 1 {
 		maskMode = "causal"
 	}
 	scale := float32(1.0 / sqrt(float64(headDim)))
-	ctx, err := q.backend.FastScaledDotProductAttention(qT, kExp, vExp, scale, maskMode, nil, nil, s)
+	ctx, err := q.backend.FastScaledDotProductAttention(qT, kForAttn, vForAttn, scale, maskMode, nil, nil, s)
 	if err != nil {
 		return nil, fmt.Errorf("fused attention: %w", err)
 	}

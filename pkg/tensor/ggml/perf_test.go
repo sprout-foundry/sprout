@@ -93,6 +93,8 @@ func TestCPUQuantFastPaths(t *testing.T) {
 	}
 	if !dotprod || !i8mm {
 		t.Skipf("libggml-cpu lacks dotprod/i8mm (built for baseline armv8-a); "+
-			"rebuild with -DGGML_NATIVE=ON to enable them. dotprod=%v i8mm=%v", dotprod, i8mm)
+			"rebuild with -DGGML_NATIVE=OFF -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+i8mm. "+
+			"GGML_NATIVE=ON does NOT work here: it passes -mcpu=native, which gcc "+
+			"resolves to baseline on this CPU. dotprod=%v i8mm=%v", dotprod, i8mm)
 	}
 }

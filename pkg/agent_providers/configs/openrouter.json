@@ -5545,6 +5545,58 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Seed 2.0 Code is a model from ByteDance Seed optimized for agentic coding. It is suited for frontend development, multilingual programming tasks, and coding-agent workflows in tools such as Claude Code, Kilo, and OpenCode.",
+        "id": "bytedance-seed/seed-2.0-code",
+        "input_cost": 0.5,
+        "name": "ByteDance Seed: Seed-2.0-Code",
+        "output_cost": 3,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises against using it for agentic coding or knowledge-heavy tasks.",
+        "id": "liquid/lfm-2.5-2.6b:free",
+        "input_cost": 0,
+        "name": "LiquidAI: LFM2.5-2.6B (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 262144,
+        "description": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agentic workloads and specialized tasks that benefit from domain-specific customization.",
+        "id": "nvidia/nemotron-3.5-lightning",
+        "input_cost": 0.1,
+        "name": "NVIDIA: Nemotron 3.5 Lightning",
+        "output_cost": 0.25,
+        "tags": [
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agentic workloads and specialized tasks that benefit from domain-specific customization.",
+        "id": "nvidia/nemotron-3.5-lightning:free",
+        "input_cost": 0,
+        "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
       }
     ],
     "model_overrides": {

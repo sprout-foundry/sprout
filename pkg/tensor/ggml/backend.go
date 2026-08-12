@@ -16,12 +16,22 @@ package ggml
 #cgo darwin LDFLAGS: -L/opt/homebrew/lib -lggml -lggml-base -framework Metal -framework Foundation
 #cgo linux LDFLAGS: -L/usr/local/lib -lggml -lggml-base
 
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <ggml.h>
 #include <ggml-backend.h>
 #include <ggml-alloc.h>
+
+#include <dlfcn.h>
+
+// The CPU backend is dlopened by ggml_backend_load_all, so its feature
+// predicates are not available at link time. Returns -1 when unresolved.
+int ggml_feat(const char * name) {
+    int (*fn)(void) = (int (*)(void)) dlsym(RTLD_DEFAULT, name);
+    return fn ? fn() : -1;
+}
 
 // Create init params.
 struct ggml_init_params ggml_make_params(size_t mem_size) {
@@ -328,6 +338,19 @@ func (g *GGMLBackend) pinTensorData(t *C.struct_ggml_tensor, data []byte) error 
 	}
 	g.pinned.Store(uintptr(unsafe.Pointer(t)), unsafe.Pointer(buf))
 	return nil
+}
+
+// cpuFeatures reports which ARM quant fast paths the ggml build detected.
+func (g *GGMLBackend) cpuFeatures() (dotprod, i8mm, neon bool) {
+	if g.ensureInit() != nil {
+		return false, false, false
+	}
+	feat := func(n string) bool {
+		cs := C.CString(n)
+		defer C.free(unsafe.Pointer(cs))
+		return C.ggml_feat(cs) > 0
+	}
+	return feat("ggml_cpu_has_dotprod"), feat("ggml_cpu_has_matmul_int8"), feat("ggml_cpu_has_neon")
 }
 
 // unpin releases a tensor's pinned buffer. Used for the short-lived inputs

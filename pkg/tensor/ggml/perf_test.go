@@ -75,3 +75,24 @@ func BenchmarkQ4MatMul(b *testing.B) {
 		r.Free()
 	}
 }
+
+// The quantized matmul kernels have ARM fast paths gated on instructions this
+// CPU has (asimddp, i8mm). They are selected at runtime from flags baked in
+// when libggml-cpu was compiled, so a library built for baseline armv8-a
+// silently falls back to the generic NEON path and roughly halves decode
+// throughput. Nothing errors — it is only visible here.
+func TestCPUQuantFastPaths(t *testing.T) {
+	g := &GGMLBackend{}
+	if !g.Available() {
+		t.Skip("GGML backend not available")
+	}
+	dotprod, i8mm, neon := g.cpuFeatures()
+	t.Logf("ggml cpu fast paths: dotprod=%v i8mm=%v neon=%v", dotprod, i8mm, neon)
+	if !neon {
+		t.Error("ggml built without NEON; quantized matmul will be scalar")
+	}
+	if !dotprod || !i8mm {
+		t.Skipf("libggml-cpu lacks dotprod/i8mm (built for baseline armv8-a); "+
+			"rebuild with -DGGML_NATIVE=ON to enable them. dotprod=%v i8mm=%v", dotprod, i8mm)
+	}
+}

@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package qwen3
 
@@ -97,25 +97,17 @@ func (q *Qwen3) attention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, st
 	var kForAttn, vForAttn tensor.Array
 
 	if cache != nil && cache.IsInitialized(layerIdx) {
-		cached, err := cache.Get(layerIdx)
+		// AppendWindow writes one position into a geometrically grown
+		// buffer instead of concatenating, so per-token cost does not
+		// scale with sequence length. The views are caller-owned.
+		kw, vw, err := cache.AppendWindow(layerIdx, q.backend.RetainArray(kRot), q.backend.RetainArray(vT))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cache append: %w", err)
 		}
-		newK, err := q.backend.ConcatenateAxis([]tensor.Array{cached.K, kRot}, 2, s)
-		if err != nil {
-			return nil, fmt.Errorf("concat K: %w", err)
-		}
-		newV, err := q.backend.ConcatenateAxis([]tensor.Array{cached.V, vT}, 2, s)
-		if err != nil {
-			newK.Free()
-			return nil, fmt.Errorf("concat V: %w", err)
-		}
-		cached.K.Free()
-		cached.V.Free()
-		cached.K = newK
-		cached.V = newV
-		kForAttn = newK
-		vForAttn = newV
+		defer kw.Free()
+		defer vw.Free()
+		kForAttn = kw
+		vForAttn = vw
 	} else if cache != nil {
 		kForAttn = kRot
 		vForAttn = vT
@@ -131,17 +123,9 @@ func (q *Qwen3) attention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, st
 		vForAttn = vT
 	}
 
-	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
-	if err != nil {
-		return nil, fmt.Errorf("k expand: %w", err)
-	}
-	defer kExp.Free()
-
-	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, q.backend, s)
-	if err != nil {
-		return nil, fmt.Errorf("v expand: %w", err)
-	}
-	defer vExp.Free()
+	// No ExpandKVHeads: MLX's SDPA handles GQA natively. Materializing the KV
+	// heads would copy the whole cache (NumHeads/NumKVHeads)x per layer per
+	// token, which dominates decode cost at long context.
 
 	// Fused scaled dot-product attention: Q@K^T/scale + mask + softmax + @V
 	// is a single Metal kernel via mlx_fast_scaled_dot_product_attention.
@@ -153,7 +137,7 @@ func (q *Qwen3) attention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, st
 		maskMode = "causal"
 	}
 	scale := float32(1.0 / math.Sqrt(float64(cfg.HeadDim)))
-	ctx, err := q.backend.FastScaledDotProductAttention(qRot, kExp, vExp, scale, maskMode, nil, nil, s)
+	ctx, err := q.backend.FastScaledDotProductAttention(qRot, kForAttn, vForAttn, scale, maskMode, nil, nil, s)
 	if err != nil {
 		return nil, fmt.Errorf("fused attention: %w", err)
 	}

@@ -28,18 +28,6 @@ import (
 	"time"
 )
 
-// DefaultPort is the port the local LLM server listens on. Matches the
-// sprout-local provider config endpoint.
-const DefaultPort = 18081
-
-// DefaultModelsDir is where downloaded models are stored.
-var DefaultModelsDir = func() string {
-	if h, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(h, "dev", "llm-models")
-	}
-	return filepath.Join(os.TempDir(), "llm-models")
-}()
-
 // ServerStatus describes the state of the local LLM server.
 type ServerStatus struct {
 	Running bool   `json:"running"`
@@ -174,20 +162,37 @@ func spawnMLXServer(port int, modelDir string) error {
 	return nil
 }
 
-// findServerBinary locates the llm_server binary. On macOS/Linux it looks
-// for "llm_server" next to the sprout executable, then on PATH.
+// findServerBinary locates the llm_server binary. Search order:
+//  1. Next to the sprout executable (e.g. ~/go/bin/llm_server or repo dir)
+//  2. Current working directory (common during development: ./llm_server)
+//  3. The directory of the Go source tree (derived from executable path
+//     when running from a dev checkout)
+//  4. PATH
 func findServerBinary() (string, error) {
+	// 1. Next to the running executable.
 	exePath, err := os.Executable()
 	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exePath), "llm_server")
+		exeDir := filepath.Dir(exePath)
+		candidate := filepath.Join(exeDir, "llm_server")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
 	}
+
+	// 2. Current working directory.
+	if wd, err := os.Getwd(); err == nil {
+		candidate := filepath.Join(wd, "llm_server")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	// 3. PATH.
 	if path, err := exec.LookPath("llm_server"); err == nil {
 		return path, nil
 	}
-	return "", errors.New("llm_server binary not found — expected next to sprout binary or on PATH")
+
+	return "", errors.New("llm_server binary not found — build it with 'make build-llm-server' and place it next to the sprout binary, in the current directory, or on PATH")
 }
 
 // EnsureServerHealth checks if the server is running and starts it if not,

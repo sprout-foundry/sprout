@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 // Package mlx is the Apple Metal tensor backend, implemented as a thin CGO
 // wrapper around Apple's MLX C API. It implements the tensor.Backend interface.

@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package llm
 
@@ -126,15 +126,6 @@ func ApplyCausalMask(scores tensor.Array, seqLen, startPos, cachedLen int, b ten
 	defer maskBF16.Free()
 
 	return b.Add(scores, maskBF16, s)
-}
-
-// ExpandKVHeads replicates KV heads to match Q heads for GQA.
-func ExpandKVHeads(x tensor.Array, numHeads, numKVHeads int, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
-	if numHeads == numKVHeads {
-		return x, nil
-	}
-	repeats := numHeads / numKVHeads
-	return b.RepeatAxis(x, repeats, 1, s)
 }
 
 // GatherAxis gathers rows from a table by index. For embedding lookups.

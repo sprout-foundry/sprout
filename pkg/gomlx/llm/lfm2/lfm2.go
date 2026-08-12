@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package lfm2
 
@@ -166,16 +166,6 @@ func (l *LFM2) InitWeights(path string, s tensor.Stream) error {
 			lw.convWeight, err = sf.Get(p+".conv.conv.weight", l.backend, s)
 			if err != nil {
 				return fmt.Errorf("layer %d conv weight: %w", i, err)
-			}
-			// Sanitize: if shape[-1] > shape[1], transpose (PyTorch layout → MLX)
-			cwShape := lw.convWeight.Shape()
-			if len(cwShape) == 3 && cwShape[2] > cwShape[1] {
-				transposed, err := l.backend.TransposeAxes(lw.convWeight, []int{0, 2, 1}, s)
-				if err != nil {
-					return fmt.Errorf("layer %d conv transpose: %w", i, err)
-				}
-				lw.convWeight.Free()
-				lw.convWeight = transposed
 			}
 
 			lw.inProj, err = llm.LoadLinear(sf, p+".conv.in_proj.weight", l.backend, s, l.cfg.Quantization)

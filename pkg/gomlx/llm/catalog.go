@@ -25,11 +25,10 @@ type CatalogModel struct {
 // by recommended RAM. SelectModelForRAM picks the first that fits.
 var ModelCatalog = []CatalogModel{
 	{
-		Name:      "lfm2.5-2.6b",
-		Dir:       "lfm2.5-2.6b-mlx/5bit",
-		HFRepo:    "LiquidAI/LFM2.5-2.6B-MLX",
-		HFInclude: "5bit/*",
-		MinRAM:    8 * 1024 * 1024 * 1024, // 8GB
+		Name:   "qwen3.5-4b",
+		Dir:    "qwen3.5-4b-4bit",
+		HFRepo: "mlx-community/Qwen3.5-4B-4bit",
+		MinRAM: 8 * 1024 * 1024 * 1024, // 8GB
 	},
 	{
 		Name:   "gemma4-e2b",
@@ -223,25 +222,48 @@ func findTunedForRAM(modelsRoot string, ramBytes uint64) *CatalogModel {
 	if rec == nil {
 		return nil
 	}
+	recParams := extractParamSize(rec.Name)
 	installed := ListInstalledModels(modelsRoot)
-	for _, im := range installed {
+	var bestTuned *InstalledModel
+	for i := range installed {
+		im := &installed[i]
 		if !im.IsTuned {
 			continue
 		}
-		// Match by param size (e.g. "4b" in "qwen35-4b-sprout-tuned-q8").
-		if im.ParamSize != "" && rec.Name != "" {
-			recParams := extractParamSize(rec.Name)
-			if recParams != "" && im.ParamSize == recParams {
-				if err := ModelMemoryGate(im.Dir); err == nil {
-					return &CatalogModel{
-						Name:   im.Name,
-						Dir:    im.Dir,
-						HFRepo: "",
-						MinRAM: rec.MinRAM,
-					}
-				}
+		if recParams != "" && im.ParamSize != "" && im.ParamSize == recParams {
+			if err := ModelMemoryGate(im.Dir); err != nil {
+				continue
+			}
+			if bestTuned == nil || preferTunedQuant(im, bestTuned) {
+				bestTuned = im
 			}
 		}
 	}
+	if bestTuned != nil {
+		return &CatalogModel{
+			Name:   bestTuned.Name,
+			Dir:    bestTuned.Dir,
+			HFRepo: "",
+			MinRAM: rec.MinRAM,
+		}
+	}
 	return nil
+}
+
+// preferTunedQuant returns true if a is a better quantization than b for
+// local inference. Prefers mlx-q5 (balanced speed/quality) over q5 and q8.
+func preferTunedQuant(a, b *InstalledModel) bool {
+	score := func(q string) int {
+		switch q {
+		case "mlx-q5":
+			return 3
+		case "q5", "-q5":
+			return 2
+		case "q8", "-q8":
+			return 1
+		default:
+			return 0
+		}
+	}
+	return score(a.QuantBits) > score(b.QuantBits)
 }

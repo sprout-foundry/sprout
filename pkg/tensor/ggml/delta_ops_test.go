@@ -245,3 +245,41 @@ func TestConcatenateAxis1_3D(t *testing.T) {
 	}
 	checkClose(t, out, append(append([]float32{}, aData...), bData...), 0, "concat axis1")
 }
+
+// The windowed KV cache writes each new position into a grown buffer via
+// SliceUpdate. Writing at the wrong offset silently clobbers position 0.
+func TestSliceUpdateWritesAtOffset(t *testing.T) {
+	g := &GGMLBackend{}
+	if !g.Available() {
+		t.Skip("GGML backend not available")
+	}
+	var b tensor.Backend = g
+	s, _ := b.DefaultGPUStream()
+
+	// [B, H, S, D] buffer with room for 4 positions; write one at index 2.
+	const B, H, S, D = 1, 2, 4, 3
+	buf := make([]float32, B*H*S*D)
+	x, _ := b.NewArrayFromFloat32(buf, []int{B, H, S, D})
+
+	upd := []float32{1, 2, 3, 4, 5, 6} // [B,H,1,D]
+	u, _ := b.NewArrayFromFloat32(upd, []int{B, H, 1, D})
+
+	got, err := b.SliceUpdate(x, u, []int{0, 0, 2, 0}, []int{B, H, 3, D}, s)
+	if err != nil {
+		t.Fatalf("SliceUpdate: %v", err)
+	}
+	if gs := got.Shape(); !equalInts(gs, []int{B, H, S, D}) {
+		t.Errorf("shape = %v, want [%d %d %d %d]", gs, B, H, S, D)
+	}
+	out, err := got.Float32Data()
+	if err != nil {
+		t.Fatalf("Float32Data: %v", err)
+	}
+	want := make([]float32, B*H*S*D)
+	for h := 0; h < H; h++ {
+		for d := 0; d < D; d++ {
+			want[(h*S+2)*D+d] = upd[h*D+d]
+		}
+	}
+	checkClose(t, out, want, 0, "SliceUpdate at offset")
+}

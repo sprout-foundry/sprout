@@ -11,23 +11,31 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 
-// init wires the local LLM server lifecycle hook so that when a chat
-// request to the sprout-local provider fails with a connection error,
-// the agent automatically starts the local server and retries.
-//
-// This is the integration point between the generic provider layer
-// (which has no build tags) and the localmodel package (which requires
-// a real OS to spawn processes). The hook is nil on WASM builds.
+// init wires the local LLM hooks. On Apple Silicon, the sprout-local
+// provider runs entirely in-process via MLX (no HTTP server, no separate
+// process). On other platforms, the provider stub returns clear errors.
 func init() {
 	providers.LocalServerHook = func(providerID string) error {
 		if providerID != string(api.SproutLocalClientType) {
 			return nil
 		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		defer cancel()
-
-		return localmodel.EnsureServerForProviderWithCheck(ctx, providerID)
+		return ensureLocalServer()
 	}
 	providers.LocalActivityHook = localmodel.TouchActivity
+}
+
+// ensureLocalServer loads the local model into GPU memory if it isn't
+// already loaded. On MLX platforms this is a direct function call — no
+// HTTP server, no process spawning.
+func ensureLocalServer() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	return localmodel.EnsureServerForProviderWithCheck(ctx, string(api.SproutLocalClientType))
+}
+
+// EnsureLocalServer pre-loads the local model so the first chat request
+// doesn't pay the load latency. Called when the user switches to
+// sprout-local via /provider.
+func (a *Agent) EnsureLocalServer() error {
+	return ensureLocalServer()
 }

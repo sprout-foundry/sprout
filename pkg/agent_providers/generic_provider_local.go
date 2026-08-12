@@ -2,6 +2,8 @@ package providers
 
 import (
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/logging"
 )
 
 // LocalServerHook is called when a local provider (sprout-local) gets a
@@ -46,6 +48,8 @@ func (p *GenericProvider) tryLocalServerRecovery() bool {
 		return false
 	}
 	if err := LocalServerHook(p.config.Name); err != nil {
+		logging.LogRequestPayloadOnError(nil, p.config.Name, p.GetModel(), false,
+			"local_server_start_failed", err)
 		return false
 	}
 	if LocalActivityHook != nil {

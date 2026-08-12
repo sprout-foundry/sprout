@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -11,11 +12,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -108,12 +111,13 @@ func createChatAgent() (*agent.Agent, error) {
 	// so the subsequent NewAgent() call picks up the fresh configuration.
 	maybeRunOnboarding()
 
-	// If using the local provider, ensure the server is running.
+	// If using the local provider, pre-load the model in-process.
 	if isLocalProvider() {
-		if err := ensureLocalServerRunning(); err != nil {
-			console.GlyphWarning.Printf("Local AI server: %v", err)
-			// Continue anyway — the error will surface on first chat request
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		if err := localmodel.EnsureServerForProviderWithCheck(ctx, "sprout-local"); err != nil {
+			console.GlyphWarning.Printf("Local AI: %v", err)
 		}
+		cancel()
 	}
 
 	var chatAgent *agent.Agent

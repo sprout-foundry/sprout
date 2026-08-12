@@ -10,19 +10,18 @@ import (
 // MinRAM fits, skipping entries whose directory is not installed.
 func TestSelectModelForRAM(t *testing.T) {
 	root := t.TempDir()
-	for _, d := range []string{"gemma-4-e2b-it-4bit"} {
+	for _, d := range []string{"gemma-4-e2b-it-4bit", "qwen3.5-4b-4bit"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// lfm2.5-2.6b-mlx/4bit is NOT created, so it must be skipped.
 
 	cases := []struct {
 		name string
 		ram  uint64
 		want string // expected Dir basename, or "" for error
 	}{
-		{"8gb_no_lfm", 8 * 1024 * 1024 * 1024, "gemma-4-e2b-it-4bit"},
+		{"8gb", 8 * 1024 * 1024 * 1024, "qwen3.5-4b-4bit"},
 		{"4gb", 4 * 1024 * 1024 * 1024, "gemma-4-e2b-it-4bit"},
 		{"1gb", 1 * 1024 * 1024 * 1024, "gemma-4-e2b-it-4bit"},
 	}
@@ -57,8 +56,8 @@ func TestRecommendModelForRAM(t *testing.T) {
 		ram  uint64
 		want string
 	}{
-		{32 * 1024 * 1024 * 1024, "lfm2.5-2.6b"},
-		{8 * 1024 * 1024 * 1024, "lfm2.5-2.6b"},
+		{32 * 1024 * 1024 * 1024, "qwen3.5-4b"},
+		{8 * 1024 * 1024 * 1024, "qwen3.5-4b"},
 		{4 * 1024 * 1024 * 1024, "gemma4-e2b"},
 		{1 * 1024 * 1024 * 1024, "gemma4-e2b"},
 	}

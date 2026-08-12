@@ -86,6 +86,12 @@ type StatusFooter struct {
 	// poll timer on Windows). Stored so Stop can clean it up.
 	resizePollerStop func()
 
+	// lastCols is the terminal column count at the most recent draw.
+	// Used by Resize to compute how many wrapped overflow rows the old
+	// (wider) content occupies at the new (narrower) width, so the clear
+	// can start high enough to catch them all.
+	lastCols int
+
 	// proseStreaming is set by the AssistantTurnRenderer while prose
 	// chunks are actively being written. When true, Refresh() skips
 	// the draw to avoid DEC save/restore (\0337/\0338) racing with
@@ -373,6 +379,7 @@ func (f *StatusFooter) Resize() {
 		steerWasActive := f.steerActive
 		lastHint := f.lastHintRows
 		lastSteer := f.lastSteerRows
+		oldCols := f.lastCols
 		f.mu.Unlock()
 
 		// Determine the topmost row the footer occupied (including
@@ -388,20 +395,55 @@ func (f *StatusFooter) Resize() {
 				topRow = steerTop
 			}
 		}
+
+		// Extend the clear range upward to catch wrapped overflow.
+		// Each footer row padded to oldCols wraps to ceil(oldCols/newCols)
+		// rows at the new width. The overflow appears above the footer's
+		// known row positions.
+		newCols, _ := f.terminalSize()
+		footerRows := 2 + lastSteer + lastHint
+		overflow := f.computeOverflowRows(oldCols, newCols, footerRows)
+		topRow -= overflow
+
 		if topRow < 1 {
 			topRow = 1
 		}
 
-		// Clear from the topmost footer row to the end of the screen.
-		// \033[J wipes everything below the cursor, catching any wrapped
-		// overflow from the old wider content that individual \033[K
-		// passes would miss.
+		// Clear from the topmost footer row (including overflow) to the
+		// end of the screen. \033[J wipes everything below the cursor,
+		// catching all stale wrapped copies in one pass.
 		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
 		fmt.Fprint(f.w, "\0338")
 	}
 
 	f.applyScrollRegionLocked()
 	f.drawLocked()
+}
+
+// computeOverflowRows calculates how many extra physical rows the footer's
+// old content occupies after a terminal width change. When the terminal
+// shrinks, each footer row that was padded to the old width wraps across
+// ceil(oldCols/newCols) physical rows. The extra rows (beyond the 1 row
+// per footer line) appear ABOVE the footer's known row positions and must
+// be cleared to avoid stale duplicates.
+//
+// Returns the number of additional rows to clear above the topmost footer row.
+func (f *StatusFooter) computeOverflowRows(oldCols, newCols, footerRows int) int {
+	if oldCols <= 0 || newCols <= 0 || oldCols <= newCols {
+		return 0
+	}
+	// Each footer row was padded to oldCols. At newCols it wraps to
+	// ceil(oldCols / newCols) rows. The overflow per row is that minus 1.
+	rowsPerLine := (oldCols-1)/newCols + 1
+	overflowPerLine := rowsPerLine - 1
+	total := overflowPerLine * footerRows
+	// Cap at a sane maximum to avoid clearing the entire screen on
+	// extreme shrinks (e.g. 1000→20). The terminal's own scrollback
+	// handles content above this range.
+	if total > 30 {
+		total = 30
+	}
+	return total
 }
 
 // Stop resets the scroll region to full-screen, clears the footer row, and
@@ -443,17 +485,24 @@ func (f *StatusFooter) Stop() {
 		hintWasActive := f.lastHintRows > 0
 		steerWasActive := f.steerActive
 		lastSteer := f.lastSteerRows
+		lastHint := f.lastHintRows
+		oldCols := f.lastCols
 		f.mu.Unlock()
 		topRow := rows - 1
 		if hintWasActive {
 			topRow = rows - 2
 		}
 		if steerWasActive && lastSteer > 0 {
-			steerTop := steerRowFor(rows, lastSteer, f.lastHintRows, 0)
+			steerTop := steerRowFor(rows, lastSteer, lastHint, 0)
 			if steerTop < topRow {
 				topRow = steerTop
 			}
 		}
+		// Extend upward for wrapped overflow (same logic as Resize).
+		newCols, _ := f.terminalSize()
+		footerRows := 2 + lastSteer + lastHint
+		overflow := f.computeOverflowRows(oldCols, newCols, footerRows)
+		topRow -= overflow
 		if topRow < 1 {
 			topRow = 1
 		}
@@ -854,6 +903,7 @@ func (f *StatusFooter) drawLocked() {
 	// next SetSteerLine can detect row-count changes.
 	f.mu.Lock()
 	f.lastRows = rows
+	f.lastCols = cols
 	f.lastSteerRows = steerRows
 	f.lastHintRows = hintRows
 	f.mu.Unlock()

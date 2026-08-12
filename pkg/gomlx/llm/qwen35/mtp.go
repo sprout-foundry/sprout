@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
 
 package qwen35
 
@@ -47,11 +47,11 @@ func loadMTPWeights(sf *llm.SafetensorsFile, backend tensor.Backend, s tensor.St
 	m := &mtpWeights{}
 	var err error
 
-	m.preFCHiddenNorm, err = sf.Get("mtp.pre_fc_norm_hidden.weight", s)
+	m.preFCHiddenNorm, err = sf.Get("mtp.pre_fc_norm_hidden.weight", backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("mtp pre_fc_norm_hidden: %w", err)
 	}
-	m.preFCEmbeddingNorm, err = sf.Get("mtp.pre_fc_norm_embedding.weight", s)
+	m.preFCEmbeddingNorm, err = sf.Get("mtp.pre_fc_norm_embedding.weight", backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("mtp pre_fc_norm_embedding: %w", err)
 	}
@@ -61,7 +61,7 @@ func loadMTPWeights(sf *llm.SafetensorsFile, backend tensor.Backend, s tensor.St
 	if err != nil {
 		return nil, fmt.Errorf("mtp fc: %w", err)
 	}
-	m.norm, err = sf.Get("mtp.norm.weight", s)
+	m.norm, err = sf.Get("mtp.norm.weight", backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("mtp norm: %w", err)
 	}
@@ -69,11 +69,11 @@ func loadMTPWeights(sf *llm.SafetensorsFile, backend tensor.Backend, s tensor.St
 	// The MTP block is a single full-attention decoder layer.
 	p := "mtp.layers.0"
 	lw := &m.layer
-	lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", s)
+	lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("mtp layer input norm: %w", err)
 	}
-	lw.postNorm, err = sf.Get(p+".post_attention_layernorm.weight", s)
+	lw.postNorm, err = sf.Get(p+".post_attention_layernorm.weight", backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("mtp layer post norm: %w", err)
 	}
@@ -94,11 +94,11 @@ func loadMTPWeights(sf *llm.SafetensorsFile, backend tensor.Backend, s tensor.St
 	if err != nil {
 		return nil, fmt.Errorf("mtp o_proj: %w", err)
 	}
-	sa.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", s)
+	sa.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("mtp q_norm: %w", err)
 	}
-	sa.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", s)
+	sa.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", backend, s)
 	if err != nil {
 		return nil, fmt.Errorf("mtp k_norm: %w", err)
 	}

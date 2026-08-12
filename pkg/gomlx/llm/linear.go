@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
 
 package llm
 
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
@@ -107,7 +106,7 @@ func LoadLinear(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.Str
 	}
 
 	// Quantize a full-precision weight at load time.
-	w, err := sf.Get(name, s)
+	w, err := sf.Get(name, b, s)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +117,7 @@ func LoadLinear(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.Str
 // loadLinearT loads a float weight and pre-transposes it from [out, in]
 // (PyTorch layout) to [in, out] so decode-time matmuls skip the transpose.
 func loadLinearT(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
-	w, err := sf.Get(name, s)
+	w, err := sf.Get(name, b, s)
 	if err != nil {
 		return nil, err
 	}
@@ -139,18 +138,18 @@ func loadLinearT(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.St
 // mlx-community stores for a pre-quantized model. `name` is the base key
 // ("...q_proj"); the triplet keys are `{name}.weight`/`.scales`/`.biases`.
 func loadQuantizedTriplet(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.Stream, quant *QuantConfig) (*Linear, error) {
-	w, err := sf.Get(name+".weight", s)
+	w, err := sf.Get(name+".weight", b, s)
 	if err != nil {
 		return nil, err
 	}
-	scales, err := sf.Get(name+".scales", s)
+	scales, err := sf.Get(name+".scales", b, s)
 	if err != nil {
 		w.Free()
 		return nil, err
 	}
 	var biases tensor.Array
 	if sf.Has(name + ".biases") {
-		biases, err = sf.Get(name+".biases", s)
+		biases, err = sf.Get(name+".biases", b, s)
 		if err != nil {
 			w.Free()
 			scales.Free()
@@ -163,6 +162,40 @@ func loadQuantizedTriplet(sf *SafetensorsFile, name string, b tensor.Backend, s 
 	// 6-bit). MLX ops validate bits against the shape, so we must pass the
 	// correct value, not the config's nominal bits.
 	bits := inferQuantBits(w.Shape(), scales.Shape(), quant.GroupSize, quant.Bits)
+
+	// If the backend can't handle native quantization, dequantize now.
+	// On GGML, this re-quantizes to Q4_0 for ARM-optimized kernels.
+	if !b.NativeQuantization() {
+		fullW, err := dequantizeToFull(b, s, w, scales, biases, bits, quant.GroupSize)
+		if err != nil {
+			w.Free()
+			scales.Free()
+			if biases != nil {
+				biases.Free()
+			}
+			return nil, fmt.Errorf("dequantize %s: %w", name, err)
+		}
+		// For Q4_0 tensors, skip the transpose — ggml_mul_mat handles [out, in]
+		// layout directly with quantized kernels. Transposing a Q4_0 tensor
+		// would require dequantization, defeating the purpose.
+		// For F32 tensors (non-Q4_0 backends), pre-transpose as before.
+		if _, ok := b.(Q4_0Quantizer); ok {
+			// Q4_0 path: store as-is in [out, in] layout. MatMul must use
+			// transpose=true semantics (handled by ggml_mul_mat natively).
+			return &Linear{wT: fullW}, nil
+		}
+		wT, err := b.Transpose(fullW, s)
+		if err != nil {
+			fullW.Free()
+			return nil, fmt.Errorf("transpose %s: %w", name, err)
+		}
+		if err := wT.Eval(); err != nil {
+			fullW.Free()
+			wT.Free()
+			return nil, fmt.Errorf("eval transpose %s: %w", name, err)
+		}
+		return &Linear{wT: wT}, nil
+	}
 
 	return &Linear{
 		qW:         w,
@@ -230,6 +263,3 @@ func quantizeLinear(w tensor.Array, b tensor.Backend, s tensor.Stream, quant *Qu
 	}
 	return l, nil
 }
-
-// _ ensures mlx.Dtype is used via the alias (mlx.Dtype = tensor.Dtype).
-var _ = mlx.Dtype(0)

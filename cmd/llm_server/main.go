@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
 
 // Command llm_server exposes the local gomlx LLM engine over an
 // OpenAI-compatible HTTP API (POST /v1/chat/completions, GET /v1/models,
@@ -29,12 +29,8 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/gemma4"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/lfm2"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm/openaisserver"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 func main() {
@@ -45,9 +41,12 @@ func main() {
 
 	dir := *modelDir
 	if dir == "" {
-		// Auto-select the best installed model for this machine's RAM.
 		modelsRoot := os.Getenv("HOME") + "/dev/llm-models"
-		ram := mlx.TotalSystemRAM()
+		backend := tensor.DetectBackend()
+		ram := uint64(8 * 1024 * 1024 * 1024)
+		if backend != nil {
+			ram = backend.TotalSystemRAM()
+		}
 		picked, err := llm.SelectModelForRAM(modelsRoot, ram)
 		if err != nil {
 			log.Fatalf("auto-select model: %v", err)

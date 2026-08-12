@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
 
 // Package qwen3 implements the Qwen3 transformer architecture for the gomlx
 // LLM engine. It provides the forward pass (prefill + cached decode), weight
@@ -19,7 +19,6 @@ import (
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
@@ -32,13 +31,6 @@ type Qwen3 struct {
 	backend tensor.Backend
 	stream  tensor.Stream
 	weights *weights
-
-	// mlxSwigluClosures are compiled per-layer MLP closures, created lazily
-	// on the inference thread (MLX compiled graphs bind to the thread-local
-	// stream used at trace time). Keyed by stream pointer so a fresh per-call
-	// stream triggers recompilation.
-	mlxSwigluClosures []*mlx.Closure
-	mlxSwigluStream   tensor.Stream
 }
 
 func New(cfg llm.ModelConfig, backend tensor.Backend) (llm.Architecture, error) {
@@ -98,7 +90,7 @@ func (q *Qwen3) SetStream(s tensor.Stream) { q.stream = s }
 // with "no Stream in current thread" when first evaluated during generation
 // on a different OS thread.
 func loadLinearT(sf *llm.SafetensorsFile, name string, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
-	w, err := sf.Get(name, s)
+	w, err := sf.Get(name, b, s)
 	if err != nil {
 		return nil, err
 	}
@@ -125,19 +117,30 @@ func (q *Qwen3) InitWeights(path string, s tensor.Stream) error {
 
 	w := &weights{layers: make([]layerWeights, q.cfg.NumLayers)}
 
-	w.embedTokens, err = sf.Get("model.embed_tokens.weight", s)
-	if err != nil {
-		return fmt.Errorf("load embed_tokens: %w", err)
+	// Load embedding. When the model has quantized embeddings (scales/biases
+	// present), use LoadEmbedding which handles dequantization for backends
+	// that lack native quantization (e.g. GGML CPU).
+	if q.cfg.Quantization != nil && sf.Has("model.embed_tokens.scales") {
+		emb, err := llm.LoadEmbedding(sf, "model.embed_tokens.weight", q.backend, s, q.cfg.Quantization)
+		if err != nil {
+			return fmt.Errorf("load embed_tokens: %w", err)
+		}
+		w.embedTokens = emb.W()
+		w.embedTokensT = emb.WT()
+	} else {
+		w.embedTokens, err = sf.Get("model.embed_tokens.weight", q.backend, s)
+		if err != nil {
+			return fmt.Errorf("load embed_tokens: %w", err)
+		}
+		w.embedTokensT, err = q.backend.Transpose(w.embedTokens, s)
+		if err != nil {
+			return fmt.Errorf("transpose embed_tokens: %w", err)
+		}
+		if err := w.embedTokensT.Eval(); err != nil {
+			return fmt.Errorf("eval transpose embed_tokens: %w", err)
+		}
 	}
-	w.embedTokensT, err = q.backend.Transpose(w.embedTokens, s)
-	if err != nil {
-		return fmt.Errorf("transpose embed_tokens: %w", err)
-	}
-	// Materialize on the loading thread (see loadLinearT).
-	if err := w.embedTokensT.Eval(); err != nil {
-		return fmt.Errorf("eval transpose embed_tokens: %w", err)
-	}
-	w.normWeight, err = sf.Get("model.norm.weight", s)
+	w.normWeight, err = sf.Get("model.norm.weight", q.backend, s)
 	if err != nil {
 		return fmt.Errorf("load final norm: %w", err)
 	}
@@ -147,7 +150,7 @@ func (q *Qwen3) InitWeights(path string, s tensor.Stream) error {
 		p := fmt.Sprintf("model.layers.%d", i)
 		quant := q.cfg.Quantization
 
-		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", s)
+		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", q.backend, s)
 		if err != nil {
 			return fmt.Errorf("load layer %d input_norm: %w", i, err)
 		}
@@ -163,15 +166,15 @@ func (q *Qwen3) InitWeights(path string, s tensor.Stream) error {
 		if lw.oProj, err = loadLinear(sf, p+".self_attn.o_proj.weight", q.backend, s, quant); err != nil {
 			return fmt.Errorf("load layer %d o_proj: %w", i, err)
 		}
-		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", s)
+		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", q.backend, s)
 		if err != nil {
 			return fmt.Errorf("load layer %d q_norm: %w", i, err)
 		}
-		lw.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", s)
+		lw.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", q.backend, s)
 		if err != nil {
 			return fmt.Errorf("load layer %d k_norm: %w", i, err)
 		}
-		lw.postNorm, err = sf.Get(p+".post_attention_layernorm.weight", s)
+		lw.postNorm, err = sf.Get(p+".post_attention_layernorm.weight", q.backend, s)
 		if err != nil {
 			return fmt.Errorf("load layer %d post_norm: %w", i, err)
 		}
@@ -195,14 +198,7 @@ func (q *Qwen3) InitWeights(path string, s tensor.Stream) error {
 }
 
 func (q *Qwen3) FreeWeights() {
-	for i, c := range q.mlxSwigluClosures {
-		if c != nil {
-			c.Free()
-		}
-		q.mlxSwigluClosures[i] = nil
-	}
-	q.mlxSwigluClosures = nil
-	q.mlxSwigluStream = nil
+	freeSwigluClosures(q)
 
 	if q.weights == nil {
 		return
@@ -380,7 +376,13 @@ func (q *Qwen3) computeLogits(h tensor.Array) (tensor.Array, error) {
 	}
 	defer normed.Free()
 
-	return q.backend.MatMul(normed, q.weights.embedTokensT, s)
+	// Q4_0 embeddings have no transposed copy — MatMul handles the
+	// [out, in] layout natively via ggml_mul_mat.
+	wT := q.weights.embedTokensT
+	if wT == nil {
+		wT = q.weights.embedTokens
+	}
+	return q.backend.MatMul(normed, wT, s)
 }
 
 // computeLogitsLast slices h to the final position, then projects to vocab.

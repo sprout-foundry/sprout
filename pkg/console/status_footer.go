@@ -224,6 +224,14 @@ func (f *StatusFooter) Start() {
 // the AssistantTurnRenderer) to avoid the DEC save/restore cursor
 // sequences racing with scroll-region content — the root cause of the
 // "scattered characters" clobbering symptom.
+//
+// The proseStreaming check is performed TWICE: once before acquiring
+// outputMu (fast-path bail-out) and once inside drawLocked after the
+// lock is held (TOCTOU guard). The double-check closes the window where
+// Refresh reads proseStreaming=false, then a concurrent WriteChunk sets
+// it to true and acquires outputMu before Refresh does. Without the
+// second check, Refresh would proceed to drawLocked and emit DECSC/DECRC
+// sequences that race with the prose being written.
 func (f *StatusFooter) Refresh() {
 	if f == nil || !f.isTTY {
 		return
@@ -732,7 +740,19 @@ func (f *StatusFooter) draw() {
 // outputMu. Extracted so printExternalLocked (which already holds
 // outputMu from PrintExternal) can re-render the footer without
 // re-acquiring the non-reentrant mutex and deadlocking.
+//
+// Performs a final proseStreaming check under outputMu to close the
+// TOCTOU window in Refresh: between reading proseStreaming=false and
+// acquiring outputMu, a concurrent WriteChunk could have set it to true
+// and started writing prose. Re-checking here prevents DECSC/DECRC
+// from racing with in-flight prose.
 func (f *StatusFooter) drawLocked() {
+	f.mu.Lock()
+	streaming := f.proseStreaming
+	f.mu.Unlock()
+	if streaming {
+		return
+	}
 	cols, rows := f.terminalSize()
 	if rows < f.reservedRows()+1 {
 		return

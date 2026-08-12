@@ -134,10 +134,24 @@ struct ggml_tensor * get_src(struct ggml_tensor * t, int i) {
 size_t ggml_sysconf_page_size() { return (size_t)sysconf(_SC_PAGESIZE); }
 size_t ggml_sysconf_phys_pages() { return (size_t)sysconf(_SC_PHYS_PAGES); }
 
-// Create a temporary context for graph building. This is separate from the
+// A single reusable arena for per-op graph metadata, kept separate from the
 // main weight context so graph metadata doesn't corrupt weight tensors.
+// Letting ggml_init malloc its own arena per op costs an mmap/munmap pair,
+// which dominates the cost of a small op once the heap is warm; re-initing a
+// context over a buffer we already own costs nothing. ggml_free leaves a
+// caller-supplied mem_buffer alone, so the arena survives across ops.
+// Callers must serialise: one arena means one live temp context.
+static void * temp_arena = NULL;
+static size_t temp_arena_size = 0;
+
 struct ggml_context * ggml_new_temp_ctx(size_t mem_size) {
-    struct ggml_init_params params = { .mem_size = mem_size, .mem_buffer = NULL, .no_alloc = true };
+    if (temp_arena_size < mem_size) {
+        free(temp_arena);
+        temp_arena = aligned_alloc(64, mem_size);
+        if (!temp_arena) { temp_arena_size = 0; return NULL; }
+        temp_arena_size = mem_size;
+    }
+    struct ggml_init_params params = { .mem_size = temp_arena_size, .mem_buffer = temp_arena, .no_alloc = true };
     return ggml_init(params);
 }
 
@@ -154,20 +168,38 @@ size_t ggml_row_size_q4_0(int n) {
     return ggml_row_size(GGML_TYPE_Q4_0, n);
 }
 
-// Clear a tensor's data pointer (set to NULL) without freeing. Used after
-// freeing a graph allocator to prevent use-after-free.
-void ggml_tensor_clear_data(struct ggml_tensor * t) {
-    t->data = NULL;
+// Give a tensor its own backend buffer so it keeps its data for life. The
+// graph allocator skips tensors that already have data, so a pinned tensor
+// is never re-assigned a graph buffer and never needs re-uploading.
+ggml_backend_buffer_t ggml_pin_tensor(ggml_backend_t b, struct ggml_tensor * t) {
+    ggml_backend_buffer_t buf = ggml_backend_alloc_buffer(b, ggml_nbytes(t) + 64);
+    if (!buf) return NULL;
+    if (ggml_backend_tensor_alloc(buf, t, ggml_backend_buffer_get_base(buf)) != GGML_STATUS_SUCCESS) {
+        ggml_backend_buffer_free(buf);
+        return NULL;
+    }
+    return buf;
 }
 
-// Release a tensor's backend buffer reference and data pointer. After the
-// graph allocator is freed, all tensors it owned (including input weights
-// that were given graph buffers) hold dangling pointers. Clear them so the
-// next gallocr allocation re-assigns fresh buffers instead of writing into
-// freed memory.
-void ggml_tensor_release(struct ggml_tensor * t) {
-    t->buffer = NULL;
-    t->data = NULL;
+// Release a pinned buffer and detach the tensor from it.
+void ggml_unpin_tensor(ggml_backend_buffer_t buf, struct ggml_tensor * t) {
+    if (t) { t->buffer = NULL; t->data = NULL; }
+    if (buf) ggml_backend_buffer_free(buf);
+}
+
+// Raise the CPU backend's thread count. The setter is an optional per-backend
+// entry point, so it is resolved through the registry rather than linked
+// directly; returns 0 when the active backend does not expose it.
+int ggml_set_threads(ggml_backend_t b, int n) {
+    ggml_backend_dev_t dev = ggml_backend_get_device(b);
+    if (!dev) return 0;
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    if (!reg) return 0;
+    ggml_backend_set_n_threads_t fn = (ggml_backend_set_n_threads_t)
+        ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+    if (!fn) return 0;
+    fn(b, n);
+    return 1;
 }
 */
 import "C"
@@ -177,6 +209,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -189,6 +223,11 @@ func init() {
 	debugEnabled = os.Getenv("SPROUT_GGML_DEBUG") != ""
 	statsEnabled = os.Getenv("SPROUT_GGML_STATS") != ""
 }
+
+// tempArenaBytes sizes the reusable arena that holds one op's graph
+// metadata. Ops are evaluated eagerly, so a graph is a handful of nodes on
+// top of ggml_new_graph's fixed 2048-node table — megabytes, not hundreds.
+const tempArenaBytes = 16 * 1024 * 1024
 
 // debugEnabled gates the per-op shape tracing. A single forward pass emits
 // thousands of lines, so it stays off unless SPROUT_GGML_DEBUG is set.
@@ -242,24 +281,21 @@ type GGMLBackend struct {
 	backend C.ggml_backend_t
 	ctx     unsafe.Pointer
 	name    string
+	threads int
 	initErr error
 
-	// tensorData maps C tensor pointers to their Go-side raw data, so
-	// that Eval() can set input tensor data after the graph allocator
-	// assigns backend buffers. Key: uintptr of *C.ggml_tensor.
-	tensorData sync.Map // map[uintptr][]byte
+	// tempMu serialises use of the shared per-op graph arena.
+	tempMu sync.Mutex
+
+	// pinned maps C tensor pointers to the dedicated backend buffer holding
+	// their data. Leaf tensors own their buffer for life, so their contents
+	// survive across graph allocations and are uploaded exactly once.
+	// Key: uintptr of *C.ggml_tensor.
+	pinned sync.Map // map[uintptr]unsafe.Pointer (ggml_backend_buffer_t)
 
 	// arrayMap maps C tensor pointers to the Array that wraps them, so
 	// logicalShape can be propagated through op chains.
 	arrayMap sync.Map // map[uintptr]*Array
-}
-
-func (g *GGMLBackend) lookupData(t *C.struct_ggml_tensor) ([]byte, bool) {
-	v, ok := g.tensorData.Load(uintptr(unsafe.Pointer(t)))
-	if !ok {
-		return nil, false
-	}
-	return v.([]byte), true
 }
 
 // registerArray associates an Array with its C tensor pointer.
@@ -269,13 +305,42 @@ func (g *GGMLBackend) registerArray(a *Array) {
 	}
 }
 
-// registerTensorData associates Go-side data with a C tensor pointer.
-func (g *GGMLBackend) registerTensorData(t *C.struct_ggml_tensor, data []byte) {
-	if t != nil && len(data) > int(C.tensor_nbytes(t)) {
-		fmt.Printf("ggml: registerTensorData OVER %d bytes > nbytes %d (ne=[%d %d %d %d] type=%d)\n",
-			len(data), int(C.tensor_nbytes(t)), int64(t.ne[0]), int64(t.ne[1]), int64(t.ne[2]), int64(t.ne[3]), int(t._type))
+// pinTensorData gives a leaf tensor its own backend buffer and uploads data
+// into it once. The Go slice is not retained: every later read goes through
+// ggml_backend_tensor_get and every later op reads the pinned buffer in
+// place, so a weight is copied out of Go memory exactly once instead of on
+// every op that consumes it.
+func (g *GGMLBackend) pinTensorData(t *C.struct_ggml_tensor, data []byte) error {
+	if t == nil {
+		return fmt.Errorf("ggml: pin on nil tensor")
 	}
-	g.tensorData.Store(uintptr(unsafe.Pointer(t)), data)
+	nbytes := int(C.tensor_nbytes(t))
+	if len(data) > nbytes {
+		return fmt.Errorf("ggml: pin of %d bytes exceeds tensor nbytes %d (ne=[%d %d %d %d] type=%d)",
+			len(data), nbytes, int64(t.ne[0]), int64(t.ne[1]), int64(t.ne[2]), int64(t.ne[3]), int(t._type))
+	}
+	buf := C.ggml_pin_tensor(g.backend, t)
+	if buf == nil {
+		return fmt.Errorf("ggml: failed to allocate %d-byte buffer for tensor", nbytes)
+	}
+	if len(data) > 0 {
+		C.ggml_backend_tensor_set(t, unsafe.Pointer(&data[0]), 0, C.size_t(len(data)))
+	}
+	g.pinned.Store(uintptr(unsafe.Pointer(t)), unsafe.Pointer(buf))
+	return nil
+}
+
+// unpin releases a tensor's pinned buffer. Used for the short-lived inputs
+// that ops build themselves (RoPE positions, attention masks), which would
+// otherwise accumulate one buffer per call.
+func (g *GGMLBackend) unpin(t *C.struct_ggml_tensor) {
+	if t == nil {
+		return
+	}
+	key := uintptr(unsafe.Pointer(t))
+	if v, ok := g.pinned.LoadAndDelete(key); ok {
+		C.ggml_unpin_tensor(C.ggml_backend_buffer_t(v.(unsafe.Pointer)), t)
+	}
 }
 
 func (g *GGMLBackend) ensureInit() error {
@@ -295,8 +360,35 @@ func (g *GGMLBackend) ensureInit() error {
 		g.backend = b
 		g.ctx = unsafe.Pointer(ctx)
 		g.name = C.GoString(C.backend_name(b))
+		g.threads = pickThreadCount()
+		if C.ggml_set_threads(b, C.int(g.threads)) == 0 {
+			g.threads = 0
+		}
 	})
 	return g.initErr
+}
+
+// pickThreadCount chooses the CPU thread count. Raising it past 4 helps a
+// single large matmul in isolation (1.94x at 8 threads on a 12-core
+// Snapdragon X Elite) but loses badly end to end: a decode step is ~1400
+// mostly-small ops, each its own graph_compute, so the OpenMP fork/join
+// barrier is paid per op and 8 threads measured ~1.5x SLOWER per token than
+// 4. Cap at 4 and let SPROUT_GGML_THREADS override for experiments.
+const maxAutoThreads = 4
+
+func pickThreadCount() int {
+	if v := os.Getenv("SPROUT_GGML_THREADS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	if n := runtime.NumCPU(); n < maxAutoThreads {
+		if n < 1 {
+			return 1
+		}
+		return n
+	}
+	return maxAutoThreads
 }
 
 func (g *GGMLBackend) Name() string {
@@ -433,8 +525,16 @@ func (a *Array) Eval() error {
 	}
 	g := a.backend
 
+	// A pinned leaf already holds its data in its own buffer.
+	if C.tensor_buffer(a.tensor) != nil {
+		a.hasData = true
+		return nil
+	}
+
 	// Use a temp context for graph building to avoid polluting the main arena.
-	tempCtx := C.ggml_new_temp_ctx(256 * 1024 * 1024)
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+	tempCtx := C.ggml_new_temp_ctx(tempArenaBytes)
 	if tempCtx == nil {
 		return fmt.Errorf("ggml: failed to create temp context for Eval")
 	}
@@ -448,8 +548,6 @@ func (a *Array) Eval() error {
 		C.ggml_free(tempCtx)
 		return fmt.Errorf("ggml: graph allocation failed")
 	}
-
-	g.setRegisteredDataRecursive(a.tensor)
 
 	status := C.ggml_backend_graph_compute(g.backend, graph)
 	C.ggml_free(tempCtx)
@@ -465,65 +563,18 @@ func (a *Array) Eval() error {
 	return nil
 }
 
-// clearDataRecursive walks the tensor graph and sets data=NULL on all tensors
-// that have registered Go-side data. Called after freeing a graph allocator
-// to prevent use-after-free when the next evalOp encounters stale data pointers.
-func (g *GGMLBackend) clearDataRecursive(t *C.struct_ggml_tensor) {
-	if t == nil {
-		return
-	}
-	if _, ok := g.lookupData(t); ok {
-		C.ggml_tensor_clear_data(t)
-		C.ggml_tensor_release(t)
-	}
-	maxSrc := int(C.ggml_max_src())
-	for i := 0; i < maxSrc; i++ {
-		src := C.get_src(t, C.int(i))
-		if src != nil {
-			g.clearDataRecursive(src)
-		}
-	}
-}
-
-func (g *GGMLBackend) setRegisteredDataRecursive(t *C.struct_ggml_tensor) {
-	// Set data for this tensor if registered AND it owns a data buffer.
-	// View tensors (reshape/slice/permute results) share their source's
-	// buffer; setting data on them writes through to the wrong location.
-	// The source tensors are visited separately by the recursion.
-	if data, ok := g.lookupData(t); ok {
-		if C.tensor_buffer(t) != nil {
-			nbytes := int(C.tensor_nbytes(t))
-			if len(data) <= nbytes {
-				C.ggml_backend_tensor_set(t, unsafe.Pointer(&data[0]), 0, C.size_t(len(data)))
-			} else {
-				fmt.Printf("ggml: setRegisteredDataRecursive SKIP %d bytes > tensor nbytes %d (ne=[%d %d %d %d] type=%d)\n",
-					len(data), nbytes, int64(t.ne[0]), int64(t.ne[1]), int64(t.ne[2]), int64(t.ne[3]), int(t._type))
-			}
-		}
-	}
-	// Recurse into source tensors
-	maxSrc := int(C.ggml_max_src())
-	for i := 0; i < maxSrc; i++ {
-		src := C.get_src(t, C.int(i))
-		if src != nil {
-			g.setRegisteredDataRecursive(src)
-		}
-	}
-}
-
 func (a *Array) Free() {
 	if a.alloc != nil {
 		C.ggml_gallocr_free(a.alloc)
 		a.alloc = nil
 	}
-	// Drop the backend's registry entries once the last wrapper goes away, so
-	// the op's result buffer becomes collectable. Without this a single
-	// forward pass pins every intermediate tensor it produced.
+	// Release the pinned buffer and registry entry once the last wrapper goes
+	// away. Without this a single forward pass retains every intermediate it
+	// ever produced.
 	if a.refs != nil && a.tensor != nil && a.backend != nil {
 		if atomic.AddInt32(a.refs, -1) == 0 {
-			key := uintptr(unsafe.Pointer(a.tensor))
-			a.backend.tensorData.Delete(key)
-			a.backend.arrayMap.Delete(key)
+			a.backend.unpin(a.tensor)
+			a.backend.arrayMap.Delete(uintptr(unsafe.Pointer(a.tensor)))
 		}
 		a.refs = nil
 	}
@@ -602,7 +653,9 @@ func (g *GGMLBackend) NewArrayFromFloat32(data []float32, shape []int) (tensor.A
 	}
 	raw := make([]byte, len(data)*4)
 	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*4))
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	// Preserve the caller's shape. GGML would collapse leading/trailing 1s
 	// (e.g. [1, seqLen] → 1D), but the model layer expects the MLX rank
@@ -678,7 +731,9 @@ func (g *GGMLBackend) NewArrayQ4_0(data []float32, shape []int) (tensor.Array, e
 	}
 	raw := C.GoBytes(cBuf, C.int(int(written)))
 	C.free(cBuf)
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -695,7 +750,9 @@ func (g *GGMLBackend) NewArrayFromInt64(data []int64, shape []int) (tensor.Array
 	}
 	raw := make([]byte, len(data)*8)
 	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*8))
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -712,7 +769,9 @@ func (g *GGMLBackend) NewArrayFromInt32(data []int32, shape []int) (tensor.Array
 	}
 	raw := make([]byte, len(data)*4)
 	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*4))
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -738,7 +797,9 @@ func (g *GGMLBackend) NewArrayFromBytes(data []byte, shape []int, dtype tensor.D
 	}
 	raw := make([]byte, len(data))
 	copy(raw, data)
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -812,7 +873,9 @@ func (g *GGMLBackend) NewScalarInt32(v int) (tensor.Array, error) {
 	t := C.ggml_new_tensor_1d(g.ctxPtr(), C.GGML_TYPE_I32, 1)
 	data := make([]byte, 4)
 	*(*int32)(unsafe.Pointer(&data[0])) = int32(v)
-	g.registerTensorData(t, data)
+	if err := g.pinTensorData(t, data); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	g.registerArray(arr)
 	return arr, nil
@@ -905,16 +968,28 @@ func shapeToNE(shape []int) []C.int64_t {
 
 func (a *Array) cTensor() *C.struct_ggml_tensor { return a.tensor }
 
-// scalarF32 creates a 1-element F32 tensor from a Go float32.
+// scalarF32 creates a 1-element F32 tensor from a Go float32. The caller
+// must unpin it once the op that consumes it has been evaluated.
 func (g *GGMLBackend) scalarF32(v float32) *C.struct_ggml_tensor {
 	ctx := g.ctxPtr()
 	t := C.ggml_new_tensor_1d(ctx, C.GGML_TYPE_F32, 1)
 	data := []byte{0, 0, 0, 0}
 	*(*float32)(unsafe.Pointer(&data[0])) = v
-	// Use registerTensorData — evalOp's setRegisteredDataRecursive will
-	// copy this into the per-op graph allocator's buffer.
-	g.registerTensorData(t, data)
+	if err := g.pinTensorData(t, data); err != nil {
+		debugf("ggml: scalarF32 pin failed: %v\n", err)
+	}
 	return t
+}
+
+// evalOpUnpin evaluates an op, then releases the transient inputs the op
+// wrapper built for itself (scalars, causal masks, position ids). Those are
+// never handed back to the caller, so nothing else will free their buffers.
+func (g *GGMLBackend) evalOpUnpin(node *C.struct_ggml_tensor, transient ...*C.struct_ggml_tensor) (*Array, error) {
+	arr, err := g.evalOp(node)
+	for _, t := range transient {
+		g.unpin(t)
+	}
+	return arr, err
 }
 
 // evalOp builds a single-op graph, allocates, sets input data, computes,
@@ -934,7 +1009,9 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 	// accumulate in the main context arena, eventually corrupting tensor
 	// metadata. By using a temp context, we keep the main arena clean for
 	// tensor structs only.
-	tempCtx := C.ggml_new_temp_ctx(256 * 1024 * 1024)
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+	tempCtx := C.ggml_new_temp_ctx(tempArenaBytes)
 	if tempCtx == nil {
 		return nil, fmt.Errorf("ggml: failed to create temp context")
 	}
@@ -954,8 +1031,6 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 		return nil, fmt.Errorf("ggml: graph allocation failed")
 	}
 
-	g.setRegisteredDataRecursive(compute)
-
 	status := C.ggml_backend_graph_compute(g.backend, graph)
 	if status != C.GGML_STATUS_SUCCESS {
 		C.ggml_gallocr_free(alloc)
@@ -974,22 +1049,18 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 	resultShape := g.tensorShape(compute)
 	resultType := compute._type
 	C.ggml_gallocr_free(alloc)
-	// The allocator assigned buffers to EVERY tensor in the graph, including
-	// input leaf tensors from previous evalOps. Those tensors now hold
-	// dangling buffer/data pointers; clear them so the next gallocr
-	// allocation re-assigns fresh buffers. Registered Go-side data is
-	// re-copied by setRegisteredDataRecursive on the next use.
-	g.clearDataRecursive(compute)
 	C.ggml_free(tempCtx)
 
-	// Create a FRESH leaf tensor in the main context and register the result
-	// data. This Array owns its data; freeing it can't hurt other arrays.
+	// Create a FRESH leaf tensor in the main context and pin the result into
+	// it. This Array owns its buffer; freeing it can't hurt other arrays.
 	leaf := createTensor(g, resultShape, resultType)
 	if leaf == nil {
 		return nil, fmt.Errorf("ggml: evalOp result tensor creation failed")
 	}
 	if resultNbytes > 0 {
-		g.registerTensorData(leaf, resultData)
+		if err := g.pinTensorData(leaf, resultData); err != nil {
+			return nil, err
+		}
 	}
 	arr := g.newArray(leaf)
 	arr.logicalShape = resultShape
@@ -1173,7 +1244,7 @@ func (g *GGMLBackend) Log1p(a tensor.Array, s tensor.Stream) (tensor.Array, erro
 	t := a.(*Array).tensor
 	// log(1 + x) = log(1+x); GGML has no log1p, compose: add scalar then log
 	one := g.scalarF32(1.0)
-	return g.evalOp(C.ggml_log(ctx, C.ggml_add(ctx, t, one)))
+	return g.evalOpUnpin(C.ggml_log(ctx, C.ggml_add(ctx, t, one)), one)
 }
 
 func (g *GGMLBackend) Sqrt(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
@@ -1197,7 +1268,7 @@ func (g *GGMLBackend) Softplus(a tensor.Array, s tensor.Stream) (tensor.Array, e
 	t := a.(*Array).tensor
 	// softplus(x) = log(1 + exp(x))
 	one := g.scalarF32(1.0)
-	return g.evalOp(C.ggml_log(ctx, C.ggml_add(ctx, one, C.ggml_exp(ctx, t))))
+	return g.evalOpUnpin(C.ggml_log(ctx, C.ggml_add(ctx, one, C.ggml_exp(ctx, t))), one)
 }
 
 func (g *GGMLBackend) Sin(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
@@ -1331,7 +1402,7 @@ func (g *GGMLBackend) Mean(a tensor.Array, axes []int, keepdims bool, s tensor.S
 	t := a.(*Array).tensor
 	sumT := C.ggml_sum(ctx, t)
 	n := g.scalarF32(float32(a.Size()))
-	return g.evalOp(C.ggml_div(ctx, sumT, n))
+	return g.evalOpUnpin(C.ggml_div(ctx, sumT, n), n)
 }
 
 func (g *GGMLBackend) Max(a tensor.Array, axes []int, keepdims bool, s tensor.Stream) (tensor.Array, error) {
@@ -1877,7 +1948,7 @@ func (g *GGMLBackend) FastScaledDotProductAttention(q, k, v tensor.Array, scale 
 		return nil, fmt.Errorf("ggml: attention QK^T failed")
 	}
 
-	var mask *C.struct_ggml_tensor
+	var mask, ownedMask *C.struct_ggml_tensor
 	switch {
 	case maskArr != nil:
 		mask = maskArr.(*Array).tensor
@@ -1889,7 +1960,7 @@ func (g *GGMLBackend) FastScaledDotProductAttention(q, k, v tensor.Array, scale 
 		if err != nil {
 			return nil, err
 		}
-		mask = m
+		mask, ownedMask = m, m
 	}
 
 	// soft_max_ext folds the scale and the additive mask into the softmax.
@@ -1906,7 +1977,7 @@ func (g *GGMLBackend) FastScaledDotProductAttention(q, k, v tensor.Array, scale 
 		return nil, fmt.Errorf("ggml: attention PV failed")
 	}
 
-	arr, err := g.evalOp(out)
+	arr, err := g.evalOpUnpin(out, ownedMask)
 	if err != nil {
 		return nil, fmt.Errorf("ggml: attention: %w", err)
 	}
@@ -1937,7 +2008,9 @@ func (g *GGMLBackend) causalMask(nQ, nKV int) (*C.struct_ggml_tensor, error) {
 			binary.LittleEndian.PutUint32(data[(i*nKV+j)*4:], negInf)
 		}
 	}
-	g.registerTensorData(t, data)
+	if err := g.pinTensorData(t, data); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
 
@@ -1964,7 +2037,7 @@ func (g *GGMLBackend) FastRoPE(x tensor.Array, dims int, traditional bool, base 
 		permuted = true
 	}
 
-	// Create position IDs tensor — evalOp will set data via setRegisteredDataRecursive.
+	// Create position IDs tensor. Unpinned after the op is evaluated.
 	nTokens := int(C.tensor_ne(xt, 2))
 	if nTokens < 1 {
 		nTokens = 1
@@ -1976,7 +2049,9 @@ func (g *GGMLBackend) FastRoPE(x tensor.Array, dims int, traditional bool, base 
 	posBytes := make([]byte, len(posData)*4)
 	copy(posBytes, unsafe.Slice((*byte)(unsafe.Pointer(&posData[0])), len(posData)*4))
 	pos := C.ggml_new_tensor_1d(ctx, C.GGML_TYPE_I32, C.int64_t(nTokens))
-	g.registerTensorData(pos, posBytes)
+	if err := g.pinTensorData(pos, posBytes); err != nil {
+		return nil, err
+	}
 	// ggml_rope would hardcode freq_base=10000; models like Qwen3 use 1e6, so
 	// the caller's base has to go through rope_ext. ext_factor=0 disables
 	// YaRN, leaving beta_fast/beta_slow inert.
@@ -1987,7 +2062,7 @@ func (g *GGMLBackend) FastRoPE(x tensor.Array, dims int, traditional bool, base 
 	if permuted {
 		result = C.ggml_permute(ctx, result, 0, 2, 1, 3)
 	}
-	out, err := g.evalOp(result)
+	out, err := g.evalOpUnpin(result, pos)
 	if err != nil {
 		return nil, err
 	}

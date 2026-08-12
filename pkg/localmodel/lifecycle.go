@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
 // ServerEndpoint is the URL the local LLM server is expected at.
@@ -42,8 +41,8 @@ func EnsureServerForProvider(ctx context.Context, providerID string) error {
 		return nil
 	}
 
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return fmt.Errorf("local LLM requires Apple Silicon (M1/M2/M3/M4); current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+	if !PlatformSupported() {
+		return fmt.Errorf("local LLM requires Apple Silicon (M1/M2/M3/M4) or Linux ARM64 with GGML; current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
 	// Determine which model to load.
@@ -66,7 +65,7 @@ func EnsureServerForProvider(ctx context.Context, providerID string) error {
 // backend for this machine. Prefers installed models; falls back to the
 // RAM-recommended catalog entry.
 func resolveModelForCurrentMachine() (modelDir string, backend string, err error) {
-	ram := mlx.TotalSystemRAM()
+	ram := tensorTotalSystemRAM()
 
 	// Try to find an installed model that fits the machine.
 	if rec := RecommendedModel(ram); rec != nil {
@@ -212,7 +211,7 @@ func IsServerPresent() bool {
 // HasInstalledModel reports whether any model is installed locally,
 // meaning the server could be started right now without a download.
 func HasInstalledModel() bool {
-	ram := mlx.TotalSystemRAM()
+	ram := tensorTotalSystemRAM()
 	if rec := RecommendedModel(ram); rec != nil && rec.Installed {
 		return true
 	}
@@ -226,7 +225,13 @@ func HasInstalledModel() bool {
 }
 
 // PlatformSupported reports whether the local LLM engine is supported on
-// this platform (Apple Silicon only for now).
+// this platform (Linux ARM64, or Apple Silicon).
 func PlatformSupported() bool {
-	return runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		return true
+	}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "arm64" {
+		return true
+	}
+	return false
 }

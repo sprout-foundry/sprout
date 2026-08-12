@@ -364,3 +364,5 @@ func toStream(s tensor.Stream) *Stream {
 }
 
 func (b *MetalBackend) EnableCompile() error { return EnableCompile() }
+
+func (*MetalBackend) NativeQuantization() bool { return true }

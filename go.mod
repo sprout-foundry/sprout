@@ -6,6 +6,8 @@ replace github.com/sprout-foundry/sprout/pkg/gomlx => ./pkg/gomlx
 
 replace github.com/sprout-foundry/sprout/pkg/tensor => ./pkg/tensor
 
+replace github.com/sprout-foundry/sprout/pkg/tensor/ggml => ./pkg/tensor/ggml
+
 require (
 	filippo.io/age v1.3.1
 	github.com/creack/pty v1.1.24
@@ -102,6 +104,7 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/sprout-foundry/sprout/pkg/tensor v0.0.0 // indirect
+	github.com/sprout-foundry/sprout/pkg/tensor/ggml v0.0.0-00010101000000-000000000000 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect

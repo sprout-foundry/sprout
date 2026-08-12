@@ -52,7 +52,7 @@ export function useSearchState(
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [replaceStatus, setReplaceStatus] = useState<string | null>(null);
   const [excludePatterns, setExcludePatterns] = useState('');
-  const [semanticThreshold, setSemanticThreshold] = useState(0.75);
+  const [semanticThreshold, setSemanticThreshold] = useState(0.30);
   const [indexStatus, setIndexStatus] = useState<{
     available: boolean;
     initialized: boolean;

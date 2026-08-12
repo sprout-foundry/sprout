@@ -242,20 +242,26 @@ func TestApplyTerminalWidthChangeResetsRedrawState(t *testing.T) {
 	ir.currentPhysicalLine = 0
 	ir.lastWrapPending = true
 
-	output := testutil.CaptureStdout(t, func() {
+	testutil.CaptureStdout(t, func() {
 		changed := ir.applyTerminalWidthChange(10, 6)
 		if !changed {
 			t.Fatal("expected width change to be handled")
 		}
 	})
 
-	// On resize we clear from the cursor to the end of the screen and redraw in
-	// place (no extra blank line), since the terminal has re-wrapped the rows.
-	if !strings.HasPrefix(output, "\r\033[J") {
-		t.Fatalf("expected resize redraw to clear-to-end-of-screen in place, got %q", output)
-	}
+	// On resize, the handler sets lastVisualRows to the reflowed row count
+	// (ceil(10/6) = 2) so refreshInputLine's clear loop moves up to the
+	// top of the reflowed block and clears each stale row with \033[2K.
+	// The footer's own SIGWINCH handler manages footer clearing.
+	// Verify the internal state that drives the clear loop.
 	if ir.terminalWidth != 6 {
 		t.Fatalf("unexpected terminal width: %d", ir.terminalWidth)
+	}
+	if ir.lastVisualRows != 2 {
+		t.Fatalf("expected lastVisualRows=2 (reflowed rows), got %d", ir.lastVisualRows)
+	}
+	if ir.currentPhysicalLine != 1 {
+		t.Fatalf("expected currentPhysicalLine=1 (bottom of reflowed block), got %d", ir.currentPhysicalLine)
 	}
 	if ir.lastWrapPending {
 		t.Fatalf("expected wrap-pending state to be recalculated after resize")

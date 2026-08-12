@@ -84,6 +84,9 @@ func (r *AssistantTurnRenderer) SetFooter(f *StatusFooter) {
 // enabled, a StreamingMarkdownFormatter is created for per-line formatting.
 // width <= 0 disables soft-wrap accounting; the indent still works.
 func NewAssistantTurnRenderer(width int, formatter *MarkdownFormatter) *AssistantTurnRenderer {
+	if formatter != nil {
+		formatter.SetWidth(width)
+	}
 	r := &AssistantTurnRenderer{
 		atLineStart:   true,
 		terminalWidth: width,
@@ -492,6 +495,23 @@ func physicalRows(visualLen, width int) int {
 		return 1
 	}
 	return (visualLen + width - 1) / width
+}
+
+// SetTerminalWidth updates the renderer's terminal width snapshot and
+// propagates it to the markdown formatter. Called by the resize subscriber
+// when the terminal is resized mid-turn so that subsequent streaming output
+// (tables, horizontal rules) uses the current width instead of the width
+// captured at turn start. Safe to call concurrently with WriteChunk.
+func (r *AssistantTurnRenderer) SetTerminalWidth(w int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if w <= 0 {
+		w = 80
+	}
+	r.terminalWidth = w
+	if r.formatter != nil {
+		r.formatter.SetWidth(w)
+	}
 }
 
 // currentStdoutWidth reads the terminal's current column count live, or 0 if it

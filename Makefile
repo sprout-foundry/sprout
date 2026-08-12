@@ -245,18 +245,28 @@ test-coverage: prepare-grammars
 	echo "Coverage check passed: $${total_coverage}% >= $${min_coverage}%"'
 
 # Build sprout binary
-# Optimized: uses build cache and parallel compilation
+# MLX is now auto-included on Darwin-arm64 via build constraints (no tag needed).
+BUILD_TAGS := grammar_blobs_external
+
 build: prepare-grammars
-	@echo "Building sprout..."
-	GO111MODULE=on go build -tags grammar_blobs_external -o sprout .
+	@echo "Building sprout (tags: $(BUILD_TAGS))..."
+	GO111MODULE=on go build -tags $(BUILD_TAGS) -o sprout .
 	@echo "Build completed"
 
-# Install sprout binary to all common locations
+# Install sprout binary and llm_server (if built) to common locations
 install: build
 	@echo "Installing sprout..."
 	@mkdir -p ~/.local/bin ~/go/bin
 	cp sprout ~/.local/bin/sprout
 	cp sprout ~/go/bin/sprout 2>/dev/null || true
+	@# Copy llm_server alongside sprout if it exists (built via make build-llm-server)
+	@if [ -f llm_server ]; then \
+		cp llm_server ~/.local/bin/llm_server 2>/dev/null || true; \
+		cp llm_server ~/go/bin/llm_server 2>/dev/null || true; \
+		echo "Installed llm_server alongside sprout"; \
+	else \
+		echo "Note: llm_server not built — run 'make build-llm-server' for local LLM support"; \
+	fi
 	@echo "Install completed"
 
 # Run an automate workflow under a renamed binary so the workflow's own
@@ -334,8 +344,8 @@ local-llm-status:
 
 # Build sprout binary with parallel compilation and cache
 build-parallel: prepare-grammars
-	@echo "Building sprout (parallel)..."
-	GO111MODULE=on GOFLAGS="-p=8" go build -tags grammar_blobs_external -o sprout .
+	@echo "Building sprout (parallel, tags: $(BUILD_TAGS))..."
+	GO111MODULE=on GOFLAGS="-p=8" go build -tags $(BUILD_TAGS) -o sprout .
 	@echo "Build completed"
 
 # Build with version information

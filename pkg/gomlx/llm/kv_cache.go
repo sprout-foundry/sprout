@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package llm
 
@@ -39,6 +39,13 @@ type KVCacheLayer struct {
 	// with sequence length.
 	State     tensor.Array
 	ConvState tensor.Array
+
+	// capacity/used implement geometric growth for AppendWindow. K and V are
+	// allocated with room for `capacity` positions, of which the first `used`
+	// hold real data. capacity == 0 means the layer is still in exact-length
+	// mode (K/V sized exactly to the sequence), which is how prefill leaves it.
+	capacity int
+	used     int
 }
 
 // NewKVCache creates a cache for the given number of layers.
@@ -174,9 +181,8 @@ func (c *KVCache) GetState(layerIdx int) (tensor.Array, tensor.Array, error) {
 }
 
 // CachedLen returns the number of cached tokens, or 0 if empty.
-// For buffered layers (AppendFast path), uses Offset which tracks the
-// number of valid tokens. For raw tensors (prefill-only / concat path),
-// reads the sequence dimension from the shape.
+// For layers grown by AppendWindow, K/V are over-allocated, so the valid
+// length is `used` rather than the sequence dimension of the buffer.
 func (c *KVCache) CachedLen() int {
 	if len(c.layers) == 0 || c.layers[0] == nil {
 		return 0
@@ -184,6 +190,9 @@ func (c *KVCache) CachedLen() int {
 	l := c.layers[0]
 	if l.K == nil {
 		return 0
+	}
+	if l.capacity > 0 {
+		return l.used
 	}
 	shape := l.K.Shape()
 	if len(shape) < 3 {
@@ -222,6 +231,11 @@ func (c *KVCache) SnapshotPrefix() *KVCache {
 		if l.ConvState != nil {
 			cp.ConvState = c.backend.RetainArray(l.ConvState)
 		}
+		// Carry the window bookkeeping: the retained buffers may be
+		// over-allocated, so used/capacity are what distinguish real tokens
+		// from padding.
+		cp.capacity = l.capacity
+		cp.used = l.used
 		snap.layers[i] = cp
 		snap.initialized[i] = c.initialized[i]
 	}
@@ -269,6 +283,8 @@ func (c *KVCache) RestorePrefix(snap *KVCache) error {
 		if l.ConvState != nil {
 			cp.ConvState = c.backend.RetainArray(l.ConvState)
 		}
+		cp.capacity = l.capacity
+		cp.used = l.used
 		c.layers[i] = cp
 		c.initialized[i] = snap.initialized[i]
 	}
@@ -293,4 +309,120 @@ func (c *KVCache) Free() {
 			}
 		}
 	}
+}
+
+// kvGrowStep is how many positions AppendWindow adds when the buffer fills.
+// Growth is the only O(seq) copy; per-token appends write a single position.
+const kvGrowStep = 256
+
+// AppendWindow appends one or more positions of K/V and returns the populated
+// prefix. Unlike Append, which concatenates (and therefore copies the whole
+// cache every call), this writes into a geometrically grown buffer, so
+// per-token decode cost is independent of sequence length.
+//
+// newK/newV are [1, num_kv_heads, n, head_dim] and are consumed. n > 1 occurs
+// when prefill is chunked. The returned arrays are caller-owned.
+func (c *KVCache) AppendWindow(layerIdx int, newK, newV tensor.Array) (tensor.Array, tensor.Array, error) {
+	if layerIdx < 0 || layerIdx >= len(c.layers) {
+		return nil, nil, fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
+	}
+	l := c.layers[layerIdx]
+	if l == nil || l.K == nil {
+		c.layers[layerIdx] = &KVCacheLayer{K: newK, V: newV}
+		c.initialized[layerIdx] = true
+		shape := newK.Shape()
+		c.layers[layerIdx].used = shape[2]
+		c.layers[layerIdx].capacity = shape[2]
+		return newK, newV, nil
+	}
+	defer newK.Free()
+	defer newV.Free()
+
+	// Adopt the prefill-shaped arrays as the initial buffer.
+	if l.capacity == 0 {
+		l.used = l.K.Shape()[2]
+		l.capacity = l.used
+	}
+
+	n := newK.Shape()[2]
+	if l.used+n > l.capacity {
+		if err := c.growLayer(l, newK.Shape(), newK.Dtype(), l.used+n-l.capacity); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	shape := l.K.Shape()
+	start := []int{0, 0, l.used, 0}
+	stop := []int{shape[0], shape[1], l.used + n, shape[3]}
+
+	updK, err := c.backend.SliceUpdate(l.K, newK, start, stop, c.stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kv_cache: slice update K: %w", err)
+	}
+	updV, err := c.backend.SliceUpdate(l.V, newV, start, stop, c.stream)
+	if err != nil {
+		updK.Free()
+		return nil, nil, fmt.Errorf("kv_cache: slice update V: %w", err)
+	}
+	l.K.Free()
+	l.V.Free()
+	l.K = updK
+	l.V = updV
+	l.used += n
+
+	return c.window(l)
+}
+
+// window returns the populated prefix of a layer's buffers. The results are
+// always caller-owned (retained when the buffer happens to be exactly full),
+// so callers can unconditionally Free them.
+func (c *KVCache) window(l *KVCacheLayer) (tensor.Array, tensor.Array, error) {
+	if l.used == l.capacity {
+		return c.backend.RetainArray(l.K), c.backend.RetainArray(l.V), nil
+	}
+	shape := l.K.Shape()
+	start := []int{0, 0, 0, 0}
+	stop := []int{shape[0], shape[1], l.used, shape[3]}
+	strides := []int{1, 1, 1, 1}
+	kv, err := c.backend.Slice(l.K, start, stop, strides, c.stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kv_cache: window K: %w", err)
+	}
+	vv, err := c.backend.Slice(l.V, start, stop, strides, c.stream)
+	if err != nil {
+		kv.Free()
+		return nil, nil, fmt.Errorf("kv_cache: window V: %w", err)
+	}
+	return kv, vv, nil
+}
+
+// growLayer extends a layer's K/V buffers by at least `need` positions,
+// rounded up to kvGrowStep so that growth is amortized across many tokens.
+func (c *KVCache) growLayer(l *KVCacheLayer, tokShape []int, dt tensor.Dtype, need int) error {
+	grow := kvGrowStep
+	if need > grow {
+		grow = ((need + kvGrowStep - 1) / kvGrowStep) * kvGrowStep
+	}
+	padShape := []int{tokShape[0], tokShape[1], grow, tokShape[3]}
+	padK, err := c.backend.Zeros(padShape, dt, c.stream)
+	if err != nil {
+		return fmt.Errorf("kv_cache: grow alloc: %w", err)
+	}
+	defer padK.Free()
+
+	grownK, err := c.backend.ConcatenateAxis([]tensor.Array{l.K, padK}, 2, c.stream)
+	if err != nil {
+		return fmt.Errorf("kv_cache: grow K: %w", err)
+	}
+	grownV, err := c.backend.ConcatenateAxis([]tensor.Array{l.V, padK}, 2, c.stream)
+	if err != nil {
+		grownK.Free()
+		return fmt.Errorf("kv_cache: grow V: %w", err)
+	}
+	l.K.Free()
+	l.V.Free()
+	l.K = grownK
+	l.V = grownV
+	l.capacity += grow
+	return nil
 }

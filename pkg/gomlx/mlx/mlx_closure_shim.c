@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 // C shim for MLX closures and compilation. cgo cannot bind C functions that
 // take function-pointer arguments (mlx_closure_new_func_payload) or

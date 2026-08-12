@@ -1539,18 +1539,34 @@ func (g *GGMLBackend) Slice(a tensor.Array, start, stop, strides []int, s tensor
 
 func (g *GGMLBackend) SliceUpdate(src, update tensor.Array, start, stop []int, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := src.(*Array).tensor
+	ga := src.(*Array)
+	t := ga.tensor
 	u := update.(*Array).tensor
-	// ggml_acc(ctx, a, b, nb1, nb2, nb3, offset) — accumulate b into a at offset.
-	offset := C.size_t(0)
-	if len(start) >= 1 {
-		offset = C.size_t(start[0] * int(t.nb[0]))
+
+	// Byte offset of the row-major `start` index. Each row-major axis maps to
+	// a GGML ne/nb index in reverse order — using start[0]*nb[0] would pair the
+	// batch index with the innermost stride and always yield 0, so every
+	// windowed KV append would overwrite position 0.
+	nd := len(ga.Shape())
+	var offset C.size_t
+	for i := 0; i < len(start) && i < nd; i++ {
+		gi := ggmlAxisIndex(nd, i)
+		if gi < 4 {
+			offset += C.size_t(start[i]) * C.size_t(t.nb[gi])
+		}
 	}
-	nb1 := t.nb[1]
-	nb2 := t.nb[2]
-	nb3 := t.nb[3]
-	result := C.ggml_acc(ctx, t, u, C.size_t(nb1), C.size_t(nb2), C.size_t(nb3), offset)
-	return g.evalOp(result)
+
+	// ggml_set writes b into a view of a (ggml_acc would ADD, which only
+	// happens to work while the destination region is still zeroed).
+	result := C.ggml_set(ctx, t, u,
+		C.size_t(t.nb[1]), C.size_t(t.nb[2]), C.size_t(t.nb[3]), offset)
+	out, err := g.evalOp(result)
+	if err != nil {
+		return nil, err
+	}
+	out.logicalShape = append([]int(nil), ga.Shape()...)
+	g.registerArray(out)
+	return out, nil
 }
 
 func (g *GGMLBackend) ConcatenateAxis(arrays []tensor.Array, axis int, s tensor.Stream) (tensor.Array, error) {

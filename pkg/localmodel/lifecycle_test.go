@@ -1,7 +1,6 @@
 package localmodel
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -56,28 +55,10 @@ func TestEnsureServerForProvider_NonLocalProvider(t *testing.T) {
 	}
 }
 
-func TestServerEndpoint(t *testing.T) {
-	if ServerEndpoint == "" {
-		t.Error("ServerEndpoint should not be empty")
+func TestSproutLocalProviderID(t *testing.T) {
+	if sproutLocalProviderID != "sprout-local" {
+		t.Errorf("expected 'sprout-local', got %q", sproutLocalProviderID)
 	}
-	// Should contain the default port.
-	if port := fmt.Sprintf(":%d", DefaultPort); !containsStr(ServerEndpoint, port) {
-		t.Errorf("ServerEndpoint %q should contain port %s", ServerEndpoint, port)
-	}
-}
-
-func containsStr(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestMarkServerActivityForTest(t *testing.T) {

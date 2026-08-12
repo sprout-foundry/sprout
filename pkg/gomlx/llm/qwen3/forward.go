@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 // Package qwen3 implements the Qwen3 transformer architecture for the gomlx
 // LLM engine. It provides the forward pass (prefill + cached decode), weight

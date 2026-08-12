@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package llm
 
@@ -403,12 +403,49 @@ func toBPESpace(word string) string {
 }
 
 // fromBPESpace converts BPE space-encoding back to regular text.
+// Handles both SentencePiece-style (▁) and GPT-2 byte-level encoding.
 func fromBPESpace(token string) string {
 	s := strings.ReplaceAll(token, "▁", " ") // Gemma SentencePiece space
-	s = strings.ReplaceAll(s, "Ġ", " ")      // GPT-2/Qwen BPE space
-	s = strings.ReplaceAll(s, "Ċ", "\n")
-	s = strings.ReplaceAll(s, "đ", "\t")
-	return s
+	// GPT-2/Qwen byte-level: bytes < 33 or > 126 are mapped to chars >= U+0100.
+	return decodeByteLevel(s)
+}
+
+// decodeByteLevel reverses the GPT-2 byte-level pre-tokenizer mapping.
+// Bytes 0–255 map to unicode chars: printable ASCII (33–126) map to
+// themselves; everything else maps to chr(byte + 256).
+func decodeByteLevel(s string) string {
+	var sb strings.Builder
+	sb.Grow(len(s))
+	for _, r := range s {
+		if r < 128 {
+			sb.WriteRune(r)
+			continue
+		}
+		// Reverse the GPT-2 bytes_to_unicode mapping
+		b := byteLevelRuneToByte(r)
+		if b >= 0 {
+			sb.WriteByte(byte(b))
+		} else {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
+// byteLevelRuneToByte reverses the GPT-2 bytes_to_unicode mapping for a
+// single rune. Returns -1 if the rune is not part of the mapping (e.g.
+// genuine multilingual text).
+func byteLevelRuneToByte(r rune) int {
+	switch {
+	case r >= 33 && r <= 126:
+		return int(r)
+	case r >= 256 && r <= 256+255:
+		v := int(r - 256)
+		if v < 33 || v > 126 {
+			return v
+		}
+	}
+	return -1
 }
 
 // HuggingFace tokenizer.json structures
@@ -472,11 +509,29 @@ type hfAddedToken struct {
 // via shouldFilterToken. Models without thinking tokens (plain qwen3) ignore
 // the marker harmlessly.
 func (t *Tokenizer) FormatChat(messages []ChatMessage) string {
+	// LFM2 uses its own chat format with BOS and <think> markers
+	if _, isLFM2 := t.vocab["<|im_start|>"]; isLFM2 && t.bosID > 0 && t.specialTokens["<|startoftext|>"] > 0 {
+		return t.formatLFM2Chat(messages)
+	}
 	// Gemma uses a different chat format than Qwen
 	if _, isGemma := t.vocab["<|turn>"]; isGemma {
 		return t.formatGemmaChat(messages)
 	}
 	return t.formatQwenChat(messages)
+}
+
+func (t *Tokenizer) formatLFM2Chat(messages []ChatMessage) string {
+	var sb strings.Builder
+	sb.WriteString("<|startoftext|>")
+	for _, msg := range messages {
+		sb.WriteString("<|im_start|>")
+		sb.WriteString(msg.Role)
+		sb.WriteString("\n")
+		sb.WriteString(msg.Content)
+		sb.WriteString("<|im_end|>\n")
+	}
+	sb.WriteString("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+	return sb.String()
 }
 
 func (t *Tokenizer) formatGemmaChat(messages []ChatMessage) string {

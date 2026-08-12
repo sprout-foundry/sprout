@@ -239,3 +239,45 @@ func TestRMSNormMatchesReference(t *testing.T) {
 }
 
 var _ tensor.Backend = (*GGMLBackend)(nil)
+
+// The model layer no longer materialises KV heads (ExpandKVHeads) — the
+// backend must broadcast Hkv key/value heads across their query-head group.
+func TestSDPAGroupedQueryAttention(t *testing.T) {
+	b := getBackend(t)
+	s, _ := b.DefaultGPUStream()
+
+	const B, H, HKV, S, D = 1, 8, 2, 5, 8
+	qShape := []int{B, H, S, D}
+	kvShape := []int{B, HKV, S, D}
+	qData := fill(B*H*S*D, 31)
+	kData := fill(B*HKV*S*D, 32)
+	vData := fill(B*HKV*S*D, 33)
+	scale := float32(1.0 / math.Sqrt(float64(D)))
+
+	q, _ := b.NewArrayFromFloat32(qData, qShape)
+	k, _ := b.NewArrayFromFloat32(kData, kvShape)
+	v, _ := b.NewArrayFromFloat32(vData, kvShape)
+
+	got, err := b.FastScaledDotProductAttention(q, k, v, scale, "causal", nil, nil, s)
+	if err != nil {
+		t.Fatalf("SDPA: %v", err)
+	}
+	if gs := got.Shape(); len(gs) != 4 || gs[1] != H || gs[2] != S || gs[3] != D {
+		t.Fatalf("shape = %v, want [%d %d %d %d]", gs, B, H, S, D)
+	}
+	data, err := got.Float32Data()
+	if err != nil {
+		t.Fatalf("Float32Data: %v", err)
+	}
+
+	// Reference: expand each KV head across its group of H/HKV query heads.
+	expK := make([]float32, B*H*S*D)
+	expV := make([]float32, B*H*S*D)
+	group := H / HKV
+	for h := 0; h < H; h++ {
+		src := (h / group) * S * D
+		copy(expK[h*S*D:(h+1)*S*D], kData[src:src+S*D])
+		copy(expV[h*S*D:(h+1)*S*D], vData[src:src+S*D])
+	}
+	checkClose(t, data, refSDPA(qData, expK, expV, qShape, qShape, scale, true), 1e-4, "GQA SDPA")
+}

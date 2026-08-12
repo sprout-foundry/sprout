@@ -19,6 +19,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
@@ -610,12 +611,14 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// (real provider instead of "editor").
 	ws.clearCachedAgent(clientID)
 
-	// Auto-start the local LLM server when sprout-local is selected so the
-	// agent has an endpoint to connect to. This is a no-op on non-Mac or
-	// when no model is downloaded.
+	// Pre-load the local model in-process when sprout-local is selected
+	// so the first chat request is fast. On Apple Silicon this loads the
+	// model directly via MLX — no HTTP server, no separate process.
 	if req.Provider == "sprout-local" {
-		if endpoint := ensureLocalLLMRunning(); endpoint != "" {
-			ws.log().Info("auto-started local LLM server", "endpoint", endpoint)
+		if err := localmodel.EnsureServerForProviderWithCheck(r.Context(), "sprout-local"); err != nil {
+			ws.log().Info("local model pre-load deferred (will lazy-load on first request)", "error", err)
+		} else {
+			ws.log().Info("local model loaded in-process")
 		}
 	}
 

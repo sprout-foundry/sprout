@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package qwen3
 

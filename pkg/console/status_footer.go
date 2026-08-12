@@ -349,36 +349,46 @@ func (f *StatusFooter) Resize() {
 
 	// Reset the scroll region temporarily so we can address rows by
 	// absolute number without the terminal clamping us inside the OLD
-	// (now-stale) scroll area. Then clear the previous footer rows —
-	// 2 rows by default (rule + content), 3 when steer was active,
-	// 4 when steer + hint were active.
+	// (now-stale) scroll area. Then clear the previous footer rows.
+	//
+	// Footer content is padded to the terminal width at draw time. When
+	// the terminal shrinks, those padded rows wrap across multiple
+	// physical rows — so \033[K (clear to end of line) on the footer's
+	// known row positions doesn't clear the wrapped overflow that now
+	// sits above them. We position at the topmost footer row and use
+	// \033[J (clear to end of screen) to wipe everything from the
+	// topmost footer row downward, then redraw fresh content.
 	if oldRows > 1 {
 		fmt.Fprint(f.w, "\033[r")
 		fmt.Fprint(f.w, "\0337")
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows)
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-1)
 		f.mu.Lock()
 		steerWasActive := f.steerActive
 		lastHint := f.lastHintRows
 		lastSteer := f.lastSteerRows
 		f.mu.Unlock()
-		// SP-115: clear hint row if it was present.
+
+		// Determine the topmost row the footer occupied (including
+		// steer panel rows). Content is at oldRows and oldRows-1;
+		// steer adds up to lastSteer rows above that; hint adds 1.
+		topRow := oldRows - 1
 		if lastHint > 0 && oldRows > 2 {
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-2)
+			topRow = oldRows - 2
 		}
-		if steerWasActive && oldRows > 2 {
-			// Clear every row the old steer panel occupied. Use the
-			// recorded lastSteerRows rather than the live steerRows
-			// because the live value reflects CURRENT state, not what
-			// was drawn the last time Resize fired. Loop bottom-up so
-			// the cursor ends at the top of the panel.
-			for i := lastSteer - 1; i >= 0; i-- {
-				row := steerRowFor(oldRows, lastSteer, lastHint, i)
-				if row >= 1 && row < oldRows {
-					fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
-				}
+		if steerWasActive && lastSteer > 0 {
+			steerTop := steerRowFor(oldRows, lastSteer, lastHint, 0)
+			if steerTop < topRow {
+				topRow = steerTop
 			}
 		}
+		if topRow < 1 {
+			topRow = 1
+		}
+
+		// Clear from the topmost footer row to the end of the screen.
+		// \033[J wipes everything below the cursor, catching any wrapped
+		// overflow from the old wider content that individual \033[K
+		// passes would miss.
+		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
 		fmt.Fprint(f.w, "\0338")
 	}
 
@@ -418,29 +428,28 @@ func (f *StatusFooter) Stop() {
 
 	_, rows := f.terminalSize()
 	if rows > 1 {
-		// Clear all pinned rows (N + N-1, plus N-2 if hint was active,
-		// plus N-3..N-3-lastSteer+1 if steer was active) before resetting
-		// the scroll region so we don't leave residual chrome in the
-		// scrollback. Order matters: bottom-up so the cursor ends near
-		// the top of where the footer was.
+		// Clear all pinned footer rows. Use \033[J (clear to end of screen)
+		// from the topmost footer row to catch any wrapped overflow from
+		// content padded to a previous (wider) terminal width.
 		f.mu.Lock()
 		hintWasActive := f.lastHintRows > 0
 		steerWasActive := f.steerActive
 		lastSteer := f.lastSteerRows
 		f.mu.Unlock()
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows)
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-1)
-		if hintWasActive && rows > 2 {
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-2)
+		topRow := rows - 1
+		if hintWasActive {
+			topRow = rows - 2
 		}
-		if steerWasActive && rows > 2 {
-			for i := lastSteer - 1; i >= 0; i-- {
-				row := steerRowFor(rows, lastSteer, f.lastHintRows, i)
-				if row >= 1 && row < rows {
-					fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
-				}
+		if steerWasActive && lastSteer > 0 {
+			steerTop := steerRowFor(rows, lastSteer, f.lastHintRows, 0)
+			if steerTop < topRow {
+				topRow = steerTop
 			}
 		}
+		if topRow < 1 {
+			topRow = 1
+		}
+		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
 	}
 	// Reset scroll region to full screen.
 	fmt.Fprint(f.w, "\033[r")

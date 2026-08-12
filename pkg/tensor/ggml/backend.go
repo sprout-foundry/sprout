@@ -220,6 +220,24 @@ int ggml_can_mul_mat_check(const struct ggml_tensor * a, const struct ggml_tenso
         && (b->ne[3] % a->ne[3] == 0);
 }
 
+// After a batch is computed, each result holds its data in its own pinned
+// buffer, but its op and src pointers still describe how it was produced —
+// and those sources live in the ops arena, which is recycled. Severing them
+// turns the result into a plain leaf, so a later graph treats it as an input
+// instead of walking into freed memory trying to recompute it.
+void ggml_make_leaf(struct ggml_tensor * t) {
+    if (!t) return;
+    t->op = GGML_OP_NONE;
+    for (int i = 0; i < GGML_MAX_SRC; i++) t->src[i] = NULL;
+    t->view_src = NULL;
+    t->view_offs = 0;
+}
+
+// ggml_new_graph defaults to 2048 nodes; a batched flush can exceed that.
+struct ggml_cgraph * ggml_new_graph_big(struct ggml_context * ctx, size_t size) {
+    return ggml_new_graph_custom(ctx, size, false);
+}
+
 // Copy src into dst backend-to-backend, but only when the layouts genuinely
 // agree — ggml_backend_tensor_copy asserts rather than returning an error, so
 // the preconditions are checked here and 0 is returned to signal "use the
@@ -312,6 +330,9 @@ func init() {
 // should return to its starting count; a per-request climb means op results
 // are never being freed. SPROUT_GGML_LEAK=1 reports it periodically.
 var (
+	batchOps     int64
+	batchFlushes int64
+	batchForced  int64
 	livePins     int64
 	livePinBytes int64
 	leakBackend  *GGMLBackend
@@ -322,6 +343,10 @@ func startLeakReporter() {
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
+			o, f, fo := atomic.LoadInt64(&batchOps), atomic.LoadInt64(&batchFlushes), atomic.LoadInt64(&batchForced)
+			if f > 0 {
+				fmt.Printf("ggml: batch ops=%d flushes=%d (%.1f ops/flush, %d hit the limit)\n", o, f, float64(o)/float64(f), fo)
+			}
 			fmt.Printf("ggml: live pinned tensors=%d bytes=%.1fMB\n",
 				atomic.LoadInt64(&livePins), float64(atomic.LoadInt64(&livePinBytes))/1e6)
 			if leakBackend != nil {
@@ -422,6 +447,15 @@ type GGMLBackend struct {
 	// pinOrigin labels the next pin with the op that produced it, for leak
 	// diagnosis. Written only under tempMu.
 	pinOrigin string
+
+	// pending holds ops whose graphs have been built but not yet computed.
+	// Batching them into one graph is what removes the per-op cgo transition
+	// and OpenMP fork/join, which together measured ~66% of decode.
+	// Guarded by tempMu.
+	pending []pendingOp
+	// deferUnpin holds buffers whose Arrays were freed while still pending;
+	// the graph still writes into them, so they are released after the flush.
+	deferUnpin []*C.struct_ggml_tensor
 
 	// bufPool recycles released backend buffers by capacity bucket. Every op
 	// result gets its own buffer, so without reuse a decode step performs
@@ -631,6 +665,9 @@ type Array struct {
 	// the MLX convention preserves ([1, seqLen, hidden]). Ops that need to
 	// preserve rank set this explicitly.
 	logicalShape []int
+	// pending is set while this Array's node is queued but not yet computed.
+	// Reading it forces a flush.
+	pending bool
 	// refs counts the Array wrappers sharing this C tensor (see RetainArray).
 	// The backend's tensorData/arrayMap registries pin the result buffer of
 	// every op, so the last wrapper to be freed must evict them — otherwise a
@@ -784,7 +821,16 @@ func (a *Array) Size() int {
 }
 
 func (a *Array) Eval() error {
-	if a.hasData || a.tensor == nil {
+	if a.tensor == nil {
+		return nil
+	}
+	if a.pending {
+		if err := a.backend.flush(); err != nil {
+			return err
+		}
+		return nil
+	}
+	if a.hasData {
 		return nil
 	}
 	g := a.backend
@@ -837,8 +883,22 @@ func (a *Array) Free() {
 	// ever produced.
 	if a.refs != nil && a.tensor != nil && a.backend != nil {
 		if atomic.AddInt32(a.refs, -1) == 0 {
-			a.backend.unpin(a.tensor)
-			a.backend.arrayMap.Delete(uintptr(unsafe.Pointer(a.tensor)))
+			b := a.backend
+			// Callers free op inputs the moment the op returns, which is safe
+			// under eager evaluation but not while a graph is queued: that
+			// graph still has to read them. Hold every release until the
+			// flush rather than trying to work out which buffers are
+			// reachable from the pending nodes.
+			b.tempMu.Lock()
+			deferred := len(b.pending) > 0
+			if deferred {
+				b.deferUnpin = append(b.deferUnpin, a.tensor)
+			}
+			b.tempMu.Unlock()
+			if !deferred {
+				b.unpin(a.tensor)
+			}
+			b.arrayMap.Delete(uintptr(unsafe.Pointer(a.tensor)))
 		}
 		a.refs = nil
 	}
@@ -1245,12 +1305,154 @@ func (g *GGMLBackend) scalarF32(v float32) *C.struct_ggml_tensor {
 	return t
 }
 
+// pendingOp pairs a queued graph node with the Array that will expose it.
+type pendingOp struct {
+	node *C.struct_ggml_tensor
+	arr  *Array
+}
+
+// batchEnabled turns on deferred evaluation. Off by default until the batched
+// path has as much mileage as the eager one.
+var batchEnabled = os.Getenv("SPROUT_GGML_BATCH") != ""
+
+// batchLimit caps how many ops accumulate before a forced flush, bounding
+// both graph size and how much pinned memory pending results hold.
+const batchLimit = 64
+
+// graphNodeCap sizes the flush graph. Each queued op expands to a handful of
+// nodes once its source chain is walked.
+const graphNodeCap = 8192
+
+// flush computes every pending op in a single graph. Caller must hold tempMu.
+func (g *GGMLBackend) flushLocked() error {
+	if len(g.pending) == 0 {
+		return nil
+	}
+	atomic.AddInt64(&batchFlushes, 1)
+	tempCtx := C.ggml_new_temp_ctx(tempArenaBytes)
+	if tempCtx == nil {
+		return fmt.Errorf("ggml: failed to create temp context for flush")
+	}
+	graph := C.ggml_new_graph_big(tempCtx, C.size_t(graphNodeCap))
+	if graph == nil {
+		C.ggml_free(tempCtx)
+		return fmt.Errorf("ggml: failed to create batch graph")
+	}
+	for _, p := range g.pending {
+		C.ggml_build_forward_expand(graph, p.node)
+	}
+
+	alloc := C.ggml_gallocr_new(C.ggml_backend_get_default_buffer_type(g.backend))
+	if !C.ggml_gallocr_alloc_graph(alloc, graph) {
+		C.ggml_gallocr_free(alloc)
+		C.ggml_free(tempCtx)
+		return fmt.Errorf("ggml: batch graph allocation failed (%d ops)", len(g.pending))
+	}
+	status := C.ggml_backend_graph_compute(g.backend, graph)
+	C.ggml_gallocr_free(alloc)
+	C.ggml_free(tempCtx)
+	if status != C.GGML_STATUS_SUCCESS {
+		return fmt.Errorf("ggml: batch graph compute failed (status %d)", int(status))
+	}
+
+	for _, p := range g.pending {
+		// Sever the node from its (about to be recycled) sources; it now owns
+		// its data and must behave as a leaf from here on.
+		C.ggml_make_leaf(p.node)
+		if p.arr != nil {
+			p.arr.hasData = true
+			p.arr.pending = false
+		}
+	}
+	g.pending = g.pending[:0]
+
+	// Results are materialised; the graph nodes are dead and any Array freed
+	// mid-batch can now release its buffer.
+	for _, t := range g.deferUnpin {
+		g.unpin(t)
+	}
+	g.deferUnpin = g.deferUnpin[:0]
+	g.recycleOpsCtx()
+	return nil
+}
+
+// flush computes any queued ops.
+func (g *GGMLBackend) flush() error {
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+	return g.flushLocked()
+}
+
+// enqueueOp defers an op instead of computing it now. The node's output is
+// pinned up front so the graph allocator leaves it alone and writes the
+// result straight into the buffer the Array will expose.
+func (g *GGMLBackend) enqueueOp(opResult *C.struct_ggml_tensor) (*Array, error) {
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+
+	// Views can claim contiguity while keeping the source's strides, so make
+	// the result contiguous — in the ops context, since it must outlive this
+	// call and survive until the flush.
+	compute := C.ggml_cont(g.leafCtxPtr(), opResult)
+	if compute == nil {
+		return nil, fmt.Errorf("ggml: cont failed")
+	}
+	resultShape := g.tensorShape(compute)
+	if int(C.tensor_nbytes(compute)) > 0 {
+		if leakEnabled {
+			g.pinOrigin = C.GoString(C.tensor_op_name(opResult))
+		}
+		if err := g.pinTensorData(compute, nil); err != nil {
+			return nil, err
+		}
+	}
+	arr := g.newArray(compute)
+	arr.logicalShape = resultShape
+	// Same rank-preserving propagation the eager path does: GGML collapses
+	// trailing 1s, which loses the MLX rank convention. Must happen here,
+	// while opResult's source chain is still intact.
+	switch int(C.tensor_op(opResult)) {
+	case int(C.GGML_OP_ADD), int(C.GGML_OP_SUB), int(C.GGML_OP_MUL), int(C.GGML_OP_DIV),
+		int(C.GGML_OP_UNARY), int(C.GGML_OP_SQRT), int(C.GGML_OP_SQR),
+		int(C.GGML_OP_RMS_NORM), int(C.GGML_OP_SOFT_MAX),
+		int(C.GGML_OP_ROPE), int(C.GGML_OP_SCALE), int(C.GGML_OP_CPY):
+		if src := C.get_src(opResult, 0); src != nil {
+			if in := g.findArrayWithShape(src); in != nil {
+				arr.logicalShape = append([]int(nil), in.logicalShape...)
+			}
+		}
+	}
+	arr.pending = true
+	g.registerArray(arr)
+	g.pending = append(g.pending, pendingOp{node: compute, arr: arr})
+	atomic.AddInt64(&batchOps, 1)
+
+	if len(g.pending) >= batchLimit {
+		atomic.AddInt64(&batchForced, 1)
+		if err := g.flushLocked(); err != nil {
+			return nil, err
+		}
+	}
+	return arr, nil
+}
+
 // evalOpUnpin evaluates an op, then releases the transient inputs the op
 // wrapper built for itself (scalars, causal masks, position ids). Those are
 // never handed back to the caller, so nothing else will free their buffers.
 func (g *GGMLBackend) evalOpUnpin(node *C.struct_ggml_tensor, transient ...*C.struct_ggml_tensor) (*Array, error) {
 	arr, err := g.evalOp(node)
 	for _, t := range transient {
+		if t == nil {
+			continue
+		}
+		if batchEnabled {
+			// The op has only been queued: the graph still has to read these
+			// inputs, so their buffers cannot be recycled until it runs.
+			g.tempMu.Lock()
+			g.deferUnpin = append(g.deferUnpin, t)
+			g.tempMu.Unlock()
+			continue
+		}
 		g.unpin(t)
 	}
 	return arr, err
@@ -1269,6 +1471,9 @@ func (g *GGMLBackend) evalOpUnpin(node *C.struct_ggml_tensor, transient ...*C.st
 // Uses a TEMPORARY GGML context for graph building, separate from the main
 // weight context, so graph metadata never overwrites weight tensor structs.
 func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
+	if batchEnabled {
+		return g.enqueueOp(opResult)
+	}
 	// Build the graph in a TEMPORARY context. Graphs are ~64KB each and
 	// accumulate in the main context arena, eventually corrupting tensor
 	// metadata. By using a temp context, we keep the main arena clean for

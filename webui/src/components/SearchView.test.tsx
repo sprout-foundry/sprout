@@ -125,7 +125,7 @@ vi.mock('./search/useSearchState', () => {
         handleReplace: vi.fn().mockResolvedValue(undefined),
         excludePatterns,
         setExcludePatterns,
-        semanticThreshold: 0.75,
+        semanticThreshold: 0.30,
         setSemanticThreshold: vi.fn(),
         indexStatus: null,
         isBuilding: false,

@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
 
 package qwen35
 
@@ -256,7 +256,7 @@ func gatedDeltaUpdateOps(q, k, v, g, beta, state tensor.Array, b tensor.Backend,
 			if curOwned {
 				cur.Free()
 			}
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("sliceHead g: t=%d B=%d Hv=%d: %w", t, B, Hv, err)
 		}
 		bt, err := sliceHead(beta, t, B, Hv, b, stream)
 		if err != nil {
@@ -323,6 +323,13 @@ func sliceHead(x tensor.Array, t, B, H int, b tensor.Backend, stream tensor.Stre
 // Returns y [B, 1, Hv, Dv] and the updated state [B, Hv, Dv, Dk]. Both are
 // freshly allocated and owned by the caller.
 func gatedDeltaStep(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
+	// GGML supports at most 4D tensors and broadcasts natively via ne=1
+	// dims in mul. Use the 4D path for non-MLX backends; the MLX path uses
+	// 5D reshapes to broadcast.
+	if !b.NativeQuantization() {
+		return gatedDeltaStep4D(state, q, k, v, g, beta, B, Hv, Dv, Dk, b, stream)
+	}
+
 	// g_t [B,1,Hv] → [B,1,Hv,1,1] to broadcast with state [B,Hv,Dv,Dk].
 	g5, err := b.Reshape(g, []int{B, 1, Hv, 1, 1}, stream)
 	if err != nil {
@@ -429,4 +436,143 @@ func gatedDeltaStep(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b t
 		return nil, nil, fmt.Errorf("state unflatten: %w", err)
 	}
 	return yCast, next, nil
+}
+
+// repeatToBackend is an optional backend capability for expanding a tensor
+// to a target shape (GGML's DeltaNet outer product needs it; MLX broadcasts
+// natively via 5D reshapes and never calls gatedDeltaStep4D).
+type repeatToBackend interface {
+	RepeatTo(a tensor.Array, target []int, s tensor.Stream) (tensor.Array, error)
+}
+
+// gatedDeltaStep4D is the GGML-compatible recurrence step. GGML tensors are
+// at most 4D and ggml_mul broadcasts natively via ne=1 dims, so the 5D
+// broadcast reshapes ([B,1,Hv,1,1] etc.) are replaced with 4D shapes that
+// carry the same logical layout:
+//
+//	state [B,Hv,Dv,Dk]; g [B,1,Hv]   → g reshaped [B,Hv,1,1]  broadcasts over Dv,Dk
+//	k     [B,1,Hv,Dk];  decayed 4D   → k reshaped [B,Hv,1,Dk]  broadcasts over Dv
+//	beta  [B,1,Hv];     diff [B,Hv,Dv] → beta [B,Hv,1]         broadcasts over Dv
+//	delta [B,Hv,Dv];    k5 [B,Hv,1,Dk] → delta [B,Hv,Dv,1]     broadcasts over Dk
+//	q     [B,1,Hv,Dk];  next [B,Hv,Dv,Dk] → q [B,Hv,1,Dk]      broadcasts over Dv
+func gatedDeltaStep4D(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
+	// g [B,1,Hv] → [B,Hv,1,1]; state stays [B,Hv,Dv,Dk].
+	g4, err := b.Reshape(g, []int{B, Hv, 1, 1}, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("g reshape: %w", err)
+	}
+	defer g4.Free()
+
+	decayed, err := b.Multiply(state, g4, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decay mul: %w", err)
+	}
+	defer decayed.Free()
+
+	// k [B,1,Hv,Dk] → [B,Hv,1,Dk]; broadcast over Dv in the product.
+	k4, err := b.Reshape(k, []int{B, Hv, 1, Dk}, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("k reshape: %w", err)
+	}
+	defer k4.Free()
+
+	prod, err := b.Multiply(decayed, k4, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kv_mem prod: %w", err)
+	}
+	defer prod.Free()
+	kvMem, err := b.Sum(prod, []int{3}, false, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("kv_mem sum: %w", err)
+	}
+	defer kvMem.Free()
+
+	// v [B,1,Hv,Dv] → [B,Hv,Dv] (drop the singleton S dim), subtract kvMem.
+	v3, err := b.Reshape(v, []int{B, Hv, Dv}, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("v reshape: %w", err)
+	}
+	defer v3.Free()
+	diff, err := b.Subtract(v3, kvMem, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("v - kv_mem: %w", err)
+	}
+	defer diff.Free()
+	// beta [B,1,Hv] → [B,Hv,1]; broadcast over Dv.
+	b4, err := b.Reshape(beta, []int{B, Hv, 1}, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("beta reshape: %w", err)
+	}
+	defer b4.Free()
+	delta, err := b.Multiply(diff, b4, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("delta mul: %w", err)
+	}
+	defer delta.Free()
+
+	// delta [B,Hv,Dv] → [B,Hv,Dv,1]; expand to full [B,Hv,Dv,Dk] so the
+	// outer product with k4 [B,Hv,1,Dk] is a plain elementwise mul.
+	d4, err := b.Reshape(delta, []int{B, Hv, Dv, 1}, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("delta reshape: %w", err)
+	}
+	defer d4.Free()
+	var dFull tensor.Array
+	if _, ok := b.(repeatToBackend); ok {
+		dFull, err = b.(repeatToBackend).RepeatTo(d4, []int{B, Hv, Dv, Dk}, stream)
+		if err != nil {
+			return nil, nil, fmt.Errorf("delta repeat: %w", err)
+		}
+		defer dFull.Free()
+	} else {
+		dFull = d4 // MLX path never reaches here; keep d4 for non-repeat backends
+	}
+	outer, err := b.Multiply(dFull, k4, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("outer: %w", err)
+	}
+	defer outer.Free()
+	next4, err := b.Add(decayed, outer, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("state add: %w", err)
+	}
+	defer next4.Free()
+
+	// y = sum_dk(state * q_t): q [B,1,Hv,Dk] → [B,Hv,1,Dk]; broadcast over Dv.
+	q4, err := b.Reshape(q, []int{B, Hv, 1, Dk}, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("q reshape: %w", err)
+	}
+	defer q4.Free()
+	yProd, err := b.Multiply(next4, q4, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("y prod: %w", err)
+	}
+	defer yProd.Free()
+	y, err := b.Sum(yProd, []int{3}, false, stream)
+	if err != nil {
+		return nil, nil, fmt.Errorf("y sum: %w", err)
+	}
+
+	yCast, err := b.AsType(y, q.Dtype(), stream)
+	y.Free()
+	if err != nil {
+		return nil, nil, fmt.Errorf("y dtype: %w", err)
+	}
+
+	// The sum drops Dk, leaving [B,Hv,Dv]. Restore the step axis so this path
+	// returns [B,1,Hv,Dv] like the 5D one: the caller concatenates the steps
+	// along axis 1 and then pairs the result with a [B,S,Hv,Dv] gate.
+	yStep, err := b.Reshape(yCast, []int{B, 1, Hv, Dv}, stream)
+	yCast.Free()
+	if err != nil {
+		return nil, nil, fmt.Errorf("y step reshape: %w", err)
+	}
+
+	next, err := b.Reshape(next4, []int{B, Hv, Dv, Dk}, stream)
+	if err != nil {
+		yStep.Free()
+		return nil, nil, fmt.Errorf("state unflatten: %w", err)
+	}
+	return yStep, next, nil
 }

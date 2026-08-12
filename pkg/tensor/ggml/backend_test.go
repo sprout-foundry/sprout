@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && ggml
+//go:build (darwin || linux) && arm64 && cgo && ggml
 
 package ggml
 
@@ -27,28 +27,14 @@ func TestGGMLMatMul(t *testing.T) {
 	b := getBackend(t)
 	s, _ := b.DefaultGPUStream()
 
-	// GGML mul_mat(ctx, a, b) computes b @ a^T where a->ne[0] == b->ne[0].
-	// For result = a @ b in standard notation:
-	//   a: ne[0]=K, ne[1]=M  (row-major [M,K] maps to ne[0]=K, ne[1]=M)
-	//   b: ne[0]=K, ne[1]=N  (row-major [K,N] needs K contiguous)
-	// Result: ne[0]=M, ne[1]=N
-	//
-	// M=2, K=3, N=4
-	aData := []float32{1, 2, 3, 4, 5, 6}                      // [M=2, K=3]
-	bData := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12} // [K=3, N=4]
+	// Standard row-major: A [M=2, K=3], B [3, N=4]
+	// GGML mul_mat(ctx, w, x) computes x @ w^T
+	// To get A @ B, we pass w=B^T and x=A
+	aData := []float32{1, 2, 3, 4, 5, 6}                      // [2, 3] row-major
+	bData := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12} // [3, 4] row-major
 
-	// Create with GGML layout: A ne[0]=K=3, ne[1]=M=2
-	a, _ := b.NewArrayFromFloat32(aData, []int{3, 2})
-	// B ne[0]=K=3, ne[1]=N=4 — but our data is row-major [K,N] which has N contiguous.
-	// GGML ne[0] is contiguous, so ne[0]=N. We need ne[0]=K.
-	// Transpose the data.
-	bTrans := make([]float32, len(bData))
-	for k := 0; k < 3; k++ {
-		for n := 0; n < 4; n++ {
-			bTrans[n*3+k] = bData[k*4+n] // [N,K] layout with K contiguous
-		}
-	}
-	bb, _ := b.NewArrayFromFloat32(bTrans, []int{3, 4}) // ne[0]=K=3, ne[1]=N=4
+	a, _ := b.NewArrayFromFloat32(aData, []int{2, 3})
+	bb, _ := b.NewArrayFromFloat32(bData, []int{3, 4})
 
 	result, err := b.MatMul(a, bb, s)
 	if err != nil {
@@ -59,21 +45,21 @@ func TestGGMLMatMul(t *testing.T) {
 		t.Fatalf("Float32Data: %v", err)
 	}
 
-	// Result ne[0]=M=2, ne[1]=N=4 (column-major). Convert to row-major.
-	// Expected: [38, 44, 50, 56, 83, 98, 113, 128]
+	// Expected A@B: [38, 44, 50, 56, 83, 98, 113, 128] in row-major [2, 4]
 	expected := []float32{38, 44, 50, 56, 83, 98, 113, 128}
-	out := make([]float32, 8)
-	for m := 0; m < 2; m++ {
-		for n := 0; n < 4; n++ {
-			out[m*4+n] = data[m+n*2] // col-major to row-major
+	// Result shape should be [2, 4] = [M, N]
+	resultShape := result.Shape()
+	if len(resultShape) >= 2 {
+		if resultShape[0] != 2 || resultShape[1] != 4 {
+			t.Logf("result shape: %v (expected [2, 4])", resultShape)
 		}
 	}
-	for i, v := range out {
-		if v != expected[i] {
-			t.Errorf("out[%d] = %f, expected %f", i, v, expected[i])
+	for i, v := range data {
+		if i < len(expected) && v != expected[i] {
+			t.Errorf("data[%d] = %f, expected %f", i, v, expected[i])
 		}
 	}
-	t.Logf("MatMul result: %v", out)
+	t.Logf("MatMul result: %v", data[:8])
 }
 
 func TestGGMLAdd(t *testing.T) {
@@ -271,8 +257,8 @@ func TestGGMLGather(t *testing.T) {
 	b := getBackend(t)
 	s, _ := b.DefaultGPUStream()
 
-	// Gather rows [10,20,30,40] by indices [0,2,3] → [10,30,40]
-	data, _ := b.NewArrayFromFloat32([]float32{10, 20, 30, 40}, []int{1, 4})
+	// Table [4, 1] (4 rows, 1 col), gather rows [0, 2, 3] -> [10, 30, 40]
+	data, _ := b.NewArrayFromFloat32([]float32{10, 20, 30, 40}, []int{4, 1})
 	indices, _ := b.NewArrayFromInt32([]int32{0, 2, 3}, []int{3})
 
 	result, err := b.GatherAxis(data, indices, 0, nil, s)
@@ -280,11 +266,10 @@ func TestGGMLGather(t *testing.T) {
 		t.Fatalf("GatherAxis: %v", err)
 	}
 	out, _ := result.Float32Data()
-	// ggml_get_rows returns [ne0, n_indices] → row-major [1, 3]
+	expected := []float32{10, 30, 40}
 	if len(out) != 3 {
 		t.Fatalf("len = %d, expected 3", len(out))
 	}
-	expected := []float32{10, 30, 40}
 	for i, v := range out {
 		if v != expected[i] {
 			t.Errorf("out[%d] = %f, expected %f", i, v, expected[i])

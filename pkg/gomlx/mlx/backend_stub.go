@@ -195,3 +195,5 @@ func (b *stubBackend) ClearCache() error           { return errUnavailable }
 func (b *stubBackend) TotalSystemRAM() uint64      { return 0 }
 
 func (b *stubBackend) EnableCompile() error { return errUnavailable }
+
+func (*stubBackend) NativeQuantization() bool { return false }

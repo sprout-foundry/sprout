@@ -219,13 +219,13 @@ func (g *Gemma4) InitWeights(path string, s tensor.Stream) error {
 		if err != nil {
 			return fmt.Errorf("load per_layer_model_projection: %w", err)
 		}
-		w.perLayerProjNorm, err = sf.Get(prefix+"per_layer_projection_norm.weight", s)
+		w.perLayerProjNorm, err = sf.Get(prefix+"per_layer_projection_norm.weight", g.backend, s)
 		if err != nil {
 			return fmt.Errorf("load per_layer_projection_norm: %w", err)
 		}
 	}
 
-	w.norm, err = sf.Get(prefix+"norm.weight", s)
+	w.norm, err = sf.Get(prefix+"norm.weight", g.backend, s)
 	if err != nil {
 		return fmt.Errorf("load final norm: %w", err)
 	}
@@ -238,25 +238,25 @@ func (g *Gemma4) InitWeights(path string, s tensor.Stream) error {
 		_ = isFull // head dim selection happens at forward time
 
 		// Norms
-		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", s)
+		lw.inputNorm, err = sf.Get(p+".input_layernorm.weight", g.backend, s)
 		if err != nil {
 			return fmt.Errorf("layer %d input_norm: %w", i, err)
 		}
-		lw.postAttnNorm, err = sf.Get(p+".post_attention_layernorm.weight", s)
+		lw.postAttnNorm, err = sf.Get(p+".post_attention_layernorm.weight", g.backend, s)
 		if err != nil {
 			return fmt.Errorf("layer %d post_attn_norm: %w", i, err)
 		}
-		lw.preFFNorm, err = sf.Get(p+".pre_feedforward_layernorm.weight", s)
+		lw.preFFNorm, err = sf.Get(p+".pre_feedforward_layernorm.weight", g.backend, s)
 		if err != nil {
 			return fmt.Errorf("layer %d pre_ff_norm: %w", i, err)
 		}
-		lw.postFFNorm, err = sf.Get(p+".post_feedforward_layernorm.weight", s)
+		lw.postFFNorm, err = sf.Get(p+".post_feedforward_layernorm.weight", g.backend, s)
 		if err != nil {
 			return fmt.Errorf("layer %d post_ff_norm: %w", i, err)
 		}
 
 		// Layer scalar
-		lw.layerScalar, err = sf.Get(p+".layer_scalar", s)
+		lw.layerScalar, err = sf.Get(p+".layer_scalar", g.backend, s)
 		if err != nil {
 			lw.layerScalar = nil // may not exist; default to 1
 		}
@@ -280,12 +280,12 @@ func (g *Gemma4) InitWeights(path string, s tensor.Stream) error {
 		if err != nil {
 			return fmt.Errorf("layer %d o_proj: %w", i, err)
 		}
-		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", s)
+		lw.qNorm, err = sf.Get(p+".self_attn.q_norm.weight", g.backend, s)
 		if err != nil {
 			return fmt.Errorf("layer %d q_norm: %w", i, err)
 		}
 		if hasKV {
-			lw.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", s)
+			lw.kNorm, err = sf.Get(p+".self_attn.k_norm.weight", g.backend, s)
 			if err != nil {
 				return fmt.Errorf("layer %d k_norm: %w", i, err)
 			}
@@ -320,7 +320,7 @@ func (g *Gemma4) InitWeights(path string, s tensor.Stream) error {
 			if err != nil {
 				return fmt.Errorf("layer %d per_layer_projection: %w", i, err)
 			}
-			lw.postPerLayerInputNorm, err = sf.Get(p+".post_per_layer_input_norm.weight", s)
+			lw.postPerLayerInputNorm, err = sf.Get(p+".post_per_layer_input_norm.weight", g.backend, s)
 			if err != nil {
 				return fmt.Errorf("layer %d post_per_layer_input_norm: %w", i, err)
 			}

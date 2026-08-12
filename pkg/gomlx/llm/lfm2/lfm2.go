@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package lfm2
 
@@ -103,7 +103,7 @@ func (l *LFM2) InitWeights(path string, s tensor.Stream) error {
 	}
 
 	// Final norm
-	w.embeddingNorm, err = sf.Get(prefix+"embedding_norm.weight", s)
+	w.embeddingNorm, err = sf.Get(prefix+"embedding_norm.weight", l.backend, s)
 	if err != nil {
 		return fmt.Errorf("load embedding_norm: %w", err)
 	}
@@ -112,11 +112,11 @@ func (l *LFM2) InitWeights(path string, s tensor.Stream) error {
 		p := fmt.Sprintf("%slayers.%d", prefix, i)
 		lw := &w.layers[i]
 
-		lw.operatorNorm, err = sf.Get(p+".operator_norm.weight", s)
+		lw.operatorNorm, err = sf.Get(p+".operator_norm.weight", l.backend, s)
 		if err != nil {
 			return fmt.Errorf("layer %d operator_norm: %w", i, err)
 		}
-		lw.ffnNorm, err = sf.Get(p+".ffn_norm.weight", s)
+		lw.ffnNorm, err = sf.Get(p+".ffn_norm.weight", l.backend, s)
 		if err != nil {
 			return fmt.Errorf("layer %d ffn_norm: %w", i, err)
 		}
@@ -153,17 +153,17 @@ func (l *LFM2) InitWeights(path string, s tensor.Stream) error {
 			if err != nil {
 				return fmt.Errorf("layer %d out_proj: %w", i, err)
 			}
-			lw.qNorm, err = sf.Get(p+".self_attn.q_layernorm.weight", s)
+			lw.qNorm, err = sf.Get(p+".self_attn.q_layernorm.weight", l.backend, s)
 			if err != nil {
 				return fmt.Errorf("layer %d q_layernorm: %w", i, err)
 			}
-			lw.kNorm, err = sf.Get(p+".self_attn.k_layernorm.weight", s)
+			lw.kNorm, err = sf.Get(p+".self_attn.k_layernorm.weight", l.backend, s)
 			if err != nil {
 				return fmt.Errorf("layer %d k_layernorm: %w", i, err)
 			}
 		} else {
 			// Conv layer
-			lw.convWeight, err = sf.Get(p+".conv.conv.weight", s)
+			lw.convWeight, err = sf.Get(p+".conv.conv.weight", l.backend, s)
 			if err != nil {
 				return fmt.Errorf("layer %d conv weight: %w", i, err)
 			}

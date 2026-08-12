@@ -1,4 +1,4 @@
-//go:build !darwin || !arm64 || !cgo
+//go:build !(arm64 && cgo && (darwin || (linux && ggml)))
 
 // Package llm is the non-MLX stub. Every function returns an error so callers
 // can fall back to cloud providers on unsupported platforms.

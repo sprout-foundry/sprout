@@ -22,6 +22,7 @@ type hfConfig struct {
 	NumKVHeads        int             `json:"num_key_value_heads"`
 	HeadDim           int             `json:"head_dim"`
 	RMSNormEPS        float64         `json:"rms_norm_eps"`
+	NormEPS           float64         `json:"norm_eps"`
 	RopeTheta         float64         `json:"rope_theta"`
 	VocabSize         int             `json:"vocab_size"`
 	BOSTokenID        int             `json:"bos_token_id"`
@@ -241,7 +242,11 @@ func LoadConfig(path string) (ModelConfig, error) {
 		cfg.RopeTheta = 10000.0
 	}
 	if cfg.RMSNormEPS == 0 {
-		cfg.RMSNormEPS = 1e-6
+		if raw.NormEPS != 0 {
+			cfg.RMSNormEPS = float32(raw.NormEPS)
+		} else {
+			cfg.RMSNormEPS = 1e-6
+		}
 	}
 	if cfg.PartialRotaryFactor == 0 {
 		cfg.PartialRotaryFactor = 1.0 // full rotation (qwen3-style)

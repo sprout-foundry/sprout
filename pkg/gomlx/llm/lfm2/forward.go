@@ -316,25 +316,17 @@ func (l *LFM2) attention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, sta
 	// KV cache
 	var kForAttn, vForAttn tensor.Array
 	if cache != nil && cache.IsInitialized(layerIdx) {
-		cached, err := cache.Get(layerIdx)
+		// AppendWindow writes one position into a geometrically grown
+		// buffer instead of concatenating, so per-token cost does not
+		// scale with sequence length. The views are caller-owned.
+		kw, vw, err := cache.AppendWindow(layerIdx, l.backend.RetainArray(kRot), l.backend.RetainArray(vT))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cache append: %w", err)
 		}
-		newK, err := l.backend.ConcatenateAxis([]tensor.Array{cached.K, kRot}, 2, s)
-		if err != nil {
-			return nil, fmt.Errorf("concat K: %w", err)
-		}
-		newV, err := l.backend.ConcatenateAxis([]tensor.Array{cached.V, vT}, 2, s)
-		if err != nil {
-			newK.Free()
-			return nil, fmt.Errorf("concat V: %w", err)
-		}
-		cached.K.Free()
-		cached.V.Free()
-		cached.K = newK
-		cached.V = newV
-		kForAttn = newK
-		vForAttn = newV
+		defer kw.Free()
+		defer vw.Free()
+		kForAttn = kw
+		vForAttn = vw
 	} else if cache != nil {
 		kForAttn = kRot
 		vForAttn = vT
@@ -350,24 +342,14 @@ func (l *LFM2) attention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, sta
 		vForAttn = vT
 	}
 
-	// Expand GQA KV heads
-	kExp, err := llm.ExpandKVHeads(kForAttn, cfg.NumHeads, cfg.NumKVHeads, l.backend, s)
-	if err != nil {
-		return nil, fmt.Errorf("k expand: %w", err)
-	}
-	defer kExp.Free()
-
-	vExp, err := llm.ExpandKVHeads(vForAttn, cfg.NumHeads, cfg.NumKVHeads, l.backend, s)
-	if err != nil {
-		return nil, fmt.Errorf("v expand: %w", err)
-	}
-	defer vExp.Free()
-
+	// No ExpandKVHeads: MLX's SDPA handles GQA natively. Materializing the KV
+	// heads would copy the whole cache (NumHeads/NumKVHeads)x per layer per
+	// token, which dominates decode cost at long context.
 	maskMode := ""
 	if seqLen > 1 {
 		maskMode = "causal"
 	}
-	ctx, err := l.backend.FastScaledDotProductAttention(qRot, kExp, vExp, l.attnScale, maskMode, nil, nil, s)
+	ctx, err := l.backend.FastScaledDotProductAttention(qRot, kForAttn, vForAttn, l.attnScale, maskMode, nil, nil, s)
 	if err != nil {
 		return nil, fmt.Errorf("fused attention: %w", err)
 	}

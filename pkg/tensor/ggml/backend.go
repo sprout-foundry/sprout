@@ -156,6 +156,24 @@ size_t ggml_sysconf_phys_pages() { return (size_t)sysconf(_SC_PHYS_PAGES); }
 static void * temp_arena = NULL;
 static size_t temp_arena_size = 0;
 
+// Op graph nodes live in their own arena so they can be reclaimed. They are
+// dead the moment evalOp copies its result into a pinned buffer, but a ggml
+// context cannot free individual tensors, so the whole arena is re-inited
+// once it fills. Reusing the same buffer keeps stale pointers mapped.
+static void * ops_arena = NULL;
+static size_t ops_arena_size = 0;
+
+struct ggml_context * ggml_new_ops_ctx(size_t mem_size) {
+    if (ops_arena_size < mem_size) {
+        free(ops_arena);
+        ops_arena = aligned_alloc(64, mem_size);
+        if (!ops_arena) { ops_arena_size = 0; return NULL; }
+        ops_arena_size = mem_size;
+    }
+    struct ggml_init_params params = { .mem_size = ops_arena_size, .mem_buffer = ops_arena, .no_alloc = true };
+    return ggml_init(params);
+}
+
 struct ggml_context * ggml_new_temp_ctx(size_t mem_size) {
     if (temp_arena_size < mem_size) {
         free(temp_arena);
@@ -298,8 +316,8 @@ func startLeakReporter() {
 			fmt.Printf("ggml: live pinned tensors=%d bytes=%.1fMB\n",
 				atomic.LoadInt64(&livePins), float64(atomic.LoadInt64(&livePinBytes))/1e6)
 			if leakBackend != nil {
-				fmt.Printf("ggml: main ctx used=%.1fMB of 512MB\n",
-					float64(C.ggml_ctx_used(leakBackend.ctxPtr()))/1e6)
+				fmt.Printf("ggml: leaf ctx used=%.1fMB of 512MB\n",
+					float64(C.ggml_ctx_used(leakBackend.leafCtxPtr()))/1e6)
 				var arrays int
 				leakBackend.arrayMap.Range(func(_, _ any) bool { arrays++; return true })
 				fmt.Printf("ggml: arrayMap entries=%d\n", arrays)
@@ -384,6 +402,7 @@ type GGMLBackend struct {
 	once    sync.Once
 	backend C.ggml_backend_t
 	ctx     unsafe.Pointer
+	opsCtx  unsafe.Pointer
 	name    string
 	threads int
 	initErr error
@@ -503,8 +522,16 @@ func (g *GGMLBackend) ensureInit() error {
 			g.initErr = fmt.Errorf("ggml: failed to init context")
 			return
 		}
+		opsCtx := C.ggml_new_ops_ctx(C.size_t(opsArenaBytes))
+		if opsCtx == nil {
+			C.ggml_free(ctx)
+			C.ggml_backend_free(b)
+			g.initErr = fmt.Errorf("ggml: failed to init op context")
+			return
+		}
 		g.backend = b
 		g.ctx = unsafe.Pointer(ctx)
+		g.opsCtx = unsafe.Pointer(opsCtx)
 		g.name = C.GoString(C.backend_name(b))
 		leakBackend = g
 		g.threads = pickThreadCount()
@@ -550,9 +577,33 @@ func (g *GGMLBackend) Available() bool {
 	return g.ensureInit() == nil
 }
 
-// ctxPtr returns the C context as a typed pointer.
+// ctxPtr returns the context op wrappers build graph nodes in. It is
+// recycled (see recycleOpsCtx), so nothing allocated here may outlive the
+// evalOp that consumes it.
 func (g *GGMLBackend) ctxPtr() *C.struct_ggml_context {
+	return (*C.struct_ggml_context)(g.opsCtx)
+}
+
+// leafCtxPtr returns the permanent context. Tensors that outlive a single op
+// — weights, and the result leaf every evalOp hands back — belong here.
+func (g *GGMLBackend) leafCtxPtr() *C.struct_ggml_context {
 	return (*C.struct_ggml_context)(g.ctx)
+}
+
+// opsArenaBytes sizes the recyclable graph-node arena. One op needs a handful
+// of tensors; this absorbs many ops between resets.
+const opsArenaBytes = 64 * 1024 * 1024
+
+// recycleOpsCtx re-inits the op arena once it is half full. Called at the end
+// of evalOp, the one point where no graph node is still needed: the result is
+// copied into its own buffer and the wrapper's nodes are dead.
+func (g *GGMLBackend) recycleOpsCtx() {
+	ctx := (*C.struct_ggml_context)(g.opsCtx)
+	if ctx == nil || uint64(C.ggml_ctx_used(ctx)) < opsArenaBytes/2 {
+		return
+	}
+	C.ggml_free(ctx)
+	g.opsCtx = unsafe.Pointer(C.ggml_new_ops_ctx(C.size_t(opsArenaBytes)))
 }
 
 // Array wraps a GGML tensor.
@@ -1073,7 +1124,7 @@ func (g *GGMLBackend) NewScalarInt32(v int) (tensor.Array, error) {
 	if err := g.ensureInit(); err != nil {
 		return nil, err
 	}
-	t := C.ggml_new_tensor_1d(g.ctxPtr(), C.GGML_TYPE_I32, 1)
+	t := C.ggml_new_tensor_1d(g.leafCtxPtr(), C.GGML_TYPE_I32, 1)
 	data := make([]byte, 4)
 	*(*int32)(unsafe.Pointer(&data[0])) = int32(v)
 	if err := g.pinTensorData(t, data); err != nil {
@@ -1144,14 +1195,14 @@ func product(shape []int) int {
 func createTensor(g *GGMLBackend, shape []int, gt C.enum_ggml_type) *C.struct_ggml_tensor {
 	switch len(shape) {
 	case 1:
-		return C.ggml_new_tensor_1d(g.ctxPtr(), gt, C.int64_t(shape[0]))
+		return C.ggml_new_tensor_1d(g.leafCtxPtr(), gt, C.int64_t(shape[0]))
 	case 2:
 		// GGML ne[0] = contiguous dim = cols; ne[1] = rows
-		return C.ggml_new_tensor_2d(g.ctxPtr(), gt, C.int64_t(shape[1]), C.int64_t(shape[0]))
+		return C.ggml_new_tensor_2d(g.leafCtxPtr(), gt, C.int64_t(shape[1]), C.int64_t(shape[0]))
 	case 3:
-		return C.ggml_new_tensor_3d(g.ctxPtr(), gt, C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
+		return C.ggml_new_tensor_3d(g.leafCtxPtr(), gt, C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
 	case 4:
-		return C.ggml_new_tensor_4d(g.ctxPtr(), gt, C.int64_t(shape[3]), C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
+		return C.ggml_new_tensor_4d(g.leafCtxPtr(), gt, C.int64_t(shape[3]), C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
 	default:
 		return nil
 	}
@@ -1278,6 +1329,8 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 	}
 	C.ggml_gallocr_free(alloc)
 	C.ggml_free(tempCtx)
+
+	g.recycleOpsCtx()
 
 	arr := g.newArray(leaf)
 	arr.logicalShape = resultShape

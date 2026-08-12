@@ -128,15 +128,6 @@ func ApplyCausalMask(scores tensor.Array, seqLen, startPos, cachedLen int, b ten
 	return b.Add(scores, maskBF16, s)
 }
 
-// ExpandKVHeads replicates KV heads to match Q heads for GQA.
-func ExpandKVHeads(x tensor.Array, numHeads, numKVHeads int, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
-	if numHeads == numKVHeads {
-		return x, nil
-	}
-	repeats := numHeads / numKVHeads
-	return b.RepeatAxis(x, repeats, 1, s)
-}
-
 // GatherAxis gathers rows from a table by index. For embedding lookups.
 func GatherAxis(table, indices tensor.Array, axis int, sliceSizes []int, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	return b.GatherAxis(table, indices, axis, sliceSizes, s)

@@ -393,19 +393,21 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 		}
 		defer kRot.Free()
 		vT2 := vT
-		g.backend.RetainArray(vT2)
 
-		// Cache update:
-		// - Initialized + any seqLen: Append (concat) — handles both
-		//   single-token decode and multi-token delta prefill
-		// - Not initialized: Store (first prefill)
+		// Cache update. AppendWindow writes into a geometrically grown buffer
+		// rather than concatenating, so per-token cost does not scale with
+		// sequence length. It handles both single-token decode and
+		// multi-token delta prefill, and consumes the arrays passed to it —
+		// hence the retains, since kRot/vT2 are owned by their own defers.
 		if cache != nil && cache.IsInitialized(layerIdx) {
-			if err := cache.Append(layerIdx, kRot, vT2); err != nil {
+			kw, vw, err := cache.AppendWindow(layerIdx, g.backend.RetainArray(kRot), g.backend.RetainArray(vT2))
+			if err != nil {
 				return nil, nil, fmt.Errorf("cache append: %w", err)
 			}
-			cached, _ := cache.Get(layerIdx)
-			kForAttn = cached.K
-			vForAttn = cached.V
+			defer kw.Free()
+			defer vw.Free()
+			kForAttn = kw
+			vForAttn = vw
 		} else if cache != nil {
 			kForAttn = kRot
 			vForAttn = vT2

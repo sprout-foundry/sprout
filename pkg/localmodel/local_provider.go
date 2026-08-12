@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -115,6 +117,27 @@ func (p *LocalProvider) ensureLoaded() (*llm.Model, error) {
 
 // --- api.ClientInterface ---
 
+// localDebug reports whether SPROUT_LOCAL_DEBUG=1 is set. When on, the
+// provider logs prompt size and raw model output, which is the only way to
+// see why a local model produced an unusable response inside the agent loop.
+func localDebug() bool { return os.Getenv("SPROUT_LOCAL_DEBUG") == "1" }
+
+func logLocalExchange(tag, prompt, raw string, promptTokens int, toolCalls int) {
+	if !localDebug() {
+		return
+	}
+	trunc := func(s string, n int) string {
+		if len(s) <= n {
+			return s
+		}
+		return s[:n] + fmt.Sprintf("...[+%d bytes]", len(s)-n)
+	}
+	log.Printf("local[%s]: prompt_tokens=%d prompt_bytes=%d raw_bytes=%d tool_calls=%d",
+		tag, promptTokens, len(prompt), len(raw), toolCalls)
+	log.Printf("local[%s]: PROMPT_TAIL=%q", tag, trunc(prompt[max(0, len(prompt)-1200):], 1200))
+	log.Printf("local[%s]: RAW_OUTPUT=%q", tag, trunc(raw, 1200))
+}
+
 func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	model, err := p.ensureLoaded()
 	if err != nil {
@@ -135,6 +158,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 
 	content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, text)
 	promptTokens := len(model.TokenizerEncode(prompt))
+	logLocalExchange("chat", prompt, text, promptTokens, len(toolCalls))
 	completionTokens := len(model.TokenizerEncode(text))
 	p.recordTPS(completionTokens, elapsed)
 
@@ -195,6 +219,7 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 
 	if hasTools {
 		content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, outputBuf.String())
+		logLocalExchange("stream", prompt, outputBuf.String(), len(model.TokenizerEncode(prompt)), len(toolCalls))
 		if content != "" && callback != nil {
 			callback(content, "content")
 		}
@@ -426,73 +451,173 @@ func parseLocalToolCalls(arch, text string) (string, []api.ToolCall) {
 	}
 }
 
+// parseQwenToolCalls extracts Qwen-style tool calls from model output.
+//
+// The format is XML-ish and models are inconsistent about whitespace: a call
+// may be spread over several lines or emitted entirely on one line, and the
+// closing </parameter>/</function>/</tool_call> tags may share a line with a
+// parameter value. So this scans the raw text rather than going line by line —
+// a line-oriented parser drops parameters whenever a value shares a line with
+// a closing tag, and misses one-line calls entirely.
 func parseQwenToolCalls(text string) (string, []api.ToolCall) {
 	if !strings.Contains(text, "<tool_call>") && !strings.Contains(text, "<function=") {
 		return text, nil
 	}
 
-	lines := strings.Split(text, "\n")
-	var contentLines []string
 	var calls []api.ToolCall
-	var currentCall *api.ToolCall
-	var currentArgs map[string]interface{}
-	var currentKey string
-	inToolCall := false
+	var content strings.Builder
+	rest := text
 
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case strings.Contains(trimmed, "<tool_call>"):
-			inToolCall = true
-			currentCall = &api.ToolCall{Type: "function"}
-			currentArgs = make(map[string]interface{})
-		case strings.Contains(trimmed, "</tool_call>"):
-			if currentCall != nil {
-				argsJSON, _ := json.Marshal(currentArgs)
-				currentCall.Function.Arguments = string(argsJSON)
-				calls = append(calls, *currentCall)
-				currentCall = nil
-			}
-			inToolCall = false
-		case strings.Contains(trimmed, "<function="):
-			if currentCall != nil {
-				start := strings.Index(trimmed, "<function=")
-				if start >= 0 {
-					rest := trimmed[start+len("<function="):]
-					end := strings.Index(rest, ">")
-					if end >= 0 {
-						currentCall.Function.Name = rest[:end]
-						currentCall.ID = fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), len(calls))
-					}
-				}
-			}
-		case strings.Contains(trimmed, "<parameter="):
-			if currentCall != nil {
-				start := strings.Index(trimmed, "<parameter=")
-				if start >= 0 {
-					rest := trimmed[start+len("<parameter="):]
-					end := strings.Index(rest, ">")
-					if end >= 0 {
-						currentKey = rest[:end]
-						val := strings.TrimSpace(rest[end+1:])
-						val = strings.TrimSuffix(val, "</parameter>")
-						val = strings.TrimSpace(val)
-						var parsed interface{}
-						if json.Unmarshal([]byte(val), &parsed) == nil {
-							currentArgs[currentKey] = parsed
-						} else {
-							currentArgs[currentKey] = val
-						}
-					}
-				}
-			}
-		case !inToolCall:
-			contentLines = append(contentLines, line)
+	for {
+		start := strings.Index(rest, "<tool_call>")
+		if start < 0 {
+			break
+		}
+		content.WriteString(rest[:start])
+		rest = rest[start+len("<tool_call>"):]
+
+		body := rest
+		if end := strings.Index(rest, "</tool_call>"); end >= 0 {
+			body = rest[:end]
+			rest = rest[end+len("</tool_call>"):]
+		} else {
+			rest = "" // unterminated: treat the remainder as the call body
+		}
+		if call, ok := parseToolCallBody(body, len(calls)); ok {
+			calls = append(calls, call)
 		}
 	}
 
-	content := strings.TrimSpace(strings.Join(contentLines, "\n"))
-	return content, calls
+	// Some models emit <function=...> without the surrounding <tool_call>.
+	if len(calls) == 0 && strings.Contains(rest, "<function=") {
+		if call, ok := parseToolCallBody(rest, 0); ok {
+			calls = append(calls, call)
+			rest = ""
+		}
+	}
+	content.WriteString(rest)
+
+	return strings.TrimSpace(content.String()), calls
+}
+
+// parseToolCallBody parses a single "<function=name>...<parameter=k>v..." body.
+func parseToolCallBody(body string, idx int) (api.ToolCall, bool) {
+	fnStart := strings.Index(body, "<function=")
+	if fnStart < 0 {
+		return api.ToolCall{}, false
+	}
+	r := body[fnStart+len("<function="):]
+	gt := strings.Index(r, ">")
+	if gt < 0 {
+		return api.ToolCall{}, false
+	}
+	name := strings.TrimSpace(r[:gt])
+	if name == "" {
+		return api.ToolCall{}, false
+	}
+
+	args := make(map[string]interface{})
+	p := r[gt+1:]
+	for {
+		ps := strings.Index(p, "<parameter=")
+		if ps < 0 {
+			break
+		}
+		p = p[ps+len("<parameter="):]
+		pe := strings.Index(p, ">")
+		if pe < 0 {
+			break
+		}
+		key := strings.TrimSpace(p[:pe])
+		p = p[pe+1:]
+
+		// The value runs to </parameter>, or to the next <parameter= when the
+		// model forgets to close, or to </function>, or to the end.
+		valEnd := len(p)
+		for _, marker := range []string{"</parameter>", "<parameter=", "</function>"} {
+			if i := strings.Index(p, marker); i >= 0 && i < valEnd {
+				valEnd = i
+			}
+		}
+		val := strings.TrimSpace(p[:valEnd])
+		if key != "" {
+			var parsed interface{}
+			if json.Unmarshal([]byte(val), &parsed) == nil {
+				args[key] = parsed
+			} else {
+				args[key] = val
+			}
+		}
+		p = p[valEnd:]
+	}
+
+	// Gemma-family models frequently emit parameters as <key=value> instead of
+	// the Qwen <parameter=key>value</parameter> form. Fall back to that shape
+	// only when no standard parameters were found, so this can't misparse a
+	// well-formed call.
+	if len(args) == 0 {
+		parseInlineParams(body[fnStart:], args)
+	}
+
+	argsJSON, _ := json.Marshal(args)
+	return api.ToolCall{
+		ID:   fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), idx),
+		Type: "function",
+		Function: api.ToolCallFunction{
+			Name:      name,
+			Arguments: string(argsJSON),
+		},
+	}, true
+}
+
+// parseInlineParams extracts <key=value> parameters, where the value ends at
+// </key> when present and at the closing > otherwise. The leading
+// <function=...> tag is skipped by the caller's slicing.
+func parseInlineParams(body string, args map[string]interface{}) {
+	p := body
+	if i := strings.Index(p, ">"); i >= 0 {
+		p = p[i+1:] // skip past <function=name>
+	}
+	for {
+		lt := strings.Index(p, "<")
+		if lt < 0 {
+			return
+		}
+		p = p[lt+1:]
+		eq := strings.Index(p, "=")
+		gt := strings.Index(p, ">")
+		if eq < 0 || (gt >= 0 && gt < eq) {
+			continue // not a key=value tag
+		}
+		key := strings.TrimSpace(p[:eq])
+		if key == "" || !isSimpleIdent(key) {
+			continue
+		}
+		rest := p[eq+1:]
+
+		end := len(rest)
+		if close := strings.Index(rest, "</"+key+">"); close >= 0 {
+			end = close
+		} else if g := strings.Index(rest, ">"); g >= 0 {
+			end = g
+		}
+		val := strings.TrimSpace(rest[:end])
+		if _, seen := args[key]; !seen && val != "" {
+			args[key] = val
+		}
+		p = rest[end:]
+	}
+}
+
+// isSimpleIdent reports whether s looks like a parameter name rather than
+// arbitrary markup, so stray angle brackets in prose aren't treated as params.
+func isSimpleIdent(s string) bool {
+	for _, r := range s {
+		if !(r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 // formatToolsPrompt builds the tool-calling system prompt for the given

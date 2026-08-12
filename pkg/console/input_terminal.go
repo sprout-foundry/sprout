@@ -72,16 +72,28 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 		reflowedRows = (oldContentLength-1)/newWidth + 1
 	}
 
-	LockOutput()
-	// Move to column 0, then up to the top of the reflowed content block.
-	// Without this upward move, \033[J only clears from the cursor's
-	// post-reflow position downward, leaving stale wrapped copies of the
-	// old prompt above — the duplicated-prompt symptom on terminal shrink.
-	fmt.Print("\r")
-	if reflowedRows > 1 {
-		fmt.Printf("\033[%dA", reflowedRows-1)
+	// Also account for the footer's padded rows wrapping. The footer
+	// content (rule + content + optional steer/hint rows) was padded to
+	// oldWidth and now wraps at newWidth. Each footer row produces
+	// ceil(oldWidth/newWidth) - 1 extra rows of overflow. Without
+	// clearing these, the old footer content stacks above the prompt.
+	footerOverflow := 0
+	if oldWidth > newWidth && oldWidth > 0 {
+		rowsPerFooterLine := (oldWidth-1)/newWidth + 1
+		// Conservative: assume 2 footer rows (rule + content). The
+		// footer's own Resize handler does the precise computation.
+		footerOverflow = (rowsPerFooterLine - 1) * 2
 	}
-	// Clear from the top of the block to the end of the screen.
+
+	totalClearUp := reflowedRows - 1 + footerOverflow
+
+	LockOutput()
+	// Move to column 0, then up to the top of the stale content block
+	// (prompt reflow + footer overflow). Clear to end of screen.
+	fmt.Print("\r")
+	if totalClearUp > 0 {
+		fmt.Printf("\033[%dA", totalClearUp)
+	}
 	fmt.Print("\033[J")
 	UnlockOutput()
 	ir.Refresh()

@@ -197,4 +197,7 @@ type Backend interface {
 
 	// Compilation
 	EnableCompile() error
+
+	// Capability
+	NativeQuantization() bool
 }

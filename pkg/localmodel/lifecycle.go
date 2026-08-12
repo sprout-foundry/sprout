@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
 // sproutLocalProviderID is the provider identifier for the local LLM.
@@ -32,14 +31,18 @@ var (
 )
 
 // EnsureServerForProvider ensures the local model is loaded and ready.
-// On Apple Silicon with MLX, this loads the model in-process (direct GPU
-// call, no HTTP server). On other platforms it returns an error.
+// On Apple Silicon with MLX, and on Linux ARM64 with the GGML backend, this
+// loads the model in-process (direct compute call, no HTTP server). On other
+// platforms it returns an error.
 //
 // Safe to call on every request — short-circuits when the model is
 // already loaded.
 func EnsureServerForProvider(ctx context.Context, providerID string) error {
 	if providerID != sproutLocalProviderID {
 		return nil
+	}
+	if !PlatformSupported() {
+		return fmt.Errorf("local LLM requires Apple Silicon (M1/M2/M3/M4) or Linux ARM64 with GGML; current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	return EnsureServerForProviderWithCheck(ctx, providerID)
 }
@@ -48,8 +51,8 @@ func EnsureServerForProvider(ctx context.Context, providerID string) error {
 // backend for this machine. Prefers installed models; falls back to the
 // RAM-recommended catalog entry.
 func resolveModelForCurrentMachine() (modelDir string, backend string, err error) {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return "", "", fmt.Errorf("local LLM requires Apple Silicon (M1/M2/M3/M4); current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+	if !PlatformSupported() {
+		return "", "", fmt.Errorf("local LLM requires Apple Silicon (M1/M2/M3/M4) or Linux ARM64 with GGML; current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
 	// SPROUT_LOCAL_MODEL pins a specific model, bypassing RAM-based selection.
@@ -66,7 +69,9 @@ func resolveModelForCurrentMachine() (modelDir string, backend string, err error
 		return dir, localBackendMLX, nil
 	}
 
-	ram := mlx.TotalSystemRAM()
+	// Platform-agnostic RAM probe (sysinfo_{darwin,linux}.go) — mlx.TotalSystemRAM
+	// is darwin-only and would not link on the Linux/GGML build.
+	ram := tensorTotalSystemRAM()
 
 	if rec := RecommendedModel(ram); rec != nil && rec.Installed {
 		return rec.Dir, rec.ServerBackend, nil
@@ -235,7 +240,7 @@ func IsServerPresent() bool {
 
 // HasInstalledModel reports whether any model is installed locally.
 func HasInstalledModel() bool {
-	ram := mlx.TotalSystemRAM()
+	ram := tensorTotalSystemRAM()
 	if rec := RecommendedModel(ram); rec != nil && rec.Installed {
 		return true
 	}
@@ -248,7 +253,13 @@ func HasInstalledModel() bool {
 }
 
 // PlatformSupported reports whether the local LLM engine is supported on
-// this platform (Apple Silicon only for now).
+// this platform (Linux ARM64, or Apple Silicon).
 func PlatformSupported() bool {
-	return runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		return true
+	}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "arm64" {
+		return true
+	}
+	return false
 }

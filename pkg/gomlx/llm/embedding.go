@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package llm
 
@@ -34,6 +34,12 @@ type Embedding struct {
 
 // EmbeddingIsQuantized reports whether the embedding holds packed weights.
 func (e *Embedding) EmbeddingIsQuantized() bool { return e.qW != nil }
+
+// W returns the full-precision weight tensor (or nil if quantized-only).
+func (e *Embedding) W() tensor.Array { return e.w }
+
+// WT returns the transposed weight for logits projection (or nil if quantized-only).
+func (e *Embedding) WT() tensor.Array { return e.wT }
 
 // EmbeddingShape returns the hidden dimension (the row width after
 // dequantization). For full precision it is len(e.w.Shape())-th dim size;
@@ -95,9 +101,14 @@ func (e *Embedding) Lookup(ids tensor.Array, b tensor.Backend, s tensor.Stream) 
 // Logits projects h (last-token hidden state, [1, hidden]) to vocab scores.
 // Full precision uses the pre-transposed weight; quantized uses
 // mlx_quantized_matmul with transpose=true (the as_linear path in mlx-lm).
+// GGML Q4_0 embeddings have no transposed copy — MatMul handles the
+// [out, in] layout natively, so fall back to e.w when e.wT is nil.
 func (e *Embedding) Logits(h tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	if e.qW == nil {
-		return b.MatMul(h, e.wT, s)
+		if e.wT != nil {
+			return b.MatMul(h, e.wT, s)
+		}
+		return b.MatMul(h, e.w, s)
 	}
 	return b.QuantizedMatMul(h, e.qW, e.qScales, e.qBiases, true, e.qGroupSize, e.qBits, e.qMode, s)
 }
@@ -123,18 +134,18 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 	base := strings.TrimSuffix(name, ".weight")
 
 	if quant != nil && sf.Has(base+".scales") {
-		w, err := sf.Get(base+".weight", s)
+		w, err := sf.Get(base+".weight", b, s)
 		if err != nil {
 			return nil, fmt.Errorf("embedding %s: %w", base, err)
 		}
-		scales, err := sf.Get(base+".scales", s)
+		scales, err := sf.Get(base+".scales", b, s)
 		if err != nil {
 			w.Free()
 			return nil, fmt.Errorf("embedding %s.scales: %w", base, err)
 		}
 		var biases tensor.Array
 		if sf.Has(base + ".biases") {
-			biases, err = sf.Get(base+".biases", s)
+			biases, err = sf.Get(base+".biases", b, s)
 			if err != nil {
 				w.Free()
 				scales.Free()
@@ -148,6 +159,38 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 		// for a working embedding lookup. The logits path still uses the
 		// quantized weights via QuantizedMatMul for speed.
 		actualBits := inferQuantBits(w.Shape(), scales.Shape(), quant.GroupSize, quant.Bits)
+
+		// If the backend can't handle native quantization, dequantize to F32 now.
+		if !b.NativeQuantization() {
+			fullW, err := dequantizeToFull(b, s, w, scales, biases, actualBits, quant.GroupSize)
+			if err != nil {
+				w.Free()
+				scales.Free()
+				if biases != nil {
+					biases.Free()
+				}
+				return nil, fmt.Errorf("embedding %s full dequantize: %w", base, err)
+			}
+			// Q4_0 tensors (GGML native quantization) can't be transposed —
+			// ggml_get_rows / ggml_mul_mat handle the [out, in] layout
+			// directly. Skip the pre-transpose; Logits falls back to e.w.
+			if _, ok := b.(Q4_0Quantizer); ok {
+				return &Embedding{w: fullW}, nil
+			}
+			// Pre-transpose for the logits projection (tied lm_head).
+			fullWT, err := b.Transpose(fullW, s)
+			if err != nil {
+				fullW.Free()
+				return nil, fmt.Errorf("transpose embedding %s: %w", base, err)
+			}
+			if err := fullWT.Eval(); err != nil {
+				fullW.Free()
+				fullWT.Free()
+				return nil, fmt.Errorf("eval embedding %s: %w", base, err)
+			}
+			return &Embedding{w: fullW, wT: fullWT}, nil
+		}
+
 		var fullPrecW tensor.Array
 		if actualBits != 2 && actualBits != 3 && actualBits != 4 && actualBits != 6 && actualBits != 8 {
 			fullPrecW, err = dequantizeFullTable(w, scales, biases, actualBits, quant.GroupSize, quant.Mode, b, s)
@@ -176,7 +219,7 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 		// Quantize at load time (GO_QUANTIZE path). The tied lm_head logits
 		// projection uses the embedding, so quantizing here also speeds up
 		// the logits matmul.
-		w, err := sf.Get(name, s)
+		w, err := sf.Get(name, b, s)
 		if err != nil {
 			return nil, fmt.Errorf("embedding %s: %w", base, err)
 		}
@@ -206,7 +249,7 @@ func LoadEmbedding(sf *SafetensorsFile, name string, b tensor.Backend, s tensor.
 		return e, nil
 	}
 
-	w, err := sf.Get(name, s)
+	w, err := sf.Get(name, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("embedding %s: %w", name, err)
 	}

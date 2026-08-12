@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package llm
 
@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
@@ -145,7 +144,7 @@ func openSingleSafetensors(path string) (*SafetensorsFile, error) {
 // are loaded directly without conversion to float32 — MLX Metal kernels handle
 // these dtypes natively at full speed, keeping memory usage and bandwidth at
 // the native (half-precision) level.
-func (sf *SafetensorsFile) Get(name string, s tensor.Stream) (tensor.Array, error) {
+func (sf *SafetensorsFile) Get(name string, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
 	if sf.weightMap != nil {
 		shardFile, ok := sf.weightMap[name]
 		if !ok {
@@ -155,7 +154,7 @@ func (sf *SafetensorsFile) Get(name string, s tensor.Stream) (tensor.Array, erro
 		if !ok {
 			return nil, fmt.Errorf("safetensors: shard %q for %q not loaded", shardFile, name)
 		}
-		return shard.Get(name, s)
+		return shard.Get(name, b, s)
 	}
 
 	entry, ok := sf.header[name]
@@ -183,10 +182,7 @@ func (sf *SafetensorsFile) Get(name string, s tensor.Stream) (tensor.Array, erro
 		return nil, fmt.Errorf("safetensors: %q has unsupported dtype %s", name, entry.DType)
 	}
 
-	// Use the mlx package directly for array creation since this is a
-	// low-level loader that doesn't have a backend reference. The created
-	// *mlx.Array satisfies tensor.Array.
-	return mlx.NewArrayFromBytes(rawBytes, entry.Shape, mlx.Dtype(dtype))
+	return b.NewArrayFromBytes(rawBytes, entry.Shape, dtype)
 }
 
 // Has reports whether a tensor exists in the file (or any shard).

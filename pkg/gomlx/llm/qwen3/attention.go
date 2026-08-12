@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo
+//go:build arm64 && cgo && (darwin || (linux && ggml))
 
 package qwen3
 
@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
@@ -165,17 +164,7 @@ func (q *Qwen3) attention(h tensor.Array, lw *layerWeights, layerIdx, seqLen, st
 func (q *Qwen3) swiglu(h tensor.Array, lw *layerWeights, layerIdx int) (tensor.Array, error) {
 	if useCompiledFFN() {
 		if c := q.swigluClosure(layerIdx); c != nil {
-			out, err := c.Apply([]*mlx.Array{h.(*mlx.Array)})
-			if err != nil {
-				return nil, fmt.Errorf("compiled ffn: %w", err)
-			}
-			if len(out) != 1 {
-				for _, a := range out {
-					a.Free()
-				}
-				return nil, fmt.Errorf("compiled ffn: expected 1 output, got %d", len(out))
-			}
-			return out[0], nil
+			return q.applySwigluClosure(c, h)
 		}
 	}
 
@@ -216,73 +205,4 @@ func (q *Qwen3) swiglu(h tensor.Array, lw *layerWeights, layerIdx int) (tensor.A
 // the machinery available for experimentation via GO_COMPILED_FFN=1.
 func useCompiledFFN() bool {
 	return os.Getenv("GO_COMPILED_FFN") == "1"
-}
-
-// swigluClosure returns the compiled MLP closure for a layer, compiling it
-// lazily on the inference thread when the per-call stream changes. Returns
-// nil if compilation is unavailable (stub build) or fails — the eager path
-// is always the fallback.
-func (q *Qwen3) swigluClosure(layerIdx int) *mlx.Closure {
-	if q.mlxSwigluStream != q.stream {
-		for i, c := range q.mlxSwigluClosures {
-			if c != nil {
-				c.Free()
-			}
-			q.mlxSwigluClosures[i] = nil
-		}
-		q.mlxSwigluClosures = nil
-		q.mlxSwigluStream = q.stream
-	}
-	if q.mlxSwigluClosures == nil {
-		q.mlxSwigluClosures = make([]*mlx.Closure, q.cfg.NumLayers)
-	}
-	if q.mlxSwigluClosures[layerIdx] != nil {
-		return q.mlxSwigluClosures[layerIdx]
-	}
-
-	s := q.stream
-	lw := &q.weights.layers[layerIdx]
-	fn := func(inputs []*mlx.Array) ([]*mlx.Array, error) {
-		h := inputs[0]
-		gate, err := lw.gateProj.Forward(h, q.backend, s)
-		if err != nil {
-			return nil, err
-		}
-		defer gate.Free()
-		up, err := lw.upProj.Forward(h, q.backend, s)
-		if err != nil {
-			return nil, err
-		}
-		defer up.Free()
-		gateSilu, err := llm.SiLU(gate, q.backend, s)
-		if err != nil {
-			return nil, err
-		}
-		defer gateSilu.Free()
-		gated, err := q.backend.Multiply(gateSilu, up, s)
-		if err != nil {
-			return nil, err
-		}
-		defer gated.Free()
-		out, err := lw.downProj.Forward(gated, q.backend, s)
-		if err != nil {
-			return nil, err
-		}
-		return []*mlx.Array{out.(*mlx.Array)}, nil
-	}
-
-	plain, err := mlx.NewClosure(fn)
-	if err != nil {
-		return nil
-	}
-	compiled, err := plain.Compile(false)
-	if err != nil {
-		plain.Free()
-		return nil
-	}
-	// plain must stay registered: the first apply of compiled runs the
-	// original body once on placeholder inputs to trace the graph. The
-	// compiled closure owns a template ref and frees it when released.
-	q.mlxSwigluClosures[layerIdx] = compiled
-	return compiled
 }

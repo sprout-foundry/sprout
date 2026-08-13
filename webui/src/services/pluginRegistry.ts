@@ -131,7 +131,7 @@ export function getPluginSettingsTabs(): readonly PluginSettingsTab[] {
 // 1. Global function: window.__sproutRegisterPlugin(plugin)
 // 2. Custom event: document.addEventListener('sprout:register-plugin', ...)
 if (typeof window !== 'undefined') {
-  (window as any).__sproutRegisterPlugin = (plugin: SproutPlugin) => {
+  (window as unknown as { __sproutRegisterPlugin?: (p: SproutPlugin) => void }).__sproutRegisterPlugin = (plugin: SproutPlugin) => {
     pluginRegistry.register(plugin);
   };
 }

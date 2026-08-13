@@ -1,0 +1,23 @@
+{
+  "name": "@sprout-foundry/design",
+  "version": "1.0.0",
+  "description": "Design tokens for Sprout — CSS custom properties for theming",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/sprout-foundry/sprout.git",
+    "directory": "packages/design"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "tokens.css",
+    "reset.css",
+    "README.md"
+  ],
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./reset.css": "./reset.css"
+  }
+}

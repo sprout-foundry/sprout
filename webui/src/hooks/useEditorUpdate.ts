@@ -6,11 +6,18 @@
  * - Document change handling (updates buffer content, tracks modified state, triggers diagnostics)
  * - Integration with cursor updates and scroll sync
  *
+ * Content state (`localContent`) is debounced via rAF: while typing rapidly,
+ * React state is updated at most once per frame instead of once per keystroke.
+ * This prevents EditorPane and all child hooks (symbol extraction, live
+ * preview, etc.) from re-rendering on every character. CodeMirror already has
+ * the latest content — the debounced state is for consumers that need a
+ * near-current snapshot.
+ *
  * @see EditorPane.tsx for the original implementation this hook extracts
  */
 
 import type { ViewUpdate } from '@codemirror/view';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import type { DiagnosticTrigger } from './useEditorDiagnostics';
 import type { CMViewAPI } from './useCMView';
@@ -81,6 +88,43 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
   const localContentRef = useRef<string>(localContent);
   localContentRef.current = localContent;
 
+  // rAF-coalesced state update: rapid typing dispatches a content change
+  // on every keystroke, but React state only needs to update at most once
+  // per frame. Without this, every keystroke triggers a full EditorPane
+  // re-render (symbol extraction, markdown preview, footer, etc.).
+  const pendingContentRef = useRef<string | null>(null);
+  const contentRafRef = useRef<number | null>(null);
+  const contentScheduledRef = useRef(false);
+
+  const debouncedSetLocalContent = useCallback(
+    (content: string) => {
+      pendingContentRef.current = content;
+      if (!contentScheduledRef.current) {
+        contentScheduledRef.current = true;
+        contentRafRef.current = requestAnimationFrame(() => {
+          contentScheduledRef.current = false;
+          contentRafRef.current = null;
+          const next = pendingContentRef.current;
+          if (next !== null) {
+            pendingContentRef.current = null;
+            localContentRef.current = next;
+            setLocalContent(next);
+          }
+        });
+      }
+    },
+    [setLocalContent],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (contentRafRef.current !== null) {
+        cancelAnimationFrame(contentRafRef.current);
+        contentRafRef.current = null;
+      }
+    };
+  }, []);
+
   const onUpdate = useCallback(
     (update: ViewUpdate) => {
       // Forward to cursor tracking and scroll sync handlers
@@ -98,7 +142,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
 
         // Only update state when content actually changed (prevents unnecessary re-renders)
         if (newContent !== localContentRef.current) {
-          setLocalContent(newContent);
+          debouncedSetLocalContent(newContent);
         }
 
         // Update buffer in global state
@@ -123,7 +167,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
     [
       bufferRef,
       fetchDiagnosticsRef,
-      setLocalContent,
+      debouncedSetLocalContent,
       cmViewApiRef,
       handleCursorUpdate,
       handleScrollUpdate,

@@ -5,11 +5,13 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // Backpressure thresholds for the command_output stream (SP-114 Phase 2c).
@@ -252,7 +254,20 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 	// the command is missing or not SteerCapable — distinguish "not
 	// found" vs "not safe" by re-parsing the command name ourselves so
 	// the WebUI gets an actionable error code.
-	resolvedCmd, output, cmdErr := ws.executeSafeSteerCommandStreaming(cmdLine, clientAgent, chunkCallback)
+	resolvedCmd, output, cmdErr := ws.executeSafeSteerCommandStreaming(cmdLine, clientAgent, chunkCallback, func(_ agent_commands.Command, _ string, _ error) {
+		// Sync agent state so the WebUI picks up changes (e.g. /clear rotates
+		// to a new session). Run asynchronously so it doesn't block the HTTP
+		// response or the final WS marker.
+		utils.SafeGo(ws.log(), "command state sync", func() {
+			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
+				ws.log().Error("async state sync failed after command",
+					slog.String("handler", "handleAPICommandExecute"),
+					slog.String("chat_id", chatID),
+					slog.Any("err", err),
+				)
+			}
+		})
+	})
 	if resolvedCmd == nil {
 		// Command not found / not safe — re-parse to give the WebUI an
 		// actionable error code. We don't emit any WS events for a

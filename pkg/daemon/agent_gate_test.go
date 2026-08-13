@@ -53,12 +53,12 @@ func (s *stubAgentService) SwitchSession(_ context.Context, id string) (*Session
 	return nil, fmt.Errorf("session %q not found", id)
 }
 
-func (s *stubAgentService) Query(_ context.Context, prompt string) (string, error) {
+func (s *stubAgentService) Query(_ context.Context, prompt, _ string) (string, error) {
 	atomic.AddInt64(&s.queries, 1)
 	return "daemon answer: " + prompt, nil
 }
 
-func (s *stubAgentService) StreamQuery(_ context.Context, prompt string, emit func(StreamEvent) error) error {
+func (s *stubAgentService) StreamQuery(_ context.Context, prompt, _ string, emit func(StreamEvent) error) error {
 	for _, chunk := range []string{"a", "b", "c"} {
 		if err := emit(StreamEvent{Type: "delta", Content: chunk}); err != nil {
 			return err
@@ -110,13 +110,13 @@ func TestAgentSocketGate(t *testing.T) {
 	require.Error(t, err, "unknown session must error")
 
 	// --- One-shot query (the daemon owns the agent; CLI is presentation) ---
-	result, err := client.Query(ctx, "hello daemon")
+	result, err := client.Query(ctx, "hello daemon", "/tmp/project")
 	require.NoError(t, err)
 	assert.Equal(t, "daemon answer: hello daemon", result)
 
 	// --- Streaming ---
 	var deltas []string
-	err = client.StreamQuery(ctx, "stream me", func(ev StreamEvent) error {
+	err = client.StreamQuery(ctx, "stream me", "/tmp/project", func(ev StreamEvent) error {
 		if ev.Type == "delta" {
 			deltas = append(deltas, ev.Content)
 		}
@@ -158,7 +158,7 @@ func TestAgentServer_ServiceErrorPropagation(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Close()
 
-	_, err = client.Query(ctx, "boom")
+	_, err = client.Query(ctx, "boom", "/tmp/project")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "injected failure")
 }
@@ -174,10 +174,10 @@ func (f *failingAgentService) CreateSession(context.Context, string) (*SessionIn
 func (f *failingAgentService) SwitchSession(context.Context, string) (*SessionInfo, error) {
 	return nil, errors.New("injected failure")
 }
-func (f *failingAgentService) Query(context.Context, string) (string, error) {
+func (f *failingAgentService) Query(context.Context, string, string) (string, error) {
 	return "", errors.New("injected failure")
 }
-func (f *failingAgentService) StreamQuery(context.Context, string, func(StreamEvent) error) error {
+func (f *failingAgentService) StreamQuery(context.Context, string, string, func(StreamEvent) error) error {
 	return errors.New("injected failure")
 }
 func (f *failingAgentService) ExecuteTool(context.Context, string, map[string]any) (*ToolResult, error) {

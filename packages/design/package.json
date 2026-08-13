@@ -17,6 +17,7 @@
     "README.md"
   ],
   "exports": {
+    ".": null,
     "./tokens.css": "./tokens.css",
     "./reset.css": "./reset.css"
   }

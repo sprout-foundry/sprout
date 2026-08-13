@@ -104,10 +104,17 @@ func ApplyMemoryLimits() error {
 		return nil // can't size limits — leave defaults
 	}
 
-	// Keep at least ~3 GB for the OS and the rest of the system. The active
-	// limit is the larger of (RAM - 3 GB) and (RAM / 2), so tiny machines
+	// Keep at least ~2 GB for the OS and the rest of the system. The active
+	// limit is the larger of (RAM - 2 GB) and (RAM / 2), so tiny machines
 	// still get a usable slice but never the full machine.
-	const minMargin = 3 * 1024 * 1024 * 1024
+	//
+	// This margin was 3 GB until it was measured to cause a severe decode
+	// slowdown (2-3x) for larger models at long context on a 16 GB machine:
+	// with a 5.8 GB model at 8K context, a 13 GB active limit put MLX's
+	// allocator too close to the ceiling, triggering aggressive buffer
+	// eviction on every layer. 2 GB of margin was the smallest tested value
+	// that stayed clean; 2.5 GB still reproduced the slowdown.
+	const minMargin = 2 * 1024 * 1024 * 1024
 	var active uint64
 	if ram > minMargin {
 		active = ram - minMargin

@@ -5,8 +5,11 @@ package localmodel
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,28 +55,85 @@ func resolveModelForCurrentMachine() (modelDir string, backend string, err error
 		return "", "", fmt.Errorf("local LLM requires Apple Silicon (M1/M2/M3/M4) or Linux ARM64 with GGML; current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
+	// SPROUT_LOCAL_MODEL pins a specific model, bypassing RAM-based selection.
+	// Accepts an absolute path to a model directory, or a path relative to
+	// DefaultModelsDir. Useful for comparing models on the same machine.
+	if override := strings.TrimSpace(os.Getenv("SPROUT_LOCAL_MODEL")); override != "" {
+		dir := override
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(DefaultModelsDir, dir)
+		}
+		if !hasModelWeights(dir) {
+			return "", "", fmt.Errorf("SPROUT_LOCAL_MODEL=%q: no model weights found at %s", override, dir)
+		}
+		return dir, localBackendMLX, nil
+	}
+
 	// Platform-agnostic RAM probe (sysinfo_{darwin,linux}.go) — mlx.TotalSystemRAM
 	// is darwin-only and would not link on the Linux/GGML build.
 	ram := tensorTotalSystemRAM()
 
-	if rec := RecommendedModel(ram); rec != nil {
-		if rec.Installed {
-			return rec.Dir, rec.ServerBackend, nil
+	if rec := RecommendedModel(ram); rec != nil && rec.Installed {
+		return rec.Dir, rec.ServerBackend, nil
+	}
+
+	if rec := llm.RecommendModelForRAM(ram); rec != nil {
+		dir := filepath.Join(DefaultModelsDir, rec.Dir)
+		if hasModelWeights(dir) {
+			return dir, rec.ServerBackend, nil
 		}
-		return "", "", fmt.Errorf("recommended model %q is not downloaded yet — run onboarding (sprout) or llm_download to install it", rec.Name)
 	}
 
-	rec := llm.RecommendModelForRAM(ram)
-	if rec == nil {
-		return "", "", fmt.Errorf("no suitable local model for this machine (%.0f GB RAM)", float64(ram)/1073741824)
+	// The RAM recommendation is a suggestion, not a gate: if the suggested
+	// model isn't downloaded but others are, use the best installed one
+	// rather than refusing to run.
+	if best := bestInstalledModel(ram); best != nil {
+		return best.Dir, best.ServerBackend, nil
 	}
 
-	dir := filepath.Join(DefaultModelsDir, rec.Dir)
-	if installed := hasModelWeights(dir); installed {
-		return dir, rec.ServerBackend, nil
-	}
+	return "", "", fmt.Errorf("no local model installed in %s — run onboarding (sprout) or llm_download, or set SPROUT_LOCAL_MODEL to a model directory", DefaultModelsDir)
+}
 
-	return "", "", fmt.Errorf("model %q not installed at %s — run onboarding or llm_download", rec.Name, dir)
+// bestInstalledModel picks the most capable installed model, preferring ones
+// that fit in RAM and tuned variants over base ones at the same size.
+func bestInstalledModel(ram uint64) *ModelStatus {
+	models := ListModels()
+	var best *ModelStatus
+	for i := range models {
+		m := &models[i]
+		if !m.Installed {
+			continue
+		}
+		if m.MinRAM > 0 && m.MinRAM > ram {
+			continue
+		}
+		if best == nil || betterModel(m, best) {
+			best = m
+		}
+	}
+	return best
+}
+
+// betterModel reports whether a should be preferred over b: larger parameter
+// count first, then tuned over base at the same size.
+func betterModel(a, b *ModelStatus) bool {
+	av, bv := paramSizeValue(a.ParamSize), paramSizeValue(b.ParamSize)
+	if av != bv {
+		return av > bv
+	}
+	return a.IsTuned && !b.IsTuned
+}
+
+// paramSizeValue parses a catalog param size ("4b", "2.6b", "0.8b") into a
+// comparable number of billions. Unparseable sizes sort last.
+func paramSizeValue(s string) float64 {
+	s = strings.TrimSpace(strings.ToLower(s))
+	s = strings.TrimSuffix(s, "b")
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // TouchActivity records that the local model is in use, resetting the

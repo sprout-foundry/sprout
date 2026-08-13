@@ -70,9 +70,16 @@ type ToolResult struct {
 
 // AgentRequest is a single protocol request.
 type AgentRequest struct {
-	ID          string         `json:"id"`
-	Op          AgentOp        `json:"op"`
-	Prompt      string         `json:"prompt,omitempty"`
+	ID     string  `json:"id"`
+	Op     AgentOp `json:"op"`
+	Prompt string  `json:"prompt,omitempty"`
+	// WorkDir is the caller's working directory for query/query_stream ops.
+	// The daemon has no other way to know which project a one-shot query is
+	// for: it's a single long-lived process that may serve callers from many
+	// different directories over its lifetime. Required for those ops —
+	// AgentService implementations must scope tool execution to WorkDir
+	// rather than the daemon process's own (fixed, arbitrary) cwd.
+	WorkDir     string         `json:"work_dir,omitempty"`
 	SessionName string         `json:"session_name,omitempty"`
 	SessionID   string         `json:"session_id,omitempty"`
 	Tool        string         `json:"tool,omitempty"`
@@ -97,10 +104,13 @@ type AgentService interface {
 	CreateSession(ctx context.Context, name string) (*SessionInfo, error)
 	// SwitchSession activates an existing session.
 	SwitchSession(ctx context.Context, sessionID string) (*SessionInfo, error)
-	// Query runs a one-shot query and returns the final response.
-	Query(ctx context.Context, prompt string) (string, error)
-	// StreamQuery runs a query and emits stream events.
-	StreamQuery(ctx context.Context, prompt string, emit func(StreamEvent) error) error
+	// Query runs a one-shot query scoped to workDir and returns the final
+	// response. Implementations must not let query state (conversation
+	// history, workspace root) leak between calls with different workDir —
+	// each call may be for an unrelated project.
+	Query(ctx context.Context, prompt, workDir string) (string, error)
+	// StreamQuery is Query with streamed events instead of a single result.
+	StreamQuery(ctx context.Context, prompt, workDir string, emit func(StreamEvent) error) error
 	// ExecuteTool invokes a tool by name with args.
 	ExecuteTool(ctx context.Context, name string, args map[string]any) (*ToolResult, error)
 }
@@ -233,7 +243,7 @@ func (s *AgentServer) serveStreamQuery(ctx context.Context, rw *bufio.ReadWriter
 		return rw.Flush()
 	}
 
-	runErr := s.Service.StreamQuery(ctx, req.Prompt, emit)
+	runErr := s.Service.StreamQuery(ctx, req.Prompt, req.WorkDir, emit)
 	done := StreamEvent{Type: "done"}
 	if runErr != nil {
 		done = StreamEvent{Type: "error", Error: runErr.Error()}
@@ -270,7 +280,7 @@ func (s *AgentServer) dispatch(ctx context.Context, req AgentRequest) AgentRespo
 		resp.Session = sess
 
 	case AgentOpQuery:
-		result, err := s.Service.Query(ctx, req.Prompt)
+		result, err := s.Service.Query(ctx, req.Prompt, req.WorkDir)
 		if err != nil {
 			resp.Error = err.Error()
 			return resp

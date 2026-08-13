@@ -459,7 +459,7 @@ func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Re
 //   - error is any execution error
 //   - (nil, "", nil) is returned if the command was not found or not safe
 func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent.Agent) (agent_commands.Command, string, error) {
-	return ws.executeSafeSteerCommandStreaming(input, chatAgent, nil)
+	return ws.executeSafeSteerCommandStreaming(input, chatAgent, nil, nil)
 }
 
 // executeSafeSteerCommandStreaming is the streaming variant of
@@ -470,6 +470,10 @@ func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent
 // non-streaming executeSafeSteerCommand — the /api/query/steer call
 // site relies on this and uses the non-streaming entry point.
 //
+// onComplete is invoked exactly once after the command finishes
+// (success or error). Use it for post-command housekeeping like state
+// sync — the shared function calls it so callers don't have to remember.
+//
 // onChunk is invoked from a goroutine that reads the command output pipe
 // concurrently with Execute. It MUST be safe to call concurrently with
 // the rest of the program; in particular it must not block on slow
@@ -477,7 +481,7 @@ func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent
 // non-blockingly via the event bus). The reader goroutine exits once
 // Execute returns and writeEnd is closed; onChunk will not be called
 // after this function returns.
-func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAgent *agent.Agent, onChunk func(string)) (agent_commands.Command, string, error) {
+func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAgent *agent.Agent, onChunk func(string), onComplete func(agent_commands.Command, string, error)) (agent_commands.Command, string, error) {
 	// Parse command name from input
 	trimmed := strings.TrimSpace(input)
 	if !strings.HasPrefix(trimmed, "/") {
@@ -517,6 +521,10 @@ func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAge
 		ws.log(), "executeSafeSteerCommandStreaming",
 		registry, input, chatAgent, onChunk, true,
 	)
+
+	if onComplete != nil {
+		onComplete(cmd, output, cmdErr)
+	}
 
 	return cmd, output, cmdErr
 }

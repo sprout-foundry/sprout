@@ -27,6 +27,12 @@ export interface EditorCoreProps {
  * for keeping it stable), and reference equality for ref objects and function
  * props. Primitive props are compared by value.
  *
+ * `localContent` is only compared when markdown preview is active — it feeds
+ * MarkdownPreview which needs fresh content. When preview is off, the editor
+ * reads from CodeMirror's internal state directly, so localContent changes
+ * are irrelevant and must NOT cause a re-render (this was the primary source
+ * of per-keystroke re-render overhead in non-markdown files).
+ *
  * The view lifecycle is owned by `useCMView` in the parent (EditorPane); this
  * component is a memoized DOM wrapper plus compartment-reconfigure. It does
  * NOT call `new EditorView(...)` — doing so would race with the central
@@ -44,7 +50,12 @@ export function areEditorCorePropsEqual(prev: EditorCoreProps, next: EditorCoreP
   if (prev.onContextMenu !== next.onContextMenu) return false;
   if (prev.markdownPreviewMode !== next.markdownPreviewMode) return false;
   if (prev.isMarkdownFile !== next.isMarkdownFile) return false;
-  if (prev.localContent !== next.localContent) return false;
+
+  // Only compare localContent when markdown preview is active — it feeds
+  // MarkdownPreview. When preview is off, the editor DOM is managed by
+  // CodeMirror internally and doesn't need React re-renders.
+  const mdActive = next.markdownPreviewMode !== 'off' && next.isMarkdownFile;
+  if (mdActive && prev.localContent !== next.localContent) return false;
 
   // reference equality for reconfigureOptions (parent must keep it stable)
   if (prev.reconfigureOptions !== next.reconfigureOptions) return false;

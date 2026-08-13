@@ -1313,6 +1313,20 @@
           "tools",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 262144,
+        "description": "Qwen3.8 2.4T A95B is an open-weight sparse mixture-of-experts model from Qwen and the open-weight variant of Qwen3.8 Max, with 95 billion active parameters out of 2.4 trillion total. It is suited for coding, research, complex reasoning, and agentic workflows.",
+        "id": "Qwen/Qwen3.8-2.4T-A95B",
+        "input_cost": 2,
+        "name": "Qwen/Qwen3.8-2.4T-A95B",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

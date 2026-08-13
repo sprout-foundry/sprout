@@ -5597,6 +5597,63 @@
           "tools",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Seed 2.1 Turbo is a multimodal model from ByteDance Seed for coding and long-horizon agent workflows. It is suited for end-to-end software delivery, multi-step task execution, and understanding visual and video inputs across agentic tasks.",
+        "id": "bytedance-seed/seed-2-1-turbo",
+        "input_cost": 0.5,
+        "name": "ByteDance Seed: Seed 2.1 Turbo",
+        "output_cost": 2.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.003625,
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Pro 0813 is a large-scale mixture-of-experts model from DeepSeek. This is the GA release of DeepSeek V4 Pro, with a 1M-token context window and support for tool calls, JSON output, and thinking mode.",
+        "id": "deepseek/deepseek-v4-pro-0813",
+        "input_cost": 0.435,
+        "name": "DeepSeek: DeepSeek V4 Pro 0813",
+        "output_cost": 0.87,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1000000,
+        "description": "Qwen3.8 2.4T A95B is an open-weight sparse mixture-of-experts model from Qwen and the open-weight variant of Qwen3.8 Max, with 95 billion active parameters out of 2.4 trillion total. It is suited for coding, research, complex reasoning, and agentic workflows.",
+        "id": "qwen/qwen3.8-2.4t-a95b",
+        "input_cost": 2,
+        "name": "Qwen: Qwen3.8 2.4T A95B",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 500000,
+        "description": "Grok 4.6 is SpaceXAI's smartest model with frontier performance on coding, knowledge work, and STEM.",
+        "id": "x-ai/grok-4.6",
+        "input_cost": 2,
+        "name": "SpaceXAI: Grok 4.6",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

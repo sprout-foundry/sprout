@@ -343,6 +343,11 @@ func init() {
 		leakEnabled = true
 		startLeakReporter()
 	}
+	if v := os.Getenv("SPROUT_GGML_BATCH_LIMIT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			batchLimit = n
+		}
+	}
 }
 
 // livePins counts tensors currently holding a pinned buffer. A forward pass
@@ -520,6 +525,11 @@ type GGMLBackend struct {
 	// arrayMap maps C tensor pointers to the Array that wraps them, so
 	// logicalShape can be propagated through op chains.
 	arrayMap sync.Map // map[uintptr]*Array
+
+	// convTapsCache caches the K depthwise-conv tap tensors for a weight
+	// tensor, so the in-graph Conv1D fast path does not rebuild them per call.
+	// Key: uintptr of the weight's C tensor.
+	convTapsCache sync.Map // map[uintptr][]*C.struct_ggml_tensor
 }
 
 // registerArray associates an Array with its C tensor pointer.
@@ -1526,11 +1536,13 @@ var batchEnabled = os.Getenv("SPROUT_GGML_BATCH") != "0"
 
 // batchLimit caps how many ops accumulate before a forced flush, bounding
 // both graph size and how much pinned memory pending results hold.
-const batchLimit = 64
+// SPROUT_GGML_BATCH_LIMIT overrides for experiments (e.g. 1024 batches a whole
+// decode step into a single graph).
+var batchLimit = 64
 
 // graphNodeCap sizes the flush graph. Each queued op expands to a handful of
 // nodes once its source chain is walked.
-const graphNodeCap = 8192
+const graphNodeCap = 16384
 
 // flush computes every pending op in a single graph. Caller must hold tempMu.
 func (g *GGMLBackend) flushLocked() error {
@@ -2974,11 +2986,128 @@ func (g *GGMLBackend) TakeAlongAxis(a, indices tensor.Array, axis int, s tensor.
 
 // ── tensor.Backend: convolution ────────────────────────────────────
 
+// convTaps returns (and caches) the K depthwise-conv tap tensors for a weight,
+// each a [C,1,1] leaf so ggml_mul broadcasts it over time and batch. The taps
+// are constant leaf data, so they are built once per weight and reused.
+func (g *GGMLBackend) convTaps(weight *Array, C, K int) ([]*C.struct_ggml_tensor, error) {
+	key := uintptr(unsafe.Pointer(weight.cTensor()))
+	if v, ok := g.convTapsCache.Load(key); ok {
+		return v.([]*C.struct_ggml_tensor), nil
+	}
+	wData, err := g.readDataAsFloat32(weight)
+	if err != nil {
+		return nil, err
+	}
+	if len(wData) < C*K {
+		return nil, fmt.Errorf("ggml: conv weight too small (%d < %d)", len(wData), C*K)
+	}
+	taps := make([]*C.struct_ggml_tensor, K)
+	for k := 0; k < K; k++ {
+		tap := C.ggml_new_tensor_2d(g.leafCtxPtr(), C.GGML_TYPE_F32, C.int64_t(C), 1)
+		if tap == nil {
+			return nil, fmt.Errorf("ggml: conv tap alloc failed")
+		}
+		data := make([]float32, C)
+		for oc := 0; oc < C; oc++ {
+			data[oc] = wData[oc*K+k]
+		}
+		raw := make([]byte, C*4)
+		copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), C*4))
+		if err := g.pinTensorData(tap, raw); err != nil {
+			return nil, err
+		}
+		taps[k] = tap
+	}
+	g.convTapsCache.Store(key, taps)
+	return taps, nil
+}
+
+// conv1DDepthwiseFast implements a depthwise 1D conv (stride=1, pad=0, dil=1,
+// groups == in_channels) as K shifted ggml_view_3d slices multiplied by cached
+// taps and summed, entirely in-graph. This removes the per-layer flush the Go
+// read-modify-write fallback forces, letting a whole decode step batch into one
+// graph. ok=false means the inputs don't match the fast-path shape (caller
+// falls back to Go).
+func (g *GGMLBackend) conv1DDepthwiseFast(input, weight tensor.Array, groups int, s tensor.Stream) (tensor.Array, bool, error) {
+	inShape := input.Shape()
+	if len(inShape) != 3 {
+		return nil, false, nil
+	}
+	B, T, C := inShape[0], inShape[1], inShape[2]
+	if groups != C || B <= 0 || T <= 0 || C <= 0 {
+		return nil, false, nil
+	}
+
+	wShape := weight.Shape()
+	var K int
+	switch len(wShape) {
+	case 3:
+		if wShape[0] != C || wShape[2] != 1 {
+			return nil, false, nil
+		}
+		K = wShape[1]
+	case 2:
+		if wShape[0] != C {
+			return nil, false, nil
+		}
+		K = wShape[1]
+	default:
+		return nil, false, nil
+	}
+	if K <= 0 {
+		return nil, false, nil
+	}
+	Sout := T - K + 1
+	if Sout <= 0 {
+		return nil, false, nil
+	}
+
+	taps, err := g.convTaps(weight.(*Array), C, K)
+	if err != nil {
+		return nil, false, nil
+	}
+
+	ctx := g.ctxPtr()
+	xt := input.(*Array).cTensor()
+
+	var acc *C.struct_ggml_tensor
+	for k := 0; k < K; k++ {
+		shifted := C.ggml_view_3d(ctx, xt,
+			C.int64_t(C), C.int64_t(Sout), C.int64_t(B),
+			C.tensor_nb(xt, 1), C.tensor_nb(xt, 2),
+			C.size_t(k)*C.tensor_nb(xt, 1))
+		if shifted == nil {
+			return nil, false, nil
+		}
+		term := C.ggml_mul(ctx, shifted, taps[k])
+		if acc == nil {
+			acc = term
+		} else {
+			acc = C.ggml_add(ctx, acc, term)
+		}
+	}
+
+	out, err := g.evalOp(acc)
+	if err != nil {
+		return nil, true, err
+	}
+	out.logicalShape = []int{B, Sout, C}
+	g.registerArray(out)
+	return out, true, nil
+}
+
 func (g *GGMLBackend) Conv1D(input, weight tensor.Array, stride, padding, dilation, groups int, s tensor.Stream) (tensor.Array, error) {
-	// DeltaNet-style depthwise conv1d. Weight is [C_out, K, C_in/groups]
-	// (sanitized MLX layout); input is [B, S, C_in]. GGML's im2col+mul_mat
-	// doesn't support grouped/depthwise 1D convs, so compute in Go. The
-	// kernel is tiny (K=4) and this runs once per token, so Go is fine.
+	// Fast path: the DeltaNet conv is depthwise with stride=1, pad=0, dil=1.
+	// Decompose into in-graph shifts/muls so it batches with surrounding ops
+	// instead of forcing a flush through the Go fallback below.
+	if stride == 1 && padding == 0 && dilation == 1 && groups > 0 {
+		if out, ok, err := g.conv1DDepthwiseFast(input, weight, groups, s); ok || err != nil {
+			return out, err
+		}
+	}
+
+	// Fallback: grouped/depthwise conv1d computed in Go. Weight is
+	// [C_out, K, C_in/groups] (sanitized MLX layout); input is [B, S, C_in].
 	if err := input.Eval(); err != nil {
 		return nil, fmt.Errorf("ggml: Conv1D input eval: %w", err)
 	}

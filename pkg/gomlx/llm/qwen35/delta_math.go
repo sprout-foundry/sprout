@@ -438,13 +438,6 @@ func gatedDeltaStep(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b t
 	return yCast, next, nil
 }
 
-// repeatToBackend is an optional backend capability for expanding a tensor
-// to a target shape (GGML's DeltaNet outer product needs it; MLX broadcasts
-// natively via 5D reshapes and never calls gatedDeltaStep4D).
-type repeatToBackend interface {
-	RepeatTo(a tensor.Array, target []int, s tensor.Stream) (tensor.Array, error)
-}
-
 // gatedDeltaStep4D is the GGML-compatible recurrence step. GGML tensors are
 // at most 4D and ggml_mul broadcasts natively via ne=1 dims, so the 5D
 // broadcast reshapes ([B,1,Hv,1,1] etc.) are replaced with 4D shapes that
@@ -510,24 +503,15 @@ func gatedDeltaStep4D(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b
 	}
 	defer delta.Free()
 
-	// delta [B,Hv,Dv] → [B,Hv,Dv,1]; expand to full [B,Hv,Dv,Dk] so the
-	// outer product with k4 [B,Hv,1,Dk] is a plain elementwise mul.
+	// delta [B,Hv,Dv] → [B,Hv,Dv,1]; the outer product with k4 [B,Hv,1,Dk]
+	// is a batched matmul, not an elementwise mul after a Dk-way repeat
+	// (the repeat materialised [B,Hv,Dv,Dk] worth of delta, Dk× waste).
 	d4, err := b.Reshape(delta, []int{B, Hv, Dv, 1}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("delta reshape: %w", err)
 	}
 	defer d4.Free()
-	var dFull tensor.Array
-	if _, ok := b.(repeatToBackend); ok {
-		dFull, err = b.(repeatToBackend).RepeatTo(d4, []int{B, Hv, Dv, Dk}, stream)
-		if err != nil {
-			return nil, nil, fmt.Errorf("delta repeat: %w", err)
-		}
-		defer dFull.Free()
-	} else {
-		dFull = d4 // MLX path never reaches here; keep d4 for non-repeat backends
-	}
-	outer, err := b.Multiply(dFull, k4, stream)
+	outer, err := b.MatMul(d4, k4, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("outer: %w", err)
 	}

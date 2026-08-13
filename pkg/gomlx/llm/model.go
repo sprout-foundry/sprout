@@ -847,15 +847,18 @@ func (m *Model) MTPAvailable() bool {
 // Local models advertise a huge native window (Qwen3.5 max_position_embeddings
 // is 262K), but a small quantized model goes stale/cogency-degrades long
 // before that. Sprout's context-profile auto-detection keys off this value:
-// reporting a bounded window (64K — the design point for a 16GB-class machine)
-// keeps small models in Low-Context Mode, where the lite prompt + 8-tool
-// allowlist + tighter compaction keep them cogent. 32K proved too tight for
-// agentic work; 64K is the pragmatic midpoint between cogency and window.
-// The server advertises this via /v1/models.
+// reporting a bounded window keeps small models in Low-Context Mode, where
+// the lite prompt + 8-tool allowlist + tighter compaction keep them cogent.
+//
+// The cap has moved: 32K proved too tight for agentic work; 64K was the
+// next design point; it's currently 128K. That 128K figure predates this
+// session's memory-pressure findings (see ApplyMemoryLimits in memory.go)
+// — it was not re-validated against the 16GB-class machine's real,
+// measured headroom, and the hybrid architecture's 1-in-5 full-attention
+// layers still hold a KV cache that grows linearly with context even
+// though DeltaNet layers don't. Worth revisiting the cap itself, not just
+// this comment, given what's been learned.
 func (m *Model) ContextLength() int {
-	// 128K is the practical default for local inference. All models in the
-	// catalog fit within 16GB RAM at 128K thanks to the hybrid DeltaNet
-	// architecture (only 1/4 of layers have growing KV cache).
 	const localModelContextCap = 128_000
 	if m.cfg.MaxPosition <= 0 {
 		return localModelContextCap

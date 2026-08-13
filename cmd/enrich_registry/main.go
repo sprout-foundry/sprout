@@ -95,6 +95,10 @@ func main() {
 			fmt.Printf("%s: skipped — global probe cap reached (%d/%d)\n", providerID, probed, *maxProbes)
 			continue
 		}
+		if *maxRunCost > 0 && totalSpend >= *maxRunCost {
+			fmt.Printf("%s: skipped — run cost cap reached ($%.4f / $%.2f)\n", providerID, totalSpend, *maxRunCost)
+			continue
+		}
 
 		providerProbed := 0
 		changed := false

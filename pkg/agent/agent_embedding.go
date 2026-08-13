@@ -13,6 +13,14 @@ import (
 // the index in the background. Call this when the user explicitly enables
 // indexing for the workspace (via /index command or UI toggle).
 // It persists the preference to the workspace config so it survives restarts.
+//
+// Sets Experimental alongside Enabled: this is the one deliberate-action path
+// that counts as informed opt-in for the experimental gate (see
+// RestoreEmbeddingIndex and EmbeddingIndexConfig.Experimental). A user
+// calling /index or the UI toggle today, after full-workspace auto-indexing
+// was found to cause severe unbounded memory growth, is choosing it knowing
+// the risk — unlike a pre-existing persisted "enabled: true" from before that
+// finding, which must not silently carry the same weight.
 func (a *Agent) EnableEmbeddingIndex() error {
 	cfg := a.GetConfig()
 	if cfg == nil {
@@ -23,10 +31,12 @@ func (a *Agent) EnableEmbeddingIndex() error {
 	if ei == nil {
 		ei = &configuration.EmbeddingIndexConfig{}
 		ei.SetEnabled(true)
+		ei.SetExperimental(true)
 		ei.SetAutoIndex(true)
 		cfg.EmbeddingIndex = ei
 	}
 	ei.SetEnabled(true)
+	ei.SetExperimental(true)
 	ei.SetAutoIndex(true)
 
 	workspaceRoot := a.GetWorkspaceRoot()
@@ -97,23 +107,29 @@ func (a *Agent) IsEmbeddingIndexEnabled() bool {
 // user has opted in. Called once during agent startup after workspace root is
 // known.
 //
-// Embeddings are OPT-IN, not default-on. The index lazily loads a ~380MB ONNX
-// model + in-memory HNSW store (it is ~80% of an agent's resident memory:
-// ~486MB with it, ~103MB without — measured), and proactive-context runs it on
-// every prompt. A fresh agent therefore stays lightweight unless semantic
-// recall / duplicate detection is explicitly wanted. Enable it via any of:
-//   - workspace config `embedding_index.enabled: true` (set by /index or the UI toggle), or
-//   - env `SPROUT_ENABLE_EMBEDDING_AUTOINDEX=1` for default-on globally.
+// Embeddings are EXPERIMENTAL and OPT-IN, not default-on. Full-workspace
+// auto-indexing was found to cause severe, unbounded native-memory growth —
+// multi-GB spikes outside what Go's own memory accounting or limits can see
+// or bound (see pkg/embedding/index.go, and EmbeddingIndexConfig.Experimental
+// in pkg/configuration). A workspace config persisted before the
+// Experimental gate existed has no "experimental" key at all, so it decodes
+// to false regardless of what "enabled" was — existing users who had it on
+// must explicitly opt in again via /index or the UI toggle, which sets both.
+// Enable it via any of:
+//   - workspace config `embedding_index.enabled: true` AND `experimental: true`
+//     (both set together by /index or the UI toggle), or
+//   - env `SPROUT_EXPERIMENTAL_EMBEDDINGS=1` for default-on globally.
 //
 // `SPROUT_DISABLE_EMBEDDING_AUTOINDEX=1` always wins and hard-disables (used by
 // the test suites — see cmd/main_test.go and pkg/agent's TestMain).
 //
 // Resolution order:
-//  1. SPROUT_DISABLE_EMBEDDING_AUTOINDEX=1                 → skip (hard off).
-//  2. Workspace config embedding_index.enabled: true      → enable (explicit opt-in).
-//  3. Workspace config embedding_index.enabled: false     → skip (explicit opt-out).
-//  4. No section / no file / unreadable config            → enable only if
-//     SPROUT_ENABLE_EMBEDDING_AUTOINDEX=1, else skip (lazy/opt-in default).
+//  1. SPROUT_DISABLE_EMBEDDING_AUTOINDEX=1                          → skip (hard off).
+//  2. Workspace config enabled: true AND experimental: true         → enable (explicit opt-in).
+//  3. Workspace config enabled: false, or experimental missing/false → skip (opted out, or
+//     never re-opted-in since this gate was added).
+//  4. No section / no file / unreadable config                     → enable only if
+//     SPROUT_EXPERIMENTAL_EMBEDDINGS=1, else skip (lazy/opt-in default).
 func (a *Agent) RestoreEmbeddingIndex() {
 	if os.Getenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX") == "1" {
 		return
@@ -141,7 +157,7 @@ func (a *Agent) RestoreEmbeddingIndex() {
 
 	// Default (no explicit per-workspace preference): enable only if the user
 	// opted into default-on embeddings globally.
-	autoOptIn := os.Getenv("SPROUT_ENABLE_EMBEDDING_AUTOINDEX") == "1"
+	autoOptIn := os.Getenv("SPROUT_EXPERIMENTAL_EMBEDDINGS") == "1"
 	enableDefault := func() {
 		if autoOptIn {
 			_ = a.EnableEmbeddingIndex()
@@ -172,7 +188,8 @@ func (a *Agent) RestoreEmbeddingIndex() {
 	}
 
 	var eiConfig struct {
-		Enabled bool `json:"enabled"`
+		Enabled      bool `json:"enabled"`
+		Experimental bool `json:"experimental"`
 	}
 	if err := json.Unmarshal(eiRaw, &eiConfig); err != nil {
 		// Malformed section — treat as no preference.
@@ -180,11 +197,12 @@ func (a *Agent) RestoreEmbeddingIndex() {
 		return
 	}
 
-	if eiConfig.Enabled {
-		// Explicit per-workspace opt-in.
+	if eiConfig.Enabled && eiConfig.Experimental {
+		// Explicit per-workspace opt-in, made under the experimental gate.
 		_ = a.EnableEmbeddingIndex()
 	}
-	// If explicitly false, skip — user opted out.
+	// If explicitly false, or experimental was never (re-)set, skip — the
+	// user opted out, or hasn't opted back in since this gate was added.
 }
 
 // persistEmbeddingIndexPreference saves the indexing enabled/disabled state
@@ -203,6 +221,12 @@ func (a *Agent) persistEmbeddingIndexPreference(workspaceRoot string, enabled bo
 			cfg.EmbeddingIndex = &configuration.EmbeddingIndexConfig{}
 		}
 		cfg.EmbeddingIndex.SetEnabled(enabled)
+		// Persist Experimental alongside Enabled: this function is the
+		// single write path behind the /index command and the UI toggle,
+		// so "enabled" here always represents a deliberate user action —
+		// see EnableEmbeddingIndex for why that action counts as informed
+		// opt-in under the experimental gate.
+		cfg.EmbeddingIndex.SetExperimental(enabled)
 		cfg.EmbeddingIndex.SetAutoIndex(enabled)
 		return nil
 	})

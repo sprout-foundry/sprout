@@ -14,7 +14,7 @@ func writeWorkspaceEmbeddingOptIn(t *testing.T, workspaceRoot string) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	cfg := `{"embedding_index":{"enabled":true,"auto_index":true}}`
+	cfg := `{"embedding_index":{"enabled":true,"experimental":true,"auto_index":true}}`
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +64,44 @@ func TestRestoreEmbeddingIndexHonorsRealWorkspaceOptIn(t *testing.T) {
 
 	if a.GetEmbeddingManager() == nil {
 		t.Error("a real workspace opting in must still restore its index")
+	}
+}
+
+// A workspace config persisted before the Experimental gate existed has
+// "enabled":true but no "experimental" key at all. That must not silently
+// keep auto-indexing after upgrading — full-workspace auto-indexing was
+// found to cause severe, unbounded native-memory growth (see
+// pkg/embedding/index.go), so existing users must explicitly re-opt-in via
+// /index or the UI toggle (which sets both fields together — see
+// EnableEmbeddingIndex) rather than have old state carry the same weight.
+func TestRestoreEmbeddingIndexRequiresReoptInWithoutExperimentalFlag(t *testing.T) {
+	a := newTestAgent(t)
+
+	t.Setenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX", "0")
+	t.Setenv("SPROUT_EXPERIMENTAL_EMBEDDINGS", "0")
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	project := filepath.Join(home, "dev", "project")
+	if err := os.MkdirAll(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(project, ".sprout")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// Pre-Experimental-gate config shape: enabled, but no "experimental" key.
+	cfg := `{"embedding_index":{"enabled":true,"auto_index":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	a.SetWorkspaceRoot(project)
+	a.RestoreEmbeddingIndex()
+
+	if a.GetEmbeddingManager() != nil {
+		t.Error("a pre-existing enabled:true config without experimental:true must not auto-restore")
 	}
 }
 

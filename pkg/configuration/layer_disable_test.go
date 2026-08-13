@@ -47,7 +47,7 @@ func TestWorkspaceSilenceInheritsEmbeddingState(t *testing.T) {
 
 	globalDir := filepath.Join(home, ".config", "sprout")
 	writeFile(t, filepath.Join(globalDir, ConfigFileName),
-		`{"version":"2.0","embedding_index":{"enabled":true,"auto_index":true}}`)
+		`{"version":"2.0","embedding_index":{"enabled":true,"experimental":true,"auto_index":true}}`)
 
 	workspaceDir := filepath.Join(home, "proj", ".sprout")
 	writeFile(t, filepath.Join(workspaceDir, WorkspaceConfigFileName),

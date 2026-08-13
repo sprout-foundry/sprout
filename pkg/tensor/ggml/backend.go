@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && ggml
+//go:build (darwin || linux) && (arm64 || amd64) && cgo && ggml
 
 // Package ggml provides CGO bindings to the GGML tensor library, enabling
 // GPU-accelerated compute on Metal (macOS), CUDA (NVIDIA), ROCm (AMD), and

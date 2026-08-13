@@ -414,12 +414,12 @@ func TestIsProviderLevelError(t *testing.T) {
 		reason string
 		want   bool
 	}{
-		{"HTTP 402: insufficient balance (1008)", true},            // MiniMax account-level
-		{"insufficient balance on account", true},                   // generic phrasing
-		{"HTTP 402: This request requires more credits", false},     // OpenRouter per-model
-		{"HTTP 405: Tool calling is not supported", false},          // per-model
-		{"HTTP 500: internal server error", false},                  // transient
-		{"passed gates + complex discovery/analysis", false},        // success
+		{"HTTP 402: insufficient balance (1008)", true},         // MiniMax account-level
+		{"insufficient balance on account", true},               // generic phrasing
+		{"HTTP 402: This request requires more credits", false}, // OpenRouter per-model
+		{"HTTP 405: Tool calling is not supported", false},      // per-model
+		{"HTTP 500: internal server error", false},              // transient
+		{"passed gates + complex discovery/analysis", false},    // success
 		{"", false},
 	}
 	for _, c := range cases {

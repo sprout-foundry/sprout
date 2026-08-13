@@ -1,10 +1,14 @@
 name: Publish @sprout-foundry/design
 
+# Publish only on explicit version tags (design-v*). This avoids
+# re-publish failures (409) when packages/design/** changes without
+# a version bump. To publish: tag and push.
+#   git tag design-v1.0.1 -m "design v1.0.1"
+#   git push origin design-v1.0.1
 on:
   push:
-    branches: [main]
-    paths:
-      - 'packages/design/**'
+    tags:
+      - 'design-v*'
   workflow_dispatch:
 
 jobs:

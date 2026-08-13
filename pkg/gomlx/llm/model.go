@@ -6,8 +6,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
@@ -33,27 +35,42 @@ type Model struct {
 	endThinkID   int
 	inThinkBlock bool
 
-	// Prefix-cache state: a retained snapshot of the prompt's K/V from the
-	// previous generation, plus the token IDs it covers. Generate computes
-	// the longest common prefix with the new prompt and prefills only the
-	// delta, skipping recomputation of a shared history (multi-turn win).
-	// The snapshot is prompt-only — generated tokens are not part of the
-	// next prompt, so they're not cached.
-	prefixCache  *KVCache
-	prefixTokens []int
+	// Prefix-cache state: retained snapshots of prior generations' prompt-only
+	// K/V, one per active conversation. sprout runs subagents concurrently
+	// (pkg/agent/subagent_runners.go RunParallel) and they all share this one
+	// Model, so a single slot would be evicted by whichever conversation's
+	// turn ran last — every interleaved turn would fully re-prefill even
+	// though nothing is wrong. Generate picks the slot whose full token
+	// sequence is a prefix of the new prompt and prefills only the delta.
+	prefixSlots []*prefixSlot
+	prefixSeq   uint64 // monotonic counter for LRU eviction
+}
+
+// prefixSlot is one retained conversation's prompt-only KV snapshot.
+type prefixSlot struct {
+	tokens   []int
+	cache    *KVCache
+	lastUsed uint64
 }
 
 // minPrefixReuse is the smallest shared token prefix worth reusing.
 // The prefix cache is safe for DeltaNet architectures ONLY when the entire
 // cached prefix is a true prefix of the new request (multi-turn continuation
 // of the same conversation). Partial overlaps (e.g., a subagent sharing
-// just the system prompt) would restore stale DeltaNet state. The check
-// in Generate uses `shared == len(m.prefixTokens)` to enforce this.
+// just the system prompt) would restore stale DeltaNet state. bestPrefixSlot
+// enforces this by requiring shared == len(slot.tokens).
 const minPrefixReuse = 8
 
 // maxPrefixLen caps the retained prefix so long histories don't pin memory
 // forever. Beyond this, caching is dropped for that request.
 const maxPrefixLen = 4096
+
+// maxPrefixSlots bounds how many concurrent conversations keep a retained
+// snapshot. Sized for sprout's real subagent parallelism rather than
+// unbounded: each slot pins GPU memory for up to maxPrefixLen tokens, and
+// this machine's RAM margin is already tight (see memory.go). The
+// least-recently-used slot is evicted once at capacity.
+const maxPrefixSlots = 4
 
 // NewModel creates a Model from a HuggingFace model directory containing
 // config.json, model.safetensors, and tokenizer.json. The architecture is
@@ -350,19 +367,28 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	cache := NewKVCache(m.cfg.NumLayers, s, m.backend)
 	defer cache.Free()
 
-	// Prefix caching: if this prompt shares a prefix with the previous one,
-	// restore the retained prefix K/V and prefill only the delta. This skips
-	// recomputing shared history (multi-turn conversations).
-	shared := longestCommonPrefix(tokenIDs, m.prefixTokens)
+	// Prefix caching: if this prompt shares a prefix with a retained slot,
+	// restore that slot's K/V and prefill only the delta. This skips
+	// recomputing shared history (multi-turn conversations), and picking
+	// among multiple slots is what lets concurrent conversations (main
+	// agent + parallel subagents) each keep their own cache hit instead of
+	// evicting one another.
+	shared, slotIdx := m.bestPrefixSlot(tokenIDs)
+	if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+		log.Printf("llm: prefix cache: shared=%d slots=%d matchedSlot=%d newPromptLen=%d",
+			shared, len(m.prefixSlots), slotIdx, len(tokenIDs))
+	}
 	var logits []float32
-	// Only reuse the prefix cache when the ENTIRE cached prefix is a true
-	// prefix of the new request. This ensures multi-turn conversations
-	// (same system prompt + growing history) get the cache hit, while
-	// subagents or different conversations (partial overlap) get a fresh
+	// Only reuse a slot when its ENTIRE token sequence is a true prefix of
+	// the new request (enforced by bestPrefixSlot). This ensures multi-turn
+	// conversations (same system prompt + growing history) get the cache
+	// hit, while unrelated conversations (partial overlap) get a fresh
 	// prefill. The DeltaNet recurrent state is sequence-dependent, so a
 	// partial overlap would corrupt the linear-attention layers.
-	if shared >= minPrefixReuse && shared == len(m.prefixTokens) && shared < len(tokenIDs) && m.prefixCache != nil {
-		if err := cache.RestorePrefix(m.prefixCache); err != nil {
+	prefillStart := time.Now()
+	usedDelta := shared >= minPrefixReuse && slotIdx >= 0 && shared < len(tokenIDs)
+	if usedDelta {
+		if err := cache.RestorePrefix(m.prefixSlots[slotIdx].cache); err != nil {
 			return fmt.Errorf("restore prefix: %w", err)
 		}
 		delta := tokenIDs[shared:]
@@ -376,22 +402,27 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 			return fmt.Errorf("prefill: %w", err)
 		}
 	}
+	if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+		processed := len(tokenIDs)
+		path := "full"
+		if usedDelta {
+			processed = len(tokenIDs) - shared
+			path = "delta"
+		}
+		log.Printf("llm: prefill: path=%s tokens_processed=%d elapsed=%.2fs", path, processed, time.Since(prefillStart).Seconds())
+	}
 
 	// Snapshot the prompt-only K/V for the next request BEFORE decoding
 	// (decode appends generated tokens to the working cache; the snapshot
 	// keeps just the prompt prefix alive). Drop caching for very long
 	// prompts so a huge history doesn't pin memory forever.
 	if len(tokenIDs) <= maxPrefixLen {
-		newPrefix := cache.SnapshotPrefix()
-		if m.prefixCache != nil {
-			m.prefixCache.Free()
-		}
-		m.prefixCache = newPrefix
-		m.prefixTokens = append([]int(nil), tokenIDs...)
-	} else if m.prefixCache != nil {
-		m.prefixCache.Free()
-		m.prefixCache = nil
-		m.prefixTokens = nil
+		m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), cache.SnapshotPrefix())
+	} else if slotIdx >= 0 {
+		// This conversation grew past the cacheable size — drop its slot
+		// rather than let it keep pinning memory for no future benefit.
+		m.prefixSlots[slotIdx].cache.Free()
+		m.prefixSlots = append(m.prefixSlots[:slotIdx], m.prefixSlots[slotIdx+1:]...)
 	}
 
 	// Fast greedy path: no repetition penalty means we can sample on the GPU
@@ -609,11 +640,10 @@ func (m *Model) Close() error {
 		return nil
 	}
 	m.closed = true
-	if m.prefixCache != nil {
-		m.prefixCache.Free()
-		m.prefixCache = nil
+	for _, slot := range m.prefixSlots {
+		slot.cache.Free()
 	}
-	m.prefixTokens = nil
+	m.prefixSlots = nil
 	if m.stream != nil {
 		m.stream.Free()
 		m.stream = nil
@@ -703,6 +733,54 @@ func promptEndsInsideThink(tokenIDs []int, thinkID, endThinkID int) bool {
 		return false // model has no thinking tokens
 	}
 	return lastThink > lastEnd
+}
+
+// bestPrefixSlot finds the retained slot whose entire token sequence is a
+// true prefix of tokenIDs, preferring the longest match. Returns shared=0,
+// idx=-1 if no slot qualifies. A full-slot match is required — not just the
+// longest common substring — because DeltaNet's recurrent state is
+// sequence-dependent; restoring from any position other than the exact end
+// of a previously-computed sequence would corrupt the linear-attention
+// layers (see minPrefixReuse).
+func (m *Model) bestPrefixSlot(tokenIDs []int) (shared int, idx int) {
+	idx = -1
+	for i, slot := range m.prefixSlots {
+		s := longestCommonPrefix(tokenIDs, slot.tokens)
+		if s == len(slot.tokens) && s > shared {
+			shared = s
+			idx = i
+		}
+	}
+	return shared, idx
+}
+
+// storePrefixSlot records a freshly prefilled prompt's KV snapshot.
+// matchedIdx is the slot bestPrefixSlot returned for this same call, or -1;
+// when set, that slot is updated in place (it's this same conversation's
+// next turn) rather than treated as a new entry. Otherwise a new slot is
+// added, evicting the least-recently-used one once at capacity.
+func (m *Model) storePrefixSlot(matchedIdx int, tokens []int, cache *KVCache) {
+	m.prefixSeq++
+	if matchedIdx >= 0 {
+		slot := m.prefixSlots[matchedIdx]
+		slot.cache.Free()
+		slot.cache = cache
+		slot.tokens = tokens
+		slot.lastUsed = m.prefixSeq
+		return
+	}
+	if len(m.prefixSlots) < maxPrefixSlots {
+		m.prefixSlots = append(m.prefixSlots, &prefixSlot{tokens: tokens, cache: cache, lastUsed: m.prefixSeq})
+		return
+	}
+	lruIdx := 0
+	for i, slot := range m.prefixSlots {
+		if slot.lastUsed < m.prefixSlots[lruIdx].lastUsed {
+			lruIdx = i
+		}
+	}
+	m.prefixSlots[lruIdx].cache.Free()
+	m.prefixSlots[lruIdx] = &prefixSlot{tokens: tokens, cache: cache, lastUsed: m.prefixSeq}
 }
 
 // longestCommonPrefix returns the length of the shared prefix of a and b.

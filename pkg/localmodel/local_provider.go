@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -138,6 +139,22 @@ func logLocalExchange(tag, prompt, raw string, promptTokens int, toolCalls int) 
 	log.Printf("local[%s]: RAW_OUTPUT=%q", tag, trunc(raw, 1200))
 }
 
+// logLocalTiming reports per-turn generation timing so the split between
+// prefill (scales with prompt_tokens) and decode (scales with
+// completion_tokens) is visible from a real agent session, not just an
+// isolated benchmark harness.
+func logLocalTiming(tag string, promptTokens, completionTokens int, elapsed float64) {
+	if !localDebug() {
+		return
+	}
+	tps := 0.0
+	if elapsed > 0 {
+		tps = float64(completionTokens) / elapsed
+	}
+	log.Printf("local[%s]: TIMING prompt_tokens=%d completion_tokens=%d elapsed=%.2fs tps=%.1f",
+		tag, promptTokens, completionTokens, elapsed, tps)
+}
+
 func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	model, err := p.ensureLoaded()
 	if err != nil {
@@ -161,6 +178,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	logLocalExchange("chat", prompt, text, promptTokens, len(toolCalls))
 	completionTokens := len(model.TokenizerEncode(text))
 	p.recordTPS(completionTokens, elapsed)
+	logLocalTiming("chat", promptTokens, completionTokens, elapsed)
 
 	finishReason := "stop"
 	if len(toolCalls) > 0 {
@@ -179,6 +197,9 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	resp.Choices[0].Message.Role = "assistant"
 	resp.Choices[0].Message.Content = content
 	resp.Choices[0].Message.ToolCalls = toolCalls
+	if len(toolCalls) > 0 {
+		resp.Choices[0].Message.Meta = map[string]string{localRawContentMetaKey: text}
+	}
 	resp.Usage = api.ChatUsage{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
@@ -219,11 +240,14 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 
 	if hasTools {
 		content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, outputBuf.String())
-		logLocalExchange("stream", prompt, outputBuf.String(), len(model.TokenizerEncode(prompt)), len(toolCalls))
+		promptTokens := len(model.TokenizerEncode(prompt))
+		logLocalExchange("stream", prompt, outputBuf.String(), promptTokens, len(toolCalls))
 		if content != "" && callback != nil {
 			callback(content, "content")
 		}
-		p.recordTPS(len(model.TokenizerEncode(outputBuf.String())), elapsed)
+		completionTokens := len(model.TokenizerEncode(outputBuf.String()))
+		p.recordTPS(completionTokens, elapsed)
+		logLocalTiming("stream", promptTokens, completionTokens, elapsed)
 		finishReason := "stop"
 		if len(toolCalls) > 0 {
 			finishReason = "tool_calls"
@@ -237,6 +261,9 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 		resp.Choices[0].Message.Role = "assistant"
 		resp.Choices[0].Message.Content = content
 		resp.Choices[0].Message.ToolCalls = toolCalls
+		if len(toolCalls) > 0 {
+			resp.Choices[0].Message.Meta = map[string]string{localRawContentMetaKey: outputBuf.String()}
+		}
 		return resp, nil
 	}
 
@@ -339,6 +366,16 @@ func (p *LocalProvider) Close() error {
 
 // --- prompt building and tool-call parsing ---
 
+// localRawContentMetaKey stashes the model's verbatim generated text on the
+// response Message (via the provider-private Meta field). buildPrompt
+// replays it byte-for-byte on the next turn instead of re-synthesizing the
+// tool-call text from parsed ToolCalls — the reconstructed form doesn't
+// match the model's own (variable) formatting, which broke the KV prefix
+// cache on every multi-turn exchange. Falls back to reconstruction when
+// Meta wasn't carried through (e.g. a session resumed from persisted disk
+// state, where Meta — tagged json:"-" — doesn't survive).
+const localRawContentMetaKey = "sprout_local_raw"
+
 // buildPrompt constructs the full prompt from messages and tools, using
 // the model's native chat template (via FormatChat) and architecture-
 // specific tool prompt formatting.
@@ -351,7 +388,11 @@ func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) str
 			msgs[i] = convertToolResponse(arch, m.Content)
 		}
 		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			msgs[i].Content = formatAssistantToolCalls(arch, m.ToolCalls)
+			if raw, ok := m.Meta[localRawContentMetaKey]; ok {
+				msgs[i].Content = raw
+			} else {
+				msgs[i].Content = formatAssistantToolCalls(arch, m.ToolCalls)
+			}
 		}
 	}
 	prompt := model.FormatChat(msgs)
@@ -396,11 +437,16 @@ func formatQwenAssistantToolCalls(toolCalls []api.ToolCall) string {
 		sb.WriteString(">\n")
 		var args map[string]interface{}
 		if json.Unmarshal([]byte(tc.Function.Arguments), &args) == nil {
-			for k, v := range args {
+			keys := make([]string, 0, len(args))
+			for k := range args {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
 				sb.WriteString("<parameter=")
 				sb.WriteString(k)
 				sb.WriteString(">\n")
-				sb.WriteString(fmt.Sprintf("%v", v))
+				sb.WriteString(fmt.Sprintf("%v", args[k]))
 				sb.WriteString("\n</parameter>\n")
 			}
 		}
@@ -414,9 +460,14 @@ func formatLFM2AssistantToolCalls(toolCalls []api.ToolCall) string {
 	for _, tc := range toolCalls {
 		var args map[string]interface{}
 		if json.Unmarshal([]byte(tc.Function.Arguments), &args) == nil {
+			keys := make([]string, 0, len(args))
+			for k := range args {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
 			var pairs []string
-			for k, v := range args {
-				pairs = append(pairs, fmt.Sprintf("%s=%s", k, lfm2FormatValue(v)))
+			for _, k := range keys {
+				pairs = append(pairs, fmt.Sprintf("%s=%s", k, lfm2FormatValue(args[k])))
 			}
 			calls = append(calls, fmt.Sprintf("%s(%s)", tc.Function.Name, strings.Join(pairs, ", ")))
 		} else {

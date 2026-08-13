@@ -182,6 +182,28 @@ func TestFormatLFM2AssistantToolCalls_DeterministicParamOrder(t *testing.T) {
 	}
 }
 
+func TestLeadingSystemMessages(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []api.Message
+		want int
+	}{
+		{"single system", []api.Message{{Role: "system", Content: "x"}, {Role: "user", Content: "y"}}, 1},
+		{"multiple leading system", []api.Message{{Role: "system", Content: "a"}, {Role: "system", Content: "b"}, {Role: "user", Content: "c"}}, 2},
+		{"no system", []api.Message{{Role: "user", Content: "y"}}, 0},
+		{"empty", nil, 0},
+		{"system not leading is ignored", []api.Message{{Role: "user", Content: "y"}, {Role: "system", Content: "x"}}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := leadingSystemMessages(tc.in)
+			if len(got) != tc.want {
+				t.Fatalf("leadingSystemMessages(%v) = %d messages, want %d", tc.in, len(got), tc.want)
+			}
+		})
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr ||
 		(len(s) > 0 && len(substr) > 0 && indexOf(s, substr) >= 0))

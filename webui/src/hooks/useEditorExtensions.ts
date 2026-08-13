@@ -276,9 +276,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
           : [],
       ),
       compartments.aiCompletions.of(
-        settings.aiCompletionsEnabled
-          ? aiCompletionsExtension(buffer.getFilePath, buffer.languageId)
-          : [],
+        settings.aiCompletionsEnabled ? aiCompletionsExtension(buffer.getFilePath, buffer.languageId) : [],
       ),
       compartments.fontSize.of([EditorView.theme({ '&': { fontSize: `${settings.editorFontSize}px` } })]),
       compartments.tabSize.of([

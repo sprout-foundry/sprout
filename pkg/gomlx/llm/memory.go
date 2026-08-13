@@ -104,23 +104,42 @@ func ApplyMemoryLimits() error {
 		return nil // can't size limits — leave defaults
 	}
 
-	// Keep at least ~2 GB for the OS and the rest of the system. The active
-	// limit is the larger of (RAM - 2 GB) and (RAM / 2), so tiny machines
-	// still get a usable slice but never the full machine.
+	// Keep at least ~10 GB for the OS and the rest of the system. The active
+	// limit is RAM - 10 GB, floored at a small fixedFloor (not RAM/2 — see
+	// below) so tiny machines still get a usable slice but never the full
+	// machine.
 	//
-	// This margin was 3 GB until it was measured to cause a severe decode
-	// slowdown (2-3x) for larger models at long context on a 16 GB machine:
-	// with a 5.8 GB model at 8K context, a 13 GB active limit put MLX's
-	// allocator too close to the ceiling, triggering aggressive buffer
-	// eviction on every layer. 2 GB of margin was the smallest tested value
-	// that stayed clean; 2.5 GB still reproduced the slowdown.
-	const minMargin = 2 * 1024 * 1024 * 1024
+	// This margin has moved twice. 3 GB, then reduced to 2 GB after being
+	// measured to fix a severe decode slowdown (2-3x) for larger models at
+	// long context on a 16 GB machine: with a 5.8 GB model at 8K context, a
+	// 13 GB active limit put MLX's allocator too close to the ceiling,
+	// triggering aggressive buffer eviction on every layer. But that 2 GB
+	// tuning pass measured the model in isolation — on a real workstation
+	// running sprout alongside a browser and IDE, a 2 GB margin (14 GB
+	// active limit on 16 GB) leaves MLX free to grow toward using the whole
+	// machine. Directly observed: 14-19 GB real (unified-memory) process
+	// usage, live swap activity (vm_stat Swapins/Swapouts incrementing in
+	// real time), free pages repeatedly bottoming out near zero, and
+	// multi-minute stalls on a single GPU eval call. Raising the margin to
+	// 6 GB (10 GB active) measurably reduced but did not eliminate the
+	// swapping — 10 GB margin (6 GB active on a 16 GB machine) is the
+	// current, more conservative tradeoff: real decode slowdown at long
+	// context in exchange for a machine that stays usable for everything
+	// else running alongside it.
+	//
+	// The floor here is a small fixed amount, not RAM/2: on this exact
+	// 16 GB machine, RAM/2 (8 GB) would silently override a 10 GB margin's
+	// intended 6 GB active limit right back up to 8 GB, defeating the
+	// purpose of raising the margin. RAM/2 only matters on machines so
+	// small the margin alone would zero out the active limit entirely.
+	const minMargin = 10 * 1024 * 1024 * 1024
+	const fixedFloor = 2 * 1024 * 1024 * 1024
 	var active uint64
 	if ram > minMargin {
 		active = ram - minMargin
 	}
-	if half := ram / 2; active < half {
-		active = half
+	if active < fixedFloor {
+		active = fixedFloor
 	}
 	if err := backend.SetMemoryLimit(active); err != nil {
 		return fmt.Errorf("set memory limit: %w", err)

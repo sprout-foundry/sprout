@@ -48,17 +48,18 @@ func TestBestPrefixSlot_NoMatch(t *testing.T) {
 // evict the least-recently-touched one, not an arbitrary or most-recently-used
 // one — otherwise an active conversation loses its cache mid-session.
 func TestStorePrefixSlot_EvictsLeastRecentlyUsed(t *testing.T) {
-	m := &Model{}
-	for i := range maxPrefixSlots {
+	const slotCap = maxPrefixSlotsCap
+	m := &Model{prefixSlotsCapOverride: slotCap}
+	for i := range slotCap {
 		m.storePrefixSlot(-1, []int{i}, &KVCache{})
 	}
-	if len(m.prefixSlots) != maxPrefixSlots {
-		t.Fatalf("expected %d slots, got %d", maxPrefixSlots, len(m.prefixSlots))
+	if len(m.prefixSlots) != slotCap {
+		t.Fatalf("expected %d slots, got %d", slotCap, len(m.prefixSlots))
 	}
 
 	// Touch every slot except the first (tokens=[0]) by updating it in
 	// place via a matched index, making it the new least-recently-used.
-	for i := 1; i < maxPrefixSlots; i++ {
+	for i := 1; i < slotCap; i++ {
 		m.storePrefixSlot(i, []int{i, 100}, &KVCache{})
 	}
 
@@ -66,8 +67,8 @@ func TestStorePrefixSlot_EvictsLeastRecentlyUsed(t *testing.T) {
 	// the only one never re-touched.
 	m.storePrefixSlot(-1, []int{999}, &KVCache{})
 
-	if len(m.prefixSlots) != maxPrefixSlots {
-		t.Fatalf("expected slot count to stay at cap %d, got %d", maxPrefixSlots, len(m.prefixSlots))
+	if len(m.prefixSlots) != slotCap {
+		t.Fatalf("expected slot count to stay at cap %d, got %d", slotCap, len(m.prefixSlots))
 	}
 	for _, slot := range m.prefixSlots {
 		if len(slot.tokens) == 1 && slot.tokens[0] == 0 {

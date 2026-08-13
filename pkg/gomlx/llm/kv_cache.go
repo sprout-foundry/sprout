@@ -3,7 +3,11 @@
 package llm
 
 import (
+	"bufio"
+	"encoding/binary"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
@@ -425,4 +429,213 @@ func (c *KVCache) growLayer(l *KVCacheLayer, tokShape []int, dt tensor.Dtype, ne
 	l.V = grownV
 	l.capacity += grow
 	return nil
+}
+
+// kvSpillMagic tags spilled-cache files so a mismatched/corrupted file is
+// detected and rejected instead of misread.
+var kvSpillMagic = [4]byte{'S', 'P', 'K', 'V'}
+
+const kvSpillVersion = uint32(1)
+
+// SaveToDisk serializes the cache's raw arrays to path (created or
+// truncated). Used to spill an inactive conversation's KV cache out of GPU
+// memory without losing it — see Model's prefix-slot spill/restore. Does
+// not modify or free c's arrays.
+func (c *KVCache) SaveToDisk(path string) (err error) {
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("kv_cache: create %s: %w", path, err)
+	}
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
+
+	w := bufio.NewWriter(f)
+	if _, err := w.Write(kvSpillMagic[:]); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, kvSpillVersion); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(c.layers))); err != nil {
+		return err
+	}
+	for i, l := range c.layers {
+		init := i < len(c.initialized) && c.initialized[i] && l != nil
+		if err := binary.Write(w, binary.LittleEndian, init); err != nil {
+			return err
+		}
+		if !init {
+			continue
+		}
+		hasKV := l.K != nil && l.V != nil
+		hasState := l.State != nil && l.ConvState != nil
+		if err := binary.Write(w, binary.LittleEndian, hasKV); err != nil {
+			return err
+		}
+		if err := binary.Write(w, binary.LittleEndian, hasState); err != nil {
+			return err
+		}
+		if err := binary.Write(w, binary.LittleEndian, int32(l.capacity)); err != nil {
+			return err
+		}
+		if err := binary.Write(w, binary.LittleEndian, int32(l.used)); err != nil {
+			return err
+		}
+		if hasKV {
+			if err := writeSpillArray(w, l.K); err != nil {
+				return fmt.Errorf("kv_cache: write layer %d K: %w", i, err)
+			}
+			if err := writeSpillArray(w, l.V); err != nil {
+				return fmt.Errorf("kv_cache: write layer %d V: %w", i, err)
+			}
+		}
+		if hasState {
+			if err := writeSpillArray(w, l.State); err != nil {
+				return fmt.Errorf("kv_cache: write layer %d State: %w", i, err)
+			}
+			if err := writeSpillArray(w, l.ConvState); err != nil {
+				return fmt.Errorf("kv_cache: write layer %d ConvState: %w", i, err)
+			}
+		}
+	}
+	return w.Flush()
+}
+
+func writeSpillArray(w io.Writer, a tensor.Array) error {
+	shape := a.Shape()
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(shape))); err != nil {
+		return err
+	}
+	for _, d := range shape {
+		if err := binary.Write(w, binary.LittleEndian, int32(d)); err != nil {
+			return err
+		}
+	}
+	if err := binary.Write(w, binary.LittleEndian, int32(a.Dtype())); err != nil {
+		return err
+	}
+	data, err := a.RawBytes()
+	if err != nil {
+		return fmt.Errorf("raw bytes: %w", err)
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint64(len(data))); err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+// LoadKVCacheFromDisk reconstructs a cache previously written by SaveToDisk.
+// The returned cache's arrays are freshly allocated on s/backend — safe to
+// use from any thread that owns a valid stream registration (see
+// Model.runOnGPUThread).
+func LoadKVCacheFromDisk(path string, s tensor.Stream, backend tensor.Backend) (_ *KVCache, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("kv_cache: open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	r := bufio.NewReader(f)
+	var magic [4]byte
+	if _, err := io.ReadFull(r, magic[:]); err != nil {
+		return nil, fmt.Errorf("kv_cache: read magic: %w", err)
+	}
+	if magic != kvSpillMagic {
+		return nil, fmt.Errorf("kv_cache: %s is not a spilled cache file", path)
+	}
+	var version, numLayers uint32
+	if err := binary.Read(r, binary.LittleEndian, &version); err != nil {
+		return nil, err
+	}
+	if version != kvSpillVersion {
+		return nil, fmt.Errorf("kv_cache: unsupported spill version %d", version)
+	}
+	if err := binary.Read(r, binary.LittleEndian, &numLayers); err != nil {
+		return nil, err
+	}
+
+	c := NewKVCache(int(numLayers), s, backend)
+	// On any error partway through, free whatever arrays were already
+	// reconstructed so a bad file can't leak GPU memory.
+	defer func() {
+		if err != nil {
+			c.Free()
+		}
+	}()
+
+	for i := range int(numLayers) {
+		var init bool
+		if err := binary.Read(r, binary.LittleEndian, &init); err != nil {
+			return nil, err
+		}
+		if !init {
+			continue
+		}
+		var hasKV, hasState bool
+		var capacity, used int32
+		if err := binary.Read(r, binary.LittleEndian, &hasKV); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.LittleEndian, &hasState); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.LittleEndian, &capacity); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(r, binary.LittleEndian, &used); err != nil {
+			return nil, err
+		}
+		l := &KVCacheLayer{capacity: int(capacity), used: int(used)}
+		if hasKV {
+			if l.K, err = readSpillArray(r, backend); err != nil {
+				return nil, fmt.Errorf("kv_cache: read layer %d K: %w", i, err)
+			}
+			if l.V, err = readSpillArray(r, backend); err != nil {
+				return nil, fmt.Errorf("kv_cache: read layer %d V: %w", i, err)
+			}
+		}
+		if hasState {
+			if l.State, err = readSpillArray(r, backend); err != nil {
+				return nil, fmt.Errorf("kv_cache: read layer %d State: %w", i, err)
+			}
+			if l.ConvState, err = readSpillArray(r, backend); err != nil {
+				return nil, fmt.Errorf("kv_cache: read layer %d ConvState: %w", i, err)
+			}
+		}
+		c.layers[i] = l
+		c.initialized[i] = true
+	}
+	return c, nil
+}
+
+func readSpillArray(r io.Reader, backend tensor.Backend) (tensor.Array, error) {
+	var ndim uint32
+	if err := binary.Read(r, binary.LittleEndian, &ndim); err != nil {
+		return nil, err
+	}
+	shape := make([]int, ndim)
+	for i := range shape {
+		var d int32
+		if err := binary.Read(r, binary.LittleEndian, &d); err != nil {
+			return nil, err
+		}
+		shape[i] = int(d)
+	}
+	var dtype int32
+	if err := binary.Read(r, binary.LittleEndian, &dtype); err != nil {
+		return nil, err
+	}
+	var byteLen uint64
+	if err := binary.Read(r, binary.LittleEndian, &byteLen); err != nil {
+		return nil, err
+	}
+	data := make([]byte, byteLen)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+	return backend.NewArrayFromBytes(data, shape, tensor.Dtype(dtype))
 }

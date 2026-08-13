@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -45,6 +46,17 @@ type Model struct {
 	prefixSlots []*prefixSlot
 	prefixSeq   uint64 // monotonic counter for LRU eviction
 
+	// prefixSlotsCapOverride, when set, fixes maxPrefixSlots' return value.
+	// Test-only.
+	prefixSlotsCapOverride int
+
+	// spillDir holds spilled (disk-backed) prefix-slot files for this
+	// Model's lifetime — see spillIdleSlots and prefixSlot. Created lazily
+	// on first spill; removed entirely in Close.
+	spillDir     string
+	spillDirOnce sync.Once
+	spillSeq     uint64
+
 	// GPU work (warmup, Generate, WarmSystemPrefix, Close's cleanup) always
 	// runs on this one dedicated, permanently OS-thread-pinned goroutine —
 	// see runOnGPUThread. MLX's Metal command encoders are thread_local: a
@@ -80,10 +92,14 @@ func (m *Model) runOnGPUThread(fn func()) {
 	<-done
 }
 
-// prefixSlot is one retained conversation's prompt-only KV snapshot.
+// prefixSlot is one retained conversation's prompt-only KV snapshot. Either
+// cache is resident in GPU memory (hot — the conversation this slot belongs
+// to used it most recently) or diskPath points to a spilled copy (cold) and
+// cache is nil. Never both, never neither once populated.
 type prefixSlot struct {
 	tokens   []int
 	cache    *KVCache
+	diskPath string
 	lastUsed uint64
 }
 
@@ -99,12 +115,21 @@ const minPrefixReuse = 8
 // forever. Beyond this, caching is dropped for that request.
 const maxPrefixLen = 4096
 
-// maxPrefixSlots bounds how many concurrent conversations keep a retained
-// snapshot. Sized for sprout's real subagent parallelism rather than
-// unbounded: each slot pins GPU memory for up to maxPrefixLen tokens, and
-// this machine's RAM margin is already tight (see memory.go). The
-// least-recently-used slot is evicted once at capacity.
-const maxPrefixSlots = 4
+// maxPrefixSlotsCap bounds how many conversations' prefixes stay
+// remembered at all (hot or spilled to disk). Not RAM-scaled: only the
+// slot for the conversation that's actively generating needs to be
+// GPU-resident, and every other slot gets spilled to disk right after its
+// turn finishes (see spillIdleSlots) before any of this ever pins memory.
+// A generous, disk-cheap cap serves every machine the same way, small or
+// large — see storePrefixSlot for the spill-then-cap flow.
+const maxPrefixSlotsCap = 8
+
+func (m *Model) maxPrefixSlots() int {
+	if m.prefixSlotsCapOverride > 0 {
+		return m.prefixSlotsCapOverride // test-only escape hatch; see field doc
+	}
+	return maxPrefixSlotsCap
+}
 
 // NewModel creates a Model from a HuggingFace model directory containing
 // config.json, model.safetensors, and tokenizer.json. The architecture is
@@ -441,7 +466,11 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	prefillStart := time.Now()
 	usedDelta := shared >= minPrefixReuse && slotIdx >= 0 && shared < len(tokenIDs)
 	if usedDelta {
-		if err := cache.RestorePrefix(m.prefixSlots[slotIdx].cache); err != nil {
+		slotCache, err := m.ensureSlotResident(slotIdx)
+		if err != nil {
+			return fmt.Errorf("load spilled prefix slot: %w", err)
+		}
+		if err := cache.RestorePrefix(slotCache); err != nil {
 			return fmt.Errorf("restore prefix: %w", err)
 		}
 		delta := tokenIDs[shared:]
@@ -470,11 +499,17 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// keeps just the prompt prefix alive). Drop caching for very long
 	// prompts so a huge history doesn't pin memory forever.
 	if len(tokenIDs) <= maxPrefixLen {
-		m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), cache.SnapshotPrefix())
+		newIdx := m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), cache.SnapshotPrefix())
+		// Only the conversation that just generated needs to stay
+		// GPU-resident; every other remembered conversation gets spilled to
+		// disk right now, before this call returns, so peak memory never
+		// includes more than one slot's worth of KV cache at rest.
+		m.spillIdleSlots(newIdx)
 	} else if slotIdx >= 0 {
 		// This conversation grew past the cacheable size — drop its slot
-		// rather than let it keep pinning memory for no future benefit.
-		m.prefixSlots[slotIdx].cache.Free()
+		// rather than let it keep pinning memory (or disk) for no future
+		// benefit.
+		m.releaseSlotStorage(m.prefixSlots[slotIdx])
 		m.prefixSlots = append(m.prefixSlots[:slotIdx], m.prefixSlots[slotIdx+1:]...)
 	}
 
@@ -697,7 +732,7 @@ func (m *Model) Close() error {
 	// runOnGPUThread), then shut the worker down.
 	m.runOnGPUThread(func() {
 		for _, slot := range m.prefixSlots {
-			slot.cache.Free()
+			m.releaseSlotStorage(slot)
 		}
 		m.prefixSlots = nil
 		if m.stream != nil {
@@ -707,6 +742,9 @@ func (m *Model) Close() error {
 		m.arch.FreeWeights()
 	})
 	close(m.gpuTasks)
+	if m.spillDir != "" {
+		_ = os.RemoveAll(m.spillDir)
+	}
 	return nil
 }
 
@@ -782,7 +820,8 @@ func (m *Model) WarmSystemPrefix(prompt string) error {
 			return
 		}
 
-		m.storePrefixSlot(-1, tokenIDs, cache.SnapshotPrefix())
+		newIdx := m.storePrefixSlot(-1, tokenIDs, cache.SnapshotPrefix())
+		m.spillIdleSlots(newIdx)
 	})
 	return warmErr
 }
@@ -878,24 +917,27 @@ func (m *Model) bestPrefixSlot(tokenIDs []int) (shared int, idx int) {
 	return shared, idx
 }
 
-// storePrefixSlot records a freshly prefilled prompt's KV snapshot.
-// matchedIdx is the slot bestPrefixSlot returned for this same call, or -1;
-// when set, that slot is updated in place (it's this same conversation's
-// next turn) rather than treated as a new entry. Otherwise a new slot is
-// added, evicting the least-recently-used one once at capacity.
-func (m *Model) storePrefixSlot(matchedIdx int, tokens []int, cache *KVCache) {
+// storePrefixSlot records a freshly prefilled prompt's KV snapshot and
+// returns the index it landed at. matchedIdx is the slot bestPrefixSlot
+// returned for this same call, or -1; when set, that slot is updated in
+// place (it's this same conversation's next turn) rather than treated as a
+// new entry. Otherwise a new slot is added, evicting the least-recently-used
+// one once at capacity. Callers should follow up with spillIdleSlots(idx) so
+// only the slot just stored stays GPU-resident.
+func (m *Model) storePrefixSlot(matchedIdx int, tokens []int, cache *KVCache) int {
 	m.prefixSeq++
 	if matchedIdx >= 0 {
 		slot := m.prefixSlots[matchedIdx]
-		slot.cache.Free()
+		m.releaseSlotStorage(slot)
 		slot.cache = cache
+		slot.diskPath = ""
 		slot.tokens = tokens
 		slot.lastUsed = m.prefixSeq
-		return
+		return matchedIdx
 	}
-	if len(m.prefixSlots) < maxPrefixSlots {
+	if len(m.prefixSlots) < m.maxPrefixSlots() {
 		m.prefixSlots = append(m.prefixSlots, &prefixSlot{tokens: tokens, cache: cache, lastUsed: m.prefixSeq})
-		return
+		return len(m.prefixSlots) - 1
 	}
 	lruIdx := 0
 	for i, slot := range m.prefixSlots {
@@ -903,8 +945,83 @@ func (m *Model) storePrefixSlot(matchedIdx int, tokens []int, cache *KVCache) {
 			lruIdx = i
 		}
 	}
-	m.prefixSlots[lruIdx].cache.Free()
+	m.releaseSlotStorage(m.prefixSlots[lruIdx])
 	m.prefixSlots[lruIdx] = &prefixSlot{tokens: tokens, cache: cache, lastUsed: m.prefixSeq}
+	return lruIdx
+}
+
+// releaseSlotStorage frees whatever backing storage a slot about to be
+// overwritten or evicted holds — its GPU cache if resident, or its spilled
+// file on disk if cold.
+func (m *Model) releaseSlotStorage(slot *prefixSlot) {
+	if slot.cache != nil {
+		slot.cache.Free()
+	}
+	if slot.diskPath != "" {
+		_ = os.Remove(slot.diskPath)
+	}
+}
+
+// spillIdleSlots writes every GPU-resident slot except keepIdx to disk and
+// frees its GPU memory, so at most one conversation's prefix cache is ever
+// resident at rest — remembering every other conversation costs disk space,
+// not RAM. keepIdx is -1 to spill everything (e.g. before Close). Spill
+// failures are non-fatal: a slot that can't be written to disk is dropped
+// entirely (releaseSlotStorage via the next store/evict) rather than risk
+// leaving it stranded in an inconsistent state.
+func (m *Model) spillIdleSlots(keepIdx int) {
+	for i, slot := range m.prefixSlots {
+		if i == keepIdx || slot.cache == nil {
+			continue
+		}
+		path, err := m.newSpillPath()
+		if err != nil {
+			continue // no spill dir available — leave it resident
+		}
+		if err := slot.cache.SaveToDisk(path); err != nil {
+			_ = os.Remove(path)
+			continue // spill failed — leave it resident rather than lose it
+		}
+		slot.cache.Free()
+		slot.cache = nil
+		slot.diskPath = path
+	}
+}
+
+// ensureSlotResident loads the slot at idx back from disk if it was
+// spilled, so its cache is safe to pass to KVCache.RestorePrefix. Must run
+// on the model's dedicated GPU thread (runOnGPUThread) — LoadKVCacheFromDisk
+// allocates new GPU arrays.
+func (m *Model) ensureSlotResident(idx int) (*KVCache, error) {
+	slot := m.prefixSlots[idx]
+	if slot.cache != nil {
+		return slot.cache, nil
+	}
+	loaded, err := LoadKVCacheFromDisk(slot.diskPath, m.stream, m.backend)
+	if err != nil {
+		return nil, err
+	}
+	_ = os.Remove(slot.diskPath)
+	slot.cache = loaded
+	slot.diskPath = ""
+	return loaded, nil
+}
+
+// newSpillPath returns a fresh file path for a spilled prefix slot, creating
+// this Model's spill directory on first use.
+func (m *Model) newSpillPath() (string, error) {
+	var mkdirErr error
+	m.spillDirOnce.Do(func() {
+		m.spillDir, mkdirErr = os.MkdirTemp("", "sprout-kvcache-*")
+	})
+	if mkdirErr != nil {
+		return "", fmt.Errorf("create spill dir: %w", mkdirErr)
+	}
+	if m.spillDir == "" {
+		return "", fmt.Errorf("spill dir unavailable")
+	}
+	m.spillSeq++
+	return filepath.Join(m.spillDir, fmt.Sprintf("slot-%d.bin", m.spillSeq)), nil
 }
 
 // longestCommonPrefix returns the length of the shared prefix of a and b.

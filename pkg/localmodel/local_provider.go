@@ -161,6 +161,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 		return nil, fmt.Errorf("local provider: %w", err)
 	}
 	TouchActivity()
+	warmSystemPrefix(model, messages, tools)
 
 	prompt := buildPrompt(model, messages, tools)
 	cfg := llm.DefaultGenerateConfig()
@@ -214,6 +215,7 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 		return nil, fmt.Errorf("local provider: %w", err)
 	}
 	TouchActivity()
+	warmSystemPrefix(model, messages, tools)
 
 	prompt := buildPrompt(model, messages, tools)
 	cfg := llm.DefaultGenerateConfig()
@@ -406,6 +408,55 @@ func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) str
 		}
 	}
 	return prompt
+}
+
+// leadingSystemMessages returns the leading run of system-role messages —
+// the part of a conversation that's identical across otherwise-unrelated
+// conversations sharing the same system prompt (main agent + subagents; see
+// warmSystemPrefix).
+func leadingSystemMessages(messages []api.Message) []api.Message {
+	i := 0
+	for i < len(messages) && messages[i].Role == "system" {
+		i++
+	}
+	return messages[:i]
+}
+
+// staticPromptPrefix mirrors buildPrompt's construction for a leading run
+// of messages, producing a string guaranteed to be an exact prefix of
+// buildPrompt's output for any messages/tools sharing this same leading
+// sequence and tool list (system messages never go through buildPrompt's
+// tool/assistant content rewrites, so no divergence there).
+func staticPromptPrefix(model *llm.Model, sysMsgs []api.Message, tools []api.Tool) string {
+	arch := model.Config().Arch
+	msgs := make([]llm.ChatMessage, len(sysMsgs))
+	for i, m := range sysMsgs {
+		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+	prefix := model.FormatChatPrefix(msgs)
+	if len(tools) > 0 {
+		if toolPrompt := formatToolsPrompt(arch, tools); toolPrompt != "" {
+			prefix = toolPrompt + prefix
+		}
+	}
+	return prefix
+}
+
+// warmSystemPrefix pre-caches the system prompt + tool definitions shared
+// by many otherwise-unrelated conversations (main agent + subagents), so
+// each one's first turn can delta-prefill instead of paying a full prefill
+// for identical boilerplate. Cheap no-op once warmed — safe to call on
+// every request. Errors are logged, not propagated: this is an optimization,
+// not required for correctness (Generate's own per-conversation caching
+// works fine without it).
+func warmSystemPrefix(model *llm.Model, messages []api.Message, tools []api.Tool) {
+	sysMsgs := leadingSystemMessages(messages)
+	if len(sysMsgs) == 0 {
+		return
+	}
+	if err := model.WarmSystemPrefix(staticPromptPrefix(model, sysMsgs, tools)); err != nil && localDebug() {
+		log.Printf("local: warm system prefix: %v", err)
+	}
 }
 
 // convertToolResponse formats a tool result message for the given architecture.

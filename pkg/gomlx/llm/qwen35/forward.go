@@ -1116,15 +1116,9 @@ func (q *Qwen35) swiglu(h tensor.Array, lw *layerWeights) (tensor.Array, error) 
 		log.Printf("qwen35: fused swiglu failed, falling back: %v", err)
 	}
 
-	gateSilu, err := llm.SiLU(gate, q.backend, s)
+	gated, err := llm.SwiGLU(up, gate, q.backend, s)
 	if err != nil {
-		return nil, fmt.Errorf("silu: %w", err)
-	}
-	defer gateSilu.Free()
-
-	gated, err := q.backend.Multiply(gateSilu, up, s)
-	if err != nil {
-		return nil, fmt.Errorf("gate multiply: %w", err)
+		return nil, fmt.Errorf("swiglu: %w", err)
 	}
 	defer gated.Free()
 

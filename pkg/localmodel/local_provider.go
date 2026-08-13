@@ -153,6 +153,25 @@ func logLocalTiming(tag string, promptTokens, completionTokens int, elapsed floa
 	}
 	log.Printf("local[%s]: TIMING prompt_tokens=%d completion_tokens=%d elapsed=%.2fs tps=%.1f",
 		tag, promptTokens, completionTokens, elapsed, tps)
+	logMLXMemory(tag)
+}
+
+// logMLXMemory reports MLX's own allocator accounting (bytes held by live
+// arrays, pooled/cached bytes, and the peak watermark since load) after
+// every turn. Isolates whether growth is coming from MLX's own live-array
+// footprint — a real reference leak in the Go/cgo layer — versus system-wide
+// pressure (other processes, macOS accounting) that shows up in Activity
+// Monitor but isn't actually MLX holding more memory.
+func logMLXMemory(tag string) {
+	stats, err := mlx.Snapshot()
+	if err != nil {
+		log.Printf("local[%s]: MLX_MEM snapshot failed: %v", tag, err)
+		return
+	}
+	log.Printf("local[%s]: MLX_MEM active=%.1fMB cache=%.1fMB peak=%.1fMB limit=%.1fMB cacheLimit=%.1fMB",
+		tag,
+		float64(stats.Active)/1048576, float64(stats.Cache)/1048576, float64(stats.Peak)/1048576,
+		float64(stats.Limit)/1048576, float64(stats.CacheLimit)/1048576)
 }
 
 func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
@@ -309,7 +328,13 @@ func (p *LocalProvider) GetModelContextLimit() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return model.Config().MaxPosition, nil
+	// ContextLength(), not Config().MaxPosition directly: MaxPosition is the
+	// model's raw native window (e.g. 262K for Qwen3.5), which a small
+	// quantized local model goes stale/cogency-degrades long before
+	// reaching. ContextLength applies the cap sprout's context-profile
+	// auto-detection relies on to drop into Low-Context Mode at a sane
+	// point.
+	return model.ContextLength(), nil
 }
 
 func (p *LocalProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {

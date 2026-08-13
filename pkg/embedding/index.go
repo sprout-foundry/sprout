@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -102,9 +104,48 @@ func (m *IndexManager) lockForBuild() (func(), error) {
 	return nil, err
 }
 
+// buildIndexMemoryLimit bounds Go heap growth for the duration of a build.
+// This is a bursty, allocation-heavy batch pass — tokenizing and embedding
+// every code unit across the whole repo, with all units for the current
+// batch of changed files held in memory (allUnits below) before anything
+// gets written out. Without an explicit limit, Go's GC waits for the heap
+// to roughly double before collecting; measured on a real 2,363-file repo,
+// that let RSS swing widely up to 7+ GB before reclaiming back down to
+// ~2GB — and this runs in the same process as, and concurrently with,
+// whatever else sprout is doing (e.g. a loaded local model holding its own
+// several-GB unified-memory footprint outside the Go heap entirely).
+// SetMemoryLimit makes the GC work harder as usage approaches the limit
+// instead of waiting for the heap to double.
+const buildIndexMemoryLimit = 3 * 1024 * 1024 * 1024
+
+// logMemCheckpoint reports Go's own runtime.MemStats at a named point in
+// the build. HeapAlloc is Go-managed live objects; Sys is total memory
+// obtained from the OS for the Go runtime itself (heap + stacks + GC
+// metadata). Comparing Sys against observed process RSS is what separates
+// "Go's own accounting is growing" from "something outside Go entirely is
+// growing" — on a real 2,363-file repo this showed Sys pinned flat at the
+// configured buildIndexMemoryLimit throughout the whole embedding loop
+// while RSS still swung up to 5+ GB above it, meaning the excess is native
+// (cgo) memory the ONNX runtime holds that neither this limit nor Go's GC
+// can see or reclaim — worth knowing precisely if this needs
+// re-investigating later rather than re-deriving it from scratch.
+func logMemCheckpoint(tag string) {
+	if !debugLogEnabled.Load() {
+		return
+	}
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	log.Printf("index: MEMCHECK %s heapAlloc=%.1fMB sys=%.1fMB numGC=%d",
+		tag, float64(ms.HeapAlloc)/1048576, float64(ms.Sys)/1048576, ms.NumGC)
+}
+
 // BuildIndex walks rootDir, extracts code units, embeds them, and stores them.
 // Uses incremental rebuild with mtime-based manifest to skip unchanged files.
 func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexStats, error) {
+	prevLimit := debug.SetMemoryLimit(buildIndexMemoryLimit)
+	defer debug.SetMemoryLimit(prevLimit)
+	logMemCheckpoint("start")
+
 	start := time.Now()
 	stats := &IndexStats{}
 
@@ -220,6 +261,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	}
 
 	stats.UnitsExtracted = len(allUnits)
+	logMemCheckpoint(fmt.Sprintf("after-extraction (%d units)", len(allUnits)))
 
 	// Note: we don't early-return when allUnits is empty — deleted file records still need cleanup below.
 
@@ -317,6 +359,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			return stats, fmt.Errorf("index: flush pending records: %w", flushErr)
 		}
 		debugLogf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
+		logMemCheckpoint(fmt.Sprintf("after-embedUnits (%d records)", len(newRecords)))
 	}
 
 	// Model changed: replace all records with fresh embeddings.
@@ -633,6 +676,7 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 		// Log progress every ProgressInterval records embedded.
 		if embedded%ProgressInterval < m.opts.BatchSize {
 			debugLogf("index: embedding progress: %d/%d records", embedded, len(units))
+			logMemCheckpoint(fmt.Sprintf("embedding-loop (%d/%d)", embedded, len(units)))
 		}
 	}
 

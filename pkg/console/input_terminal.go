@@ -30,7 +30,16 @@ func (ir *InputReader) processPendingResize(resizeCh <-chan os.Signal, parser *E
 func (ir *InputReader) handleResize() bool {
 	oldWidth := ir.terminalWidth
 	ir.updateTerminalWidth()
-	return ir.applyTerminalWidthChange(oldWidth, ir.terminalWidth)
+	changed := ir.applyTerminalWidthChange(oldWidth, ir.terminalWidth)
+	// Notify resize subscribers (e.g. the active turn renderer) so width-
+	// dependent consumers update their snapshots. This is needed when the
+	// resize arrives while the input reader is processing a SIGWINCH that
+	// the footer's watcher might not have fired yet (two independent
+	// handlers, order is not guaranteed).
+	if changed {
+		notifyResizeSubscribers()
+	}
+	return changed
 }
 
 func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
@@ -42,22 +51,34 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 		return false
 	}
 
+	// Compute how many physical rows the OLD content occupies at the
+	// new width. The terminal has already reflowed the on-screen rows,
+	// so a prompt that fit on one line at the old width may now wrap
+	// across multiple rows. We set lastVisualRows to this count so
+	// refreshInputLine's clear loop (which uses max(current, previous)
+	// rows) will clear all stale wrapped copies before redrawing.
+	oldContentLength := ir.lastLineLength
+	reflowedRows := 1
+	if oldContentLength > 0 && newWidth > 0 {
+		reflowedRows = (oldContentLength-1)/newWidth + 1
+	}
+
 	ir.terminalWidth = newWidth
 	ir.lastLineLength = 0
-	ir.currentPhysicalLine = 0
-	ir.lastVisualRows = 0
+	// After the terminal's reflow, the cursor is at the bottom of the
+	// reflowed prompt block. Set currentPhysicalLine and lastVisualRows
+	// so refreshInputLine's clear loop moves up to the TOP of the block
+	// before clearing each row. Without this, the clear loop stays at
+	// the cursor's current row and misses stale wrapped copies above.
+	ir.currentPhysicalLine = reflowedRows - 1
+	ir.lastVisualRows = reflowedRows
 	ir.lastWrapPending = false
 
-	// After a resize the terminal re-soft-wraps the on-screen rows to the new
-	// width, so our captured geometry is stale and the block's top row can't be
-	// located reliably without a cursor-position query. Clear from the cursor to
-	// the end of the screen (dropping any stale wrapped rows below) and redraw
-	// the prompt+line fresh in place. This avoids the extra blank line the prior
-	// "\r CLEAR \n" inserted on every resize; rows above the cursor are left to
-	// the terminal's own reflow.
-	LockOutput()
-	fmt.Print("\r\033[J")
-	UnlockOutput()
+	// Redraw in place. refreshInputLine will move up lastVisualRows
+	// lines, clear each one with \033[K (per-line clear, NOT \033[J
+	// which would wipe the footer below), then redraw the prompt.
+	// The footer's own SIGWINCH handler (watchResize → Resize) takes
+	// care of clearing and redrawing the footer rows independently.
 	ir.Refresh()
 	return true
 }

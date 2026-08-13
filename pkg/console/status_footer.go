@@ -82,6 +82,16 @@ type StatusFooter struct {
 	winchStop chan struct{}
 	winchDone chan struct{}
 
+	// resizePollerStop halts the platform resize watcher (SIGWINCH on Unix,
+	// poll timer on Windows). Stored so Stop can clean it up.
+	resizePollerStop func()
+
+	// lastCols is the terminal column count at the most recent draw.
+	// Used by Resize to compute how many wrapped overflow rows the old
+	// (wider) content occupies at the new (narrower) width, so the clear
+	// can start high enough to catch them all.
+	lastCols int
+
 	// proseStreaming is set by the AssistantTurnRenderer while prose
 	// chunks are actively being written. When true, Refresh() skips
 	// the draw to avoid DEC save/restore (\0337/\0338) racing with
@@ -201,6 +211,15 @@ func (f *StatusFooter) Start() {
 
 	if !wasActive {
 		go f.watchResize(stopCh, doneCh)
+		// On platforms without SIGWINCH (Windows), watchResize is a no-op.
+		// Start a polling-based resize detector that calls Resize() +
+		// notifyResizeSubscribers() on a timer. The stop function is stored
+		// and invoked from Stop().
+		f.mu.Lock()
+		f.resizePollerStop = startResizePoller(func() {
+			f.Resize()
+		})
+		f.mu.Unlock()
 	}
 }
 
@@ -211,6 +230,14 @@ func (f *StatusFooter) Start() {
 // the AssistantTurnRenderer) to avoid the DEC save/restore cursor
 // sequences racing with scroll-region content — the root cause of the
 // "scattered characters" clobbering symptom.
+//
+// The proseStreaming check is performed TWICE: once before acquiring
+// outputMu (fast-path bail-out) and once inside drawLocked after the
+// lock is held (TOCTOU guard). The double-check closes the window where
+// Refresh reads proseStreaming=false, then a concurrent WriteChunk sets
+// it to true and acquires outputMu before Refresh does. Without the
+// second check, Refresh would proceed to drawLocked and emit DECSC/DECRC
+// sequences that race with the prose being written.
 func (f *StatusFooter) Refresh() {
 	if f == nil || !f.isTTY {
 		return
@@ -334,43 +361,72 @@ func (f *StatusFooter) Resize() {
 		return
 	}
 
-	// Reset the scroll region temporarily so we can address rows by
-	// absolute number without the terminal clamping us inside the OLD
-	// (now-stale) scroll area. Then clear the previous footer rows —
-	// 2 rows by default (rule + content), 3 when steer was active,
-	// 4 when steer + hint were active.
+	// Reset the scroll region, clear stale footer content, then
+	// re-apply the scroll region and redraw.
+	//
+	// Footer content is padded to the terminal width at draw time. When
+	// the terminal shrinks, those padded rows wrap across multiple
+	// physical rows. The terminal reflows everything, making precise
+	// row calculations unreliable. Instead, we clear a generous region
+	// at the bottom of the screen (footer rows × max wrap ratio + slack)
+	// to guarantee all stale copies are wiped before redrawing.
 	if oldRows > 1 {
+		// Reset the scroll region first so we can address the full screen.
 		fmt.Fprint(f.w, "\033[r")
-		fmt.Fprint(f.w, "\0337")
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows)
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-1)
 		f.mu.Lock()
-		steerWasActive := f.steerActive
 		lastHint := f.lastHintRows
 		lastSteer := f.lastSteerRows
+		oldCols := f.lastCols
 		f.mu.Unlock()
-		// SP-115: clear hint row if it was present.
-		if lastHint > 0 && oldRows > 2 {
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-2)
+
+		newCols, newRows := f.terminalSize()
+		reserved := 2 + lastSteer + lastHint
+		if newRows < reserved+1 {
+			newRows = reserved + 1
 		}
-		if steerWasActive && oldRows > 2 {
-			// Clear every row the old steer panel occupied. Use the
-			// recorded lastSteerRows rather than the live steerRows
-			// because the live value reflects CURRENT state, not what
-			// was drawn the last time Resize fired. Loop bottom-up so
-			// the cursor ends at the top of the panel.
-			for i := lastSteer - 1; i >= 0; i-- {
-				row := steerRowFor(oldRows, lastSteer, lastHint, i)
-				if row >= 1 && row < oldRows {
-					fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
-				}
-			}
+
+		// Compute wrapped overflow: each padded footer row wraps to
+		// ceil(oldCols/newCols) rows at the new width.
+		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
+
+		// Clear from (newRows - reserved - overflow) to end of screen.
+		// This catches the footer's current rows AND any wrapped overflow
+		// from the old wider content that the terminal reflowed upward.
+		clearTop := newRows - reserved - overflow
+		if clearTop < 1 {
+			clearTop = 1
 		}
-		fmt.Fprint(f.w, "\0338")
+		fmt.Fprintf(f.w, "\033[%d;1H\033[J", clearTop)
 	}
 
 	f.applyScrollRegionLocked()
 	f.drawLocked()
+}
+
+// computeOverflowRows calculates how many extra physical rows the footer's
+// old content occupies after a terminal width change. When the terminal
+// shrinks, each footer row that was padded to the old width wraps across
+// ceil(oldCols/newCols) physical rows. The extra rows (beyond the 1 row
+// per footer line) appear ABOVE the footer's known row positions and must
+// be cleared to avoid stale duplicates.
+//
+// Returns the number of additional rows to clear above the topmost footer row.
+func (f *StatusFooter) computeOverflowRows(oldCols, newCols, footerRows int) int {
+	if oldCols <= 0 || newCols <= 0 || oldCols <= newCols {
+		return 0
+	}
+	// Each footer row was padded to oldCols. At newCols it wraps to
+	// ceil(oldCols / newCols) rows. The overflow per row is that minus 1.
+	rowsPerLine := (oldCols-1)/newCols + 1
+	overflowPerLine := rowsPerLine - 1
+	total := overflowPerLine * footerRows
+	// Cap at a sane maximum to avoid clearing the entire screen on
+	// extreme shrinks (e.g. 1000→20). The terminal's own scrollback
+	// handles content above this range.
+	if total > 30 {
+		total = 30
+	}
+	return total
 }
 
 // Stop resets the scroll region to full-screen, clears the footer row, and
@@ -391,38 +447,38 @@ func (f *StatusFooter) Stop() {
 	doneCh := f.winchDone
 	f.winchStop = nil
 	f.winchDone = nil
+	pollerStop := f.resizePollerStop
+	f.resizePollerStop = nil
 	f.mu.Unlock()
 
 	if stopCh != nil {
 		close(stopCh)
 		<-doneCh
 	}
+	if pollerStop != nil {
+		pollerStop()
+	}
 
 	_, rows := f.terminalSize()
 	if rows > 1 {
-		// Clear all pinned rows (N + N-1, plus N-2 if hint was active,
-		// plus N-3..N-3-lastSteer+1 if steer was active) before resetting
-		// the scroll region so we don't leave residual chrome in the
-		// scrollback. Order matters: bottom-up so the cursor ends near
-		// the top of where the footer was.
 		f.mu.Lock()
-		hintWasActive := f.lastHintRows > 0
-		steerWasActive := f.steerActive
 		lastSteer := f.lastSteerRows
+		lastHint := f.lastHintRows
+		oldCols := f.lastCols
 		f.mu.Unlock()
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows)
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-1)
-		if hintWasActive && rows > 2 {
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-2)
+
+		// Compute the footer's reserved rows.
+		reserved := 2 + lastSteer + lastHint
+		topRow := rows - reserved
+
+		// Extend upward for wrapped overflow (same logic as Resize).
+		newCols, _ := f.terminalSize()
+		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
+		topRow -= overflow
+		if topRow < 1 {
+			topRow = 1
 		}
-		if steerWasActive && rows > 2 {
-			for i := lastSteer - 1; i >= 0; i-- {
-				row := steerRowFor(rows, lastSteer, f.lastHintRows, i)
-				if row >= 1 && row < rows {
-					fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
-				}
-			}
-		}
+		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
 	}
 	// Reset scroll region to full screen.
 	fmt.Fprint(f.w, "\033[r")
@@ -452,6 +508,10 @@ func (f *StatusFooter) Stop() {
 // re-applies the scroll region + redraws the footer. Exits when stopCh
 // is closed. On platforms without SIGWINCH (Windows, js/wasm) the goroutine
 // just waits for stopCh and never fires Resize.
+//
+// After its own Resize, it calls notifyResizeSubscribers so the active
+// turn renderer and any other width-dependent consumers update their
+// width snapshots.
 func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 	defer close(doneCh)
 	sig := resizeSignal()
@@ -468,6 +528,7 @@ func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 			return
 		case <-ch:
 			f.Resize()
+			notifyResizeSubscribers()
 		}
 	}
 }
@@ -700,7 +761,19 @@ func (f *StatusFooter) draw() {
 // outputMu. Extracted so printExternalLocked (which already holds
 // outputMu from PrintExternal) can re-render the footer without
 // re-acquiring the non-reentrant mutex and deadlocking.
+//
+// Performs a final proseStreaming check under outputMu to close the
+// TOCTOU window in Refresh: between reading proseStreaming=false and
+// acquiring outputMu, a concurrent WriteChunk could have set it to true
+// and started writing prose. Re-checking here prevents DECSC/DECRC
+// from racing with in-flight prose.
 func (f *StatusFooter) drawLocked() {
+	f.mu.Lock()
+	streaming := f.proseStreaming
+	f.mu.Unlock()
+	if streaming {
+		return
+	}
 	cols, rows := f.terminalSize()
 	if rows < f.reservedRows()+1 {
 		return
@@ -802,6 +875,7 @@ func (f *StatusFooter) drawLocked() {
 	// next SetSteerLine can detect row-count changes.
 	f.mu.Lock()
 	f.lastRows = rows
+	f.lastCols = cols
 	f.lastSteerRows = steerRows
 	f.lastHintRows = hintRows
 	f.mu.Unlock()

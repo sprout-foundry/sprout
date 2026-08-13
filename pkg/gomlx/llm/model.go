@@ -44,6 +44,40 @@ type Model struct {
 	// sequence is a prefix of the new prompt and prefills only the delta.
 	prefixSlots []*prefixSlot
 	prefixSeq   uint64 // monotonic counter for LRU eviction
+
+	// GPU work (warmup, Generate, WarmSystemPrefix, Close's cleanup) always
+	// runs on this one dedicated, permanently OS-thread-pinned goroutine —
+	// see runOnGPUThread. MLX's Metal command encoders are thread_local: a
+	// stream (and any array whose lazy graph references it) only evaluates
+	// on the OS thread that created it. runtime.LockOSThread per call isn't
+	// enough, because it only pins for that one call's duration — the next
+	// call can and does land on a different OS thread under real
+	// concurrency, so a KV cache slot created on one call's thread fails
+	// ("no Stream(gpu, N) in current thread") when a later call restores it
+	// from a different thread. Routing everything through one thread that
+	// never unlocks removes the hazard entirely.
+	gpuWorkerOnce sync.Once
+	gpuTasks      chan func()
+}
+
+// runOnGPUThread submits fn to the model's dedicated GPU thread (starting
+// it on first use) and blocks until fn returns.
+func (m *Model) runOnGPUThread(fn func()) {
+	m.gpuWorkerOnce.Do(func() {
+		m.gpuTasks = make(chan func())
+		go func() {
+			runtime.LockOSThread()
+			for task := range m.gpuTasks {
+				task()
+			}
+		}()
+	})
+	done := make(chan struct{})
+	m.gpuTasks <- func() {
+		fn()
+		close(done)
+	}
+	<-done
 }
 
 // prefixSlot is one retained conversation's prompt-only KV snapshot.
@@ -225,49 +259,47 @@ func (m *Model) initThinking() {
 // lazy-compiles Metal kernels on first use; without warmup, the user's first
 // query stalls while kernels compile.
 //
-// Note: we can't pre-fill the system prompt KV cache here because MLX arrays
-// are thread-local — the warmup runs on the load thread, but Generate creates
-// a fresh GPU stream on the calling thread. The prefix cache is populated
-// on the first Generate call instead (the existing prefix-cache logic
-// handles this transparently).
+// Runs on the model's dedicated GPU thread (runOnGPUThread) — every later
+// Generate/WarmSystemPrefix call runs on that same thread too, so the
+// stream and compiled kernels this sets up stay valid for the model's
+// entire lifetime instead of being tied to whichever thread happened to
+// load the model.
 func (m *Model) warmupAndPreCache() {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	m.runOnGPUThread(func() {
+		// Enable MLX graph compilation. MLX traces ops within each eval()
+		// boundary and fuses them into fewer Metal kernels, reducing kernel
+		// launch overhead and memory round-trips.
+		if err := m.backend.EnableCompile(); err != nil {
+			log.Printf("llm: enable_compile failed (continuing without): %v", err)
+		}
 
-	// Enable MLX graph compilation. MLX traces ops within each eval()
-	// boundary and fuses them into fewer Metal kernels, reducing kernel
-	// launch overhead and memory round-trips.
-	if err := m.backend.EnableCompile(); err != nil {
-		log.Printf("llm: enable_compile failed (continuing without): %v", err)
-	}
+		s, err := m.backend.DefaultGPUStream()
+		if err != nil {
+			log.Printf("llm: warmup skipped (no GPU stream): %v", err)
+			return
+		}
+		m.stream = s
+		m.arch.SetStream(s)
 
-	s, err := m.backend.DefaultGPUStream()
-	if err != nil {
-		log.Printf("llm: warmup skipped (no GPU stream): %v", err)
-		return
-	}
-	defer s.Free()
-	m.stream = s
-	m.arch.SetStream(s)
-
-	// Warmup: run a tiny prefill + decode to compile all Metal kernels.
-	dummyTokens := m.tokenizer.Encode("Hello")
-	if m.cfg.BOSTokenID > 0 {
-		dummyTokens = append([]int{m.cfg.BOSTokenID}, dummyTokens...)
-	}
-	warmupCache := NewKVCache(m.cfg.NumLayers, s, m.backend)
-	if _, err := m.arch.ForwardPrefill(m.makeIDsArray(dummyTokens), len(dummyTokens), warmupCache); err != nil {
-		log.Printf("llm: warmup prefill failed: %v", err)
+		// Warmup: run a tiny prefill + decode to compile all Metal kernels.
+		dummyTokens := m.tokenizer.Encode("Hello")
+		if m.cfg.BOSTokenID > 0 {
+			dummyTokens = append([]int{m.cfg.BOSTokenID}, dummyTokens...)
+		}
+		warmupCache := NewKVCache(m.cfg.NumLayers, s, m.backend)
+		if _, err := m.arch.ForwardPrefill(m.makeIDsArray(dummyTokens), len(dummyTokens), warmupCache); err != nil {
+			log.Printf("llm: warmup prefill failed: %v", err)
+			warmupCache.Free()
+			return
+		}
+		// One decode step to compile decode-path kernels (concat, argmax, etc.)
+		if greedy, ok := m.arch.(GreedyArchitecture); ok {
+			_, _ = greedy.ForwardDecodeArgmax(dummyTokens[len(dummyTokens)-1], len(dummyTokens), warmupCache)
+		}
 		warmupCache.Free()
-		return
-	}
-	// One decode step to compile decode-path kernels (concat, argmax, etc.)
-	if greedy, ok := m.arch.(GreedyArchitecture); ok {
-		_, _ = greedy.ForwardDecodeArgmax(dummyTokens[len(dummyTokens)-1], len(dummyTokens), warmupCache)
-	}
-	warmupCache.Free()
 
-	log.Printf("llm: warmup complete (Metal kernels compiled)")
+		log.Printf("llm: warmup complete (Metal kernels compiled)")
+	})
 }
 
 // GenerateConfig controls text generation behavior.
@@ -337,6 +369,17 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 		return fmt.Errorf("llm: model is closed")
 	}
 
+	var genErr error
+	m.runOnGPUThread(func() {
+		genErr = m.generateLocked(ctx, prompt, genCfg, onToken)
+	})
+	return genErr
+}
+
+// generateLocked runs the generation loop's GPU work on the model's
+// dedicated GPU thread (see runOnGPUThread). Only called from Generate,
+// which holds m.mu for the whole call.
+func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg GenerateConfig, onToken func(tokenID int)) error {
 	tokenIDs := m.tokenizer.Encode(prompt)
 	if len(tokenIDs) == 0 {
 		return fmt.Errorf("llm: empty prompt after tokenization")
@@ -352,9 +395,6 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	// continue the block (filter it). An empty <think>\n\n</think>\n\n pair
 	// (thinking disabled) leaves the model answering directly — no filter.
 	m.inThinkBlock = promptEndsInsideThink(tokenIDs, m.thinkID, m.endThinkID)
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 
 	s, err := m.backend.DefaultGPUStream()
 	if err != nil {
@@ -373,7 +413,20 @@ func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConf
 	// among multiple slots is what lets concurrent conversations (main
 	// agent + parallel subagents) each keep their own cache hit instead of
 	// evicting one another.
-	shared, slotIdx := m.bestPrefixSlot(tokenIDs)
+	//
+	// Skip matching entirely once the prompt itself exceeds maxPrefixLen:
+	// a long-running conversation's own slot gets dropped below (too big to
+	// keep pinning memory for), and without this guard bestPrefixSlot would
+	// then fall back to whatever short, unrelated slot happens to still
+	// qualify (e.g. a warmed system-prefix slot) — turning every subsequent
+	// turn into an ever-growing "restore a tiny base, delta-prefill
+	// thousands of tokens" call instead of a plain full prefill. That code
+	// path is unproven at scale and not worth the risk; once a conversation
+	// is too big to cache, always fall through to full prefill.
+	shared, slotIdx := 0, -1
+	if len(tokenIDs) <= maxPrefixLen {
+		shared, slotIdx = m.bestPrefixSlot(tokenIDs)
+	}
 	if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
 		log.Printf("llm: prefix cache: shared=%d slots=%d matchedSlot=%d newPromptLen=%d",
 			shared, len(m.prefixSlots), slotIdx, len(tokenIDs))
@@ -640,15 +693,20 @@ func (m *Model) Close() error {
 		return nil
 	}
 	m.closed = true
-	for _, slot := range m.prefixSlots {
-		slot.cache.Free()
-	}
-	m.prefixSlots = nil
-	if m.stream != nil {
-		m.stream.Free()
-		m.stream = nil
-	}
-	m.arch.FreeWeights()
+	// Free on the same dedicated GPU thread everything was created on (see
+	// runOnGPUThread), then shut the worker down.
+	m.runOnGPUThread(func() {
+		for _, slot := range m.prefixSlots {
+			slot.cache.Free()
+		}
+		m.prefixSlots = nil
+		if m.stream != nil {
+			m.stream.Free()
+			m.stream = nil
+		}
+		m.arch.FreeWeights()
+	})
+	close(m.gpuTasks)
 	return nil
 }
 
@@ -661,6 +719,72 @@ func (m *Model) TokenizerEncode(text string) []int {
 // raw prompt string fed to the model.
 func (m *Model) FormatChat(messages []ChatMessage) string {
 	return m.tokenizer.FormatChat(messages)
+}
+
+// FormatChatPrefix applies the chat template without the trailing
+// "generate now" cue — see Tokenizer.FormatChatPrefix. Callers use this to
+// identify a static prompt prefix (e.g. system message + tool definitions)
+// worth warming with WarmSystemPrefix.
+func (m *Model) FormatChatPrefix(messages []ChatMessage) string {
+	return m.tokenizer.FormatChatPrefix(messages)
+}
+
+// WarmSystemPrefix ensures a KV cache slot exists for the given static
+// prompt prefix, prefilling it if not already cached. Many otherwise-
+// unrelated conversations share this exact prefix — sprout runs subagents
+// concurrently (pkg/agent/subagent_runners.go RunParallel) sharing this one
+// Model, and each currently pays a full prefill for identical system
+// prompt + tool definition boilerplate on its first turn. Warming it once
+// lets every conversation's first turn delta-prefill instead of waiting
+// until its second turn to get a cache hit.
+//
+// Cheap to call on every request: no-ops immediately once a matching slot
+// already exists. No-ops (rather than erroring) if prompt is too short to
+// bother caching or too long for maxPrefixLen, since either way the normal
+// per-conversation caching in Generate still works correctly on its own.
+func (m *Model) WarmSystemPrefix(prompt string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.closed {
+		return fmt.Errorf("llm: model is closed")
+	}
+
+	tokenIDs := m.tokenizer.Encode(prompt)
+	if m.cfg.BOSTokenID > 0 {
+		tokenIDs = append([]int{m.cfg.BOSTokenID}, tokenIDs...)
+	}
+	if len(tokenIDs) < minPrefixReuse || len(tokenIDs) > maxPrefixLen {
+		return nil
+	}
+
+	for _, slot := range m.prefixSlots {
+		if len(slot.tokens) == len(tokenIDs) && longestCommonPrefix(tokenIDs, slot.tokens) == len(tokenIDs) {
+			return nil // already warmed
+		}
+	}
+
+	var warmErr error
+	m.runOnGPUThread(func() {
+		s, err := m.backend.DefaultGPUStream()
+		if err != nil {
+			warmErr = fmt.Errorf("get GPU stream: %w", err)
+			return
+		}
+		m.stream = s
+		m.arch.SetStream(s)
+
+		cache := NewKVCache(m.cfg.NumLayers, s, m.backend)
+		defer cache.Free()
+
+		if _, err := m.arch.ForwardPrefill(m.makeIDsArray(tokenIDs), len(tokenIDs), cache); err != nil {
+			warmErr = fmt.Errorf("warm system prefix: %w", err)
+			return
+		}
+
+		m.storePrefixSlot(-1, tokenIDs, cache.SnapshotPrefix())
+	})
+	return warmErr
 }
 
 // DecodeToken converts a single token ID back to text (for streaming deltas).

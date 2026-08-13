@@ -520,9 +520,29 @@ func (t *Tokenizer) FormatChat(messages []ChatMessage) string {
 	return t.formatQwenChat(messages)
 }
 
+// FormatChatPrefix renders messages the same way FormatChat does, but
+// without the trailing "generate now" cue. Because every architecture's
+// chat template appends one message at a time, the result is guaranteed to
+// be an exact prefix of FormatChat(longerMessages) for any longerMessages
+// sharing this leading sequence. Used to pre-warm a KV cache slot for
+// content (system prompt + tool definitions) shared by many otherwise-
+// unrelated conversations — see Model.WarmSystemPrefix.
+func (t *Tokenizer) FormatChatPrefix(messages []ChatMessage) string {
+	if _, isLFM2 := t.vocab["<|im_start|>"]; isLFM2 && t.bosID > 0 && t.specialTokens["<|startoftext|>"] > 0 {
+		return "<|startoftext|>" + t.formatLFM2Body(messages)
+	}
+	if _, isGemma := t.vocab["<|turn>"]; isGemma {
+		return t.formatGemmaBody(messages)
+	}
+	return t.formatQwenBody(messages)
+}
+
 func (t *Tokenizer) formatLFM2Chat(messages []ChatMessage) string {
+	return "<|startoftext|>" + t.formatLFM2Body(messages) + "<|im_start|>assistant\n<think>\n\n</think>\n\n"
+}
+
+func (t *Tokenizer) formatLFM2Body(messages []ChatMessage) string {
 	var sb strings.Builder
-	sb.WriteString("<|startoftext|>")
 	for _, msg := range messages {
 		sb.WriteString("<|im_start|>")
 		sb.WriteString(msg.Role)
@@ -533,11 +553,14 @@ func (t *Tokenizer) formatLFM2Chat(messages []ChatMessage) string {
 		sb.WriteString(msg.Content)
 		sb.WriteString("<|im_end|>\n")
 	}
-	sb.WriteString("<|im_start|>assistant\n<think>\n\n</think>\n\n")
 	return sb.String()
 }
 
 func (t *Tokenizer) formatGemmaChat(messages []ChatMessage) string {
+	return t.formatGemmaBody(messages) + "<|turn>model\n"
+}
+
+func (t *Tokenizer) formatGemmaBody(messages []ChatMessage) string {
 	var sb strings.Builder
 	for _, msg := range messages {
 		role := msg.Role
@@ -549,11 +572,14 @@ func (t *Tokenizer) formatGemmaChat(messages []ChatMessage) string {
 		sb.WriteString(msg.Content)
 		sb.WriteString("<turn|>\n")
 	}
-	sb.WriteString("<|turn>model\n")
 	return sb.String()
 }
 
 func (t *Tokenizer) formatQwenChat(messages []ChatMessage) string {
+	return t.formatQwenBody(messages) + "<|im_start|>assistant\n<think>\n\n</think>\n\n"
+}
+
+func (t *Tokenizer) formatQwenBody(messages []ChatMessage) string {
 	var sb strings.Builder
 	for _, msg := range messages {
 		sb.WriteString("<|im_start|>")
@@ -565,7 +591,6 @@ func (t *Tokenizer) formatQwenChat(messages []ChatMessage) string {
 		sb.WriteString(msg.Content)
 		sb.WriteString("<|im_end|>\n")
 	}
-	sb.WriteString("<|im_start|>assistant\n<think>\n\n</think>\n\n")
 	return sb.String()
 }
 

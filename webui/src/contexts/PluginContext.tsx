@@ -8,7 +8,12 @@
 
 import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
 import type { PluginView, PluginPanel, PluginSettingsTab } from '../types/plugin';
-import { getPluginViews, getPluginPanels, getPluginSettingsTabs, PLUGINS_CHANGED_EVENT } from '../services/pluginRegistry';
+import {
+  getPluginViews,
+  getPluginPanels,
+  getPluginSettingsTabs,
+  PLUGINS_CHANGED_EVENT,
+} from '../services/pluginRegistry';
 
 interface PluginContextValue {
   /** All registered plugin views (sorted by order). */

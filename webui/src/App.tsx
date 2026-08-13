@@ -25,6 +25,7 @@ import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
+import { PluginContextProvider } from './contexts/PluginContext';
 import { ProviderCatalogProvider } from './contexts/ProviderCatalogContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -391,7 +392,8 @@ function AppInner() {
       <WasmLoadingOverlay isLoading={!!state.wasmLoading} error={state.wasmError} />
       <SproutAdapterProvider>
         <PlatformNavProvider>
-          <ThemeProvider>
+          <PluginContextProvider>
+            <ThemeProvider>
             <HotkeyProvider>
               <EditorManagerProvider>
                 <ProviderCatalogProvider isConnected={state.isConnected}>
@@ -566,6 +568,7 @@ function AppInner() {
               </EditorManagerProvider>
             </HotkeyProvider>
           </ThemeProvider>
+          </PluginContextProvider>
         </PlatformNavProvider>
       </SproutAdapterProvider>
     </ErrorBoundary>

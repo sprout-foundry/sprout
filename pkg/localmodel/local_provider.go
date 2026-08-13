@@ -23,8 +23,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
-const localBackendMLX = "mlx"
-
 // LocalProvider implements api.ClientInterface by calling the MLX model
 // engine directly — no HTTP, no separate process, no serialization.
 // The model is loaded once (lazy, on first request) and kept resident

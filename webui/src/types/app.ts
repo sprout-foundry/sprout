@@ -77,7 +77,7 @@ export interface PerChatState {
 }
 
 /** All navigable views in the editor (chat, editor, git, costs) plus any plugin-registered view IDs. */
-export type ViewType = 'chat' | 'editor' | 'git' | 'costs' | (string & {});
+export type ViewType = 'chat' | 'editor' | 'git' | 'costs' | (string & object);
 
 export interface AppState {
   isConnected: boolean;

@@ -45,6 +45,8 @@ func main() {
 	baseURL := flag.String("base-url", "https://sprout-foundry.github.io/sprout", "live registry base URL to diff against")
 	maxProbeCost := flag.Float64("max-probe-cost", 0.10, "probe budget: skip models whose estimated per-probe cost exceeds this (USD); 0 disables")
 	maxProbes := flag.Int("max-probes", 50, "max models to probe this run (overall cost cap)")
+	maxRunCost := flag.Float64("max-run-cost", 0, "aggregate spend cap: stop probing once cumulative estimated cost reaches this (USD); 0 disables")
+	maxPricePerMTok := flag.Float64("max-price-per-mtok", 0, "per-token price ceiling: skip models whose input OR output price exceeds this (USD/MTok); 0 disables")
 	dryRun := flag.Bool("dry-run", false, "don't probe; just report what would be probed/skipped")
 	fromEmbeddedConfigs := flag.String("from-embedded-configs", "", "dir of embedded provider configs to fall back to for providers without a canonical models/<id>.json file")
 	flag.Parse()
@@ -64,6 +66,7 @@ func main() {
 	providerCap, _ := allocateProbeBudget(numProviders, *maxProbes)
 
 	probed := 0
+	totalSpend := 0.0 // cumulative estimated probe cost (USD) across the run
 	for _, pfEntry := range providerFiles {
 		providerID := pfEntry.providerID
 		if providerID == "index" {
@@ -79,6 +82,14 @@ func main() {
 		baseline := fetchBaseline(*baseURL, providerID)
 		clientType, ctErr := api.ParseProviderName(providerID)
 
+		// Pre-flight: skip the entire provider if its API key is not set.
+		// In CI, keys come from secrets mapped to env vars. A missing env var
+		// means the key isn't configured — every model will fail identically.
+		if envVar := providers.ProviderEnvVar(providerID); envVar != "" && os.Getenv(envVar) == "" {
+			fmt.Printf("%s: skipped — API key (%s) not set\n", providerID, envVar)
+			continue
+		}
+
 		// Check if there's any remaining budget for this provider.
 		if probed >= *maxProbes {
 			fmt.Printf("%s: skipped — global probe cap reached (%d/%d)\n", providerID, probed, *maxProbes)
@@ -88,6 +99,7 @@ func main() {
 		providerProbed := 0
 		changed := false
 		newCount := 0
+		providerSkipReason := "" // set when a provider-level permanent error (e.g. 402) is discovered
 		for i := range pf.Models {
 			m := &pf.Models[i]
 
@@ -101,9 +113,16 @@ func main() {
 			if prev, ok := baseline[m.ID]; ok && prev.Probe != nil && prev.Probe.ProbeVersion == modelprobe.ProbeVersion {
 				m.Probe = prev.Probe
 				m.RecommendedRoles = prev.RecommendedRoles
-				continue // already have a result; nothing to spend
+				changed = true // carry-forward populates the in-memory file; must persist
+				continue       // already have a result; nothing to spend
 			}
 			newCount++
+
+			// Skip remaining models if the provider has a known permanent issue
+			// (e.g. 402 insufficient balance — every model will fail identically).
+			if providerSkipReason != "" {
+				continue
+			}
 
 			// Per-provider cap: stop probing this provider once its share is used.
 			if providerProbed >= providerCap {
@@ -130,6 +149,29 @@ func main() {
 				continue
 			}
 
+			// Per-token price ceiling: reject models whose input or output
+			// price exceeds the ceiling, even if the per-probe estimate is
+			// under budget. A cheap probe on a $20/MTok model still isn't
+			// worth surfacing as a recommended coding model.
+			if *maxPricePerMTok > 0 && costKnown {
+				if inCost > *maxPricePerMTok || outCost > *maxPricePerMTok {
+					if *dryRun {
+						fmt.Printf("  [skip] %s/%s — price $%.2f/$%.2f per MTok exceeds ceiling $%.2f\n",
+							providerID, m.ID, inCost, outCost, *maxPricePerMTok)
+					}
+					continue
+				}
+			}
+
+			// Aggregate spend cap: stop probing once cumulative estimated
+			// cost reaches the run-level budget.
+			estCost := modelprobe.EstimatedCostUSD(inCost, outCost)
+			if *maxRunCost > 0 && totalSpend+estCost > *maxRunCost {
+				fmt.Printf("  [skip] %s/%s — run cost cap reached ($%.4f + $%.4f > $%.2f)\n",
+					providerID, m.ID, totalSpend, estCost, *maxRunCost)
+				break
+			}
+
 			if *dryRun {
 				fmt.Printf("  [would probe] %s/%s (est. probe cost $%.4f)\n",
 					providerID, m.ID, modelprobe.EstimatedCostUSD(inCost, outCost))
@@ -152,8 +194,16 @@ func main() {
 			cancel()
 			probed++
 			providerProbed++
+			totalSpend += estCost
 
-			// Inconclusive (transport/5xx/timeout): do NOT persist a verdict.
+			// Detect provider-level permanent errors (e.g. 402 insufficient
+			// balance) and skip remaining models for this provider — every
+			// model will fail identically.
+			if isProviderLevelError(res.Reason) {
+				providerSkipReason = res.Reason
+			}
+
+			// Transient (transport/5xx/timeout): do NOT persist a verdict.
 			// Leaving the model un-probed means the next run retries it, rather
 			// than carrying forward a wrong "failed/not-complex" result.
 			if err != nil || res.Errored {
@@ -177,6 +227,9 @@ func main() {
 
 		fmt.Printf("%s: %d new model(s), %d total, probed %d (cap %d)\n",
 			providerID, newCount, len(pf.Models), providerProbed, providerCap)
+		if providerSkipReason != "" {
+			fmt.Printf("  [%s] remaining models skipped — %s\n", providerID, providerSkipReason)
+		}
 		if changed && !*dryRun {
 			if err := writeProviderFile(pfEntry.path, pf); err != nil {
 				fmt.Fprintf(os.Stderr, "  write %s: %v\n", pfEntry.path, err)
@@ -225,18 +278,30 @@ func main() {
 			baseline := fetchBaseline(*baseURL, providerID)
 			clientType, ctErr := api.ParseProviderName(providerID)
 
+			// Pre-flight: skip if API key not set.
+			if envVar := providers.ProviderEnvVar(providerID); envVar != "" && os.Getenv(envVar) == "" {
+				fmt.Printf("%s (embedded): skipped — API key (%s) not set\n", providerID, envVar)
+				continue
+			}
+
 			providerProbed := 0
 			changed := false
 			newCount := 0
+			providerSkipReason := ""
 			for i := range embeddedModels {
 				m := &embeddedModels[i]
 
 				if prev, ok := baseline[m.ID]; ok && prev.Probe != nil && prev.Probe.ProbeVersion == modelprobe.ProbeVersion {
 					m.Probe = prev.Probe
 					m.RecommendedRoles = prev.RecommendedRoles
+					changed = true
 					continue
 				}
 				newCount++
+
+				if providerSkipReason != "" {
+					continue
+				}
 
 				if providerProbed >= providerCap {
 					fmt.Printf("  [%s (embedded)] reached per-provider cap of %d probes\n", providerID, providerCap)
@@ -255,6 +320,21 @@ func main() {
 						fmt.Printf("  [skip] %s/%s (embedded) — %s\n", providerID, m.ID, reason)
 					}
 					continue
+				}
+
+				if *maxPricePerMTok > 0 && costKnown {
+					if inCost > *maxPricePerMTok || outCost > *maxPricePerMTok {
+						if *dryRun {
+							fmt.Printf("  [skip] %s/%s (embedded) — price exceeds ceiling\n", providerID, m.ID)
+						}
+						continue
+					}
+				}
+
+				estCost := modelprobe.EstimatedCostUSD(inCost, outCost)
+				if *maxRunCost > 0 && totalSpend+estCost > *maxRunCost {
+					fmt.Printf("  [skip] %s/%s (embedded) — run cost cap reached\n", providerID, m.ID)
+					break
 				}
 
 				if *dryRun {
@@ -279,6 +359,11 @@ func main() {
 				cancel()
 				probed++
 				providerProbed++
+				totalSpend += estCost
+
+				if isProviderLevelError(res.Reason) {
+					providerSkipReason = res.Reason
+				}
 
 				if err != nil || res.Errored {
 					fmt.Fprintf(os.Stderr, "  probe %s/%s (embedded) inconclusive (will retry next run): %s\n", providerID, m.ID, res.Reason)
@@ -301,6 +386,9 @@ func main() {
 
 			fmt.Printf("%s (embedded): %d new model(s), %d total, probed %d (cap %d)\n",
 				providerID, newCount, len(embeddedModels), providerProbed, providerCap)
+			if providerSkipReason != "" {
+				fmt.Printf("  [%s (embedded)] remaining models skipped — %s\n", providerID, providerSkipReason)
+			}
 			if changed && !*dryRun {
 				pf := &modelcontract.ProviderFile{
 					SchemaVersion: modelcontract.SchemaVersion,
@@ -315,7 +403,22 @@ func main() {
 		}
 	}
 
-	fmt.Printf("done: %d model(s) probed\n", probed)
+	fmt.Printf("done: %d model(s) probed, est. cost $%.4f\n", probed, totalSpend)
+}
+
+// isProviderLevelError reports whether a probe result reason indicates a
+// provider-level issue that will cause every model on that provider to fail
+// identically. When detected, the caller skips remaining models for that
+// provider rather than wasting probes.
+//
+// This is NOT the same as IsPermanentError. A per-model 402 (e.g. OpenRouter
+// "requires more credits" for an expensive model) is permanent for that model
+// but NOT provider-level — cheaper or free models on the same provider may
+// still succeed. Only account-wide issues like MiniMax's "insufficient balance"
+// qualify as provider-level.
+func isProviderLevelError(reason string) bool {
+	r := strings.ToLower(reason)
+	return strings.Contains(r, "insufficient balance")
 }
 
 // providerFile tracks a provider file to process along with its path.

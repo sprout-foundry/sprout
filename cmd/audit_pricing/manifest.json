@@ -72,7 +72,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-08-12",
+    "last_verified": "2026-08-13",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -572,6 +572,12 @@
         "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning",
         "input_per_mtok": 0.05,
         "output_per_mtok": 0.2
+      },
+      {
+        "id": "Qwen/Qwen3.8-2.4T-A95B",
+        "input_per_mtok": 2,
+        "output_per_mtok": 6,
+        "cached_per_mtok": 0.2
       }
     ]
   },
@@ -1468,7 +1474,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-08-12",
+    "last_verified": "2026-08-13",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -3749,6 +3755,29 @@
         "id": "nvidia/nemotron-3.5-lightning:free",
         "input_per_mtok": 0,
         "output_per_mtok": 0
+      },
+      {
+        "id": "bytedance-seed/seed-2-1-turbo",
+        "input_per_mtok": 0.5,
+        "output_per_mtok": 2.5
+      },
+      {
+        "id": "deepseek/deepseek-v4-pro-0813",
+        "input_per_mtok": 0.435,
+        "output_per_mtok": 0.87,
+        "cached_per_mtok": 0.003625
+      },
+      {
+        "id": "qwen/qwen3.8-2.4t-a95b",
+        "input_per_mtok": 2,
+        "output_per_mtok": 6,
+        "cached_per_mtok": 0.2
+      },
+      {
+        "id": "x-ai/grok-4.6",
+        "input_per_mtok": 2,
+        "output_per_mtok": 6,
+        "cached_per_mtok": 0.5
       }
     ]
   },

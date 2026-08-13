@@ -14,7 +14,7 @@ package ggml
 #cgo darwin CFLAGS: -I/opt/homebrew/include
 #cgo linux CFLAGS: -I/usr/local/include
 #cgo darwin LDFLAGS: -L/opt/homebrew/lib -lggml -lggml-base -framework Metal -framework Foundation
-#cgo linux LDFLAGS: -L/usr/local/lib -lggml -lggml-base
+#cgo linux LDFLAGS: -L/usr/local/lib -lggml -lggml-base -lm
 
 #define _GNU_SOURCE
 #include <stdlib.h>
@@ -25,6 +25,42 @@ package ggml
 #include <ggml-alloc.h>
 
 #include <dlfcn.h>
+#include <math.h>
+
+// Byte-identical fused SiLU: replicates sigmoid (1/(1+exp(-x))) then x*sigmoid,
+// matching the ggml_sigmoid + ggml_mul sequence the fallback path used, so
+// output is bit-for-bit identical while collapsing two ops into one.
+void silu_f32(struct ggml_tensor * dst, const struct ggml_tensor * a, int ith, int nth, void * userdata) {
+    const float * x = (const float *) a->data;
+    float * y = (float *) dst->data;
+    const int64_t n = ggml_nelements(a);
+    for (int64_t i = ith; i < n; i += nth) {
+        float sig = 1.0f / (1.0f + expf(-x[i]));
+        y[i] = x[i] * sig;
+    }
+}
+
+// Byte-identical fused SwiGLU: (gate*sigmoid(gate))*up, matching
+// sigmoid + mul + mul. Collapses the three-op SwiGLU activation into one.
+void swiglu_f32(struct ggml_tensor * dst, const struct ggml_tensor * a, const struct ggml_tensor * b, int ith, int nth, void * userdata) {
+    const float * g = (const float *) a->data;
+    const float * u = (const float *) b->data;
+    float * y = (float *) dst->data;
+    const int64_t n = ggml_nelements(a);
+    for (int64_t i = ith; i < n; i += nth) {
+        float sig = 1.0f / (1.0f + expf(-g[i]));
+        float silu = g[i] * sig;
+        y[i] = silu * u[i];
+    }
+}
+
+struct ggml_tensor * ggml_silu_custom(struct ggml_context * ctx, struct ggml_tensor * a) {
+    return ggml_map_custom1(ctx, a, silu_f32, GGML_N_TASKS_MAX, NULL);
+}
+
+struct ggml_tensor * ggml_swiglu_custom(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
+    return ggml_map_custom2(ctx, a, b, swiglu_f32, GGML_N_TASKS_MAX, NULL);
+}
 
 // The CPU backend is dlopened by ggml_backend_load_all, so its feature
 // predicates are not available at link time. Returns -1 when unresolved.
@@ -1983,6 +2019,30 @@ func (g *GGMLBackend) Negative(a tensor.Array, s tensor.Stream) (tensor.Array, e
 
 func (g *GGMLBackend) Sigmoid(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
 	return g.evalOp(C.ggml_sigmoid(g.ctxPtr(), a.(*Array).cTensor()))
+}
+
+// SiLU computes silu(x) = x*sigmoid(x) with a custom kernel that matches the
+// ggml_sigmoid+ggml_mul sequence bit-for-bit, in a single op.
+func (g *GGMLBackend) SiLU(x tensor.Array, s tensor.Stream) (tensor.Array, error) {
+	out, err := g.evalOp(C.ggml_silu_custom(g.ctxPtr(), x.(*Array).cTensor()))
+	if err != nil {
+		return nil, err
+	}
+	out.logicalShape = append([]int(nil), x.Shape()...)
+	g.registerArray(out)
+	return out, nil
+}
+
+// SwiGLU computes silu(gate)*up with a custom kernel matching the
+// sigmoid+mul+mul fallback bit-for-bit, in a single op.
+func (g *GGMLBackend) SwiGLU(gate, up tensor.Array, s tensor.Stream) (tensor.Array, error) {
+	out, err := g.evalOp(C.ggml_swiglu_custom(g.ctxPtr(), gate.(*Array).cTensor(), up.(*Array).cTensor()))
+	if err != nil {
+		return nil, err
+	}
+	out.logicalShape = append([]int(nil), gate.Shape()...)
+	g.registerArray(out)
+	return out, nil
 }
 
 func (g *GGMLBackend) Softplus(a tensor.Array, s tensor.Stream) (tensor.Array, error) {

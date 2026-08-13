@@ -38,7 +38,17 @@ func LinearT(x, wT tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Arra
 }
 
 // SiLU computes x * sigmoid(x). Uses the fused Sigmoid kernel.
+// fusedActivations is an optional backend capability for byte-identical fused
+// SiLU/SwiGLU kernels (one op instead of sigmoid+mul / sigmoid+mul+mul).
+type fusedActivations interface {
+	SiLU(x tensor.Array, s tensor.Stream) (tensor.Array, error)
+	SwiGLU(gate, up tensor.Array, s tensor.Stream) (tensor.Array, error)
+}
+
 func SiLU(x tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
+	if f, ok := b.(fusedActivations); ok {
+		return f.SiLU(x, s)
+	}
 	sig, err := b.Sigmoid(x, s)
 	if err != nil {
 		return nil, fmt.Errorf("silu sigmoid: %w", err)
@@ -49,6 +59,9 @@ func SiLU(x tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, erro
 
 // SwiGLU computes SiLU(gate) * up. Used by both dense MLP and MoE expert FFN.
 func SwiGLU(up, gate tensor.Array, b tensor.Backend, s tensor.Stream) (tensor.Array, error) {
+	if f, ok := b.(fusedActivations); ok {
+		return f.SwiGLU(gate, up, s)
+	}
 	gateSilu, err := SiLU(gate, b, s)
 	if err != nil {
 		return nil, fmt.Errorf("swiglu silu: %w", err)

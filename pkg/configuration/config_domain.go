@@ -22,6 +22,17 @@ type EmbeddingIndexConfig struct {
 	// nil means "not specified at this layer" — inherit from a broader layer.
 	Enabled *bool `json:"enabled,omitempty"`
 
+	// Experimental is a second, independent gate required alongside Enabled.
+	// Off by default, and — critically — a workspace config persisted before
+	// this field existed has no "experimental" key at all, so it decodes to
+	// nil (off) regardless of what Enabled was set to. That's deliberate:
+	// full-workspace auto-indexing was found to cause severe, unbounded
+	// native-memory growth (multi-GB spikes, outside what Go's own memory
+	// accounting or limits can see or bound — see pkg/embedding/index.go).
+	// Existing users with Enabled already true from before this gate must
+	// explicitly opt in again rather than silently keep auto-indexing.
+	Experimental *bool `json:"experimental,omitempty"`
+
 	// IndexDir is the directory where the embedding index JSONL files are stored.
 	// If empty, uses ~/.config/sprout/embeddings/
 	IndexDir string `json:"index_dir,omitempty"`
@@ -38,9 +49,16 @@ type EmbeddingIndexConfig struct {
 	ExcludePaths []string `json:"exclude_paths,omitempty"`
 }
 
-// IsEnabled reports whether the embedding index is on. Unspecified is off.
+// IsEnabled reports whether the embedding index is on. Requires both Enabled
+// and Experimental — unspecified (nil) is off for either.
 func (e *EmbeddingIndexConfig) IsEnabled() bool {
-	return e != nil && e.Enabled != nil && *e.Enabled
+	return e != nil && e.Enabled != nil && *e.Enabled && e.IsExperimental()
+}
+
+// IsExperimental reports whether the experimental embedding-index opt-in is
+// set. Unspecified is off.
+func (e *EmbeddingIndexConfig) IsExperimental() bool {
+	return e != nil && e.Experimental != nil && *e.Experimental
 }
 
 // IsAutoIndex reports whether the index builds automatically. Unspecified is off.
@@ -48,9 +66,10 @@ func (e *EmbeddingIndexConfig) IsAutoIndex() bool {
 	return e != nil && e.AutoIndex != nil && *e.AutoIndex
 }
 
-// SetEnabled and SetAutoIndex record an explicit value.
-func (e *EmbeddingIndexConfig) SetEnabled(v bool)   { e.Enabled = &v }
-func (e *EmbeddingIndexConfig) SetAutoIndex(v bool) { e.AutoIndex = &v }
+// SetEnabled, SetExperimental, and SetAutoIndex record an explicit value.
+func (e *EmbeddingIndexConfig) SetEnabled(v bool)      { e.Enabled = &v }
+func (e *EmbeddingIndexConfig) SetExperimental(v bool) { e.Experimental = &v }
+func (e *EmbeddingIndexConfig) SetAutoIndex(v bool)    { e.AutoIndex = &v }
 
 // ComputerUseConfig gates the computer_user persona's desktop-control tools. Off by default.
 type ComputerUseConfig struct {

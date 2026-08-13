@@ -527,6 +527,9 @@ func (t *Tokenizer) formatLFM2Chat(messages []ChatMessage) string {
 		sb.WriteString("<|im_start|>")
 		sb.WriteString(msg.Role)
 		sb.WriteString("\n")
+		if msg.Role == "assistant" {
+			sb.WriteString("<think>\n\n</think>\n\n")
+		}
 		sb.WriteString(msg.Content)
 		sb.WriteString("<|im_end|>\n")
 	}
@@ -556,6 +559,9 @@ func (t *Tokenizer) formatQwenChat(messages []ChatMessage) string {
 		sb.WriteString("<|im_start|>")
 		sb.WriteString(msg.Role)
 		sb.WriteString("\n")
+		if msg.Role == "assistant" {
+			sb.WriteString("<think>\n\n</think>\n\n")
+		}
 		sb.WriteString(msg.Content)
 		sb.WriteString("<|im_end|>\n")
 	}

@@ -144,6 +144,44 @@ func TestFormatAssistantToolCalls_Qwen(t *testing.T) {
 	}
 }
 
+// TestFormatQwenAssistantToolCalls_DeterministicParamOrder guards against
+// nondeterministic map iteration reordering a tool call's parameters on
+// every replay. When the reconstructed text isn't byte-identical across
+// calls, it can't stay an exact prefix match of what was actually cached,
+// which silently defeats the KV prefix cache for any turn after a
+// multi-parameter tool call.
+func TestFormatQwenAssistantToolCalls_DeterministicParamOrder(t *testing.T) {
+	calls := []api.ToolCall{{
+		Type: "function",
+		Function: api.ToolCallFunction{
+			Name:      "edit_file",
+			Arguments: `{"path":"stats.go","new_str":"x","old_str":"y","zzz":"z","aaa":"a"}`,
+		},
+	}}
+	first := formatQwenAssistantToolCalls(calls)
+	for range 20 {
+		if got := formatQwenAssistantToolCalls(calls); got != first {
+			t.Fatalf("formatQwenAssistantToolCalls is nondeterministic across calls:\nfirst=%q\ngot=%q", first, got)
+		}
+	}
+}
+
+func TestFormatLFM2AssistantToolCalls_DeterministicParamOrder(t *testing.T) {
+	calls := []api.ToolCall{{
+		Type: "function",
+		Function: api.ToolCallFunction{
+			Name:      "edit_file",
+			Arguments: `{"path":"stats.go","new_str":"x","old_str":"y","zzz":"z","aaa":"a"}`,
+		},
+	}}
+	first := formatLFM2AssistantToolCalls(calls)
+	for range 20 {
+		if got := formatLFM2AssistantToolCalls(calls); got != first {
+			t.Fatalf("formatLFM2AssistantToolCalls is nondeterministic across calls:\nfirst=%q\ngot=%q", first, got)
+		}
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr ||
 		(len(s) > 0 && len(substr) > 0 && indexOf(s, substr) >= 0))

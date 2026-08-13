@@ -1,8 +1,9 @@
-//go:build (darwin || linux) && arm64 && cgo && ggml
+//go:build (darwin || linux) && (arm64 || amd64) && cgo && ggml
 
 package ggml
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -85,6 +86,13 @@ func TestCPUQuantFastPaths(t *testing.T) {
 	g := &GGMLBackend{}
 	if !g.Available() {
 		t.Skip("GGML backend not available")
+	}
+	t.Logf("active ggml backend: %s", g.Name())
+	if runtime.GOARCH != "arm64" {
+		// dotprod/i8mm/NEON are ARM extensions. The equivalent question on
+		// other architectures is about AVX/AMX, which ggml also selects at
+		// build time, but none of these probes apply.
+		t.Skipf("ARM quant fast paths not applicable on %s", runtime.GOARCH)
 	}
 	dotprod, i8mm, neon := g.cpuFeatures()
 	t.Logf("ggml cpu fast paths: dotprod=%v i8mm=%v neon=%v", dotprod, i8mm, neon)

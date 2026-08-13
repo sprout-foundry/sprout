@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build cgo && ((darwin && arm64 && (mlx || ggml)) || (linux && ggml && (arm64 || amd64)))
 
 // Command llm_server exposes the local gomlx LLM engine over an
 // OpenAI-compatible HTTP API (POST /v1/chat/completions, GET /v1/models,

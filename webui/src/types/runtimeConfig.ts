@@ -35,4 +35,7 @@ export interface RuntimeConfig {
     email: string;
     tier: string;
   };
+
+  /** URLs of external plugin script bundles (IIFE) to load at bootstrap time. */
+  pluginScripts?: string[];
 }

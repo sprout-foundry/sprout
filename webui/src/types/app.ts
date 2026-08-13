@@ -76,8 +76,8 @@ export interface PerChatState {
   pendingEvents?: WsEvent[];
 }
 
-/** All navigable views in the editor (chat, editor, git, costs). */
-export type ViewType = 'chat' | 'editor' | 'git' | 'costs';
+/** All navigable views in the editor (chat, editor, git, costs) plus any plugin-registered view IDs. */
+export type ViewType = 'chat' | 'editor' | 'git' | 'costs' | (string & {});
 
 export interface AppState {
   isConnected: boolean;

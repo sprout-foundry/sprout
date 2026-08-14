@@ -1,4 +1,4 @@
-//go:build arm64 && cgo && (darwin || (linux && ggml))
+//go:build cgo && ((darwin && arm64) || (linux && ggml && (arm64 || amd64)))
 
 package qwen35
 
@@ -138,10 +138,17 @@ func freeAll(ys []tensor.Array) {
 	}
 }
 
+// fusedDeltaNet is the optional fused DeltaNet capability for backends
+// that can run the full recurrence in a single kernel (e.g. GGML on Linux).
+type fusedDeltaNet interface {
+	GatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, s tensor.Stream) (tensor.Array, tensor.Array, error)
+}
+
 // gatedDeltaUpdate implements the Gated DeltaNet recurrence over a full
 // sequence. On Apple Silicon (Metal available) it dispatches to a single
 // fused Metal kernel (fusedGatedDeltaUpdate) that scans the whole sequence in
-// one launch; otherwise it falls back to the exact sequential per-step ops
+// one launch; on Linux with GGML it dispatches to the GGML fused kernel if
+// available; otherwise it falls back to the exact sequential per-step ops
 // loop below (mirroring mlx-lm's gated_delta_ops reference implementation).
 //
 // Inputs (batch B):
@@ -164,6 +171,17 @@ func freeAll(ys []tensor.Array) {
 var deltaPathLogged = map[string]bool{}
 
 func gatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
+	// Fused kernel path for backends that support it (e.g. GGML on Linux).
+	// SPROUT_GGML_DELTA_FUSED=0 disables it to A/B against the eager path.
+	if os.Getenv("SPROUT_GGML_DELTA_FUSED") != "0" {
+		if fd, ok := b.(fusedDeltaNet); ok {
+			y, ns, err := fd.GatedDeltaUpdate(q, k, v, g, beta, state, stream)
+			if err == nil {
+				return y, ns, nil
+			}
+		}
+	}
+
 	// Fast path: one fused Metal kernel launch when available.
 	if b.Available() && os.Getenv("SPROUT_DELTA_OPS") == "" {
 		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, b, stream)
@@ -452,13 +470,6 @@ func gatedDeltaStep(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b t
 	return yCast, next, nil
 }
 
-// repeatToBackend is an optional backend capability for expanding a tensor
-// to a target shape (GGML's DeltaNet outer product needs it; MLX broadcasts
-// natively via 5D reshapes and never calls gatedDeltaStep4D).
-type repeatToBackend interface {
-	RepeatTo(a tensor.Array, target []int, s tensor.Stream) (tensor.Array, error)
-}
-
 // gatedDeltaStep4D is the GGML-compatible recurrence step. GGML tensors are
 // at most 4D and ggml_mul broadcasts natively via ne=1 dims, so the 5D
 // broadcast reshapes ([B,1,Hv,1,1] etc.) are replaced with 4D shapes that
@@ -524,24 +535,15 @@ func gatedDeltaStep4D(state, q, k, v, g, beta tensor.Array, B, Hv, Dv, Dk int, b
 	}
 	defer delta.Free()
 
-	// delta [B,Hv,Dv] → [B,Hv,Dv,1]; expand to full [B,Hv,Dv,Dk] so the
-	// outer product with k4 [B,Hv,1,Dk] is a plain elementwise mul.
+	// delta [B,Hv,Dv] → [B,Hv,Dv,1]; the outer product with k4 [B,Hv,1,Dk]
+	// is a batched matmul, not an elementwise mul after a Dk-way repeat
+	// (the repeat materialised [B,Hv,Dv,Dk] worth of delta, Dk× waste).
 	d4, err := b.Reshape(delta, []int{B, Hv, Dv, 1}, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("delta reshape: %w", err)
 	}
 	defer d4.Free()
-	var dFull tensor.Array
-	if _, ok := b.(repeatToBackend); ok {
-		dFull, err = b.(repeatToBackend).RepeatTo(d4, []int{B, Hv, Dv, Dk}, stream)
-		if err != nil {
-			return nil, nil, fmt.Errorf("delta repeat: %w", err)
-		}
-		defer dFull.Free()
-	} else {
-		dFull = d4 // MLX path never reaches here; keep d4 for non-repeat backends
-	}
-	outer, err := b.Multiply(dFull, k4, stream)
+	outer, err := b.MatMul(d4, k4, stream)
 	if err != nil {
 		return nil, nil, fmt.Errorf("outer: %w", err)
 	}

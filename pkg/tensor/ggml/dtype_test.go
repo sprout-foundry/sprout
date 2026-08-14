@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && ggml
+//go:build (darwin || linux) && (arm64 || amd64) && cgo && ggml
 
 package ggml
 

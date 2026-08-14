@@ -1,4 +1,4 @@
-//go:build arm64 && cgo && (darwin || (linux && ggml))
+//go:build cgo && ((darwin && arm64) || (linux && ggml && (arm64 || amd64)))
 
 // Package llm provides local LLM inference via MLX on Apple Silicon.
 // It implements the full transformer forward pass in Go via CGO — no Python,

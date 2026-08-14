@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && ggml
+//go:build (darwin || linux) && (arm64 || amd64) && cgo && ggml
 
 package ggml
 
@@ -161,4 +161,26 @@ func itoa(v []int) string {
 		s += string(rune('0' + x))
 	}
 	return s
+}
+
+// A caller passing a float weight in the quantized [out, in] layout used to
+// trip GGML_ASSERT and abort the process. It must surface as an error.
+func TestMatMulShapeMismatchIsAnError(t *testing.T) {
+	g := &GGMLBackend{}
+	if !g.Available() {
+		t.Skip("GGML backend not available")
+	}
+	var b tensor.Backend = g
+	s, _ := b.DefaultGPUStream()
+
+	const in, out = 64, 128
+	// Float weights must be pre-transposed to [in, out]; pass [out, in].
+	w, _ := b.NewArrayFromFloat32(fill(out*in, 1), []int{out, in})
+	defer w.Free()
+	x, _ := b.NewArrayFromFloat32(fill(in, 2), []int{1, 1, in})
+	defer x.Free()
+
+	if _, err := b.MatMul(x, w, s); err == nil {
+		t.Fatal("MatMul with a wrongly-laid-out float weight returned nil error")
+	}
 }

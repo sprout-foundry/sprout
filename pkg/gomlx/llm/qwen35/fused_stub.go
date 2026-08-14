@@ -1,4 +1,4 @@
-//go:build linux && arm64 && cgo && ggml
+//go:build linux && (arm64 || amd64) && cgo && ggml
 
 // Package qwen35 stub implementations for non-MLX backends. The fused Metal
 // kernel and compiled closure paths are unavailable — callers fall back to

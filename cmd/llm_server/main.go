@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && (mlx || ggml)
+//go:build cgo && ((darwin && arm64 && (mlx || ggml)) || (linux && ggml && (arm64 || amd64)))
 
 // Command llm_server exposes the local gomlx LLM engine over an
 // OpenAI-compatible HTTP API (POST /v1/chat/completions, GET /v1/models,
@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,7 +38,17 @@ func main() {
 	modelDir := flag.String("model", "", "path to the model directory (default: auto-select from ~/dev/llm-models by RAM)")
 	port := flag.Int("port", 18081, "port to listen on (default matches the sprout-local provider config)")
 	maxTokens := flag.Int("max-tokens", 512, "cap on max_tokens per request (0 = honor client value)")
+	pprofAddr := flag.String("pprof", "", "serve net/http/pprof on this address (e.g. 127.0.0.1:6060); off when empty")
 	flag.Parse()
+
+	if *pprofAddr != "" {
+		go func() {
+			log.Printf("pprof listening on http://%s/debug/pprof/", *pprofAddr)
+			if err := http.ListenAndServe(*pprofAddr, nil); err != nil {
+				log.Printf("pprof: %v", err)
+			}
+		}()
+	}
 
 	dir := *modelDir
 	if dir == "" {

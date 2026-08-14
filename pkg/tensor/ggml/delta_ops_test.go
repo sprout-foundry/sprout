@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && ggml
+//go:build (darwin || linux) && (arm64 || amd64) && cgo && ggml
 
 package ggml
 
@@ -140,37 +140,42 @@ func TestConv1DDepthwise(t *testing.T) {
 	var b tensor.Backend = g
 	s, _ := b.DefaultGPUStream()
 
-	const B, S, C, K = 1, 7, 5, 4
-	inData := fill(B*S*C, 21)
+	const S, C, K = 7, 5, 4
 	wData := fill(C*K, 22)
 
-	x, _ := b.NewArrayFromFloat32(inData, []int{B, S, C})
-	w, _ := b.NewArrayFromFloat32(wData, []int{C, K, 1})
+	for _, B := range []int{1, 2} {
+		inData := fill(B*S*C, 21)
 
-	got, err := b.Conv1D(x, w, 1, 0, 1, C, s)
-	if err != nil {
-		t.Fatalf("Conv1D: %v", err)
-	}
-	sout := S - K + 1
-	if gs := got.Shape(); !equalInts(gs, []int{B, sout, C}) {
-		t.Errorf("shape = %v, want [%d %d %d]", gs, B, sout, C)
-	}
-	out, err := got.Float32Data()
-	if err != nil {
-		t.Fatalf("Float32Data: %v", err)
-	}
+		x, _ := b.NewArrayFromFloat32(inData, []int{B, S, C})
+		w, _ := b.NewArrayFromFloat32(wData, []int{C, K, 1})
 
-	want := make([]float32, B*sout*C)
-	for so := 0; so < sout; so++ {
-		for c := 0; c < C; c++ {
-			var acc float32
-			for k := 0; k < K; k++ {
-				acc += inData[(so+k)*C+c] * wData[c*K+k]
-			}
-			want[so*C+c] = acc
+		got, err := b.Conv1D(x, w, 1, 0, 1, C, s)
+		if err != nil {
+			t.Fatalf("Conv1D B=%d: %v", B, err)
 		}
+		sout := S - K + 1
+		if gs := got.Shape(); !equalInts(gs, []int{B, sout, C}) {
+			t.Errorf("B=%d shape = %v, want [%d %d %d]", B, gs, B, sout, C)
+		}
+		out, err := got.Float32Data()
+		if err != nil {
+			t.Fatalf("Float32Data: %v", err)
+		}
+
+		want := make([]float32, B*sout*C)
+		for bb := 0; bb < B; bb++ {
+			for so := 0; so < sout; so++ {
+				for c := 0; c < C; c++ {
+					var acc float32
+					for k := 0; k < K; k++ {
+						acc += inData[(bb*S+so+k)*C+c] * wData[c*K+k]
+					}
+					want[(bb*sout+so)*C+c] = acc
+				}
+			}
+		}
+		checkClose(t, out, want, 1e-5, "Conv1D depthwise")
 	}
-	checkClose(t, out, want, 1e-5, "Conv1D depthwise")
 }
 
 // DeltaNet splits the conv output into q|k|v along the channel axis. Only the

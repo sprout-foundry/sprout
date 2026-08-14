@@ -173,7 +173,11 @@ func filterPrefix(candidates []string, prefix string) []string {
 // building CompletionCandidate structs, avoiding the allocation that
 // buildRichSlashCommandCompleter does. Used for Tab cycle completion
 // where descriptions aren't rendered.
-func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvider {
+//
+// When steerOnly is true, only commands that are safe to run mid-turn
+// (SteerCapable && SafeDuringSteer()) are offered, matching the steer
+// panel's execution gate.
+func buildSlashCommandCompleter(chatAgent *agent.Agent, steerOnly bool) console.CompletionProvider {
 	return func(line string, cursorPos int) []string {
 		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
 			return nil
@@ -181,10 +185,15 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 
 		registry := globalSlashCache.getRegistry()
 
+		names := registry.CompletionCandidates()
+		if steerOnly {
+			names = registry.SteerCompletionCandidates()
+		}
+
 		if !strings.ContainsAny(line, " \t") {
 			prefix := strings.ToLower(line[1:])
 			var matches []string
-			for _, name := range registry.CompletionCandidates() {
+			for _, name := range names {
 				if strings.HasPrefix(strings.ToLower(name), prefix) {
 					matches = append(matches, "/"+name)
 				}
@@ -198,6 +207,12 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 		cmd, exists := registry.GetCommand(cmdName)
 		if !exists {
 			return nil
+		}
+
+		if steerOnly {
+			if sc, ok := cmd.(agent_commands.SteerCapable); !ok || !sc.SafeDuringSteer() {
+				return nil
+			}
 		}
 
 		var args []string
@@ -229,7 +244,11 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 // buildRichSlashCommandCompleter returns a RichCompletionProvider that
 // includes command descriptions alongside the command names. Used by
 // the live autocomplete dropdown so the user sees what each command does.
-func buildRichSlashCommandCompleter(chatAgent *agent.Agent) console.RichCompletionProvider {
+//
+// When steerOnly is true, only commands that are safe to run mid-turn
+// (SteerCapable && SafeDuringSteer()) are offered, matching the steer
+// panel's execution gate.
+func buildRichSlashCommandCompleter(chatAgent *agent.Agent, steerOnly bool) console.RichCompletionProvider {
 	return func(line string, cursorPos int) []console.CompletionCandidate {
 		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
 			return nil
@@ -237,10 +256,15 @@ func buildRichSlashCommandCompleter(chatAgent *agent.Agent) console.RichCompleti
 
 		registry := globalSlashCache.getRegistry()
 
+		names := registry.CompletionCandidates()
+		if steerOnly {
+			names = registry.SteerCompletionCandidates()
+		}
+
 		if !strings.ContainsAny(line, " \t") {
 			prefix := strings.ToLower(line[1:])
 			var matches []console.CompletionCandidate
-			for _, name := range registry.CompletionCandidates() {
+			for _, name := range names {
 				if strings.HasPrefix(strings.ToLower(name), prefix) {
 					desc := ""
 					if cmd, ok := registry.GetCommand(name); ok {
@@ -262,6 +286,12 @@ func buildRichSlashCommandCompleter(chatAgent *agent.Agent) console.RichCompleti
 		cmd, exists := registry.GetCommand(cmdName)
 		if !exists {
 			return nil
+		}
+
+		if steerOnly {
+			if sc, ok := cmd.(agent_commands.SteerCapable); !ok || !sc.SafeDuringSteer() {
+				return nil
+			}
 		}
 
 		var args []string

@@ -1,4 +1,4 @@
-//go:build arm64 && cgo && (darwin || (linux && ggml))
+//go:build cgo && ((darwin && arm64) || (linux && ggml && (arm64 || amd64)))
 
 package qwen35
 
@@ -447,8 +447,11 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 		logPrefillLayerMem(-1, "after-layer-loop", seqLen)
 	}
 
+	// setLastHidden takes its own reference, so this pass must still release
+	// the one it holds. h is final here; the loop above frees each earlier h.
+	defer h.Free()
+
 	if err := q.setLastHidden(h, seqLen); err != nil {
-		h.Free()
 		return nil, err
 	}
 	if debugMem {
@@ -457,7 +460,6 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 
 	logits, err := q.computeLogitsLast(h, seqLen)
 	if err != nil {
-		h.Free()
 		return nil, err
 	}
 	if debugMem {
@@ -599,14 +601,14 @@ func (q *Qwen35) decodeInternalFromArray(idsArr tensor.Array, pos int, cache *ll
 		h = out
 	}
 
+	defer h.Free()
+
 	if err := q.setLastHidden(h, 1); err != nil {
-		h.Free()
 		return nil, err
 	}
 
 	logits, err := q.computeLogits(h)
 	if err != nil {
-		h.Free()
 		return nil, err
 	}
 	return logits, nil
@@ -760,15 +762,15 @@ func (q *Qwen35) ForwardPrefillArgmaxAll(ids []int, startPos int, cache *llm.KVC
 		h = out
 	}
 
+	defer h.Free()
+
 	if err := q.setLastHidden(h, seqLen); err != nil {
-		h.Free()
 		return nil, err
 	}
 
 	// Logits at every position: [1, seqLen, vocab].
 	logits, err := q.computeLogits(h)
 	if err != nil {
-		h.Free()
 		return nil, err
 	}
 	defer logits.Free()
@@ -1219,15 +1221,9 @@ func (q *Qwen35) swiglu(h tensor.Array, lw *layerWeights) (tensor.Array, error) 
 		log.Printf("qwen35: fused swiglu failed, falling back: %v", err)
 	}
 
-	gateSilu, err := llm.SiLU(gate, q.backend, s)
+	gated, err := llm.SwiGLU(up, gate, q.backend, s)
 	if err != nil {
-		return nil, fmt.Errorf("silu: %w", err)
-	}
-	defer gateSilu.Free()
-
-	gated, err := q.backend.Multiply(gateSilu, up, s)
-	if err != nil {
-		return nil, fmt.Errorf("gate multiply: %w", err)
+		return nil, fmt.Errorf("swiglu: %w", err)
 	}
 	defer gated.Free()
 

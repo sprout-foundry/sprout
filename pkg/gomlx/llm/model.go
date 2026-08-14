@@ -1,4 +1,4 @@
-//go:build arm64 && cgo && (darwin || (linux && ggml))
+//go:build cgo && ((darwin && arm64) || (linux && ggml && (arm64 || amd64)))
 
 package llm
 
@@ -19,6 +19,11 @@ import (
 // the generation loop (prefill → decode) and delegates the forward pass to
 // the Architecture implementation.
 type Model struct {
+	// inferJobs feeds the single OS thread all inference runs on; see
+	// onInferenceThread for why it must be exactly one thread.
+	inferJobs chan func()
+	inferOnce sync.Once
+
 	cfg       ModelConfig
 	backend   tensor.Backend
 	stream    tensor.Stream
@@ -383,7 +388,44 @@ func (m *Model) isStopToken(tokenID int) bool {
 // Generate drives the autoregressive generation loop, calling onToken for each
 // generated token ID (after filtering thinking tokens if applicable).
 // Returns when EOS is produced, maxTokens is reached, or context is cancelled.
+// Generate runs one generation. The work is dispatched to a single
+// long-lived OS thread (see inferenceThread) rather than running on whichever
+// goroutine called in.
+//
+// This matters more than it looks. ggml's CPU backend parallelises with
+// OpenMP, and GOMP builds its worker team per calling thread and never tears
+// it down. Locking a fresh OS thread per request therefore leaks a whole
+// worker team per request, and those abandoned teams keep spinning: with the
+// default active wait policy they starve the live team of cores. Measured on
+// a 12-core Snapdragon X Elite, throughput collapsed ~10x on the third
+// request (28 -> 2.7 tok/s on Qwen3-0.6B) and never recovered. Pinning all
+// inference to one thread keeps exactly one team alive.
 func (m *Model) Generate(ctx context.Context, prompt string, genCfg GenerateConfig, onToken func(tokenID int)) error {
+	return m.onInferenceThread(func() error {
+		return m.generate(ctx, prompt, genCfg, onToken)
+	})
+}
+
+// onInferenceThread runs fn on the model's dedicated inference thread.
+func (m *Model) onInferenceThread(fn func() error) error {
+	m.inferOnce.Do(func() {
+		m.inferJobs = make(chan func())
+		go func() {
+			// Held for the lifetime of the process: the OS thread identity is
+			// what GOMP keys its worker team on.
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			for job := range m.inferJobs {
+				job()
+			}
+		}()
+	})
+	done := make(chan error, 1)
+	m.inferJobs <- func() { done <- fn() }
+	return <-done
+}
+
+func (m *Model) generate(ctx context.Context, prompt string, genCfg GenerateConfig, onToken func(tokenID int)) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-//go:build (darwin || linux) && arm64 && cgo && ggml
+//go:build (darwin || linux) && (arm64 || amd64) && cgo && ggml
 
 // Package ggml provides CGO bindings to the GGML tensor library, enabling
 // GPU-accelerated compute on Metal (macOS), CUDA (NVIDIA), ROCm (AMD), and
@@ -14,14 +14,168 @@ package ggml
 #cgo darwin CFLAGS: -I/opt/homebrew/include
 #cgo linux CFLAGS: -I/usr/local/include
 #cgo darwin LDFLAGS: -L/opt/homebrew/lib -lggml -lggml-base -framework Metal -framework Foundation
-#cgo linux LDFLAGS: -L/usr/local/lib -lggml -lggml-base
+#cgo linux LDFLAGS: -L/usr/local/lib -lggml -lggml-base -lm
 
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <ggml.h>
 #include <ggml-backend.h>
 #include <ggml-alloc.h>
+
+#include <dlfcn.h>
+#include <math.h>
+
+// Byte-identical fused SiLU: replicates sigmoid (1/(1+exp(-x))) then x*sigmoid,
+// matching the ggml_sigmoid + ggml_mul sequence the fallback path used, so
+// output is bit-for-bit identical while collapsing two ops into one.
+void silu_f32(struct ggml_tensor * dst, const struct ggml_tensor * a, int ith, int nth, void * userdata) {
+    const float * x = (const float *) a->data;
+    float * y = (float *) dst->data;
+    const int64_t n = ggml_nelements(a);
+    for (int64_t i = ith; i < n; i += nth) {
+        float sig = 1.0f / (1.0f + expf(-x[i]));
+        y[i] = x[i] * sig;
+    }
+}
+
+// Byte-identical fused SwiGLU: (gate*sigmoid(gate))*up, matching
+// sigmoid + mul + mul. Collapses the three-op SwiGLU activation into one.
+void swiglu_f32(struct ggml_tensor * dst, const struct ggml_tensor * a, const struct ggml_tensor * b, int ith, int nth, void * userdata) {
+    const float * g = (const float *) a->data;
+    const float * u = (const float *) b->data;
+    float * y = (float *) dst->data;
+    const int64_t n = ggml_nelements(a);
+    for (int64_t i = ith; i < n; i += nth) {
+        float sig = 1.0f / (1.0f + expf(-g[i]));
+        float silu = g[i] * sig;
+        y[i] = silu * u[i];
+    }
+}
+
+struct ggml_tensor * ggml_silu_custom(struct ggml_context * ctx, struct ggml_tensor * a) {
+    return ggml_map_custom1(ctx, a, silu_f32, GGML_N_TASKS_MAX, NULL);
+}
+
+struct ggml_tensor * ggml_swiglu_custom(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
+    return ggml_map_custom2(ctx, a, b, swiglu_f32, GGML_N_TASKS_MAX, NULL);
+}
+
+// Fused Gated DeltaNet recurrence kernel.
+// Args via dst->src: [0]=q[B,S,Hk,Dk], [1]=k[B,S,Hk,Dk], [2]=v[B,S,Hv,Dv],
+// [3]=g[B,S,Hv], [4]=beta[B,S,Hv], [5]=state_in[B,Hv,Dv,Dk], [6]=state_out[B,Hv,Dv,Dk].
+// Output dst = y[B,S,Hv,Dv] in F32.
+// Parallelized across B*Hv*Dv; each thread processes one (b,hv,dv) row over all S steps.
+// Reductions over Dk use sequential double accumulation to match ggml_sum_rows byte-for-byte.
+void gated_delta_fused(struct ggml_tensor * dst, int ith, int nth, void * userdata) {
+    const float * q_data = (const float *)dst->src[0]->data;
+    const float * k_data = (const float *)dst->src[1]->data;
+    const float * v_data = (const float *)dst->src[2]->data;
+    const float * g_data = (const float *)dst->src[3]->data;
+    const float * beta_data = (const float *)dst->src[4]->data;
+    const float * state_data = (const float *)dst->src[5]->data;
+    float * so_data = (float *)dst->src[6]->data;
+    float * y_data = (float *)dst->data;
+
+    // GGML ne layout (column-major indexing):
+    // q/k: ne = [Dk, Hk, S, B], v: ne = [Dv, Hv, S, B]
+    // g/beta: ne = [Hv, S, B, 1], state: ne = [Dk, Dv, Hv, B]
+    int64_t Dk = dst->src[0]->ne[0], Hk = dst->src[0]->ne[1];
+    int64_t S = dst->src[0]->ne[2], B = dst->src[0]->ne[3];
+    int64_t Dv = dst->src[2]->ne[0], Hv = dst->src[2]->ne[1];
+    int64_t repeat = Hv / Hk;
+
+    // Row-major strides (all F32, element index = byte index / 4).
+    int64_t qk_stride = Hk * Dk; // per time step in q/k
+    int64_t v_stride = Hv * Dv;  // per time step in v/y
+    int64_t g_stride = Hv;       // per time step in g/beta
+
+    int64_t total = B * Hv * Dv;
+    for (int64_t idx = ith; idx < total; idx += nth) {
+        int dv = (int)(idx % Dv);
+        int hv = (int)((idx / Dv) % Hv);
+        int b = (int)(idx / (Dv * Hv));
+        int hk = (int)(hv / repeat);
+
+        // Thread-local state vector for this (b, hv, dv) across all dk.
+        float * state = alloca((size_t)Dk * sizeof(float));
+
+        // Load initial state: state[b,hv,dv,dk] → row-major index.
+        int64_t state_idx = b * Hv * Dv * Dk + hv * Dv * Dk + dv * Dk;
+        for (int dk = 0; dk < Dk; dk++) {
+            state[dk] = state_data[state_idx + dk];
+        }
+
+        // Time-step base indices (row-major).
+        int64_t q_idx = b * S * Hk * Dk + hk * Dk;
+        int64_t k_idx = q_idx; // Same layout as q.
+        int64_t v_idx = b * S * Hv * Dv + hv * Dv;
+        int64_t g_idx = b * S * Hv + hv;
+        int64_t beta_idx = g_idx; // Same layout as g.
+        int64_t y_idx = b * S * Hv * Dv + hv * Dv;
+
+        for (int t = 0; t < S; t++) {
+            float gt = g_data[g_idx];
+            float bt = beta_data[beta_idx];
+
+            // Decay: state *= g (elementwise).
+            for (int dk = 0; dk < Dk; dk++) {
+                state[dk] *= gt;
+            }
+
+            // kv_mem = sum_dk(state * k) — sequential left-to-right, double accumulation.
+            // Matches ggml_sum_rows → ggml_vec_sum_f32 (ggml_float = double).
+            double kv_sum = 0.0;
+            for (int dk = 0; dk < Dk; dk++) {
+                kv_sum += (double)(state[dk] * k_data[k_idx + dk]);
+            }
+            float kv_mem = (float)kv_sum;
+
+            // delta = (v - kv_mem) * beta.
+            float delta = (v_data[v_idx + dv] - kv_mem) * bt;
+
+            // state += k * delta, then y = sum_dk(state * q).
+            // Outer product is elementwise (MatMul with ne[0]=1 does a[0]*b[0]).
+            // y reduction uses the same sequential double accumulation as ggml_sum_rows.
+            double y_sum = 0.0;
+            for (int dk = 0; dk < Dk; dk++) {
+                state[dk] += k_data[k_idx + dk] * delta;
+                y_sum += (double)(state[dk] * q_data[q_idx + dk]);
+            }
+            y_data[y_idx + dv] = (float)y_sum;
+
+            g_idx += g_stride;
+            beta_idx += g_stride;
+            v_idx += v_stride;
+            q_idx += qk_stride;
+            k_idx += qk_stride;
+            y_idx += v_stride;
+        }
+
+        // Write final state_out[b,hv,dv,dk].
+        int64_t so_idx = state_idx;
+        for (int dk = 0; dk < Dk; dk++) {
+            so_data[so_idx + dk] = state[dk];
+        }
+    }
+}
+
+// Wrapper that creates the custom op node for the fused gated delta kernel.
+struct ggml_tensor * ggml_gated_delta(struct ggml_context * ctx, struct ggml_tensor ** args, int n_args) {
+    // args: [0]=q, [1]=k, [2]=v, [3]=g, [4]=beta, [5]=state, [6]=state_out.
+    // Output y: [B,S,Hv,Dv] → GGML ne [Dv,Hv,S,B] (same layout as v).
+    struct ggml_tensor * v = args[2];
+    return ggml_custom_4d(ctx, GGML_TYPE_F32, v->ne[0], v->ne[1], v->ne[2], v->ne[3],
+        args, n_args, gated_delta_fused, GGML_N_TASKS_MAX, NULL);
+}
+
+// The CPU backend is dlopened by ggml_backend_load_all, so its feature
+// predicates are not available at link time. Returns -1 when unresolved.
+int ggml_feat(const char * name) {
+    int (*fn)(void) = (int (*)(void)) dlsym(RTLD_DEFAULT, name);
+    return fn ? fn() : -1;
+}
 
 // Create init params.
 struct ggml_init_params ggml_make_params(size_t mem_size) {
@@ -131,13 +285,66 @@ struct ggml_tensor * get_src(struct ggml_tensor * t, int i) {
 }
 
 // Get total system RAM in bytes via sysconf.
+size_t ggml_ctx_used(struct ggml_context * ctx) { return ggml_used_mem(ctx); }
+
 size_t ggml_sysconf_page_size() { return (size_t)sysconf(_SC_PAGESIZE); }
 size_t ggml_sysconf_phys_pages() { return (size_t)sysconf(_SC_PHYS_PAGES); }
 
-// Create a temporary context for graph building. This is separate from the
+// A single reusable arena for per-op graph metadata, kept separate from the
 // main weight context so graph metadata doesn't corrupt weight tensors.
+// Letting ggml_init malloc its own arena per op costs an mmap/munmap pair,
+// which dominates the cost of a small op once the heap is warm; re-initing a
+// context over a buffer we already own costs nothing. ggml_free leaves a
+// caller-supplied mem_buffer alone, so the arena survives across ops.
+// Callers must serialise: one arena means one live temp context.
+static void * temp_arena = NULL;
+static size_t temp_arena_size = 0;
+
+// Op graph nodes live in their own arena so they can be reclaimed. They are
+// dead the moment evalOp copies its result into a pinned buffer, but a ggml
+// context cannot free individual tensors, so the whole arena is re-inited
+// once it fills. Reusing the same buffer keeps stale pointers mapped.
+static void * ops_arena = NULL;
+static size_t ops_arena_size = 0;
+
+struct ggml_context * ggml_new_ops_ctx(size_t mem_size) {
+    if (ops_arena_size < mem_size) {
+        free(ops_arena);
+        ops_arena = aligned_alloc(64, mem_size);
+        if (!ops_arena) { ops_arena_size = 0; return NULL; }
+        ops_arena_size = mem_size;
+    }
+    struct ggml_init_params params = { .mem_size = ops_arena_size, .mem_buffer = ops_arena, .no_alloc = true };
+    return ggml_init(params);
+}
+
 struct ggml_context * ggml_new_temp_ctx(size_t mem_size) {
-    struct ggml_init_params params = { .mem_size = mem_size, .mem_buffer = NULL, .no_alloc = true };
+    if (temp_arena_size < mem_size) {
+        free(temp_arena);
+        temp_arena = aligned_alloc(64, mem_size);
+        if (!temp_arena) { temp_arena_size = 0; return NULL; }
+        temp_arena_size = mem_size;
+    }
+    struct ggml_init_params params = { .mem_size = temp_arena_size, .mem_buffer = temp_arena, .no_alloc = true };
+    return ggml_init(params);
+}
+
+// Result-leaf tensor structs live in their own arena so they can be recycled
+// once a generation has consumed them. Same reuse strategy as ops_arena:
+// re-initing over the same buffer keeps the recycle cheap and stale pointers
+// mapped (they are only dereferenced through the live-result holder, which is
+// re-homed on recycle).
+static void * result_arena = NULL;
+static size_t result_arena_size = 0;
+
+struct ggml_context * ggml_new_result_ctx(size_t mem_size) {
+    if (result_arena_size < mem_size) {
+        free(result_arena);
+        result_arena = aligned_alloc(64, mem_size);
+        if (!result_arena) { result_arena_size = 0; return NULL; }
+        result_arena_size = mem_size;
+    }
+    struct ggml_init_params params = { .mem_size = result_arena_size, .mem_buffer = result_arena, .no_alloc = true };
     return ggml_init(params);
 }
 
@@ -154,20 +361,104 @@ size_t ggml_row_size_q4_0(int n) {
     return ggml_row_size(GGML_TYPE_Q4_0, n);
 }
 
-// Clear a tensor's data pointer (set to NULL) without freeing. Used after
-// freeing a graph allocator to prevent use-after-free.
-void ggml_tensor_clear_data(struct ggml_tensor * t) {
-    t->data = NULL;
+// Give a tensor its own backend buffer so it keeps its data for life. The
+// graph allocator skips tensors that already have data, so a pinned tensor
+// is never re-assigned a graph buffer and never needs re-uploading.
+ggml_backend_buffer_t ggml_pin_tensor(ggml_backend_t b, struct ggml_tensor * t) {
+    ggml_backend_buffer_t buf = ggml_backend_alloc_buffer(b, ggml_nbytes(t) + 64);
+    if (!buf) return NULL;
+    if (ggml_backend_tensor_alloc(buf, t, ggml_backend_buffer_get_base(buf)) != GGML_STATUS_SUCCESS) {
+        ggml_backend_buffer_free(buf);
+        return NULL;
+    }
+    return buf;
 }
 
-// Release a tensor's backend buffer reference and data pointer. After the
-// graph allocator is freed, all tensors it owned (including input weights
-// that were given graph buffers) hold dangling pointers. Clear them so the
-// next gallocr allocation re-assigns fresh buffers instead of writing into
-// freed memory.
-void ggml_tensor_release(struct ggml_tensor * t) {
-    t->buffer = NULL;
-    t->data = NULL;
+// ggml validates mul_mat operands with GGML_ASSERT, which aborts the whole
+// process on a shape mismatch. Check first so a caller error surfaces as a Go
+// error with the shapes in it instead of killing the server.
+int ggml_can_mul_mat_check(const struct ggml_tensor * a, const struct ggml_tensor * b) {
+    return (a->ne[0] == b->ne[0])
+        && (b->ne[2] % a->ne[2] == 0)
+        && (b->ne[3] % a->ne[3] == 0);
+}
+
+// After a batch is computed, each result holds its data in its own pinned
+// buffer, but its op and src pointers still describe how it was produced —
+// and those sources live in the ops arena, which is recycled. Severing them
+// turns the result into a plain leaf, so a later graph treats it as an input
+// instead of walking into freed memory trying to recompute it.
+void ggml_make_leaf(struct ggml_tensor * t) {
+    if (!t) return;
+    t->op = GGML_OP_NONE;
+    for (int i = 0; i < GGML_MAX_SRC; i++) t->src[i] = NULL;
+    t->view_src = NULL;
+    t->view_offs = 0;
+}
+
+// ggml_new_graph defaults to 2048 nodes; a batched flush can exceed that.
+struct ggml_cgraph * ggml_new_graph_big(struct ggml_context * ctx, size_t size) {
+    return ggml_new_graph_custom(ctx, size, false);
+}
+
+// Copy src into dst backend-to-backend, but only when the layouts genuinely
+// agree — ggml_backend_tensor_copy asserts rather than returning an error, so
+// the preconditions are checked here and 0 is returned to signal "use the
+// slow path" instead of aborting the process.
+int ggml_copy_tensor_checked(struct ggml_tensor * src, struct ggml_tensor * dst) {
+    if (!src || !dst || src->type != dst->type) return 0;
+    for (int i = 0; i < GGML_MAX_DIMS; i++) {
+        if (src->ne[i] != dst->ne[i]) return 0;
+    }
+    if (!ggml_is_contiguous(src) || !ggml_is_contiguous(dst)) return 0;
+    if (ggml_nbytes(src) != ggml_nbytes(dst)) return 0;
+    ggml_backend_tensor_copy(src, dst);
+    return 1;
+}
+
+// Allocate a buffer of an explicit size and bind the tensor into it. Sizing
+// by bucket rather than by exact need is what lets buffers be pooled.
+ggml_backend_buffer_t ggml_pin_tensor_sized(ggml_backend_t b, struct ggml_tensor * t, size_t size) {
+    ggml_backend_buffer_t buf = ggml_backend_alloc_buffer(b, size);
+    if (!buf) return NULL;
+    if (ggml_backend_tensor_alloc(buf, t, ggml_backend_buffer_get_base(buf)) != GGML_STATUS_SUCCESS) {
+        ggml_backend_buffer_free(buf);
+        return NULL;
+    }
+    return buf;
+}
+
+// Bind a tensor into an existing buffer, so a released buffer can be reused
+// for a later tensor of no greater size instead of going back to malloc.
+int ggml_bind_tensor(ggml_backend_buffer_t buf, struct ggml_tensor * t) {
+    if (!buf || !t) return 0;
+    return ggml_backend_tensor_alloc(buf, t, ggml_backend_buffer_get_base(buf)) == GGML_STATUS_SUCCESS;
+}
+
+// Detach a tensor from its buffer without freeing the buffer.
+void ggml_unbind_tensor(struct ggml_tensor * t) {
+    if (t) { t->buffer = NULL; t->data = NULL; }
+}
+
+// Release a pinned buffer and detach the tensor from it.
+void ggml_unpin_tensor(ggml_backend_buffer_t buf, struct ggml_tensor * t) {
+    if (t) { t->buffer = NULL; t->data = NULL; }
+    if (buf) ggml_backend_buffer_free(buf);
+}
+
+// Raise the CPU backend's thread count. The setter is an optional per-backend
+// entry point, so it is resolved through the registry rather than linked
+// directly; returns 0 when the active backend does not expose it.
+int ggml_set_threads(ggml_backend_t b, int n) {
+    ggml_backend_dev_t dev = ggml_backend_get_device(b);
+    if (!dev) return 0;
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    if (!reg) return 0;
+    ggml_backend_set_n_threads_t fn = (ggml_backend_set_n_threads_t)
+        ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+    if (!fn) return 0;
+    fn(b, n);
+    return 1;
 }
 */
 import "C"
@@ -177,8 +468,12 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
+	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/sprout-foundry/sprout/pkg/tensor"
@@ -188,7 +483,96 @@ func init() {
 	tensor.RegisterBackend(&GGMLBackend{})
 	debugEnabled = os.Getenv("SPROUT_GGML_DEBUG") != ""
 	statsEnabled = os.Getenv("SPROUT_GGML_STATS") != ""
+	if os.Getenv("SPROUT_GGML_LEAK") != "" {
+		leakEnabled = true
+		startLeakReporter()
+	}
+	if v := os.Getenv("SPROUT_GGML_BATCH_LIMIT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			batchLimit = n
+		}
+	}
 }
+
+// livePins counts tensors currently holding a pinned buffer. A forward pass
+// should return to its starting count; a per-request climb means op results
+// are never being freed. SPROUT_GGML_LEAK=1 reports it periodically.
+var (
+	batchOps     int64
+	opHist       sync.Map // op name -> *int64, cumulative; leak mode only
+	batchFlushes int64
+	batchForced  int64
+	livePins     int64
+	livePinBytes int64
+	leakBackend  *GGMLBackend
+	leakEnabled  bool
+)
+
+func startLeakReporter() {
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			type oc struct {
+				name string
+				n    int64
+			}
+			var ops []oc
+			var total int64
+			opHist.Range(func(k, v any) bool {
+				n := atomic.LoadInt64(v.(*int64))
+				ops = append(ops, oc{k.(string), n})
+				total += n
+				return true
+			})
+			sort.Slice(ops, func(i, j int) bool { return ops[i].n > ops[j].n })
+			for i, e := range ops {
+				if i >= 12 {
+					break
+				}
+				fmt.Printf("ggml: op %-14s %8d  %4.1f%%\n", e.name, e.n, 100*float64(e.n)/float64(total))
+			}
+			fmt.Printf("ggml: total ops=%d\n", total)
+			o, f, fo := atomic.LoadInt64(&batchOps), atomic.LoadInt64(&batchFlushes), atomic.LoadInt64(&batchForced)
+			if f > 0 {
+				fmt.Printf("ggml: batch ops=%d flushes=%d (%.1f ops/flush, %d hit the limit)\n", o, f, float64(o)/float64(f), fo)
+			}
+			fmt.Printf("ggml: live pinned tensors=%d bytes=%.1fMB\n",
+				atomic.LoadInt64(&livePins), float64(atomic.LoadInt64(&livePinBytes))/1e6)
+			if leakBackend != nil {
+				fmt.Printf("ggml: leaf ctx used=%.1fMB of 512MB\n",
+					float64(C.ggml_ctx_used(leakBackend.leafCtxPtr()))/1e6)
+				var arrays int
+				leakBackend.arrayMap.Range(func(_, _ any) bool { arrays++; return true })
+				fmt.Printf("ggml: arrayMap entries=%d\n", arrays)
+				hist := map[string]int{}
+				leakBackend.pinned.Range(func(_, v any) bool {
+					hist[v.(pinnedBuf).origin]++
+					return true
+				})
+				type kv struct {
+					k string
+					n int
+				}
+				var rows []kv
+				for k, n := range hist {
+					rows = append(rows, kv{k, n})
+				}
+				sort.Slice(rows, func(i, j int) bool { return rows[i].n > rows[j].n })
+				for i, r := range rows {
+					if i >= 6 {
+						break
+					}
+					fmt.Printf("ggml:   origin %-16s %d\n", r.k, r.n)
+				}
+			}
+		}
+	}()
+}
+
+// tempArenaBytes sizes the reusable arena that holds one op's graph
+// metadata. Ops are evaluated eagerly, so a graph is a handful of nodes on
+// top of ggml_new_graph's fixed 2048-node table — megabytes, not hundreds.
+const tempArenaBytes = 16 * 1024 * 1024
 
 // debugEnabled gates the per-op shape tracing. A single forward pass emits
 // thousands of lines, so it stays off unless SPROUT_GGML_DEBUG is set.
@@ -241,41 +625,130 @@ type GGMLBackend struct {
 	once    sync.Once
 	backend C.ggml_backend_t
 	ctx     unsafe.Pointer
-	name    string
-	initErr error
+	opsCtx  unsafe.Pointer
+	// resultCtx holds result-leaf tensor structs. Unlike ctx (permanent, for
+	// weights), it is recycled in place once its live results are all freed,
+	// so a long generation does not exhaust the arena with dead structs.
+	resultCtx unsafe.Pointer
+	// resultLive counts result-leaf tensors still referenced by a live Array.
+	resultLive int64
+	name       string
+	threads    int
+	initErr    error
 
-	// tensorData maps C tensor pointers to their Go-side raw data, so
-	// that Eval() can set input tensor data after the graph allocator
-	// assigns backend buffers. Key: uintptr of *C.ggml_tensor.
-	tensorData sync.Map // map[uintptr][]byte
+	// tempMu serialises use of the shared per-op graph arena.
+	tempMu sync.Mutex
+
+	// pinOrigin labels the next pin with the op that produced it, for leak
+	// diagnosis. Written only under tempMu.
+	pinOrigin string
+
+	// pending holds ops whose graphs have been built but not yet computed.
+	// Batching them into one graph is what removes the per-op cgo transition
+	// and OpenMP fork/join, which together measured ~66% of decode.
+	// Guarded by tempMu.
+	pending []pendingOp
+	// deferUnpin holds buffers whose Arrays were freed while still pending;
+	// the graph still writes into them, so they are released after the flush.
+	deferUnpin []*C.struct_ggml_tensor
+
+	// bufPool recycles released backend buffers by capacity bucket. Every op
+	// result gets its own buffer, so without reuse a decode step performs
+	// thousands of malloc/free pairs; glibc's heap fragments under that and
+	// allocation alone grew to ~35% of decode time in a CPU profile.
+	bufMu   sync.Mutex
+	bufPool map[int][]unsafe.Pointer
+	bufHeld int
+
+	// pinned maps C tensor pointers to the dedicated backend buffer holding
+	// their data. Leaf tensors own their buffer for life, so their contents
+	// survive across graph allocations and are uploaded exactly once.
+	// Key: uintptr of *C.ggml_tensor.
+	pinned sync.Map // map[uintptr]unsafe.Pointer (ggml_backend_buffer_t)
 
 	// arrayMap maps C tensor pointers to the Array that wraps them, so
 	// logicalShape can be propagated through op chains.
 	arrayMap sync.Map // map[uintptr]*Array
-}
 
-func (g *GGMLBackend) lookupData(t *C.struct_ggml_tensor) ([]byte, bool) {
-	v, ok := g.tensorData.Load(uintptr(unsafe.Pointer(t)))
-	if !ok {
-		return nil, false
-	}
-	return v.([]byte), true
+	// convTapsCache caches the K depthwise-conv tap tensors for a weight
+	// tensor, so the in-graph Conv1D fast path does not rebuild them per call.
+	// Key: uintptr of the weight's C tensor.
+	convTapsCache sync.Map // map[uintptr][]*C.struct_ggml_tensor
 }
 
 // registerArray associates an Array with its C tensor pointer.
 func (g *GGMLBackend) registerArray(a *Array) {
-	if a != nil && a.tensor != nil {
-		g.arrayMap.Store(uintptr(unsafe.Pointer(a.tensor)), a)
+	if a != nil && a.cTensor() != nil {
+		g.arrayMap.Store(uintptr(unsafe.Pointer(a.cTensor())), a)
 	}
 }
 
-// registerTensorData associates Go-side data with a C tensor pointer.
-func (g *GGMLBackend) registerTensorData(t *C.struct_ggml_tensor, data []byte) {
-	if t != nil && len(data) > int(C.tensor_nbytes(t)) {
-		fmt.Printf("ggml: registerTensorData OVER %d bytes > nbytes %d (ne=[%d %d %d %d] type=%d)\n",
-			len(data), int(C.tensor_nbytes(t)), int64(t.ne[0]), int64(t.ne[1]), int64(t.ne[2]), int64(t.ne[3]), int(t._type))
+// pinTensorData gives a leaf tensor its own backend buffer and uploads data
+// into it once. The Go slice is not retained: every later read goes through
+// ggml_backend_tensor_get and every later op reads the pinned buffer in
+// place, so a weight is copied out of Go memory exactly once instead of on
+// every op that consumes it.
+func (g *GGMLBackend) pinTensorData(t *C.struct_ggml_tensor, data []byte) error {
+	if t == nil {
+		return fmt.Errorf("ggml: pin on nil tensor")
 	}
-	g.tensorData.Store(uintptr(unsafe.Pointer(t)), data)
+	nbytes := int(C.tensor_nbytes(t))
+	if len(data) > nbytes {
+		return fmt.Errorf("ggml: pin of %d bytes exceeds tensor nbytes %d (ne=[%d %d %d %d] type=%d)",
+			len(data), nbytes, int64(t.ne[0]), int64(t.ne[1]), int64(t.ne[2]), int64(t.ne[3]), int(t._type))
+	}
+
+	capacity := bufCapacityFor(nbytes)
+	var buf C.ggml_backend_buffer_t
+	if reused, ok := g.bufPoolGet(capacity); ok {
+		if C.ggml_bind_tensor(reused, t) != 0 {
+			buf = reused
+		} else {
+			C.ggml_unpin_tensor(reused, nil)
+		}
+	}
+	if buf == nil {
+		buf = C.ggml_pin_tensor_sized(g.backend, t, C.size_t(capacity))
+		if buf == nil {
+			return fmt.Errorf("ggml: failed to allocate %d-byte buffer for tensor", capacity)
+		}
+	}
+	if len(data) > 0 {
+		C.ggml_backend_tensor_set(t, unsafe.Pointer(&data[0]), 0, C.size_t(len(data)))
+	}
+	g.pinned.Store(uintptr(unsafe.Pointer(t)), pinnedBuf{buf: unsafe.Pointer(buf), capacity: capacity, origin: g.pinOrigin})
+	atomic.AddInt64(&livePins, 1)
+	atomic.AddInt64(&livePinBytes, int64(capacity))
+	return nil
+}
+
+// cpuFeatures reports which ARM quant fast paths the ggml build detected.
+func (g *GGMLBackend) cpuFeatures() (dotprod, i8mm, neon bool) {
+	if g.ensureInit() != nil {
+		return false, false, false
+	}
+	feat := func(n string) bool {
+		cs := C.CString(n)
+		defer C.free(unsafe.Pointer(cs))
+		return C.ggml_feat(cs) > 0
+	}
+	return feat("ggml_cpu_has_dotprod"), feat("ggml_cpu_has_matmul_int8"), feat("ggml_cpu_has_neon")
+}
+
+// unpin returns a tensor's pinned buffer to the pool. Used for the
+// short-lived inputs that ops build themselves (RoPE positions, attention
+// masks) and for every op result when its last Array is freed.
+func (g *GGMLBackend) unpin(t *C.struct_ggml_tensor) {
+	if t == nil {
+		return
+	}
+	if v, ok := g.pinned.LoadAndDelete(uintptr(unsafe.Pointer(t))); ok {
+		pb := v.(pinnedBuf)
+		C.ggml_unbind_tensor(t)
+		atomic.AddInt64(&livePins, -1)
+		atomic.AddInt64(&livePinBytes, -int64(pb.capacity))
+		g.bufPoolPut(C.ggml_backend_buffer_t(pb.buf), pb.capacity)
+	}
 }
 
 func (g *GGMLBackend) ensureInit() error {
@@ -292,11 +765,58 @@ func (g *GGMLBackend) ensureInit() error {
 			g.initErr = fmt.Errorf("ggml: failed to init context")
 			return
 		}
+		opsCtx := C.ggml_new_ops_ctx(C.size_t(opsArenaBytes))
+		if opsCtx == nil {
+			C.ggml_free(ctx)
+			C.ggml_backend_free(b)
+			g.initErr = fmt.Errorf("ggml: failed to init op context")
+			return
+		}
+		resultCtx := C.ggml_new_result_ctx(C.size_t(resultArenaBytes))
+		if resultCtx == nil {
+			C.ggml_free(opsCtx)
+			C.ggml_free(ctx)
+			C.ggml_backend_free(b)
+			g.initErr = fmt.Errorf("ggml: failed to init result context")
+			return
+		}
 		g.backend = b
 		g.ctx = unsafe.Pointer(ctx)
+		g.opsCtx = unsafe.Pointer(opsCtx)
+		g.resultCtx = unsafe.Pointer(resultCtx)
 		g.name = C.GoString(C.backend_name(b))
+		leakBackend = g
+		g.threads = pickThreadCount()
+		if C.ggml_set_threads(b, C.int(g.threads)) == 0 {
+			g.threads = 0
+		}
 	})
 	return g.initErr
+}
+
+// pickThreadCount chooses the CPU thread count. On a 12-core Snapdragon X
+// Elite (Qwen3.5-4B, Q4_0): 4 threads ~8.5 tok/s, 6 threads ~8.6, 8 threads
+// ~1.4 (collapse). The collapse past 6 is oversubscription — ggml's OpenMP
+// workers spin by default and, together with Go's own runtime threads, swamp
+// the cores. llama.cpp (pure C++, no Go runtime) scales to 8 threads
+// (~22 tok/s) on the same model, so the matmul is NOT memory-saturated at 4
+// threads: the Go+GGML thread interaction is the limiter. Cap at 4 as the
+// safe workaround; SPROUT_GGML_THREADS overrides for experiments.
+const maxAutoThreads = 4
+
+func pickThreadCount() int {
+	if v := os.Getenv("SPROUT_GGML_THREADS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	if n := runtime.NumCPU(); n < maxAutoThreads {
+		if n < 1 {
+			return 1
+		}
+		return n
+	}
+	return maxAutoThreads
 }
 
 func (g *GGMLBackend) Name() string {
@@ -311,15 +831,139 @@ func (g *GGMLBackend) Available() bool {
 	return g.ensureInit() == nil
 }
 
-// ctxPtr returns the C context as a typed pointer.
+// ctxPtr returns the context op wrappers build graph nodes in. It is
+// recycled (see recycleOpsCtx), so nothing allocated here may outlive the
+// evalOp that consumes it.
 func (g *GGMLBackend) ctxPtr() *C.struct_ggml_context {
+	return (*C.struct_ggml_context)(g.opsCtx)
+}
+
+// leafCtxPtr returns the permanent context that holds weights. It is never
+// recycled for the life of the backend.
+func (g *GGMLBackend) leafCtxPtr() *C.struct_ggml_context {
 	return (*C.struct_ggml_context)(g.ctx)
 }
 
+// resultCtxPtr returns the recyclable context that holds result-leaf tensor
+// structs. See maybeRecycleResultCtx.
+func (g *GGMLBackend) resultCtxPtr() *C.struct_ggml_context {
+	return (*C.struct_ggml_context)(g.resultCtx)
+}
+
+// opsArenaBytes sizes the recyclable graph-node arena. One op needs a handful
+// of tensors; this absorbs many ops between resets.
+const opsArenaBytes = 64 * 1024 * 1024
+
+// resultArenaBytes sizes the recyclable result-leaf arena. Result structs are
+// ~GGML_TENSOR_SIZE (~400 bytes) each; this holds a few thousand live/queued
+// results between recycles without pinning a large chunk of address space.
+const resultArenaBytes = 64 * 1024 * 1024
+
+// recycleOpsCtx re-inits the op arena once it is half full. Called at the end
+// of evalOp, the one point where no graph node is still needed: the result is
+// copied into its own buffer and the wrapper's nodes are dead.
+func (g *GGMLBackend) recycleOpsCtx() {
+	ctx := (*C.struct_ggml_context)(g.opsCtx)
+	if ctx == nil || uint64(C.ggml_ctx_used(ctx)) < opsArenaBytes/2 {
+		return
+	}
+	C.ggml_free(ctx)
+	g.opsCtx = unsafe.Pointer(C.ggml_new_ops_ctx(C.size_t(opsArenaBytes)))
+}
+
+// maybeRecycleResultCtx re-homes live result-leaf tensors into a fresh context
+// and frees the old one once it is half full. It must run at a flush boundary:
+// by then no pending graph nodes or deferred unpins still reference the old
+// structs. Live results (the just-flushed batch plus any retained KV-cache
+// state) are re-bound to their existing pinned buffers, so no data is copied
+// and every Array wrapper keeps working.
+func (g *GGMLBackend) maybeRecycleResultCtx() {
+	ctx := g.resultCtxPtr()
+	if ctx == nil || uint64(C.ggml_ctx_used(ctx)) < resultArenaBytes/2 {
+		return
+	}
+
+	// Snapshot live result tensors before resetting the arena: reading their
+	// ne/type after ggml_new_result_ctx would see overwritten memory.
+	type live struct {
+		arr    *Array
+		typ    C.enum_ggml_type
+		ne     [4]C.int64_t
+		pinned pinnedBuf
+		ok     bool
+	}
+	var lives []live
+	g.arrayMap.Range(func(_, v any) bool {
+		a := v.(*Array)
+		if !a.result || a.tRef == nil || a.tRef.t == nil {
+			return true
+		}
+		t := a.tRef.t
+		var l live
+		l.arr = a
+		l.typ = t._type
+		for i := 0; i < 4; i++ {
+			l.ne[i] = C.tensor_ne(t, C.int(i))
+		}
+		if pb, ok := g.pinned.Load(uintptr(unsafe.Pointer(t))); ok {
+			l.pinned = pb.(pinnedBuf)
+			l.ok = true
+		}
+		lives = append(lives, l)
+		return true
+	})
+
+	fresh := C.ggml_new_result_ctx(C.size_t(resultArenaBytes))
+	if fresh == nil {
+		return
+	}
+
+	for i := range lives {
+		l := &lives[i]
+		nt := C.ggml_new_tensor((*C.struct_ggml_context)(unsafe.Pointer(fresh)), l.typ, C.int(4), &l.ne[0])
+		if nt == nil {
+			continue
+		}
+		oldKey := uintptr(unsafe.Pointer(l.arr.tRef.t))
+		if l.ok {
+			C.ggml_bind_tensor(C.ggml_backend_buffer_t(l.pinned.buf), nt)
+		}
+		newKey := uintptr(unsafe.Pointer(nt))
+		if l.ok {
+			g.pinned.Delete(oldKey)
+			g.pinned.Store(newKey, l.pinned)
+		}
+		g.arrayMap.Delete(oldKey)
+		g.arrayMap.Store(newKey, l.arr)
+		l.arr.tRef.t = nt
+		l.arr.tensor = nt
+	}
+
+	C.ggml_free(ctx)
+	g.resultCtx = unsafe.Pointer(fresh)
+	atomic.StoreInt64(&g.resultLive, int64(len(lives)))
+}
+
 // Array wraps a GGML tensor.
+// tensorRef is a shared pointer to a C tensor. Result-leaf tensors live in a
+// recyclable context, so re-homing them to a fresh context on recycle must
+// update every Array wrapper (original + RetainArray'd copies) that points at
+// the old struct. Sharing this holder instead of the raw pointer lets a single
+// write reach all wrappers.
+type tensorRef struct {
+	t *C.struct_ggml_tensor
+}
+
 type Array struct {
 	backend *GGMLBackend
 	tensor  *C.struct_ggml_tensor
+	// tRef is the shared holder for this tensor. When non-nil it is the
+	// authoritative source (cTensor reads it); result leaves keep it so a
+	// context recycle can move them without touching every wrapper.
+	tRef *tensorRef
+	// result marks a result-leaf tensor that lives in the recyclable result
+	// context (as opposed to a weight in the permanent leaf context).
+	result  bool
 	hasData bool
 	// alloc is the graph allocator that owns the backend buffer for this
 	// tensor's graph. Kept alive until Free() so the data persists.
@@ -331,6 +975,9 @@ type Array struct {
 	// the MLX convention preserves ([1, seqLen, hidden]). Ops that need to
 	// preserve rank set this explicitly.
 	logicalShape []int
+	// pending is set while this Array's node is queued but not yet computed.
+	// Reading it forces a flush.
+	pending bool
 	// refs counts the Array wrappers sharing this C tensor (see RetainArray).
 	// The backend's tensorData/arrayMap registries pin the result buffer of
 	// every op, so the last wrapper to be freed must evict them — otherwise a
@@ -338,11 +985,67 @@ type Array struct {
 	refs *int32
 }
 
+// pinnedBuf is a tensor's backend buffer plus the bucket capacity it was
+// allocated at, which is what it must be returned to.
+type pinnedBuf struct {
+	buf      unsafe.Pointer
+	capacity int
+	origin   string
+}
+
+// bufPoolMaxBytes caps how much memory the recycler holds. Past this, buffers
+// are returned to the allocator rather than retained.
+const bufPoolMaxBytes = 512 << 20
+
+// bufCapacityFor rounds an allocation up to a power-of-two bucket (with a
+// floor, since most op results are small) so that differently-sized results
+// can share buffers. The op graph repeats every token, so a handful of
+// buckets covers essentially every allocation after the first step.
+func bufCapacityFor(nbytes int) int {
+	const minCap = 4096
+	c := minCap
+	for c < nbytes+64 {
+		c <<= 1
+	}
+	return c
+}
+
+func (g *GGMLBackend) bufPoolGet(capacity int) (C.ggml_backend_buffer_t, bool) {
+	g.bufMu.Lock()
+	defer g.bufMu.Unlock()
+	free := g.bufPool[capacity]
+	if len(free) == 0 {
+		return nil, false
+	}
+	p := free[len(free)-1]
+	g.bufPool[capacity] = free[:len(free)-1]
+	g.bufHeld -= capacity
+	return C.ggml_backend_buffer_t(p), true
+}
+
+func (g *GGMLBackend) bufPoolPut(buf C.ggml_backend_buffer_t, capacity int) {
+	if buf == nil {
+		return
+	}
+	g.bufMu.Lock()
+	if g.bufHeld+capacity > bufPoolMaxBytes {
+		g.bufMu.Unlock()
+		C.ggml_unpin_tensor(buf, nil)
+		return
+	}
+	if g.bufPool == nil {
+		g.bufPool = make(map[int][]unsafe.Pointer)
+	}
+	g.bufPool[capacity] = append(g.bufPool[capacity], unsafe.Pointer(buf))
+	g.bufHeld += capacity
+	g.bufMu.Unlock()
+}
+
 // newArray wraps a freshly created C tensor with a reference count of one.
 func (g *GGMLBackend) newArray(t *C.struct_ggml_tensor) *Array {
 	refs := new(int32)
 	*refs = 1
-	return &Array{backend: g, tensor: t, refs: refs}
+	return &Array{backend: g, tensor: t, tRef: &tensorRef{t: t}, refs: refs}
 }
 
 // Stream is a no-op for GGML (graph compute is synchronous).
@@ -376,7 +1079,7 @@ func fromGGMLType(gt C.enum_ggml_type) tensor.Dtype {
 // ── tensor.Array implementation ────────────────────────────────────
 
 func (a *Array) Shape() []int {
-	if a.tensor == nil {
+	if a.cTensor() == nil {
 		return nil
 	}
 	// GGML pads ne[] to 4 dims and ggml_n_dims collapses trailing 1s
@@ -386,10 +1089,10 @@ func (a *Array) Shape() []int {
 		return a.logicalShape
 	}
 	// Collect GGML dims (ne[0] = contiguous, ne[1] = rows, ...)
-	nd := int(C.tensor_ndims(a.tensor))
+	nd := int(C.tensor_ndims(a.cTensor()))
 	var ne []int
 	for i := 0; i < nd; i++ {
-		n := int(C.tensor_ne(a.tensor, C.int(i)))
+		n := int(C.tensor_ne(a.cTensor(), C.int(i)))
 		if n <= 0 {
 			break
 		}
@@ -404,10 +1107,10 @@ func (a *Array) Shape() []int {
 }
 
 func (a *Array) Dtype() tensor.Dtype {
-	if a.tensor == nil {
+	if a.cTensor() == nil {
 		return tensor.Float32
 	}
-	return fromGGMLType(a.tensor._type)
+	return fromGGMLType(a.cTensor()._type)
 }
 
 func (a *Array) Ndim() int {
@@ -421,10 +1124,10 @@ func (a *Array) Ndim() int {
 }
 
 func (a *Array) Size() int {
-	if a.tensor == nil {
+	if a.cTensor() == nil {
 		return 0
 	}
-	return int(C.tensor_nelements(a.tensor))
+	return int(C.tensor_nelements(a.cTensor()))
 }
 
 // AsyncEval is a synchronous alias on GGML: unlike MLX, this backend has no
@@ -433,19 +1136,36 @@ func (a *Array) Size() int {
 func (a *Array) AsyncEval() error { return a.Eval() }
 
 func (a *Array) Eval() error {
-	if a.hasData || a.tensor == nil {
+	if a.cTensor() == nil {
+		return nil
+	}
+	if a.pending {
+		if err := a.backend.flush(); err != nil {
+			return err
+		}
+		return nil
+	}
+	if a.hasData {
 		return nil
 	}
 	g := a.backend
 
+	// A pinned leaf already holds its data in its own buffer.
+	if C.tensor_buffer(a.cTensor()) != nil {
+		a.hasData = true
+		return nil
+	}
+
 	// Use a temp context for graph building to avoid polluting the main arena.
-	tempCtx := C.ggml_new_temp_ctx(256 * 1024 * 1024)
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+	tempCtx := C.ggml_new_temp_ctx(tempArenaBytes)
 	if tempCtx == nil {
 		return fmt.Errorf("ggml: failed to create temp context for Eval")
 	}
 
 	graph := C.ggml_new_graph(tempCtx)
-	C.ggml_build_forward_expand(graph, a.tensor)
+	C.ggml_build_forward_expand(graph, a.cTensor())
 
 	alloc := C.ggml_gallocr_new(C.ggml_backend_get_default_buffer_type(g.backend))
 	if !C.ggml_gallocr_alloc_graph(alloc, graph) {
@@ -453,8 +1173,6 @@ func (a *Array) Eval() error {
 		C.ggml_free(tempCtx)
 		return fmt.Errorf("ggml: graph allocation failed")
 	}
-
-	g.setRegisteredDataRecursive(a.tensor)
 
 	status := C.ggml_backend_graph_compute(g.backend, graph)
 	C.ggml_free(tempCtx)
@@ -470,69 +1188,41 @@ func (a *Array) Eval() error {
 	return nil
 }
 
-// clearDataRecursive walks the tensor graph and sets data=NULL on all tensors
-// that have registered Go-side data. Called after freeing a graph allocator
-// to prevent use-after-free when the next evalOp encounters stale data pointers.
-func (g *GGMLBackend) clearDataRecursive(t *C.struct_ggml_tensor) {
-	if t == nil {
-		return
-	}
-	if _, ok := g.lookupData(t); ok {
-		C.ggml_tensor_clear_data(t)
-		C.ggml_tensor_release(t)
-	}
-	maxSrc := int(C.ggml_max_src())
-	for i := 0; i < maxSrc; i++ {
-		src := C.get_src(t, C.int(i))
-		if src != nil {
-			g.clearDataRecursive(src)
-		}
-	}
-}
-
-func (g *GGMLBackend) setRegisteredDataRecursive(t *C.struct_ggml_tensor) {
-	// Set data for this tensor if registered AND it owns a data buffer.
-	// View tensors (reshape/slice/permute results) share their source's
-	// buffer; setting data on them writes through to the wrong location.
-	// The source tensors are visited separately by the recursion.
-	if data, ok := g.lookupData(t); ok {
-		if C.tensor_buffer(t) != nil {
-			nbytes := int(C.tensor_nbytes(t))
-			if len(data) <= nbytes {
-				C.ggml_backend_tensor_set(t, unsafe.Pointer(&data[0]), 0, C.size_t(len(data)))
-			} else {
-				fmt.Printf("ggml: setRegisteredDataRecursive SKIP %d bytes > tensor nbytes %d (ne=[%d %d %d %d] type=%d)\n",
-					len(data), nbytes, int64(t.ne[0]), int64(t.ne[1]), int64(t.ne[2]), int64(t.ne[3]), int(t._type))
-			}
-		}
-	}
-	// Recurse into source tensors
-	maxSrc := int(C.ggml_max_src())
-	for i := 0; i < maxSrc; i++ {
-		src := C.get_src(t, C.int(i))
-		if src != nil {
-			g.setRegisteredDataRecursive(src)
-		}
-	}
-}
-
 func (a *Array) Free() {
 	if a.alloc != nil {
 		C.ggml_gallocr_free(a.alloc)
 		a.alloc = nil
 	}
-	// Drop the backend's registry entries once the last wrapper goes away, so
-	// the op's result buffer becomes collectable. Without this a single
-	// forward pass pins every intermediate tensor it produced.
-	if a.refs != nil && a.tensor != nil && a.backend != nil {
+	t := a.cTensor()
+	// Release the pinned buffer and registry entry once the last wrapper goes
+	// away. Without this a single forward pass retains every intermediate it
+	// ever produced.
+	if a.refs != nil && t != nil && a.backend != nil {
 		if atomic.AddInt32(a.refs, -1) == 0 {
-			key := uintptr(unsafe.Pointer(a.tensor))
-			a.backend.tensorData.Delete(key)
-			a.backend.arrayMap.Delete(key)
+			b := a.backend
+			// Callers free op inputs the moment the op returns, which is safe
+			// under eager evaluation but not while a graph is queued: that
+			// graph still has to read them. Hold every release until the
+			// flush rather than trying to work out which buffers are
+			// reachable from the pending nodes.
+			b.tempMu.Lock()
+			deferred := len(b.pending) > 0
+			if deferred {
+				b.deferUnpin = append(b.deferUnpin, t)
+			}
+			b.tempMu.Unlock()
+			if !deferred {
+				b.unpin(t)
+			}
+			b.arrayMap.Delete(uintptr(unsafe.Pointer(t)))
+			if a.result {
+				atomic.AddInt64(&b.resultLive, -1)
+			}
 		}
 		a.refs = nil
 	}
 	a.tensor = nil
+	a.tRef = nil
 }
 
 func (a *Array) Float32Data() ([]float32, error) {
@@ -540,12 +1230,12 @@ func (a *Array) Float32Data() ([]float32, error) {
 		return nil, err
 	}
 	n := a.Size()
-	if n == 0 || a.tensor == nil {
+	if n == 0 || a.cTensor() == nil {
 		return nil, fmt.Errorf("ggml: Float32Data on empty/null tensor")
 	}
 	data := make([]float32, n)
 	nbytes := C.size_t(n * 4)
-	C.ggml_backend_tensor_get(a.tensor, unsafe.Pointer(&data[0]), 0, nbytes)
+	C.ggml_backend_tensor_get(a.cTensor(), unsafe.Pointer(&data[0]), 0, nbytes)
 	return data, nil
 }
 
@@ -556,7 +1246,7 @@ func (a *Array) Int64Data() ([]int64, error) {
 	n := a.Size()
 	data := make([]int64, n)
 	nbytes := C.size_t(n * 8)
-	C.ggml_backend_tensor_get(a.tensor, unsafe.Pointer(&data[0]), 0, nbytes)
+	C.ggml_backend_tensor_get(a.cTensor(), unsafe.Pointer(&data[0]), 0, nbytes)
 	return data, nil
 }
 
@@ -567,7 +1257,7 @@ func (a *Array) Uint32Data() ([]uint32, error) {
 	n := a.Size()
 	data := make([]uint32, n)
 	nbytes := C.size_t(n * 4)
-	C.ggml_backend_tensor_get(a.tensor, unsafe.Pointer(&data[0]), 0, nbytes)
+	C.ggml_backend_tensor_get(a.cTensor(), unsafe.Pointer(&data[0]), 0, nbytes)
 	return data, nil
 }
 
@@ -577,15 +1267,15 @@ func (a *Array) RawBytes() ([]byte, error) {
 	if err := a.Eval(); err != nil {
 		return nil, err
 	}
-	if a.tensor == nil {
+	if a.cTensor() == nil {
 		return nil, fmt.Errorf("ggml: RawBytes on nil tensor")
 	}
-	totalBytes := int(C.tensor_nbytes(a.tensor))
+	totalBytes := int(C.tensor_nbytes(a.cTensor()))
 	if totalBytes == 0 {
 		return []byte{}, nil
 	}
 	out := make([]byte, totalBytes)
-	C.ggml_backend_tensor_get(a.tensor, unsafe.Pointer(&out[0]), 0, C.size_t(totalBytes))
+	C.ggml_backend_tensor_get(a.cTensor(), unsafe.Pointer(&out[0]), 0, C.size_t(totalBytes))
 	return out, nil
 }
 
@@ -597,6 +1287,42 @@ func (g *GGMLBackend) DefaultStream() (tensor.Stream, error)    { return Stream{
 
 // ── tensor.Backend: array creation ─────────────────────────────────
 
+// newResultArray creates a result-leaf tensor in the recyclable result context
+// from raw data, mirroring NewArrayFromFloat32 but for transient op outputs
+// (conv, gather, reductions, splits, zeros, arange) rather than permanent
+// weights. Result structs get recycled by maybeRecycleResultCtx, so they do
+// not accumulate in the permanent weight context.
+func (g *GGMLBackend) newResultArray(raw []byte, shape []int, gt C.enum_ggml_type) (*Array, error) {
+	if err := g.ensureInit(); err != nil {
+		return nil, err
+	}
+	t := createTensorIn(g.resultCtxPtr(), shape, gt)
+	if t == nil {
+		return nil, fmt.Errorf("ggml: failed to create result tensor")
+	}
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
+	arr := g.newArray(t)
+	arr.result = true
+	atomic.AddInt64(&g.resultLive, 1)
+	arr.logicalShape = append([]int(nil), shape...)
+	g.registerArray(arr)
+	return arr, nil
+}
+
+func (g *GGMLBackend) newResultF32(data []float32, shape []int) (tensor.Array, error) {
+	raw := make([]byte, len(data)*4)
+	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*4))
+	return g.newResultArray(raw, shape, C.GGML_TYPE_F32)
+}
+
+func (g *GGMLBackend) newResultI32(data []int32, shape []int) (tensor.Array, error) {
+	raw := make([]byte, len(data)*4)
+	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*4))
+	return g.newResultArray(raw, shape, C.GGML_TYPE_I32)
+}
+
 func (g *GGMLBackend) NewArrayFromFloat32(data []float32, shape []int) (tensor.Array, error) {
 	if err := g.ensureInit(); err != nil {
 		return nil, err
@@ -607,7 +1333,9 @@ func (g *GGMLBackend) NewArrayFromFloat32(data []float32, shape []int) (tensor.A
 	}
 	raw := make([]byte, len(data)*4)
 	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*4))
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	// Preserve the caller's shape. GGML would collapse leading/trailing 1s
 	// (e.g. [1, seqLen] → 1D), but the model layer expects the MLX rank
@@ -683,7 +1411,9 @@ func (g *GGMLBackend) NewArrayQ4_0(data []float32, shape []int) (tensor.Array, e
 	}
 	raw := C.GoBytes(cBuf, C.int(int(written)))
 	C.free(cBuf)
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -700,7 +1430,9 @@ func (g *GGMLBackend) NewArrayFromInt64(data []int64, shape []int) (tensor.Array
 	}
 	raw := make([]byte, len(data)*8)
 	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*8))
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -717,7 +1449,9 @@ func (g *GGMLBackend) NewArrayFromInt32(data []int32, shape []int) (tensor.Array
 	}
 	raw := make([]byte, len(data)*4)
 	copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), len(data)*4))
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -743,7 +1477,9 @@ func (g *GGMLBackend) NewArrayFromBytes(data []byte, shape []int, dtype tensor.D
 	}
 	raw := make([]byte, len(data))
 	copy(raw, data)
-	g.registerTensorData(t, raw)
+	if err := g.pinTensorData(t, raw); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	arr.logicalShape = append([]int(nil), shape...)
 	g.registerArray(arr)
@@ -814,10 +1550,12 @@ func (g *GGMLBackend) NewScalarInt32(v int) (tensor.Array, error) {
 	if err := g.ensureInit(); err != nil {
 		return nil, err
 	}
-	t := C.ggml_new_tensor_1d(g.ctxPtr(), C.GGML_TYPE_I32, 1)
+	t := C.ggml_new_tensor_1d(g.leafCtxPtr(), C.GGML_TYPE_I32, 1)
 	data := make([]byte, 4)
 	*(*int32)(unsafe.Pointer(&data[0])) = int32(v)
-	g.registerTensorData(t, data)
+	if err := g.pinTensorData(t, data); err != nil {
+		return nil, err
+	}
 	arr := g.newArray(t)
 	g.registerArray(arr)
 	return arr, nil
@@ -825,7 +1563,7 @@ func (g *GGMLBackend) NewScalarInt32(v int) (tensor.Array, error) {
 
 func (g *GGMLBackend) Zeros(shape []int, dtype tensor.Dtype, s tensor.Stream) (tensor.Array, error) {
 	data := make([]float32, product(shape))
-	return g.NewArrayFromFloat32(data, shape)
+	return g.newResultF32(data, shape)
 }
 
 func (g *GGMLBackend) Arange(start, stop, step float64, dtype tensor.Dtype, s tensor.Stream) (tensor.Array, error) {
@@ -834,7 +1572,7 @@ func (g *GGMLBackend) Arange(start, stop, step float64, dtype tensor.Dtype, s te
 	for i := 0; i < n; i++ {
 		data[i] = float32(start + float64(i)*step)
 	}
-	return g.NewArrayFromFloat32(data, []int{n})
+	return g.newResultF32(data, []int{n})
 }
 
 func (g *GGMLBackend) RetainArray(a tensor.Array) tensor.Array {
@@ -852,7 +1590,9 @@ func (g *GGMLBackend) RetainArray(a tensor.Array) tensor.Array {
 	}
 	return &Array{
 		backend:      ga.backend,
-		tensor:       ga.tensor,
+		tensor:       ga.cTensor(),
+		tRef:         ga.tRef,
+		result:       ga.result,
 		hasData:      ga.hasData,
 		refs:         ga.refs,
 		logicalShape: append([]int(nil), ga.logicalShape...),
@@ -866,7 +1606,7 @@ func (g *GGMLBackend) AsType(a tensor.Array, dtype tensor.Dtype, s tensor.Stream
 	ctx := g.ctxPtr()
 	shape := ga.Shape()
 	target := createTensor(g, shape, gt)
-	result := C.ggml_cpy(ctx, ga.tensor, target)
+	result := C.ggml_cpy(ctx, ga.cTensor(), target)
 	return g.evalOp(result)
 }
 
@@ -880,20 +1620,24 @@ func product(shape []int) int {
 	return p
 }
 
-func createTensor(g *GGMLBackend, shape []int, gt C.enum_ggml_type) *C.struct_ggml_tensor {
+func createTensorIn(ctx *C.struct_ggml_context, shape []int, gt C.enum_ggml_type) *C.struct_ggml_tensor {
 	switch len(shape) {
 	case 1:
-		return C.ggml_new_tensor_1d(g.ctxPtr(), gt, C.int64_t(shape[0]))
+		return C.ggml_new_tensor_1d(ctx, gt, C.int64_t(shape[0]))
 	case 2:
 		// GGML ne[0] = contiguous dim = cols; ne[1] = rows
-		return C.ggml_new_tensor_2d(g.ctxPtr(), gt, C.int64_t(shape[1]), C.int64_t(shape[0]))
+		return C.ggml_new_tensor_2d(ctx, gt, C.int64_t(shape[1]), C.int64_t(shape[0]))
 	case 3:
-		return C.ggml_new_tensor_3d(g.ctxPtr(), gt, C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
+		return C.ggml_new_tensor_3d(ctx, gt, C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
 	case 4:
-		return C.ggml_new_tensor_4d(g.ctxPtr(), gt, C.int64_t(shape[3]), C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
+		return C.ggml_new_tensor_4d(ctx, gt, C.int64_t(shape[3]), C.int64_t(shape[2]), C.int64_t(shape[1]), C.int64_t(shape[0]))
 	default:
 		return nil
 	}
+}
+
+func createTensor(g *GGMLBackend, shape []int, gt C.enum_ggml_type) *C.struct_ggml_tensor {
+	return createTensorIn(g.leafCtxPtr(), shape, gt)
 }
 
 func shapeToNE(shape []int) []C.int64_t {
@@ -908,18 +1652,186 @@ func shapeToNE(shape []int) []C.int64_t {
 	return ne
 }
 
-func (a *Array) cTensor() *C.struct_ggml_tensor { return a.tensor }
+func (a *Array) cTensor() *C.struct_ggml_tensor {
+	if a.tRef != nil {
+		return a.tRef.t
+	}
+	return a.tensor
+}
 
-// scalarF32 creates a 1-element F32 tensor from a Go float32.
+// scalarF32 creates a 1-element F32 tensor from a Go float32. The caller
+// must unpin it once the op that consumes it has been evaluated.
 func (g *GGMLBackend) scalarF32(v float32) *C.struct_ggml_tensor {
 	ctx := g.ctxPtr()
 	t := C.ggml_new_tensor_1d(ctx, C.GGML_TYPE_F32, 1)
 	data := []byte{0, 0, 0, 0}
 	*(*float32)(unsafe.Pointer(&data[0])) = v
-	// Use registerTensorData — evalOp's setRegisteredDataRecursive will
-	// copy this into the per-op graph allocator's buffer.
-	g.registerTensorData(t, data)
+	if err := g.pinTensorData(t, data); err != nil {
+		debugf("ggml: scalarF32 pin failed: %v\n", err)
+	}
 	return t
+}
+
+// pendingOp pairs a queued graph node with the Array that will expose it.
+type pendingOp struct {
+	node *C.struct_ggml_tensor
+	arr  *Array
+}
+
+// batchEnabled turns on deferred evaluation. Batched evaluation removes the
+// per-op graph build/alloc/compute/copy overhead and measured ~34% faster
+// decode on a Snapdragon X Elite (Qwen3.5-4B), so it is on by default.
+// SPROUT_GGML_BATCH=0 restores eager evaluation for debugging.
+var batchEnabled = os.Getenv("SPROUT_GGML_BATCH") != "0"
+
+// batchLimit caps how many ops accumulate before a forced flush, bounding
+// both graph size and how much pinned memory pending results hold.
+// SPROUT_GGML_BATCH_LIMIT overrides for experiments (e.g. 1024 batches a whole
+// decode step into a single graph).
+var batchLimit = 64
+
+// graphNodeCap sizes the flush graph. Each queued op expands to a handful of
+// nodes once its source chain is walked.
+const graphNodeCap = 16384
+
+// flush computes every pending op in a single graph. Caller must hold tempMu.
+func (g *GGMLBackend) flushLocked() error {
+	if len(g.pending) == 0 {
+		return nil
+	}
+	atomic.AddInt64(&batchFlushes, 1)
+	tempCtx := C.ggml_new_temp_ctx(tempArenaBytes)
+	if tempCtx == nil {
+		return fmt.Errorf("ggml: failed to create temp context for flush")
+	}
+	graph := C.ggml_new_graph_big(tempCtx, C.size_t(graphNodeCap))
+	if graph == nil {
+		C.ggml_free(tempCtx)
+		return fmt.Errorf("ggml: failed to create batch graph")
+	}
+	for _, p := range g.pending {
+		C.ggml_build_forward_expand(graph, p.node)
+	}
+
+	alloc := C.ggml_gallocr_new(C.ggml_backend_get_default_buffer_type(g.backend))
+	if !C.ggml_gallocr_alloc_graph(alloc, graph) {
+		C.ggml_gallocr_free(alloc)
+		C.ggml_free(tempCtx)
+		return fmt.Errorf("ggml: batch graph allocation failed (%d ops)", len(g.pending))
+	}
+	status := C.ggml_backend_graph_compute(g.backend, graph)
+	C.ggml_gallocr_free(alloc)
+	C.ggml_free(tempCtx)
+	if status != C.GGML_STATUS_SUCCESS {
+		return fmt.Errorf("ggml: batch graph compute failed (status %d)", int(status))
+	}
+
+	for _, p := range g.pending {
+		// Sever the node from its (about to be recycled) sources; it now owns
+		// its data and must behave as a leaf from here on.
+		C.ggml_make_leaf(p.node)
+		if p.arr != nil {
+			p.arr.hasData = true
+			p.arr.pending = false
+		}
+	}
+	g.pending = g.pending[:0]
+
+	// Results are materialised; the graph nodes are dead and any Array freed
+	// mid-batch can now release its buffer.
+	for _, t := range g.deferUnpin {
+		g.unpin(t)
+	}
+	g.deferUnpin = g.deferUnpin[:0]
+	g.recycleOpsCtx()
+	g.maybeRecycleResultCtx()
+	return nil
+}
+
+// flush computes any queued ops.
+func (g *GGMLBackend) flush() error {
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+	return g.flushLocked()
+}
+
+// enqueueOp defers an op instead of computing it now. The node's output is
+// pinned up front so the graph allocator leaves it alone and writes the
+// result straight into the buffer the Array will expose.
+func (g *GGMLBackend) enqueueOp(opResult *C.struct_ggml_tensor) (*Array, error) {
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+
+	// Views can claim contiguity while keeping the source's strides, so make
+	// the result contiguous — in the recyclable result context, since it must
+	// outlive this call and survive until the flush.
+	compute := C.ggml_cont(g.resultCtxPtr(), opResult)
+	if compute == nil {
+		return nil, fmt.Errorf("ggml: cont failed")
+	}
+	resultShape := g.tensorShape(compute)
+	if int(C.tensor_nbytes(compute)) > 0 {
+		if leakEnabled {
+			g.pinOrigin = C.GoString(C.tensor_op_name(opResult))
+			c, _ := opHist.LoadOrStore(g.pinOrigin, new(int64))
+			atomic.AddInt64(c.(*int64), 1)
+		}
+		if err := g.pinTensorData(compute, nil); err != nil {
+			return nil, err
+		}
+	}
+	arr := g.newArray(compute)
+	arr.result = true
+	atomic.AddInt64(&g.resultLive, 1)
+	arr.logicalShape = resultShape
+	// Same rank-preserving propagation the eager path does: GGML collapses
+	// trailing 1s, which loses the MLX rank convention. Must happen here,
+	// while opResult's source chain is still intact.
+	switch int(C.tensor_op(opResult)) {
+	case int(C.GGML_OP_ADD), int(C.GGML_OP_SUB), int(C.GGML_OP_MUL), int(C.GGML_OP_DIV),
+		int(C.GGML_OP_UNARY), int(C.GGML_OP_SQRT), int(C.GGML_OP_SQR),
+		int(C.GGML_OP_RMS_NORM), int(C.GGML_OP_SOFT_MAX),
+		int(C.GGML_OP_ROPE), int(C.GGML_OP_SCALE), int(C.GGML_OP_CPY):
+		if src := C.get_src(opResult, 0); src != nil {
+			if in := g.findArrayWithShape(src); in != nil {
+				arr.logicalShape = append([]int(nil), in.logicalShape...)
+			}
+		}
+	}
+	arr.pending = true
+	g.registerArray(arr)
+	g.pending = append(g.pending, pendingOp{node: compute, arr: arr})
+	atomic.AddInt64(&batchOps, 1)
+
+	if len(g.pending) >= batchLimit {
+		atomic.AddInt64(&batchForced, 1)
+		if err := g.flushLocked(); err != nil {
+			return nil, err
+		}
+	}
+	return arr, nil
+}
+
+// evalOpUnpin evaluates an op, then releases the transient inputs the op
+// wrapper built for itself (scalars, causal masks, position ids). Those are
+// never handed back to the caller, so nothing else will free their buffers.
+func (g *GGMLBackend) evalOpUnpin(node *C.struct_ggml_tensor, transient ...*C.struct_ggml_tensor) (*Array, error) {
+	arr, err := g.evalOp(node)
+	for _, t := range transient {
+		if t == nil {
+			continue
+		}
+		if batchEnabled {
+			// The op has only been queued: the graph still has to read these
+			// inputs, so their buffers cannot be recycled until it runs.
+			g.tempMu.Lock()
+			g.deferUnpin = append(g.deferUnpin, t)
+			g.tempMu.Unlock()
+			continue
+		}
+		g.unpin(t)
+	}
+	return arr, err
 }
 
 // evalOp builds a single-op graph, allocates, sets input data, computes,
@@ -935,11 +1847,16 @@ func (g *GGMLBackend) scalarF32(v float32) *C.struct_ggml_tensor {
 // Uses a TEMPORARY GGML context for graph building, separate from the main
 // weight context, so graph metadata never overwrites weight tensor structs.
 func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
+	if batchEnabled {
+		return g.enqueueOp(opResult)
+	}
 	// Build the graph in a TEMPORARY context. Graphs are ~64KB each and
 	// accumulate in the main context arena, eventually corrupting tensor
 	// metadata. By using a temp context, we keep the main arena clean for
 	// tensor structs only.
-	tempCtx := C.ggml_new_temp_ctx(256 * 1024 * 1024)
+	g.tempMu.Lock()
+	defer g.tempMu.Unlock()
+	tempCtx := C.ggml_new_temp_ctx(tempArenaBytes)
 	if tempCtx == nil {
 		return nil, fmt.Errorf("ggml: failed to create temp context")
 	}
@@ -959,8 +1876,6 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 		return nil, fmt.Errorf("ggml: graph allocation failed")
 	}
 
-	g.setRegisteredDataRecursive(compute)
-
 	status := C.ggml_backend_graph_compute(g.backend, graph)
 	if status != C.GGML_STATUS_SUCCESS {
 		C.ggml_gallocr_free(alloc)
@@ -968,37 +1883,60 @@ func (g *GGMLBackend) evalOp(opResult *C.struct_ggml_tensor) (*Array, error) {
 		return nil, fmt.Errorf("ggml: graph compute failed (status %d)", int(status))
 	}
 
-	// Read the computed result into Go memory, then free the graph allocator.
-	resultNbytes := int(C.tensor_nbytes(compute))
-	resultData := make([]byte, resultNbytes)
-	if resultNbytes > 0 {
-		C.ggml_backend_tensor_get(compute, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
-	}
 	// Capture the shape and type BEFORE freeing the temp context (the
 	// contiguous tensor may live there).
+	resultNbytes := int(C.tensor_nbytes(compute))
 	resultShape := g.tensorShape(compute)
 	resultType := compute._type
-	C.ggml_gallocr_free(alloc)
-	// The allocator assigned buffers to EVERY tensor in the graph, including
-	// input leaf tensors from previous evalOps. Those tensors now hold
-	// dangling buffer/data pointers; clear them so the next gallocr
-	// allocation re-assigns fresh buffers. Registered Go-side data is
-	// re-copied by setRegisteredDataRecursive on the next use.
-	g.clearDataRecursive(compute)
-	C.ggml_free(tempCtx)
 
-	// Create a FRESH leaf tensor in the main context and register the result
-	// data. This Array owns its data; freeing it can't hurt other arrays.
-	leaf := createTensor(g, resultShape, resultType)
+	// Recycle the result context (if nearly full) before allocating this op's
+	// result leaf, so the leaf always lands in a fresh context and is never
+	// invalidated by the recycle.
+	g.maybeRecycleResultCtx()
+
+	// Create a FRESH leaf tensor in the recyclable result context and move the
+	// result into it. This Array owns its buffer; freeing it can't hurt other
+	// arrays. The move goes buffer-to-buffer: staging it through a Go []byte
+	// per op made evalOp the largest single source of garbage in the process,
+	// and GC was costing ~30% of decode in a CPU profile.
+	leaf := createTensorIn(g.resultCtxPtr(), resultShape, resultType)
 	if leaf == nil {
+		C.ggml_gallocr_free(alloc)
+		C.ggml_free(tempCtx)
 		return nil, fmt.Errorf("ggml: evalOp result tensor creation failed")
 	}
-	if resultNbytes > 0 {
-		g.registerTensorData(leaf, resultData)
+	if leakEnabled {
+		// C.GoString allocates; only pay it when diagnosing a leak.
+		g.pinOrigin = C.GoString(C.tensor_op_name(opResult))
 	}
+	var resultData []byte
+	if resultNbytes > 0 {
+		if err := g.pinTensorData(leaf, nil); err != nil {
+			C.ggml_gallocr_free(alloc)
+			C.ggml_free(tempCtx)
+			return nil, err
+		}
+		if C.ggml_copy_tensor_checked(compute, leaf) == 0 {
+			// Layouts disagree; fall back to staging through Go memory.
+			resultData = make([]byte, resultNbytes)
+			C.ggml_backend_tensor_get(compute, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
+			C.ggml_backend_tensor_set(leaf, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
+		}
+	}
+	C.ggml_gallocr_free(alloc)
+	C.ggml_free(tempCtx)
+
+	g.recycleOpsCtx()
+
 	arr := g.newArray(leaf)
+	arr.result = true
+	atomic.AddInt64(&g.resultLive, 1)
 	arr.logicalShape = resultShape
 	if statsEnabled {
+		if resultData == nil && resultNbytes > 0 {
+			resultData = make([]byte, resultNbytes)
+			C.ggml_backend_tensor_get(leaf, unsafe.Pointer(&resultData[0]), 0, C.size_t(resultNbytes))
+		}
 		logResultStats(C.GoString(C.tensor_op_name(opResult)), resultShape, resultType, resultData)
 	}
 	// Propagate logicalShape from the primary input for RANK-PRESERVING ops
@@ -1069,12 +2007,12 @@ func (g *GGMLBackend) tensorShape(t *C.struct_ggml_tensor) []int {
 }
 
 func (g *GGMLBackend) Add(a, b tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_add(g.ctxPtr(), a.(*Array).tensor, b.(*Array).tensor))
+	return g.evalOp(C.ggml_add(g.ctxPtr(), a.(*Array).cTensor(), b.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Subtract(a, b tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	ta := a.(*Array).tensor
-	tb := b.(*Array).tensor
+	ta := a.(*Array).cTensor()
+	tb := b.(*Array).cTensor()
 	debugf("ggml: Sub aShape=%v aNe=[%d %d %d %d] bShape=%v bNe=[%d %d %d %d]\n",
 		a.Shape(), int64(ta.ne[0]), int64(ta.ne[1]), int64(ta.ne[2]), int64(ta.ne[3]),
 		b.Shape(), int64(tb.ne[0]), int64(tb.ne[1]), int64(tb.ne[2]), int64(tb.ne[3]))
@@ -1082,8 +2020,8 @@ func (g *GGMLBackend) Subtract(a, b tensor.Array, s tensor.Stream) (tensor.Array
 }
 
 func (g *GGMLBackend) Multiply(a, b tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	ta := a.(*Array).tensor
-	tb := b.(*Array).tensor
+	ta := a.(*Array).cTensor()
+	tb := b.(*Array).cTensor()
 	// Elementwise mul is commutative. GGML requires the SECOND operand to be
 	// broadcastable to the FIRST (can_repeat(b, a)); when the caller passes
 	// the larger tensor second (e.g. [32] * [1,S,32]), swap so the smaller
@@ -1123,7 +2061,7 @@ func canRepeat(b, a *C.struct_ggml_tensor) bool {
 // broadcast both ways in one call.
 func (g *GGMLBackend) RepeatTo(a tensor.Array, target []int, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// Map row-major target to GGML ne.
 	nd := len(target)
 	rev := make([]C.int64_t, 4)
@@ -1146,14 +2084,14 @@ func (g *GGMLBackend) RepeatTo(a tensor.Array, target []int, s tensor.Stream) (t
 }
 
 func (g *GGMLBackend) Divide(a, b tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_div(g.ctxPtr(), a.(*Array).tensor, b.(*Array).tensor))
+	return g.evalOp(C.ggml_div(g.ctxPtr(), a.(*Array).cTensor(), b.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Maximum(a, b tensor.Array, s tensor.Stream) (tensor.Array, error) {
 	// GGML has no max op; compose: max(a,b) = a + relu(b-a)
 	ctx := g.ctxPtr()
-	ta := a.(*Array).tensor
-	tb := b.(*Array).tensor
+	ta := a.(*Array).cTensor()
+	tb := b.(*Array).cTensor()
 	diff := C.ggml_sub(ctx, tb, ta)
 	relu := C.ggml_relu(ctx, diff)
 	return g.evalOp(C.ggml_add(ctx, ta, relu))
@@ -1162,64 +2100,212 @@ func (g *GGMLBackend) Maximum(a, b tensor.Array, s tensor.Stream) (tensor.Array,
 // ── tensor.Backend: elementwise unary ──────────────────────────────
 
 func (g *GGMLBackend) Abs(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_abs(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_abs(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Exp(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_exp(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_exp(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Log(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_log(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_log(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Log1p(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// log(1 + x) = log(1+x); GGML has no log1p, compose: add scalar then log
 	one := g.scalarF32(1.0)
-	return g.evalOp(C.ggml_log(ctx, C.ggml_add(ctx, t, one)))
+	return g.evalOpUnpin(C.ggml_log(ctx, C.ggml_add(ctx, t, one)), one)
 }
 
 func (g *GGMLBackend) Sqrt(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_sqrt(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_sqrt(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Square(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_sqr(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_sqr(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Negative(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_neg(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_neg(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Sigmoid(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_sigmoid(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_sigmoid(g.ctxPtr(), a.(*Array).cTensor()))
+}
+
+// SiLU computes silu(x) = x*sigmoid(x) with a custom kernel that matches the
+// ggml_sigmoid+ggml_mul sequence bit-for-bit, in a single op.
+func (g *GGMLBackend) SiLU(x tensor.Array, s tensor.Stream) (tensor.Array, error) {
+	out, err := g.evalOp(C.ggml_silu_custom(g.ctxPtr(), x.(*Array).cTensor()))
+	if err != nil {
+		return nil, err
+	}
+	out.logicalShape = append([]int(nil), x.Shape()...)
+	g.registerArray(out)
+	return out, nil
+}
+
+// SwiGLU computes silu(gate)*up with a custom kernel matching the
+// sigmoid+mul+mul fallback bit-for-bit, in a single op.
+func (g *GGMLBackend) SwiGLU(gate, up tensor.Array, s tensor.Stream) (tensor.Array, error) {
+	out, err := g.evalOp(C.ggml_swiglu_custom(g.ctxPtr(), gate.(*Array).cTensor(), up.(*Array).cTensor()))
+	if err != nil {
+		return nil, err
+	}
+	out.logicalShape = append([]int(nil), gate.Shape()...)
+	g.registerArray(out)
+	return out, nil
+}
+
+// GatedDeltaUpdate runs the full Gated DeltaNet recurrence in a single fused
+// kernel, replacing ~18 eager ops per step. Matches gatedDeltaStep4D
+// byte-for-byte: sequential double accumulation for the Dk reductions,
+// elementwise outer product for the state update, and F32 output cast to
+// q's dtype.
+//
+// Inputs: q,k [B,S,Hk,Dk], v [B,S,Hv,Dv], g,beta [B,S,Hv],
+//
+//	state [B,Hv,Dv,Dk] or nil.
+//
+// Returns: y [B,S,Hv,Dv] (cast to q's dtype), state_out [B,Hv,Dv,Dk] (F32).
+func (g *GGMLBackend) GatedDeltaUpdate(q, k, v, gTensor, beta, state tensor.Array, s tensor.Stream) (tensor.Array, tensor.Array, error) {
+	if err := g.ensureInit(); err != nil {
+		return nil, nil, err
+	}
+	qs := q.Shape()
+	if len(qs) != 4 {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate q must be 4D, got %v", qs)
+	}
+	B, S, Hk, Dk := qs[0], qs[1], qs[2], qs[3]
+	vs := v.Shape()
+	if len(vs) != 4 {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate v must be 4D, got %v", vs)
+	}
+	Hv, Dv := vs[2], vs[3]
+	if vs[0] != B || vs[1] != S {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate v batch/seq mismatch: v=%v q=%v", vs, qs)
+	}
+	gs := gTensor.Shape()
+	if len(gs) != 3 || gs[0] != B || gs[1] != S || gs[2] != Hv {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate g shape mismatch: got %v want [%d,%d,%d]", gs, B, S, Hv)
+	}
+	betas := beta.Shape()
+	if len(betas) != 3 || betas[0] != B || betas[1] != S || betas[2] != Hv {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate beta shape mismatch: got %v want [%d,%d,%d]", betas, B, S, Hv)
+	}
+	if Hv%Hk != 0 {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate Hv=%d not divisible by Hk=%d", Hv, Hk)
+	}
+
+	// Handle nil state: create a zeroed F32 state. stateArr (non-nil only when
+	// we allocated it) is freed via Free() so its buffer is deferred until the
+	// batch flush rather than recycled while the pending op still reads it.
+	var stateT *C.struct_ggml_tensor
+	var stateArr tensor.Array
+	if state != nil {
+		stateT = state.(*Array).cTensor()
+	} else {
+		zeroState, err := g.Zeros([]int{B, Hv, Dv, Dk}, tensor.Float32, s)
+		if err != nil {
+			return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate zero state: %w", err)
+		}
+		stateArr = zeroState
+		stateT = stateArr.(*Array).cTensor()
+	}
+
+	// Allocate state_out as a pinned F32 tensor in the result context. Its
+	// buffer is written by the kernel (a side channel, since ggml_custom_4d
+	// yields one output), so it must be pinned and stay alive until the flush.
+	stateOutT := createTensorIn(g.resultCtxPtr(), []int{B, Hv, Dv, Dk}, C.GGML_TYPE_F32)
+	if stateOutT == nil {
+		if stateArr != nil {
+			stateArr.Free()
+		}
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate state_out alloc failed")
+	}
+	if err := g.pinTensorData(stateOutT, nil); err != nil {
+		if stateArr != nil {
+			stateArr.Free()
+		}
+		return nil, nil, err
+	}
+
+	// Build 7-arg custom op: [q, k, v, g, beta, state, state_out].
+	ctx := g.ctxPtr()
+	args := [7]*C.struct_ggml_tensor{
+		q.(*Array).cTensor(),
+		k.(*Array).cTensor(),
+		v.(*Array).cTensor(),
+		gTensor.(*Array).cTensor(),
+		beta.(*Array).cTensor(),
+		stateT,
+		stateOutT,
+	}
+	node := C.ggml_gated_delta(ctx, &args[0], 7)
+	if node == nil {
+		if stateArr != nil {
+			stateArr.Free()
+		}
+		g.unpin(stateOutT)
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate custom op failed")
+	}
+
+	// Evaluate the op (batch or eager). The custom kernel writes y to its dst
+	// and state_out to args[6]'s pinned buffer.
+	y, err := g.evalOp(node)
+	if stateArr != nil {
+		stateArr.Free()
+	}
+	if err != nil {
+		g.unpin(stateOutT)
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate eval: %w", err)
+	}
+
+	// Cast y to q's dtype (matches the reference's AsType(y, q.Dtype())).
+	yCast, err := g.AsType(y, q.Dtype(), s)
+	y.Free()
+	if err != nil {
+		g.unpin(stateOutT)
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate y cast: %w", err)
+	}
+	yCast.(*Array).logicalShape = []int{B, S, Hv, Dv}
+	g.registerArray(yCast.(*Array))
+
+	// Wrap state_out as a result Array (F32).
+	stateOut := g.newArray(stateOutT)
+	stateOut.result = true
+	atomic.AddInt64(&g.resultLive, 1)
+	stateOut.logicalShape = []int{B, Hv, Dv, Dk}
+	g.registerArray(stateOut)
+
+	return yCast, stateOut, nil
 }
 
 func (g *GGMLBackend) Softplus(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// softplus(x) = log(1 + exp(x))
 	one := g.scalarF32(1.0)
-	return g.evalOp(C.ggml_log(ctx, C.ggml_add(ctx, one, C.ggml_exp(ctx, t))))
+	return g.evalOpUnpin(C.ggml_log(ctx, C.ggml_add(ctx, one, C.ggml_exp(ctx, t))), one)
 }
 
 func (g *GGMLBackend) Sin(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_sin(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_sin(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Cos(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_cos(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_cos(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Tanh(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_tanh(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_tanh(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) Power(a tensor.Array, exp float32, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// x^exp = exp(exp * log(x)) for x > 0
 	logT := C.ggml_log(ctx, t)
 	scaled := C.ggml_scale(ctx, logT, C.float(exp))
@@ -1233,12 +2319,59 @@ func (g *GGMLBackend) Sum(a tensor.Array, axes []int, keepdims bool, s tensor.St
 	// (DeltaNet sums over Dk = last dim), compute in Go to keep the logical
 	// shape correct. The sums here are small (per-head), so Go is fine.
 	if len(axes) == 0 {
-		return g.evalOp(C.ggml_sum(g.ctxPtr(), a.(*Array).tensor))
+		return g.evalOp(C.ggml_sum(g.ctxPtr(), a.(*Array).cTensor()))
 	}
+	shape := a.Shape()
+
+	// Reducing only the innermost axis is the hot path — DeltaNet sums over
+	// Dk on every step and the MoE router reduces over -1 — and it maps
+	// exactly onto ggml_sum_rows, which reduces ne[0]. Taking the Go path
+	// here instead costs a full readback per call and showed up as ~15% of
+	// decode in a CPU profile.
+	if len(axes) == 1 && len(shape) <= 4 && a.Dtype() == tensor.Float32 {
+		ax := axes[0]
+		if ax < 0 {
+			ax += len(shape)
+		}
+		if ax == len(shape)-1 {
+			ls := make([]int, 0, len(shape))
+			for i, d := range shape {
+				switch {
+				case i != ax:
+					ls = append(ls, d)
+				case keepdims:
+					ls = append(ls, 1)
+				}
+			}
+			if len(ls) == 0 {
+				ls = []int{1}
+			}
+			node := C.ggml_sum_rows(g.ctxPtr(), a.(*Array).cTensor())
+			if !keepdims {
+				// sum_rows reduces ne[0] but leaves it in place as a 1, while
+				// dropping the axis in row-major terms shifts every remaining
+				// dim down one slot. Without this reshape the ne of the result
+				// is offset by one against its logical shape, and the next op
+				// fails ggml_can_repeat.
+				ne := [4]C.int64_t{1, 1, 1, 1}
+				for i := range ls {
+					ne[i] = C.int64_t(ls[len(ls)-1-i])
+				}
+				node = C.ggml_reshape_4d(g.ctxPtr(), node, ne[0], ne[1], ne[2], ne[3])
+			}
+			out, err := g.evalOp(node)
+			if err != nil {
+				return nil, err
+			}
+			out.logicalShape = ls
+			g.registerArray(out)
+			return out, nil
+		}
+	}
+
 	if err := a.Eval(); err != nil {
 		return nil, err
 	}
-	shape := a.Shape()
 	data, err := g.readDataAsFloat32(a.(*Array))
 	if err != nil {
 		return nil, fmt.Errorf("ggml: Sum read: %w", err)
@@ -1305,7 +2438,7 @@ func (g *GGMLBackend) Sum(a tensor.Array, axes []int, keepdims bool, s tensor.St
 	if len(arrShape) == 0 {
 		arrShape = []int{1}
 	}
-	arr, err := g.NewArrayFromFloat32(out, arrShape)
+	arr, err := g.newResultF32(out, arrShape)
 	if err != nil {
 		return nil, err
 	}
@@ -1333,31 +2466,37 @@ func dot(idx, stride []int) int {
 
 func (g *GGMLBackend) Mean(a tensor.Array, axes []int, keepdims bool, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	sumT := C.ggml_sum(ctx, t)
 	n := g.scalarF32(float32(a.Size()))
-	return g.evalOp(C.ggml_div(ctx, sumT, n))
+	return g.evalOpUnpin(C.ggml_div(ctx, sumT, n), n)
 }
 
 func (g *GGMLBackend) Max(a tensor.Array, axes []int, keepdims bool, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_argmax(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_argmax(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 // ── tensor.Backend: linear algebra ─────────────────────────────────
 
 func (g *GGMLBackend) MatMul(a, b tensor.Array, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	tA := a.(*Array).tensor
-	tB := b.(*Array).tensor
+	tA := a.(*Array).cTensor()
+	tB := b.(*Array).cTensor()
 
 	var result *C.struct_ggml_tensor
 	if tB._type != C.GGML_TYPE_F32 && tB._type != C.GGML_TYPE_F16 && tB._type != C.GGML_TYPE_BF16 {
 		// Quantized weight (Q4_0 etc.) — already in [ne0=K, ne1=N] layout.
 		// ggml_mul_mat(w, x) = x @ w^T = [M, N]. No transpose needed.
+		if C.ggml_can_mul_mat_check(tB, tA) == 0 {
+			return nil, fmt.Errorf("ggml: MatMul shapes incompatible: a=%v b=%v (quantized b must be [out, in])", a.Shape(), b.Shape())
+		}
 		result = C.ggml_mul_mat(ctx, tB, tA)
 	} else {
 		// F32 weight — transpose B to align inner dims, then mul_mat.
 		tBt := C.ggml_cont(ctx, C.ggml_transpose(ctx, tB))
+		if C.ggml_can_mul_mat_check(tBt, tA) == 0 {
+			return nil, fmt.Errorf("ggml: MatMul shapes incompatible: a=%v b=%v (float b must be pre-transposed to [in, out])", a.Shape(), b.Shape())
+		}
 		result = C.ggml_mul_mat(ctx, tBt, tA)
 	}
 	if result == nil {
@@ -1390,7 +2529,7 @@ func (g *GGMLBackend) MatMul(a, b tensor.Array, s tensor.Stream) (tensor.Array, 
 
 func (g *GGMLBackend) Reshape(a tensor.Array, shape []int, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// GGML ne is reversed from row-major: for shape [d0,d1,...,dn-1],
 	// ne = [dn-1, ..., d1, d0] with n_dims = len(shape). Only the meaningful
 	// dims are reversed; trailing padding (ne[i]=1) comes after.
@@ -1419,13 +2558,13 @@ func (g *GGMLBackend) Reshape(a tensor.Array, shape []int, s tensor.Stream) (ten
 }
 
 func (g *GGMLBackend) Transpose(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_cont(g.ctxPtr(), C.ggml_transpose(g.ctxPtr(), a.(*Array).tensor)))
+	return g.evalOp(C.ggml_cont(g.ctxPtr(), C.ggml_transpose(g.ctxPtr(), a.(*Array).cTensor())))
 }
 
 func (g *GGMLBackend) TransposeAxes(a tensor.Array, axes []int, s tensor.Stream) (tensor.Array, error) {
 	// GGML only supports 2D transpose directly; for higher dims, compose.
 	// For the common case of [0,2,1,3] (attention transpose), use permute.
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// Map row-major axes to GGML ne indices (reversed order). ggml_permute's
 	// argument i names the DESTINATION of source dim i, whereas axes[i] names
 	// the SOURCE of destination i — so the assignment is indexed by the source.
@@ -1466,7 +2605,7 @@ func (g *GGMLBackend) SqueezeAxis(a tensor.Array, axis int, s tensor.Stream) (te
 
 func (g *GGMLBackend) Slice(a tensor.Array, start, stop, strides []int, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// General N-D slice via GGML views. Row-major start/stop map to GGML
 	// dims in reverse (row-major [B,S,H,D] ↔ GGML ne=[D,H,S,B]).
 	nd := len(start)
@@ -1545,8 +2684,8 @@ func (g *GGMLBackend) Slice(a tensor.Array, start, stop, strides []int, s tensor
 func (g *GGMLBackend) SliceUpdate(src, update tensor.Array, start, stop []int, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
 	ga := src.(*Array)
-	t := ga.tensor
-	u := update.(*Array).tensor
+	t := ga.cTensor()
+	u := update.(*Array).cTensor()
 
 	// Byte offset of the row-major `start` index. Each row-major axis maps to
 	// a GGML ne/nb index in reverse order — using start[0]*nb[0] would pair the
@@ -1583,9 +2722,9 @@ func (g *GGMLBackend) ConcatenateAxis(arrays []tensor.Array, axis int, s tensor.
 	// row-major axis must be mapped to the GGML ne index.
 	nd := len(arrays[0].Shape())
 	ggmlAxis := ggmlAxisIndex(nd, axis)
-	result := arrays[0].(*Array).tensor
+	result := arrays[0].(*Array).cTensor()
 	for _, a := range arrays[1:] {
-		result = C.ggml_concat(ctx, result, a.(*Array).tensor, C.int(ggmlAxis))
+		result = C.ggml_concat(ctx, result, a.(*Array).cTensor(), C.int(ggmlAxis))
 	}
 	out, err := g.evalOp(result)
 	if err != nil {
@@ -1624,9 +2763,9 @@ func (g *GGMLBackend) Stack(arrays []tensor.Array, s tensor.Stream) (tensor.Arra
 	// Stack = concatenate along a new axis 0. GGML doesn't have stack directly;
 	// reshape each to [1, ...original] and concat on axis 0.
 	ctx := g.ctxPtr()
-	result := arrays[0].(*Array).tensor
+	result := arrays[0].(*Array).cTensor()
 	for _, a := range arrays[1:] {
-		result = C.ggml_concat(ctx, result, a.(*Array).tensor, 1)
+		result = C.ggml_concat(ctx, result, a.(*Array).cTensor(), 1)
 	}
 	return g.evalOp(result)
 }
@@ -1709,7 +2848,7 @@ func (g *GGMLBackend) SplitAxis(a tensor.Array, indices []int, axis int, s tenso
 		chunkShape := make([]int, len(shape))
 		copy(chunkShape, shape)
 		chunkShape[axis] = idx - prev
-		arr, err := g.NewArrayFromFloat32(out(prev, idx), chunkShape)
+		arr, err := g.newResultF32(out(prev, idx), chunkShape)
 		if err != nil {
 			return nil, err
 		}
@@ -1719,7 +2858,7 @@ func (g *GGMLBackend) SplitAxis(a tensor.Array, indices []int, axis int, s tenso
 	chunkShape := make([]int, len(shape))
 	copy(chunkShape, shape)
 	chunkShape[axis] = dim - prev
-	arr, err := g.NewArrayFromFloat32(out(prev, dim), chunkShape)
+	arr, err := g.newResultF32(out(prev, dim), chunkShape)
 	if err != nil {
 		return nil, err
 	}
@@ -1729,7 +2868,7 @@ func (g *GGMLBackend) SplitAxis(a tensor.Array, indices []int, axis int, s tenso
 
 func (g *GGMLBackend) RepeatAxis(a tensor.Array, repeats, axis int, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	// Map row-major axis to GGML ne index.
 	nd := len(a.Shape())
 	ggmlAxis := ggmlAxisIndex(nd, axis)
@@ -1784,7 +2923,7 @@ func (g *GGMLBackend) RepeatAxis(a tensor.Array, repeats, axis int, s tensor.Str
 
 func (g *GGMLBackend) Pad(a tensor.Array, axes, low, high []int, padValue tensor.Array, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	p := [4]C.int{0, 0, 0, 0}
 	for i := range axes {
 		if i < 4 {
@@ -1801,9 +2940,9 @@ func (g *GGMLBackend) Where(condition, x, y tensor.Array, s tensor.Stream) (tens
 	// where c is a boolean mask (0 or 1). If the condition is not already
 	// 0/1, apply step() to binarize it.
 	ctx := g.ctxPtr()
-	tc := condition.(*Array).tensor
-	tx := x.(*Array).tensor
-	ty := y.(*Array).tensor
+	tc := condition.(*Array).cTensor()
+	tx := x.(*Array).cTensor()
+	ty := y.(*Array).cTensor()
 
 	// Binarize: step(c) gives 1 where c > 0, 0 elsewhere
 	cBin := C.ggml_unary(ctx, tc, C.GGML_UNARY_OP_STEP)
@@ -1826,7 +2965,7 @@ func (g *GGMLBackend) Tril(a tensor.Array, k int, s tensor.Stream) (tensor.Array
 	// For the attention use case (creating a causal mask), diag_mask_inf
 	// is exactly what we need.
 	ctx := g.ctxPtr()
-	t := a.(*Array).tensor
+	t := a.(*Array).cTensor()
 	result := C.ggml_diag_mask_inf(ctx, t, C.int(k))
 	return g.evalOp(result)
 }
@@ -1834,18 +2973,18 @@ func (g *GGMLBackend) Tril(a tensor.Array, k int, s tensor.Stream) (tensor.Array
 // ── tensor.Backend: normalization ──────────────────────────────────
 
 func (g *GGMLBackend) Softmax(a tensor.Array, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_soft_max(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_soft_max(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) SoftmaxAxis(a tensor.Array, axis int, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_soft_max(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_soft_max(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) FastRMSNorm(x, weight tensor.Array, eps float32, s tensor.Stream) (tensor.Array, error) {
 	ctx := g.ctxPtr()
-	result := C.ggml_rms_norm(ctx, x.(*Array).tensor, C.float(eps))
+	result := C.ggml_rms_norm(ctx, x.(*Array).cTensor(), C.float(eps))
 	if weight != nil {
-		result = C.ggml_mul(ctx, result, weight.(*Array).tensor)
+		result = C.ggml_mul(ctx, result, weight.(*Array).cTensor())
 	}
 	return g.evalOp(result)
 }
@@ -1867,9 +3006,9 @@ func (g *GGMLBackend) FastScaledDotProductAttention(q, k, v tensor.Array, scale 
 		return nil, fmt.Errorf("ggml: attention sinks not supported")
 	}
 	ctx := g.ctxPtr()
-	tq := q.(*Array).tensor
-	tk := k.(*Array).tensor
-	tv := v.(*Array).tensor
+	tq := q.(*Array).cTensor()
+	tk := k.(*Array).cTensor()
+	tv := v.(*Array).cTensor()
 
 	nQ := int(C.tensor_ne(tq, 1))
 	nKV := int(C.tensor_ne(tk, 1))
@@ -1882,10 +3021,10 @@ func (g *GGMLBackend) FastScaledDotProductAttention(q, k, v tensor.Array, scale 
 		return nil, fmt.Errorf("ggml: attention QK^T failed")
 	}
 
-	var mask *C.struct_ggml_tensor
+	var mask, ownedMask *C.struct_ggml_tensor
 	switch {
 	case maskArr != nil:
-		mask = maskArr.(*Array).tensor
+		mask = maskArr.(*Array).cTensor()
 	case maskMode == "causal" && nQ > 1:
 		// Query i sits at absolute position nKV-nQ+i, so it may attend to
 		// keys j <= nKV-nQ+i. ne=[nKV,nQ] matches soft_max_ext's expected
@@ -1894,7 +3033,7 @@ func (g *GGMLBackend) FastScaledDotProductAttention(q, k, v tensor.Array, scale 
 		if err != nil {
 			return nil, err
 		}
-		mask = m
+		mask, ownedMask = m, m
 	}
 
 	// soft_max_ext folds the scale and the additive mask into the softmax.
@@ -1911,7 +3050,7 @@ func (g *GGMLBackend) FastScaledDotProductAttention(q, k, v tensor.Array, scale 
 		return nil, fmt.Errorf("ggml: attention PV failed")
 	}
 
-	arr, err := g.evalOp(out)
+	arr, err := g.evalOpUnpin(out, ownedMask)
 	if err != nil {
 		return nil, fmt.Errorf("ggml: attention: %w", err)
 	}
@@ -1942,7 +3081,9 @@ func (g *GGMLBackend) causalMask(nQ, nKV int) (*C.struct_ggml_tensor, error) {
 			binary.LittleEndian.PutUint32(data[(i*nKV+j)*4:], negInf)
 		}
 	}
-	g.registerTensorData(t, data)
+	if err := g.pinTensorData(t, data); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
 
@@ -1954,7 +3095,7 @@ func (g *GGMLBackend) FastRoPE(x tensor.Array, dims int, traditional bool, base 
 	if !traditional {
 		mode = C.int(2) // GGML_ROPE_TYPE_NEOX
 	}
-	xt := x.(*Array).tensor
+	xt := x.(*Array).cTensor()
 
 	// GGML's rope expects tokens on ne[2] (layout [n_embd, n_head, n_tokens]).
 	// Every caller applies RoPE AFTER the [B,S,H,D]→[B,H,S,D] transpose (MLX
@@ -1969,7 +3110,7 @@ func (g *GGMLBackend) FastRoPE(x tensor.Array, dims int, traditional bool, base 
 		permuted = true
 	}
 
-	// Create position IDs tensor — evalOp will set data via setRegisteredDataRecursive.
+	// Create position IDs tensor. Unpinned after the op is evaluated.
 	nTokens := int(C.tensor_ne(xt, 2))
 	if nTokens < 1 {
 		nTokens = 1
@@ -1981,7 +3122,9 @@ func (g *GGMLBackend) FastRoPE(x tensor.Array, dims int, traditional bool, base 
 	posBytes := make([]byte, len(posData)*4)
 	copy(posBytes, unsafe.Slice((*byte)(unsafe.Pointer(&posData[0])), len(posData)*4))
 	pos := C.ggml_new_tensor_1d(ctx, C.GGML_TYPE_I32, C.int64_t(nTokens))
-	g.registerTensorData(pos, posBytes)
+	if err := g.pinTensorData(pos, posBytes); err != nil {
+		return nil, err
+	}
 	// ggml_rope would hardcode freq_base=10000; models like Qwen3 use 1e6, so
 	// the caller's base has to go through rope_ext. ext_factor=0 disables
 	// YaRN, leaving beta_fast/beta_slow inert.
@@ -1992,7 +3135,7 @@ func (g *GGMLBackend) FastRoPE(x tensor.Array, dims int, traditional bool, base 
 	if permuted {
 		result = C.ggml_permute(ctx, result, 0, 2, 1, 3)
 	}
-	out, err := g.evalOp(result)
+	out, err := g.evalOpUnpin(result, pos)
 	if err != nil {
 		return nil, err
 	}
@@ -2045,11 +3188,11 @@ func (g *GGMLBackend) GatherAxis(a, indices tensor.Array, axis int, sliceSizes [
 	// Quantized tables (Q4_0 etc.) can't be read as F32 directly. Use GGML's
 	// native ggml_get_rows, which dequantizes only the gathered rows on the
 	// fly (ARM-optimized kernel). Result is F32 [ne0=rowWidth, ne1=n].
-	tType := a.(*Array).tensor._type
+	tType := a.(*Array).cTensor()._type
 	if tType != C.GGML_TYPE_F32 && tType != C.GGML_TYPE_F16 && tType != C.GGML_TYPE_BF16 {
 		// DEBUG: verify index bounds before ggml_get_rows asserts.
-		ne0v := int(C.tensor_ne(a.(*Array).tensor, 0))
-		ne1v := int(C.tensor_ne(a.(*Array).tensor, 1))
+		ne0v := int(C.tensor_ne(a.(*Array).cTensor(), 0))
+		ne1v := int(C.tensor_ne(a.(*Array).cTensor(), 1))
 		maxIdx := -1
 		for _, v := range flat {
 			if int(v) > maxIdx {
@@ -2059,12 +3202,12 @@ func (g *GGMLBackend) GatherAxis(a, indices tensor.Array, axis int, sliceSizes [
 		if maxIdx >= ne1v {
 			fmt.Printf("ggml: GatherAxis DEBUG ne0=%d ne1=%d maxIdx=%d nIndices=%d — index out of range!\n", ne0v, ne1v, maxIdx, len(flat))
 		}
-		idxArr, err := g.NewArrayFromInt32(flat, []int{len(flat)})
+		idxArr, err := g.newResultI32(flat, []int{len(flat)})
 		if err != nil {
 			return nil, fmt.Errorf("ggml: GatherAxis create index tensor: %w", err)
 		}
 		defer idxArr.Free()
-		result := C.ggml_get_rows(g.ctxPtr(), a.(*Array).tensor, idxArr.(*Array).tensor)
+		result := C.ggml_get_rows(g.ctxPtr(), a.(*Array).cTensor(), idxArr.(*Array).cTensor())
 		out, oerr := g.evalOp(result)
 		if oerr != nil {
 			return nil, oerr
@@ -2107,7 +3250,7 @@ func (g *GGMLBackend) GatherAxis(a, indices tensor.Array, axis int, sliceSizes [
 	}
 
 	// Result shape: [len(flat), rowWidth] in row-major convention.
-	out, err := g.NewArrayFromFloat32(resultData, []int{len(flat), rowWidth})
+	out, err := g.newResultF32(resultData, []int{len(flat), rowWidth})
 	if err != nil {
 		return nil, err
 	}
@@ -2124,11 +3267,11 @@ func (g *GGMLBackend) GatherAxis(a, indices tensor.Array, axis int, sliceSizes [
 }
 
 func (g *GGMLBackend) ArgMax(a tensor.Array, keepdims bool, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_argmax(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_argmax(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) ArgMaxAxis(a tensor.Array, axis int, keepdims bool, s tensor.Stream) (tensor.Array, error) {
-	return g.evalOp(C.ggml_argmax(g.ctxPtr(), a.(*Array).tensor))
+	return g.evalOp(C.ggml_argmax(g.ctxPtr(), a.(*Array).cTensor()))
 }
 
 func (g *GGMLBackend) ArgPartitionAxis(a tensor.Array, kth, axis int, s tensor.Stream) (tensor.Array, error) {
@@ -2141,11 +3284,128 @@ func (g *GGMLBackend) TakeAlongAxis(a, indices tensor.Array, axis int, s tensor.
 
 // ── tensor.Backend: convolution ────────────────────────────────────
 
+// convTaps returns (and caches) the K depthwise-conv tap tensors for a weight,
+// each a [C,1,1] leaf so ggml_mul broadcasts it over time and batch. The taps
+// are constant leaf data, so they are built once per weight and reused.
+func (g *GGMLBackend) convTaps(weight *Array, C, K int) ([]*C.struct_ggml_tensor, error) {
+	key := uintptr(unsafe.Pointer(weight.cTensor()))
+	if v, ok := g.convTapsCache.Load(key); ok {
+		return v.([]*C.struct_ggml_tensor), nil
+	}
+	wData, err := g.readDataAsFloat32(weight)
+	if err != nil {
+		return nil, err
+	}
+	if len(wData) < C*K {
+		return nil, fmt.Errorf("ggml: conv weight too small (%d < %d)", len(wData), C*K)
+	}
+	taps := make([]*C.struct_ggml_tensor, K)
+	for k := 0; k < K; k++ {
+		tap := C.ggml_new_tensor_2d(g.leafCtxPtr(), C.GGML_TYPE_F32, C.int64_t(C), 1)
+		if tap == nil {
+			return nil, fmt.Errorf("ggml: conv tap alloc failed")
+		}
+		data := make([]float32, C)
+		for oc := 0; oc < C; oc++ {
+			data[oc] = wData[oc*K+k]
+		}
+		raw := make([]byte, C*4)
+		copy(raw, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), C*4))
+		if err := g.pinTensorData(tap, raw); err != nil {
+			return nil, err
+		}
+		taps[k] = tap
+	}
+	g.convTapsCache.Store(key, taps)
+	return taps, nil
+}
+
+// conv1DDepthwiseFast implements a depthwise 1D conv (stride=1, pad=0, dil=1,
+// groups == in_channels) as K shifted ggml_view_3d slices multiplied by cached
+// taps and summed, entirely in-graph. This removes the per-layer flush the Go
+// read-modify-write fallback forces, letting a whole decode step batch into one
+// graph. ok=false means the inputs don't match the fast-path shape (caller
+// falls back to Go).
+func (g *GGMLBackend) conv1DDepthwiseFast(input, weight tensor.Array, groups int, s tensor.Stream) (tensor.Array, bool, error) {
+	inShape := input.Shape()
+	if len(inShape) != 3 {
+		return nil, false, nil
+	}
+	B, T, C := inShape[0], inShape[1], inShape[2]
+	if groups != C || B <= 0 || T <= 0 || C <= 0 {
+		return nil, false, nil
+	}
+
+	wShape := weight.Shape()
+	var K int
+	switch len(wShape) {
+	case 3:
+		if wShape[0] != C || wShape[2] != 1 {
+			return nil, false, nil
+		}
+		K = wShape[1]
+	case 2:
+		if wShape[0] != C {
+			return nil, false, nil
+		}
+		K = wShape[1]
+	default:
+		return nil, false, nil
+	}
+	if K <= 0 {
+		return nil, false, nil
+	}
+	Sout := T - K + 1
+	if Sout <= 0 {
+		return nil, false, nil
+	}
+
+	taps, err := g.convTaps(weight.(*Array), C, K)
+	if err != nil {
+		return nil, false, nil
+	}
+
+	ctx := g.ctxPtr()
+	xt := input.(*Array).cTensor()
+
+	var acc *C.struct_ggml_tensor
+	for k := 0; k < K; k++ {
+		shifted := C.ggml_view_3d(ctx, xt,
+			C.int64_t(C), C.int64_t(Sout), C.int64_t(B),
+			C.tensor_nb(xt, 1), C.tensor_nb(xt, 2),
+			C.size_t(k)*C.tensor_nb(xt, 1))
+		if shifted == nil {
+			return nil, false, nil
+		}
+		term := C.ggml_mul(ctx, shifted, taps[k])
+		if acc == nil {
+			acc = term
+		} else {
+			acc = C.ggml_add(ctx, acc, term)
+		}
+	}
+
+	out, err := g.evalOp(acc)
+	if err != nil {
+		return nil, true, err
+	}
+	out.logicalShape = []int{B, Sout, C}
+	g.registerArray(out)
+	return out, true, nil
+}
+
 func (g *GGMLBackend) Conv1D(input, weight tensor.Array, stride, padding, dilation, groups int, s tensor.Stream) (tensor.Array, error) {
-	// DeltaNet-style depthwise conv1d. Weight is [C_out, K, C_in/groups]
-	// (sanitized MLX layout); input is [B, S, C_in]. GGML's im2col+mul_mat
-	// doesn't support grouped/depthwise 1D convs, so compute in Go. The
-	// kernel is tiny (K=4) and this runs once per token, so Go is fine.
+	// Fast path: the DeltaNet conv is depthwise with stride=1, pad=0, dil=1.
+	// Decompose into in-graph shifts/muls so it batches with surrounding ops
+	// instead of forcing a flush through the Go fallback below.
+	if stride == 1 && padding == 0 && dilation == 1 && groups > 0 {
+		if out, ok, err := g.conv1DDepthwiseFast(input, weight, groups, s); ok || err != nil {
+			return out, err
+		}
+	}
+
+	// Fallback: grouped/depthwise conv1d computed in Go. Weight is
+	// [C_out, K, C_in/groups] (sanitized MLX layout); input is [B, S, C_in].
 	if err := input.Eval(); err != nil {
 		return nil, fmt.Errorf("ggml: Conv1D input eval: %w", err)
 	}
@@ -2221,7 +3481,7 @@ func (g *GGMLBackend) Conv1D(input, weight tensor.Array, stride, padding, dilati
 			}
 		}
 	}
-	convArr, err := g.NewArrayFromFloat32(out, []int{B, Sout, Cout})
+	convArr, err := g.newResultF32(out, []int{B, Sout, Cout})
 	if err != nil {
 		return nil, err
 	}
@@ -2238,10 +3498,10 @@ func (g *GGMLBackend) readDataAsFloat32(a *Array) ([]float32, error) {
 	if err := a.Eval(); err != nil {
 		return nil, err
 	}
-	if a.tensor == nil {
+	if a.cTensor() == nil {
 		return nil, fmt.Errorf("ggml: readDataAsFloat32 on nil tensor")
 	}
-	switch a.tensor._type {
+	switch a.cTensor()._type {
 	case C.GGML_TYPE_F32:
 		return a.Float32Data()
 	case C.GGML_TYPE_BF16:
@@ -2267,7 +3527,7 @@ func (g *GGMLBackend) readDataAsFloat32(a *Array) ([]float32, error) {
 		}
 		return out, nil
 	default:
-		return nil, fmt.Errorf("ggml: readDataAsFloat32 unsupported type %d", int(a.tensor._type))
+		return nil, fmt.Errorf("ggml: readDataAsFloat32 unsupported type %d", int(a.cTensor()._type))
 	}
 }
 
@@ -2289,10 +3549,10 @@ func (g *GGMLBackend) QuantizedMatMul(x, w, scales tensor.Array, biases tensor.A
 	ctx := g.ctxPtr()
 	if transpose {
 		// ggml_mul_mat(ctx, w, x) computes x @ w^T = [batch, out]
-		result := C.ggml_mul_mat(ctx, w.(*Array).tensor, x.(*Array).tensor)
+		result := C.ggml_mul_mat(ctx, w.(*Array).cTensor(), x.(*Array).cTensor())
 		return g.evalOp(result)
 	}
-	result := C.ggml_mul_mat(ctx, w.(*Array).tensor, x.(*Array).tensor)
+	result := C.ggml_mul_mat(ctx, w.(*Array).cTensor(), x.(*Array).cTensor())
 	return g.evalOp(result)
 }
 

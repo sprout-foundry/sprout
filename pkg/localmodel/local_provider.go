@@ -78,7 +78,7 @@ func (p *LocalProvider) loadModel() {
 			return
 		}
 
-		dir, _, err := resolveModelForCurrentMachine()
+		dir, resolvedBackend, err := resolveModelForCurrentMachine()
 		if err != nil {
 			p.loadErr = err
 			return
@@ -89,7 +89,12 @@ func (p *LocalProvider) loadModel() {
 			return
 		}
 
+		if localDebug() {
+			log.Printf("local: resolved model dir=%s backend=%s", dir, resolvedBackend)
+		}
+		logMLXMemory("model-load-start")
 		m, err := llm.NewModel(dir)
+		logMLXMemory("model-load-end")
 		if err != nil {
 			p.loadErr = fmt.Errorf("load model from %s: %w", dir, err)
 			return
@@ -185,7 +190,35 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	prompt := buildPrompt(model, messages, tools)
 	cfg := llm.DefaultGenerateConfig()
 	cfg.PromptLookupMaxDrafts = 4
+	// MaxMTPDrafts is deliberately left disabled (0). It was enabled once
+	// tonight after TestMTPParityLiveModel passed cleanly against a correct
+	// (non-pipelined) baseline on 4 short synthetic prompts — but a real
+	// `sprout commit` run on a real diff produced a commit message with
+	// literal chat-template tokens ("assistant", "<|im_start|>user") and
+	// duplicated text leaking into it. Root-caused one real bug in the MTP
+	// decode loop (a stop token landing mid-batch only broke the inner
+	// accumulation loop, not the outer one — fixed, see generateLocked's
+	// mtpOuter label) but the corruption persisted after that fix on the
+	// same real commit, and confirmed the model's EOSTokenID resolves
+	// correctly (248046, matching tokenizer.json's <|im_end|>) so it isn't
+	// simple EOS misconfiguration either. Short synthetic prompts (capped at
+	// 24-40 tokens) apparently never exercise whatever the remaining failure
+	// mode is — real, longer, natural-stopping generations do. Needs a live
+	// reproduction with full SPROUT_LOCAL_DEBUG output before re-enabling.
+	//
+	// Greedy decoding: DefaultGenerateConfig's Temperature=0.6/RepetitionPenalty=1.1
+	// disable the on-device GPU argmax path (see Model.generateLocked's
+	// useGPUArgmax gate), forcing every decode step to transfer the full
+	// vocab logits vector (250K+ floats) to the CPU for sampling — a fixed
+	// per-token tax that made local decode 10-30x slower than mlx-lm's
+	// greedy-by-default CLI on the same model. It also silently disabled
+	// PromptLookupMaxDrafts above, which requires useGPUArgmax. Zeroing both
+	// here restores the fast path; deterministic output is also simply
+	// correct for tool-calling and commit-message generation.
+	cfg.Temperature = 0
+	cfg.RepetitionPenalty = 0
 
+	logMLXMemory("chat-start")
 	start := time.Now()
 	text, err := model.GenerateText(ctx, prompt, cfg)
 	if err != nil {
@@ -239,9 +272,16 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 	prompt := buildPrompt(model, messages, tools)
 	cfg := llm.DefaultGenerateConfig()
 	cfg.PromptLookupMaxDrafts = 4
+	// MaxMTPDrafts is deliberately left disabled — see the matching comment
+	// in SendChatRequest (real commit-message output corrupted with leaked
+	// chat-template tokens even after fixing a real bug in the MTP decode
+	// loop's stop handling).
+	cfg.Temperature = 0
+	cfg.RepetitionPenalty = 0
 
 	hasTools := len(tools) > 0
 	var outputBuf strings.Builder
+	logMLXMemory("stream-start")
 	start := time.Now()
 
 	err = model.Generate(ctx, prompt, cfg, func(tokenID int) {

@@ -6,12 +6,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/tensor"
+	"golang.org/x/sys/unix"
 )
 
 // safetensorEntry is the metadata for one tensor in a safetensors file.
@@ -34,7 +34,12 @@ type safetensorsIndex struct {
 // routes to the owning shard transparently.
 type SafetensorsFile struct {
 	header  map[string]safetensorEntry
-	rawData []byte
+	rawData []byte // data section, sliced from mmapData — never written to
+
+	// mmapData is the full mmap'd file (header + data); Release/Close unmap
+	// exactly this slice. rawData is a sub-slice of it, not a separate
+	// allocation.
+	mmapData []byte
 
 	// Sharded-model fields (only set when the model spans multiple files).
 	weightMap map[string]string           // tensor name -> shard filename
@@ -42,14 +47,24 @@ type SafetensorsFile struct {
 	shardDir  string
 }
 
-// Release drops the raw file data. Call after every weight has been loaded via
-// Get: the MLX arrays own copies of their buffers, so the (potentially
-// multiple-hundred-MB) Go-side file blob can be garbage collected. Keeps the
-// header so Has/Get still work for metadata-only access.
+// Release unmaps the file. Call after every weight has been loaded via Get:
+// the MLX arrays own copies of their buffers (see Get), so the mapping is no
+// longer needed. Safe to call more than once (callers both defer it and call
+// it explicitly right after the load loop, to free memory before the deferred
+// call fires) and safe on a nil-mmapData shard.
+//
+// The file is mmap'd rather than read into a Go []byte so the OS pages in
+// only the byte ranges Get actually touches, instead of a second full-file
+// copy sitting in the Go heap alongside the MLX-side arrays for the entire
+// load loop — for a multi-GB weights file that's the difference between one
+// copy and two. It also means any file bytes no tensor's data_offsets cover
+// (conversion-tool padding or gaps) are never faulted in at all.
 func (sf *SafetensorsFile) Release() {
-	if sf.rawData != nil {
-		sf.rawData = nil
+	if sf.mmapData != nil {
+		_ = unix.Munmap(sf.mmapData)
+		sf.mmapData = nil
 	}
+	sf.rawData = nil
 	for _, shard := range sf.shards {
 		shard.Release()
 	}
@@ -108,36 +123,38 @@ func openSingleSafetensors(path string) (*SafetensorsFile, error) {
 	}
 	defer f.Close()
 
-	var headerLen uint64
-	if err := binary.Read(f, binary.LittleEndian, &headerLen); err != nil {
-		return nil, fmt.Errorf("read header length: %w", err)
-	}
-	if headerLen > 1<<30 {
-		return nil, fmt.Errorf("safetensors header too large: %d bytes", headerLen)
-	}
-
-	headerBytes := make([]byte, headerLen)
-	if _, err := io.ReadFull(f, headerBytes); err != nil {
-		return nil, fmt.Errorf("read header: %w", err)
-	}
-
-	headerMap, err := parseSafetensorsHeader(headerBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	dataStart := 8 + int64(headerLen)
 	stat, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat safetensors: %w", err)
 	}
-	dataSize := stat.Size() - dataStart
-	rawData := make([]byte, dataSize)
-	if _, err := io.ReadFull(f, rawData); err != nil {
-		return nil, fmt.Errorf("read data blob: %w", err)
+	size := stat.Size()
+	if size < 8 {
+		return nil, fmt.Errorf("safetensors file too small: %d bytes", size)
 	}
 
-	return &SafetensorsFile{header: headerMap, rawData: rawData}, nil
+	mapped, err := unix.Mmap(int(f.Fd()), 0, int(size), unix.PROT_READ, unix.MAP_SHARED)
+	if err != nil {
+		return nil, fmt.Errorf("mmap safetensors: %w", err)
+	}
+
+	headerLen := binary.LittleEndian.Uint64(mapped[:8])
+	if headerLen > 1<<30 {
+		_ = unix.Munmap(mapped)
+		return nil, fmt.Errorf("safetensors header too large: %d bytes", headerLen)
+	}
+	dataStart := int64(8 + headerLen)
+	if dataStart > size {
+		_ = unix.Munmap(mapped)
+		return nil, fmt.Errorf("safetensors header length %d exceeds file size %d", headerLen, size)
+	}
+
+	headerMap, err := parseSafetensorsHeader(mapped[8:dataStart])
+	if err != nil {
+		_ = unix.Munmap(mapped)
+		return nil, err
+	}
+
+	return &SafetensorsFile{header: headerMap, rawData: mapped[dataStart:], mmapData: mapped}, nil
 }
 
 // Get loads a tensor by name as a native-dtype tensor.Array. BF16 and F16 weights
@@ -212,14 +229,12 @@ func (sf *SafetensorsFile) Keys() []string {
 	return keys
 }
 
-// Close releases the mmap'd data backing the safetensors file.
+// Close releases the mmap'd data backing the safetensors file, including shards.
 func (sf *SafetensorsFile) Close() error {
 	if sf == nil {
 		return nil
 	}
-	if sf.rawData != nil {
-		sf.rawData = nil
-	}
+	sf.Release()
 	return nil
 }
 

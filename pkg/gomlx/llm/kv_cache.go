@@ -81,6 +81,17 @@ func (c *KVCache) Store(layerIdx int, k, v tensor.Array) error {
 	if layerIdx < 0 || layerIdx >= len(c.layers) {
 		return fmt.Errorf("kv_cache: layer index %d out of range [0, %d)", layerIdx, len(c.layers))
 	}
+	// Materialize before storing: a later chunk's attention reads these back
+	// as inputs, so an unevaluated k/v here becomes a dependency every
+	// subsequent chunk's graph carries until something forces evaluation —
+	// compounding across chunks the same way an un-evaluated layer chain did
+	// (see the eval call in qwen35's prefillInternalChunk).
+	if err := k.Eval(); err != nil {
+		return fmt.Errorf("kv_cache: eval stored K: %w", err)
+	}
+	if err := v.Eval(); err != nil {
+		return fmt.Errorf("kv_cache: eval stored V: %w", err)
+	}
 	if c.layers[layerIdx] != nil {
 		l := c.layers[layerIdx]
 		if l.K != nil {
@@ -150,6 +161,20 @@ func (c *KVCache) Get(layerIdx int) (*KVCacheLayer, error) {
 func (c *KVCache) StoreState(layerIdx int, state, convState tensor.Array) error {
 	if layerIdx < 0 || layerIdx >= len(c.layers) {
 		return fmt.Errorf("kv_cache: layer index %d out of range", layerIdx)
+	}
+	// Same reasoning as Store/AppendWindow: a later chunk's DeltaNet forward
+	// reads this state back as its recurrence's starting point, so leaving
+	// it lazy carries this chunk's whole computation forward uncomputed.
+	// Callers (e.g. LFM2's shortConv) may pass a nil state or convState.
+	if state != nil {
+		if err := state.Eval(); err != nil {
+			return fmt.Errorf("kv_cache: eval stored state: %w", err)
+		}
+	}
+	if convState != nil {
+		if err := convState.Eval(); err != nil {
+			return fmt.Errorf("kv_cache: eval stored conv state: %w", err)
+		}
 	}
 	if c.layers[layerIdx] != nil {
 		l := c.layers[layerIdx]
@@ -367,6 +392,20 @@ func (c *KVCache) AppendWindow(layerIdx int, newK, newV tensor.Array) (tensor.Ar
 	if err != nil {
 		updK.Free()
 		return nil, nil, fmt.Errorf("kv_cache: slice update V: %w", err)
+	}
+	// Materialize the updated buffer now rather than leaving it lazy — see
+	// the eval call in Store. A subsequent chunk's SliceUpdate reads this
+	// buffer back as its base, so an unevaluated buffer here is a dependency
+	// every later chunk's graph carries forward uncomputed.
+	if err := updK.Eval(); err != nil {
+		updK.Free()
+		updV.Free()
+		return nil, nil, fmt.Errorf("kv_cache: eval updated K: %w", err)
+	}
+	if err := updV.Eval(); err != nil {
+		updK.Free()
+		updV.Free()
+		return nil, nil, fmt.Errorf("kv_cache: eval updated V: %w", err)
 	}
 	l.K.Free()
 	l.V.Free()

@@ -161,15 +161,29 @@ func freeAll(ys []tensor.Array) {
 //	delta = (v_t - kv_mem) * beta_t            [B,Hv,Dv]
 //	state = state + k_t * delta                [B,Hv,Dv,Dk]
 //	y_t = sum_dk(state * q_t)                  [B,Hv,Dv]
+var deltaPathLogged = map[string]bool{}
+
 func gatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
 	// Fast path: one fused Metal kernel launch when available.
 	if b.Available() && os.Getenv("SPROUT_DELTA_OPS") == "" {
 		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, b, stream)
 		if err == nil {
+			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" && !deltaPathLogged["fused"] {
+				deltaPathLogged["fused"] = true
+				fmt.Printf("delta: using FUSED kernel path (shape q=%v)\n", q.Shape())
+			}
 			return y, ns, nil
+		}
+		if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" && !deltaPathLogged["fallback-err"] {
+			deltaPathLogged["fallback-err"] = true
+			fmt.Printf("delta: fused kernel FAILED (%v), falling back to ops loop\n", err)
 		}
 		// Fall through to the sequential ops loop on any kernel error
 		// (uncompilable shape, Metal hiccup, etc.).
+	}
+	if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" && !deltaPathLogged["ops"] {
+		deltaPathLogged["ops"] = true
+		fmt.Printf("delta: using SEQUENTIAL ops-loop path (shape q=%v)\n", q.Shape())
 	}
 	return gatedDeltaUpdateOps(q, k, v, g, beta, state, b, stream)
 }

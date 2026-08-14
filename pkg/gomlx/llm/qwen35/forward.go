@@ -344,6 +344,17 @@ func (q *Qwen35) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *
 	// Chunked prefill: process large sequences in segments to avoid
 	// exceeding Metal's maximum buffer size (~9.5GB on 16GB machines).
 	// Each chunk runs through all layers, attending to itself + cached K/V.
+	//
+	// Tested dropping this to 1024 to check whether peak scales with
+	// chunk_len * cumulative_context (smaller chunks would reduce it if so):
+	// it didn't — peak went slightly UP (28GB -> 30GB) and growth turned out
+	// perfectly linear in *total tokens processed*, independent of chunk
+	// size. That rules out chunk-length-dependent attention scratch as the
+	// mechanism. mlx-lm's own default is 2048; matching mlx-lm's algorithm
+	// exactly (verified: identical KV-cache slicing, identical fused SDPA
+	// call) still leaves sprout using ~5x its peak on the same prompt, so
+	// the remaining difference is runtime-level, not algorithmic — see
+	// ArrayLiveStats.
 	const prefillChunkSize = 4096
 
 	if seqLen <= prefillChunkSize || cache == nil {
@@ -365,6 +376,17 @@ func (q *Qwen35) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *
 		chunkIDs.Free()
 		if err != nil {
 			return nil, fmt.Errorf("prefill chunk at %d: %w", processed, err)
+		}
+		// mlx-lm's own chunked-prefill loop (generate.py) does exactly this
+		// after every chunk: evaluate the cache (now handled at the KV
+		// cache's actual storage points — see KVCache.Store/AppendWindow/
+		// StoreState) and clear_cache() to return MLX's pooled freed buffers
+		// to the OS. MLX pools every freed buffer by default; across 5
+		// chunks of a 20K-token prefill with nothing ever returning that
+		// pool, it's a plausible dominant contributor to a peak far above
+		// active memory. Sprout never called this during prefill before.
+		if err := q.backend.ClearCache(); err != nil {
+			return nil, fmt.Errorf("prefill chunk at %d: clear cache: %w", processed, err)
 		}
 	}
 
@@ -393,6 +415,7 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 		return nil, fmt.Errorf("squeeze embedding: %w", err)
 	}
 
+	debugMem := os.Getenv("SPROUT_LOCAL_DEBUG") == "1" && os.Getenv("SPROUT_PREFILL_LAYER_MEM") == "1"
 	for i := 0; i < q.cfg.NumLayers; i++ {
 		out, err := q.forwardLayer(h, i, seqLen, startPos, cache)
 		if err != nil {
@@ -400,11 +423,36 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 		}
 		h.Free()
 		h = out
+		// Neither per-layer h.Eval() nor per-layer s.Synchronize() (full
+		// stream barrier) fixed the long-context memory blowup — both only
+		// reduced it (32GB -> 27-29GB at 20K tokens), while costing real
+		// prefill latency. Per-chunk tracing (see the after-layer-loop
+		// checkpoint below) showed the growth tracks each chunk's
+		// *cumulative* attended context, not per-layer state — pointing at
+		// the full-attention kernel's own scratch memory, not anything an
+		// eval boundary here can fix. Left debug-only; see prefillChunkSize.
+		if debugMem {
+			if err := s.Synchronize(); err != nil {
+				return nil, fmt.Errorf("debug sync layer %d: %w", i, err)
+			}
+			kind := "linear"
+			if !isLinearLayer(i, q.cfg.FullAttentionInterval) {
+				kind = "FULL"
+			}
+			logPrefillLayerMem(i, kind, seqLen)
+		}
+	}
+
+	if debugMem {
+		logPrefillLayerMem(-1, "after-layer-loop", seqLen)
 	}
 
 	if err := q.setLastHidden(h, seqLen); err != nil {
 		h.Free()
 		return nil, err
+	}
+	if debugMem {
+		logPrefillLayerMem(-1, "after-setLastHidden", seqLen)
 	}
 
 	logits, err := q.computeLogitsLast(h, seqLen)
@@ -412,9 +460,15 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 		h.Free()
 		return nil, err
 	}
+	if debugMem {
+		logPrefillLayerMem(-1, "after-computeLogitsLast", seqLen)
+	}
 	if err := s.Synchronize(); err != nil {
 		logits.Free()
 		return nil, fmt.Errorf("synchronize: %w", err)
+	}
+	if debugMem {
+		logPrefillLayerMem(-1, "after-final-sync", seqLen)
 	}
 	return logits, nil
 }
@@ -508,14 +562,23 @@ func (q *Qwen35) ForwardDecodeArgmax(tokenID int, pos int, cache *llm.KVCache) (
 }
 
 func (q *Qwen35) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tensor.Array, error) {
-	s := q.stream
-
 	idData := []int64{int64(tokenID)}
 	idsArr, err := q.backend.NewArrayFromInt64(idData, []int{1, 1})
 	if err != nil {
 		return nil, fmt.Errorf("create ids: %w", err)
 	}
 	defer idsArr.Free()
+	return q.decodeInternalFromArray(idsArr, pos, cache)
+}
+
+// decodeInternalFromArray is decodeInternal's shared body, parameterized on
+// the ids array instead of a concrete token ID. idsArr may still be an
+// unevaluated lazy graph node (e.g. a not-yet-read-back argmax result) — the
+// embedding gather and every op downstream just chain onto it, so this
+// dispatches without blocking on idsArr's value. See
+// llm.PipelinedGreedyArchitecture.
+func (q *Qwen35) decodeInternalFromArray(idsArr tensor.Array, pos int, cache *llm.KVCache) (tensor.Array, error) {
+	s := q.stream
 
 	h, err := q.weights.embed.Lookup(idsArr, q.backend, s)
 	if err != nil {
@@ -547,6 +610,47 @@ func (q *Qwen35) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 		return nil, err
 	}
 	return logits, nil
+}
+
+// ForwardDecodeArgmaxArray implements llm.PipelinedGreedyArchitecture.
+func (q *Qwen35) ForwardDecodeArgmaxArray(tokenArr tensor.Array, pos int, cache *llm.KVCache) (tensor.Array, error) {
+	logits, err := q.decodeInternalFromArray(tokenArr, pos, cache)
+	if err != nil {
+		return nil, err
+	}
+	defer logits.Free()
+
+	// logits is [1, 1, vocab]; ArgMax has no axis parameter and flattens the
+	// whole array, which for a [1,1,vocab] input is exactly the vocab
+	// argmax (see logitsToArgmax) — but the result is a 0-d scalar, so it
+	// needs reshaping back to [1,1] before it can serve as the next step's
+	// embedding-lookup ids.
+	idx, err := q.backend.ArgMax(logits, false, q.stream)
+	if err != nil {
+		return nil, fmt.Errorf("argmax: %w", err)
+	}
+
+	// Match the int64 dtype decodeInternal uses for ids (NewArrayFromInt64)
+	// so every step's embedding gather sees a consistent index dtype.
+	idx64, err := q.backend.AsType(idx, tensor.Int64, q.stream)
+	idx.Free()
+	if err != nil {
+		return nil, fmt.Errorf("argmax cast: %w", err)
+	}
+
+	next, err := q.backend.Reshape(idx64, []int{1, 1}, q.stream)
+	idx64.Free()
+	if err != nil {
+		return nil, fmt.Errorf("argmax reshape: %w", err)
+	}
+
+	// Dispatch this step's graph now instead of waiting for the caller to
+	// read it back — see PipelinedGreedyArchitecture.
+	if err := next.AsyncEval(); err != nil {
+		next.Free()
+		return nil, fmt.Errorf("async eval: %w", err)
+	}
+	return next, nil
 }
 
 func (q *Qwen35) logitsToFloat32(logits tensor.Array) ([]float32, error) {
@@ -1109,6 +1213,7 @@ func (q *Qwen35) swiglu(h tensor.Array, lw *layerWeights) (tensor.Array, error) 
 	if q.backend.Available() {
 		out, err := fusedSwiglu(h, gate, up, q.backend, s)
 		if err == nil {
+			defer out.Free()
 			return lw.downProj.Forward(out, q.backend, s)
 		}
 		log.Printf("qwen35: fused swiglu failed, falling back: %v", err)

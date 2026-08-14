@@ -5654,6 +5654,36 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 1048576,
+        "description": "Gemini 3.7 Flash is a multimodal model from Google for fast agentic workflows, coding, and complex multi-step reasoning. It is designed for tasks that require responsive performance and reliable multi-step reasoning, with a 1M-token context window and structured output support.",
+        "id": "google/gemini-3.7-flash",
+        "input_cost": 0.375,
+        "name": "Google: Gemini 3.7 Flash",
+        "output_cost": 1.875,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01875,
+        "context_length": 1048576,
+        "description": "Gemini 3.7 Flash via the Batch API at 50% of standard pricing. Multimodal model from Google for fast agentic workflows, coding, and complex multi-step reasoning with a 1M-token context window.",
+        "id": "google/gemini-3.7-flash:batch",
+        "input_cost": 0.1875,
+        "name": "Google: Gemini 3.7 Flash (batch)",
+        "output_cost": 0.9375,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

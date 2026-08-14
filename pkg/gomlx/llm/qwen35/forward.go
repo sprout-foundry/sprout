@@ -345,34 +345,46 @@ func (q *Qwen35) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *
 	// exceeding Metal's maximum buffer size (~9.5GB on 16GB machines).
 	// Each chunk runs through all layers, attending to itself + cached K/V.
 	//
-	// Tested dropping this to 1024 to check whether peak scales with
-	// chunk_len * cumulative_context (smaller chunks would reduce it if so):
-	// it didn't — peak went slightly UP (28GB -> 30GB) and growth turned out
-	// perfectly linear in *total tokens processed*, independent of chunk
-	// size. That rules out chunk-length-dependent attention scratch as the
-	// mechanism. mlx-lm's own default is 2048; matching mlx-lm's algorithm
-	// exactly (verified: identical KV-cache slicing, identical fused SDPA
-	// call) still leaves sprout using ~5x its peak on the same prompt, so
-	// the remaining difference is runtime-level, not algorithmic — see
-	// ArrayLiveStats.
-	const prefillChunkSize = 4096
+	// The original 1024-vs-4096 test (see git history) found smaller chunks
+	// made peak slightly worse and concluded chunk length didn't matter —
+	// that read was confounded by two real leaks active at the time (an
+	// unfreed swiglu output, and an unfreed logits array on every
+	// cache-building chunk). With both fixed, re-running the same sweep
+	// shows the opposite: peak scales cleanly with chunk length (20K-token
+	// prefill, same 4B model): 4096->12.4GB, 2048->8.3GB, 1024->6.0GB,
+	// 512->4.8GB, 256->4.2GB, 128->4.0GB, all at ~65-78s wall time (flat,
+	// i.e. no throughput cost). This confirms the fused SDPA kernel's own
+	// scratch scales with query chunk length even under an identical
+	// causal-mask call to mlx-lm's, and matches mlx-lm's smaller default
+	// (2048) pointing the same direction. Picked 512: past that point
+	// returns diminish fast (256/128 only shave another 12%/5%) for 4x/8x
+	// more chunk-loop iterations, which isn't validated across the other
+	// architectures (LFM2, Gemma4) sharing this chunking path.
+	const prefillChunkSize = 512
 
 	if seqLen <= prefillChunkSize || cache == nil {
-		return q.prefillInternalChunk(ids, seqLen, startPos, cache)
+		return q.prefillInternalChunk(ids, seqLen, startPos, cache, true)
 	}
 
 	s := q.stream
 	idsShape := ids.Shape()
 
 	// Process all but the last chunk as cache-building passes.
-	// We don't need logits from these — just the KV cache extension.
+	// We don't need logits from these — just the KV cache extension. Passing
+	// needLogits=false skips the vocab-projection matmul entirely (previously
+	// run and discarded every chunk — wasted compute) and, critically, skips
+	// allocating the logits array that was leaking: it was computed then
+	// thrown away via `_`, never freed, +1 live array per cache-building
+	// chunk (confirmed via ArrayLiveStats: live incremented exactly between
+	// the after-setLastHidden and after-computeLogitsLast checkpoints, every
+	// chunk, matching this call site precisely).
 	for processed := 0; processed+prefillChunkSize < seqLen; processed += prefillChunkSize {
 		chunkLen := prefillChunkSize
 		chunkIDs, err := q.backend.Slice(ids, []int{0, processed}, []int{idsShape[0], processed + chunkLen}, []int{1, 1}, s)
 		if err != nil {
 			return nil, fmt.Errorf("prefill chunk slice at %d: %w", processed, err)
 		}
-		_, err = q.prefillInternalChunk(chunkIDs, chunkLen, startPos+processed, cache)
+		_, err = q.prefillInternalChunk(chunkIDs, chunkLen, startPos+processed, cache, false)
 		chunkIDs.Free()
 		if err != nil {
 			return nil, fmt.Errorf("prefill chunk at %d: %w", processed, err)
@@ -398,11 +410,15 @@ func (q *Qwen35) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *
 		return nil, fmt.Errorf("last chunk slice: %w", err)
 	}
 	defer lastChunkIDs.Free()
-	return q.prefillInternalChunk(lastChunkIDs, lastChunkLen, startPos+lastChunkStart, cache)
+	return q.prefillInternalChunk(lastChunkIDs, lastChunkLen, startPos+lastChunkStart, cache, true)
 }
 
 // prefillInternalChunk runs the full model over a single chunk of tokens.
-func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache) (tensor.Array, error) {
+// needLogits controls whether the final vocab projection runs at all: cache-
+// building chunks in prefillInternal's chunked loop only need the KV cache
+// side effect, so skipping it avoids both the wasted matmul and an unfreed
+// throwaway logits array.
+func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, cache *llm.KVCache, needLogits bool) (tensor.Array, error) {
 	s := q.stream
 
 	h, err := q.weights.embed.Lookup(ids, q.backend, s)
@@ -456,6 +472,16 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 	}
 	if debugMem {
 		logPrefillLayerMem(-1, "after-setLastHidden", seqLen)
+	}
+
+	if !needLogits {
+		if err := s.Synchronize(); err != nil {
+			return nil, fmt.Errorf("synchronize: %w", err)
+		}
+		if debugMem {
+			logPrefillLayerMem(-1, "after-final-sync", seqLen)
+		}
+		return nil, nil
 	}
 
 	logits, err := q.computeLogitsLast(h, seqLen)

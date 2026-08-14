@@ -214,6 +214,16 @@
           "tools",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Pro preview - flagship MoE model (1.6T total, 49B active) with 1M context",
+        "id": "deepseek-v4-pro:preview",
+        "name": "DeepSeek V4 Pro Preview",
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
       }
     ]
   },

@@ -62,6 +62,114 @@ struct ggml_tensor * ggml_swiglu_custom(struct ggml_context * ctx, struct ggml_t
     return ggml_map_custom2(ctx, a, b, swiglu_f32, GGML_N_TASKS_MAX, NULL);
 }
 
+// Fused Gated DeltaNet recurrence kernel.
+// Args via dst->src: [0]=q[B,S,Hk,Dk], [1]=k[B,S,Hk,Dk], [2]=v[B,S,Hv,Dv],
+// [3]=g[B,S,Hv], [4]=beta[B,S,Hv], [5]=state_in[B,Hv,Dv,Dk], [6]=state_out[B,Hv,Dv,Dk].
+// Output dst = y[B,S,Hv,Dv] in F32.
+// Parallelized across B*Hv*Dv; each thread processes one (b,hv,dv) row over all S steps.
+// Reductions over Dk use sequential double accumulation to match ggml_sum_rows byte-for-byte.
+void gated_delta_fused(struct ggml_tensor * dst, int ith, int nth, void * userdata) {
+    const float * q_data = (const float *)dst->src[0]->data;
+    const float * k_data = (const float *)dst->src[1]->data;
+    const float * v_data = (const float *)dst->src[2]->data;
+    const float * g_data = (const float *)dst->src[3]->data;
+    const float * beta_data = (const float *)dst->src[4]->data;
+    const float * state_data = (const float *)dst->src[5]->data;
+    float * so_data = (float *)dst->src[6]->data;
+    float * y_data = (float *)dst->data;
+
+    // GGML ne layout (column-major indexing):
+    // q/k: ne = [Dk, Hk, S, B], v: ne = [Dv, Hv, S, B]
+    // g/beta: ne = [Hv, S, B, 1], state: ne = [Dk, Dv, Hv, B]
+    int64_t Dk = dst->src[0]->ne[0], Hk = dst->src[0]->ne[1];
+    int64_t S = dst->src[0]->ne[2], B = dst->src[0]->ne[3];
+    int64_t Dv = dst->src[2]->ne[0], Hv = dst->src[2]->ne[1];
+    int64_t repeat = Hv / Hk;
+
+    // Row-major strides (all F32, element index = byte index / 4).
+    int64_t qk_stride = Hk * Dk; // per time step in q/k
+    int64_t v_stride = Hv * Dv;  // per time step in v/y
+    int64_t g_stride = Hv;       // per time step in g/beta
+
+    int64_t total = B * Hv * Dv;
+    for (int64_t idx = ith; idx < total; idx += nth) {
+        int dv = (int)(idx % Dv);
+        int hv = (int)((idx / Dv) % Hv);
+        int b = (int)(idx / (Dv * Hv));
+        int hk = (int)(hv / repeat);
+
+        // Thread-local state vector for this (b, hv, dv) across all dk.
+        float * state = alloca((size_t)Dk * sizeof(float));
+
+        // Load initial state: state[b,hv,dv,dk] → row-major index.
+        int64_t state_idx = b * Hv * Dv * Dk + hv * Dv * Dk + dv * Dk;
+        for (int dk = 0; dk < Dk; dk++) {
+            state[dk] = state_data[state_idx + dk];
+        }
+
+        // Time-step base indices (row-major).
+        int64_t q_idx = b * S * Hk * Dk + hk * Dk;
+        int64_t k_idx = q_idx; // Same layout as q.
+        int64_t v_idx = b * S * Hv * Dv + hv * Dv;
+        int64_t g_idx = b * S * Hv + hv;
+        int64_t beta_idx = g_idx; // Same layout as g.
+        int64_t y_idx = b * S * Hv * Dv + hv * Dv;
+
+        for (int t = 0; t < S; t++) {
+            float gt = g_data[g_idx];
+            float bt = beta_data[beta_idx];
+
+            // Decay: state *= g (elementwise).
+            for (int dk = 0; dk < Dk; dk++) {
+                state[dk] *= gt;
+            }
+
+            // kv_mem = sum_dk(state * k) — sequential left-to-right, double accumulation.
+            // Matches ggml_sum_rows → ggml_vec_sum_f32 (ggml_float = double).
+            double kv_sum = 0.0;
+            for (int dk = 0; dk < Dk; dk++) {
+                kv_sum += (double)(state[dk] * k_data[k_idx + dk]);
+            }
+            float kv_mem = (float)kv_sum;
+
+            // delta = (v - kv_mem) * beta.
+            float delta = (v_data[v_idx + dv] - kv_mem) * bt;
+
+            // state += k * delta, then y = sum_dk(state * q).
+            // Outer product is elementwise (MatMul with ne[0]=1 does a[0]*b[0]).
+            // y reduction uses the same sequential double accumulation as ggml_sum_rows.
+            double y_sum = 0.0;
+            for (int dk = 0; dk < Dk; dk++) {
+                state[dk] += k_data[k_idx + dk] * delta;
+                y_sum += (double)(state[dk] * q_data[q_idx + dk]);
+            }
+            y_data[y_idx + dv] = (float)y_sum;
+
+            g_idx += g_stride;
+            beta_idx += g_stride;
+            v_idx += v_stride;
+            q_idx += qk_stride;
+            k_idx += qk_stride;
+            y_idx += v_stride;
+        }
+
+        // Write final state_out[b,hv,dv,dk].
+        int64_t so_idx = state_idx;
+        for (int dk = 0; dk < Dk; dk++) {
+            so_data[so_idx + dk] = state[dk];
+        }
+    }
+}
+
+// Wrapper that creates the custom op node for the fused gated delta kernel.
+struct ggml_tensor * ggml_gated_delta(struct ggml_context * ctx, struct ggml_tensor ** args, int n_args) {
+    // args: [0]=q, [1]=k, [2]=v, [3]=g, [4]=beta, [5]=state, [6]=state_out.
+    // Output y: [B,S,Hv,Dv] → GGML ne [Dv,Hv,S,B] (same layout as v).
+    struct ggml_tensor * v = args[2];
+    return ggml_custom_4d(ctx, GGML_TYPE_F32, v->ne[0], v->ne[1], v->ne[2], v->ne[3],
+        args, n_args, gated_delta_fused, GGML_N_TASKS_MAX, NULL);
+}
+
 // The CPU backend is dlopened by ggml_backend_load_all, so its feature
 // predicates are not available at link time. Returns -1 when unresolved.
 int ggml_feat(const char * name) {
@@ -2043,6 +2151,130 @@ func (g *GGMLBackend) SwiGLU(gate, up tensor.Array, s tensor.Stream) (tensor.Arr
 	out.logicalShape = append([]int(nil), gate.Shape()...)
 	g.registerArray(out)
 	return out, nil
+}
+
+// GatedDeltaUpdate runs the full Gated DeltaNet recurrence in a single fused
+// kernel, replacing ~18 eager ops per step. Matches gatedDeltaStep4D
+// byte-for-byte: sequential double accumulation for the Dk reductions,
+// elementwise outer product for the state update, and F32 output cast to
+// q's dtype.
+//
+// Inputs: q,k [B,S,Hk,Dk], v [B,S,Hv,Dv], g,beta [B,S,Hv],
+//
+//	state [B,Hv,Dv,Dk] or nil.
+//
+// Returns: y [B,S,Hv,Dv] (cast to q's dtype), state_out [B,Hv,Dv,Dk] (F32).
+func (g *GGMLBackend) GatedDeltaUpdate(q, k, v, gTensor, beta, state tensor.Array, s tensor.Stream) (tensor.Array, tensor.Array, error) {
+	if err := g.ensureInit(); err != nil {
+		return nil, nil, err
+	}
+	qs := q.Shape()
+	if len(qs) != 4 {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate q must be 4D, got %v", qs)
+	}
+	B, S, Hk, Dk := qs[0], qs[1], qs[2], qs[3]
+	vs := v.Shape()
+	if len(vs) != 4 {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate v must be 4D, got %v", vs)
+	}
+	Hv, Dv := vs[2], vs[3]
+	if vs[0] != B || vs[1] != S {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate v batch/seq mismatch: v=%v q=%v", vs, qs)
+	}
+	gs := gTensor.Shape()
+	if len(gs) != 3 || gs[0] != B || gs[1] != S || gs[2] != Hv {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate g shape mismatch: got %v want [%d,%d,%d]", gs, B, S, Hv)
+	}
+	betas := beta.Shape()
+	if len(betas) != 3 || betas[0] != B || betas[1] != S || betas[2] != Hv {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate beta shape mismatch: got %v want [%d,%d,%d]", betas, B, S, Hv)
+	}
+	if Hv%Hk != 0 {
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate Hv=%d not divisible by Hk=%d", Hv, Hk)
+	}
+
+	// Handle nil state: create a zeroed F32 state. stateArr (non-nil only when
+	// we allocated it) is freed via Free() so its buffer is deferred until the
+	// batch flush rather than recycled while the pending op still reads it.
+	var stateT *C.struct_ggml_tensor
+	var stateArr tensor.Array
+	if state != nil {
+		stateT = state.(*Array).cTensor()
+	} else {
+		zeroState, err := g.Zeros([]int{B, Hv, Dv, Dk}, tensor.Float32, s)
+		if err != nil {
+			return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate zero state: %w", err)
+		}
+		stateArr = zeroState
+		stateT = stateArr.(*Array).cTensor()
+	}
+
+	// Allocate state_out as a pinned F32 tensor in the result context. Its
+	// buffer is written by the kernel (a side channel, since ggml_custom_4d
+	// yields one output), so it must be pinned and stay alive until the flush.
+	stateOutT := createTensorIn(g.resultCtxPtr(), []int{B, Hv, Dv, Dk}, C.GGML_TYPE_F32)
+	if stateOutT == nil {
+		if stateArr != nil {
+			stateArr.Free()
+		}
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate state_out alloc failed")
+	}
+	if err := g.pinTensorData(stateOutT, nil); err != nil {
+		if stateArr != nil {
+			stateArr.Free()
+		}
+		return nil, nil, err
+	}
+
+	// Build 7-arg custom op: [q, k, v, g, beta, state, state_out].
+	ctx := g.ctxPtr()
+	args := [7]*C.struct_ggml_tensor{
+		q.(*Array).cTensor(),
+		k.(*Array).cTensor(),
+		v.(*Array).cTensor(),
+		gTensor.(*Array).cTensor(),
+		beta.(*Array).cTensor(),
+		stateT,
+		stateOutT,
+	}
+	node := C.ggml_gated_delta(ctx, &args[0], 7)
+	if node == nil {
+		if stateArr != nil {
+			stateArr.Free()
+		}
+		g.unpin(stateOutT)
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate custom op failed")
+	}
+
+	// Evaluate the op (batch or eager). The custom kernel writes y to its dst
+	// and state_out to args[6]'s pinned buffer.
+	y, err := g.evalOp(node)
+	if stateArr != nil {
+		stateArr.Free()
+	}
+	if err != nil {
+		g.unpin(stateOutT)
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate eval: %w", err)
+	}
+
+	// Cast y to q's dtype (matches the reference's AsType(y, q.Dtype())).
+	yCast, err := g.AsType(y, q.Dtype(), s)
+	y.Free()
+	if err != nil {
+		g.unpin(stateOutT)
+		return nil, nil, fmt.Errorf("ggml: GatedDeltaUpdate y cast: %w", err)
+	}
+	yCast.(*Array).logicalShape = []int{B, S, Hv, Dv}
+	g.registerArray(yCast.(*Array))
+
+	// Wrap state_out as a result Array (F32).
+	stateOut := g.newArray(stateOutT)
+	stateOut.result = true
+	atomic.AddInt64(&g.resultLive, 1)
+	stateOut.logicalShape = []int{B, Hv, Dv, Dk}
+	g.registerArray(stateOut)
+
+	return yCast, stateOut, nil
 }
 
 func (g *GGMLBackend) Softplus(a tensor.Array, s tensor.Stream) (tensor.Array, error) {

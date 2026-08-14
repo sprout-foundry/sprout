@@ -143,6 +143,9 @@ func onboardingLocal() (string, bool) {
 		console.GlyphSuccess.Printf("Local server running (model: %s)", selected.Name)
 	}
 
+	fmt.Println()
+	console.GlyphWarning.Printf("Local AI is experimental: output quality varies more than cloud providers, and memory use can spike well beyond configured limits during generation.")
+
 	// Persist the config.
 	modelName := selected.Name
 	if err := persistProviderAndModel("sprout-local", modelName); err != nil {

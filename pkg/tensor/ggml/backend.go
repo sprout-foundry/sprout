@@ -427,6 +427,11 @@ func (a *Array) Size() int {
 	return int(C.tensor_nelements(a.tensor))
 }
 
+// AsyncEval is a synchronous alias on GGML: unlike MLX, this backend has no
+// async dispatch queue to pipeline against, so there is nothing to gain by
+// deferring — just do the work now.
+func (a *Array) AsyncEval() error { return a.Eval() }
+
 func (a *Array) Eval() error {
 	if a.hasData || a.tensor == nil {
 		return nil

@@ -66,6 +66,9 @@ func AsType(a *Array, dtype Dtype, s *Stream) (*Array, error) { return nil, errU
 // Eval always returns errUnavailable on stub builds.
 func (a *Array) Eval() error { return errUnavailable }
 
+// AsyncEval always returns errUnavailable on stub builds.
+func (a *Array) AsyncEval() error { return errUnavailable }
+
 // Float32Data always returns errUnavailable on stub builds.
 func (a *Array) Float32Data() ([]float32, error) { return nil, errUnavailable }
 

@@ -33,6 +33,7 @@ package mlx
 #include <mlx/c/error.h>
 #include <mlx/c/ops.h>
 #include <mlx/c/stream.h>
+#include <mlx/c/transforms.h>
 #include <mlx/c/vector.h>
 
 // Defined in mlx_error_shim.c; forwards to the exported Go error handler.
@@ -45,6 +46,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -170,7 +172,18 @@ func (a *Array) finalize() {
 	if a.handle.ctx != nil {
 		C.mlx_array_free(a.handle)
 		a.handle.ctx = nil
+		atomic.AddInt64(&arraysLive, -1)
 	}
+}
+
+// finalizeViaGC is registered as the runtime finalizer (see wrap). It only
+// ever runs for an Array that was never explicitly Free()'d — Free clears
+// the finalizer before calling finalize() itself. Counting these separately
+// from ArrayLiveCount answers "is something relying on GC instead of an
+// explicit Free" directly, without GPU-level profiling tools.
+func (a *Array) finalizeViaGC() {
+	atomic.AddInt64(&arraysGCFinalized, 1)
+	a.finalize()
 }
 
 // Free releases the underlying MLX handle. Safe to call multiple times and
@@ -194,12 +207,33 @@ func RetainArray(a *Array) *Array {
 	return wrap(retained)
 }
 
+// arraysLive is created-minus-finalized, a running count of outstanding MLX
+// array handles. arraysGCFinalized counts only those reclaimed by the
+// runtime finalizer (i.e. never explicitly Free()'d) — see ArrayLiveStats.
+var (
+	arraysLive        int64
+	arraysGCFinalized int64
+)
+
+// ArrayLiveStats reports outstanding-handle diagnostics: how many Array
+// wrappers are currently live, and how many have ever been reclaimed only by
+// the GC finalizer rather than an explicit Free(). A rising GC-finalized
+// count over the course of one long-running call means something is relying
+// on GC timing instead of freeing deterministically — GC runs on its own
+// schedule, not in step with allocation, so the underlying MLX/Metal memory
+// can sit unreclaimed far longer than the Go wrapper struct's own tiny size
+// would suggest from a heap profile alone.
+func ArrayLiveStats() (live, gcFinalized int64) {
+	return atomic.LoadInt64(&arraysLive), atomic.LoadInt64(&arraysGCFinalized)
+}
+
 // wrap turns a freshly created C.mlx_array into a Go *Array with a finalizer.
 // The returned Array owns the handle. Assumes the caller just created the
 // handle (new or from an op) and the caller will not free it themselves.
 func wrap(h C.mlx_array) *Array {
 	a := &Array{handle: h}
-	runtime.SetFinalizer(a, (*Array).finalize)
+	runtime.SetFinalizer(a, (*Array).finalizeViaGC)
+	atomic.AddInt64(&arraysLive, 1)
 	return a
 }
 
@@ -343,6 +377,20 @@ func (a *Array) cHandle() C.mlx_array {
 // arrays are queued on a stream; Eval blocks until the value is materialized.
 func (a *Array) Eval() error {
 	return checkRC(C.mlx_array_eval(a.cHandle()), "eval")
+}
+
+// AsyncEval schedules a lazy array's graph for evaluation without blocking
+// the caller. Use this to kick off one decode step's GPU work, then build
+// and dispatch the NEXT step's graph (feeding this array in as a still-lazy
+// input rather than reading it back first) before finally blocking on this
+// step's result — overlapping GPU execution of step N with CPU-side graph
+// construction of step N+1. Mirrors mlx-lm's decode loop, which pipelines
+// the same way via Python's mx.async_eval.
+func (a *Array) AsyncEval() error {
+	handles := []C.mlx_array{a.cHandle()}
+	vec := C.mlx_vector_array_new_data(&handles[0], C.size_t(len(handles)))
+	defer C.mlx_vector_array_free(vec)
+	return checkRC(C.mlx_async_eval(vec), "async_eval")
 }
 
 // RawBytes returns the raw underlying bytes of the array. Evaluates first.

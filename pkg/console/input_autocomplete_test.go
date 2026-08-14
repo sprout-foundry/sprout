@@ -263,7 +263,7 @@ func TestAutocomplete_RenderRowsStartAtColumnZero(t *testing.T) {
 		},
 	}
 
-	output := captureStdout(t, func() { a.render() })
+	output := captureStdout(t, func() { a.render(80) })
 
 	// Fixed sequence: move-down + carriage return + clear-line.
 	// MoveCursorDownSeq(1) emits "\x1b[1B" (not "\x1b[B" — it includes the

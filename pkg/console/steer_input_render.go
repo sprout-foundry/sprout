@@ -5,38 +5,6 @@ import (
 	"strings"
 )
 
-// maxSteerDropdownRows is how many candidate rows the steer-panel
-// dropdown will render above the input line. The footer caps the steer
-// panel at maxSteerRows=6, so we reserve the last row for the input
-// line and render up to 5 candidates above it.
-const maxSteerDropdownRows = 5
-
-// formatSteerDropdownRow renders a single candidate as a steer-panel
-// row. The selected row uses a "▶" marker prefix; unselected rows use
-// two spaces. This deliberately avoids embedding ANSI escape codes
-// (reverse video) in the text because the footer's WrapSteerLayout
-// is not ANSI-aware — ANSI bytes would be counted as visible width
-// and cause incorrect wrapping/truncation.
-func formatSteerDropdownRow(c CompletionCandidate, selected bool, cols int) string {
-	const marker = "▶ "
-	const markerOff = "  "
-	prefix := markerOff
-	if selected {
-		prefix = marker
-	}
-
-	body := " " + c.Text
-	if c.Description != "" {
-		body = body + "  " + c.Description
-	}
-	budget := cols - displayWidth(prefix)
-	if budget < 1 {
-		budget = 1
-	}
-	body = truncateLinePreservingANSI(body, budget)
-	return prefix + body
-}
-
 // renderLine asks the footer to repaint the pinned input row with the
 // current buffer and a mode-specific prefix. The prefix is included
 // here (not in the footer) so the footer stays content-agnostic and
@@ -183,8 +151,8 @@ func (r *SteerInputReader) refreshDropdownLocked(text string, cursorByte int) bo
 // moment of render.
 func (r *SteerInputReader) buildDropdownLine(prefix, text string, cursorByte, cols int, candidates []CompletionCandidate, selected int) (full string, cursorRow, cursorCol int) {
 	n := len(candidates)
-	if n > maxSteerDropdownRows {
-		n = maxSteerDropdownRows
+	if n > maxDropdownRows {
+		n = maxDropdownRows
 	}
 
 	// Each candidate row is pre-truncated to `cols` visible columns so
@@ -193,7 +161,7 @@ func (r *SteerInputReader) buildDropdownLine(prefix, text string, cursorByte, co
 	// wrap a candidate across two rows when its content overflows.)
 	rows := make([]string, 0, n+1)
 	for i := 0; i < n; i++ {
-		rows = append(rows, formatSteerDropdownRow(candidates[i], i == selected, cols))
+		rows = append(rows, formatDropdownRow(candidates[i], i == selected, cols))
 	}
 
 	inputLine := prefix + text

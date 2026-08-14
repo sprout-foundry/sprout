@@ -30,6 +30,8 @@ interface BootstrapResponse {
     email: string;
     tier: string;
   };
+  /** URLs of external plugin script bundles (IIFE) to load after adapter installation. */
+  pluginScripts?: string[];
 }
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
@@ -51,6 +53,23 @@ const LOCALHOST_DEFAULTS: RuntimeConfig = {
 };
 
 let lastConfig: RuntimeConfig = LOCALHOST_DEFAULTS;
+
+/**
+ * Load external plugin scripts (IIFE bundles) by injecting <script> tags.
+ * Called after the adapter is installed so the registration global
+ * (window.__sproutRegisterPlugin) is in place before the script runs.
+ */
+function loadPluginScripts(urls: string[]): void {
+  if (typeof document === 'undefined') return;
+  for (const url of urls) {
+    const script = document.createElement('script');
+    script.src = url;
+    script.defer = true;
+    script.onload = () => console.warn(`[sprout] Plugin script loaded: ${url}`);
+    script.onerror = () => console.error(`[sprout] Failed to load plugin script: ${url}`);
+    document.head.appendChild(script);
+  }
+}
 
 /**
  * Most recently resolved user identity from bootstrap. Undefined when the
@@ -168,6 +187,12 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
       currentUserIdentity = config.user;
       // eslint-disable-next-line no-console
       installAdapterForConfig(config);
+
+      // Load any plugin scripts advertised by the server.
+      if (data.pluginScripts && Array.isArray(data.pluginScripts)) {
+        loadPluginScripts(data.pluginScripts);
+      }
+
       return config;
     }
   } catch (err: unknown) {

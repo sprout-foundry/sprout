@@ -10,7 +10,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { supportsGit } from '../config/mode';
 import { debugLog } from '../utils/log';
 
-export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'automations';
+export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'automations' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
 
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 600;

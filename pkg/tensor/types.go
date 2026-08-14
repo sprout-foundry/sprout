@@ -48,6 +48,10 @@ type Array interface {
 	Ndim() int
 	Size() int
 	Eval() error
+	// AsyncEval schedules the array's graph for evaluation without blocking.
+	// Backends without an async dispatch queue may implement this as a
+	// synchronous Eval.
+	AsyncEval() error
 	Free()
 	Float32Data() ([]float32, error)
 	RawBytes() ([]byte, error)

@@ -173,6 +173,7 @@ func NewModel(modelDir string) (*Model, error) {
 	if cfg.EOSTokenID <= 0 || tok.EOSID() > 0 {
 		cfg.EOSTokenID = tok.EOSID()
 	}
+	log.Printf("llm: resolved EOSTokenID=%d (tokenizer EOSID=%d, config.json eos_token_id raw pre-fallback logged above if mismatched)", cfg.EOSTokenID, tok.EOSID())
 
 	// Weights are loaded using the default stream; actual inference creates
 	// a fresh GPU stream on the calling thread (MLX streams are thread-local).
@@ -494,17 +495,22 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 		log.Printf("llm: prefill: path=%s tokens_processed=%d elapsed=%.2fs", path, processed, time.Since(prefillStart).Seconds())
 	}
 
+	logGenMem("before-prefix-slot-bookkeeping")
 	// Snapshot the prompt-only K/V for the next request BEFORE decoding
 	// (decode appends generated tokens to the working cache; the snapshot
 	// keeps just the prompt prefix alive). Drop caching for very long
 	// prompts so a huge history doesn't pin memory forever.
 	if len(tokenIDs) <= maxPrefixLen {
-		newIdx := m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), cache.SnapshotPrefix())
+		snap := cache.SnapshotPrefix()
+		logGenMem("after-SnapshotPrefix")
+		newIdx := m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), snap)
+		logGenMem("after-storePrefixSlot")
 		// Only the conversation that just generated needs to stay
 		// GPU-resident; every other remembered conversation gets spilled to
 		// disk right now, before this call returns, so peak memory never
 		// includes more than one slot's worth of KV cache at rest.
 		m.spillIdleSlots(newIdx)
+		logGenMem("after-spillIdleSlots")
 	} else if slotIdx >= 0 {
 		// This conversation grew past the cacheable size — drop its slot
 		// rather than let it keep pinning memory (or disk) for no future
@@ -519,7 +525,20 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	useGPUArgmax := greedyOK && genCfg.Temperature <= 0 && genCfg.RepetitionPenalty == 0
 	mtpArch, mtpOK := m.arch.(MTPArchitecture)
 	useMTP := useGPUArgmax && mtpOK && mtpArch.MTPAvailable() && genCfg.MaxMTPDrafts > 0 && genCfg.MaxTokens > 1
-	usePromptLookup := useGPUArgmax && !useMTP && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
+	// Pipelined single-token decode (see PipelinedGreedyArchitecture) takes
+	// priority over prompt-lookup: both are decode-loop-level throughput
+	// strategies, and combining them would mean materializing tokens
+	// synchronously to search for n-gram candidates, defeating pipelining's
+	// whole point of NOT reading back every step. Pipelining alone recovers
+	// the bulk of the gap against mlx-lm; prompt-lookup on top is future work.
+	pipelinedArch, pipelinedOK := m.arch.(PipelinedGreedyArchitecture)
+	// SPROUT_PIPELINE_DECODE=1 opts in. Defaults OFF: TestPipelinedDecodeParityLiveModel
+	// found this path produces genuinely different output from the plain
+	// per-token path on every tested prompt (diverges from the first
+	// generated token in some cases) — a real correctness bug, not yet
+	// root-caused. Do not flip this default without a passing parity test.
+	usePipelined := useGPUArgmax && !useMTP && pipelinedOK && os.Getenv("SPROUT_PIPELINE_DECODE") == "1"
+	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
 
 	nextToken := 0
 	if useGPUArgmax {
@@ -530,6 +549,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 		}
 		nextToken = sample(logits, genCfg)
 	}
+	logGenMem("after-argmax-before-decode-branch")
 	if onToken != nil && !m.shouldFilterToken(nextToken, genCfg) {
 		onToken(nextToken)
 	}
@@ -541,6 +561,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 		// 1-layer MTP head, verify all in one batched main-model forward.
 		mtpDrafts := genCfg.MaxMTPDrafts
 		pos := len(tokenIDs) // position of nextToken (first generated token)
+	mtpOuter:
 		for i := 1; i < genCfg.MaxTokens; {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -549,26 +570,116 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 				break
 			}
 
+			if i == 1 {
+				logGenMem("before-first-ForwardDecodeMTP")
+			}
 			out, err := mtpArch.ForwardDecodeMTP(nextToken, pos, cache, mtpDrafts)
+			if i == 1 {
+				logGenMem("after-first-ForwardDecodeMTP")
+			}
 			if err != nil {
 				return fmt.Errorf("mtp decode: %w", err)
 			}
 			pos += len(out)
+			// A single MTP round drafts+verifies a whole batch (out) at
+			// once; the stop token can land mid-batch, not just at the end.
+			// nextToken must track the LAST TOKEN ACTUALLY EMITTED — using
+			// out[len(out)-1] unconditionally (the old behavior) could pick
+			// a token from PAST the stop token, and breaking only the inner
+			// loop left the outer loop's own isStopToken check unable to see
+			// it, so generation silently continued past EOS into a
+			// hallucinated next turn. break mtpOuter on stop (not break)
+			// exits decode immediately, matching every other decode path.
 			for _, t := range out {
 				if i >= genCfg.MaxTokens {
-					break
+					break mtpOuter
 				}
 				generated = append(generated, t)
 				if onToken != nil && !m.shouldFilterToken(t, genCfg) {
 					onToken(t)
 				}
 				i++
+				nextToken = t
 				if m.isStopToken(t) {
-					break
+					break mtpOuter
 				}
 			}
-			nextToken = out[len(out)-1]
 		}
+		return nil
+	}
+
+	if usePipelined {
+		// curArr always enters each iteration already dispatched (AsyncEval
+		// called either here or by the previous iteration's
+		// ForwardDecodeArgmaxArray) — see PipelinedGreedyArchitecture.
+		curArr, err := m.backend.NewArrayFromInt64([]int64{int64(nextToken)}, []int{1, 1})
+		if err != nil {
+			return fmt.Errorf("pipelined decode: seed token array: %w", err)
+		}
+		if err := curArr.AsyncEval(); err != nil {
+			curArr.Free()
+			return fmt.Errorf("pipelined decode: seed async eval: %w", err)
+		}
+		pos := len(tokenIDs)
+		iterStart := time.Now()
+		for i := 1; i < genCfg.MaxTokens; i++ {
+			if err := ctx.Err(); err != nil {
+				curArr.Free()
+				return err
+			}
+			if m.isStopToken(nextToken) {
+				curArr.Free()
+				break
+			}
+			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" && i > 1 {
+				log.Printf("llm: pipelined iter %d: pre-loop-body gap=%.3fs", i, time.Since(iterStart).Seconds())
+			}
+
+			// Build and dispatch the NEXT step's graph, chained onto curArr
+			// as its (possibly still-computing) embedding-lookup input. This
+			// runs on the CPU while curArr's own GPU computation — already
+			// dispatched before this loop or by the prior iteration —
+			// continues concurrently; only after this do we block reading
+			// curArr's value below. That overlap is the entire point (see
+			// PipelinedGreedyArchitecture).
+			stepStart := time.Now()
+			nextArr, err := pipelinedArch.ForwardDecodeArgmaxArray(curArr, pos, cache)
+			buildElapsed := time.Since(stepStart)
+			if err != nil {
+				curArr.Free()
+				return fmt.Errorf("pipelined decode step %d: %w", i, err)
+			}
+			pos++
+
+			readStart := time.Now()
+			data, err := curArr.Int64Data()
+			readElapsed := time.Since(readStart)
+			curArr.Free()
+			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+				log.Printf("llm: pipelined decode step %d: pos=%d build=%.3fs read=%.3fs total=%.3fs",
+					i, pos, buildElapsed.Seconds(), readElapsed.Seconds(), time.Since(stepStart).Seconds())
+			}
+			if err != nil {
+				nextArr.Free()
+				return fmt.Errorf("pipelined decode step %d: read token: %w", i, err)
+			}
+			if len(data) == 0 {
+				nextArr.Free()
+				return fmt.Errorf("pipelined decode step %d: empty token readback", i)
+			}
+			nextToken = int(data[0])
+			generated = append(generated, nextToken)
+			onTokStart := time.Now()
+			if onToken != nil && !m.shouldFilterToken(nextToken, genCfg) {
+				onToken(nextToken)
+			}
+			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+				log.Printf("llm: pipelined iter %d: onToken+bookkeeping=%.3fs", i, time.Since(onTokStart).Seconds())
+			}
+			curArr = nextArr
+			iterStart = time.Now()
+		}
+		curArr.Free()
 		return nil
 	}
 
@@ -591,7 +702,11 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 
 			candidates := findPromptLookupCandidates(allTokens, ngGramSize, maxDraft)
 			if len(candidates) == 0 || !canVerify {
+				stepStart := time.Now()
 				t, err := greedyArch.ForwardDecodeArgmax(nextToken, pos, cache)
+				if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+					log.Printf("llm: decode step %d: cheap path pos=%d elapsed=%.3fs", i, pos, time.Since(stepStart).Seconds())
+				}
 				if err != nil {
 					return fmt.Errorf("decode step %d: %w", i, err)
 				}
@@ -609,9 +724,13 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 			// Batched verify: feed [nextToken, candidates...] through the model.
 			// predictions[j] = what the model thinks follows verifyIDs[j].
 			// Take a snapshot before verify so we can rollback on rejection.
+			stepStart := time.Now()
 			snap := cache.SnapshotPrefix()
 			verifyIDs := append([]int{nextToken}, candidates...)
 			predictions, err := verifyArch.ForwardPrefillArgmaxAll(verifyIDs, pos, cache)
+			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+				log.Printf("llm: decode step %d: verify path pos=%d candidates=%d elapsed=%.3fs", i, pos, len(candidates), time.Since(stepStart).Seconds())
+			}
 			if err != nil {
 				snap.Free()
 				return fmt.Errorf("prompt-lookup verify: %w", err)
@@ -681,7 +800,13 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 		recent := recentTokens[recentStart:]
 
 		if useGPUArgmax {
+			if i == 1 {
+				logGenMem("before-first-plain-ForwardDecodeArgmax")
+			}
 			nextToken, err = greedyArch.ForwardDecodeArgmax(nextToken, len(tokenIDs)+i-1, cache)
+			if i == 1 {
+				logGenMem("after-first-plain-ForwardDecodeArgmax")
+			}
 			if err != nil {
 				return fmt.Errorf("decode step %d: %w", i, err)
 			}

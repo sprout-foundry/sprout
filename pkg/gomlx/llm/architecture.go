@@ -73,6 +73,34 @@ type GreedyArchitecture interface {
 	ForwardDecodeArgmax(tokenID int, pos int, cache *KVCache) (int, error)
 }
 
+// PipelinedGreedyArchitecture is an optional refinement of GreedyArchitecture
+// for architectures that can keep the sampled token as a lazy tensor array
+// between decode steps instead of reading it back to a Go int every step.
+//
+// MLX is a lazy-graph framework: an op only does real GPU work once something
+// forces evaluation (reading its data, printing it, etc). mlx-lm's own decode
+// loop exploits this — it builds step N+1's graph fed directly from step N's
+// still-unevaluated output array, calls mx.async_eval to dispatch it, and
+// only blocks on step N's own result afterward. That overlaps GPU execution
+// of one step with CPU-side graph construction of the next. The prior
+// Go decode loop read back a concrete int after every single step (forced by
+// ForwardDecodeArgmax's signature), which serialized construction and
+// execution with no overlap — a measured ~4x slower decode than mlx-lm on
+// the identical model despite comparable prefill throughput, pointing at a
+// dispatch/pipelining gap rather than a compute one.
+type PipelinedGreedyArchitecture interface {
+	GreedyArchitecture
+
+	// ForwardDecodeArgmaxArray runs a single-token decode step. tokenArr is
+	// the previous step's sampled token as a [1,1] integer array — it may
+	// still be an unevaluated lazy graph node, in which case this call
+	// chains onto it rather than forcing readback. Returns the new token as
+	// a [1,1] array with AsyncEval already called on it (dispatched,
+	// non-blocking); the caller owns it and must Free it, and must read it
+	// back (Uint32Data/Int64Data) before relying on its concrete value.
+	ForwardDecodeArgmaxArray(tokenArr tensor.Array, pos int, cache *KVCache) (tensor.Array, error)
+}
+
 // MTPArchitecture is an optional refinement implemented by architectures
 // with a multi-token prediction head (e.g. raw Qwen3.5 HF exports carry
 // mtp.* tensors; mlx-community conversions strip them). It enables

@@ -21,14 +21,7 @@
  */
 
 import { Annotation, Prec, StateEffect, StateField, type Extension } from '@codemirror/state';
-import {
-  Decoration,
-  EditorView,
-  ViewPlugin,
-  type ViewUpdate,
-  WidgetType,
-  keymap,
-} from '@codemirror/view';
+import { Decoration, EditorView, ViewPlugin, type ViewUpdate, WidgetType, keymap } from '@codemirror/view';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 

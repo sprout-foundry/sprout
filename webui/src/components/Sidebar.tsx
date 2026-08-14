@@ -4,6 +4,7 @@ import { supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../co
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
+import { usePlugins } from '../contexts/PluginContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
@@ -201,6 +202,7 @@ function Sidebar({
     setFormatOnSaveEnabled,
   } = useEditorManager();
   const { platformNavItems } = usePlatformNav();
+  const { pluginViews, pluginPanels } = usePlugins();
   const sortedPlatformNavItems = useMemo(
     () => [...platformNavItems].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
     [platformNavItems],
@@ -385,6 +387,12 @@ function Sidebar({
           />
         ) : null;
       default:
+        // Check if this is a plugin panel
+        const pluginPanel = pluginPanels.find((p) => p.id === effectiveSelectedSection);
+        if (pluginPanel) {
+          const PanelComponent = pluginPanel.component;
+          return <PanelComponent />;
+        }
         return null;
     }
   };
@@ -467,6 +475,7 @@ function Sidebar({
                 <nav aria-label="Platform navigation">
                   {sortedPlatformNavItems.map((item) => {
                     const IconComponent = item.icon ? (PLATFORM_ICON_MAP[item.icon] ?? ExternalLink) : ExternalLink;
+                    const hasPluginView = pluginViews.some((v) => v.id === item.id);
                     const isActive = currentView === item.id;
                     return (
                       <button
@@ -475,10 +484,41 @@ function Sidebar({
                         aria-selected={isActive}
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
-                          window.location.href = item.href;
+                          if (hasPluginView) {
+                            onViewChange?.(item.id);
+                          } else {
+                            window.location.href = item.href;
+                          }
                         }}
                         title={item.label}
                         aria-label={item.label}
+                      >
+                        <IconComponent size={18} strokeWidth={1.5} />
+                      </button>
+                    );
+                  })}
+                </nav>
+              </>
+            )}
+
+            {/* Plugin Panels (between platform nav and costs) */}
+            {pluginPanels.length > 0 && (
+              <>
+                <div className="sidebar-icon-rail-divider" role="separator" />
+                <nav aria-label="Plugin panels">
+                  {pluginPanels.map((panel) => {
+                    const IconComponent = panel.icon ? (PLATFORM_ICON_MAP[panel.icon] ?? ExternalLink) : ExternalLink;
+                    const isActive = effectiveSelectedSection === panel.id;
+                    return (
+                      <button
+                        key={panel.id}
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-controls="sidebar-tabpanel"
+                        className={`rail-icon ${isActive ? 'active' : ''}`}
+                        onClick={() => handleSectionTabClick(panel.id)}
+                        title={panel.label}
+                        aria-label={panel.label}
                       >
                         <IconComponent size={18} strokeWidth={1.5} />
                       </button>

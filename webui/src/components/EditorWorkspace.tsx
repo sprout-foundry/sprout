@@ -2,6 +2,7 @@ import { SkeletonText } from '@sprout/ui';
 import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
 import React, { Suspense, lazy, useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
+import { usePlugins } from '../contexts/PluginContext';
 import type { PerChatState, ViewType } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
@@ -547,6 +548,20 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     window.addEventListener('sprout:hotkey', handleHotkey);
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [handleFocusPaneIndex]);
+
+  const { pluginViews } = usePlugins();
+
+  const activePluginView = pluginViews.find((v) => v.id === currentView);
+  if (activePluginView) {
+    const Component = activePluginView.component;
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Component onBack={() => onViewChange?.('chat')} onNavigate={(id) => onViewChange?.(id)} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   if (currentView === 'costs') {
     return (

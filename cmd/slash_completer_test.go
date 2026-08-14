@@ -279,15 +279,22 @@ func TestGetArgCompletionsEmptyFetchDoesNotBlockTyping(t *testing.T) {
 	}
 }
 
+// resetGlobalSlashCache clears the shared arg-completion cache so each
+// completer test starts from a clean slate regardless of what a prior
+// test cached. globalSlashCache is a process-wide singleton.
+func resetGlobalSlashCache() {
+	globalSlashCache.mu.Lock()
+	globalSlashCache.argCache = make(map[string]argCacheEntry)
+	globalSlashCache.mu.Unlock()
+}
+
 // TestBuildRichSlashCommandCompleterArgumentPath exercises the live
 // dropdown completer against the real registry. /tools implements
 // CompletableCommand with static arguments; a nil chatAgent is fine
 // because ToolsCommand.Complete ignores the agent.
 func TestBuildRichSlashCommandCompleterArgumentPath(t *testing.T) {
-	completer := buildRichSlashCommandCompleter(nil)
-	globalSlashCache.mu.Lock()
-	globalSlashCache.argCache = make(map[string]argCacheEntry)
-	globalSlashCache.mu.Unlock()
+	completer := buildRichSlashCommandCompleter(nil, false)
+	resetGlobalSlashCache()
 
 	// No space: command-name completion phase.
 	cands := completer("/tool", len("/tool"))
@@ -330,5 +337,100 @@ func TestBuildRichSlashCommandCompleterArgumentPath(t *testing.T) {
 	sort.Strings(names)
 	if len(names) != 2 || names[0] != "off" || names[1] != "on" {
 		t.Fatalf("typed prefix: got %v, want [off on]", names)
+	}
+}
+
+// TestBuildRichSlashCommandCompleter_PerModeFiltering verifies that the
+// steer-only mode excludes unsafe commands from autocomplete, while the
+// REPL mode includes all commands.
+func TestBuildRichSlashCommandCompleter_PerModeFiltering(t *testing.T) {
+	resetGlobalSlashCache()
+
+	// REPL mode (steerOnly=false): both safe and unsafe commands appear.
+	replCompleter := buildRichSlashCommandCompleter(nil, false)
+	replCands := replCompleter("/", 1)
+
+	replNames := make(map[string]bool)
+	for _, c := range replCands {
+		replNames[c.Text] = true
+	}
+
+	// /info is steer-safe and should appear in REPL.
+	if !replNames["/info"] {
+		t.Error("REPL mode: /info should be available")
+	}
+	// /commit is NOT steer-safe but SHOULD appear in REPL.
+	if !replNames["/commit"] {
+		t.Error("REPL mode: /commit should be available (REPL mode includes all commands)")
+	}
+
+	// Steer mode (steerOnly=true): only safe commands appear.
+	steerCompleter := buildRichSlashCommandCompleter(nil, true)
+	steerCands := steerCompleter("/", 1)
+
+	steerNames := make(map[string]bool)
+	for _, c := range steerCands {
+		steerNames[c.Text] = true
+	}
+
+	// /info is steer-safe and should appear in steer.
+	if !steerNames["/info"] {
+		t.Error("Steer mode: /info should be available")
+	}
+	// /commit is NOT steer-safe and should NOT appear in steer.
+	if steerNames["/commit"] {
+		t.Error("Steer mode: /commit should NOT be available (it's unsafe during steer)")
+	}
+
+	// Steer should have fewer or equal candidates than REPL.
+	if len(steerCands) > len(replCands) {
+		t.Errorf("Steer mode should have ≤ candidates than REPL, got %d vs %d", len(steerCands), len(replCands))
+	}
+}
+
+// TestBuildRichSlashCommandCompleter_SteerArgumentGate verifies that in
+// steer-only mode, argument completion is denied for unsafe commands even
+// if the user types a valid command name.
+func TestBuildRichSlashCommandCompleter_SteerArgumentGate(t *testing.T) {
+	resetGlobalSlashCache()
+
+	// /commit is unsafe; in steer-only mode its argument path should return nil.
+	steerCompleter := buildRichSlashCommandCompleter(nil, true)
+	cands := steerCompleter("/commit ", 8)
+	if len(cands) > 0 {
+		t.Errorf("Steer mode: /commit argument completion should be blocked, got %d candidates", len(cands))
+	}
+
+	// /info is safe; its argument path can proceed (even if it returns nil because
+	// InfoCommand doesn't implement CompletableCommand).
+	steerCompleterSafe := buildRichSlashCommandCompleter(nil, true)
+	// /info has no CompletableCommand, so result is nil regardless — just verify
+	// it doesn't panic.
+	steerCompleterSafe("/info ", 7)
+}
+
+// TestBuildSlashCommandCompleter_SteerOnly verifies the lightweight
+// Tab-cycle completer also filters unsafe commands in steer-only mode.
+func TestBuildSlashCommandCompleter_SteerOnly(t *testing.T) {
+	resetGlobalSlashCache()
+
+	completer := buildSlashCommandCompleter(nil, true)
+	cands := completer("/", 1)
+
+	for _, c := range cands {
+		if c == "/commit" {
+			t.Error("steer-only plain completer should not include /commit")
+		}
+	}
+
+	foundInfo := false
+	for _, c := range cands {
+		if c == "/info" {
+			foundInfo = true
+			break
+		}
+	}
+	if !foundInfo {
+		t.Error("steer-only plain completer should include /info")
 	}
 }

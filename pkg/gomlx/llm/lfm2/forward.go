@@ -135,6 +135,12 @@ func (l *LFM2) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *ll
 		h = out
 	}
 
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
+	}
+
 	normed, err := l.rmsNorm(h, l.weights.embeddingNorm)
 	if err != nil {
 		return nil, fmt.Errorf("final norm: %w", err)
@@ -171,6 +177,12 @@ func (l *LFM2) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tensor.
 		}
 		h.Free()
 		h = out
+	}
+
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
 	}
 
 	normed, err := l.rmsNorm(h, l.weights.embeddingNorm)

@@ -199,6 +199,12 @@ type Backend interface {
 	ClearCache() error
 	TotalSystemRAM() uint64
 
+	// AsyncEvalBatch schedules multiple arrays for evaluation in a single
+	// dispatch, rather than each array paying its own graph-walk/encode cost
+	// via a separate AsyncEval call. Backends without native batching may
+	// fall back to evaluating each array in turn. Empty input is a no-op.
+	AsyncEvalBatch(arrays []Array) error
+
 	// Compilation
 	EnableCompile() error
 

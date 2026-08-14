@@ -351,6 +351,17 @@ func (b *MetalBackend) SetMemoryLimit(bytes uint64) error { return SetMemoryLimi
 func (b *MetalBackend) ClearCache() error                 { return ClearCache() }
 func (b *MetalBackend) TotalSystemRAM() uint64            { return TotalSystemRAM() }
 
+func (b *MetalBackend) AsyncEvalBatch(arrays []tensor.Array) error {
+	if len(arrays) == 0 {
+		return nil
+	}
+	converted := make([]*Array, len(arrays))
+	for i, a := range arrays {
+		converted[i] = a.(*Array)
+	}
+	return AsyncEvalBatch(converted)
+}
+
 // mlxDtype converts tensor.Dtype to the internal mlx Dtype.
 // They share the same integer ordering (both follow the mlx_dtype enum).
 func mlxDtype(dt tensor.Dtype) Dtype { return Dtype(dt) }

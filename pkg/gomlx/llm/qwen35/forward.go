@@ -463,6 +463,12 @@ func (q *Qwen35) prefillInternalChunk(ids tensor.Array, seqLen, startPos int, ca
 		logPrefillLayerMem(-1, "after-layer-loop", seqLen)
 	}
 
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
+	}
+
 	// setLastHidden takes its own reference, so this pass must still release
 	// the one it holds. h is final here; the loop above frees each earlier h.
 	defer h.Free()
@@ -527,6 +533,12 @@ func (q *Qwen35) DebugDumpPrefill(ids tensor.Array, seqLen int, cache *llm.KVCac
 		h = out
 		if err := dumpArrayF32(h, fmt.Sprintf("%s/layer-%02d.bin", dumpDir, i), q.backend, s); err != nil {
 			return err
+		}
+	}
+
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return fmt.Errorf("flush kv cache: %w", err)
 		}
 	}
 
@@ -625,6 +637,16 @@ func (q *Qwen35) decodeInternalFromArray(idsArr tensor.Array, pos int, cache *ll
 		}
 		h.Free()
 		h = out
+	}
+
+	// Batch-dispatch every layer's KV-cache update in one call instead of
+	// each of the 32 layers paying its own dispatch cost — see
+	// KVCache.FlushPending. This is the dominant per-token decode cost
+	// (confirmed via CPU profiling), so this call sits on the hot path.
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
 	}
 
 	defer h.Free()
@@ -786,6 +808,12 @@ func (q *Qwen35) ForwardPrefillArgmaxAll(ids []int, startPos int, cache *llm.KVC
 		}
 		h.Free()
 		h = out
+	}
+
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
 	}
 
 	defer h.Free()

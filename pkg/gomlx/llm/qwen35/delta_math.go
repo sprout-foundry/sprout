@@ -138,10 +138,17 @@ func freeAll(ys []tensor.Array) {
 	}
 }
 
+// fusedDeltaNet is the optional fused DeltaNet capability for backends
+// that can run the full recurrence in a single kernel (e.g. GGML on Linux).
+type fusedDeltaNet interface {
+	GatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, s tensor.Stream) (tensor.Array, tensor.Array, error)
+}
+
 // gatedDeltaUpdate implements the Gated DeltaNet recurrence over a full
 // sequence. On Apple Silicon (Metal available) it dispatches to a single
 // fused Metal kernel (fusedGatedDeltaUpdate) that scans the whole sequence in
-// one launch; otherwise it falls back to the exact sequential per-step ops
+// one launch; on Linux with GGML it dispatches to the GGML fused kernel if
+// available; otherwise it falls back to the exact sequential per-step ops
 // loop below (mirroring mlx-lm's gated_delta_ops reference implementation).
 //
 // Inputs (batch B):
@@ -162,6 +169,17 @@ func freeAll(ys []tensor.Array) {
 //	state = state + k_t * delta                [B,Hv,Dv,Dk]
 //	y_t = sum_dk(state * q_t)                  [B,Hv,Dv]
 func gatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, tensor.Array, error) {
+	// Fused kernel path for backends that support it (e.g. GGML on Linux).
+	// SPROUT_GGML_DELTA_FUSED=0 disables it to A/B against the eager path.
+	if os.Getenv("SPROUT_GGML_DELTA_FUSED") != "0" {
+		if fd, ok := b.(fusedDeltaNet); ok {
+			y, ns, err := fd.GatedDeltaUpdate(q, k, v, g, beta, state, stream)
+			if err == nil {
+				return y, ns, nil
+			}
+		}
+	}
+
 	// Fast path: one fused Metal kernel launch when available.
 	if b.Available() && os.Getenv("SPROUT_DELTA_OPS") == "" {
 		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, b, stream)

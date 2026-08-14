@@ -132,9 +132,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// SP-048-2a: slash command tab completion. The registry is cached
 	// per-session (see slashCommandCache); argument completions are
 	// TTL-cached to avoid network/config reads on every keystroke.
-	completer := buildSlashCommandCompleter(chatAgent)
+	completer := buildSlashCommandCompleter(chatAgent, false)
 	inputReader.SetCompleter(completer)
-	inputReader.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent))
+	inputReader.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent, false))
 
 	// SP-055: steer coordinator owns the pinned steer-input panel for
 	// the lifetime of this REPL. Constructed once with the agent +
@@ -145,14 +145,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// SP-078 Phase 2: same slash-command completer on the steer panel
 	// so Ctrl-] cycles slash commands mid-turn (Tab is reserved for
 	// STEER ↔ QUEUE mode toggle on the steer panel).
-	steerCoord.SetCompleter(completer)
+	steerCoord.SetCompleter(buildSlashCommandCompleter(chatAgent, true))
 
 	// SP-078 Phase 3: structured completer on the steer panel renders
 	// a live dropdown above the input line while the user types a
 	// "/" command (matches the InputReader's affordance). Tab accepts
 	// the highlighted candidate; Up/Down navigate while the dropdown
 	// is visible; Esc dismisses.
-	steerCoord.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent))
+	steerCoord.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent, true))
 
 	// Capture a ground-truth termios snapshot of stdin in its default
 	// cooked state (the terminal is fully cooked at this point — no

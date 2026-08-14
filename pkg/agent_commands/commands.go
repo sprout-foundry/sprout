@@ -87,6 +87,9 @@ type CommandRegistry struct {
 
 	candidatesOnce  sync.Once
 	candidatesCache []string
+
+	steerCandidatesOnce  sync.Once
+	steerCandidatesCache []string
 }
 
 // NewCommandRegistry creates a new command registry
@@ -256,6 +259,33 @@ func (r *CommandRegistry) CompletionCandidates() []string {
 		r.candidatesCache = out
 	})
 	return r.candidatesCache
+}
+
+// SteerCompletionCandidates returns the slash-command names (canonical
+// plus aliases) that are safe to run mid-turn, sorted alphabetically.
+// A command qualifies when it implements SteerCapable and reports
+// SafeDuringSteer() == true — the same gate the steer panel's execution
+// path uses. Aliases resolve through their canonical command. The result
+// is cached since the registry is immutable after construction.
+func (r *CommandRegistry) SteerCompletionCandidates() []string {
+	r.steerCandidatesOnce.Do(func() {
+		out := make([]string, 0, len(r.commands)+len(r.aliases))
+		for name, cmd := range r.commands {
+			if sc, ok := cmd.(SteerCapable); ok && sc.SafeDuringSteer() {
+				out = append(out, name)
+			}
+		}
+		for alias, canonical := range r.aliases {
+			if cmd, ok := r.commands[canonical]; ok {
+				if sc, ok := cmd.(SteerCapable); ok && sc.SafeDuringSteer() {
+					out = append(out, alias)
+				}
+			}
+		}
+		sort.Strings(out)
+		r.steerCandidatesCache = out
+	})
+	return r.steerCandidatesCache
 }
 
 // Register adds a command to the registry

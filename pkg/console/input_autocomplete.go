@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const maxAutocompleteRows = 8
+const maxDropdownRows = 5
 
 // CompletionCandidate is a single autocomplete suggestion with an
 // optional description shown alongside the command name in the
@@ -114,6 +114,32 @@ func plainToCandidates(ss []string) []CompletionCandidate {
 	return out
 }
 
+// formatDropdownRow renders a single autocomplete candidate as a
+// dropdown row. The selected row uses a "▶" marker prefix; unselected
+// rows use two spaces. This deliberately avoids embedding ANSI escape
+// codes (reverse video) in the text because the footer's WrapSteerLayout
+// is not ANSI-aware — ANSI bytes would be counted as visible width and
+// cause incorrect wrapping/truncation.
+func formatDropdownRow(c CompletionCandidate, selected bool, cols int) string {
+	const marker = "▶ "
+	const markerOff = "  "
+	prefix := markerOff
+	if selected {
+		prefix = marker
+	}
+
+	body := " " + c.Text
+	if c.Description != "" {
+		body = body + "  " + c.Description
+	}
+	budget := cols - displayWidth(prefix)
+	if budget < 1 {
+		budget = 1
+	}
+	body = truncateLinePreservingANSI(body, budget)
+	return prefix + body
+}
+
 // hide marks the dropdown as invisible and clears candidate state.
 // Does NOT erase rendered rows from the terminal — the caller must
 // invoke clear() (or Refresh → refreshLocked → clear) to erase them.
@@ -143,17 +169,21 @@ func (a *inlineAutocomplete) accept() string {
 
 // render draws the dropdown below the input cursor position. The caller
 // must already hold the output lock and must have just finished drawing
-// the input line via refreshInputLine().
-func (a *inlineAutocomplete) render() {
+// the input line via refreshInputLine(). cols is the terminal width used
+// to truncate each candidate to a single visual row.
+func (a *inlineAutocomplete) render(cols int) {
 	if a == nil || !a.visible || len(a.candidates) == 0 {
 		return
+	}
+	if cols <= 0 {
+		cols = 80
 	}
 
 	n := len(a.candidates)
 	more := 0
-	if n > maxAutocompleteRows {
-		more = n - maxAutocompleteRows
-		n = maxAutocompleteRows
+	if n > maxDropdownRows {
+		more = n - maxDropdownRows
+		n = maxDropdownRows
 	}
 
 	// Compute the scroll window so the selected item is always visible.
@@ -174,19 +204,8 @@ func (a *inlineAutocomplete) render() {
 			break
 		}
 		c := a.candidates[idx]
-		fmt.Printf("%s\r%s", MoveCursorDownSeq(1), ClearLineSeq())
-
-		if idx == a.selected {
-			fmt.Printf("\033[7m %s\033[27m", c.Text)
-			if c.Description != "" {
-				fmt.Printf(" \033[2;7m%s\033[27m", c.Description)
-			}
-		} else {
-			fmt.Printf("\033[1m %s\033[0m", c.Text)
-			if c.Description != "" {
-				fmt.Printf(" \033[2m%s\033[0m", c.Description)
-			}
-		}
+		row := formatDropdownRow(c, idx == a.selected, cols)
+		fmt.Printf("%s\r%s%s", MoveCursorDownSeq(1), ClearLineSeq(), row)
 	}
 
 	drawnRows := n

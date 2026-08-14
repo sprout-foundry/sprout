@@ -92,6 +92,39 @@ type Result struct {
 	ProbeVersion     string `json:"probe_version"`
 }
 
+// IsPermanentError reports whether an error from a probe request indicates a
+// definitive failure that will not change on retry, as opposed to a transient
+// transport/5xx/timeout that might succeed next time. Permanent errors are
+// classified as definitive probe failures (Passed=false, Errored=false) so they
+// are persisted and carried forward, rather than retried every run.
+//
+// HTTP status codes classified as permanent:
+//   - 402 Payment Required (insufficient balance)
+//   - 403 Forbidden
+//   - 404 Not Found (model doesn't exist)
+//   - 405 Method Not Allowed (tool calling not supported)
+//
+// Missing API key errors ("environment variable X is not set") are also permanent
+// — they require a configuration change, not a retry.
+func IsPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+
+	if strings.Contains(msg, "environment variable") && strings.Contains(msg, "is not set") {
+		return true
+	}
+
+	for _, code := range []string{"http 402", "http 403", "http 404", "http 405"} {
+		if strings.Contains(msg, code) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // EstimatedCostUSD estimates the dollar cost of one probe run for a model with
 // the given per-million-token input/output prices.
 func EstimatedCostUSD(inputPerMTok, outputPerMTok float64) float64 {
@@ -153,6 +186,13 @@ func Run(ctx context.Context, client api.ClientInterface, provider, model string
 	vision := runVision(ctx, client)
 	if vision.stats.err != nil {
 		r := base()
+		if IsPermanentError(vision.stats.err) {
+			r.Passed = false
+			r.Reason = "permanent probe failure: " + vision.stats.err.Error()
+			r.Turns = vision.stats.turns
+			r.LatencyMS = time.Since(start).Milliseconds()
+			return r, nil
+		}
 		r.Errored = true
 		r.Reason = "vision probe request failed: " + vision.stats.err.Error()
 		r.Turns = vision.stats.turns
@@ -168,6 +208,13 @@ func Run(ctx context.Context, client api.ClientInterface, provider, model string
 
 	gates := runFastGates(ctx, client)
 	if gates.stats.err != nil {
+		if IsPermanentError(gates.stats.err) {
+			r.Passed = false
+			r.Reason = "permanent probe failure: " + gates.stats.err.Error()
+			r.Turns += gates.stats.turns
+			r.LatencyMS = time.Since(start).Milliseconds()
+			return r, nil
+		}
 		r.Errored = true
 		r.Reason = "probe request failed: " + gates.stats.err.Error()
 		r.Turns += gates.stats.turns
@@ -198,6 +245,15 @@ func Run(ctx context.Context, client api.ClientInterface, provider, model string
 	r.LatencyMS = time.Since(start).Milliseconds()
 
 	if cx.stats.err != nil {
+		if IsPermanentError(cx.stats.err) {
+			// Gates passed, but the complex stage hit a permanent error.
+			// Persist as definitive: gates passed (Passed=true), complex failed.
+			r.ComplexScore = 0
+			r.Complex = false
+			r.Score = 0.5
+			r.Reason = "passed gates; complex stage permanently failed: " + cx.stats.err.Error()
+			return r, nil
+		}
 		// Gates passed, but the complex stage couldn't be assessed. Mark the
 		// whole run inconclusive so callers re-probe rather than persisting a
 		// Complex=false verdict that's really "unknown".

@@ -123,8 +123,11 @@ vi.mock('@codemirror/state', () => ({
   },
   Compartment: MockCompartment,
   Annotation: { define: () => ({}) },
-  Prec: { highest: (...a: unknown[]) => `prec-highest-${a.length}`, lowest: (...a: unknown[]) => `prec-lowest-${a.length}` },
-  StateEffect: { define: <T,>() => ({ of: (v: T) => ({ is: () => false, value: v }) }) },
+  Prec: {
+    highest: (...a: unknown[]) => `prec-highest-${a.length}`,
+    lowest: (...a: unknown[]) => `prec-lowest-${a.length}`,
+  },
+  StateEffect: { define: <T>() => ({ of: (v: T) => ({ is: () => false, value: v }) }) },
   StateField: { define: () => 'mock-statefield' },
 }));
 vi.mock('@codemirror/theme-one-dark', () => ({
@@ -300,7 +303,7 @@ function buildOpts(opts = {}) {
     whitespaceRenderingMode: 'none',
     inlayHintsEnabled: false,
     signatureHelpEnabled: false,
-  aiCompletionsEnabled: false,
+    aiCompletionsEnabled: false,
     languageId: 'typescript',
     themePack: { mode: 'dark', editorSyntaxStyle: 'default' },
     customHighlightStyle: null,

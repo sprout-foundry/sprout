@@ -37,7 +37,7 @@ func (ir *InputReader) refreshLocked() {
 	// leading clear() above but never re-rendered for the accepted line.
 	if ir.autocomplete != nil && ir.hasEditedLine && !ir.suppressAutocompleteNextRefresh {
 		ir.autocomplete.update(ir.line, ir.cursorPos, ir.completer, ir.richCompleter)
-		ir.autocomplete.render()
+		ir.autocomplete.render(ir.terminalWidth)
 	}
 	if ir.suppressAutocompleteNextRefresh {
 		ir.suppressAutocompleteNextRefresh = false

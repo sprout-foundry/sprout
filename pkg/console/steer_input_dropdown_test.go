@@ -2,7 +2,7 @@
 // Mirrors the InputReader's dropdown affordance but adapted to the
 // footer's pinned-rows rendering. These tests cover the dropdown's
 // pure logic (candidate updates, selection navigation, accept, dismiss)
-// and the rendering helpers (formatSteerDropdownRow, buildDropdownLine).
+// and the rendering helpers (formatDropdownRow, buildDropdownLine).
 package console
 
 import (
@@ -342,7 +342,7 @@ func TestSteerInputReader_Dropdown_UpRecallsHistoryWhenHidden(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFormatSteerDropdownRow_SelectedHasMarker(t *testing.T) {
-	row := formatSteerDropdownRow(CompletionCandidate{Text: "/help", Description: "Show help"}, true, 60)
+	row := formatDropdownRow(CompletionCandidate{Text: "/help", Description: "Show help"}, true, 60)
 	// Selected row starts with the ▶ marker.
 	if !strings.Contains(row, "▶ ") {
 		t.Fatalf("selected row should contain ▶ marker, got %q", row)
@@ -356,7 +356,7 @@ func TestFormatSteerDropdownRow_SelectedHasMarker(t *testing.T) {
 }
 
 func TestFormatSteerDropdownRow_UnselectedHasNoMarker(t *testing.T) {
-	row := formatSteerDropdownRow(CompletionCandidate{Text: "/help", Description: "Show help"}, false, 60)
+	row := formatDropdownRow(CompletionCandidate{Text: "/help", Description: "Show help"}, false, 60)
 	if strings.Contains(row, "▶") {
 		t.Fatalf("unselected row should NOT have ▶ marker, got %q", row)
 	}
@@ -366,7 +366,7 @@ func TestFormatSteerDropdownRow_UnselectedHasNoMarker(t *testing.T) {
 }
 
 func TestFormatSteerDropdownRow_NoDescription(t *testing.T) {
-	row := formatSteerDropdownRow(CompletionCandidate{Text: "/help"}, true, 60)
+	row := formatDropdownRow(CompletionCandidate{Text: "/help"}, true, 60)
 	if !strings.Contains(row, "/help") {
 		t.Fatalf("expected command text, got %q", row)
 	}
@@ -374,7 +374,7 @@ func TestFormatSteerDropdownRow_NoDescription(t *testing.T) {
 
 func TestFormatSteerDropdownRow_TruncatesLongDescription(t *testing.T) {
 	long := strings.Repeat("x", 100)
-	row := formatSteerDropdownRow(CompletionCandidate{Text: "/cmd", Description: long}, false, 30)
+	row := formatDropdownRow(CompletionCandidate{Text: "/cmd", Description: long}, false, 30)
 	if visibleLen(row) > 30 {
 		t.Fatalf("row should fit within cols (30), got visible width %d: %q", visibleLen(row), row)
 	}
@@ -454,10 +454,10 @@ func TestBuildDropdownLine_CapsAtMaxDropdownRows(t *testing.T) {
 
 	full, _, _ := r.buildDropdownLine(SteerPromptPrefix, "/", 1, 80, candidates, 0)
 	lines := strings.Split(full, "\n")
-	// 1 input line + up to maxSteerDropdownRows candidates.
-	if len(lines) != maxSteerDropdownRows+1 {
+	// 1 input line + up to maxDropdownRows candidates.
+	if len(lines) != maxDropdownRows+1 {
 		t.Fatalf("expected %d lines (%d candidates + 1 input), got %d",
-			maxSteerDropdownRows+1, maxSteerDropdownRows, len(lines))
+			maxDropdownRows+1, maxDropdownRows, len(lines))
 	}
 }
 

@@ -794,13 +794,14 @@ func (g *GGMLBackend) ensureInit() error {
 	return g.initErr
 }
 
-// pickThreadCount chooses the CPU thread count. Measured end to end on a
-// 12-core Snapdragon X Elite (Qwen3.5-4B): 4 threads 4.28 tok/s, 6 threads
-// 4.33, 8 threads 0.56, 12 threads 0.44. The collapse past 6 is
-// oversubscription — ggml's OpenMP workers spin by default, and together with
-// Go's own runtime threads they swamp the cores. Streaming memory bandwidth
-// also saturates by 4 threads here (107 GB/s), so there is nothing to win.
-// Cap at 4; SPROUT_GGML_THREADS overrides for experiments.
+// pickThreadCount chooses the CPU thread count. On a 12-core Snapdragon X
+// Elite (Qwen3.5-4B, Q4_0): 4 threads ~8.5 tok/s, 6 threads ~8.6, 8 threads
+// ~1.4 (collapse). The collapse past 6 is oversubscription — ggml's OpenMP
+// workers spin by default and, together with Go's own runtime threads, swamp
+// the cores. llama.cpp (pure C++, no Go runtime) scales to 8 threads
+// (~22 tok/s) on the same model, so the matmul is NOT memory-saturated at 4
+// threads: the Go+GGML thread interaction is the limiter. Cap at 4 as the
+// safe workaround; SPROUT_GGML_THREADS overrides for experiments.
 const maxAutoThreads = 4
 
 func pickThreadCount() int {

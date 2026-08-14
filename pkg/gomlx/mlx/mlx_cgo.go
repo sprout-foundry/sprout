@@ -393,6 +393,25 @@ func (a *Array) AsyncEval() error {
 	return checkRC(C.mlx_async_eval(vec), "async_eval")
 }
 
+// AsyncEvalBatch schedules multiple arrays for evaluation in a single
+// mlx_async_eval dispatch. Each array's own graph-walk/encode cost still
+// happens, but as ONE call to the C API instead of N — profiling a decode
+// step calling AsyncEval once per KV-cache-layer update (32 layers, every
+// token) showed the per-call overhead itself, not GPU wait time, dominates;
+// this amortizes it. Empty input is a no-op.
+func AsyncEvalBatch(arrays []*Array) error {
+	if len(arrays) == 0 {
+		return nil
+	}
+	handles := make([]C.mlx_array, len(arrays))
+	for i, a := range arrays {
+		handles[i] = a.cHandle()
+	}
+	vec := C.mlx_vector_array_new_data(&handles[0], C.size_t(len(handles)))
+	defer C.mlx_vector_array_free(vec)
+	return checkRC(C.mlx_async_eval(vec), "async_eval_batch")
+}
+
 // RawBytes returns the raw underlying bytes of the array. Evaluates first.
 // The bytes are copied so the caller owns the memory.
 func (a *Array) RawBytes() ([]byte, error) {

@@ -28,6 +28,12 @@ type KVCache struct {
 	initialized []bool
 	stream      tensor.Stream
 	backend     tensor.Backend
+
+	// pending collects arrays queued by StoreState/AppendWindow for the next
+	// FlushPending call. Batching these into one AsyncEvalBatch call instead
+	// of dispatching each individually cuts 32 per-token dispatch calls
+	// (one per layer) down to 1 — see FlushPending.
+	pending []tensor.Array
 }
 
 // KVCacheLayer holds the cached K and V for a single transformer layer.
@@ -65,6 +71,22 @@ func NewKVCache(numLayers int, s tensor.Stream, backend tensor.Backend) *KVCache
 // SetBackend sets the backend used for tensor operations in the cache.
 func (c *KVCache) SetBackend(b tensor.Backend) {
 	c.backend = b
+}
+
+// FlushPending dispatches every array queued by StoreState/AppendWindow
+// since the last call in a single batched AsyncEvalBatch, instead of each
+// one paying its own dispatch cost individually. Callers must call this
+// once after each full layer loop (both prefill's per-chunk loop and
+// decode's per-token loop) — arrays queued here are not evaluated any other
+// way, so skipping this leaves them purely lazy and their un-evaluated
+// graphs accumulate unboundedly across steps.
+func (c *KVCache) FlushPending() error {
+	if len(c.pending) == 0 {
+		return nil
+	}
+	err := c.backend.AsyncEvalBatch(c.pending)
+	c.pending = c.pending[:0]
+	return err
 }
 
 // IsInitialized reports whether a layer's cache has been populated.
@@ -165,26 +187,19 @@ func (c *KVCache) StoreState(layerIdx int, state, convState tensor.Array) error 
 	// Same reasoning as Store/AppendWindow: a later chunk's DeltaNet forward
 	// reads this state back as its recurrence's starting point, so leaving
 	// it fully lazy carries this chunk's whole computation forward
-	// uncomputed. AsyncEval (not Eval) dispatches it without blocking: this
-	// is called once per DeltaNet layer on every single decode step (24 of
-	// 32 layers), and a blocking Eval here forces a synchronous CPU-GPU
-	// round trip per layer per token — confirmed via CPU profiling to be
-	// the dominant decode-time cost (~29% of all samples, ~80% of the
-	// decode loop itself), serializing 32 layers' worth of Metal dispatch
-	// into 32 blocking round trips instead of one continuous async stream
-	// ending in a single sync at the argmax readback. AsyncEval still
-	// prevents unbounded graph growth (the whole point of evaluating here
-	// at all) without paying for the wait.
+	// uncomputed. Queued for FlushPending rather than dispatched here
+	// directly: this is called once per DeltaNet layer on every single
+	// decode step (24 of 32 layers), and profiling showed AsyncEval's own
+	// per-call graph-walk/encode cost — not GPU wait — dominates decode
+	// time when paid 32 separate times per token. Batching all layers'
+	// updates into one AsyncEvalBatch call (via FlushPending, called once
+	// after the full layer loop) amortizes that cost instead of 32x-ing it.
 	// Callers (e.g. LFM2's shortConv) may pass a nil state or convState.
 	if state != nil {
-		if err := state.AsyncEval(); err != nil {
-			return fmt.Errorf("kv_cache: eval stored state: %w", err)
-		}
+		c.pending = append(c.pending, state)
 	}
 	if convState != nil {
-		if err := convState.AsyncEval(); err != nil {
-			return fmt.Errorf("kv_cache: eval stored conv state: %w", err)
-		}
+		c.pending = append(c.pending, convState)
 	}
 	if c.layers[layerIdx] != nil {
 		l := c.layers[layerIdx]
@@ -403,25 +418,15 @@ func (c *KVCache) AppendWindow(layerIdx int, newK, newV tensor.Array) (tensor.Ar
 		updK.Free()
 		return nil, nil, fmt.Errorf("kv_cache: slice update V: %w", err)
 	}
-	// Dispatch the updated buffer now rather than leaving it fully lazy —
-	// see the eval call in Store. A subsequent chunk's SliceUpdate reads
-	// this buffer back as its base, so an undispatched buffer here is a
-	// dependency every later chunk's graph carries forward uncomputed.
-	// AsyncEval (not Eval): this runs once per full-attention layer on
-	// every decode step, and a blocking Eval here — like StoreState's,
-	// see the comment there — forces a synchronous round trip per layer
-	// per token instead of letting all layers dispatch as one continuous
-	// async stream.
-	if err := updK.AsyncEval(); err != nil {
-		updK.Free()
-		updV.Free()
-		return nil, nil, fmt.Errorf("kv_cache: eval updated K: %w", err)
-	}
-	if err := updV.AsyncEval(); err != nil {
-		updK.Free()
-		updV.Free()
-		return nil, nil, fmt.Errorf("kv_cache: eval updated V: %w", err)
-	}
+	// Queued for FlushPending rather than dispatched here directly — see
+	// StoreState's comment. Queuing doesn't stop updK/updV from also being
+	// consumed immediately downstream (this token's attention chains onto
+	// the same array handle); it just ensures the buffer gets dispatched
+	// once, batched with the rest of this step's layers, instead of leaving
+	// it fully lazy (a subsequent chunk's SliceUpdate reads this buffer back
+	// as its base, so an undispatched buffer here is a dependency every
+	// later chunk's graph carries forward uncomputed).
+	c.pending = append(c.pending, updK, updV)
 	l.K.Free()
 	l.V.Free()
 	l.K = updK

@@ -265,6 +265,12 @@ func (q *Qwen3) prefillInternal(ids tensor.Array, seqLen, startPos int, cache *l
 		h = out
 	}
 
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
+	}
+
 	logits, err := q.computeLogitsLast(h, seqLen)
 	if err != nil {
 		h.Free()
@@ -327,6 +333,14 @@ func (q *Qwen3) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tensor
 		}
 		h.Free()
 		h = out
+	}
+
+	// Batch-dispatch every layer's KV-cache update in one call instead of
+	// each layer paying its own dispatch cost — see KVCache.FlushPending.
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
 	}
 
 	// No explicit sync here: the caller's data read (Float32Data or

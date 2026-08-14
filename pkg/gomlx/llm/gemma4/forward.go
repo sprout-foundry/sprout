@@ -120,6 +120,12 @@ func (g *Gemma4) forwardInternal(ids tensor.Array, seqLen, startPos int, cache *
 		}
 	}
 
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
+	}
+
 	// Final norm + logits
 	normed, err := g.gemmaRMSNorm(h, g.weights.norm)
 	if err != nil {
@@ -706,6 +712,12 @@ func (g *Gemma4) decodeInternal(tokenID int, pos int, cache *llm.KVCache) (tenso
 		}
 		h.Free()
 		h = out
+	}
+
+	if cache != nil {
+		if err := cache.FlushPending(); err != nil {
+			return nil, fmt.Errorf("flush kv cache: %w", err)
+		}
 	}
 
 	normed, err := g.gemmaRMSNorm(h, g.weights.norm)

@@ -189,10 +189,11 @@ func (b *stubBackend) GatherQuantizedMatMul(tensor.Array, tensor.Array, tensor.A
 func (b *stubBackend) Dequantize(tensor.Array, tensor.Array, tensor.Array, int, int, string, tensor.Stream) (tensor.Array, error) {
 	return nil, errUnavailable
 }
-func (b *stubBackend) SetCacheLimit(uint64) error  { return errUnavailable }
-func (b *stubBackend) SetMemoryLimit(uint64) error { return errUnavailable }
-func (b *stubBackend) ClearCache() error           { return errUnavailable }
-func (b *stubBackend) TotalSystemRAM() uint64      { return 0 }
+func (b *stubBackend) SetCacheLimit(uint64) error                 { return errUnavailable }
+func (b *stubBackend) SetMemoryLimit(uint64) error                { return errUnavailable }
+func (b *stubBackend) ClearCache() error                          { return errUnavailable }
+func (b *stubBackend) TotalSystemRAM() uint64                     { return 0 }
+func (b *stubBackend) AsyncEvalBatch(arrays []tensor.Array) error { return errUnavailable }
 
 func (b *stubBackend) EnableCompile() error { return errUnavailable }
 

@@ -3576,6 +3576,17 @@ func (g *GGMLBackend) TotalSystemRAM() uint64 {
 	return uint64(C.ggml_sysconf_page_size()) * uint64(C.ggml_sysconf_phys_pages())
 }
 
+// AsyncEvalBatch is a synchronous per-array fallback on GGML: unlike MLX,
+// this backend has no async dispatch queue to batch onto (see AsyncEval).
+func (g *GGMLBackend) AsyncEvalBatch(arrays []tensor.Array) error {
+	for _, a := range arrays {
+		if err := a.Eval(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (b *GGMLBackend) EnableCompile() error { return nil }
 
 func (g *GGMLBackend) NativeQuantization() bool { return false }

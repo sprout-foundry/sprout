@@ -17,12 +17,11 @@ import type { Terminal, ILinkProvider, ILink, IDisposable } from '@xterm/xterm';
  *   - (?:[\w.\/_-]+\/)? - Optional directory segments (must end with /)
  *   - [\w_-]+ - Filename (letters, digits, underscores, hyphens)
  *   - \.[a-zA-Z][\w]* - File extension (dot + at least one letter, avoids IPs)
- * - (?::(\d+)) - Capture group 2: line number after colon
- * - (?::(\d+))? - Capture group 3: optional column number after colon
- * - (?=$|[\s),;:]) - Lookahead: must end at line end or before whitespace/delimiter/colon
+ * - (?=$|[\s),;:]) - Lookahead: must end at line end or before whitespace/delimiter
+ * - (?!=:\d) - Negative lookahead: don't stop at : if a digit follows (that's a column number)
  */
 const _originalPattern =
-  /(?<=^|[\s(])(\.?\/?(?:[\w.\/_-]+\/)?[\w_-]+\.[a-zA-Z][\w]*)(?::(\d+))(?::(\d+))?(?=$|[\s),;:])/g;
+  /(?<=^|[\s(])(\.?\/?(?:[\w.\/_-]+\/)?[\w_-]+\.[a-zA-Z][\w]*)(?::(\d+))(?::(\d+))?(?=$|[\s),;:])(?!=:\d)/g;
 export const filePathPatternSource = _originalPattern.source;
 export const filePathPattern = new RegExp(filePathPatternSource, 'g');
 

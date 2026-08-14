@@ -579,7 +579,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// per-token path on every tested prompt (diverges from the first
 	// generated token in some cases) — a real correctness bug, not yet
 	// root-caused. Do not flip this default without a passing parity test.
-	usePipelined := useGPUArgmax && !useMTP && pipelinedOK && os.Getenv("SPROUT_PIPELINE_DECODE") == "1"
+	usePipelined := useGPUArgmax && !useMTP && pipelinedOK && genCfg.MaxTokens > 1 && os.Getenv("SPROUT_PIPELINE_DECODE") == "1"
 	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
 
 	nextToken := 0
@@ -651,62 +651,82 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	}
 
 	if usePipelined {
-		// curArr always enters each iteration already dispatched (AsyncEval
-		// called either here or by the previous iteration's
-		// ForwardDecodeArgmaxArray) — see PipelinedGreedyArchitecture.
-		curArr, err := m.backend.NewArrayFromInt64([]int64{int64(nextToken)}, []int{1, 1})
+		// nextToken (T0) was already read back and emitted by the shared
+		// pre-branch code above — this loop must never re-emit it. `pending`
+		// therefore always holds the NEXT not-yet-emitted token (T1 going
+		// in), dispatched one step ahead of whatever this loop last emitted,
+		// mirroring mlx-lm's generate_step: it calls _step(y) and
+		// async_evals the result BEFORE yielding y, so the newly dispatched
+		// step's GPU work overlaps with the read-back of the previous one.
+		// The original version seeded `pending` with T0 itself, so its first
+		// iteration dispatched T1 but then read back and re-emitted T0 —
+		// producing a duplicated first token every call (caught by
+		// TestPipelinedDecodeParityLiveModel).
+		seedArr, err := m.backend.NewArrayFromInt64([]int64{int64(nextToken)}, []int{1, 1})
 		if err != nil {
 			return fmt.Errorf("pipelined decode: seed token array: %w", err)
 		}
-		if err := curArr.AsyncEval(); err != nil {
-			curArr.Free()
+		if err := seedArr.AsyncEval(); err != nil {
+			seedArr.Free()
 			return fmt.Errorf("pipelined decode: seed async eval: %w", err)
 		}
 		pos := len(tokenIDs)
+		pending, err := pipelinedArch.ForwardDecodeArgmaxArray(seedArr, pos, cache)
+		seedArr.Free()
+		if err != nil {
+			return fmt.Errorf("pipelined decode: dispatch first step: %w", err)
+		}
+		pos++
+
 		iterStart := time.Now()
 		for i := 1; i < genCfg.MaxTokens; i++ {
 			if err := ctx.Err(); err != nil {
-				curArr.Free()
+				pending.Free()
 				return err
 			}
 			if m.isStopToken(nextToken) {
-				curArr.Free()
+				pending.Free()
 				break
 			}
 			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" && i > 1 {
 				log.Printf("llm: pipelined iter %d: pre-loop-body gap=%.3fs", i, time.Since(iterStart).Seconds())
 			}
 
-			// Build and dispatch the NEXT step's graph, chained onto curArr
-			// as its (possibly still-computing) embedding-lookup input. This
-			// runs on the CPU while curArr's own GPU computation — already
-			// dispatched before this loop or by the prior iteration —
-			// continues concurrently; only after this do we block reading
-			// curArr's value below. That overlap is the entire point (see
-			// PipelinedGreedyArchitecture).
+			// Dispatch the FOLLOWING step, chained onto `pending` (this
+			// iteration's not-yet-read token), before blocking on its
+			// read-back below — that overlap is the entire point (see
+			// PipelinedGreedyArchitecture). Skipped on the final iteration:
+			// there is no token after this one to dispatch for.
 			stepStart := time.Now()
-			nextArr, err := pipelinedArch.ForwardDecodeArgmaxArray(curArr, pos, cache)
-			buildElapsed := time.Since(stepStart)
-			if err != nil {
-				curArr.Free()
-				return fmt.Errorf("pipelined decode step %d: %w", i, err)
+			var next tensor.Array
+			if i+1 < genCfg.MaxTokens {
+				next, err = pipelinedArch.ForwardDecodeArgmaxArray(pending, pos, cache)
+				if err != nil {
+					pending.Free()
+					return fmt.Errorf("pipelined decode step %d: %w", i, err)
+				}
+				pos++
 			}
-			pos++
+			buildElapsed := time.Since(stepStart)
 
 			readStart := time.Now()
-			data, err := curArr.Int64Data()
+			data, err := pending.Int64Data()
 			readElapsed := time.Since(readStart)
-			curArr.Free()
+			pending.Free()
 			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
 				log.Printf("llm: pipelined decode step %d: pos=%d build=%.3fs read=%.3fs total=%.3fs",
 					i, pos, buildElapsed.Seconds(), readElapsed.Seconds(), time.Since(stepStart).Seconds())
 			}
 			if err != nil {
-				nextArr.Free()
+				if next != nil {
+					next.Free()
+				}
 				return fmt.Errorf("pipelined decode step %d: read token: %w", i, err)
 			}
 			if len(data) == 0 {
-				nextArr.Free()
+				if next != nil {
+					next.Free()
+				}
 				return fmt.Errorf("pipelined decode step %d: empty token readback", i)
 			}
 			nextToken = int(data[0])
@@ -718,10 +738,9 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 			if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
 				log.Printf("llm: pipelined iter %d: onToken+bookkeeping=%.3fs", i, time.Since(onTokStart).Seconds())
 			}
-			curArr = nextArr
+			pending = next
 			iterStart = time.Now()
 		}
-		curArr.Free()
 		return nil
 	}
 

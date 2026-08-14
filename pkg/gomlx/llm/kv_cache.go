@@ -164,15 +164,25 @@ func (c *KVCache) StoreState(layerIdx int, state, convState tensor.Array) error 
 	}
 	// Same reasoning as Store/AppendWindow: a later chunk's DeltaNet forward
 	// reads this state back as its recurrence's starting point, so leaving
-	// it lazy carries this chunk's whole computation forward uncomputed.
+	// it fully lazy carries this chunk's whole computation forward
+	// uncomputed. AsyncEval (not Eval) dispatches it without blocking: this
+	// is called once per DeltaNet layer on every single decode step (24 of
+	// 32 layers), and a blocking Eval here forces a synchronous CPU-GPU
+	// round trip per layer per token — confirmed via CPU profiling to be
+	// the dominant decode-time cost (~29% of all samples, ~80% of the
+	// decode loop itself), serializing 32 layers' worth of Metal dispatch
+	// into 32 blocking round trips instead of one continuous async stream
+	// ending in a single sync at the argmax readback. AsyncEval still
+	// prevents unbounded graph growth (the whole point of evaluating here
+	// at all) without paying for the wait.
 	// Callers (e.g. LFM2's shortConv) may pass a nil state or convState.
 	if state != nil {
-		if err := state.Eval(); err != nil {
+		if err := state.AsyncEval(); err != nil {
 			return fmt.Errorf("kv_cache: eval stored state: %w", err)
 		}
 	}
 	if convState != nil {
-		if err := convState.Eval(); err != nil {
+		if err := convState.AsyncEval(); err != nil {
 			return fmt.Errorf("kv_cache: eval stored conv state: %w", err)
 		}
 	}
@@ -393,16 +403,21 @@ func (c *KVCache) AppendWindow(layerIdx int, newK, newV tensor.Array) (tensor.Ar
 		updK.Free()
 		return nil, nil, fmt.Errorf("kv_cache: slice update V: %w", err)
 	}
-	// Materialize the updated buffer now rather than leaving it lazy — see
-	// the eval call in Store. A subsequent chunk's SliceUpdate reads this
-	// buffer back as its base, so an unevaluated buffer here is a dependency
-	// every later chunk's graph carries forward uncomputed.
-	if err := updK.Eval(); err != nil {
+	// Dispatch the updated buffer now rather than leaving it fully lazy —
+	// see the eval call in Store. A subsequent chunk's SliceUpdate reads
+	// this buffer back as its base, so an undispatched buffer here is a
+	// dependency every later chunk's graph carries forward uncomputed.
+	// AsyncEval (not Eval): this runs once per full-attention layer on
+	// every decode step, and a blocking Eval here — like StoreState's,
+	// see the comment there — forces a synchronous round trip per layer
+	// per token instead of letting all layers dispatch as one continuous
+	// async stream.
+	if err := updK.AsyncEval(); err != nil {
 		updK.Free()
 		updV.Free()
 		return nil, nil, fmt.Errorf("kv_cache: eval updated K: %w", err)
 	}
-	if err := updV.Eval(); err != nil {
+	if err := updV.AsyncEval(); err != nil {
 		updK.Free()
 		updV.Free()
 		return nil, nil, fmt.Errorf("kv_cache: eval updated V: %w", err)

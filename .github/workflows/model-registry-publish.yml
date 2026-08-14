@@ -2,7 +2,7 @@ name: Publish Model Registry
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 9 * * *"
   workflow_dispatch:
 
 jobs:
@@ -52,6 +52,12 @@ jobs:
         # --from-embedded-configs falls back to embedded provider configs
         # for providers without a canonical models/<id>.json file (e.g.,
         # providers whose API key is not available in CI).
+        #
+        # Cost guardrails:
+        #   --max-probe-cost    per-probe estimate cap ($0.10)
+        #   --max-probes        total probe count cap (300)
+        #   --max-run-cost      aggregate spend cap ($5/run = $5/day)
+        #   --max-price-per-mtok  skip expensive models entirely ($5/MTok)
         env:
           SPROUT_MODEL_REGISTRY_URL: "disabled"
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -65,7 +71,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-        run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=300 --from-embedded-configs=pkg/agent_providers/configs
+        run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=300 --max-run-cost=5.00 --max-price-per-mtok=5.00 --from-embedded-configs=pkg/agent_providers/configs
 
       - name: Audit pricing against verified manifest
         # Compares provider config pricing against a hand-verified manifest

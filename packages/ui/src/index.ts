@@ -135,3 +135,13 @@ export {
   persistCommandHistory
 } from './components/command_input_history';
 export { FONT_SIZE_DEFAULT } from './components/terminalConstants';
+
+// ── Plugin API types ──────────────────────────────────────────────────
+export type {
+  PluginView,
+  PluginViewProps,
+  PluginPanel,
+  PluginSettingsTab,
+  SproutPlugin,
+  PluginRegistration,
+} from './types/plugin';

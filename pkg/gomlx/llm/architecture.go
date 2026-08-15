@@ -125,6 +125,39 @@ type MTPArchitecture interface {
 	ForwardDecodeMTP(nextToken int, pos int, cache *KVCache, k int) ([]int, error)
 }
 
+// CompiledGreedyArchitecture is an optional refinement of
+// PipelinedGreedyArchitecture for architectures that can run the whole
+// single-token decode step as one MLX-compiled graph closure, replaying a
+// cached execution plan instead of re-walking the 32-layer graph from Go on
+// every token. The KV cache's per-layer state becomes explicit closure I/O:
+// inputs are the current K/V buffers (full-attention layers) and recurrent
+// states (linear-attention layers), outputs are the updated ones. The
+// implementation owns a fixed-capacity buffer scheme so shapes stay constant
+// across decode steps (a shape change would force a recompile).
+//
+// PrepareCompiledDecode is called once before the decode loop (after
+// prefill), giving the implementation the prompt length and generation
+// budget it needs to size buffers and trace+compile the closure. It returns
+// an error when compilation is unsupported for this model/backend — the
+// caller falls back to the pipelined or plain eager path.
+type CompiledGreedyArchitecture interface {
+	PipelinedGreedyArchitecture
+
+	// PrepareCompiledDecode sizes and compiles the decode closure. promptLen
+	// is the number of tokens already in the KV cache; maxTokens is the
+	// generation budget (promptLen+maxTokens bounds the required capacity).
+	PrepareCompiledDecode(promptLen, maxTokens int, cache *KVCache) error
+
+	// ForwardDecodeCompiled runs one compiled decode step for the token at
+	// position pos and returns the argmax next token as a [1,1] array with
+	// AsyncEval already called (same contract as
+	// ForwardDecodeArgmaxArray).
+	ForwardDecodeCompiled(tokenArr tensor.Array, pos int) (tensor.Array, error)
+
+	// ReleaseCompiledDecode frees the compiled closure and its buffers.
+	ReleaseCompiledDecode()
+}
+
 // ModelConfig holds architecture-independent configuration values. Every
 // decoder-only transformer shares these fields; architecture-specific values
 // (e.g. QK norm presence, bias presence) are encoded as booleans that the

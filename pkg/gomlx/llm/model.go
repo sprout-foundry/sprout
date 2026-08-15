@@ -580,7 +580,24 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// generated token in some cases) — a real correctness bug, not yet
 	// root-caused. Do not flip this default without a passing parity test.
 	usePipelined := useGPUArgmax && !useMTP && pipelinedOK && genCfg.MaxTokens > 1 && os.Getenv("SPROUT_PIPELINE_DECODE") == "1"
-	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
+	// Compiled decode (CompiledGreedyArchitecture): the whole step runs as
+	// one MLX-compiled graph closure, replaying a cached execution plan
+	// instead of re-walking the ~1500-op graph per token. Also opt-in via
+	// env until TestCompiledDecodeParityLiveModel passes.
+	compiledArch, compiledOK := m.arch.(CompiledGreedyArchitecture)
+	useCompiled := useGPUArgmax && !useMTP && !usePipelined && compiledOK && genCfg.MaxTokens > 1 && os.Getenv("SPROUT_COMPILED_DECODE") == "1"
+	if useCompiled {
+		if err := compiledArch.PrepareCompiledDecode(len(tokenIDs), genCfg.MaxTokens, cache); err != nil {
+			log.Printf("llm: compiled decode unavailable (%v), falling back to eager", err)
+			useCompiled = false
+		}
+	}
+	defer func() {
+		if compiledOK {
+			compiledArch.ReleaseCompiledDecode()
+		}
+	}()
+	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && !useCompiled && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
 
 	nextToken := 0
 	if useGPUArgmax {
@@ -646,6 +663,76 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 					break mtpOuter
 				}
 			}
+		}
+		return nil
+	}
+
+	if useCompiled {
+		// Same lazy-array pipelining discipline as the usePipelined branch
+		// (dispatch next step before blocking on the current readback), but
+		// each step is one compiled-closure replay instead of a from-scratch
+		// graph build. nextToken (T0) was already emitted by the shared
+		// pre-branch code; the loop starts by dispatching T1.
+		seedArr, err := m.backend.NewArrayFromInt64([]int64{int64(nextToken)}, []int{1, 1})
+		if err != nil {
+			return fmt.Errorf("compiled decode: seed token array: %w", err)
+		}
+		if err := seedArr.AsyncEval(); err != nil {
+			seedArr.Free()
+			return fmt.Errorf("compiled decode: seed async eval: %w", err)
+		}
+		pos := len(tokenIDs)
+		stepStart := time.Now()
+		pending, err := compiledArch.ForwardDecodeCompiled(seedArr, pos)
+		seedArr.Free()
+		if err != nil {
+			return fmt.Errorf("compiled decode: dispatch first step: %w", err)
+		}
+		pos++
+		if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+			log.Printf("llm: compiled decode: prepare+first step: %.3fs", time.Since(stepStart).Seconds())
+		}
+
+		for i := 1; i < genCfg.MaxTokens; i++ {
+			if err := ctx.Err(); err != nil {
+				pending.Free()
+				return err
+			}
+			if m.isStopToken(nextToken) {
+				pending.Free()
+				break
+			}
+
+			var next tensor.Array
+			if i+1 < genCfg.MaxTokens {
+				next, err = compiledArch.ForwardDecodeCompiled(pending, pos)
+				if err != nil {
+					pending.Free()
+					return fmt.Errorf("compiled decode step %d: %w", i, err)
+				}
+				pos++
+			}
+
+			data, err := pending.Int64Data()
+			pending.Free()
+			if err != nil {
+				if next != nil {
+					next.Free()
+				}
+				return fmt.Errorf("compiled decode step %d: read token: %w", i, err)
+			}
+			if len(data) == 0 {
+				if next != nil {
+					next.Free()
+				}
+				return fmt.Errorf("compiled decode step %d: empty token readback", i)
+			}
+			nextToken = int(data[0])
+			generated = append(generated, nextToken)
+			if onToken != nil && !m.shouldFilterToken(nextToken, genCfg) {
+				onToken(nextToken)
+			}
+			pending = next
 		}
 		return nil
 	}

@@ -117,22 +117,21 @@ type prefixSlot struct {
 // enforces this by requiring shared == len(slot.tokens).
 const minPrefixReuse = 8
 
-// maxPrefixLen caps the retained prefix so long histories don't pin memory
-// forever. Beyond this, caching is dropped for that request.
-//
-// Sized by KV cost, not token count convenience: the 8 full-attention
-// layers cost ~32KB/token, so the ACTIVE conversation's prefix is
-// ~1.0 GB at 32K tokens; idle conversations spill to disk immediately
-// (spillIdleSlots), so at most one prefix is GPU-resident. Conversations
-// that outgrow this fall back to full prefill per turn (the pre-fix
-// behavior for everything >4096). SPROUT_PREFIX_CACHE_MAX overrides.
-func maxPrefixLenTokens() int {
+// maxPrefixLen caps the retained prefix so conversations can't outgrow
+// what the model can actually serve. Matched to ContextLength() (default
+// 128K, or the model's native window if smaller) so the cache policy
+// never introduces a cliff below the model's own limit: as long as the
+// model can process the prompt, the cache can retain it. A conversation
+// that outgrows its slot simply falls back to full prefill per turn —
+// the same cost it would pay with no cache at all. SPROUT_PREFIX_CACHE_MAX
+// overrides for explicit manual control.
+func (m *Model) maxPrefixLenTokens() int {
 	if v := os.Getenv("SPROUT_PREFIX_CACHE_MAX"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			return n
 		}
 	}
-	return 32768
+	return m.ContextLength()
 }
 
 // maxPrefixSlotsCap bounds how many conversations' prefixes stay
@@ -507,7 +506,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// path is unproven at scale and not worth the risk; once a conversation
 	// is too big to cache, always fall through to full prefill.
 	shared, slotIdx := 0, -1
-	if len(tokenIDs) <= maxPrefixLenTokens() {
+	if len(tokenIDs) <= m.maxPrefixLenTokens() {
 		shared, slotIdx = m.bestPrefixSlot(tokenIDs)
 	}
 	if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
@@ -557,7 +556,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// (decode appends generated tokens to the working cache; the snapshot
 	// keeps just the prompt prefix alive). Drop caching for very long
 	// prompts so a huge history doesn't pin memory forever.
-	if len(tokenIDs) <= maxPrefixLenTokens() {
+	if len(tokenIDs) <= m.maxPrefixLenTokens() {
 		snap := cache.SnapshotPrefix()
 		logGenMem("after-SnapshotPrefix")
 		newIdx := m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), snap)
@@ -1102,7 +1101,7 @@ func (m *Model) WarmSystemPrefix(prompt string) error {
 	if m.cfg.BOSTokenID > 0 {
 		tokenIDs = append([]int{m.cfg.BOSTokenID}, tokenIDs...)
 	}
-	if len(tokenIDs) < minPrefixReuse || len(tokenIDs) > maxPrefixLenTokens() {
+	if len(tokenIDs) < minPrefixReuse || len(tokenIDs) > m.maxPrefixLenTokens() {
 		return nil
 	}
 

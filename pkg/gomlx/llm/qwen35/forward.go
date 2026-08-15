@@ -709,6 +709,17 @@ func (q *Qwen35) ForwardDecodeArgmaxArray(tokenArr tensor.Array, pos int, cache 
 }
 
 func (q *Qwen35) logitsToFloat32(logits tensor.Array) ([]float32, error) {
+	if logits.Dtype() != tensor.Float32 {
+		// Activations stay bf16 end-to-end now (the scaleRMSNorm promotion
+		// fix kept the delta path in bf16, so logits are bf16 like mlx-lm's);
+		// cast for the CPU-side sampling readback.
+		f32, err := q.backend.AsType(logits, tensor.Float32, q.stream)
+		if err != nil {
+			return nil, err
+		}
+		defer f32.Free()
+		return f32.Float32Data()
+	}
 	return logits.Float32Data()
 }
 

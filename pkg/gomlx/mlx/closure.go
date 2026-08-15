@@ -3,8 +3,10 @@
 package mlx
 
 /*
+#include <stdlib.h>
 #include <mlx/c/closure.h>
 #include <mlx/c/compile.h>
+#include <mlx/c/metal.h>
 #include <mlx/c/vector.h>
 
 // Defined in mlx_closure_shim.c; simple entry points around the C closure
@@ -171,6 +173,28 @@ func SetCompileMode(m CompileMode) error {
 	rc := C.mlx_set_compile_mode(C.mlx_compile_mode(m))
 	if rc != 0 {
 		return fmt.Errorf("mlx: mlx_set_compile_mode: %s", lastMLXError())
+	}
+	return nil
+}
+
+// StartMetalCapture records a Metal GPU trace (a .gputrace bundle) to path.
+// Apple's Instruments/Trace utility opens it for per-kernel GPU timing.
+// Diagnostic only — used to attribute decode-step GPU cost per kernel.
+func StartMetalCapture(path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	rc := C.mlx_metal_start_capture(cPath)
+	if rc != 0 {
+		return fmt.Errorf("mlx: mlx_metal_start_capture: %s", lastMLXError())
+	}
+	return nil
+}
+
+// StopMetalCapture ends a capture started by StartMetalCapture.
+func StopMetalCapture() error {
+	rc := C.mlx_metal_stop_capture()
+	if rc != 0 {
+		return fmt.Errorf("mlx: mlx_metal_stop_capture: %s", lastMLXError())
 	}
 	return nil
 }

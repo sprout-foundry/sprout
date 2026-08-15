@@ -345,16 +345,11 @@ func (q *Qwen35) ForwardDecodeCompiled(tokenArr tensor.Array, pos int) (tensor.A
 	}
 	logits := outs[idx]
 
-	// Dispatch (not block on) the state outputs: the next Apply reads them,
-	// and without a dispatch their lazy graphs would chain unboundedly.
-	// Logits stay lazy — the argmax chain below dispatches without blocking.
-	toDispatch := make([]tensor.Array, 0, len(outs)-1)
-	for _, o := range outs[:len(outs)-1] {
-		toDispatch = append(toDispatch, o)
-	}
-	if err := q.backend.AsyncEvalBatch(toDispatch); err != nil {
-		return nil, fmt.Errorf("qwen35: compiled decode eval state: %w", err)
-	}
+	// The compiled replay evaluates its outputs before returning (verified:
+	// Apply is 1ms while the next blocking readback waits on real GPU work),
+	// so no separate state dispatch is needed. Keeping an AsyncEvalBatch
+	// here walked the whole output graph a SECOND time — measured 45ms/token
+	// at 20K context, the entire long-context regression.
 
 	// [1,1,vocab] argmax → [1,1] int64, dispatched without readback — same
 	// tail as ForwardDecodeArgmaxArray.
@@ -378,7 +373,8 @@ func (q *Qwen35) ForwardDecodeCompiled(tokenArr tensor.Array, pos int) (tensor.A
 		return nil, fmt.Errorf("qwen35: compiled decode async eval: %w", err)
 	}
 	if debugCompiledDecode() {
-		log.Printf("qwen35: compiled step pos=%d total=%.3fs", pos, time.Since(t0).Seconds())
+		log.Printf("qwen35: compiled step pos=%d total=%.3fs (apply=%.3f tail=%.3f)",
+			pos, time.Since(t0).Seconds(), applyDone.Sub(t0).Seconds(), time.Since(applyDone).Seconds())
 	}
 	return next, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -95,9 +96,25 @@ func TestSemanticRecall_E2E_FullPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get conversation store: %v", err)
 	}
+
+	// EmbedAndStoreTurn runs asynchronously inside
+	// recordTurnCheckpointFromMessages (goroutine), so poll until all five
+	// async writes land rather than asserting immediately after the calls
+	// return. Bounded wait: 10s deadline, 50ms poll interval.
+	deadline := time.Now().Add(10 * time.Second)
 	all, err := store.LoadAll()
 	if err != nil {
 		t.Fatalf("load all records: %v", err)
+	}
+	for len(all) < len(scenarios) {
+		if time.Now().After(deadline) {
+			t.Fatalf("expected %d records in conversation store, got %d", len(scenarios), len(all))
+		}
+		time.Sleep(50 * time.Millisecond)
+		all, err = store.LoadAll()
+		if err != nil {
+			t.Fatalf("load all records: %v", err)
+		}
 	}
 	if len(all) != len(scenarios) {
 		t.Fatalf("expected %d records in conversation store, got %d", len(scenarios), len(all))

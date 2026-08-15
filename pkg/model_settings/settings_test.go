@@ -111,3 +111,110 @@ func TestResolveOpenRouterSettingsForGptOssFamily(t *testing.T) {
 		t.Fatalf("expected third_party source type without creator override, got %s", settings.SourceType)
 	}
 }
+
+func TestResolveQwen38ThinkingMode(t *testing.T) {
+	settings := ResolveModelSettingsForMode("qwen3.8-27b", false)
+	if !settings.Known {
+		t.Fatalf("expected known settings for qwen3.8-27b")
+	}
+	if settings.SourceType != "creator" {
+		t.Fatalf("expected creator source type, got %s", settings.SourceType)
+	}
+	if settings.Parameters["temperature"] != 1.0 {
+		t.Fatalf("expected qwen3.8 thinking temperature 1.0, got %#v", settings.Parameters["temperature"])
+	}
+	if settings.Parameters["top_p"] != 0.95 {
+		t.Fatalf("expected qwen3.8 thinking top_p 0.95, got %#v", settings.Parameters["top_p"])
+	}
+	if settings.Parameters["presence_penalty"] != 0.0 {
+		t.Fatalf("expected qwen3.8 thinking presence_penalty 0.0, got %#v", settings.Parameters["presence_penalty"])
+	}
+}
+
+func TestResolveQwen38InstructMode(t *testing.T) {
+	settings := ResolveModelSettingsForMode("qwen3.8-27b", true)
+	if !settings.Known {
+		t.Fatalf("expected known settings for qwen3.8-27b")
+	}
+	if settings.SourceType != "creator" {
+		t.Fatalf("expected creator source type, got %s", settings.SourceType)
+	}
+	if settings.Parameters["temperature"] != 0.7 {
+		t.Fatalf("expected qwen3.8 instruct temperature 0.7, got %#v", settings.Parameters["temperature"])
+	}
+	if settings.Parameters["top_p"] != 0.8 {
+		t.Fatalf("expected qwen3.8 instruct top_p 0.8, got %#v", settings.Parameters["top_p"])
+	}
+	if settings.Parameters["presence_penalty"] != 1.5 {
+		t.Fatalf("expected qwen3.8 instruct presence_penalty 1.5, got %#v", settings.Parameters["presence_penalty"])
+	}
+}
+
+func TestResolveQwen38FamilyMatchesPrefixVariants(t *testing.T) {
+	for _, model := range []string{"qwen3.8-35b-a3b", "qwen/qwen3.8-max"} {
+		settings := ResolveModelSettingsForMode(model, false)
+		if !settings.Known {
+			t.Fatalf("expected known settings for %s", model)
+		}
+		if settings.Parameters["temperature"] != 1.0 {
+			t.Fatalf("expected %s thinking temperature 1.0, got %#v", model, settings.Parameters["temperature"])
+		}
+	}
+}
+
+func TestResolveModelSettingsDefaultsToThinkingMode(t *testing.T) {
+	if got := ResolveModelSettings("qwen3.8-27b").Parameters["temperature"]; got != 1.0 {
+		t.Fatalf("expected default ResolveModelSettings to use thinking mode temp 1.0, got %#v", got)
+	}
+}
+
+func TestResolveQwen36CodingMode(t *testing.T) {
+	// Qwen3.6 family uses the creator's "precise coding tasks" set as its
+	// thinking-mode default (temp 0.6) and the instruct set when non-thinking.
+	settings := ResolveModelSettingsForMode("qwen3.6-27b", false)
+	if !settings.Known {
+		t.Fatalf("expected known settings for qwen3.6-27b")
+	}
+	if settings.SourceType != "creator" {
+		t.Fatalf("expected creator source type, got %s", settings.SourceType)
+	}
+	if settings.Parameters["temperature"] != 0.6 {
+		t.Fatalf("expected qwen3.6 coding temperature 0.6, got %#v", settings.Parameters["temperature"])
+	}
+	if settings.Parameters["top_p"] != 0.95 {
+		t.Fatalf("expected qwen3.6 coding top_p 0.95, got %#v", settings.Parameters["top_p"])
+	}
+	if settings.Parameters["presence_penalty"] != 0.0 {
+		t.Fatalf("expected qwen3.6 coding presence_penalty 0.0, got %#v", settings.Parameters["presence_penalty"])
+	}
+
+	instruct := ResolveModelSettingsForMode("qwen3.6-27b", true)
+	if instruct.Parameters["temperature"] != 0.7 {
+		t.Fatalf("expected qwen3.6 instruct temperature 0.7, got %#v", instruct.Parameters["temperature"])
+	}
+	if instruct.Parameters["presence_penalty"] != 1.5 {
+		t.Fatalf("expected qwen3.6 instruct presence_penalty 1.5, got %#v", instruct.Parameters["presence_penalty"])
+	}
+}
+
+func TestResolveQwen36FamilyDoesNotCaptureQwen35Or38(t *testing.T) {
+	if s := ResolveModelSettingsForMode("qwen3.5-27b", false); s.SourceType != "creator" || s.Parameters["temperature"] != 0.6 {
+		t.Fatalf("qwen3.5-27b should resolve to qwen3.5 profile, got src=%s temp=%#v", s.SourceType, s.Parameters["temperature"])
+	}
+	if s := ResolveModelSettingsForMode("qwen3.8-27b", false); s.SourceType != "creator" || s.Parameters["temperature"] != 1.0 {
+		t.Fatalf("qwen3.8-27b should resolve to qwen3.8 profile, got src=%s temp=%#v", s.SourceType, s.Parameters["temperature"])
+	}
+}
+
+func TestResolveQwen25CoderPrefixBeatsGeneric(t *testing.T) {
+	// qwen2.5-coder-* must resolve to the coder profile (repetition_penalty 1.1),
+	// not be shadowed by the generic qwen2.5-family prefix (repetition_penalty 1.05).
+	coder := ResolveModelSettingsForMode("qwen2.5-coder-32b", false)
+	if coder.Parameters["repetition_penalty"] != 1.1 {
+		t.Fatalf("expected qwen2.5-coder repetition_penalty 1.1, got %#v", coder.Parameters["repetition_penalty"])
+	}
+	generic := ResolveModelSettingsForMode("qwen2.5-7b-instruct", false)
+	if generic.Parameters["repetition_penalty"] != 1.05 {
+		t.Fatalf("expected qwen2.5 generic repetition_penalty 1.05, got %#v", generic.Parameters["repetition_penalty"])
+	}
+}

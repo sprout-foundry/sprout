@@ -5684,6 +5684,34 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 512000,
+        "description": "Dots3-Note Preview is an open-weight mixture-of-experts model from Dots Studio, with 16B active parameters out of 280B total. It is the lightest model in the Dots 3 family and is...",
+        "id": "dots-studio/dots-3-note-preview:free",
+        "input_cost": 0,
+        "name": "Dots Studio: Dots3-Note Preview (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
+        "id": "qwen/qwen3.8-27b",
+        "input_cost": 0.45,
+        "name": "Qwen: Qwen3.8 27B",
+        "output_cost": 3.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

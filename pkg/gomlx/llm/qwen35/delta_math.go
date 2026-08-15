@@ -188,7 +188,11 @@ func gatedDeltaUpdate(q, k, v, g, beta, state tensor.Array, b tensor.Backend, st
 		}
 	}
 
-	// Fast path: one fused Metal kernel launch when available.
+	// Fast path: one fused Metal kernel launch when available. Note: an
+	// isolated per-call-sync benchmark suggests the ops loop is faster at
+	// S=1, but the real-model A/B says the opposite (fused 23.0 tok/s vs
+	// ops 21.1 at 20K context) — sync-per-call measurements don't model
+	// the pipelined stream, so trust the end-to-end number and keep fused.
 	if b.Available() && os.Getenv("SPROUT_DELTA_OPS") == "" {
 		y, ns, err := fusedGatedDeltaUpdate(q, k, v, g, beta, state, b, stream)
 		if err == nil {

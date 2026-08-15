@@ -117,9 +117,22 @@ type prefixSlot struct {
 // enforces this by requiring shared == len(slot.tokens).
 const minPrefixReuse = 8
 
-// maxPrefixLen caps the retained prefix so long histories don't pin memory
-// forever. Beyond this, caching is dropped for that request.
-const maxPrefixLen = 4096
+// maxPrefixLen caps the retained prefix so conversations can't outgrow
+// what the model can actually serve. Matched to ContextLength() (default
+// 128K, or the model's native window if smaller) so the cache policy
+// never introduces a cliff below the model's own limit: as long as the
+// model can process the prompt, the cache can retain it. A conversation
+// that outgrows its slot simply falls back to full prefill per turn —
+// the same cost it would pay with no cache at all. SPROUT_PREFIX_CACHE_MAX
+// overrides for explicit manual control.
+func (m *Model) maxPrefixLenTokens() int {
+	if v := os.Getenv("SPROUT_PREFIX_CACHE_MAX"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return m.ContextLength()
+}
 
 // maxPrefixSlotsCap bounds how many conversations' prefixes stay
 // remembered at all (hot or spilled to disk). Not RAM-scaled: only the
@@ -493,7 +506,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// path is unproven at scale and not worth the risk; once a conversation
 	// is too big to cache, always fall through to full prefill.
 	shared, slotIdx := 0, -1
-	if len(tokenIDs) <= maxPrefixLen {
+	if len(tokenIDs) <= m.maxPrefixLenTokens() {
 		shared, slotIdx = m.bestPrefixSlot(tokenIDs)
 	}
 	if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
@@ -543,7 +556,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// (decode appends generated tokens to the working cache; the snapshot
 	// keeps just the prompt prefix alive). Drop caching for very long
 	// prompts so a huge history doesn't pin memory forever.
-	if len(tokenIDs) <= maxPrefixLen {
+	if len(tokenIDs) <= m.maxPrefixLenTokens() {
 		snap := cache.SnapshotPrefix()
 		logGenMem("after-SnapshotPrefix")
 		newIdx := m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), snap)
@@ -602,11 +615,13 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	}
 	// Prompt-lookup speculative decoding takes priority where enabled
 	// (production streaming chat): it can emit up to k+1 tokens per forward
-	// — a bigger multiplier than compiled decode's +14%. Compiled serves
-	// the remaining greedy callers (commit messages, non-lookup requests).
-	// Default ON below the context cutoff; SPROUT_COMPILED_DECODE=0 opts
-	// out. Above the cutoff the path is declined automatically (staging
-	// cost scales with KV size — see the comment above).
+	// pass — a bigger multiplier than compiled decode's +14%. Both
+	// production callers (local_provider, openaisserver) enable lookup, so
+	// compiled decode currently serves only callers that explicitly opt out
+	// of lookup (benchmarks, parity tests). Default ON below the context
+	// cutoff; SPROUT_COMPILED_DECODE=0 opts out. Above the cutoff the path
+	// is declined automatically (staging cost scales with KV size — see the
+	// comment above).
 	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
 	useCompiled := useGPUArgmax && !useMTP && !usePipelined && !usePromptLookup && compiledOK && genCfg.MaxTokens > 1 &&
 		len(tokenIDs) <= compiledCtxLimit && os.Getenv("SPROUT_COMPILED_DECODE") != "0"
@@ -1088,7 +1103,7 @@ func (m *Model) WarmSystemPrefix(prompt string) error {
 	if m.cfg.BOSTokenID > 0 {
 		tokenIDs = append([]int{m.cfg.BOSTokenID}, tokenIDs...)
 	}
-	if len(tokenIDs) < minPrefixReuse || len(tokenIDs) > maxPrefixLen {
+	if len(tokenIDs) < minPrefixReuse || len(tokenIDs) > m.maxPrefixLenTokens() {
 		return nil
 	}
 

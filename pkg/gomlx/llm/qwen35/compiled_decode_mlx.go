@@ -131,11 +131,10 @@ func (q *Qwen35) PrepareCompiledDecode(promptLen, maxTokens int, cache *llm.KVCa
 				return fail(fmt.Errorf("qwen35: compiled decode: alloc v buf: %w", err))
 			}
 			if err := q.copyPrefillWindow(cd, i, kb, vb, layer.K, layer.V, n); err != nil {
-				kb.Free()
-				vb.Free()
 				return fail(err)
 			}
-			cd.kBufs[i], cd.vBufs[i] = kb, vb
+			// copyPrefillWindow adopts the zero-padded buffers (see its
+			// comment): on success it owns and assigns cd.kBufs[i]/vBufs[i].
 		} else if layer.State != nil && layer.ConvState != nil {
 			// Fixed-size recurrent state: retain the prefilled values; the
 			// closure rewrites them each step.
@@ -219,8 +218,14 @@ func (q *Qwen35) PrepareCompiledDecode(promptLen, maxTokens int, cache *llm.KVCa
 }
 
 // copyPrefillWindow copies a layer's populated window into the fresh
-// fixed-capacity buffers via SliceUpdate (eager, once per generation).
+// fixed-capacity buffers. Takes full ownership of kb/vb (freed on every
+// path) and, on success, adopts the SliceUpdate results into
+// cd.kBufs[layerIdx]/cd.vBufs[layerIdx]: MLX arrays are value-semantics,
+// so SliceUpdate returns NEW arrays carrying the prefilled window — the
+// original zero-padded buffers are never written in place.
 func (q *Qwen35) copyPrefillWindow(cd *compiledDecode, layerIdx int, kb, vb, srcK, srcV tensor.Array, n int) error {
+	defer kb.Free()
+	defer vb.Free()
 	shape := srcK.Shape()
 	if n <= 0 || n > shape[2] {
 		n = shape[2]
@@ -246,8 +251,8 @@ func (q *Qwen35) copyPrefillWindow(cd *compiledDecode, layerIdx int, kb, vb, src
 		wv.Free()
 		return fmt.Errorf("qwen35: prefill copy v eval: %w", err)
 	}
-	wk.Free()
-	wv.Free()
+	cd.kBufs[layerIdx] = wk
+	cd.vBufs[layerIdx] = wv
 	return nil
 }
 

@@ -10,6 +10,29 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
+// waitForStoredRecords polls the conversation store until it contains the
+// expected number of records or the timeout expires. recordTurnCheckpointFromMessages
+// spawns embedding in a goroutine; this helper gives the goroutines time to run
+// before the test asserts on store contents.
+func waitForStoredRecords(t *testing.T, mgr *embedding.EmbeddingManager, expected int, ctx context.Context) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		store, err := mgr.GetConversationStore(ctx)
+		if err == nil && store.Size() >= expected {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Logf("warning: waited for %d stored records but only got %d", expected, func() int {
+		store, err := mgr.GetConversationStore(ctx)
+		if err != nil || store == nil {
+			return 0
+		}
+		return store.Size()
+	}())
+}
+
 // TestSemanticRecall_E2E_FullPipeline exercises the entire SP-066 Phase 3
 // recall chain against a mock embedding manager:
 //
@@ -89,6 +112,10 @@ func TestSemanticRecall_E2E_FullPipeline(t *testing.T) {
 		}
 		a.recordTurnCheckpointFromMessages(base, base+2, msgs)
 	}
+
+	// recordTurnCheckpointFromMessages spawns embedding in a goroutine.
+	// Wait until all records have been stored before proceeding with assertions.
+	waitForStoredRecords(t, mgr, len(scenarios), ctx)
 
 	// --- Step 2: assert the production path stamped checkpoint_id ---
 

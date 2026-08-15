@@ -4,11 +4,25 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
+
+// isRateLimitError checks if the error indicates a rate-limit or balance
+// issue (HTTP 429) so that CI tests can skip gracefully instead of failing.
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "429") ||
+		strings.Contains(msg, "rate limit") ||
+		strings.Contains(msg, "Insufficient balance") ||
+		strings.Contains(msg, "no resource package")
+}
 
 // TestZAIProviderIsolated tests the ZAI provider in isolation
 func TestZAIProviderIsolated(t *testing.T) {
@@ -42,6 +56,9 @@ func TestZAIProviderIsolated(t *testing.T) {
 		start := time.Now()
 		err := provider.CheckConnection()
 		if err != nil {
+			if isRateLimitError(err) {
+				t.Skipf("Skipping connection test (rate limited / insufficient balance): %v", err)
+			}
 			t.Fatalf("Connection test failed: %v", err)
 		}
 		t.Logf("[OK] Connection test passed in %v", time.Since(start))
@@ -56,6 +73,9 @@ func TestZAIProviderIsolated(t *testing.T) {
 		start := time.Now()
 		resp, err := provider.SendChatRequest(context.Background(), messages, nil, "", false)
 		if err != nil {
+			if isRateLimitError(err) {
+				t.Skipf("Skipping non-streaming test (rate limited / insufficient balance): %v", err)
+			}
 			t.Fatalf("Non-streaming request failed: %v", err)
 		}
 		t.Logf("[OK] Non-streaming request completed in %v", time.Since(start))
@@ -75,6 +95,9 @@ func TestZAIProviderIsolated(t *testing.T) {
 			t.Logf("[pkg] Chunk (%s): %q", contentType, chunk)
 		})
 		if err != nil {
+			if isRateLimitError(err) {
+				t.Skipf("Skipping streaming test (rate limited / insufficient balance): %v", err)
+			}
 			t.Fatalf("Streaming request failed: %v", err)
 		}
 		t.Logf("[OK] Streaming request completed in %v", time.Since(start))
@@ -122,6 +145,9 @@ func TestZAIProviderDirect(t *testing.T) {
 	// Test non-streaming first
 	resp, err := provider.SendChatRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
+		if isRateLimitError(err) {
+			t.Skipf("[SKIP] Non-streaming skipped (rate limited / insufficient balance): %v", err)
+		}
 		t.Fatalf("[FAIL] Non-streaming failed: %v", err)
 	}
 

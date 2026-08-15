@@ -3,6 +3,7 @@ package embedding
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"path/filepath"
 )
 
@@ -77,8 +78,23 @@ func makeUnitID(path, name string, startLine int) string {
 
 // ExtractFromFile extracts code units from the given file path using the
 // language-specific extractor determined by file extension.
-// Returns an empty slice (no error) for unsupported file types.
+// Returns an empty slice (no error) for unsupported or oversized files.
 func ExtractFromFile(path string, opts ...ExtractOption) ([]CodeUnit, error) {
+	// Size guard at the chokepoint: every caller reaches the language
+	// extractors through here, and their os.ReadFile is unbounded. A
+	// multi-GB code file (generated corpora, bundled output) would OOM
+	// the build exactly like the oversized non-code files this cap exists
+	// to stop — AST parsing doesn't need files this large anyway.
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("embedding: stat %s: %w", path, err)
+	}
+	if fi.Size() > MaxIndexableFileBytes {
+		debugLogf("index: skipping %s: %d bytes exceeds %d-byte indexable limit",
+			path, fi.Size(), MaxIndexableFileBytes)
+		return nil, nil
+	}
+
 	ext := filepath.Ext(path)
 	switch ext {
 	case ".go":

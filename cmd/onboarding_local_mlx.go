@@ -154,44 +154,11 @@ func onboardingLocal() (string, bool) {
 		return "", false
 	}
 
-	saveLocalModelPath(selected.Dir)
 	return modelName, true
 }
 
-func saveLocalModelPath(modelDir string) {
-	cfg, err := configuration.Load()
-	if err != nil || cfg == nil {
-		return
-	}
-	cfg.LocalModelPath = modelDir
-	_ = cfg.Save()
-}
-
-func getLocalModelPath() string {
-	cfg, err := configuration.Load()
-	if err != nil || cfg == nil {
-		return ""
-	}
-	return cfg.LocalModelPath
-}
-
 func ensureLocalServerRunning() error {
-	modelPath := getLocalModelPath()
-	backend := ""
-	if modelPath == "" {
-		ram := mlx.TotalSystemRAM()
-		picked, err := llm.SelectModelForRAM(localmodel.DefaultModelsDir, ram)
-		if err != nil {
-			return fmt.Errorf("no local model available — run onboarding first")
-		}
-		modelPath = picked.Dir
-		backend = picked.ServerBackend
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	return localmodel.EnsureServerHealthWithBackend(ctx, modelPath, backend)
+	return nil // in-process provider loads on first request; nothing to pre-start
 }
 
 func localProgressBar(pct, width int) string {

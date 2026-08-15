@@ -5,7 +5,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
@@ -22,16 +21,4 @@ func onboardingLocal() (string, bool) {
 	fmt.Println()
 	fmt.Println("You can still use cloud providers — try one of those instead.")
 	return "", false
-}
-
-func getLocalModelPath() string {
-	cfg, err := configuration.Load()
-	if err != nil || cfg == nil {
-		return ""
-	}
-	return cfg.LocalModelPath
-}
-
-func ensureLocalServerRunning() error {
-	return nil // no-op on non-MLX builds
 }

@@ -41,9 +41,24 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// Log request on HTTP error — use the actual sent body (post-redaction)
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "http_request_failed", err)
-		return nil, agenterrors.NewNetwork("HTTP request failed", err)
+		// For local providers, attempt to auto-start the server and retry once.
+		if recovered := p.tryLocalServerRecovery(); recovered {
+			req2, _, err2 := p.buildHTTPRequestCtx(ctx, requestBody, true)
+			if err2 == nil {
+				p.mu.RLock()
+				c2 := p.streamingClient
+				p.mu.RUnlock()
+				if resp2, err3 := c2.Do(req2); err3 == nil {
+					resp = resp2
+					err = nil
+				}
+			}
+		}
+		if err != nil {
+			// Log request on HTTP error — use the actual sent body (post-redaction)
+			logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "http_request_failed", err)
+			return nil, agenterrors.NewNetwork("HTTP request failed", err)
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -76,6 +91,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true, "streaming_response", err)
 				return nil, agenterrors.NewNetwork("chat request failed", err)
 			}
+			api.RecoverInlineToolCalls(response, tools)
 			return response, nil
 		}
 
@@ -95,6 +111,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 	}
 
 	// Success - don't log the request
+	api.RecoverInlineToolCalls(response, tools)
 	return response, nil
 }
 

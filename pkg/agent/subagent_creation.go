@@ -159,6 +159,13 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// during delegation.
 	agent.riskProfileOverride = r.parentAgent.riskProfileOverride
 
+	// Inherit the parent's context profile so LCM (Low-Context Mode)
+	// settings — tool allowlist, system prompt path, compaction fraction —
+	// propagate into subagents. Without this, subagents get a zero-value
+	// profile (full mode, all tools), which undoes LCM's context savings
+	// and sends 41+ tool definitions instead of the curated 12.
+	agent.contextProfile = r.parentAgent.contextProfile
+
 	// Propagate session folder allowlist into the subagent so paths
 	// the user already approved at the root level don't re-prompt
 	// inside delegated work. The snapshot is a copy — the subagent

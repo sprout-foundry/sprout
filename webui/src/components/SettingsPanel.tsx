@@ -16,6 +16,7 @@ import MCPSettingsTab from './settings/MCPSettingsTab';
 import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
 import PersistentContextSettingsTab from './settings/PersistentContextSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
+import { LocalLLMSettingsTab } from './settings/LocalLLMSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
 import SkillsSettingsTab from './settings/SkillsSettingsTab';
 import SubagentSettingsTab from './settings/SubagentSettingsTab';
@@ -461,6 +462,9 @@ function SettingsPanel({
             handleDeleteProvider={mutations.handleDeleteProvider}
           />
         );
+
+      case 'env-local-llm':
+        return <LocalLLMSettingsTab />;
 
       case 'env-advanced':
         return (

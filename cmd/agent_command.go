@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -11,11 +12,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -101,12 +104,84 @@ func resolveGlobalConfigDir() string {
 	return filepath.Join(homeDir, ".config", "sprout")
 }
 
+// shouldPreloadLocalModel reports whether createChatAgent should eagerly
+// load the local model before the agent is ready to serve. Three cases skip
+// the (expensive, GPU-loading) preload:
+//
+//  1. Not using the local provider at all — nothing to preload.
+//  2. A silently auto-started background daemon (SPROUT_DAEMON_AUTOSTARTED=1,
+//     set by daemon_autostart.go on the child's env): nothing routes real
+//     agent traffic through that daemon yet, so eagerly loading here only
+//     duplicates the foreground process's GPU/model work and contends with
+//     it for the same GPU — which made the daemon's own health check
+//     reliably miss its 10s StartTimeout, leaving it running unsupervised.
+//  3. A daemon is already up, healthy, and about to actually serve this
+//     query: tryDaemonOneShot (called later in the same invocation, once
+//     flags/workflow are resolved) will route there, so preloading our own
+//     copy first would be paid for nothing. Guarded to only skip when we're
+//     confident tryDaemonOneShot will actually run and would route
+//     successfully — see the inline checks below, which mirror
+//     tryDaemonOneShot's own gating exactly so this can't skip a preload
+//     that then has nothing to fall back on.
+//
+// In every skip case the model still loads normally on first actual local
+// use (lazy init in LocalProvider.ensureLoaded) if daemon routing doesn't
+// end up happening after all. An explicit `sprout agent -d` /
+// `sprout service start` (daemonMode true, no SPROUT_DAEMON_AUTOSTARTED
+// marker) always preloads — it doesn't route to another daemon at all
+// (case 3 doesn't apply to it), and it's intentionally going to be used.
+func shouldPreloadLocalModel() bool {
+	if !isLocalProvider() {
+		return false
+	}
+	if os.Getenv("SPROUT_DAEMON_AUTOSTARTED") == "1" {
+		return false
+	}
+	if daemonMode {
+		return true // we ARE the daemon; nothing else to defer to
+	}
+	// Mirror tryDaemonOneShot's own preconditions (cmd/agent_socket.go)
+	// exactly: if any of these say it won't run or won't route, don't skip
+	// the preload — we'd be relying on a fallback that isn't coming.
+	if agentSkipDaemonRouting() {
+		return true
+	}
+	return !isDaemonReachableForAgentRouting()
+}
+
+// agentSkipDaemonRouting reports whether this invocation will never attempt
+// tryDaemonOneShot at all, independent of daemon health — i.e. shouldn't be
+// used as a basis for skipping the local-model preload.
+//
+// tryDaemonOneShot's actual gate (agent_modes.go) is `workflowConfig ==
+// nil`, where workflowConfig is loaded from the --workflow-config file at
+// RunAgent time — after createChatAgent has already returned, so the loaded
+// value itself isn't available yet here. agentWorkflowConfig (the raw flag)
+// is populated by cobra before RunE runs, same timing createChatAgent
+// already relies on for agentProvider/agentModel/etc, so "is the flag set"
+// is used as a conservative stand-in: if it's set but loading later fails,
+// the command errors out before ever reaching tryDaemonOneShot anyway, so
+// treating "flag set" as "won't route" never skips a preload that had
+// something to fall back on.
+func agentSkipDaemonRouting() bool {
+	return agentWorkflowConfig != ""
+}
+
 func createChatAgent() (*agent.Agent, error) {
 	// Proactive CLI onboarding: if no provider is configured and we're in
 	// an interactive terminal, guide the user through setup before trying
 	// to create an agent. Onboarding persists the provider+model to config
 	// so the subsequent NewAgent() call picks up the fresh configuration.
 	maybeRunOnboarding()
+
+	// If using the local provider, pre-load the model in-process.
+	if shouldPreloadLocalModel() {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		if err := localmodel.EnsureServerForProviderWithCheck(ctx, "sprout-local"); err != nil {
+			console.GlyphWarning.Printf("Local AI: %v", err)
+		}
+		cancel()
+	}
 
 	var chatAgent *agent.Agent
 	var err error

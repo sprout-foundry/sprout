@@ -307,6 +307,33 @@ func TestCreateProviderClient_TestClientType_FullInterface(t *testing.T) {
 	_ = client.CheckConnection()
 }
 
+// TestCreateProviderClient_SproutLocalType verifies the sprout-local
+// provider dispatches to the in-process LocalProvider (not the HTTP
+// GenericProvider).
+func TestCreateProviderClient_SproutLocalType(t *testing.T) {
+	client, err := CreateProviderClient(api.SproutLocalClientType, "")
+	if err != nil {
+		t.Fatalf("CreateProviderClient failed for SproutLocalClientType: %v", err)
+	}
+
+	if client.GetProvider() != "sprout-local" {
+		t.Errorf("expected provider 'sprout-local', got '%s'", client.GetProvider())
+	}
+
+	// Should NOT support vision
+	if client.SupportsVision() {
+		t.Error("local provider should not support vision")
+	}
+
+	// Should implement the full interface without panic
+	_ = client.GetModel()
+	_ = client.GetLastTPS()
+	_ = client.GetAverageTPS()
+	_ = client.GetTPSStats()
+	client.ResetTPSStats()
+	client.SetDebug(false)
+}
+
 // TestTestClient_NilMessages tests that TestClient handles nil gracefully
 func TestTestClient_NilMessages(t *testing.T) {
 	client := &TestClient{}

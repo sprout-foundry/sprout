@@ -19,6 +19,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
@@ -131,15 +132,27 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		RecommendedPrefixes: []string{},
 		RecommendedModelWhy: "Good default for high-performance inference use.",
 	},
+	"sprout-local": {
+		Description:         "Run fully offline on your Mac — no API key, no network. GPU-accelerated via Apple MLX with quantized Qwen3.5 models.",
+		SetupHint:           "No setup needed if a model is already downloaded. First use downloads a ~2–5 GB model automatically.",
+		DocsURL:             "",
+		SignupURL:           "",
+		APIKeyLabel:         "",
+		APIKeyHelp:          "",
+		Recommended:         false,
+		RecommendedPrefixes: []string{"qwen3.5-"},
+		RecommendedModelWhy: "Best speed-to-capability ratio for local hardware.",
+	},
 }
 
 var onboardingProviderOrder = map[string]int{
-	"zai":        0,
-	"minimax":    1,
-	"openrouter": 2,
-	"deepinfra":  3,
-	"chutes":     4,
-	"cerebras":   5,
+	"zai":          0,
+	"minimax":      1,
+	"openrouter":   2,
+	"deepinfra":    3,
+	"chutes":       4,
+	"cerebras":     5,
+	"sprout-local": 6,
 }
 
 func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {
@@ -597,6 +610,17 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// Clear any cached agent so it is re-created with the updated config
 	// (real provider instead of "editor").
 	ws.clearCachedAgent(clientID)
+
+	// Pre-load the local model in-process when sprout-local is selected
+	// so the first chat request is fast. On Apple Silicon this loads the
+	// model directly via MLX — no HTTP server, no separate process.
+	if req.Provider == "sprout-local" {
+		if err := localmodel.EnsureServerForProviderWithCheck(r.Context(), "sprout-local"); err != nil {
+			ws.log().Info("local model pre-load deferred (will lazy-load on first request)", "error", err)
+		} else {
+			ws.log().Info("local model loaded in-process")
+		}
+	}
 
 	// Now create/get the agent with the newly configured provider.
 	clientAgent, err := ws.getClientAgent(clientID)

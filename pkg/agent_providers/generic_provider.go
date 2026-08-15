@@ -121,9 +121,24 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// Log request on HTTP error
-		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "http_request_failed", err)
-		return nil, agenterrors.NewNetwork("HTTP request failed", err)
+		// For local providers, attempt to auto-start the server and retry once.
+		if recovered := p.tryLocalServerRecovery(); recovered {
+			req2, _, err2 := p.buildHTTPRequestCtx(ctx, requestBody, false)
+			if err2 == nil {
+				p.mu.RLock()
+				c2 := p.httpClient
+				p.mu.RUnlock()
+				if resp2, err3 := c2.Do(req2); err3 == nil {
+					resp = resp2
+					err = nil
+				}
+			}
+		}
+		if err != nil {
+			// Log request on HTTP error
+			logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "http_request_failed", err)
+			return nil, agenterrors.NewNetwork("HTTP request failed", err)
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {

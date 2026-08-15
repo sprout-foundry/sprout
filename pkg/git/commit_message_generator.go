@@ -157,15 +157,32 @@ Return ONLY the description paragraph. No title, no markdown, no code blocks, no
 	titleChan := make(chan callResult, 1)
 	descChan := make(chan callResult, 1)
 
+	// The local provider serializes generation internally — one GPU, one
+	// model mutex (Model.Generate) — so dispatching both calls concurrently
+	// buys no real parallelism: the second call just queues up and starts
+	// its own heavy prefill+decode the instant the first releases the lock,
+	// back-to-back with no gap for the allocator to reclaim anything in
+	// between. On a memory-constrained machine that measurably worsens the
+	// second call's decode throughput. Cloud providers get genuine
+	// parallelism from concurrent HTTP requests, so only the local provider
+	// is serialized here.
+	isLocalProvider := client.GetProvider() == string(api.SproutLocalClientType)
+
 	go func() {
 		r, e := client.SendChatRequest(ctx, titleMessages, nil, "", false)
 		titleChan <- callResult{r, e}
+		if isLocalProvider {
+			r, e := client.SendChatRequest(ctx, descMessages, nil, "", false)
+			descChan <- callResult{r, e}
+		}
 	}()
 
-	go func() {
-		r, e := client.SendChatRequest(ctx, descMessages, nil, "", false)
-		descChan <- callResult{r, e}
-	}()
+	if !isLocalProvider {
+		go func() {
+			r, e := client.SendChatRequest(ctx, descMessages, nil, "", false)
+			descChan <- callResult{r, e}
+		}()
+	}
 
 	select {
 	case result := <-titleChan:

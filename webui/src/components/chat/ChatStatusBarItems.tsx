@@ -135,6 +135,19 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
     );
   }
 
+  // Offline badge when using a local/offline provider.
+  if (provider === 'sprout-local') {
+    segments.push(
+      <span
+        key="offline"
+        className="chat-statusbar-item chat-statusbar-offline"
+        title="Running fully on-device — no network"
+      >
+        Offline
+      </span>,
+    );
+  }
+
   // Persona chip — only when the agent's active persona is something
   // other than the unmarked primary. The CLI shows persona via tool-line
   // badges; this surfaces the same signal at the status level so users

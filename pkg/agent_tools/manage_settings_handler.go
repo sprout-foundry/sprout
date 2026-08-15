@@ -141,7 +141,11 @@ func (h *manageSettingsHandler) handleSet(mgr *configuration.Manager, args map[s
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("failed to set %q: %v", key, err), IsError: true}, nil
 	}
-	return ToolResult{Output: fmt.Sprintf("Setting %q updated to %q", key, value)}, nil
+	output := fmt.Sprintf("Setting %q updated to %q", key, value)
+	if strings.ToLower(key) == "provider" && value == "sprout-local" {
+		output += ". Note: sprout-local (on-device MLX) is experimental — expect rougher output quality than cloud providers, and memory use that can spike well beyond configured limits during generation."
+	}
+	return ToolResult{Output: output}, nil
 }
 
 // handleListProviders lists available providers.

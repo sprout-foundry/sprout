@@ -108,6 +108,24 @@ class ApiService {
     return miscApi.getProviderModels(clientFetch, provider);
   }
 
+  // ── Local LLM ─────────────────────────────────────────────────────
+
+  async getLocalLLMStatus(): Promise<import('./types').LocalLLMStatus> {
+    return miscApi.getLocalLLMStatus(clientFetch);
+  }
+
+  async startLocalLLM(): Promise<{ status: string; endpoint?: string; pid?: number }> {
+    return miscApi.startLocalLLM(clientFetch);
+  }
+
+  async getLocalLLMModels(): Promise<{ models: import('./types').LocalLLMModel[]; recommended: string; model_dir: string }> {
+    return miscApi.getLocalLLMModels(clientFetch);
+  }
+
+  async downloadLocalLLMModel(model?: string): Promise<{ status: string; model: string; pid: number; message: string }> {
+    return miscApi.downloadLocalLLMModel(clientFetch, model);
+  }
+
   async getProviderCredentials(): Promise<{
     storage_backend: string;
     providers: Array<{

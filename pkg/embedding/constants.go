@@ -51,6 +51,15 @@ const MaxDepth = 15
 // MaxFileCount caps files WalkCodeFiles will collect.
 const MaxFileCount = 10000
 
+// MaxIndexableFileBytes caps the size of ANY file the index will read —
+// code files (via ExtractFromFile) and file-level non-code files alike.
+// Files larger than this are skipped entirely: index bodies truncate to
+// 8 KB anyway, so reading a multi-GB file (generated code bundles, data
+// corpora) would only waste memory and walk budget. The read paths also
+// use this as their LimitReader bound, so even a race between stat and
+// open can't blow memory.
+const MaxIndexableFileBytes int64 = 1 << 20 // 1 MiB
+
 // ProgressInterval is the file count between progress events during walk and embedding.
 const ProgressInterval = 500
 

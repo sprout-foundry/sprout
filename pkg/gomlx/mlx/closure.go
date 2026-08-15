@@ -148,6 +148,33 @@ func (c *Closure) Compile(shapeless bool) (*Closure, error) {
 	return out, nil
 }
 
+// CompileMode selects how mlx_compile transforms the traced graph.
+type CompileMode int
+
+const (
+	// CompileModeDisabled disables compilation entirely.
+	CompileModeDisabled CompileMode = 0
+	// CompileModeNoSimplify skips algebraic simplification of the graph.
+	CompileModeNoSimplify CompileMode = 1
+	// CompileModeNoFuse caches the scheduled execution plan but does NOT
+	// fuse kernels — each traced op runs its stock kernel with eager-path
+	// intermediate precision. Without this, fusion keeps fp32 intermediates
+	// where the eager path rounds to bf16 between kernels, changing
+	// numerics enough to flip near-tie argmax tokens.
+	CompileModeNoFuse CompileMode = 2
+	// CompileModeEnabled is MLX's default: simplify + fuse.
+	CompileModeEnabled CompileMode = 3
+)
+
+// SetCompileMode sets the global transform mode used by Compile.
+func SetCompileMode(m CompileMode) error {
+	rc := C.mlx_set_compile_mode(C.mlx_compile_mode(m))
+	if rc != 0 {
+		return fmt.Errorf("mlx: mlx_set_compile_mode: %s", lastMLXError())
+	}
+	return nil
+}
+
 // vectorToArrays converts an owned mlx_vector_array into Go *Array wrappers.
 // Each wrapper takes ownership of one ref (the vector holds its own), and
 // the vector itself is freed by the caller. The wrappers must be freed by

@@ -39,7 +39,13 @@ func decayGate(aLog, a, dtBias tensor.Array, b tensor.Backend, stream tensor.Str
 			return g, nil
 		}
 	}
+	return decayGateOps(aLog, a, dtBias, b, stream)
+}
 
+// decayGateOps is decayGate's multi-op fp32 mirror — the same math as the
+// fused kernel (softplus via log1p(exp)), for callers that must avoid custom
+// Metal kernels (the compiled decode closure traces plain ops only).
+func decayGateOps(aLog, a, dtBias tensor.Array, b tensor.Backend, stream tensor.Stream) (tensor.Array, error) {
 	aF32, err := b.AsType(a, tensor.Float32, stream)
 	if err != nil {
 		return nil, err

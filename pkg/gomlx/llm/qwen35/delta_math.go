@@ -19,11 +19,25 @@ func scaleRMSNorm(x tensor.Array, s float32, b tensor.Backend, stream tensor.Str
 		return nil, err
 	}
 	defer n.Free()
+	// The scalar must match n's dtype: MLX promotes mixed-dtype multiply to
+	// the WIDER type, so an fp32 scalar × bf16 activations promotes the
+	// whole tensor to fp32 — 2x memory traffic downstream (the fused delta
+	// kernel then instantiates its fp32 variant; observed as
+	// custom_kernel_gated_delta_step__float_* in Metal traces vs mlx-lm's
+	// bfloat16 variant, and measured as part of the decode gap).
 	scalar, err := b.NewArrayFromFloat32([]float32{s}, []int{1})
 	if err != nil {
 		return nil, err
 	}
 	defer scalar.Free()
+	if scalar.Dtype() != n.Dtype() {
+		cast, err := b.AsType(scalar, n.Dtype(), stream)
+		if err != nil {
+			return nil, err
+		}
+		defer cast.Free()
+		return b.Multiply(n, cast, stream)
+	}
 	return b.Multiply(n, scalar, stream)
 }
 

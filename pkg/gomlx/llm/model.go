@@ -600,8 +600,16 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 			compiledCtxLimit = n
 		}
 	}
-	useCompiled := useGPUArgmax && !useMTP && !usePipelined && compiledOK && genCfg.MaxTokens > 1 &&
-		len(tokenIDs) <= compiledCtxLimit && os.Getenv("SPROUT_COMPILED_DECODE") == "1"
+	// Prompt-lookup speculative decoding takes priority where enabled
+	// (production streaming chat): it can emit up to k+1 tokens per forward
+	// — a bigger multiplier than compiled decode's +14%. Compiled serves
+	// the remaining greedy callers (commit messages, non-lookup requests).
+	// Default ON below the context cutoff; SPROUT_COMPILED_DECODE=0 opts
+	// out. Above the cutoff the path is declined automatically (staging
+	// cost scales with KV size — see the comment above).
+	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
+	useCompiled := useGPUArgmax && !useMTP && !usePipelined && !usePromptLookup && compiledOK && genCfg.MaxTokens > 1 &&
+		len(tokenIDs) <= compiledCtxLimit && os.Getenv("SPROUT_COMPILED_DECODE") != "0"
 	if useCompiled {
 		if err := compiledArch.PrepareCompiledDecode(len(tokenIDs), genCfg.MaxTokens, cache); err != nil {
 			log.Printf("llm: compiled decode unavailable (%v), falling back to eager", err)
@@ -613,7 +621,6 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 			compiledArch.ReleaseCompiledDecode()
 		}
 	}()
-	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && !useCompiled && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
 
 	nextToken := 0
 	if useGPUArgmax {

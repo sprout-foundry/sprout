@@ -137,19 +137,19 @@ func TestSaveFetchContent(t *testing.T) {
 	})
 
 	t.Run("creates temp directory if needed", func(t *testing.T) {
-		os.RemoveAll(fetchTempDir)
-		defer os.RemoveAll(fetchTempDir)
+		os.RemoveAll(fetchTempDir())
+		defer os.RemoveAll(fetchTempDir())
 
 		path, err := saveFetchContent("https://test.com", "data")
 		if err != nil {
 			t.Fatalf("saveFetchContent failed: %v", err)
 		}
 
-		if !strings.HasPrefix(path, fetchTempDir) {
+		if !strings.HasPrefix(path, fetchTempDir()) {
 			t.Errorf("path should be under fetchTempDir, got %s", path)
 		}
 
-		info, err := os.Stat(fetchTempDir)
+		info, err := os.Stat(fetchTempDir())
 		if err != nil {
 			t.Fatalf("Stat failed: %v", err)
 		}
@@ -158,7 +158,7 @@ func TestSaveFetchContent(t *testing.T) {
 		}
 	})
 
-	t.Run("path is under /tmp/sprout/fetch", func(t *testing.T) {
+	t.Run("path is under the fetch temp dir", func(t *testing.T) {
 		path, err := saveFetchContent("https://example.com", "test")
 		if err != nil {
 			t.Fatalf("saveFetchContent failed: %v", err)
@@ -166,8 +166,8 @@ func TestSaveFetchContent(t *testing.T) {
 		defer os.Remove(path)
 
 		dir := filepath.Dir(path)
-		if dir != fetchTempDir {
-			t.Errorf("expected path under %s, got %s", fetchTempDir, dir)
+		if dir != fetchTempDir() {
+			t.Errorf("expected path under %s, got %s", fetchTempDir(), dir)
 		}
 	})
 
@@ -223,10 +223,15 @@ func TestSaveFetchContent(t *testing.T) {
 }
 
 func TestEvictOldFiles(t *testing.T) {
-	defer os.RemoveAll(fetchTempDir)
+	dir := fetchTempDir()
+	os.RemoveAll(dir)
+	defer os.RemoveAll(dir)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
 
 	for i := 0; i < maxFetchFiles+5; i++ {
-		path := filepath.Join(fetchTempDir, fmt.Sprintf("fetch_%08d.txt", i))
+		path := filepath.Join(dir, fmt.Sprintf("fetch_%08d.txt", i))
 		if err := os.WriteFile(path, []byte(fmt.Sprintf("content-%d", i)), 0600); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
@@ -237,7 +242,7 @@ func TestEvictOldFiles(t *testing.T) {
 		t.Fatalf("saveFetchContent failed: %v", err)
 	}
 
-	entries, err := os.ReadDir(fetchTempDir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("ReadDir failed: %v", err)
 	}

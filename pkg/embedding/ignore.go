@@ -286,6 +286,15 @@ func walkFiles(ctx context.Context, root string, extensionCheck func(path string
 			return nil
 		}
 
+		// Skip files larger than the file-level indexing cap before spending
+		// walk budget on them: a multi-GB corpus would OOM the read path and
+		// crowd out real source files in the 10k-file budget. Info() errors
+		// (e.g. broken symlinks) skip the file silently rather than fail the walk.
+		info, ierr := d.Info()
+		if ierr != nil || info.Size() > MaxIndexableFileBytes {
+			return nil
+		}
+
 		files = append(files, path)
 
 		// Emit progress log every ProgressInterval files.

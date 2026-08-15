@@ -914,6 +914,13 @@ func TestRecoverProviderStartupNonInteractive(t *testing.T) {
 	// preventing any possible blocking in the function.
 	_ = w.Close()
 
+	// Pin the daemon-detection env so this test always exercises the
+	// non-daemon non-interactive branch regardless of the host process's
+	// environment (e.g. when go test runs inside a sprout daemon session,
+	// which sets SPROUT_DAEMON=1 or BROWSER=none).
+	t.Setenv("SPROUT_DAEMON", "")
+	t.Setenv("BROWSER", "")
+
 	// Verify the environment is actually non-interactive (sanity check).
 	if !isNonInteractive() {
 		t.Fatal("precondition failed: stdin must be non-interactive for this test")
@@ -1290,6 +1297,11 @@ func TestRecoverProviderStartup_DaemonMode_SSHDaemonEnv(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSSHDaemon_UnsetFlipsDetection(t *testing.T) {
+	// Pin BROWSER so the "flips to false" assertion below tests only the
+	// SPROUT_DAEMON lifecycle. isSSHDaemon() is also true when BROWSER=none,
+	// which a host process (e.g. an SSH daemon session) may have set.
+	t.Setenv("BROWSER", "")
+
 	// Set SPROUT_DAEMON and verify isSSHDaemon() picks it up.
 	t.Setenv("SPROUT_DAEMON", "1")
 	if !isSSHDaemon() {
@@ -1305,8 +1317,8 @@ func TestSSHDaemon_UnsetFlipsDetection(t *testing.T) {
 		t.Fatal("isSSHDaemon() must return false after SPROUT_DAEMON is unset; the env var leaked")
 	}
 
-	// t.Setenv auto-restores SPROUT_DAEMON=1 on test cleanup, but that
-	// restoration is harmless because the test has already finished.
+	// t.Setenv's cleanup restores SPROUT_DAEMON to its pre-test value, so
+	// the raw os.Unsetenv above doesn't leak a missing var to later tests.
 }
 
 func TestNewTestAgent_SubManagersInitialised(t *testing.T) {

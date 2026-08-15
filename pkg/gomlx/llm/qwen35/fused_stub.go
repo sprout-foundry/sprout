@@ -12,18 +12,19 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
-// compiledDecoder is a no-op stub (never instantiated on non-MLX builds).
-type compiledDecoder struct{}
+// PrepareCompiledDecode always fails on non-MLX backends; the Model layer
+// falls back to the eager decode path (interface assertion governs).
+func (q *Qwen35) PrepareCompiledDecode(promptLen, maxTokens int, cache *llm.KVCache) error {
+	return errFusedUnavailable
+}
 
-func useCompiledDecode() bool { return false }
-
-func (q *Qwen35) compileDecodeClosure(cache *llm.KVCache) (*compiledDecoder, error) {
+// ForwardDecodeCompiled always fails on non-MLX backends.
+func (q *Qwen35) ForwardDecodeCompiled(tokenArr tensor.Array, pos int) (tensor.Array, error) {
 	return nil, errFusedUnavailable
 }
 
-func (q *Qwen35) forwardDecodeCompiled(tokenID int, pos int, cache *llm.KVCache) (int, error) {
-	return 0, errFusedUnavailable
-}
+// ReleaseCompiledDecode is a no-op on non-MLX backends.
+func (q *Qwen35) ReleaseCompiledDecode() {}
 
 // fusedSwiglu always fails — caller falls back to eager SiLU + multiply.
 func fusedSwiglu(h, gate, xVal tensor.Array, backend tensor.Backend, stream tensor.Stream) (tensor.Array, error) {

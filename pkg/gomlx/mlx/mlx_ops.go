@@ -181,6 +181,24 @@ func Maximum(a, b *Array, s *Stream) (*Array, error) {
 	return wrapResult(out, rc, "maximum")
 }
 
+// Equal returns the elementwise a == b comparison as a boolean array. Used
+// to build dynamic positional selects (e.g. Where(Equal(arange(C), pos),
+// new, buf)) inside compiled graphs where slice offsets cannot be baked in.
+func Equal(a, b *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_equal(&out, a.cHandle(), b.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "equal")
+}
+
+// LessEqual returns the elementwise a <= b comparison as a boolean array.
+// Used to derive decode attention masks in-graph from a dynamic position
+// input: valid keys are the positions <= pos.
+func LessEqual(a, b *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_less_equal(&out, a.cHandle(), b.cHandle(), s.cHandle())
+	return wrapResult(out, rc, "less_equal")
+}
+
 // ------------------------------------------------------------
 // Unary elementwise ops
 // ------------------------------------------------------------

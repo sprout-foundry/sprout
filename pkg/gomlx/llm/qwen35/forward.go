@@ -33,6 +33,10 @@ type Qwen35 struct {
 	mtp        *mtpWeights  // multi-token prediction head; nil when absent
 	lastHidden tensor.Array // retained [1,1,H] main-model hidden at the last processed position
 
+	// cd is the compiled decode closure state; nil unless
+	// PrepareCompiledDecode succeeded (SPROUT_COMPILED_DECODE=1). MLX only.
+	cd *compiledDecode
+
 	// normPreAdded is true for mlx-community exports where sanitize() has
 	// already added 1 to the RMSNorm weights. When true, rmsNormQwen35
 	// uses plain multiplication instead of (1+w).
@@ -266,6 +270,7 @@ func (q *Qwen35) FreeWeights() {
 	if q.weights == nil {
 		return
 	}
+	q.ReleaseCompiledDecode()
 	if q.lastHidden != nil {
 		q.lastHidden.Free()
 		q.lastHidden = nil

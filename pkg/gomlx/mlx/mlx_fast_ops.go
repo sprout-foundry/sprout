@@ -81,6 +81,26 @@ func FastRoPE(x *Array, dims int, traditional bool, base float64, scale float32,
 	return wrapResult(out, rc, "fast_rope")
 }
 
+// FastRoPEDynamic is FastRoPE with the position offset as an array rather
+// than a compile-time constant. offset must be a scalar or [B] vector. This
+// is what makes a compiled decode step position-agnostic: the closure takes
+// pos as an input array instead of capturing a Go int, so one compiled graph
+// serves every decode position.
+func FastRoPEDynamic(x *Array, dims int, traditional bool, base float64, scale float32, offset *Array, freqs *Array, s *Stream) (*Array, error) {
+	out := newOutput()
+	var f C.mlx_array
+	if freqs != nil {
+		f = freqs.cHandle()
+	}
+	hasBase := C.bool(true)
+	if freqs != nil {
+		hasBase = C.bool(false)
+	}
+	opt := C.mlx_optional_float{value: C.float(base), has_value: hasBase}
+	rc := C.mlx_fast_rope_dynamic(&out, x.cHandle(), C.int(dims), C.bool(traditional), opt, C.float(scale), offset.cHandle(), f, s.cHandle())
+	return wrapResult(out, rc, "fast_rope_dynamic")
+}
+
 // FastScaledDotProductAttention applies fused attention with optional mask.
 // maskMode is one of "none", "causal", "generic".
 func FastScaledDotProductAttention(q, k, v *Array, scale float32, maskMode string, maskArr, sinks *Array, s *Stream) (*Array, error) {

@@ -615,11 +615,13 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	}
 	// Prompt-lookup speculative decoding takes priority where enabled
 	// (production streaming chat): it can emit up to k+1 tokens per forward
-	// — a bigger multiplier than compiled decode's +14%. Compiled serves
-	// the remaining greedy callers (commit messages, non-lookup requests).
-	// Default ON below the context cutoff; SPROUT_COMPILED_DECODE=0 opts
-	// out. Above the cutoff the path is declined automatically (staging
-	// cost scales with KV size — see the comment above).
+	// pass — a bigger multiplier than compiled decode's +14%. Both
+	// production callers (local_provider, openaisserver) enable lookup, so
+	// compiled decode currently serves only callers that explicitly opt out
+	// of lookup (benchmarks, parity tests). Default ON below the context
+	// cutoff; SPROUT_COMPILED_DECODE=0 opts out. Above the cutoff the path
+	// is declined automatically (staging cost scales with KV size — see the
+	// comment above).
 	usePromptLookup := useGPUArgmax && !useMTP && !usePipelined && genCfg.PromptLookupMaxDrafts > 0 && genCfg.MaxTokens > 1
 	useCompiled := useGPUArgmax && !useMTP && !usePipelined && !usePromptLookup && compiledOK && genCfg.MaxTokens > 1 &&
 		len(tokenIDs) <= compiledCtxLimit && os.Getenv("SPROUT_COMPILED_DECODE") != "0"

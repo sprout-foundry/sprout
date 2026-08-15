@@ -461,6 +461,10 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		}
 	}
 
+	if err := swallowedCommentError(content, path); err != nil {
+		return "", err
+	}
+
 	if warning := validateJSONContent(content, path); warning != "" {
 		a.Logger().Debug("%s\n", warning)
 	}
@@ -532,6 +536,10 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	newStr, err := getRequiredString(args, "new_str")
 	if err != nil {
 		return "", agenterrors.Wrap(err, "failed to get new_str parameter")
+	}
+
+	if err := swallowedCommentError(newStr, path); err != nil {
+		return "", err
 	}
 
 	if warning := validateJSONContent(newStr, path); warning != "" {
@@ -754,6 +762,45 @@ func validateJSONContent(content, path string) string {
 	}
 
 	return ""
+}
+
+// doubleSlashCommentExts lists source file extensions where // is the line
+// comment marker.
+var doubleSlashCommentExts = map[string]bool{
+	".go": true, ".js": true, ".jsx": true, ".mjs": true, ".ts": true, ".tsx": true,
+	".java": true, ".c": true, ".h": true, ".cpp": true, ".cc": true, ".hpp": true,
+	".rs": true, ".swift": true, ".kt": true, ".kts": true, ".cs": true,
+	".php": true, ".scala": true, ".dart": true, ".groovy": true,
+}
+
+// swallowedCommentError checks for content that's almost certainly missing
+// line breaks it needs: in every // line-comment language, a comment
+// extends to the next newline, so with no newline anywhere in the content,
+// the first // silently swallows everything after it. Local models
+// occasionally emit multi-line code as one unbroken physical line under
+// pressure (e.g. after several failed attempts); the resulting file is
+// still syntactically legal (an empty declaration list is valid in most of
+// these languages) but is missing every real declaration after the
+// comment, which then sends the model into a long, confused debugging loop
+// it has no way to diagnose — read_file/cat both show the content as
+// "correct" because the missing newlines aren't visually obvious in that
+// output. Requiring two or more // markers keeps this from firing on a
+// single legitimate trailing comment (e.g. one containing a URL).
+func swallowedCommentError(content, path string) error {
+	if !doubleSlashCommentExts[strings.ToLower(filepath.Ext(path))] {
+		return nil
+	}
+	if strings.Contains(content, "\n") {
+		return nil
+	}
+	if strings.Count(content, "//") < 2 {
+		return nil
+	}
+	return agenterrors.NewValidation(
+		"this content has no line breaks but contains multiple // comments — "+
+			"it looks like several lines got merged into one, and the first // "+
+			"would silently swallow everything after it as a comment. Resubmit "+
+			"with real newlines between statements/declarations.", nil)
 }
 
 func disallowRawStructuredWrite(path, toolName string) error {

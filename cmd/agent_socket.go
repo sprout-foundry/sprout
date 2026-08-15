@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -31,10 +32,22 @@ func AgentSocketPath() string {
 	return filepath.Join(dataDir, defaultAgentSocketName)
 }
 
-// SharedAgentService adapts the daemon's shared agent to the SP-136 P4 agent
-// socket protocol. The daemon owns the agent; the CLI is a presentation
-// layer. Session ops map to the agent's session ID; tool execution via the
-// socket is not yet wired (the protocol op exists and is covered by tests) —
+// SharedAgentService adapts the daemon to the SP-136 P4 agent socket
+// protocol. The daemon is a single long-lived process that may serve
+// one-shot queries from many different callers, in many different project
+// directories, over its lifetime — Query/StreamQuery must not let one call's
+// state (conversation history, workspace root) leak into another's.
+//
+// So Query/StreamQuery build a fresh, throwaway *agent.Agent per call rather
+// than reusing a shared one: agent construction resolves to the same
+// process-wide local-model singleton either way (pkg/factory/factory.go →
+// localmodel.GetLocalProvider()), so this doesn't reload the GPU-resident
+// model — it only costs the (cheap) Agent object construction, in exchange
+// for correct per-call isolation.
+//
+// `a` is retained only for the (currently client-unused) session RPCs below,
+// which predate the fix and don't go through the one-shot query path.
+// Tool execution via the socket is not yet wired (ExecuteTool below) —
 // callers fall back to in-process for full tool workflows.
 type SharedAgentService struct {
 	a *agent.Agent
@@ -66,24 +79,84 @@ func (s *SharedAgentService) SwitchSession(_ context.Context, sessionID string) 
 	return &daemon.SessionInfo{ID: sessionID, Name: sessionID, Active: true}, nil
 }
 
-// Query implements daemon.AgentService — the daemon runs the agent loop.
-func (s *SharedAgentService) Query(_ context.Context, prompt string) (string, error) {
-	return s.a.ProcessQuery(prompt)
+// Query implements daemon.AgentService: a fresh, isolated agent per call
+// (see the type doc for why), scoped to the caller's workDir.
+func (s *SharedAgentService) Query(_ context.Context, prompt, workDir string) (string, error) {
+	callAgent, err := newEphemeralDaemonAgent(workDir)
+	if err != nil {
+		return "", err
+	}
+	return callAgent.ProcessQuery(prompt)
 }
 
 // StreamQuery implements daemon.AgentService (one-shot result as a single
 // delta; full token streaming is a future protocol refinement).
-func (s *SharedAgentService) StreamQuery(_ context.Context, prompt string, emit func(daemon.StreamEvent) error) error {
-	result, err := s.a.ProcessQuery(prompt)
+func (s *SharedAgentService) StreamQuery(_ context.Context, prompt, workDir string, emit func(daemon.StreamEvent) error) error {
+	callAgent, err := newEphemeralDaemonAgent(workDir)
+	if err != nil {
+		return err
+	}
+	result, err := callAgent.ProcessQuery(prompt)
 	if err != nil {
 		return err
 	}
 	return emit(daemon.StreamEvent{Type: "delta", Content: result})
 }
 
+// newEphemeralDaemonAgent builds a minimal agent for one daemon-routed
+// one-shot query: no onboarding (not appropriate for a background socket
+// server) and no local-model preload (the daemon's own top-level agent
+// already triggered that at startup, or it happens lazily on first real use
+// either way — see LocalProvider.ensureLoaded). Provider/model/persona
+// overrides from the calling CLI's flags aren't transmitted over the wire
+// protocol today, so this always uses the daemon process's own defaults —
+// consistent with every other field the protocol doesn't carry yet.
+func newEphemeralDaemonAgent(workDir string) (*agent.Agent, error) {
+	if strings.TrimSpace(workDir) == "" {
+		return nil, errors.New("daemon: query missing work_dir — refusing to guess a project directory")
+	}
+	callAgent, err := agent.NewAgent()
+	if err != nil {
+		return nil, fmt.Errorf("daemon: create per-query agent: %w", err)
+	}
+	callAgent.SetWorkspaceRoot(workDir)
+	return callAgent, nil
+}
+
 // ExecuteTool implements daemon.AgentService.
 func (s *SharedAgentService) ExecuteTool(context.Context, string, map[string]any) (*daemon.ToolResult, error) {
 	return nil, errors.New("tool execution over the daemon socket is not wired yet — run in-process for tool workflows")
+}
+
+// isDaemonReachableForAgentRouting reports whether a daemon is listening on
+// the agent socket AND actually responsive — not just that something
+// accepted the connection. AgentClient's dial alone doesn't guarantee that:
+// a daemon that's spawned but stuck (see maybeAutoStartDaemon) can still
+// accept a connection into the OS backlog while never servicing it, so this
+// does one cheap round-trip (ListSessions, the lightest read-only op the
+// protocol has) with a short timeout, mirroring the real handshake
+// NewRemoteEmbeddingProvider already does for the embedding socket.
+//
+// Used to decide whether createChatAgent can skip its own local-model
+// preload because tryDaemonOneShot (called later in the same invocation)
+// will actually serve the query. Callers must independently confirm this
+// invocation could reach that same tryDaemonOneShot call (see
+// shouldPreloadLocalModel) — this function only answers "is a daemon there
+// and alive," not "will this specific query be routed to it."
+func isDaemonReachableForAgentRouting() bool {
+	if v := os.Getenv("SPROUT_DAEMON_AGENT"); v == "0" {
+		return false
+	}
+	client, err := daemon.NewAgentClient(AgentSocketPath())
+	if err != nil {
+		return false
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	_, err = client.ListSessions(ctx)
+	return err == nil
 }
 
 // startDaemonAgentServer starts the daemon-side agent socket server
@@ -119,6 +192,14 @@ func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, er
 		return false, nil
 	}
 
+	// The daemon is a single long-lived process that may serve callers from
+	// many different project directories over its lifetime — it has no way
+	// to know which one this query is for except what we tell it here.
+	workDir, err := os.Getwd()
+	if err != nil {
+		return false, nil // can't determine our own cwd — in-process fallback
+	}
+
 	client, err := daemon.NewAgentClient(AgentSocketPath())
 	if err != nil {
 		// Daemon not reachable — in-process fallback.
@@ -127,7 +208,7 @@ func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, er
 	defer client.Close()
 
 	console.GlyphAction.Printf("Running via daemon at %s", AgentSocketPath())
-	result, err := client.Query(ctx, query)
+	result, err := client.Query(ctx, query, workDir)
 	if err != nil {
 		// The daemon was up but the query failed — surface it, don't
 		// silently re-run in-process (the daemon owns the agent state).

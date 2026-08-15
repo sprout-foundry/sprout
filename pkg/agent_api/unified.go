@@ -141,6 +141,9 @@ func (w *UnifiedProviderWrapper) SendChatRequest(ctx context.Context, messages [
 			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
 				apiResponse.Choices[i].Message.ToolCalls = recovered
 				apiResponse.Choices[i].Message.Content = rest
+			} else if recovered, rest, recoveredOK := RecoverLFM2ToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
 			}
 		}
 	}
@@ -319,6 +322,9 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(ctx context.Context, messages
 			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
 				apiResponse.Choices[i].Message.ToolCalls = recovered
 				apiResponse.Choices[i].Message.Content = rest
+			} else if recovered, rest, recoveredOK := RecoverLFM2ToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
 			}
 		}
 	}
@@ -432,8 +438,12 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(ctx context.Context, mess
 
 		// Recover Mistral-family `[TOOL_CALLS]…` text-format tool calls that the
 		// provider didn't translate into structured tool_calls (streamed path).
+		// Also try LFM2's Pythonic `[func(args)]` format for Liquid AI models.
 		if len(apiResponse.Choices[i].Message.ToolCalls) == 0 && len(tools) > 0 {
 			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
+			} else if recovered, rest, recoveredOK := RecoverLFM2ToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
 				apiResponse.Choices[i].Message.ToolCalls = recovered
 				apiResponse.Choices[i].Message.Content = rest
 			}

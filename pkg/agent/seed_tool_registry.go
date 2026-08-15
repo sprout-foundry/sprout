@@ -29,11 +29,26 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 		PreExecuteHook: newPreExecuteHook(agent),
 	})
 
+	// Build the LCM tool allowlist set (if applicable).
+	var allowSet map[string]struct{}
+	if agent != nil && len(agent.contextProfile.ToolAllowlist) > 0 {
+		allowSet = make(map[string]struct{}, len(agent.contextProfile.ToolAllowlist))
+		for _, name := range agent.contextProfile.ToolAllowlist {
+			allowSet[name] = struct{}{}
+		}
+	}
+
 	for _, h := range tools.GetNewToolRegistry().All() {
 		if h.Definition().RequiresEmbeddings && (agent == nil || agent.GetEmbeddingManager() == nil) {
 			continue
 		}
 		if agent != nil {
+			// LCM tool allowlist: skip tools not in the curated set.
+			if allowSet != nil {
+				if _, ok := allowSet[h.Name()]; !ok {
+					continue
+				}
+			}
 			if h.Name() == "run_parallel_subagents" {
 				if agent.contextProfile.Mode == configuration.ContextModeLowContext || !agent.CanSpawnSubagents() {
 					continue

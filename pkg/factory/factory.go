@@ -12,6 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/providerregistry"
 )
 
@@ -341,6 +342,8 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 	switch clientType {
 	case api.OllamaClientType, api.OllamaLocalClientType:
 		return api.NewOllamaLocalClient(model)
+	case api.SproutLocalClientType:
+		return localmodel.GetLocalProvider(), nil
 	case api.TestClientType:
 		testClient := &TestClient{model: model}
 		if model != "" {

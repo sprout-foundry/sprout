@@ -93,6 +93,12 @@ If you can't find the information you need in the codebase or via web search,
 stop and ask the user. Don't guess or fabricate answers. A short question
 is better than a wrong change.
 
+## AGENTS.md Maintenance
+- **Keep AGENTS.md lean** — it's injected into every request. Keep it under 2K tokens (~1K ideal).
+- **Rules and guidance only** — actionable rules, conventions, pointers. Not status reports, tracking, or architecture docs.
+- **Move details to linked docs** — reference material goes in `docs/` files read on demand.
+- **Don't use AGENTS.md as a work log.**
+
 ## Current Date and Time
 
 The current date and time is provided at the top of each user message as a `<current-time>` tag. Use that timestamp for timing, deadlines, and "now"-relative requests. A fresh tag arrives with every new user message.

@@ -96,8 +96,11 @@ func (c *AgentClient) do(ctx context.Context, req AgentRequest) (*AgentResponse,
 }
 
 // Query runs a one-shot query on the daemon and returns the final response.
-func (c *AgentClient) Query(ctx context.Context, prompt string) (string, error) {
-	resp, err := c.do(ctx, AgentRequest{Op: AgentOpQuery, Prompt: prompt})
+// workDir is the caller's working directory, required so the daemon (a
+// single long-lived process that may serve many different projects over its
+// lifetime) scopes tool execution to the right one.
+func (c *AgentClient) Query(ctx context.Context, prompt, workDir string) (string, error) {
+	resp, err := c.do(ctx, AgentRequest{Op: AgentOpQuery, Prompt: prompt, WorkDir: workDir})
 	if err != nil {
 		return "", err
 	}
@@ -140,9 +143,9 @@ func (c *AgentClient) ExecuteTool(ctx context.Context, name string, args map[str
 	return resp.Tool, nil
 }
 
-// StreamQuery runs a query and delivers each stream event to emit. The call
-// returns after the terminal "done"/"error" event.
-func (c *AgentClient) StreamQuery(ctx context.Context, prompt string, emit func(StreamEvent) error) error {
+// StreamQuery is Query with streamed events instead of a single result. The
+// call returns after the terminal "done"/"error" event.
+func (c *AgentClient) StreamQuery(ctx context.Context, prompt, workDir string, emit func(StreamEvent) error) error {
 	if err := c.ensureConn(); err != nil {
 		return err
 	}
@@ -155,7 +158,7 @@ func (c *AgentClient) StreamQuery(ctx context.Context, prompt string, emit func(
 		return fmt.Errorf("set socket deadline: %w", err)
 	}
 
-	req := AgentRequest{Op: AgentOpStreamQuery, Prompt: prompt}
+	req := AgentRequest{Op: AgentOpStreamQuery, Prompt: prompt, WorkDir: workDir}
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal stream request: %w", err)

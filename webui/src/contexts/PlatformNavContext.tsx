@@ -1,6 +1,6 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import type { PlatformNavItem } from '../services/apiAdapter';
-import { getAdapter } from '../services/apiAdapter';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { APIAdapter, PlatformNavItem } from '../services/apiAdapter';
+import { getAdapter, ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 
 interface PlatformNavContextValue {
   platformNavItems: readonly PlatformNavItem[];
@@ -23,15 +23,25 @@ interface PlatformNavProviderProps {
 }
 
 export function PlatformNavProvider({ children }: PlatformNavProviderProps): JSX.Element {
-  // The adapter is installed once at startup and never changes.
-  // useMemo with empty deps ensures the value object is stable across re-renders,
-  // preventing unnecessary re-renders of all consumers.
-  const value = useMemo<PlatformNavContextValue>(() => {
-    const adapter = getAdapter();
-    return {
-      platformNavItems: adapter?.platformNavItems ?? EMPTY_NAV_ITEMS,
+  // The adapter is installed asynchronously after the bootstrap fetch resolves,
+  // so we start with the current value (which may be null) and listen for the
+  // ADAPTER_INSTALLED_EVENT to update when the adapter becomes available.
+  const [adapter, setAdapter] = useState<APIAdapter | null>(() => getAdapter());
+
+  useEffect(() => {
+    const handler = () => {
+      setAdapter(getAdapter());
+    };
+    window.addEventListener(ADAPTER_INSTALLED_EVENT, handler);
+    return () => {
+      window.removeEventListener(ADAPTER_INSTALLED_EVENT, handler);
     };
   }, []);
+
+  const value = useMemo<PlatformNavContextValue>(
+    () => ({ platformNavItems: adapter?.platformNavItems ?? EMPTY_NAV_ITEMS }),
+    [adapter],
+  );
 
   return <PlatformNavContext.Provider value={value}>{children}</PlatformNavContext.Provider>;
 }

@@ -10,9 +10,16 @@ import (
 	"sync/atomic"
 )
 
-// fetchTempDir is the directory for cached fetch_url content files.
-// Matches the agent convention of /tmp/sprout/ for transient files.
-const fetchTempDir = "/tmp/sprout/fetch"
+// fetchTempDir returns the directory for cached fetch_url content files.
+// It is rooted at os.TempDir() so it is writable on every supported platform
+// — including Termux, where /tmp is not writable but $TMPDIR (the value
+// os.TempDir() resolves to) is. On plain Linux this still yields
+// /tmp/sprout/fetch. The read-back path-tier classifier
+// (filesystem.IsUnderTmpPath) already treats os.TempDir() paths as
+// unconditionally allowed, so cached files remain readable without prompting.
+func fetchTempDir() string {
+	return filepath.Join(os.TempDir(), "sprout", "fetch")
+}
 
 // fetchContentThreshold is the character count above which content is
 // saved to a temp file with a section TOC instead of returned inline.
@@ -32,14 +39,15 @@ var fetchTempCounter atomic.Uint64
 // from concurrent fetches of the same URL. Returns the file path for the
 // agent to read later.
 func saveFetchContent(url string, content string) (string, error) {
-	if err := os.MkdirAll(fetchTempDir, 0700); err != nil {
+	dir := fetchTempDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("create fetch temp dir: %w", err)
 	}
 
 	// Deterministic filename from URL hash — repeated fetches reuse the file.
 	hash := sha256.Sum256([]byte(url))
 	filename := fmt.Sprintf("fetch_%x.txt", hash[:8])
-	path := filepath.Join(fetchTempDir, filename)
+	path := filepath.Join(dir, filename)
 
 	// Evict oldest files if we're over the cap.
 	evictOldFiles(path)
@@ -59,10 +67,11 @@ func saveFetchContent(url string, content string) (string, error) {
 	return path, nil
 }
 
-// evictOldFiles removes the oldest files in fetchTempDir when the count
+// evictOldFiles removes the oldest files in the fetch temp dir when the count
 // exceeds maxFetchFiles. Skips the targetPath itself and any .tmp files.
 func evictOldFiles(targetPath string) {
-	entries, err := os.ReadDir(fetchTempDir)
+	dir := fetchTempDir()
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
@@ -77,7 +86,7 @@ func evictOldFiles(targetPath string) {
 		if strings.HasSuffix(name, ".tmp") {
 			continue
 		}
-		if filepath.Join(fetchTempDir, name) == targetPath {
+		if filepath.Join(dir, name) == targetPath {
 			continue
 		}
 		evictable = append(evictable, e)
@@ -100,7 +109,7 @@ func evictOldFiles(targetPath string) {
 	// Remove enough to get under the cap.
 	removeCount := len(evictable) - maxFetchFiles
 	for i := 0; i < removeCount; i++ {
-		os.Remove(filepath.Join(fetchTempDir, evictable[i].Name()))
+		os.Remove(filepath.Join(dir, evictable[i].Name()))
 	}
 }
 

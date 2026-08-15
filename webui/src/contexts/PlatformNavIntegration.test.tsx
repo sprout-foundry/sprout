@@ -37,16 +37,26 @@ const mockAdapter = {
   getWebSocketURL: () => 'wss://test.sprout.dev/ws',
 };
 
-// Mock apiAdapter module — this runs BEFORE any imports of apiAdapter resolve
+// Mock apiAdapter module — this runs BEFORE any imports of apiAdapter resolve.
+// installAdapter mirrors the real implementation: it updates the singleton
+// (read back via getAdapter) and dispatches ADAPTER_INSTALLED_EVENT on window.
+let _activeAdapter: typeof mockAdapter | null = mockAdapter;
+
 vi.mock('../services/apiAdapter', () => ({
-  getAdapter: vi.fn(() => mockAdapter),
-  installAdapter: vi.fn(),
-  hasAdapter: vi.fn(() => true),
-  requiresBackendHealthCheck: vi.fn(() => true),
+  ADAPTER_INSTALLED_EVENT: 'sprout:adapter-installed',
+  getAdapter: vi.fn(() => _activeAdapter),
+  installAdapter: vi.fn((adapter: typeof mockAdapter) => {
+    _activeAdapter = adapter;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('sprout:adapter-installed'));
+    }
+  }),
+  hasAdapter: vi.fn(() => _activeAdapter !== null),
+  requiresBackendHealthCheck: vi.fn(() => _activeAdapter?.requiresBackendHealthCheck === true),
 }));
 
 // Now import — PlatformNavContext will use the mocked getAdapter()
-import { getAdapter } from '../services/apiAdapter';
+import { getAdapter, installAdapter } from '../services/apiAdapter';
 import { PlatformNavProvider, usePlatformNav } from './PlatformNavContext';
 
 // ---------------------------------------------------------------------------
@@ -185,5 +195,47 @@ describe('PlatformNav Integration: Local mode (no adapter)', () => {
     expect(latestContext).toBeDefined();
     expect(latestContext.platformNavItems).toEqual([]);
     expect(latestContext.platformNavItems).toHaveLength(0);
+  });
+});
+
+describe('PlatformNav Regression: adapter installed AFTER mount (cloud mode)', () => {
+  // Reproduce the real bug: the App tree mounts synchronously on first render
+  // (before the bootstrap fetch resolves), so getAdapter() returns null at
+  // mount time. The adapter is installed later, firing ADAPTER_INSTALLED_EVENT.
+  // The provider must pick up the items WITHOUT a remount.
+  beforeEach(() => {
+    // Start in local mode (no adapter) — getAdapter() returns null at mount.
+    vi.mocked(getAdapter).mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    // Restore cloud adapter for other tests.
+    vi.mocked(getAdapter).mockReturnValue(mockAdapter);
+  });
+
+  it('picks up platformNavItems after late installAdapter WITHOUT remounting', () => {
+    // 1. Mount with NO adapter installed → nav items empty.
+    renderProvider();
+    expect(latestContext).toBeDefined();
+    expect(latestContext.platformNavItems).toEqual([]);
+
+    // 2. Simulate async bootstrap completion: install the cloud adapter.
+    //    installAdapter updates the singleton AND fires ADAPTER_INSTALLED_EVENT,
+    //    which the provider's listener turns into setAdapter(getAdapter()).
+    act(() => {
+      vi.mocked(getAdapter).mockReturnValue(mockAdapter);
+      installAdapter(mockAdapter);
+    });
+
+    // 3. Assert the SAME mounted consumer now sees the adapter's items.
+    expect(latestContext.platformNavItems).toHaveLength(3);
+    expect(latestContext.platformNavItems.map((i: PlatformNavItem) => i.id)).toEqual([
+      'tasks',
+      'billing',
+      'team',
+    ]);
+
+    // No remount happened: the consumer div is still the original node.
+    expect(container.querySelector('[data-testid="consumer"]')).not.toBeNull();
   });
 });

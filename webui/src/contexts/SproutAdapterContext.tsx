@@ -1,6 +1,6 @@
-import { createContext, useContext, useMemo, type ReactNode, useCallback } from 'react';
+import { createContext, useContext, useMemo, type ReactNode, useCallback, useState, useEffect } from 'react';
 import type { APIAdapter } from '../services/apiAdapter';
-import { getAdapter } from '../services/apiAdapter';
+import { getAdapter, ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { clientFetch, resolveWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
 
 interface SproutAdapterContextValue {
@@ -76,11 +76,22 @@ export interface SproutAdapterProviderProps {
  * ThemeProvider, to ensure all components have access to the adapter.
  */
 export function SproutAdapterProvider({ children }: SproutAdapterProviderProps): JSX.Element {
-  // Read adapter from singleton - this is the source of truth
-  const adapter = getAdapter();
+  // The adapter is installed asynchronously (after the /api/bootstrap
+  // fetch resolves), which can happen AFTER this provider's first mount.
+  // Track the singleton in state and refresh on the install event so
+  // consumers (e.g. useSproutFetch) see the adapter deterministically
+  // instead of depending on an unrelated parent re-render.
+  const [adapter, setAdapter] = useState<APIAdapter | null>(() => getAdapter());
+  useEffect(() => {
+    const onAdapterInstalled = () => setAdapter(getAdapter());
+    window.addEventListener(ADAPTER_INSTALLED_EVENT, onAdapterInstalled);
+    return () => {
+      window.removeEventListener(ADAPTER_INSTALLED_EVENT, onAdapterInstalled);
+    };
+  }, []);
 
-  // Memoize context value to prevent unnecessary re-renders
-  // The adapter reference is stable, so this only updates when getAdapter() returns a different value
+  // Memoize context value to prevent unnecessary re-renders.
+  // The adapter reference is stable once installed.
   const value = useMemo(() => ({ adapter }), [adapter]);
 
   return <SproutAdapterContext.Provider value={value}>{children}</SproutAdapterContext.Provider>;

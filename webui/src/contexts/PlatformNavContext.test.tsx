@@ -11,6 +11,7 @@ import { PlatformNavProvider, usePlatformNav } from './PlatformNavContext';
 
 vi.mock('../services/apiAdapter', () => ({
   getAdapter: vi.fn(),
+  ADAPTER_INSTALLED_EVENT: 'sprout:adapter-installed',
 }));
 
 // ---------------------------------------------------------------------------
@@ -234,7 +235,8 @@ describe('usePlatformNav inside provider', () => {
 
     const secondCtx = ctx();
 
-    // The context value object itself should be stable (useMemo with [])
+    // The context value object itself should be stable (useMemo with
+    // [adapter] — the adapter reference is unchanged across rerenders).
     expect(secondCtx).toBe(firstCtx);
 
     // The platformNavItems array reference should also be stable

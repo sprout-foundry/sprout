@@ -20,7 +20,15 @@ import (
 
 const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/token heuristic)
 const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
-const defaultFetchURLArchiveDir = "/tmp/sprout/downloads"
+// defaultFetchURLArchiveDir returns the directory where over-limit fetch_url
+// output is archived. Rooted at os.TempDir() so it is writable on every
+// supported platform — including Termux, where /tmp is not writable but
+// $TMPDIR (the value os.TempDir() resolves to) is. On plain Linux this
+// still yields /tmp/sprout/downloads.
+func defaultFetchURLArchiveDir() string {
+	return filepath.Join(os.TempDir(), "sprout", "downloads")
+}
+
 const defaultAnalyzeImageResultExcerptChars = 4000
 const defaultToolResultMaxChars = 50000 // Universal cap on tool result size (~12K tokens)
 
@@ -90,7 +98,7 @@ func buildFetchURLTruncationNotice(omitted int, archivePath string, archiveErr e
 func saveFetchURLOutputToFile(args map[string]interface{}, output string) (string, error) {
 	dir := strings.TrimSpace(envutil.GetEnvSimple("FETCH_URL_ARCHIVE_DIR"))
 	if dir == "" {
-		dir = defaultFetchURLArchiveDir
+		dir = defaultFetchURLArchiveDir()
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {

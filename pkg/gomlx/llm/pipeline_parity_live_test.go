@@ -53,11 +53,18 @@ func TestPipelinedDecodeParityLiveModel(t *testing.T) {
 	}
 
 	for _, prompt := range prompts {
+		// Pin compiled decode OFF for both legs: it is default-ON for short
+		// greedy prompts now, but this test compares pipelined vs plain
+		// EAGER byte-for-byte (their graphs are supposed to be identical —
+		// any divergence is a pipelining bug). The compiled path has its own
+		// near-parity test with different (determinism) assertions.
+		os.Setenv("SPROUT_COMPILED_DECODE", "0")
 		plain := runOne(t, prompt)
 
 		t.Setenv("SPROUT_PIPELINE_DECODE", "1")
 		pipelined := runOne(t, prompt)
 		os.Unsetenv("SPROUT_PIPELINE_DECODE")
+		os.Unsetenv("SPROUT_COMPILED_DECODE")
 
 		if pipelined != plain {
 			t.Errorf("pipelined decode divergence for %q:\n  pipelined: %q\n  plain:     %q", prompt, pipelined, plain)

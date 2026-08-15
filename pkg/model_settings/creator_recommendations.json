@@ -165,16 +165,51 @@
       "source_type": "creator"
     },
     {
-      "id": "qwen2.5-family",
-      "match_prefixes": ["qwen2.5-", "qwen2.5"],
+      "id": "qwen3.8-family",
+      "match_prefixes": ["qwen3.8-"],
       "parameters": {
+        "do_sample": true,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repetition_penalty": 1.0
+      },
+      "instruct_parameters": {
         "do_sample": true,
         "temperature": 0.7,
         "top_p": 0.8,
         "top_k": 20,
-        "repetition_penalty": 1.05
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repetition_penalty": 1.0
       },
-      "source": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/raw/main/generation_config.json",
+      "source": "https://huggingface.co/Qwen/Qwen3.8-27B",
+      "source_type": "creator"
+    },
+    {
+      "id": "qwen3.6-family",
+      "match_prefixes": ["qwen3.6-"],
+      "parameters": {
+        "do_sample": true,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repetition_penalty": 1.0
+      },
+      "instruct_parameters": {
+        "do_sample": true,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repetition_penalty": 1.0
+      },
+      "source": "https://huggingface.co/Qwen/Qwen3.6-27B",
       "source_type": "creator"
     },
     {
@@ -188,6 +223,19 @@
         "repetition_penalty": 1.1
       },
       "source": "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct/raw/main/generation_config.json",
+      "source_type": "creator"
+    },
+    {
+      "id": "qwen2.5-family",
+      "match_prefixes": ["qwen2.5-", "qwen2.5"],
+      "parameters": {
+        "do_sample": true,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "repetition_penalty": 1.05
+      },
+      "source": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/raw/main/generation_config.json",
       "source_type": "creator"
     },
     {

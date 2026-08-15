@@ -335,7 +335,7 @@ func TestApplyModelSpecificSettingsRemovesUnsupportedFields(t *testing.T) {
 		"top_p":       1.0,
 	}
 
-	applyModelSpecificSettings("openai/gpt-5", request)
+	applyModelSpecificSettings("openai/gpt-5", request, false)
 
 	if _, ok := request["temperature"]; ok {
 		t.Fatalf("expected temperature to be removed for gpt-5")
@@ -350,10 +350,34 @@ func TestApplyModelSpecificSettingsDoesNotForceGptOssReasoningEffort(t *testing.
 		"temperature": 0.7,
 	}
 
-	applyModelSpecificSettings("openai/gpt-oss-20b", request)
+	applyModelSpecificSettings("openai/gpt-oss-20b", request, false)
 
 	if _, exists := request["reasoning_effort"]; exists {
 		t.Fatalf("expected no model-settings reasoning_effort injection for gpt-oss")
+	}
+}
+
+func TestApplyModelSpecificSettingsQwen36ModeWiring(t *testing.T) {
+	// Locks the disableThinking -> instruct mapping at the request layer:
+	// disableThinking=false (thinking) uses the coding set (temp 0.6),
+	// disableThinking=true (instruct) uses the non-thinking set (temp 0.7,
+	// presence_penalty 1.5).
+	thinking := map[string]interface{}{}
+	applyModelSpecificSettings("qwen3.6-27b", thinking, false)
+	if thinking["temperature"] != 0.6 {
+		t.Fatalf("expected thinking-mode qwen3.6-27b temperature 0.6, got %#v", thinking["temperature"])
+	}
+	if thinking["presence_penalty"] != 0.0 {
+		t.Fatalf("expected thinking-mode qwen3.6-27b presence_penalty 0.0, got %#v", thinking["presence_penalty"])
+	}
+
+	instruct := map[string]interface{}{}
+	applyModelSpecificSettings("qwen3.6-27b", instruct, true)
+	if instruct["temperature"] != 0.7 {
+		t.Fatalf("expected instruct-mode qwen3.6-27b temperature 0.7, got %#v", instruct["temperature"])
+	}
+	if instruct["presence_penalty"] != 1.5 {
+		t.Fatalf("expected instruct-mode qwen3.6-27b presence_penalty 1.5, got %#v", instruct["presence_penalty"])
 	}
 }
 

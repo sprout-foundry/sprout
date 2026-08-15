@@ -15,9 +15,13 @@ vi.mock('../services/apiAdapter', () => {
     getAdapter: () => mockAdapter,
     installAdapter: (adapter: APIAdapter | null) => {
       mockAdapter = adapter;
+      // Mirror the real installAdapter so post-mount installs are picked up
+      // via the event, not only by initial state.
+      window.dispatchEvent(new Event('sprout:adapter-installed'));
     },
     hasAdapter: () => mockAdapter !== null,
     requiresBackendHealthCheck: () => mockAdapter?.requiresBackendHealthCheck === true,
+    ADAPTER_INSTALLED_EVENT: 'sprout:adapter-installed',
     __esModule: true,
   };
 });

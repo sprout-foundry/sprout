@@ -43,7 +43,7 @@ export function usePlugins(): PluginContextValue {
  */
 export function PluginContextProvider({ children }: { children: ReactNode }): JSX.Element {
   // Tick state to force re-read from the registry on each event.
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const handler = () => setTick((t) => t + 1);
@@ -57,13 +57,16 @@ export function PluginContextProvider({ children }: { children: ReactNode }): JS
     };
   }, []);
 
+  // Deps must be the tick VALUE, not the stable setTick setter — with
+  // [setTick] the memo would compute once and never reflect late plugin
+  // registrations (external IIFE bundles register after first mount).
   const value = useMemo<PluginContextValue>(() => {
     return {
       pluginViews: getPluginViews(),
       pluginPanels: getPluginPanels(),
       pluginSettingsTabs: getPluginSettingsTabs(),
     };
-  }, [setTick]);
+  }, [tick]);
 
   return <PluginContext.Provider value={value}>{children}</PluginContext.Provider>;
 }

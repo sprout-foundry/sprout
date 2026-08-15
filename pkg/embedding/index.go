@@ -3,6 +3,7 @@ package embedding
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -238,7 +239,29 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 				continue
 			}
 		} else if isIndexableFile {
-			content, err := os.ReadFile(path)
+			// Skip oversized files before any read: file-level indexing
+			// truncates to 8 KB anyway, and a multi-GB corpus would OOM.
+			fi, err := os.Stat(path)
+			if err != nil {
+				debugLogf("index: skipping %s: %v", path, err)
+				continue
+			}
+			if fi.Size() > MaxIndexableFileBytes {
+				debugLogf("index: skipping %s: %d bytes exceeds %d-byte indexable limit",
+					path, fi.Size(), MaxIndexableFileBytes)
+				continue
+			}
+			// Defense-in-depth: LimitReader bounds the read even if the file
+			// grew between Stat and Open (or is a symlink to something huge).
+			f, err := os.Open(path)
+			if err != nil {
+				debugLogf("index: skipping %s: %v", path, err)
+				continue
+			}
+			content, err := io.ReadAll(io.LimitReader(f, MaxIndexableFileBytes))
+			if cerr := f.Close(); cerr != nil && err == nil {
+				err = cerr
+			}
 			if err != nil {
 				debugLogf("index: skipping %s: %v", path, err)
 				continue
@@ -480,8 +503,27 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 			return fmt.Errorf("index: extract %s: %w", filePath, err)
 		}
 	} else if m.opts.IndexFileLevel && IsSupportedIndexableFile(filePath) {
-		// Use file extractor for non-code files when file-level indexing is enabled
-		content, err := os.ReadFile(filePath)
+		// Skip oversized files entirely: file-level indexing truncates to
+		// 8 KB anyway, and a multi-GB corpus would OOM the read path.
+		fi, err := os.Stat(filePath)
+		if err != nil {
+			return fmt.Errorf("index: stat %s: %w", filePath, err)
+		}
+		if fi.Size() > MaxIndexableFileBytes {
+			debugLogf("index: skipping %s: %d bytes exceeds %d-byte indexable limit",
+				filePath, fi.Size(), MaxIndexableFileBytes)
+			return nil
+		}
+		// Defense-in-depth: LimitReader bounds the read even if the file
+		// grew between Stat and Open (or is a symlink to something huge).
+		f, err := os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("index: open %s: %w", filePath, err)
+		}
+		content, err := io.ReadAll(io.LimitReader(f, MaxIndexableFileBytes))
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
 		if err != nil {
 			return fmt.Errorf("index: read %s: %w", filePath, err)
 		}

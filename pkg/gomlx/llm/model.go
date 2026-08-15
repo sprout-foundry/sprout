@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -582,10 +583,25 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	usePipelined := useGPUArgmax && !useMTP && pipelinedOK && genCfg.MaxTokens > 1 && os.Getenv("SPROUT_PIPELINE_DECODE") == "1"
 	// Compiled decode (CompiledGreedyArchitecture): the whole step runs as
 	// one MLX-compiled graph closure, replaying a cached execution plan
-	// instead of re-walking the ~1500-op graph per token. Also opt-in via
-	// env until TestCompiledDecodeParityLiveModel passes.
+	// instead of re-walking the ~1500-op graph per token. Opt-in via env;
+	// automatically declined for long contexts: the compiled replay stages
+	// every closure input/output array through the graph, so the
+	// fixed-capacity K/V buffers (2x16 whole buffers, ~1.3GB at 20K
+	// context) cost ~16ms/token of pure staging at long context — measured
+	// (TestSpikeApply65Inputs) and unavoidable under MLX's value-semantics
+	// arrays (TestSpikeCapturedBufferMutation: captured constants freeze
+	// values; SliceUpdate never writes shared storage). Below the cutoff
+	// the CPU graph-walk savings dominate and the path WINS (+14% measured
+	// at ~300-token context); above it eager decode is faster.
 	compiledArch, compiledOK := m.arch.(CompiledGreedyArchitecture)
-	useCompiled := useGPUArgmax && !useMTP && !usePipelined && compiledOK && genCfg.MaxTokens > 1 && os.Getenv("SPROUT_COMPILED_DECODE") == "1"
+	compiledCtxLimit := 4096
+	if v := os.Getenv("SPROUT_COMPILED_DECODE_CTX_LIMIT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			compiledCtxLimit = n
+		}
+	}
+	useCompiled := useGPUArgmax && !useMTP && !usePipelined && compiledOK && genCfg.MaxTokens > 1 &&
+		len(tokenIDs) <= compiledCtxLimit && os.Getenv("SPROUT_COMPILED_DECODE") == "1"
 	if useCompiled {
 		if err := compiledArch.PrepareCompiledDecode(len(tokenIDs), genCfg.MaxTokens, cache); err != nil {
 			log.Printf("llm: compiled decode unavailable (%v), falling back to eager", err)

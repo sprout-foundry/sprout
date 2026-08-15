@@ -5,8 +5,10 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -33,6 +35,205 @@ func TestAvailablePersonaCompletions(t *testing.T) {
 	if len(filtered) != 1 || filtered[0] != "web_scraper" {
 		t.Fatalf("unexpected filtered completions: %v", filtered)
 	}
+}
+
+// =============================================================================
+// shouldPreloadLocalModel
+//
+// Regression coverage for the daemon-autostart GPU-contention bug: an
+// auto-started background daemon inherits the foreground process's
+// SPROUT_PROVIDER=sprout-local and used to eagerly preload the local model,
+// competing with the foreground process for the same GPU. That reliably made
+// the daemon miss its 10s health-check StartTimeout, leaving an unsupervised
+// process running (observed firsthand: a spawned daemon pinned at ~99% CPU
+// for 15+ minutes with nothing to reap it, since the idle reaper only
+// watches daemons that reached a serving state). SPROUT_DAEMON_AUTOSTARTED=1
+// (set only on the auto-spawned child's env, never by an explicit
+// `sprout agent -d`) now gates the eager preload off for that one case.
+// =============================================================================
+
+// TestShouldPreloadLocalModel_NoDaemonReachable covers the cases that don't
+// depend on daemon reachability: provider gating, the auto-started-daemon
+// skip, and daemonMode always preloading. SPROUT_DAEMON_AGENT_SOCKET is
+// pointed at a nonexistent path throughout so isDaemonReachableForAgentRouting
+// always sees "no daemon" — these cases must hold regardless of whether a
+// real daemon happens to be running on the machine the test executes on.
+func TestShouldPreloadLocalModel_NoDaemonReachable(t *testing.T) {
+	t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", shortSocketPath(t, "no-daemon"))
+
+	tests := []struct {
+		name        string
+		provider    string // SPROUT_PROVIDER
+		autostarted string // SPROUT_DAEMON_AUTOSTARTED
+		daemon      bool   // daemonMode
+		want        bool
+	}{
+		{
+			name:     "foreground local session preloads when no daemon is reachable",
+			provider: "sprout-local",
+			want:     true,
+		},
+		{
+			name:        "auto-started background daemon skips preload",
+			provider:    "sprout-local",
+			autostarted: "1",
+			want:        false,
+		},
+		{
+			name:     "non-local provider never preloads",
+			provider: "openai",
+			want:     false,
+		},
+		{
+			name:     "explicit daemon (-d) always preloads — no autostarted marker",
+			provider: "sprout-local",
+			daemon:   true,
+			want:     true,
+		},
+		{
+			name:        "autostarted marker with non-local provider still skips",
+			provider:    "openai",
+			autostarted: "1",
+			want:        false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SPROUT_PROVIDER", tc.provider)
+			// Empty string is equivalent to unset for this check (both are
+			// != "1"), and t.Setenv (unlike os.Unsetenv) auto-restores the
+			// prior value after the test, per this repo's env-scoping rule.
+			t.Setenv("SPROUT_DAEMON_AUTOSTARTED", tc.autostarted)
+
+			origDaemonMode := daemonMode
+			daemonMode = tc.daemon
+			defer func() { daemonMode = origDaemonMode }()
+
+			if got := shouldPreloadLocalModel(); got != tc.want {
+				t.Errorf("shouldPreloadLocalModel() = %v, want %v (provider=%q autostarted=%q daemonMode=%v)",
+					got, tc.want, tc.provider, tc.autostarted, tc.daemon)
+			}
+		})
+	}
+}
+
+// TestShouldPreloadLocalModel_DaemonReachable is the regression test for the
+// preload-ordering gap: a foreground local session must skip its own eager
+// preload when a healthy daemon is already up to serve the query instead —
+// otherwise "share the GPU-resident model across instances" never actually
+// happens, even when daemon routing works.
+func TestShouldPreloadLocalModel_DaemonReachable(t *testing.T) {
+	stub := &stubAgentForCmd{}
+	sockPath := startCmdAgentServer(t, stub)
+	t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", sockPath)
+	t.Setenv("SPROUT_PROVIDER", "sprout-local")
+	t.Setenv("SPROUT_DAEMON_AUTOSTARTED", "")
+
+	origDaemonMode := daemonMode
+	origWorkflowConfig := agentWorkflowConfig
+	defer func() {
+		daemonMode = origDaemonMode
+		agentWorkflowConfig = origWorkflowConfig
+	}()
+
+	t.Run("healthy daemon present: skip preload, defer to daemon routing", func(t *testing.T) {
+		daemonMode = false
+		agentWorkflowConfig = ""
+		if got := shouldPreloadLocalModel(); got {
+			t.Error("shouldPreloadLocalModel() = true, want false: a healthy daemon is reachable and should serve this query")
+		}
+	})
+
+	t.Run("daemonMode true: preload anyway, we ARE the daemon", func(t *testing.T) {
+		daemonMode = true
+		agentWorkflowConfig = ""
+		if !shouldPreloadLocalModel() {
+			t.Error("shouldPreloadLocalModel() = false, want true: daemon mode never routes to another daemon")
+		}
+	})
+
+	t.Run("workflow config set: tryDaemonOneShot won't run, preload anyway", func(t *testing.T) {
+		daemonMode = false
+		agentWorkflowConfig = "/some/workflow.json"
+		if !shouldPreloadLocalModel() {
+			t.Error("shouldPreloadLocalModel() = false, want true: workflow runs never route through tryDaemonOneShot")
+		}
+	})
+}
+
+// TestIsDaemonReachableForAgentRouting_RealRoundTrip verifies the health
+// check does a genuine round trip, not just a socket dial — a listener that
+// accepts connections but never responds (simulating a hung/stuck daemon,
+// which is exactly the auto-start failure mode this whole fix chain started
+// from) must be reported unreachable, not mistaken for healthy.
+func TestIsDaemonReachableForAgentRouting_RealRoundTrip(t *testing.T) {
+	t.Run("healthy daemon is reachable", func(t *testing.T) {
+		stub := &stubAgentForCmd{}
+		sockPath := startCmdAgentServer(t, stub)
+		t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", sockPath)
+		t.Setenv("SPROUT_DAEMON_AGENT", "")
+
+		if !isDaemonReachableForAgentRouting() {
+			t.Error("expected a healthy stub daemon to be reachable")
+		}
+	})
+
+	t.Run("no daemon at all is unreachable", func(t *testing.T) {
+		t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", shortSocketPath(t, "missing"))
+		t.Setenv("SPROUT_DAEMON_AGENT", "")
+
+		if isDaemonReachableForAgentRouting() {
+			t.Error("expected no daemon socket to be unreachable")
+		}
+	})
+
+	t.Run("accepts but never responds is unreachable", func(t *testing.T) {
+		sockPath := shortSocketPath(t, "stuck")
+		ln, err := net.Listen("unix", sockPath)
+		if err != nil {
+			t.Fatalf("listen: %v", err)
+		}
+		defer ln.Close()
+		// Accept connections but never read/write — simulates a daemon
+		// that's spawned and listening but stuck (e.g. hung on its own
+		// eager local-model load), the exact scenario the 1.5s round-trip
+		// timeout exists to catch.
+		go func() {
+			for {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				_ = conn // deliberately never close/read/write
+			}
+		}()
+
+		t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", sockPath)
+		t.Setenv("SPROUT_DAEMON_AGENT", "")
+
+		start := time.Now()
+		reachable := isDaemonReachableForAgentRouting()
+		elapsed := time.Since(start)
+
+		if reachable {
+			t.Error("expected a stuck (non-responding) daemon to be reported unreachable")
+		}
+		if elapsed > 3*time.Second {
+			t.Errorf("health check took %s, expected it to respect its ~1.5s timeout", elapsed)
+		}
+	})
+
+	t.Run("SPROUT_DAEMON_AGENT=0 forces unreachable even if daemon is healthy", func(t *testing.T) {
+		stub := &stubAgentForCmd{}
+		sockPath := startCmdAgentServer(t, stub)
+		t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", sockPath)
+		t.Setenv("SPROUT_DAEMON_AGENT", "0")
+
+		if isDaemonReachableForAgentRouting() {
+			t.Error("SPROUT_DAEMON_AGENT=0 must force unreachable regardless of daemon health")
+		}
+	})
 }
 
 // =============================================================================

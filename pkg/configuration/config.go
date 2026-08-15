@@ -48,6 +48,11 @@ type Config struct {
 	ProviderModels   map[string]string `json:"provider_models"`
 	ProviderPriority []string          `json:"provider_priority"`
 
+	// LocalModelPath is the model directory used by the local LLM server
+	// (sprout-local provider). When non-empty, sprout auto-starts llm_server
+	// with this model before agent creation.
+	LocalModelPath string `json:"local_model_path,omitempty"`
+
 	// Language Server Override Configuration
 	LanguageServers []LanguageServerOverride `json:"language_servers,omitempty"`
 

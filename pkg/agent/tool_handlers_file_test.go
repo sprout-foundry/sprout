@@ -328,6 +328,44 @@ func TestValidateJSONContent(t *testing.T) {
 	})
 }
 
+func TestSwallowedCommentError(t *testing.T) {
+	t.Run("flattened go code with two comments is rejected", func(t *testing.T) {
+		content := `package modeltest // Average returns the mean of the given values. func Average(values []float64) float64 { return 0 } // Max returns the largest value in the slice. func Max(values []int) int { return 0 }`
+		err := swallowedCommentError(content, "stats.go")
+		if err == nil {
+			t.Fatal("expected error for flattened content with multiple // comments")
+		}
+	})
+
+	t.Run("single trailing comment is allowed", func(t *testing.T) {
+		content := `package modeltest // a normal short comment`
+		if err := swallowedCommentError(content, "stats.go"); err != nil {
+			t.Errorf("got error %v, want nil for a single trailing comment", err)
+		}
+	})
+
+	t.Run("properly newlined code is allowed", func(t *testing.T) {
+		content := "package modeltest\n\n// Average returns the mean.\nfunc Average() {}\n\n// Max returns the max.\nfunc Max() {}\n"
+		if err := swallowedCommentError(content, "stats.go"); err != nil {
+			t.Errorf("got error %v, want nil for properly formatted content", err)
+		}
+	})
+
+	t.Run("non-source extension is ignored", func(t *testing.T) {
+		content := `some text // with a comment // and another comment, no newlines anywhere`
+		if err := swallowedCommentError(content, "notes.txt"); err != nil {
+			t.Errorf("got error %v, want nil for non-source file", err)
+		}
+	})
+
+	t.Run("no comment marker is allowed regardless of length", func(t *testing.T) {
+		content := `package modeltest func Average(values []float64) float64 { sum := 0.0 for _, v := range values { sum += v } return sum }`
+		if err := swallowedCommentError(content, "stats.go"); err != nil {
+			t.Errorf("got error %v, want nil when there's no // comment marker at all", err)
+		}
+	})
+}
+
 func TestDisallowRawStructuredWrite(t *testing.T) {
 	t.Run("json extension returns error", func(t *testing.T) {
 		err := disallowRawStructuredWrite("file.json", "write_file")

@@ -422,6 +422,15 @@ You have a per-session ChangeTracker. When the user says "undo that" / "revert w
 
 ---
 
+## AGENTS.md Maintenance
+- **Keep AGENTS.md lean** — it's injected into every request, consuming context tokens. Keep it under 2K tokens (~1K ideal).
+- **Rules and guidance only** — AGENTS.md should contain actionable rules, conventions, and pointers. Not status reports, tracking, or detailed architecture docs.
+- **Move details to linked docs** — reference material belongs in `docs/` files that agents read on demand, not in AGENTS.md where it's always loaded.
+- **Per-package AGENTS.md** — large repos can split into per-package files with only the relevant subset injected.
+- **Don't use AGENTS.md as a work log** — session progress, tracking, and reports go in roadmap files, commit messages, or memories.
+
+---
+
 ## Completion Criteria
 End response with a clear completion summary only after:
 - All requested work completed and verified

@@ -214,3 +214,36 @@ func Cast(a *Array, dtype Dtype, s *Stream) (*Array, error) { return nil, errUna
 func SqueezeAxis(a *Array, axis int, s *Stream) (*Array, error) {
 	return nil, errUnavailable
 }
+
+// Cos returns errUnavailable on stub builds.
+func Cos(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Sin returns errUnavailable on stub builds.
+func Sin(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Power returns errUnavailable on stub builds.
+func Power(a *Array, exp float32, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Square returns errUnavailable on stub builds.
+func Square(a *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Slice returns errUnavailable on stub builds.
+func Slice(a *Array, start, stop, strides []int, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+
+// Tril returns errUnavailable on stub builds.
+func Tril(a *Array, k int, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// Where returns errUnavailable on stub builds.
+func Where(condition, x, y *Array, s *Stream) (*Array, error) { return nil, errUnavailable }
+
+// RepeatAxis returns errUnavailable on stub builds.
+func RepeatAxis(a *Array, repeats, axis int, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}
+
+// Pad returns errUnavailable on stub builds.
+func Pad(a *Array, axes, low, high []int, padValue *Array, s *Stream) (*Array, error) {
+	return nil, errUnavailable
+}

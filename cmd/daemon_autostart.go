@@ -42,6 +42,14 @@ func maybeAutoStartDaemon(ctx context.Context, daemonMode bool) func() {
 		spec := daemonpkg.DefaultDaemonSpec()
 		// Auto-started daemons reap themselves after the idle window.
 		spec.Env = append(spec.Env, "SPROUT_DAEMON_IDLE_TIMEOUT="+defaultDaemonIdleTimeout.String())
+		// Distinguishes this silent, best-effort background spawn from an
+		// explicit `sprout agent -d` / `sprout service start`. createChatAgent
+		// uses this to skip the eager local-model preload: nothing routes real
+		// agent traffic through an auto-started daemon yet, so preloading here
+		// only duplicates GPU/memory work the foreground process is already
+		// doing and competes with it for the same GPU — the direct cause of a
+		// daemon spawn that never passes its health check within StartTimeout.
+		spec.Env = append(spec.Env, "SPROUT_DAEMON_AUTOSTARTED=1")
 
 		already, err := daemonpkg.EnsureDaemon(ctx, spec)
 		if err != nil {

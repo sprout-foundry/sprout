@@ -222,6 +222,11 @@ func (ws *ReactWebServer) Shutdown() error {
 	}
 	ws.log().Info("all terminal sessions closed")
 
+	// Stop the local LLM server if it was running. The server is a detached
+	// process that survives CLI sessions, but when the daemon shuts down
+	// explicitly we release its GPU memory.
+	stopLocalLLMServer(ws.log())
+
 	if listener != nil {
 		_ = listener.Close()
 	}

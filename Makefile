@@ -25,6 +25,8 @@ help:
 	@echo "  make install          - Build and install to ~/.local/bin/sprout"
 	@echo "  make build-fast       - Fast incremental build (skips unchanged UI)"
 	@echo "  make build-version    - Build with version information"
+	@echo "  make build-llm-server  - Build local LLM server (mlx)"
+	@echo "  make build-llm-download - Build model download helper (mlx)"
 	@echo "  make build-ui         - Build React web UI only"
 	@echo "  make deploy-ui        - Build and deploy React UI (incremental)"
 	@echo "  make build-wasm       - Build WASM shell module"
@@ -44,6 +46,11 @@ help:
 	@echo "                                         (sprout-automate) so pkill -f sprout inside"
 	@echo "                                         the workflow can't kill itself."
 	@echo "                                         Pass flags via AUTOMATE_ARGS=\"--yes --budget-usd 5\""
+	@echo ""
+	@echo "Local LLM (MLX):"
+	@echo "  make local-model              - Download the recommended model for this machine's RAM"
+	@echo "  make local-llm                - Build and run the local LLM server (auto-selects by RAM)"
+	@echo "  make local-llm-status         - Check if the local LLM server is up (curl /health)"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  ./scripts/version-manager.sh build    - Build with version info"
@@ -238,18 +245,28 @@ test-coverage: prepare-grammars
 	echo "Coverage check passed: $${total_coverage}% >= $${min_coverage}%"'
 
 # Build sprout binary
-# Optimized: uses build cache and parallel compilation
+# MLX is now auto-included on Darwin-arm64 via build constraints (no tag needed).
+BUILD_TAGS := grammar_blobs_external
+
 build: prepare-grammars
-	@echo "Building sprout..."
-	GO111MODULE=on go build -tags grammar_blobs_external -o sprout .
+	@echo "Building sprout (tags: $(BUILD_TAGS))..."
+	GO111MODULE=on go build -tags $(BUILD_TAGS) -o sprout .
 	@echo "Build completed"
 
-# Install sprout binary to all common locations
+# Install sprout binary and llm_server (if built) to common locations
 install: build
 	@echo "Installing sprout..."
 	@mkdir -p ~/.local/bin ~/go/bin
 	cp sprout ~/.local/bin/sprout
 	cp sprout ~/go/bin/sprout 2>/dev/null || true
+	@# Copy llm_server alongside sprout if it exists (built via make build-llm-server)
+	@if [ -f llm_server ]; then \
+		cp llm_server ~/.local/bin/llm_server 2>/dev/null || true; \
+		cp llm_server ~/go/bin/llm_server 2>/dev/null || true; \
+		echo "Installed llm_server alongside sprout"; \
+	else \
+		echo "Note: llm_server not built — run 'make build-llm-server' for local LLM support"; \
+	fi
 	@echo "Install completed"
 
 # Run an automate workflow under a renamed binary so the workflow's own
@@ -294,10 +311,41 @@ automate-run: build
 	@echo "Running workflow as sprout-automate (workflow=$(notdir $(WORKFLOW)), extra=$(AUTOMATE_ARGS))"
 	@./sprout-automate automate run $(notdir $(WORKFLOW)) $(AUTOMATE_ARGS)
 
+# ---------------------------------------------------------------------------
+# Local LLM (MLX) — see docs/LOCAL_LLM.md for the full guide.
+# ---------------------------------------------------------------------------
+
+# Download the model the catalog recommends for this machine's RAM.
+local-model:
+	@echo "Downloading recommended local model..."
+	cd pkg/gomlx && go run -tags mlx ../../cmd/llm_download
+
+# Build and run the local LLM server (auto-selects the best installed model
+# for this machine's RAM; serves OpenAI-compatible API on 127.0.0.1:18081).
+local-llm:
+	@echo "Building local LLM server..."
+	go build -tags mlx -o llm_server ./cmd/llm_server
+	@echo "Starting local LLM server on http://127.0.0.1:18081 ..."
+	@./llm_server -port 18081
+
+# Build the local LLM server binary (used by sprout's auto-discovery).
+build-llm-server:
+	@echo "Building llm_server binary..."
+	go build -tags mlx -o llm_server ./cmd/llm_server
+
+# Build the model download helper binary.
+build-llm-download:
+	@echo "Building llm_download binary..."
+	go build -tags mlx -o llm_download ./cmd/llm_download
+
+# Check whether the local LLM server is up and which model it loaded.
+local-llm-status:
+	@curl -s -m 5 http://127.0.0.1:18081/health || echo "local LLM server is not running (start it with 'make local-llm')"
+
 # Build sprout binary with parallel compilation and cache
 build-parallel: prepare-grammars
-	@echo "Building sprout (parallel)..."
-	GO111MODULE=on GOFLAGS="-p=8" go build -tags grammar_blobs_external -o sprout .
+	@echo "Building sprout (parallel, tags: $(BUILD_TAGS))..."
+	GO111MODULE=on GOFLAGS="-p=8" go build -tags $(BUILD_TAGS) -o sprout .
 	@echo "Build completed"
 
 # Build with version information

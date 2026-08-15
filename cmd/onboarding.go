@@ -90,6 +90,14 @@ func runGuidedOnboarding() bool {
 		return false
 	}
 
+	// Special path for local provider: model download + server lifecycle.
+	if providerID == "sprout-local" {
+		if _, ok := onboardingLocal(); ok {
+			return true
+		}
+		return false
+	}
+
 	// Look up the catalog entry for model defaults + signup URLs.
 	catProvider, _ := providercatalog.FindProvider(providerID)
 	meta, _ := configuration.GetProviderAuthMetadata(providerID)

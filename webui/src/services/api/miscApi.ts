@@ -10,6 +10,8 @@ import type {
   DeepReviewFixResponse,
   DeepReviewFixStartResponse,
   DeepReviewFixStatusResponse,
+  LocalLLMStatus,
+  LocalLLMModel,
 } from './types';
 
 // ── Stats ──────────────────────────────────────────────────────────
@@ -133,4 +135,37 @@ export async function exportSupportBundle(fetchFn: typeof fetch): Promise<void> 
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+// ── Local LLM ──────────────────────────────────────────────────────
+
+export async function getLocalLLMStatus(fetchFn: typeof fetch): Promise<LocalLLMStatus> {
+  const response = await fetchFn('/api/local-llm/status');
+  if (!response.ok) throw new Error('Failed to get local LLM status');
+  return response.json();
+}
+
+export async function startLocalLLM(fetchFn: typeof fetch): Promise<{ status: string; endpoint?: string; pid?: number }> {
+  const response = await fetchFn('/api/local-llm/start', { method: 'POST' });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(String(data.message || data.error || `HTTP ${response.status}`));
+  }
+  return response.json();
+}
+
+export async function getLocalLLMModels(fetchFn: typeof fetch): Promise<{ models: LocalLLMModel[]; recommended: string; model_dir: string }> {
+  const response = await fetchFn('/api/local-llm/models');
+  if (!response.ok) throw new Error('Failed to get local LLM models');
+  return response.json();
+}
+
+export async function downloadLocalLLMModel(fetchFn: typeof fetch, model?: string): Promise<{ status: string; model: string; pid: number; message: string }> {
+  const params = model ? `?model=${encodeURIComponent(model)}` : '';
+  const response = await fetchFn(`/api/local-llm/download${params}`, { method: 'POST' });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(String(data.message || data.error || `HTTP ${response.status}`));
+  }
+  return response.json();
 }

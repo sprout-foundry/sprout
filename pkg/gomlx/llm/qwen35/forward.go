@@ -1186,6 +1186,9 @@ func (q *Qwen35) fullAttention(h tensor.Array, lw *layerWeights, layerIdx, seqLe
 		// AppendWindow writes one position into a geometrically grown buffer
 		// instead of concatenating, so per-token cost does not scale with
 		// sequence length. The returned views borrow the cache's buffers.
+		// (A/B'd directly against mlx-lm's concat-style update: concat-append
+		// measured 2.5x WORSE end-to-end at 20K — 9.0 vs 23.1 tok/s — under
+		// our eval discipline, so the window design stays.)
 		kw, vw, err := cache.AppendWindow(layerIdx, q.backend.RetainArray(kRot), q.backend.RetainArray(vT))
 		if err != nil {
 			return nil, fmt.Errorf("cache append: %w", err)

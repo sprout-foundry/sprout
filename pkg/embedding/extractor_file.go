@@ -1,11 +1,13 @@
 package embedding
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // supportedFileExtensions lists file extensions that should be indexed
@@ -61,6 +63,10 @@ func NewFileExtractor(maxFileBytes int) *FileExtractor {
 
 // Extract produces a single CodeUnit representing the entire file content.
 // Returns an empty slice (no error) for unsupported file types.
+//
+// Extract is memory-bounded: it never materializes the full input as a string
+// or rune slice. Newline counting and truncation operate on the raw []byte, so
+// callers may pass arbitrarily large content without spiking memory.
 func (e *FileExtractor) Extract(path string, content []byte) ([]CodeUnit, error) {
 	ext := filepath.Ext(path)
 	base := filepath.Base(path)
@@ -70,16 +76,31 @@ func (e *FileExtractor) Extract(path string, content []byte) ([]CodeUnit, error)
 		return nil, nil
 	}
 
-	// Truncate content if needed
-	body := string(content)
-	if len(body) > e.maxFileBytes {
-		// Truncate at the last valid UTF-8 boundary
-		runes := []rune(body)
-		if len(runes) > e.maxFileBytes {
-			runes = runes[:e.maxFileBytes]
+	// Count newlines on the raw bytes BEFORE truncation so EndLine reflects
+	// the whole file without ever materializing a full string copy.
+	endLine := bytes.Count(content, []byte{'\n'}) + 1
+
+	// Truncate the raw bytes first; only then convert to string, keeping
+	// memory bounded at maxFileBytes regardless of input size.
+	if len(content) > e.maxFileBytes {
+		content = content[:e.maxFileBytes]
+		// Trim an incomplete final rune cut by truncation: find the start
+		// of the last rune in the slice; if the slice doesn't contain all
+		// of it, drop it. A complete final rune (or an ASCII tail) keeps
+		// the full slice — cutting at the rune-start index instead would
+		// strand the lead byte without its continuation bytes.
+		start := len(content)
+		for start > 0 && !utf8.RuneStart(content[start-1]) {
+			start--
 		}
-		body = string(runes)
+		switch {
+		case start == 0:
+			content = content[:0] // slice is all continuation bytes
+		case !utf8.FullRune(content[start-1:]):
+			content = content[:start-1] // drop the cut-off lead byte
+		}
 	}
+	body := string(content)
 
 	// Clean body based on file type
 	body = e.cleanBody(ext, base, body)
@@ -95,7 +116,7 @@ func (e *FileExtractor) Extract(path string, content []byte) ([]CodeUnit, error)
 		Signature: base, // For file-level, signature is just the filename
 		Body:      body,
 		StartLine: 1,
-		EndLine:   strings.Count(string(content), "\n") + 1,
+		EndLine:   endLine,
 		Language:  lang,
 	}
 	unit.ComputeHash()

@@ -335,7 +335,7 @@
 }
 
 .queue-badge-button:hover {
-  background: var(--accent-primary-hover, #4f46e5);
+  background: var(--accent-primary-hover);
   transform: scale(1.1);
 }
 
@@ -476,12 +476,12 @@
 }
 
 .image-preview-chip.error {
-  border-color: var(--color-danger, #dc3545);
+  border-color: var(--accent-error);
 }
 
 .image-preview-chip .upload-error {
   font-size: 8px;
-  color: var(--color-danger, #dc3545);
+  color: var(--accent-error);
   max-width: 68px;
   overflow: hidden;
   text-overflow: ellipsis;

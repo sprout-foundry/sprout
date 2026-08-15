@@ -11,15 +11,17 @@ import (
 )
 
 // TestCompiledDecodeParityLiveModel verifies the compiled-decode path
-// (opted into via SPROUT_COMPILED_DECODE=1 — see Model.generateLocked's
-// useCompiled branch, off by default) against the plain per-token path.
+// (default ON for greedy decoding below the context cutoff — see
+// Model.generateLocked's useCompiled branch; SPROUT_COMPILED_DECODE=0
+// opts out, SPROUT_COMPILED_DECODE_CTX_LIMIT bounds it) against the eager
+// per-token path (forced here with the opt-out).
 //
 // What is asserted:
 //  1. The compiled path runs (no silent eager fallback — the compiled-only
-//     branch must actually execute when the env var is set).
+//     branch must actually execute when the default is on).
 //  2. Both paths are self-deterministic across repeated calls on the same
 //     model instance (same warm prefix-slot path).
-//  3. Output is coherent text (non-empty, decodable).
+//  3. Output is coherent (non-empty token stream).
 //
 // What is NOT asserted, deliberately: byte-identical token streams between
 // the eager and compiled paths. The compiled path's K/V buffers attend with
@@ -31,8 +33,7 @@ import (
 // Every constituent was verified bitwise in isolation (rope dynamic offset,
 // Where-scatter, masked-vs-exact SDPA at synthetic shapes, metal-kernel
 // tracing/replay, stateful feedback) — the residual is shape-specialized
-// accumulation order, not a correctness bug. If you need byte parity,
-// compiled decode must not be enabled.
+// accumulation order, not a correctness bug.
 //
 // Skips when SPROUT_MTP_PARITY_MODEL isn't set.
 func TestCompiledDecodeParityLiveModel(t *testing.T) {
@@ -61,6 +62,9 @@ func TestCompiledDecodeParityLiveModel(t *testing.T) {
 			cfg.MaxTokens = 24
 			cfg.Temperature = 0
 			cfg.RepetitionPenalty = 0
+			// Disable prompt-lookup so the compiled branch is the one under
+			// test (lookup takes priority in generateLocked).
+			cfg.PromptLookupMaxDrafts = 0
 
 			gen := func() []int {
 				var toks []int
@@ -72,14 +76,15 @@ func TestCompiledDecodeParityLiveModel(t *testing.T) {
 				return toks
 			}
 
-			gen()           // cold: full prefill, populates this instance's slot
-			plain1 := gen() // warm eager
-			plain2 := gen() // eager determinism control
+			gen() // cold: full prefill, populates this instance's slot
 
-			os.Setenv("SPROUT_COMPILED_DECODE", "1")
-			compiled1 := gen() // warm compiled
-			compiled2 := gen() // compiled determinism control
+			os.Setenv("SPROUT_COMPILED_DECODE", "0")
+			plain1 := gen() // warm eager (opted out)
+			plain2 := gen() // eager determinism control
 			os.Unsetenv("SPROUT_COMPILED_DECODE")
+
+			compiled1 := gen() // warm compiled (default on)
+			compiled2 := gen() // compiled determinism control
 
 			if len(compiled1) == 0 {
 				t.Fatalf("compiled decode produced no tokens for %q", prompt)

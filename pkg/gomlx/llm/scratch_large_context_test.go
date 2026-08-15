@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
@@ -16,6 +17,9 @@ import (
 // TestScratchLargeContext measures memory/throughput at a genuinely large,
 // agentic-scale context (tens of thousands of tokens) rather than a small
 // commit-message-sized prompt. Skips when SPROUT_MTP_PARITY_MODEL isn't set.
+// SPROUT_SCRATCH_WORDS sets the approximate prompt size in words (default
+// 20000). Roughly 1.3-1.6 tokens per word with this vocabulary, so use
+// ~65000-75000 words for a ~100K-token context.
 func TestScratchLargeContext(t *testing.T) {
 	dir := os.Getenv("SPROUT_MTP_PARITY_MODEL")
 	if dir == "" {
@@ -34,7 +38,13 @@ func TestScratchLargeContext(t *testing.T) {
 	r := rand.New(rand.NewSource(42))
 	var buf []byte
 	buf = append(buf, "Summarize the following text in one sentence.\n\n"...)
-	for i := 0; i < 20000; i++ {
+	nWords := 20000
+	if v := os.Getenv("SPROUT_SCRATCH_WORDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			nWords = n
+		}
+	}
+	for i := 0; i < nWords; i++ {
 		buf = append(buf, words[r.Intn(len(words))]...)
 		buf = append(buf, ' ')
 	}

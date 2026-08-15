@@ -538,8 +538,8 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-2);
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: color-mix(in srgb, var(--accent-error) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-error) 20%, transparent);
   border-radius: var(--radius-sm);
   font-size: 11px;
   overflow: hidden;
@@ -657,8 +657,8 @@
 /* ── Duplicate Cluster Summary ───────────────────────────────── */
 
 .search-duplicate-summary {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: color-mix(in srgb, var(--accent-warning) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 20%, transparent);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
@@ -679,16 +679,16 @@
 }
 
 .search-duplicate-summary-header:hover {
-  background: rgba(245, 158, 11, 0.1);
+  background: color-mix(in srgb, var(--accent-warning) 10%, transparent);
 }
 
 .search-duplicate-summary-icon {
-  color: rgba(245, 158, 11, 0.8);
+  color: color-mix(in srgb, var(--accent-warning) 80%, transparent);
 }
 
 .search-duplicate-summary-content {
   padding: 0 var(--space-3) var(--space-3);
-  border-top: 1px solid rgba(245, 158, 11, 0.15);
+  border-top: 1px solid color-mix(in srgb, var(--accent-warning) 15%, transparent);
 }
 
 .search-duplicate-cluster-item {
@@ -699,7 +699,7 @@
 }
 
 .search-duplicate-cluster-item:not(:last-child) {
-  border-bottom: 1px solid rgba(245, 158, 11, 0.1);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-warning) 10%, transparent);
 }
 
 .search-duplicate-cluster-label {
@@ -720,7 +720,7 @@
 /* ── Semantic Result Cluster Indicator ─────────────────────── */
 
 .search-semantic-result--clustered {
-  border-left: 3px solid rgba(245, 158, 11, 0.5);
+  border-left: 3px solid color-mix(in srgb, var(--accent-warning) 50%, transparent);
 }
 
 .search-semantic-result-cluster-badge {
@@ -823,7 +823,7 @@
   font-size: 12px;
   color: var(--text-secondary);
   border-left: 2px solid var(--accent-warning, #f0ad4e);
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.03));
+  background: var(--bg-tertiary);
   border-radius: 0 4px 4px 0;
 }
 

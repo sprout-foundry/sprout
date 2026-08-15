@@ -190,6 +190,39 @@
   /* Transitions */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Semantic aliases for component-local vocabularies (worktree panel,
+   * chat dialog, settings panel, status surfaces). These are referenced
+   * WITHOUT a fallback by WorktreePanel.css / WorktreeChatDialog.css /
+   * SettingsPanel.css / WorkspacePane.css etc. and previously resolved
+   * to nothing. Each is an alias to a canonical token that already
+   * theme-switches, so a single :root definition works for both themes. */
+  --panel-bg: var(--bg-secondary);
+  --panel-header-bg: var(--bg-elevated);
+  --hover-bg: var(--bg-hover);
+  --item-bg: var(--bg-secondary);
+  --item-hover-bg: var(--bg-elevated);
+  --modal-bg: var(--bg-elevated);
+  --button-primary-bg: var(--accent-primary);
+  --button-primary-text: var(--accent-fg);
+  --button-primary-hover-bg: color-mix(in srgb, var(--accent-primary) 85%, white);
+  --button-secondary-bg: var(--bg-elevated);
+  --button-secondary-hover-bg: var(--bg-surface);
+  --error-bg: var(--bg-error);
+  --error-border: color-mix(in srgb, var(--accent-error) 30%, transparent);
+  --error-text: var(--accent-error);
+  --accent-color-opacity: var(--accent-primary-alpha);
+  --border-color-hover: var(--border-strong);
+  --border-muted: var(--border-subtle);
+  --font-size-sm: var(--text-sm);
+  --font-size-xs: var(--text-xs);
+  --success-green: var(--accent-success);
+  --error-red: var(--accent-error);
+  --primary-color: var(--accent-primary);
+  --border-hover: var(--border-strong);
+  --border-primary: var(--border-default);
+  --transition-fast: 150ms var(--ease-out);
+  --accent-primary-hover: color-mix(in srgb, var(--accent-primary) 85%, white);
 }
 
 :root[data-theme='light'] {

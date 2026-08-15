@@ -119,7 +119,21 @@ const minPrefixReuse = 8
 
 // maxPrefixLen caps the retained prefix so long histories don't pin memory
 // forever. Beyond this, caching is dropped for that request.
-const maxPrefixLen = 4096
+//
+// Sized by KV cost, not token count convenience: the 8 full-attention
+// layers cost ~32KB/token, so the ACTIVE conversation's prefix is
+// ~1.0 GB at 32K tokens; idle conversations spill to disk immediately
+// (spillIdleSlots), so at most one prefix is GPU-resident. Conversations
+// that outgrow this fall back to full prefill per turn (the pre-fix
+// behavior for everything >4096). SPROUT_PREFIX_CACHE_MAX overrides.
+func maxPrefixLenTokens() int {
+	if v := os.Getenv("SPROUT_PREFIX_CACHE_MAX"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 32768
+}
 
 // maxPrefixSlotsCap bounds how many conversations' prefixes stay
 // remembered at all (hot or spilled to disk). Not RAM-scaled: only the
@@ -493,7 +507,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// path is unproven at scale and not worth the risk; once a conversation
 	// is too big to cache, always fall through to full prefill.
 	shared, slotIdx := 0, -1
-	if len(tokenIDs) <= maxPrefixLen {
+	if len(tokenIDs) <= maxPrefixLenTokens() {
 		shared, slotIdx = m.bestPrefixSlot(tokenIDs)
 	}
 	if os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
@@ -543,7 +557,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	// (decode appends generated tokens to the working cache; the snapshot
 	// keeps just the prompt prefix alive). Drop caching for very long
 	// prompts so a huge history doesn't pin memory forever.
-	if len(tokenIDs) <= maxPrefixLen {
+	if len(tokenIDs) <= maxPrefixLenTokens() {
 		snap := cache.SnapshotPrefix()
 		logGenMem("after-SnapshotPrefix")
 		newIdx := m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), snap)
@@ -1088,7 +1102,7 @@ func (m *Model) WarmSystemPrefix(prompt string) error {
 	if m.cfg.BOSTokenID > 0 {
 		tokenIDs = append([]int{m.cfg.BOSTokenID}, tokenIDs...)
 	}
-	if len(tokenIDs) < minPrefixReuse || len(tokenIDs) > maxPrefixLen {
+	if len(tokenIDs) < minPrefixReuse || len(tokenIDs) > maxPrefixLenTokens() {
 		return nil
 	}
 

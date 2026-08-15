@@ -115,7 +115,10 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	}
 
 	// Apply model-specific defaults and suppress unsupported fields.
-	applyModelSpecificSettings(model, request)
+	// instruct=true when thinking is disabled, so models with a distinct
+	// non-thinking recommendation (e.g. Qwen3.6, Qwen3.8) get the correct
+	// parameters.
+	applyModelSpecificSettings(model, request, disableThinking)
 	applyReasoningEffort(model, reasoning, request)
 	applyDisableThinking(model, disableThinking, request)
 
@@ -299,8 +302,8 @@ func (p *GenericProvider) ensureModel() error {
 	return nil
 }
 
-func applyModelSpecificSettings(model string, request map[string]interface{}) {
-	settings := modelsettings.ResolveModelSettings(model)
+func applyModelSpecificSettings(model string, request map[string]interface{}, disableThinking bool) {
+	settings := modelsettings.ResolveModelSettingsForMode(model, disableThinking)
 	if !settings.Known {
 		return
 	}

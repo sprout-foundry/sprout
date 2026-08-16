@@ -74,6 +74,10 @@ const BuildLockTimeout = 2 * time.Second
 // EmbedBatchSize is the number of code units per ONNX inference call.
 const EmbedBatchSize = 32
 
+// memFloorBytes stops builds before native (cgo/ONNX) allocations invisible to
+// the Go heap limit can grow until the kernel OOM killer fires.
+const memFloorBytes = 1 << 30 // 1 GiB
+
 // autoBuildTimeout calculates an adaptive timeout for background index builds.
 func autoBuildTimeout(fileCount int) time.Duration {
 	const (

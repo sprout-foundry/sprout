@@ -13,6 +13,9 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 
 // localLLMStatus describes the current state of the local LLM engine.
@@ -32,6 +35,13 @@ type localLLMModel struct {
 	Name     string `json:"name"`
 	Present  bool   `json:"present"`
 	SizeHint string `json:"size_hint"`
+	// Tier is "suggested", "stretch", or "blocked" for this machine's RAM —
+	// see llm.TieredCatalogForRAM. Additive field (omitempty): older
+	// frontend builds that don't know about it simply ignore it.
+	Tier string `json:"tier,omitempty"`
+	// Description explains the tier classification (e.g. why a model is
+	// blocked, or how much RAM a stretch pick risks).
+	Description string `json:"description,omitempty"`
 }
 
 var (
@@ -43,10 +53,39 @@ var (
 const localLLMCacheTTL = 10 * time.Second
 const localLLMEndpoint = "http://127.0.0.1:18081"
 
-// catalogModels is the static catalog of available local models. The backend
-// checks for their presence on disk; the UI uses this to show download actions.
-var catalogModels = []localLLMModel{
-	{ID: "gemma-4-e2b-it-4bit", Name: "Gemma4 2B (4-bit MLX)", SizeHint: "~3.3 GB"},
+// catalogModelsForRAM builds the local model list from the real RAM-tier
+// catalog (pkg/gomlx/llm.TieredCatalogForRAM / pkg/localmodel), the same
+// source /model in the CLI uses — this used to be a separate hardcoded
+// single-entry list here, disconnected from the real catalog and RAM-aware
+// selection logic used everywhere else.
+func catalogModelsForRAM(ram uint64) []localLLMModel {
+	tiered := llm.TieredCatalogForRAM(ram)
+	models := make([]localLLMModel, 0, len(tiered))
+	for _, tm := range tiered {
+		sizeHint := ""
+		if tm.Model.MinRAMSelect > 0 {
+			sizeHint = fmt.Sprintf("~%.0f GB RAM to run", float64(tm.Model.MinRAMSelect)/(1024*1024*1024))
+		}
+		description := ""
+		switch tm.Status {
+		case llm.TierSuggested:
+			description = "Suggested for this machine"
+		case llm.TierEligible:
+			description = "Smaller than suggested — a safe, lighter-weight choice"
+		case llm.TierStretch:
+			description = "Fits, but risks running out of memory"
+		default:
+			description = fmt.Sprintf("Requires more RAM than this machine has (%.0f GB)", float64(ram)/(1024*1024*1024))
+		}
+		models = append(models, localLLMModel{
+			ID:          tm.Model.Dir,
+			Name:        tm.Model.Name,
+			SizeHint:    sizeHint,
+			Tier:        tm.Status.String(),
+			Description: description,
+		})
+	}
+	return models
 }
 
 // getLocalLLMStatus returns the cached status, refreshing if stale.
@@ -66,10 +105,8 @@ func getLocalLLMStatus() *localLLMStatus {
 
 func probeLocalLLMStatus() *localLLMStatus {
 	status := &localLLMStatus{
-		Platform:         runtime.GOOS + "-" + runtime.GOARCH,
-		Endpoint:         localLLMEndpoint,
-		RecommendedModel: "gemma-4-e2b-it-4bit",
-		Models:           catalogModels,
+		Platform: runtime.GOOS + "-" + runtime.GOARCH,
+		Endpoint: localLLMEndpoint,
 	}
 
 	// Only Apple Silicon supports MLX inference.
@@ -78,14 +115,19 @@ func probeLocalLLMStatus() *localLLMStatus {
 		return status
 	}
 
-	// Check for downloaded models. Use the same directory as the localmodel
-	// package and llm_server (~/dev/llm-models), checking the legacy
-	// ~/.cache/sprout/models path as a fallback.
+	ram := localmodel.TotalSystemRAM()
+	status.Models = catalogModelsForRAM(ram)
+	status.RecommendedModel = llm.RecommendModelForRAM(ram).Dir
+
+	// Check for downloaded models. localmodel.DefaultModelsDir is the same
+	// directory the in-process provider and llm_server use
+	// (~/dev/llm-models); check the legacy ~/.cache/sprout/models path as a
+	// fallback for machines onboarded before that layout existed.
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return status
 	}
-	primaryDir := filepath.Join(home, "dev", "llm-models")
+	primaryDir := localmodel.DefaultModelsDir
 	legacyDir := filepath.Join(home, ".cache", "sprout", "models")
 	status.ModelDir = primaryDir
 
@@ -295,7 +337,7 @@ func (ws *ReactWebServer) handleLocalLLMDownload(w http.ResponseWriter, r *http.
 
 	// Validate the model ID is in our catalog.
 	valid := false
-	for _, m := range catalogModels {
+	for _, m := range catalogModelsForRAM(localmodel.TotalSystemRAM()) {
 		if m.ID == modelID {
 			valid = true
 			break

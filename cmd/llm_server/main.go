@@ -63,8 +63,8 @@ func main() {
 			log.Fatalf("auto-select model: %v", err)
 		}
 		dir = picked.Dir
-		log.Printf("auto-selected %s (%.0f GB RAM, min %.1f GB)", picked.Name,
-			float64(ram)/1073741824, float64(picked.MinRAM)/1073741824)
+		log.Printf("auto-selected %s (%.0f GB RAM, suggested at %.1f GB)", picked.Name,
+			float64(ram)/1073741824, float64(picked.MinRAMSuggested)/1073741824)
 	}
 
 	log.Printf("loading model from %s ...", dir)

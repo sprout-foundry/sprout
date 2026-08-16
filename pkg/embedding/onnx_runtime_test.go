@@ -35,7 +35,7 @@ func TestDefaultModelDir_Fallback(t *testing.T) {
 	os.Unsetenv("SPROUT_MODELS_DIR")
 	dataDir := t.TempDir()
 	t.Setenv("SPROUT_DATA_DIR", dataDir)
-	expected := filepath.Join(dataDir, "models")
+	expected := filepath.Join(dataDir, "models", "embedding")
 	got := DefaultModelDir()
 	if got != expected {
 		t.Errorf("expected %s, got %s", expected, got)

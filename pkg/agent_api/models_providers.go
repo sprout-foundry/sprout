@@ -18,11 +18,34 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
+// LocalModelsProvider, when non-nil, supplies the live model listing for
+// SproutLocalClientType. pkg/localmodel owns the real implementation (the
+// in-process MLX LocalProvider) but already imports this package for shared
+// types, so it can't be imported back here without a cycle — its init()
+// sets this var instead, a standard one-directional registration hook.
+// Left nil (falling through to the generic config-file wrapper, which has
+// no real model list for "sprout-local") only on platforms where
+// pkg/localmodel never gets linked in at all.
+var LocalModelsProvider func(ctx context.Context) ([]ModelInfo, error)
+
+type localModelsListWrapper struct {
+	fn func(ctx context.Context) ([]ModelInfo, error)
+}
+
+func (w localModelsListWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	return w.fn(ctx)
+}
+
 // createProviderForType creates a provider instance for the given client type
 func createProviderForType(clientType ClientType) (interface {
 	ListModels(context.Context) ([]ModelInfo, error)
 }, error) {
 	switch clientType {
+	case SproutLocalClientType:
+		if LocalModelsProvider != nil {
+			return localModelsListWrapper{fn: LocalModelsProvider}, nil
+		}
+		return &genericConfigListModelsWrapper{providerName: string(clientType)}, nil
 	case OllamaClientType, OllamaLocalClientType:
 		client, err := NewOllamaLocalClient("llama3.1:8b") // Use an available model
 		if err != nil {

@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"unicode"
 )
 
 // Tokenizer is a BPE tokenizer for Qwen3 models. It loads the HuggingFace
@@ -154,12 +153,13 @@ func (t *Tokenizer) encodeBPE(text string) []int {
 	if _, hasNewline := t.vocab["\n"]; hasNewline {
 		return t.encodeGemma(text)
 	}
-	// Standard BPE (Qwen/GPT-2 style)
-	words := preTokenize(text)
+	// Qwen/GPT-2 byte-level: split via the HF pre-tokenizer regex (which
+	// keeps newline runs standalone — see qwen_pretok.go) and byte-encode
+	// each segment before BPE.
+	words := qwenPreTokenize(text)
 	var tokenIDs []int
 	for _, word := range words {
-		bpeWord := toBPESpace(word)
-		tokens := t.bpe(bpeWord)
+		tokens := t.bpe(word)
 		for _, tokStr := range tokens {
 			if id, ok := t.vocab[tokStr]; ok {
 				tokenIDs = append(tokenIDs, id)
@@ -359,49 +359,6 @@ func getAllPairs(symbols []rune) []string {
 	return pairs
 }
 
-// preTokenize splits text into words, attaching each whitespace run to the
-// following word (GPT-2/Qwen BPE convention: "The capital" → ["The", " capital"]).
-// A bare " " must never be emitted as its own word — toBPESpace would encode
-// it as the standalone Ġ token (id 220) instead of the merged "Ġcapital".
-func preTokenize(text string) []string {
-	var words []string
-	var current strings.Builder
-	spacePending := false
-
-	for _, r := range text {
-		if unicode.IsSpace(r) {
-			if current.Len() > 0 {
-				words = append(words, current.String())
-				current.Reset()
-			}
-			spacePending = true // attach to next word
-		} else {
-			if spacePending {
-				current.WriteString(" ")
-				spacePending = false
-			}
-			current.WriteRune(r)
-		}
-	}
-	if current.Len() > 0 {
-		words = append(words, current.String())
-	}
-	return words
-}
-
-// toBPESpace converts a pre-tokenized word to BPE space encoding.
-// In GPT-2/Qwen BPE, a leading space is encoded as Ġ (U+0120).
-func toBPESpace(word string) string {
-	if word == " " {
-		return "Ġ"
-	}
-	// Replace leading space with Ġ
-	if strings.HasPrefix(word, " ") {
-		return "Ġ" + word[1:]
-	}
-	return word
-}
-
 // fromBPESpace converts BPE space-encoding back to regular text.
 // Handles both SentencePiece-style (▁) and GPT-2 byte-level encoding.
 func fromBPESpace(token string) string {
@@ -410,42 +367,19 @@ func fromBPESpace(token string) string {
 	return decodeByteLevel(s)
 }
 
-// decodeByteLevel reverses the GPT-2 byte-level pre-tokenizer mapping.
-// Bytes 0–255 map to unicode chars: printable ASCII (33–126) map to
-// themselves; everything else maps to chr(byte + 256).
+// decodeByteLevel reverses the GPT-2 byte-level pre-tokenizer mapping using
+// the same byteEncoder table the encode path uses (see qwen_pretok.go).
 func decodeByteLevel(s string) string {
 	var sb strings.Builder
 	sb.Grow(len(s))
 	for _, r := range s {
-		if r < 128 {
-			sb.WriteRune(r)
+		if b, ok := qwenByteDecoder[r]; ok {
+			sb.WriteByte(b)
 			continue
 		}
-		// Reverse the GPT-2 bytes_to_unicode mapping
-		b := byteLevelRuneToByte(r)
-		if b >= 0 {
-			sb.WriteByte(byte(b))
-		} else {
-			sb.WriteRune(r)
-		}
+		sb.WriteRune(r)
 	}
 	return sb.String()
-}
-
-// byteLevelRuneToByte reverses the GPT-2 bytes_to_unicode mapping for a
-// single rune. Returns -1 if the rune is not part of the mapping (e.g.
-// genuine multilingual text).
-func byteLevelRuneToByte(r rune) int {
-	switch {
-	case r >= 33 && r <= 126:
-		return int(r)
-	case r >= 256 && r <= 256+255:
-		v := int(r - 256)
-		if v < 33 || v > 126 {
-			return v
-		}
-	}
-	return -1
 }
 
 // HuggingFace tokenizer.json structures

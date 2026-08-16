@@ -206,6 +206,16 @@ func SoftmaxAxis(a *Array, axis int, s *Stream) (*Array, error) {
 	return wrapResult(out, rc, "softmax_axis")
 }
 
+// SoftmaxAxisPrecise applies softmax along the given axis with fp32
+// accumulation (mx.softmax(..., precise=True)). Needed where bf16 rounding
+// shifts the result materially — e.g. MoE routers selecting among hundreds
+// of experts, where a tiny score perturbation picks a different expert.
+func SoftmaxAxisPrecise(a *Array, axis int, s *Stream) (*Array, error) {
+	out := newOutput()
+	rc := C.mlx_softmax_axis(&out, a.cHandle(), C.int(axis), C.bool(true), s.cHandle())
+	return wrapResult(out, rc, "softmax_axis_precise")
+}
+
 // ------------------------------------------------------------
 // Split, Gather, Concatenate
 // ------------------------------------------------------------

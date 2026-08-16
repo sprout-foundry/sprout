@@ -66,7 +66,9 @@ function OnboardingDialog({
       }
     };
     checkStatus();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [onboarding.provider]);
 
   // Poll for download completion
@@ -81,7 +83,9 @@ function OnboardingDialog({
           setDownloadingModel(false);
           setDownloadMessage('');
         }
-      } catch { /* ignore poll errors */ }
+      } catch {
+        /* ignore poll errors */
+      }
     }, 5000);
     return () => clearInterval(interval);
   }, [downloadingModel, onboarding.provider]);
@@ -371,9 +375,7 @@ function OnboardingDialog({
                       <Download size={14} />
                       {downloadingModel ? 'Downloading...' : 'Download recommended model (~2.5 GB)'}
                     </button>
-                    {downloadMessage && (
-                      <div className="onboarding-caveat-item">{downloadMessage}</div>
-                    )}
+                    {downloadMessage && <div className="onboarding-caveat-item">{downloadMessage}</div>}
                   </div>
                 )}
                 {localLLMModelPresent === true && (

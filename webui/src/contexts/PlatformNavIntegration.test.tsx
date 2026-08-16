@@ -229,11 +229,7 @@ describe('PlatformNav Regression: adapter installed AFTER mount (cloud mode)', (
 
     // 3. Assert the SAME mounted consumer now sees the adapter's items.
     expect(latestContext.platformNavItems).toHaveLength(3);
-    expect(latestContext.platformNavItems.map((i: PlatformNavItem) => i.id)).toEqual([
-      'tasks',
-      'billing',
-      'team',
-    ]);
+    expect(latestContext.platformNavItems.map((i: PlatformNavItem) => i.id)).toEqual(['tasks', 'billing', 'team']);
 
     // No remount happened: the consumer div is still the original node.
     expect(container.querySelector('[data-testid="consumer"]')).not.toBeNull();

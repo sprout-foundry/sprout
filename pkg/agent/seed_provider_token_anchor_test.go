@@ -49,7 +49,7 @@ func TestFingerprintMessages(t *testing.T) {
 
 func TestTokenAnchor_NoAnchorYet(t *testing.T) {
 	var anchor tokenAnchor
-	if _, _, ok := anchor.estimate([]core.Message{{Role: "user", Content: "hi"}}, 0); ok {
+	if _, _, ok := anchor.estimate("test-model", []core.Message{{Role: "user", Content: "hi"}}, 0); ok {
 		t.Error("expected no usable anchor before any update()")
 	}
 }
@@ -60,9 +60,9 @@ func TestTokenAnchor_ExactPrefixReturnsActualTokens(t *testing.T) {
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "hello"},
 	}
-	anchor.update(messages, 2, 5000)
+	anchor.update("test-model", messages, 2, 5000)
 
-	got, heuristic, ok := anchor.estimate(messages, 2)
+	got, heuristic, ok := anchor.estimate("test-model", messages, 2)
 	if !ok {
 		t.Fatal("expected anchor to apply for the exact same messages/tools")
 	}
@@ -80,12 +80,12 @@ func TestTokenAnchor_AppendedMessagesAddHeuristicDelta(t *testing.T) {
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "hello"},
 	}
-	anchor.update(base, 2, 5000)
+	anchor.update("test-model", base, 2, 5000)
 
 	newMsg := core.Message{Role: "assistant", Content: "a fairly long assistant reply with several words in it"}
 	extended := append(append([]core.Message{}, base...), newMsg)
 
-	got, heuristic, ok := anchor.estimate(extended, 2)
+	got, heuristic, ok := anchor.estimate("test-model", extended, 2)
 	if !ok {
 		t.Fatal("expected anchor to apply when messages are purely appended to")
 	}
@@ -102,9 +102,9 @@ func TestTokenAnchor_AppendedMessagesAddHeuristicDelta(t *testing.T) {
 func TestTokenAnchor_InvalidatedByToolCountChange(t *testing.T) {
 	var anchor tokenAnchor
 	messages := []core.Message{{Role: "user", Content: "hi"}}
-	anchor.update(messages, 2, 5000)
+	anchor.update("test-model", messages, 2, 5000)
 
-	if _, _, ok := anchor.estimate(messages, 3); ok {
+	if _, _, ok := anchor.estimate("test-model", messages, 3); ok {
 		t.Error("expected anchor to be invalidated when tool count changes")
 	}
 }
@@ -115,7 +115,7 @@ func TestTokenAnchor_InvalidatedByPrefixEdit(t *testing.T) {
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "hello"},
 	}
-	anchor.update(messages, 0, 5000)
+	anchor.update("test-model", messages, 0, 5000)
 
 	// Simulate checkpoint substitution: the first message's content changes
 	// even though the slice length is the same.
@@ -123,7 +123,7 @@ func TestTokenAnchor_InvalidatedByPrefixEdit(t *testing.T) {
 		{Role: "system", Content: "sys (summarized)"},
 		{Role: "user", Content: "hello"},
 	}
-	if _, _, ok := anchor.estimate(edited, 0); ok {
+	if _, _, ok := anchor.estimate("test-model", edited, 0); ok {
 		t.Error("expected anchor to be invalidated when prefix content changed (e.g. checkpoint substitution)")
 	}
 }
@@ -135,11 +135,11 @@ func TestTokenAnchor_InvalidatedByShrink(t *testing.T) {
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "hi there"},
 	}
-	anchor.update(messages, 0, 5000)
+	anchor.update("test-model", messages, 0, 5000)
 
 	// Simulate rollup/drop compaction: fewer messages than the anchor saw.
 	shrunk := messages[:1]
-	if _, _, ok := anchor.estimate(shrunk, 0); ok {
+	if _, _, ok := anchor.estimate("test-model", shrunk, 0); ok {
 		t.Error("expected anchor to be invalidated when the message count shrinks below the anchor")
 	}
 }
@@ -147,9 +147,9 @@ func TestTokenAnchor_InvalidatedByShrink(t *testing.T) {
 func TestTokenAnchor_IgnoresNonPositiveActualTokens(t *testing.T) {
 	var anchor tokenAnchor
 	messages := []core.Message{{Role: "user", Content: "hi"}}
-	anchor.update(messages, 0, 0) // provider didn't report usage
+	anchor.update("test-model", messages, 0, 0) // provider didn't report usage
 
-	if _, _, ok := anchor.estimate(messages, 0); ok {
+	if _, _, ok := anchor.estimate("test-model", messages, 0); ok {
 		t.Error("expected update() with actualTokens<=0 to leave the anchor unset")
 	}
 }
@@ -193,7 +193,7 @@ func TestSproutProviderEstimateTokens_UsesAnchorAfterUpdate(t *testing.T) {
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "hello world"},
 	}
-	sp.tokenAnchor.update(base, 0, 42000) // simulate a real Usage.PromptTokens from a prior response
+	sp.tokenAnchor.update("test-model", base, 0, 42000) // simulate a real Usage.PromptTokens from a prior response
 
 	newMsg := core.Message{Role: "assistant", Content: "a reply"}
 	req := &core.ChatRequest{Messages: append(append([]core.Message{}, base...), newMsg)}

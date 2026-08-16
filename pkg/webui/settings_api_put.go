@@ -160,6 +160,13 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 		return
 	}
 
+	// A runtime max_context_tokens change must re-resolve the effective cap
+	// on live agents immediately — otherwise reconcileContextCap's fast path
+	// keeps serving the stale resolution until the next provider/model switch.
+	if _, ok := incoming["max_context_tokens"]; ok {
+		ws.refreshContextCapOnLiveAgents()
+	}
+
 	if _, ok := incoming["system_prompt_text"]; ok {
 		cfg := cm.GetConfig()
 		providerForPrompt := ""

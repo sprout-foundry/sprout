@@ -257,9 +257,12 @@ func isClosedErr(err error) bool {
 // socket protocol. Manager acquisition is workspace-scoped: each workspace
 // root resolves to the daemon's shared manager (sole writer per index).
 type EmbeddingManagerService struct {
-	// Acquire returns a manager for the workspace root. The daemon wires
-	// this to embedding.AcquireManager with the workspace's config.
-	Acquire func(workspaceRoot string) *embedding.EmbeddingManager
+	// Acquire returns a manager for the workspace root, or an error when
+	// the workspace is refused (e.g. the index is not enabled). A nil
+	// manager with a nil error means no manager is available at all. The
+	// daemon wires this to embedding.AcquireManager with the workspace's
+	// config.
+	Acquire func(workspaceRoot string) (*embedding.EmbeddingManager, error)
 	// Release drops a reference taken by Acquire.
 	Release func(m *embedding.EmbeddingManager)
 
@@ -271,9 +274,9 @@ type EmbeddingManagerService struct {
 
 // Meta implements EmbeddingService.
 func (s *EmbeddingManagerService) Meta(ctx context.Context) (string, int, string, error) {
-	mgr := s.acquire("")
-	if mgr == nil {
-		return "", 0, "", errors.New("embedding service: no manager available")
+	mgr, err := s.acquire("")
+	if err != nil {
+		return "", 0, "", err
 	}
 	defer s.release(mgr)
 	if err := mgr.Init(ctx); err != nil {
@@ -284,9 +287,9 @@ func (s *EmbeddingManagerService) Meta(ctx context.Context) (string, int, string
 
 // Embed implements EmbeddingService.
 func (s *EmbeddingManagerService) Embed(ctx context.Context, text string) ([]float32, error) {
-	mgr := s.acquire("")
-	if mgr == nil {
-		return nil, errors.New("embedding service: no manager available")
+	mgr, err := s.acquire("")
+	if err != nil {
+		return nil, err
 	}
 	defer s.release(mgr)
 	if err := mgr.Init(ctx); err != nil {
@@ -297,9 +300,9 @@ func (s *EmbeddingManagerService) Embed(ctx context.Context, text string) ([]flo
 
 // EmbedBatch implements EmbeddingService.
 func (s *EmbeddingManagerService) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
-	mgr := s.acquire("")
-	if mgr == nil {
-		return nil, errors.New("embedding service: no manager available")
+	mgr, err := s.acquire("")
+	if err != nil {
+		return nil, err
 	}
 	defer s.release(mgr)
 	if err := mgr.Init(ctx); err != nil {
@@ -310,9 +313,9 @@ func (s *EmbeddingManagerService) EmbedBatch(ctx context.Context, texts []string
 
 // QuerySimilar implements EmbeddingService.
 func (s *EmbeddingManagerService) QuerySimilar(ctx context.Context, workspaceRoot, text string, topK int, threshold float32) ([]embedding.QueryResult, error) {
-	mgr := s.acquire(workspaceRoot)
-	if mgr == nil {
-		return nil, errors.New("embedding service: no manager available")
+	mgr, err := s.acquire(workspaceRoot)
+	if err != nil {
+		return nil, err
 	}
 	defer s.release(mgr)
 	if topK <= 0 {
@@ -330,9 +333,9 @@ func (s *EmbeddingManagerService) BuildIndex(ctx context.Context, workspaceRoot 
 	s.buildMu.Lock()
 	defer s.buildMu.Unlock()
 
-	mgr := s.acquire(workspaceRoot)
-	if mgr == nil {
-		return nil, errors.New("embedding service: no manager available")
+	mgr, err := s.acquire(workspaceRoot)
+	if err != nil {
+		return nil, err
 	}
 	defer s.release(mgr)
 	return mgr.BuildIndex(ctx)
@@ -340,19 +343,26 @@ func (s *EmbeddingManagerService) BuildIndex(ctx context.Context, workspaceRoot 
 
 // CheckDuplicates implements EmbeddingService.
 func (s *EmbeddingManagerService) CheckDuplicates(ctx context.Context, workspaceRoot, filePath, content string) (*embedding.CheckDuplicatesResult, error) {
-	mgr := s.acquire(workspaceRoot)
-	if mgr == nil {
-		return nil, errors.New("embedding service: no manager available")
+	mgr, err := s.acquire(workspaceRoot)
+	if err != nil {
+		return nil, err
 	}
 	defer s.release(mgr)
 	return mgr.CheckDuplicates(ctx, filePath, content)
 }
 
-func (s *EmbeddingManagerService) acquire(workspaceRoot string) *embedding.EmbeddingManager {
+func (s *EmbeddingManagerService) acquire(workspaceRoot string) (*embedding.EmbeddingManager, error) {
 	if s.Acquire == nil {
-		return nil
+		return nil, errors.New("embedding service: no manager available")
 	}
-	return s.Acquire(workspaceRoot)
+	mgr, err := s.Acquire(workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+	if mgr == nil {
+		return nil, errors.New("embedding service: no manager available")
+	}
+	return mgr, nil
 }
 
 func (s *EmbeddingManagerService) release(m *embedding.EmbeddingManager) {

@@ -76,12 +76,18 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 		// Status is a directory walk; doesn't need an embedding manager.
 		return h.handleStatus(embeddingCfg, workspaceRoot, env.EmbeddingMgr)
 	case "build":
+		if !embeddingCfg.IsEnabled() || !configuration.WorkspaceEmbeddingIndexEnabled(workspaceRoot) {
+			return embeddingIndexNotEnabled(), nil
+		}
 		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
 		if ownsMgr {
 			defer embedding.ReleaseManager(mgr)
 		}
 		return h.handleBuild(ctx, mgr, !ownsMgr)
 	case "update":
+		if !embeddingCfg.IsEnabled() || !configuration.WorkspaceEmbeddingIndexEnabled(workspaceRoot) {
+			return embeddingIndexNotEnabled(), nil
+		}
 		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
 		if ownsMgr {
 			defer embedding.ReleaseManager(mgr)
@@ -92,6 +98,17 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 			Output:  fmt.Sprintf("Unknown operation '%s'. Valid operations: build, update, status", operation),
 			IsError: true,
 		}, nil
+	}
+}
+
+// embeddingIndexNotEnabled is the result build/update return when the
+// workspace has not opted into the experimental embedding index. It is not an
+// error — callers (the model) should surface the enable path instead of
+// silently activating an index behind the gate.
+func embeddingIndexNotEnabled() ToolResult {
+	return ToolResult{
+		Output:  "Embedding index is not enabled for this workspace. Enable it via the /index command (or the settings UI toggle) to use build/update.",
+		IsError: false,
 	}
 }
 

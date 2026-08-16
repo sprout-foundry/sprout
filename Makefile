@@ -253,16 +253,23 @@ build: prepare-grammars
 	GO111MODULE=on go build -tags $(BUILD_TAGS) -o sprout .
 	@echo "Build completed"
 
-# Install sprout binary and llm_server (if built) to common locations
+# Install sprout binary and llm_server (if built) to common locations.
+# Removes the destination before each cp rather than overwriting it in
+# place: macOS caches a binary's code-signature validity per (device,
+# inode), so cp'ing new content onto the same inode as a previous build can
+# leave that cache stale — every exec of the file then gets SIGKILLed with
+# "Taskgated Invalid Signature" until it's replaced at a fresh inode
+# (rm+cp, same effect as an atomic rename here since these are same-volume
+# copies into a directory only this install step writes to).
 install: build
 	@echo "Installing sprout..."
 	@mkdir -p ~/.local/bin ~/go/bin
-	cp sprout ~/.local/bin/sprout
-	cp sprout ~/go/bin/sprout 2>/dev/null || true
+	rm -f ~/.local/bin/sprout && cp sprout ~/.local/bin/sprout
+	rm -f ~/go/bin/sprout && cp sprout ~/go/bin/sprout 2>/dev/null || true
 	@# Copy llm_server alongside sprout if it exists (built via make build-llm-server)
 	@if [ -f llm_server ]; then \
-		cp llm_server ~/.local/bin/llm_server 2>/dev/null || true; \
-		cp llm_server ~/go/bin/llm_server 2>/dev/null || true; \
+		rm -f ~/.local/bin/llm_server && cp llm_server ~/.local/bin/llm_server 2>/dev/null || true; \
+		rm -f ~/go/bin/llm_server && cp llm_server ~/go/bin/llm_server 2>/dev/null || true; \
 		echo "Installed llm_server alongside sprout"; \
 	else \
 		echo "Note: llm_server not built — run 'make build-llm-server' for local LLM support"; \

@@ -4,33 +4,55 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 )
 
 // ModelStatus describes a model from the user's perspective — either a
 // downloadable catalog entry or an installed model discovered on disk.
+// Thresholds here are RAM-agnostic (the raw catalog values); classifying a
+// model as suggested/stretch/blocked for a specific machine is done
+// separately via llm.TieredCatalogForRAM, which needs actual RAM in hand.
 type ModelStatus struct {
-	Name          string `json:"name"`
-	Dir           string `json:"dir"`
-	HFRepo        string `json:"hf_repo"`
-	HFInclude     string `json:"hf_include,omitempty"`
-	MinRAM        uint64 `json:"min_ram_gb"`
-	Installed     bool   `json:"installed"`
-	Size          int64  `json:"size_bytes"`
-	IsTuned       bool   `json:"is_tuned"`
-	ParamSize     string `json:"param_size"`
-	QuantBits     string `json:"quant_bits"`
-	ServerBackend string `json:"server_backend,omitempty"`
+	Name      string `json:"name"`
+	Dir       string `json:"dir"`
+	HFRepo    string `json:"hf_repo"`
+	HFInclude string `json:"hf_include,omitempty"`
+	// MinRAM is the minimum RAM to select this model at all (with a warning
+	// if below MinRAMSuggested). 0 for the entry-level model.
+	MinRAM uint64 `json:"min_ram_gb"`
+	// MinRAMSuggested is the RAM at which this model becomes the unwarned
+	// default. Capped display-side for the top-of-line model, whose real
+	// threshold is intentionally unbounded (it never becomes an unwarned
+	// default — see catalog.go) rather than showing a nonsensical value.
+	MinRAMSuggested uint64 `json:"min_ram_suggested_gb,omitempty"`
+	Installed       bool   `json:"installed"`
+	Size            int64  `json:"size_bytes"`
+	IsTuned         bool   `json:"is_tuned"`
+	ParamSize       string `json:"param_size"`
+	QuantBits       string `json:"quant_bits"`
+	ServerBackend   string `json:"server_backend,omitempty"`
 }
 
 // ProgressCallback is called during model download with bytes downloaded
 // and total bytes (0 if unknown).
 type ProgressCallback func(downloaded, total int64)
+
+// TotalSystemRAM returns this machine's physical RAM in bytes, for callers
+// outside this package that need it for RAM-tier gate checks (e.g. the
+// /model CLI command, deciding whether to download a selection before
+// LocalProvider.SetModel's own gate would reject it).
+func TotalSystemRAM() uint64 {
+	return tensorTotalSystemRAM()
+}
 
 // ListModels returns all models: installed variants discovered on disk
 // (including sprout-tuned, different quant levels) plus downloadable
@@ -40,11 +62,33 @@ func ListModels() []ModelStatus {
 	installed := llm.ListInstalledModels(DefaultModelsDir)
 	var statuses []ModelStatus
 
+	// dirBasenameToCatalogName maps a catalog entry's default install
+	// directory (e.g. "qwen3.5-9b-4bit") back to its stable, user-facing
+	// catalog Name ("qwen3.5-9b") — the ID /model and ResolveModelID
+	// expect. An installed model discovered by directory scan otherwise
+	// only carries its raw directory basename as Name, which is fine for
+	// sprout-tuned variants (their directory names aren't catalog
+	// entries), but for a PLAIN catalog download sitting under its
+	// default directory, using the basename as Name silently orphans the
+	// catalog Name: nothing in the returned list would carry it, so
+	// ResolveModelID("qwen3.5-9b") and the /model listing's installed-status
+	// check both fail even though the model is fully downloaded.
+	dirBasenameToCatalogName := make(map[string]string, len(llm.ModelCatalog))
+	for _, m := range llm.ModelCatalog {
+		dirBasenameToCatalogName[m.Dir] = m.Name
+	}
+
 	seen := make(map[string]bool)
 
 	for _, im := range installed {
+		name := im.Name
+		if !im.IsTuned {
+			if catalogName, ok := dirBasenameToCatalogName[im.Name]; ok {
+				name = catalogName
+			}
+		}
 		statuses = append(statuses, ModelStatus{
-			Name:      im.Name,
+			Name:      name,
 			Dir:       im.Dir,
 			Installed: true,
 			Size:      im.SizeBytes,
@@ -52,28 +96,39 @@ func ListModels() []ModelStatus {
 			ParamSize: im.ParamSize,
 			QuantBits: im.QuantBits,
 		})
-		seen[im.Name] = true
+		seen[name] = true
 	}
 
 	// Add downloadable catalog entries that aren't installed.
 	for _, m := range llm.ModelCatalog {
 		dir := filepath.Join(DefaultModelsDir, m.Dir)
-		if seen[m.Dir] || seen[m.Name] {
+		if seen[m.Name] {
 			continue
 		}
 		installedOnDisk := false
 		if st, err := os.Stat(dir); err == nil && st.IsDir() {
 			installedOnDisk = hasModelWeights(dir)
 		}
+		// MinRAM reflects the "can select at all" threshold (MinRAMSelect) —
+		// this field answers "how much RAM do I need to use this model",
+		// which is what a download-decision UI needs. MinRAMSuggested is
+		// capped at MinRAM for the top-of-line model instead of dividing its
+		// real (intentionally unbounded — see catalog.go) threshold, which
+		// would otherwise display a nonsensical GB figure.
+		minRAMSuggestedGB := m.MinRAMSelect / (1024 * 1024 * 1024)
+		if m.MinRAMSuggested != math.MaxUint64 {
+			minRAMSuggestedGB = m.MinRAMSuggested / (1024 * 1024 * 1024)
+		}
 		statuses = append(statuses, ModelStatus{
-			Name:          m.Name,
-			Dir:           dir,
-			HFRepo:        m.HFRepo,
-			HFInclude:     m.HFInclude,
-			MinRAM:        m.MinRAM / (1024 * 1024 * 1024),
-			Installed:     installedOnDisk,
-			ParamSize:     llm.ExtractParamSize(m.Name),
-			ServerBackend: m.ServerBackend,
+			Name:            m.Name,
+			Dir:             dir,
+			HFRepo:          m.HFRepo,
+			HFInclude:       m.HFInclude,
+			MinRAM:          m.MinRAMSelect / (1024 * 1024 * 1024),
+			MinRAMSuggested: minRAMSuggestedGB,
+			Installed:       installedOnDisk,
+			ParamSize:       llm.ExtractParamSize(m.Name),
+			ServerBackend:   m.ServerBackend,
 		})
 		seen[m.Name] = true
 	}
@@ -99,6 +154,106 @@ func RecommendedModel(ramBytes uint64) *ModelStatus {
 		ParamSize:     llm.ExtractParamSize(picked.Name),
 		ServerBackend: picked.ServerBackend,
 	}
+}
+
+// quantScore ranks quantization preference for tuned-variant selection:
+// mlx-q5 (balanced speed/quality) > q5 > q8 > unquantized/other. Mirrors
+// llm's unexported preferTunedQuant scoring (kept local — it's a 4-line
+// switch, not worth plumbing across the package boundary).
+func quantScore(q string) int {
+	switch q {
+	case "mlx-q5":
+		return 3
+	case "q5", "-q5":
+		return 2
+	case "q8", "-q8":
+		return 1
+	default:
+		return 0
+	}
+}
+
+// ResolveModelID finds the ModelStatus for a stable model ID — either a
+// catalog tier Name (e.g. "qwen3.5-9b", preferring an installed sprout-tuned
+// variant of the same size, matching SelectModelForRAM's own preference) or
+// an installed directory's exact basename. Returns an error if unknown.
+func ResolveModelID(id string) (*ModelStatus, error) {
+	statuses := ListModels()
+
+	for _, cm := range llm.ModelCatalog {
+		if !strings.EqualFold(cm.Name, id) {
+			continue
+		}
+		targetSize := llm.ExtractParamSize(cm.Name)
+		var best *ModelStatus
+		for i := range statuses {
+			s := &statuses[i]
+			if s.Installed && s.IsTuned && targetSize != "" && s.ParamSize == targetSize {
+				if best == nil || quantScore(s.QuantBits) > quantScore(best.QuantBits) {
+					best = s
+				}
+			}
+		}
+		if best != nil {
+			return best, nil
+		}
+		break // no tuned variant — fall through to the plain catalog entry below
+	}
+
+	for i := range statuses {
+		if strings.EqualFold(statuses[i].Name, id) || strings.EqualFold(filepath.Base(statuses[i].Dir), id) {
+			return &statuses[i], nil
+		}
+	}
+	return nil, fmt.Errorf("unknown local model %q", id)
+}
+
+// TieredModelInfos builds the RAM-tier catalog matrix as api.ModelInfo
+// entries for a given RAM budget — see llm.TieredCatalogForRAM. Every tier
+// is included (so /model shows the full roadmap, not just what's pickable
+// today), but only the suggested and stretch tiers carry EligibleRoles;
+// blocked tiers get an explanatory Description and no eligible/recommended
+// roles, matching existing picker conventions for "not really pickable".
+// Actual selection is enforced separately in LocalProvider.SetModel — this
+// only informs the picker.
+func TieredModelInfos(ram uint64) []api.ModelInfo {
+	tiered := llm.TieredCatalogForRAM(ram)
+	infos := make([]api.ModelInfo, 0, len(tiered))
+	ramGB := float64(ram) / (1024 * 1024 * 1024)
+
+	for _, tm := range tiered {
+		status, _ := ResolveModelID(tm.Model.Name)
+		installed := status != nil && status.Installed
+
+		info := api.ModelInfo{ID: tm.Model.Name, Name: tm.Model.Name}
+		selectGB := float64(tm.Model.MinRAMSelect) / (1024 * 1024 * 1024)
+
+		switch tm.Status {
+		case llm.TierSuggested:
+			info.Description = fmt.Sprintf("Suggested for this machine (%.0f GB RAM)", ramGB)
+			info.EligibleRoles = []string{"primary", "subagent"}
+			info.RecommendedRoles = []string{"primary", "subagent"}
+		case llm.TierEligible:
+			info.Description = "Smaller than the suggested model for this machine — a safe, lighter-weight choice"
+			info.EligibleRoles = []string{"primary", "subagent"}
+		case llm.TierStretch:
+			if tm.Model.MinRAMSuggested == math.MaxUint64 {
+				info.Description = fmt.Sprintf("Fits, but risks running out of memory — top-of-line model, always a manual choice (this machine has %.0f GB)", ramGB)
+			} else {
+				suggestGB := float64(tm.Model.MinRAMSuggested) / (1024 * 1024 * 1024)
+				info.Description = fmt.Sprintf("Fits, but risks running out of memory — %.0f GB+ recommended, this machine has %.0f GB", suggestGB, ramGB)
+			}
+			info.EligibleRoles = []string{"primary", "subagent"}
+			info.Warnings = []string{"Risk of running out of memory on this machine"}
+		default:
+			info.Description = fmt.Sprintf("Requires %.0f GB+ RAM — this machine has %.0f GB", selectGB, ramGB)
+		}
+		if !installed {
+			info.Tags = append(info.Tags, "not downloaded")
+		}
+		infos = append(infos, info)
+	}
+	return infos
 }
 
 // EnsureModel downloads a model if it's not already installed.
@@ -146,11 +301,25 @@ func EnsureModel(ctx context.Context, status ModelStatus, progressFn ProgressCal
 		return "", fmt.Errorf("start download: %w", err)
 	}
 
-	go parseDownloadProgress(stderr, progressFn)
-	go parseDownloadProgress(stdout, progressFn)
+	// Drain stdout/stderr so the subprocess never blocks on a full pipe
+	// buffer — hf download writes nothing to either when piped (see
+	// pollDownloadProgress's doc comment), but the pipes still need a
+	// reader.
+	go io.Copy(io.Discard, stderr)
+	go io.Copy(io.Discard, stdout)
 
-	if err := cmd.Wait(); err != nil {
-		return "", fmt.Errorf("download failed: %w", err)
+	stopPoll := make(chan struct{})
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		pollDownloadProgress(localDir, stopPoll, progressFn)
+	}()
+
+	waitErr := cmd.Wait()
+	close(stopPoll)
+	<-pollDone
+	if waitErr != nil {
+		return "", fmt.Errorf("download failed: %w", waitErr)
 	}
 
 	patchTokenizerConfig(dest)
@@ -203,39 +372,48 @@ func patchTokenizerConfig(modelDir string) {
 	_ = os.WriteFile(tokPath, patched, 0o644)
 }
 
-func parseDownloadProgress(r interface{ Read([]byte) (int, error) }, fn ProgressCallback) {
-	buf := make([]byte, 4096)
+// pollDownloadProgress reports download progress by periodically measuring
+// how many bytes have landed in dest, until stop is closed.
+//
+// The obvious approach — scan the hf/huggingface-cli subprocess's stdout
+// and stderr for a percentage — doesn't work: confirmed empirically (piped
+// hf download, --format human/json/default all tried) that it writes
+// ZERO bytes to either stream when not connected to a real terminal,
+// regardless of --format. Its progress bars are tqdm-based and gated on
+// isatty(), which a Go exec.Cmd pipe never satisfies. So the total is
+// unknown up front (fn is called with total=0 — callers show bytes
+// downloaded so far rather than a percentage) and progress is inferred
+// from disk instead, which works regardless of the download tool's own
+// TTY detection.
+func pollDownloadProgress(dest string, stop <-chan struct{}, fn ProgressCallback) {
+	if fn == nil {
+		return
+	}
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 	for {
-		n, err := r.Read(buf)
-		if n > 0 && fn != nil {
-			line := string(buf[:n])
-			if pct := extractPercentage(line); pct >= 0 {
-				fn(pct, 100)
-			}
-		}
-		if err != nil {
+		select {
+		case <-stop:
+			fn(dirSizeBytes(dest), 0)
 			return
+		case <-ticker.C:
+			fn(dirSizeBytes(dest), 0)
 		}
 	}
 }
 
-func extractPercentage(s string) int64 {
-	idx := strings.Index(s, "%")
-	if idx < 0 {
-		return -1
-	}
-	start := idx
-	for start > 0 && (s[start-1] >= '0' && s[start-1] <= '9') {
-		start--
-	}
-	if start == idx {
-		return -1
-	}
-	var pct int64
-	for _, c := range s[start:idx] {
-		pct = pct*10 + int64(c-'0')
-	}
-	return pct
+func dirSizeBytes(dir string) int64 {
+	var total int64
+	_ = filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if info, statErr := d.Info(); statErr == nil {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total
 }
 
 func hasModelWeights(dir string) bool {

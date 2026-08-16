@@ -204,7 +204,33 @@ func markServerActivityForTest(t time.Time) {
 // No HTTP server is spawned — the model runs directly via MLX.
 // This is the proactive pre-load path called when the user switches to
 // sprout-local. Returns nil if the model is already loaded.
+//
+// Equivalent to EnsureServerForProviderWithCheckAndModel with no model hint
+// — auto-selects by RAM tier. Kept as a separate name since most callers
+// (the local-provider recovery hook, onboarding) have no specific model in
+// mind and auto-selection is exactly right for them.
 func EnsureServerForProviderWithCheck(ctx context.Context, providerID string) error {
+	return EnsureServerForProviderWithCheckAndModel(ctx, providerID, "")
+}
+
+// EnsureServerForProviderWithCheckAndModel is EnsureServerForProviderWithCheck,
+// but preloads the given model (a catalog Name or installed directory
+// basename — see ResolveModelID) instead of the RAM-tier auto-selected
+// one, when model is non-empty.
+//
+// This matters for callers preloading BEFORE the real agent (and its
+// config-driven model resolution) exists yet — cmd/agent_command.go's
+// createChatAgent preloads here to warm up the model while the rest of
+// startup proceeds, but without this, that preload had no way to know the
+// user's persisted model choice and always auto-selected instead. If that
+// choice differs from the RAM-tier default (e.g. the user explicitly
+// picked the larger "stretch" tier model), the auto-selected preload loads
+// the WRONG model, and the real agent creation moments later corrects it
+// with SetModel + a second full reload — silently doubling startup
+// latency with an 8+ second load nobody asked for. A bad model hint
+// (unknown ID, stale/uninstalled choice) degrades gracefully to
+// auto-selection, same as SetModel's other callers.
+func EnsureServerForProviderWithCheckAndModel(ctx context.Context, providerID, model string) error {
 	if providerID != sproutLocalProviderID {
 		return nil
 	}
@@ -216,6 +242,9 @@ func EnsureServerForProviderWithCheck(ctx context.Context, providerID string) er
 
 	// Load the model in-process via the singleton provider.
 	p := GetLocalProvider()
+	if model != "" {
+		_ = p.SetModel(model) // best-effort — falls back to auto-selection on failure
+	}
 	if err := p.CheckConnection(); err != nil {
 		return err
 	}

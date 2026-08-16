@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -26,11 +27,12 @@ import (
 
 // LocalProvider implements api.ClientInterface by calling the MLX model
 // engine directly — no HTTP, no separate process, no serialization.
-// The model is loaded once (lazy, on first request) and kept resident
-// for subsequent requests. The idle reaper (in lifecycle.go) unloads
-// weights to reclaim GPU memory after inactivity.
+// The model is loaded lazily on first request and kept resident for
+// subsequent requests. The idle reaper (in lifecycle.go) unloads weights to
+// reclaim GPU memory after inactivity; ensureLoadedLocked reloads lazily on
+// the next request rather than the process being stuck once unloaded.
 type LocalProvider struct {
-	mu sync.Mutex
+	mu sync.Mutex // guards every field below except the atomics
 
 	model    *llm.Model
 	modelDir string
@@ -38,8 +40,15 @@ type LocalProvider struct {
 	backend  string
 	debug    bool
 
-	loadOnce sync.Once
-	loadErr  error
+	// targetDir, when non-empty, is the model directory SetModel most
+	// recently validated and recorded — an explicit user/config choice that
+	// overrides RAM auto-selection. Empty means "use
+	// resolveModelForCurrentMachine's pick", cached once it's loaded (matching
+	// the old sync.Once behavior) until an idle-unload or an explicit
+	// SetModel call invalidates it.
+	targetDir string
+
+	loadErr error
 
 	// TPS tracking (fixed-point: value * 1000, stored as uint64)
 	lastTPS     atomic.Uint64
@@ -69,53 +78,76 @@ func detectBackend() string {
 	return "none"
 }
 
-func (p *LocalProvider) loadModel() {
-	p.loadOnce.Do(func() {
-		if p.backend == "none" {
-			p.loadErr = fmt.Errorf("no local LLM backend available (requires Apple Silicon with MLX)")
-			return
-		}
-
-		dir, resolvedBackend, err := resolveModelForCurrentMachine()
-		if err != nil {
-			p.loadErr = err
-			return
-		}
-
-		if err := llm.ApplyMemoryLimits(); err != nil {
-			p.loadErr = fmt.Errorf("apply memory limits: %w", err)
-			return
-		}
-
-		if localDebug() {
-			log.Printf("local: resolved model dir=%s backend=%s", dir, resolvedBackend)
-		}
-		logMLXMemory("model-load-start")
-		m, err := llm.NewModel(dir)
-		logMLXMemory("model-load-end")
-		if err != nil {
-			p.loadErr = fmt.Errorf("load model from %s: %w", dir, err)
-			return
-		}
-
-		p.model = m
-		p.modelDir = dir
-		cfg := m.Config()
-		p.modelID = fmt.Sprintf("%s-local-%d-%d", cfg.Arch, cfg.HiddenSize, cfg.NumLayers)
-	})
+// ensureLoaded returns the currently-loaded model, loading (or switching to
+// a different explicitly-selected target, or reloading after an idle
+// unload) it first if necessary. Locked for the whole operation — a load or
+// switch takes several seconds and there is exactly one GPU to serve from,
+// so concurrent callers legitimately block on each other here rather than
+// racing to load two models at once.
+func (p *LocalProvider) ensureLoaded() (*llm.Model, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.ensureLoadedLocked()
 }
 
-func (p *LocalProvider) ensureLoaded() (*llm.Model, error) {
-	if p.model != nil {
-		return p.model, nil
-	}
-	p.loadModel()
-	if p.loadErr != nil {
+// ensureLoadedLocked is ensureLoaded's body; callers must already hold p.mu.
+func (p *LocalProvider) ensureLoadedLocked() (*llm.Model, error) {
+	if p.backend == "none" {
+		p.loadErr = fmt.Errorf("no local LLM backend available (requires Apple Silicon with MLX)")
 		return nil, p.loadErr
 	}
-	if p.model == nil {
-		return nil, fmt.Errorf("model failed to load")
+
+	// Already loaded and either in auto mode (no explicit target recorded)
+	// or already serving the explicitly selected target — nothing to do.
+	// Auto mode intentionally does NOT re-resolve on every call once
+	// loaded (matches the old sync.Once behavior — RAM/installed-model
+	// state isn't expected to change mid-process); it only re-resolves
+	// after p.model is cleared (idle-reaper Close, or SetModel picking a
+	// new target).
+	if p.model != nil && (p.targetDir == "" || p.targetDir == p.modelDir) {
+		return p.model, nil
 	}
+
+	dir := p.targetDir
+	resolvedBackend := localBackendMLX
+	if dir == "" {
+		var err error
+		dir, resolvedBackend, err = resolveModelForCurrentMachine()
+		if err != nil {
+			p.loadErr = err
+			return nil, err
+		}
+	}
+
+	if p.model != nil {
+		// Switching to a different explicit target — release the resident
+		// model before loading the new one; never hold two at once.
+		_ = p.model.Close()
+		p.model = nil
+		p.modelDir = ""
+		p.modelID = ""
+	}
+
+	if err := llm.ApplyMemoryLimits(); err != nil {
+		p.loadErr = fmt.Errorf("apply memory limits: %w", err)
+		return nil, p.loadErr
+	}
+
+	if localDebug() {
+		log.Printf("local: resolved model dir=%s backend=%s", dir, resolvedBackend)
+	}
+	logMLXMemory("model-load-start")
+	m, err := llm.NewModel(dir)
+	logMLXMemory("model-load-end")
+	if err != nil {
+		p.loadErr = fmt.Errorf("load model from %s: %w", dir, err)
+		return nil, p.loadErr
+	}
+
+	p.model = m
+	p.modelDir = dir
+	p.modelID = filepath.Base(dir)
+	p.loadErr = nil
 	return p.model, nil
 }
 
@@ -344,10 +376,45 @@ func (p *LocalProvider) CheckConnection() error {
 
 func (p *LocalProvider) SetDebug(debug bool) { p.debug = debug }
 
-func (p *LocalProvider) SetModel(model string) error { return nil }
+// SetModel selects which model this provider should load, by stable ID
+// (catalog Name like "qwen3.5-9b", or an installed directory basename —
+// see ResolveModelID). Validates the pick against this machine's RAM tier
+// (llm.SelectableForRAM): a tier-blocked pick is refused unless
+// SPROUT_ALLOW_OVERWEIGHT=1 is set. Does not download or load anything
+// itself — callers that want a not-yet-installed catalog pick to actually
+// become available must call EnsureModel first (the CLI's /model command
+// does this with visible progress before calling SetModel). Takes effect
+// on the next ensureLoaded call (chat request), which reloads lazily.
+func (p *LocalProvider) SetModel(model string) error {
+	if strings.TrimSpace(model) == "" {
+		return fmt.Errorf("empty model id")
+	}
+	status, err := ResolveModelID(model)
+	if err != nil {
+		return err
+	}
+	if !status.Installed {
+		return fmt.Errorf("model %q is not installed — download it first", status.Name)
+	}
+	ram := tensorTotalSystemRAM()
+	if tier, known := llm.SelectableForRAM(status.Name, ram); known && tier == llm.TierBlocked {
+		if os.Getenv("SPROUT_ALLOW_OVERWEIGHT") != "1" {
+			return fmt.Errorf("%s needs more RAM than this machine has (%.0f GB) — set SPROUT_ALLOW_OVERWEIGHT=1 to force it anyway",
+				status.Name, float64(ram)/(1024*1024*1024))
+		}
+	}
+	p.mu.Lock()
+	p.targetDir = status.Dir
+	p.mu.Unlock()
+	return nil
+}
 
 func (p *LocalProvider) GetModel() string {
-	p.loadModel()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.model == nil {
+		_, _ = p.ensureLoadedLocked() // best-effort; matches prior behavior of ignoring load failure here
+	}
 	if p.modelID != "" {
 		return p.modelID
 	}
@@ -357,9 +424,21 @@ func (p *LocalProvider) GetModel() string {
 func (p *LocalProvider) GetProvider() string { return "sprout-local" }
 
 // isModelLoaded reports whether the model is currently in GPU memory.
-func (p *LocalProvider) isModelLoaded() bool    { return p.model != nil }
-func (p *LocalProvider) loadedModelDir() string { return p.modelDir }
-func (p *LocalProvider) loadedModelID() string  { return p.modelID }
+func (p *LocalProvider) isModelLoaded() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.model != nil
+}
+func (p *LocalProvider) loadedModelDir() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.modelDir
+}
+func (p *LocalProvider) loadedModelID() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.modelID
+}
 
 func (p *LocalProvider) GetModelContextLimit() (int, error) {
 	model, err := p.ensureLoaded()
@@ -375,8 +454,12 @@ func (p *LocalProvider) GetModelContextLimit() (int, error) {
 	return model.ContextLength(), nil
 }
 
+// ListModels returns the full RAM-tier catalog matrix for this machine —
+// every model tier is visible, but only the suggested and stretch tiers
+// carry EligibleRoles (selection is enforced separately, in SetModel; this
+// just informs the picker). See llm.TieredCatalogForRAM for the tier logic.
 func (p *LocalProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
-	return []api.ModelInfo{{ID: p.GetModel()}}, nil
+	return TieredModelInfos(tensorTotalSystemRAM()), nil
 }
 
 func (p *LocalProvider) SupportsVision() bool               { return false }
@@ -425,6 +508,8 @@ func (p *LocalProvider) Close() error {
 	if p.model != nil {
 		_ = p.model.Close()
 		p.model = nil
+		p.modelDir = ""
+		p.modelID = ""
 	}
 	return nil
 }

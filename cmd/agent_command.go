@@ -174,10 +174,36 @@ func createChatAgent() (*agent.Agent, error) {
 	// so the subsequent NewAgent() call picks up the fresh configuration.
 	maybeRunOnboarding()
 
-	// If using the local provider, pre-load the model in-process.
+	// If using the local provider, pre-load the model in-process — with
+	// the user's actual persisted/flag-selected model, not the RAM-tier
+	// default. This preload runs before the real agent (and its own
+	// config-driven model resolution below) exists, so without resolving
+	// the intended model here too, it would always auto-select — loading
+	// the wrong model whenever that differs from the persisted choice,
+	// and paying for a second full reload moments later when the real
+	// agent corrects it. A throwaway config read here is a few
+	// milliseconds; the reload it avoids is 8+ seconds of GPU work.
 	if shouldPreloadLocalModel() {
+		preloadModel := ""
+		if cfgManager, cfgErr := configuration.NewManagerSilent(); cfgErr == nil {
+			if _, resolvedModel, resolveErr := cfgManager.ResolveProviderModel(agentProvider, agentModel); resolveErr == nil {
+				preloadModel = resolvedModel
+			}
+		}
+		// This is the one place local-model loading is otherwise
+		// completely silent: it runs before the REPL/spinner
+		// infrastructure exists, so without an explicit message the
+		// terminal just sits frozen for the load's 8+ seconds with no
+		// indication anything is happening. Every other load path (a
+		// mid-session /model switch) at least runs under the "Thinking"
+		// spinner already.
+		if preloadModel != "" {
+			console.GlyphInfo.Printf("Loading local model (%s)...", preloadModel)
+		} else {
+			console.GlyphInfo.Print("Loading local model...")
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		if err := localmodel.EnsureServerForProviderWithCheck(ctx, "sprout-local"); err != nil {
+		if err := localmodel.EnsureServerForProviderWithCheckAndModel(ctx, "sprout-local", preloadModel); err != nil {
 			console.GlyphWarning.Printf("Local AI: %v", err)
 		}
 		cancel()

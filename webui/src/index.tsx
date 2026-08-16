@@ -14,12 +14,9 @@ import App from './App';
 // Plugin scripts are injected only after the async bootstrap, so these
 // globals are guaranteed to exist before any plugin executes.
 (window as unknown as Record<string, unknown>).__sproutReact = React;
-(window as unknown as Record<string, unknown>).__sproutReactDOM =
-  ReactDOMClient as unknown;
-(window as unknown as Record<string, unknown>).__sproutReactDOMClient =
-  ReactDOMClient;
-(window as unknown as Record<string, unknown>).__sproutReactJsxRuntime =
-  JSXRuntime;
+(window as unknown as Record<string, unknown>).__sproutReactDOM = ReactDOMClient as unknown;
+(window as unknown as Record<string, unknown>).__sproutReactDOMClient = ReactDOMClient;
+(window as unknown as Record<string, unknown>).__sproutReactJsxRuntime = JSXRuntime;
 
 const root = ReactDOMClient.createRoot(document.getElementById('root') as HTMLElement);
 root.render(<App />);

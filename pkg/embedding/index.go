@@ -2,6 +2,7 @@ package embedding
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -374,8 +375,18 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			}
 		}
 		if err != nil {
-			stats.Duration = time.Since(start)
-			return stats, fmt.Errorf("index: embed units: %w", err)
+			if errors.Is(err, errMemFloor) && len(newRecords) > 0 {
+				// The floor is a system-wide condition, not a per-file failure,
+				// and partial records were already checkpointed per-file. Treat
+				// it as a clean stop: keep the partial index and fall through
+				// to the normal completion path (stale cleanup, manifest save).
+				// Zero-progress floor trips stay hard errors — an empty build
+				// result would be indistinguishable from "nothing to index".
+				log.Printf("index: embedding halted at memory floor; keeping partial results")
+			} else {
+				stats.Duration = time.Since(start)
+				return stats, fmt.Errorf("index: embed units: %w", err)
+			}
 		}
 		if flushErr != nil {
 			stats.Duration = time.Since(start)
@@ -595,6 +606,7 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 	now := time.Now()
 	var records []VectorRecord
 	var embedded int
+	floorTripped := false // mid-loop floor halt: return errMemFloor with partial records
 
 	// Fail hard below the floor with zero progress: an empty build result
 	// would otherwise be indistinguishable from "nothing to index".
@@ -697,9 +709,11 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 		}
 		// Same partial-flush behavior as cancellation: native allocations are
 		// invisible to the Go heap limit, so stop a runaway build before the
-		// kernel OOM killer picks a victim.
+		// kernel OOM killer picks a victim. Unlike cancellation, this is not a
+		// clean stop — callers must be able to see the memory condition.
 		if err := checkMemFloor(); err != nil {
 			log.Printf("index: embedding halted after %d/%d units: %v", embedded, len(units), err)
+			floorTripped = true
 			break
 		}
 
@@ -738,7 +752,7 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 	// Emit in input order for per-file grouping.
 	for i, u := range units {
 		if vecByIndex[i] == nil {
-			continue // not reached before cancellation
+			continue // not reached before cancellation/floor halt
 		}
 		// File-level units have ID == file path; code units have ID == "file:name".
 		if u.ID == u.File {
@@ -750,6 +764,9 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 		}
 	}
 
+	if floorTripped {
+		return records, errMemFloor
+	}
 	return records, nil
 }
 
@@ -934,6 +951,12 @@ func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (
 		}
 
 		if err := m.UpdateFile(ctx, f); err != nil {
+			// The memory floor is system-wide: every remaining file would hit
+			// the same wall, so abort rather than emit per-file skip spam.
+			if errors.Is(err, errMemFloor) {
+				stats.Duration = time.Since(start)
+				return stats, fmt.Errorf("index: update aborted: %w", err)
+			}
 			debugLogf("index: skipping %s: %v", f, err)
 			errs = append(errs, f)
 			continue

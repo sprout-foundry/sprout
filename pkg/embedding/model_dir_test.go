@@ -29,7 +29,7 @@ func TestDefaultModelDirIgnoresWorkspaceConfigRoot(t *testing.T) {
 	if strings.HasPrefix(got, workspace) {
 		t.Errorf("model dir %q sits inside the workspace — every repo gets its own 222MB copy", got)
 	}
-	if want := filepath.Join(dataDir, "models"); got != want {
+	if want := filepath.Join(dataDir, "models", "embedding"); got != want {
 		t.Errorf("DefaultModelDir() = %q, want %q", got, want)
 	}
 }
@@ -50,6 +50,47 @@ func TestDefaultModelDirIsWorkspaceIndependent(t *testing.T) {
 
 	if first != second {
 		t.Errorf("two workspaces resolved to different model dirs:\n  %s\n  %s", first, second)
+	}
+}
+
+// TestDefaultModelDirFallsBackToFlatLegacy guards the models/ -> models/embedding
+// split: an installation that already downloaded the embedding model under
+// the old flat models/ directory must keep resolving there (no
+// re-download) until it also has content under models/embedding.
+func TestDefaultModelDirFallsBackToFlatLegacy(t *testing.T) {
+	t.Setenv("SPROUT_MODELS_DIR", "")
+	t.Setenv("SPROUT_MODEL_DIR", "")
+	dataDir := t.TempDir()
+	t.Setenv("SPROUT_DATA_DIR", dataDir)
+
+	flatModels := filepath.Join(dataDir, "models")
+	if err := os.MkdirAll(filepath.Join(flatModels, "jina-code-v2-mlx"), 0o755); err != nil {
+		t.Fatalf("seed flat legacy dir: %v", err)
+	}
+
+	if got := DefaultModelDir(); got != flatModels {
+		t.Errorf("DefaultModelDir() = %q, want flat legacy %q", got, flatModels)
+	}
+}
+
+// TestDefaultModelDirIgnoresSiblingLLMDir guards against the flat-legacy
+// check misreading pkg/localmodel's models/llm subdirectory (a sibling
+// under the same models/ root) as legacy embedding content — without
+// excluding known subdirectory names, downloading an LLM model would
+// permanently pin embedding resolution to the wrong (flat) directory.
+func TestDefaultModelDirIgnoresSiblingLLMDir(t *testing.T) {
+	t.Setenv("SPROUT_MODELS_DIR", "")
+	t.Setenv("SPROUT_MODEL_DIR", "")
+	dataDir := t.TempDir()
+	t.Setenv("SPROUT_DATA_DIR", dataDir)
+
+	if err := os.MkdirAll(filepath.Join(dataDir, "models", "llm", "some-model"), 0o755); err != nil {
+		t.Fatalf("seed sibling llm dir: %v", err)
+	}
+
+	want := filepath.Join(dataDir, "models", "embedding")
+	if got := DefaultModelDir(); got != want {
+		t.Errorf("DefaultModelDir() = %q, want %q (sibling models/llm content should not trigger flat-legacy fallback)", got, want)
 	}
 }
 

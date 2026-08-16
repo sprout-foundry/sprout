@@ -467,6 +467,10 @@ Examples:
 		// before RunAgent has a chance to set the env var.
 		if daemonMode {
 			os.Setenv("SPROUT_DAEMON", "1")
+			// SP-137 Phase 3: an auto-started daemon raises its oom_score_adj
+			// so the kernel sacrifices the background helper before any
+			// user-facing process. Explicit starts keep the default.
+			maybePreferOOMVictim(daemonMode)
 			// Defensive unset on command exit. RunAgent also defers its own
 			// unset, but this handler may return early (provider errors,
 			// session-load failures) before RunAgent runs.

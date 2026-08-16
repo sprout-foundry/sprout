@@ -1507,8 +1507,12 @@ body,
   color: var(--text-primary);
 }
 
-.local-llm-status-value.status-ok { color: var(--accent-success); }
-.local-llm-status-value.status-off { color: var(--text-tertiary); }
+.local-llm-status-value.status-ok {
+  color: var(--accent-success);
+}
+.local-llm-status-value.status-off {
+  color: var(--text-tertiary);
+}
 
 .local-llm-models {
   display: flex;

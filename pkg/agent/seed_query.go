@@ -332,13 +332,15 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		// SP-126: clamp to the effective cap (user MaxContextTokens or native window).
 		// After a model switch, effectiveContextCap is refreshed by
 		// refreshEffectiveContextCap() so this uses the current model's cap.
-		if cap := a.effectiveContextCap; cap > 0 && contextSize > cap {
+		// One snapshot so both reads see the same value.
+		cap := a.effectiveCapSnapshot()
+		if cap > 0 && contextSize > cap {
 			contextSize = cap
 		}
 		// When the provider reports no context info (contextSize == 0),
 		// fall back to the effective cap if we have one.
 		if contextSize == 0 {
-			contextSize = a.effectiveContextCap
+			contextSize = cap
 		}
 		a.state.SetMaxContextTokens(contextSize)
 

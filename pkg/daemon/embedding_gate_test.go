@@ -109,9 +109,9 @@ func TestEmbeddingSocketGate(t *testing.T) {
 	// one writer per workspace). Count acquisitions to prove dedup.
 	var acquisitions atomic.Int64
 	svc := &EmbeddingManagerService{
-		Acquire: func(string) *embedding.EmbeddingManager {
+		Acquire: func(string) (*embedding.EmbeddingManager, error) {
 			acquisitions.Add(1)
-			return mgr
+			return mgr, nil
 		},
 		Release: func(*embedding.EmbeddingManager) {},
 	}

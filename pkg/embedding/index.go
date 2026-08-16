@@ -596,6 +596,12 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 	var records []VectorRecord
 	var embedded int
 
+	// Fail hard below the floor with zero progress: an empty build result
+	// would otherwise be indistinguishable from "nothing to index".
+	if err := checkMemFloor(); err != nil {
+		return nil, err
+	}
+
 	// Sort by length to minimize padding waste in batch embedding.
 	order := make([]int, len(units))
 	textOf := make([]string, len(units))
@@ -687,6 +693,13 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoo
 		if err := ctx.Err(); err != nil {
 			// Return partial results on cancellation; completed files were already flushed.
 			log.Printf("index: embedding interrupted after %d/%d units: %v", embedded, len(units), err)
+			break
+		}
+		// Same partial-flush behavior as cancellation: native allocations are
+		// invisible to the Go heap limit, so stop a runaway build before the
+		// kernel OOM killer picks a victim.
+		if err := checkMemFloor(); err != nil {
+			log.Printf("index: embedding halted after %d/%d units: %v", embedded, len(units), err)
 			break
 		}
 

@@ -205,6 +205,7 @@ type ModelConfig struct {
 
 	// Gemma4 fields
 	GlobalHeadDim           int     // head_dim for full-attention layers (usually 2x)
+	NumGlobalKVHeads        int     // KV heads on full-attention layers when k_eq_v (gemma4 unified)
 	SlidingWindow           int     // sliding window size (e.g. 512)
 	SlidingWindowPattern    int     // every Nth layer is full attention (e.g. 5)
 	NumKVSharedLayers       int     // last N layers share KV (no k/v proj)

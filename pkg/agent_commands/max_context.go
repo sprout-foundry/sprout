@@ -94,6 +94,9 @@ func (c *MaxContextCommand) set(chatAgent *agent.Agent, n int) error {
 	}); err != nil {
 		return fmt.Errorf("updating config: %w", err)
 	}
+	// Re-resolve the live cap so this session honors the new value
+	// immediately instead of waiting for the next provider/model switch.
+	chatAgent.RefreshContextCapFromConfig()
 	console.GlyphSuccess.Printf("Max context cap set to %s (persisted to config)", fmtTokens(n))
 	return nil
 }
@@ -109,6 +112,9 @@ func (c *MaxContextCommand) clear(chatAgent *agent.Agent) error {
 	}); err != nil {
 		return fmt.Errorf("updating config: %w", err)
 	}
+	// Re-resolve the live cap so this session honors the removal
+	// immediately instead of waiting for the next provider/model switch.
+	chatAgent.RefreshContextCapFromConfig()
 	console.GlyphSuccess.Printf("Max context cap cleared — using full native context window")
 	return nil
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -52,6 +53,32 @@ func maybeEnableRemoteEmbedding(daemonMode bool) {
 	})
 }
 
+// newDaemonEmbeddingService builds the socket service with gate-consistent
+// manager acquisition. Workspace-scoped requests (query/build/duplicates)
+// must not activate an index the workspace never opted into, so Acquire
+// refuses with a distinguishable error when the workspace config is not
+// enabled — clients surface that to the caller instead of silently falling
+// back in-process. Pure inference ops (meta/embed/embed_batch) carry no
+// workspace root and are the daemon's model-hosting role (SP-136 P3), so
+// they keep the previous behavior.
+func newDaemonEmbeddingService() *daemon.EmbeddingManagerService {
+	return &daemon.EmbeddingManagerService{
+		Acquire: func(workspaceRoot string) (*embedding.EmbeddingManager, error) {
+			if workspaceRoot != "" && !configuration.WorkspaceEmbeddingIndexEnabled(workspaceRoot) {
+				// SPROUT_EXPERIMENTAL_EMBEDDINGS=1 mirrors RestoreEmbeddingIndex's
+				// default-on escape hatch for daemon-hosted workspaces; the
+				// embedding_index tool stays strict because it is an explicit
+				// user operation requiring the workspace's own opt-in.
+				if os.Getenv("SPROUT_EXPERIMENTAL_EMBEDDINGS") != "1" {
+					return nil, errors.New("embedding index not enabled for this workspace")
+				}
+			}
+			return embedding.AcquireManager(&configuration.EmbeddingIndexConfig{}, workspaceRoot), nil
+		},
+		Release: embedding.ReleaseManager,
+	}
+}
+
 // startDaemonEmbeddingServer starts the daemon-side embedding socket server
 // (SP-136 P3). Returns the server (or nil if not in daemon mode / failed).
 // The daemon owns the sole model copy and sole index writer per workspace.
@@ -61,12 +88,7 @@ func startDaemonEmbeddingServer(ctx context.Context, daemonMode bool) *daemon.Em
 	}
 
 	socketPath := EmbeddingSocketPath()
-	svc := &daemon.EmbeddingManagerService{
-		Acquire: func(workspaceRoot string) *embedding.EmbeddingManager {
-			return embedding.AcquireManager(&configuration.EmbeddingIndexConfig{}, workspaceRoot)
-		},
-		Release: embedding.ReleaseManager,
-	}
+	svc := newDaemonEmbeddingService()
 	srv := &daemon.EmbeddingServer{SocketPath: socketPath, Service: svc}
 	if err := srv.Start(ctx); err != nil {
 		console.GlyphWarning.Fprintf(os.Stderr,

@@ -77,6 +77,57 @@ func TestStorePrefixSlot_EvictsLeastRecentlyUsed(t *testing.T) {
 	}
 }
 
+// TestStoreIndexFor_ProtectedSlotNotOverwritten guards the fix for a bug
+// where Generate would overwrite a WarmSystemPrefix-created slot in place
+// the moment any conversation's first turn matched it, replacing the short
+// reusable system prefix with that one turn's full prompt — silently
+// destroying the warm cache for every other conversation and even this same
+// one's next turn, forcing a full system-prompt re-prefill (tens of
+// seconds) on every single turn instead of once per session.
+func TestStoreIndexFor_ProtectedSlotNotOverwritten(t *testing.T) {
+	m := &Model{
+		prefixSeq: 5,
+		prefixSlots: []*prefixSlot{
+			{tokens: []int{1, 2, 3}, protected: true, lastUsed: 1},
+		},
+	}
+
+	got := m.storeIndexFor(0)
+
+	if got != -1 {
+		t.Fatalf("expected -1 (append new slot) for a protected match, got %d", got)
+	}
+	if m.prefixSlots[0].lastUsed <= 1 {
+		t.Fatalf("expected protected slot's lastUsed to be bumped so LRU doesn't treat it as idle, got %d", m.prefixSlots[0].lastUsed)
+	}
+}
+
+// TestStoreIndexFor_UnprotectedSlotUpdatedInPlace guards the normal case:
+// a conversation's own prior-turn slot (not a warm base) should still be
+// updated in place, as intended by storePrefixSlot's matchedIdx design.
+func TestStoreIndexFor_UnprotectedSlotUpdatedInPlace(t *testing.T) {
+	m := &Model{
+		prefixSlots: []*prefixSlot{
+			{tokens: []int{1, 2, 3}, protected: false},
+		},
+	}
+
+	got := m.storeIndexFor(0)
+
+	if got != 0 {
+		t.Fatalf("expected 0 (update in place) for a non-protected match, got %d", got)
+	}
+}
+
+// TestStoreIndexFor_NoMatch guards the no-match (-1) passthrough case.
+func TestStoreIndexFor_NoMatch(t *testing.T) {
+	m := &Model{prefixSlots: []*prefixSlot{{tokens: []int{1, 2, 3}}}}
+
+	if got := m.storeIndexFor(-1); got != -1 {
+		t.Fatalf("expected -1 passthrough for no match, got %d", got)
+	}
+}
+
 func dumpSlots(slots []*prefixSlot) [][]int {
 	out := make([][]int, len(slots))
 	for i, s := range slots {

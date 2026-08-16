@@ -107,6 +107,16 @@ type prefixSlot struct {
 	cache    *KVCache
 	diskPath string
 	lastUsed uint64
+
+	// protected marks a slot created by WarmSystemPrefix: a base shared by
+	// many otherwise-unrelated conversations (main agent + subagents), not
+	// any one conversation's own growing history. Generate must never
+	// overwrite a protected slot in place when it matches one as a prefix —
+	// doing so would replace the short, reusable system prefix with that
+	// one caller's full prompt, so every other/future conversation (and
+	// this same one's next turn) loses the warm cache and pays a full
+	// re-prefill again. See warmSystemPrefix in local_provider.go.
+	protected bool
 }
 
 // minPrefixReuse is the smallest shared token prefix worth reusing.
@@ -559,7 +569,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 	if len(tokenIDs) <= m.maxPrefixLenTokens() {
 		snap := cache.SnapshotPrefix()
 		logGenMem("after-SnapshotPrefix")
-		newIdx := m.storePrefixSlot(slotIdx, append([]int(nil), tokenIDs...), snap)
+		newIdx := m.storePrefixSlot(m.storeIndexFor(slotIdx), append([]int(nil), tokenIDs...), snap)
 		logGenMem("after-storePrefixSlot")
 		// Only the conversation that just generated needs to stay
 		// GPU-resident; every other remembered conversation gets spilled to
@@ -878,6 +888,7 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 		pos := len(tokenIDs)
 		allTokens := append(append([]int{}, tokenIDs...), nextToken)
 
+	promptLookupOuter:
 		for i := 1; i < genCfg.MaxTokens; {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -947,7 +958,18 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 				pos += len(verifyIDs)
 			}
 
-			// Emit accepted tokens + the model's next prediction.
+			// Emit accepted tokens + the model's next prediction. A stop
+			// token can land mid-batch: prompt-lookup drafts n-gram matches
+			// from the existing conversation history, which in an agentic
+			// tool-calling session is full of legitimate
+			// <|im_end|><|im_start|>user turn-boundary patterns from
+			// earlier turns — exactly what a 3-gram match right after a
+			// tool result is likely to draft. shouldFilterToken already
+			// hides the stop token itself from onToken, but nothing
+			// previously stopped the loop from continuing to emit whatever
+			// candidates or newNext followed it, decoding past EOS into a
+			// hallucinated next turn (same bug class as the mtpOuter fix
+			// for MTP's batch loop — see ForwardDecodeMTP's caller).
 			for j := 0; j < accepted && i < genCfg.MaxTokens; j++ {
 				generated = append(generated, candidates[j])
 				allTokens = append(allTokens, candidates[j])
@@ -955,6 +977,9 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 					onToken(candidates[j])
 				}
 				i++
+				if m.isStopToken(candidates[j]) {
+					break promptLookupOuter
+				}
 			}
 			nextToken = newNext
 			allTokens = append(allTokens, nextToken)
@@ -1109,7 +1134,9 @@ func (m *Model) WarmSystemPrefix(prompt string) error {
 
 	for _, slot := range m.prefixSlots {
 		if len(slot.tokens) == len(tokenIDs) && longestCommonPrefix(tokenIDs, slot.tokens) == len(tokenIDs) {
-			return nil // already warmed
+			m.prefixSeq++
+			slot.lastUsed = m.prefixSeq // keep the warm base fresh for LRU purposes
+			return nil                  // already warmed
 		}
 	}
 
@@ -1132,6 +1159,7 @@ func (m *Model) WarmSystemPrefix(prompt string) error {
 		}
 
 		newIdx := m.storePrefixSlot(-1, tokenIDs, cache.SnapshotPrefix())
+		m.prefixSlots[newIdx].protected = true
 		m.spillIdleSlots(newIdx)
 	})
 	return warmErr
@@ -1229,6 +1257,24 @@ func (m *Model) bestPrefixSlot(tokenIDs []int) (shared int, idx int) {
 		}
 	}
 	return shared, idx
+}
+
+// storeIndexFor decides which index to pass to storePrefixSlot for a
+// just-completed generation, given the slot bestPrefixSlot matched (or -1).
+// A protected slot (see prefixSlot.protected) is a warm base shared by many
+// otherwise-unrelated conversations, not this one's own prior-turn slot —
+// overwriting it in place would destroy the reusable short prefix and force
+// every future caller to pay a full re-prefill. So a match against a
+// protected slot is treated like no match at all (storePrefixSlot appends a
+// new slot instead), after bumping the base's lastUsed so LRU eviction
+// doesn't mistake it for idle just because it was read from, not written to.
+func (m *Model) storeIndexFor(slotIdx int) int {
+	if slotIdx < 0 || !m.prefixSlots[slotIdx].protected {
+		return slotIdx
+	}
+	m.prefixSeq++
+	m.prefixSlots[slotIdx].lastUsed = m.prefixSeq
+	return -1
 }
 
 // storePrefixSlot records a freshly prefilled prompt's KV snapshot and

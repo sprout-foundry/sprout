@@ -343,7 +343,17 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 	case api.OllamaClientType, api.OllamaLocalClientType:
 		return api.NewOllamaLocalClient(model)
 	case api.SproutLocalClientType:
-		return localmodel.GetLocalProvider(), nil
+		p := localmodel.GetLocalProvider()
+		if model != "" {
+			// Best-effort: a persisted choice that's since gone stale (model
+			// deleted from disk, machine's RAM no longer fits it) shouldn't
+			// block agent creation — just fall back to RAM auto-selection,
+			// same as if no choice had ever been recorded.
+			if err := p.SetModel(model); err != nil && os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+				log.Printf("factory: persisted local model %q unavailable (%v), falling back to auto-selection", model, err)
+			}
+		}
+		return p, nil
 	case api.TestClientType:
 		testClient := &TestClient{model: model}
 		if model != "" {

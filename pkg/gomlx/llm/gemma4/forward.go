@@ -349,17 +349,30 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 			return nil, nil, err
 		}
 		defer k2d.Free()
-		v2d, err := lw.vProj.Forward(h, g.backend, s)
-		if err != nil {
-			return nil, nil, err
+
+		// k_eq_v: full-attention layers on gemma4-unified share V = K at the
+		// projection output; the reference then applies k_norm+rope to K and
+		// v_norm (no scale) to V separately.
+		kvHeads := numKVHeads
+		if cfg.AttentionKEqV && isFull && cfg.NumGlobalKVHeads > 0 {
+			kvHeads = cfg.NumGlobalKVHeads
+		}
+		var v2d tensor.Array
+		if cfg.AttentionKEqV && isFull {
+			v2d = g.backend.RetainArray(k2d)
+		} else {
+			v2d, err = lw.vProj.Forward(h, g.backend, s)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		defer v2d.Free()
 
-		kR, err := g.backend.Reshape(k2d, []int{1, seqLen, numKVHeads, headDim}, s)
+		kR, err := g.backend.Reshape(k2d, []int{1, seqLen, kvHeads, headDim}, s)
 		if err != nil {
 			return nil, nil, err
 		}
-		vR, err := g.backend.Reshape(v2d, []int{1, seqLen, numKVHeads, headDim}, s)
+		vR, err := g.backend.Reshape(v2d, []int{1, seqLen, kvHeads, headDim}, s)
 		if err != nil {
 			return nil, nil, err
 		}

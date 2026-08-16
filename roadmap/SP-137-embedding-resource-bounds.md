@@ -65,13 +65,15 @@ Three gaps:
   injectable): reads `MemAvailable` from `/proc/meminfo` (linux) or
   `vm.stats.vm.v_free_count` equivalent (darwin); other platforms report
   "unknown" and the check is skipped.
-- `IndexManager.BuildIndex` checks the floor at batch boundaries in the
-  embedding loop (and once before the loop starts). Below the floor the
-  build stops cleanly: partial records are flushed (same path as
-  cancellation), and the error names the condition so callers can surface
-  it. Default floor: conservative absolute value (e.g. 1 GiB) chosen so
-  that hitting it on a healthy host indicates a runaway build, not normal
-  variance.
+- The shared embedding loop — used by `BuildIndex`, `UpdateFile`, and
+  `UpdateFromGitDiff` — checks the floor at batch boundaries (and once
+  before the loop starts). Below the floor the loop stops and returns the
+  floor error alongside any partial records. `BuildIndex` treats the halt
+  as a clean stop and keeps the partial results already checkpointed;
+  `UpdateFile` / `UpdateFromGitDiff` abort with the floor error so callers
+  surface the condition. Default floor: conservative absolute value (e.g.
+  1 GiB) chosen so that hitting it on a healthy host indicates a runaway
+  build, not normal variance.
 - The floor is not configurable in v1; revisit if it misfires.
 
 ### Phase 3 — Daemon OOM sacrifice

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -128,5 +131,110 @@ func TestCheckMemFloor(t *testing.T) {
 	memAvailableFn = func() (uint64, bool) { return memFloorBytes - 1, true }
 	if err := checkMemFloor(); !errors.Is(err, errMemFloor) {
 		t.Errorf("memory below the floor should fail with errMemFloor, got %v", err)
+	}
+}
+
+// A system-wide memory condition must abort the whole git-diff update, not
+// just skip the current file: every remaining file would hit the same floor,
+// so the loop should not keep calling UpdateFile (or report N per-file
+// failures) pointlessly.
+func TestUpdateFromGitDiffAbortsBelowMemoryFloor(t *testing.T) {
+	workspace := t.TempDir()
+	runGitTest(t, workspace, "init")
+	runGitTest(t, workspace, "config", "user.email", "test@test.com")
+	runGitTest(t, workspace, "config", "user.name", "Test")
+
+	writeFile(t, filepath.Join(workspace, "f1.go"), "package p\n\nfunc F1() int { return 1 }\n")
+	writeFile(t, filepath.Join(workspace, "f2.go"), "package p\n\nfunc F2() int { return 2 }\n")
+	runGitTest(t, workspace, "add", "f1.go", "f2.go")
+
+	// git reports paths relative to the repo root, and the agent process runs
+	// with the workspace as CWD — mirror that so UpdateFile can resolve them.
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workspace); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	orig := memAvailableFn
+	t.Cleanup(func() { memAvailableFn = orig })
+	memAvailableFn = func() (uint64, bool) { return memFloorBytes - 1, true }
+
+	idx := NewIndexManager(newMockProvider(8), newCountingStore(), IndexOptions{BatchSize: 2, MaxBodyLen: 2000})
+
+	stats, err := idx.UpdateFromGitDiff(context.Background(), workspace)
+	if !errors.Is(err, errMemFloor) {
+		t.Fatalf("error = %v, want errMemFloor", err)
+	}
+	if strings.Contains(err.Error(), "failed to update") {
+		t.Errorf("error %q looks like per-file skip spam, want a single abort error", err)
+	}
+	if stats.FilesProcessed != 0 {
+		t.Errorf("FilesProcessed = %d, want 0 (loop must abort before processing remaining files)", stats.FilesProcessed)
+	}
+}
+
+// runGitTest runs git in dir, failing the test on any error. Used to set up
+// the hermetic temp repo for git-diff tests.
+func runGitTest(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s failed in %s: %v\noutput: %s", strings.Join(args, " "), dir, err, string(out))
+	}
+}
+
+// A floor trip mid-file must still escape to UpdateFromGitDiff: the sentinel
+// must not be swallowed by embedUnits' partial-results path. If it were, the
+// abort would fire one file late (the next file's pre-check) or — when the
+// trip lands on the last file — the update would return success silently.
+func TestUpdateFromGitDiffAbortsMidFileBelowMemoryFloor(t *testing.T) {
+	workspace := t.TempDir()
+	runGitTest(t, workspace, "init")
+	runGitTest(t, workspace, "config", "user.email", "test@test.com")
+	runGitTest(t, workspace, "config", "user.name", "Test")
+
+	// Three functions per file => three units, so at BatchSize 2 each file
+	// needs two batches (2 + 1). The first file's second batch trips the
+	// floor mid-loop, not the pre-check.
+	writeFile(t, filepath.Join(workspace, "f1.go"),
+		"package p\n\nfunc F1() int { return 1 }\n\nfunc F2() int { return 2 }\n\nfunc F3() int { return 3 }\n")
+	writeFile(t, filepath.Join(workspace, "f2.go"),
+		"package p\n\nfunc G1() int { return 1 }\n\nfunc G2() int { return 2 }\n\nfunc G3() int { return 3 }\n")
+	runGitTest(t, workspace, "add", "f1.go", "f2.go")
+
+	// git reports paths relative to the repo root, and the agent process runs
+	// with the workspace as CWD — mirror that so UpdateFile can resolve them.
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workspace); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	orig := memAvailableFn
+	t.Cleanup(func() { memAvailableFn = orig })
+	memAvailableFn = belowFloorAt(2) // pre-check + first batch pass, second batch trips
+
+	idx := NewIndexManager(newMockProvider(8), newCountingStore(), IndexOptions{BatchSize: 2, MaxBodyLen: 2000})
+
+	stats, err := idx.UpdateFromGitDiff(context.Background(), workspace)
+	if !errors.Is(err, errMemFloor) {
+		t.Fatalf("error = %v, want errMemFloor (trip was mid-file, not the pre-check)", err)
+	}
+	if strings.Contains(err.Error(), "failed to update") {
+		t.Errorf("error %q looks like per-file skip spam, want a single abort error", err)
+	}
+	// Aborting mid-first-file means the first file must not count as
+	// processed — with the sentinel swallowed it would (and the abort would
+	// land one file late at the second file's pre-check instead).
+	if stats.FilesProcessed != 0 {
+		t.Errorf("FilesProcessed = %d, want 0 (loop must abort mid-first-file, not one file late)", stats.FilesProcessed)
 	}
 }

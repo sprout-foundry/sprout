@@ -92,6 +92,45 @@ func (ws *ReactWebServer) applySystemPromptToLiveAgents(systemPrompt string) {
 	}
 }
 
+// refreshContextCapOnLiveAgents re-resolves the effective context cap from
+// config on every live agent after a runtime MaxContextTokens change, so the
+// running session honors the new cap without waiting for a model switch.
+func (ws *ReactWebServer) refreshContextCapOnLiveAgents() {
+	ws.mutex.RLock()
+	agents := make([]*agentpkg.Agent, 0, len(ws.clientContexts))
+	seen := make(map[*agentpkg.Agent]struct{})
+	for _, ctx := range ws.clientContexts {
+		if ctx == nil {
+			continue
+		}
+		if ctx.Agent != nil {
+			if _, exists := seen[ctx.Agent]; !exists {
+				agents = append(agents, ctx.Agent)
+				seen[ctx.Agent] = struct{}{}
+			}
+		}
+		for _, cs := range ctx.ChatSessions {
+			if cs == nil {
+				continue
+			}
+			cs.mu.RLock()
+			agentInst := cs.Agent
+			cs.mu.RUnlock()
+			if agentInst != nil {
+				if _, exists := seen[agentInst]; !exists {
+					agents = append(agents, agentInst)
+					seen[agentInst] = struct{}{}
+				}
+			}
+		}
+	}
+	ws.mutex.RUnlock()
+
+	for _, agentInst := range agents {
+		agentInst.RefreshContextCapFromConfig()
+	}
+}
+
 // expandNestedKeys recursively expands nested maps in a flat dot-path map.
 // e.g. {"a": {"b": 1}} becomes {"a.b": 1, "a": {"b": 1}}
 // The original keys are preserved alongside the expanded ones.

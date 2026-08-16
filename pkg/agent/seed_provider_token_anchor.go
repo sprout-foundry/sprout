@@ -21,12 +21,13 @@ import (
 
 // tokenAnchor caches the last real prompt-token count reported by the
 // provider, keyed to a fingerprint of the exact message prefix that produced
-// it. It is safe for concurrent use.
+// it and the model that measured it. It is safe for concurrent use.
 type tokenAnchor struct {
 	mu           sync.RWMutex
 	messageCount int
 	fingerprint  uint64
 	toolCount    int
+	model        string
 	actualTokens int
 }
 
@@ -60,9 +61,11 @@ func fingerprintMessages(messages []core.Message) uint64 {
 
 // update records the actual prompt-token count for the exact messages/tools
 // that produced it (a real API response), so a later estimate() call can
-// anchor to it. Ignores non-positive counts (providers that don't report
-// usage) so the anchor never gets poisoned by a zero.
-func (a *tokenAnchor) update(messages []core.Message, toolCount int, actualTokens int) {
+// anchor to it. The anchor is bound to the measuring model: a mid-run model
+// switch invalidates it because tokenizer output differs between models.
+// Ignores non-positive counts (providers that don't report usage) so the
+// anchor never gets poisoned by a zero.
+func (a *tokenAnchor) update(model string, messages []core.Message, toolCount int, actualTokens int) {
 	if actualTokens <= 0 {
 		return
 	}
@@ -71,27 +74,31 @@ func (a *tokenAnchor) update(messages []core.Message, toolCount int, actualToken
 	a.messageCount = len(messages)
 	a.fingerprint = fp
 	a.toolCount = toolCount
+	a.model = model
 	a.actualTokens = actualTokens
 	a.mu.Unlock()
 }
 
 // estimate returns an anchored token estimate for messages/tools when the
 // cached anchor's message prefix still matches the start of messages, or
-// false when there's no usable anchor — first call, tool list changed, or
-// the prefix was edited by compaction/substitution/masking since the anchor
-// was recorded. Callers must fall back to a full heuristic estimate in that
-// case.
+// false when there's no usable anchor — first call, model changed, tool list
+// changed, or the prefix was edited by compaction/substitution/masking since
+// the anchor was recorded. Callers must fall back to a full heuristic
+// estimate in that case.
 //
 // Returns (totalTokens, heuristicTokens, ok). When ok is true, totalTokens
 // is the full estimate and heuristicTokens is the portion that went through
 // the heuristic (subject to EstimationErrorPercent). The anchored portion
 // (totalTokens - heuristicTokens) is a real measurement.
-func (a *tokenAnchor) estimate(messages []core.Message, toolCount int) (totalTokens, heuristicTokens int, ok bool) {
+func (a *tokenAnchor) estimate(model string, messages []core.Message, toolCount int) (totalTokens, heuristicTokens int, ok bool) {
 	a.mu.RLock()
-	messageCount, fingerprint, anchoredToolCount, actualTokens := a.messageCount, a.fingerprint, a.toolCount, a.actualTokens
+	messageCount, fingerprint, anchoredToolCount, anchoredModel, actualTokens := a.messageCount, a.fingerprint, a.toolCount, a.model, a.actualTokens
 	a.mu.RUnlock()
 
 	if actualTokens <= 0 || messageCount == 0 {
+		return 0, 0, false
+	}
+	if model != anchoredModel {
 		return 0, 0, false
 	}
 	if toolCount != anchoredToolCount {

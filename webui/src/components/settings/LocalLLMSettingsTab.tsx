@@ -51,7 +51,7 @@ export function LocalLLMSettingsTab(): ReactElement {
       const poll = setInterval(async () => {
         const s = await ApiService.getInstance().getLocalLLMStatus();
         setStatus(s);
-        if (s.models.some((m: typeof s.models[number]) => m.id === modelId && m.present)) {
+        if (s.models.some((m: (typeof s.models)[number]) => m.id === modelId && m.present)) {
           setDownloading(null);
           setMessage(`Downloaded ${modelId}`);
           clearInterval(poll);
@@ -78,7 +78,8 @@ export function LocalLLMSettingsTab(): ReactElement {
       <div className="settings-section">
         <h3 className="settings-section-title">Local LLM</h3>
         <p className="settings-description">
-          Local LLM requires Apple Silicon (M-series Mac). Your platform ({status?.platform || 'unknown'}) is not supported.
+          Local LLM requires Apple Silicon (M-series Mac). Your platform ({status?.platform || 'unknown'}) is not
+          supported.
         </p>
       </div>
     );
@@ -102,7 +103,9 @@ export function LocalLLMSettingsTab(): ReactElement {
           <span className="local-llm-status-label">Server</span>
           <span className={`local-llm-status-value ${status.running ? 'status-ok' : 'status-off'}`}>
             {status.running ? (
-              <><CheckCircle size={12} /> Running</>
+              <>
+                <CheckCircle size={12} /> Running
+              </>
             ) : (
               'Stopped'
             )}
@@ -117,12 +120,7 @@ export function LocalLLMSettingsTab(): ReactElement {
       </div>
 
       {!status.running && status.model_present && (
-        <button
-          type="button"
-          className="settings-action-btn"
-          onClick={handleStart}
-          disabled={starting}
-        >
+        <button type="button" className="settings-action-btn" onClick={handleStart} disabled={starting}>
           {starting ? <Loader2 size={14} className="spin" /> : null}
           {starting ? 'Starting...' : 'Start Local Server'}
         </button>
@@ -130,13 +128,15 @@ export function LocalLLMSettingsTab(): ReactElement {
 
       <h4 className="settings-subsection-title">Models</h4>
       <div className="local-llm-models">
-        {status.models.map((model: typeof status.models[number]) => (
+        {status.models.map((model: (typeof status.models)[number]) => (
           <div key={model.id} className="local-llm-model-card">
             <div className="local-llm-model-info">
               <div className="local-llm-model-name">{model.name}</div>
               <div className="local-llm-model-meta">
                 {model.size_hint}
-                {model.id === status.recommended_model && <span className="local-llm-recommended-tag">Recommended</span>}
+                {model.id === status.recommended_model && (
+                  <span className="local-llm-recommended-tag">Recommended</span>
+                )}
               </div>
             </div>
             <div className="local-llm-model-actions">
@@ -152,9 +152,13 @@ export function LocalLLMSettingsTab(): ReactElement {
                   disabled={downloading !== null}
                 >
                   {downloading === model.id ? (
-                    <><Loader2 size={14} className="spin" /> Downloading...</>
+                    <>
+                      <Loader2 size={14} className="spin" /> Downloading...
+                    </>
                   ) : (
-                    <><Download size={14} /> Download</>
+                    <>
+                      <Download size={14} /> Download
+                    </>
                   )}
                 </button>
               )}
@@ -166,8 +170,7 @@ export function LocalLLMSettingsTab(): ReactElement {
       {message && <div className="settings-message">{message}</div>}
 
       <div className="settings-info-note">
-        Models are stored in <code>{status.model_dir}</code>.
-        Quantized models use ~2–6 GB of disk space.
+        Models are stored in <code>{status.model_dir}</code>. Quantized models use ~2–6 GB of disk space.
       </div>
     </div>
   );

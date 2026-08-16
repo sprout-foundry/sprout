@@ -118,11 +118,17 @@ class ApiService {
     return miscApi.startLocalLLM(clientFetch);
   }
 
-  async getLocalLLMModels(): Promise<{ models: import('./types').LocalLLMModel[]; recommended: string; model_dir: string }> {
+  async getLocalLLMModels(): Promise<{
+    models: import('./types').LocalLLMModel[];
+    recommended: string;
+    model_dir: string;
+  }> {
     return miscApi.getLocalLLMModels(clientFetch);
   }
 
-  async downloadLocalLLMModel(model?: string): Promise<{ status: string; model: string; pid: number; message: string }> {
+  async downloadLocalLLMModel(
+    model?: string,
+  ): Promise<{ status: string; model: string; pid: number; message: string }> {
     return miscApi.downloadLocalLLMModel(clientFetch, model);
   }
 

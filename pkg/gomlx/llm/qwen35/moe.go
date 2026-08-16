@@ -129,22 +129,30 @@ func (m *sparseMoeBlock) forward(x tensor.Array, q *Qwen35) (tensor.Array, error
 	}
 	defer gates.Free()
 
-	gates, err = b.SoftmaxAxis(gates, -1, s)
+	if ps, ok := b.(interface {
+		SoftmaxAxisPrecise(tensor.Array, int, tensor.Stream) (tensor.Array, error)
+	}); ok {
+		gates, err = ps.SoftmaxAxisPrecise(gates, -1, s)
+	} else {
+		gates, err = b.SoftmaxAxis(gates, -1, s)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("moe softmax: %w", err)
 	}
 	defer gates.Free()
 
 	// --- Top-k expert selection ---
-	// argpartition with kth=-k puts the top-k elements at the end
+	// argpartition with kth=-k puts the top-k elements at the end of the
+	// axis (verified against MLX: argpartition(-3) on a 10-expert row
+	// returns the top-3 in the last 3 slots). Slice the LAST k indices.
 	partIdx, err := b.ArgPartitionAxis(gates, -k, -1, s)
 	if err != nil {
 		return nil, fmt.Errorf("moe argpartition: %w", err)
 	}
 	defer partIdx.Free()
 
-	// Slice last k indices: [..., -k:]
-	inds, err := b.Slice(partIdx, []int{0, 0}, []int{BS, k}, []int{1, 1}, s)
+	numExperts := gates.Shape()[1]
+	inds, err := b.Slice(partIdx, []int{0, numExperts - k}, []int{BS, numExperts}, []int{1, 1}, s)
 	if err != nil {
 		return nil, fmt.Errorf("moe slice indices: %w", err)
 	}
@@ -157,20 +165,22 @@ func (m *sparseMoeBlock) forward(x tensor.Array, q *Qwen35) (tensor.Array, error
 	}
 	defer scores.Free()
 
-	// Normalize if needed
-	if m.normTopkProb {
-		scoreSum, err := b.Sum(scores, []int{-1}, true, s)
-		if err != nil {
-			return nil, fmt.Errorf("moe score sum: %w", err)
-		}
-		defer scoreSum.Free()
-		scores, err = b.Divide(scores, scoreSum, s)
-		if err != nil {
-			return nil, fmt.Errorf("moe score norm: %w", err)
-		}
-		scores.Free()
-		scores = scores // rebind — Divide returns new
+	// Normalize: Qwen3-MoE always normalizes the top-k router scores
+	// (softmax top-k weights sum to < 1; the reference divides by their
+	// sum so the routed branch keeps the shared branch's scale). mlx-lm
+	// qwen3_moe.py does this unconditionally — norm_topk_prob in config
+	// is a Gemma-style flag this family does not set.
+	scoreSum, err := b.Sum(scores, []int{-1}, true, s)
+	if err != nil {
+		return nil, fmt.Errorf("moe score sum: %w", err)
 	}
+	defer scoreSum.Free()
+	normalized, err := b.Divide(scores, scoreSum, s)
+	if err != nil {
+		return nil, fmt.Errorf("moe score norm: %w", err)
+	}
+	scores.Free()
+	scores = normalized
 
 	// --- Shared expert (always runs) ---
 	sharedGate, err := m.sharedGateProj.Forward(xFlat, b, s)
@@ -211,21 +221,25 @@ func (m *sparseMoeBlock) forward(x tensor.Array, q *Qwen35) (tensor.Array, error
 	}
 
 	// --- Routed experts via gather_qmm ---
-	// x needs shape [BS, 1, H] for gather_qmm (adds a seq dimension)
-	x3d, err := b.Reshape(xFlat, []int{BS, 1, lastDim}, s)
+	// x must be [BS, 1, 1, H]: the lhs batch dims [BS, 1] broadcast against
+	// the rhs_indices [BS, k] to produce per-token-per-expert outputs
+	// [BS, k, 1, ...] (mlx-lm SwitchGLU does mx.expand_dims(x, (-2, -3))).
+	// A 3D [BS, 1, H] lhs has batch dims [BS] and fails to broadcast with
+	// [BS, k].
+	x4d, err := b.Reshape(xFlat, []int{BS, 1, 1, lastDim}, s)
 	if err != nil {
-		return nil, fmt.Errorf("moe reshape x3d: %w", err)
+		return nil, fmt.Errorf("moe reshape x4d: %w", err)
 	}
-	defer x3d.Free()
+	defer x4d.Free()
 
 	// inds is [BS, k] — these are the expert indices per token
-	gateOut, err := b.GatherQuantizedMatMul(x3d, m.switchGateProj.QW(), m.switchGateProj.QScales(), m.switchGateProj.QBiases(), nil, inds, true, m.switchGateProj.QGroupSize(), m.switchGateProj.QBits(), m.switchGateProj.QMode(), false, s)
+	gateOut, err := b.GatherQuantizedMatMul(x4d, m.switchGateProj.QW(), m.switchGateProj.QScales(), m.switchGateProj.QBiases(), nil, inds, true, m.switchGateProj.QGroupSize(), m.switchGateProj.QBits(), m.switchGateProj.QMode(), false, s)
 	if err != nil {
 		return nil, fmt.Errorf("moe gather gate_proj: %w", err)
 	}
 	defer gateOut.Free()
 
-	upOut, err := b.GatherQuantizedMatMul(x3d, m.switchUpProj.QW(), m.switchUpProj.QScales(), m.switchUpProj.QBiases(), nil, inds, true, m.switchUpProj.QGroupSize(), m.switchUpProj.QBits(), m.switchUpProj.QMode(), false, s)
+	upOut, err := b.GatherQuantizedMatMul(x4d, m.switchUpProj.QW(), m.switchUpProj.QScales(), m.switchUpProj.QBiases(), nil, inds, true, m.switchUpProj.QGroupSize(), m.switchUpProj.QBits(), m.switchUpProj.QMode(), false, s)
 	if err != nil {
 		return nil, fmt.Errorf("moe gather up_proj: %w", err)
 	}
@@ -244,9 +258,9 @@ func (m *sparseMoeBlock) forward(x tensor.Array, q *Qwen35) (tensor.Array, error
 	}
 	defer downOut.Free()
 
-	// downOut shape: [BS, k, H]
-	// Weight by scores: scores [BS, k] → [BS, k, 1]
-	scoreWeights, err := b.Reshape(scores, []int{BS, k, 1}, s)
+	// downOut shape: [BS, k, 1, H]
+	// Weight by scores: scores [BS, k] → [BS, k, 1, 1] to broadcast over H
+	scoreWeights, err := b.Reshape(scores, []int{BS, k, 1, 1}, s)
 	if err != nil {
 		return nil, fmt.Errorf("moe reshape scores: %w", err)
 	}
@@ -258,14 +272,20 @@ func (m *sparseMoeBlock) forward(x tensor.Array, q *Qwen35) (tensor.Array, error
 	}
 	defer weightedOut.Free()
 
-	// Sum over experts: [BS, H]
-	routedOut, err := b.Sum(weightedOut, []int{1}, false, s)
+	// Sum over experts: [BS, 1, H]
+	summedOut, err := b.Sum(weightedOut, []int{1}, false, s)
 	if err != nil {
 		return nil, fmt.Errorf("moe sum: %w", err)
 	}
+	defer summedOut.Free()
+
+	// y = routed + shared — drop the unit expert axis for the add
+	routedOut, err := b.Reshape(summedOut, []int{BS, lastDim}, s)
+	if err != nil {
+		return nil, fmt.Errorf("moe reshape routed: %w", err)
+	}
 	defer routedOut.Free()
 
-	// y = routed + shared
 	result, err := b.Add(routedOut, sharedOut, s)
 	if err != nil {
 		return nil, fmt.Errorf("moe add shared: %w", err)

@@ -255,6 +255,12 @@ func (b *MetalBackend) SoftmaxAxis(a tensor.Array, axis int, s tensor.Stream) (t
 	return SoftmaxAxis(a.(*Array), axis, toStream(s))
 }
 
+// SoftmaxAxisPrecise applies softmax with fp32 accumulation (precise=true),
+// matching mlx-lm's router softmax over hundreds of experts.
+func (b *MetalBackend) SoftmaxAxisPrecise(a tensor.Array, axis int, s tensor.Stream) (tensor.Array, error) {
+	return SoftmaxAxisPrecise(a.(*Array), axis, toStream(s))
+}
+
 func (b *MetalBackend) FastRMSNorm(x, weight tensor.Array, eps float32, s tensor.Stream) (tensor.Array, error) {
 	var w *Array
 	if weight != nil {

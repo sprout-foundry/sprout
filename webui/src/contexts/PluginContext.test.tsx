@@ -22,11 +22,13 @@ import { PluginContextProvider, usePlugins } from './PluginContext';
 
 let container: HTMLDivElement;
 let root: Root;
-let latest: {
-  pluginViews: readonly PluginView[];
-  pluginPanels: unknown[];
-  pluginSettingsTabs: unknown[];
-} | undefined;
+let latest:
+  | {
+      pluginViews: readonly PluginView[];
+      pluginPanels: unknown[];
+      pluginSettingsTabs: unknown[];
+    }
+  | undefined;
 
 const FAKE_COMPONENT = () => createElement('div', null, 'fake');
 
@@ -108,9 +110,7 @@ describe('PluginContext — late plugin registration (cloud mode plugin bundles)
     //    exact path a plugin bundle takes (window.__sproutRegisterPlugin).
     const plugin = makePlugin('late-test');
     act(() => {
-      (window as unknown as { __sproutRegisterPlugin: (p: unknown) => void }).__sproutRegisterPlugin(
-        plugin,
-      );
+      (window as unknown as { __sproutRegisterPlugin: (p: unknown) => void }).__sproutRegisterPlugin(plugin);
     });
 
     // 3. The same mounted consumer must now see the plugin's views/panels.

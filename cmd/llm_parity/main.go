@@ -10,6 +10,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sprout/pkg/tensor"
 )
 
 // Dumps the hidden state after each layer for a fixed prompt so the parity
@@ -35,7 +36,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	arch, err := qwen35.New(cfg)
+	backend := tensor.DetectBackend()
+	arch, err := qwen35.New(cfg, backend)
 	if err != nil {
 		log.Fatalf("arch: %v", err)
 	}
@@ -69,7 +71,7 @@ func main() {
 	}
 	defer ids.Free()
 
-	cache := llm.NewKVCache(cfg.NumLayers, s)
+	cache := llm.NewKVCache(cfg.NumLayers, s, backend)
 	defer cache.Free()
 
 	if err := os.MkdirAll(dumpDir, 0o755); err != nil {

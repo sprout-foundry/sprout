@@ -114,6 +114,8 @@ type timestampCaptureClient struct {
 	messages []api.Message
 }
 
+func (c *timestampCaptureClient) GetModel() string { return "test-model" }
+
 func (c *timestampCaptureClient) capture(messages []api.Message) *api.ChatResponse {
 	c.messages = append([]api.Message(nil), messages...)
 	return &api.ChatResponse{

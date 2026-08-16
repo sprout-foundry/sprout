@@ -133,19 +133,20 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		if capErr != nil {
 			return nil, agenterrors.NewConfig("resolving effective context cap", capErr)
 		}
-		agent.effectiveContextCap = resolvedCap
+		agent.setContextCapState(resolvedCap, nativeWindow, cfg)
 
 		// Activation notice: emit a one-time stderr line when the user set a cap below the native window.
+		effectiveCap := agent.effectiveCapSnapshot()
 		if cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 &&
-			agent.effectiveContextCap > 0 &&
-			agent.effectiveContextCap < nativeWindow {
+			effectiveCap > 0 &&
+			effectiveCap < nativeWindow {
 			_, _ = fmt.Fprintf(os.Stderr,
 				"⚡ Context cap active: %s (native: %s)\n"+
 					"  All requests will use at most %s of context.\n"+
 					"  /max-context clear to remove, /max-context <N> to change.\n",
-				agent.formatTokenCount(agent.effectiveContextCap),
+				agent.formatTokenCount(effectiveCap),
 				agent.formatTokenCount(nativeWindow),
-				agent.formatTokenCount(agent.effectiveContextCap),
+				agent.formatTokenCount(effectiveCap),
 			)
 		}
 

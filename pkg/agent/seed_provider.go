@@ -205,7 +205,7 @@ func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest)
 	}
 	if err == nil {
 		sp.accumulateResponseCost(resp)
-		sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
+		sp.tokenAnchor.update(sp.currentClient().GetModel(), req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	}
 	return resp, err
 }
@@ -517,7 +517,7 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		return err
 	}
 	// Anchor future EstimateTokens calls to this response's real prompt-token count.
-	sp.tokenAnchor.update(req.Messages, len(req.Tools), resp.Usage.PromptTokens)
+	sp.tokenAnchor.update(sp.currentClient().GetModel(), req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	handler.OnDone(sproutResponseToSeed(resp))
 	return nil
 }
@@ -571,17 +571,26 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 }
 
 func (sp *sproutProvider) Info() core.ProviderInfo {
-	ctxLimit, _ := sp.currentClient().GetModelContextLimit()
-	// Apply the effective context cap so seed's internal budget math receives the capped value.
-	if sp.agent != nil {
-		if cap := sp.agent.effectiveContextCap; cap > 0 && ctxLimit > cap {
-			ctxLimit = cap
+	client := sp.currentClient()
+	ctxLimit, limitErr := client.GetModelContextLimit()
+	if limitErr != nil || ctxLimit <= 0 {
+		// A 0 ContextSize disables seed's compaction trigger entirely —
+		// fall back to the last known effective cap (or 32K) instead.
+		ctxLimit = 0
+		if sp.agent != nil {
+			ctxLimit = sp.agent.effectiveCapSnapshot()
+		}
+		if ctxLimit <= 0 {
+			ctxLimit = 32000
 		}
 	}
+	if sp.agent != nil {
+		ctxLimit = sp.agent.reconcileContextCap(ctxLimit)
+	}
 	return core.ProviderInfo{
-		Model:       sp.currentClient().GetModel(),
+		Model:       client.GetModel(),
 		ContextSize: ctxLimit,
-		HasVision:   sp.currentClient().SupportsVision(),
+		HasVision:   client.SupportsVision(),
 	}
 }
 
@@ -600,7 +609,7 @@ func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 	}
 	// Anchor to the last real Usage.PromptTokens count when the message prefix still matches.
 	// Falls back to a full from-scratch heuristic estimate on the first call or after compaction.
-	if total, _, ok := sp.tokenAnchor.estimate(req.Messages, len(req.Tools)); ok {
+	if total, _, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools)); ok {
 		return total
 	}
 
@@ -638,7 +647,7 @@ func (sp *sproutProvider) computeMaxTokensHint(req *core.ChatRequest) {
 		sp.setMaxTokensHint(0)
 		return
 	}
-	total, heuristic, ok := sp.tokenAnchor.estimate(req.Messages, len(req.Tools))
+	total, heuristic, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools))
 	if !ok {
 		sp.setMaxTokensHint(0) // no hint — let provider compute from scratch
 		return

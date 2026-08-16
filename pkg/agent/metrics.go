@@ -36,8 +36,8 @@ func (a *Agent) GetMaxContextTokens() int {
 
 // GetEffectiveContextCap returns the user-facing effective context cap — min of native window and user's MaxContextTokens setting.
 func (a *Agent) GetEffectiveContextCap() int {
-	if a.effectiveContextCap > 0 {
-		return a.effectiveContextCap
+	if cap := a.effectiveCapSnapshot(); cap > 0 {
+		return cap
 	}
 	return a.getModelContextLimit()
 }

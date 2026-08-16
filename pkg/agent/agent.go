@@ -144,6 +144,21 @@ type Agent struct {
 	// switch via refreshEffectiveContextCap(). Call sites MUST use this
 	// instead of Config.MaxContextTokens or client.GetModelContextLimit().
 	effectiveContextCap int
+	// nativeContextWindow is the native model context window that
+	// effectiveContextCap was resolved against (0 = never resolved). Used to
+	// detect a stale cap when the live window diverges from this value.
+	nativeContextWindow int
+
+	// contextCapMu guards effectiveContextCap/nativeContextWindow and the
+	// lastResolved* user-cap snapshot. Reads happen on every seed iteration
+	// (Info/reconcile) while writes come from model switches and runtime
+	// /max-context or settings-API cap changes, so the two must not race.
+	contextCapMu sync.RWMutex
+	// lastResolvedUserCap/lastResolvedHasCap snapshot the config's
+	// MaxContextTokens at the last cap resolution so reconcileContextCap can
+	// detect a runtime cap change without re-resolving every iteration.
+	lastResolvedUserCap int
+	lastResolvedHasCap  bool
 
 	// Shell CWD tracking — updated by cd commands so git operations use the correct directory.
 	shellCwd *shellCwdTracker

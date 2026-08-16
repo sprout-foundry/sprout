@@ -200,6 +200,14 @@ func (g *Gemma4) InitWeights(path string, s tensor.Stream) error {
 	prefix := g.cfg.WeightPrefix
 	if prefix == "" {
 		prefix = "language_model.model."
+		// Raw-HF gemma4_unified checkpoints prefix the language model
+		// "model.language_model." (mlx-community style drops the leading
+		// "model."). Probe both.
+		if !sf.Has(prefix + "embed_tokens.weight") {
+			if sf.Has("model.language_model.embed_tokens.weight") {
+				prefix = "model.language_model."
+			}
+		}
 	}
 
 	w := &weights{layers: make([]layerWeights, g.cfg.NumLayers)}
@@ -271,9 +279,26 @@ func (g *Gemma4) InitWeights(path string, s tensor.Stream) error {
 			if err != nil {
 				return fmt.Errorf("layer %d k_proj: %w", i, err)
 			}
-			lw.vProj, err = llm.LoadLinear(sf, p+".self_attn.v_proj.weight", g.backend, s, g.cfg.Quantization)
-			if err != nil {
-				return fmt.Errorf("layer %d v_proj: %w", i, err)
+			// k_eq_v full-attention layers have no v_proj (V := K). The
+			// projection's width is the authoritative KV-head count for
+			// those layers — on the 12B it's num_global_key_value_heads (1),
+			// narrower than the sliding layers' num_key_value_heads.
+			if g.cfg.AttentionKEqV && isFull && g.cfg.NumGlobalKVHeads > 0 {
+				outDim := 0
+				if q := lw.kProj.QW(); q != nil {
+					outDim = q.Shape()[0] // packed [out, in*bits/32]
+				} else if wt := lw.kProj.WT(); wt != nil {
+					outDim = wt.Shape()[1] // pre-transposed [in, out]
+				}
+				if outDim != 0 && outDim != g.cfg.NumGlobalKVHeads*g.cfg.GlobalHeadDim {
+					return fmt.Errorf("layer %d k_proj out %d != global kv heads %d * head dim %d",
+						i, outDim, g.cfg.NumGlobalKVHeads, g.cfg.GlobalHeadDim)
+				}
+			} else {
+				lw.vProj, err = llm.LoadLinear(sf, p+".self_attn.v_proj.weight", g.backend, s, g.cfg.Quantization)
+				if err != nil {
+					return fmt.Errorf("layer %d v_proj: %w", i, err)
+				}
 			}
 		}
 		lw.oProj, err = llm.LoadLinear(sf, p+".self_attn.o_proj.weight", g.backend, s, g.cfg.Quantization)

@@ -55,6 +55,7 @@ type hfConfig struct {
 
 	// Gemma4 fields
 	GlobalHeadDim           int            `json:"global_head_dim"`
+	NumGlobalKVHeads        int            `json:"num_global_key_value_heads"`
 	SlidingWindow           int            `json:"sliding_window"`
 	SlidingWindowPattern    int            `json:"sliding_window_pattern"`
 	NumKVSharedLayers       int            `json:"num_kv_shared_layers"`
@@ -152,6 +153,7 @@ func LoadConfig(path string) (ModelConfig, error) {
 
 		// Gemma4 fields
 		GlobalHeadDim:           raw.GlobalHeadDim,
+		NumGlobalKVHeads:        raw.NumGlobalKVHeads,
 		SlidingWindow:           raw.SlidingWindow,
 		SlidingWindowPattern:    raw.SlidingWindowPattern,
 		NumKVSharedLayers:       raw.NumKVSharedLayers,
@@ -203,15 +205,71 @@ func LoadConfig(path string) (ModelConfig, error) {
 		cfg.WeightPrefix = "model.language_model."
 	case "gemma4_text":
 		cfg.WeightPrefix = "language_model.model."
-		cfg.BOSTokenID = 0            // Gemma doesn't use BOS prepending
+		// Gemma's canonical chat template emits {{ bos_token }} before the
+		// first turn, and raw completions without it degrade to noise —
+		// verified on the 12B sprout-tuned build (garbage without BOS,
+		// clean "**Paris**" with it). Default to <bos>=2 when the config
+		// doesn't carry one.
+		if cfg.BOSTokenID == 0 {
+			cfg.BOSTokenID = 2
+		}
 		cfg.StopTokenIDs = []int{106} // <turn|> — end of turn marker
 		if cfg.GlobalHeadDim == 0 {
 			cfg.GlobalHeadDim = cfg.HeadDim
+		}
+		if len(cfg.LayerTypes) > 0 {
+			// Derive the positional pattern from the explicit layer_types so
+			// isFullAttention(i, pattern) matches the config's per-layer
+			// assignments (these models use a 6-pattern: full at 5, 11, ...).
+			cfg.SlidingWindowPattern = 0
+			for i, t := range cfg.LayerTypes {
+				if t == "full_attention" {
+					cfg.SlidingWindowPattern = i + 1
+					break
+				}
+			}
 		}
 		if cfg.SlidingWindowPattern == 0 {
 			cfg.SlidingWindowPattern = 5
 		}
 		// Generate layer_types if not present in config
+		if len(cfg.LayerTypes) == 0 && cfg.NumLayers > 0 {
+			cfg.LayerTypes = make([]string, cfg.NumLayers)
+			for i := range cfg.LayerTypes {
+				if (i+1)%cfg.SlidingWindowPattern == 0 {
+					cfg.LayerTypes[i] = "full_attention"
+				} else {
+					cfg.LayerTypes[i] = "sliding_attention"
+				}
+			}
+		}
+	case "gemma4_unified_text":
+		// Gemma4 "unified" checkpoints (12B dense, 26B/31B MoE): same text
+		// block as gemma4_text with a wider full-attention config — global
+		// head dim 2x, attention_k_eq_v on full layers with a single global
+		// KV head. Raw-HF layout prefixes tensors "model.language_model.";
+		// the loader probes both prefixes.
+		cfg.Arch = "gemma4_text"
+		cfg.WeightPrefix = ""
+		if cfg.BOSTokenID == 0 {
+			cfg.BOSTokenID = 2
+		}
+		cfg.StopTokenIDs = []int{106}
+		if cfg.GlobalHeadDim == 0 {
+			cfg.GlobalHeadDim = cfg.HeadDim
+		}
+		if len(cfg.LayerTypes) > 0 {
+			cfg.SlidingWindowPattern = 0
+			for i, t := range cfg.LayerTypes {
+				if t == "full_attention" {
+					cfg.SlidingWindowPattern = i + 1
+					break
+				}
+			}
+		}
+		if cfg.SlidingWindowPattern == 0 {
+			cfg.SlidingWindowPattern = 5
+		}
 		if len(cfg.LayerTypes) == 0 && cfg.NumLayers > 0 {
 			cfg.LayerTypes = make([]string, cfg.NumLayers)
 			for i := range cfg.LayerTypes {

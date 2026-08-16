@@ -1,7 +1,7 @@
 {
   "chutes": {
     "source": "https://api.chutes.com/v1/models",
-    "last_verified": "2026-08-10",
+    "last_verified": "2026-08-16",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -67,6 +67,11 @@
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
         "input_per_mtok": 0.14,
         "output_per_mtok": 0.28
+      },
+      {
+        "id": "Qwen/Qwen3.8-27B-TEE",
+        "input_per_mtok": 0.4,
+        "output_per_mtok": 3
       }
     ]
   },
@@ -845,7 +850,7 @@
   },
   "ollama-cloud": {
     "source": "https://api.ollama-cloud.com/v1/models",
-    "last_verified": "2026-08-14",
+    "last_verified": "2026-08-16",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -944,6 +949,11 @@
       },
       {
         "id": "deepseek-v4-pro:preview",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "deepseek-v4-pro:0813",
         "input_per_mtok": 0,
         "output_per_mtok": 0
       }

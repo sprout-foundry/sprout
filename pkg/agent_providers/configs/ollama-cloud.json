@@ -224,6 +224,16 @@
           "tools",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Pro 0813 - official release of DeepSeek V4 Pro with enhanced agentic capabilities",
+        "id": "deepseek-v4-pro:0813",
+        "name": "DeepSeek V4 Pro 0813",
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
       }
     ]
   },

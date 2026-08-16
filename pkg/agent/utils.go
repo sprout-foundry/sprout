@@ -64,18 +64,111 @@ func (a *Agent) getNativeModelContextLimit() int {
 	return limit
 }
 
+// userCapFromConfig extracts the configured MaxContextTokens (if any) as a
+// has/value pair. A nil/zero cap means "no cap".
+func userCapFromConfig(cfg *configuration.Config) (hasCap bool, capVal int) {
+	if cfg == nil || cfg.MaxContextTokens == nil || *cfg.MaxContextTokens <= 0 {
+		return false, 0
+	}
+	return true, *cfg.MaxContextTokens
+}
+
+// effectiveCapSnapshot returns the current effective context cap under the
+// read lock. Prefer this over reading a.effectiveContextCap directly.
+func (a *Agent) effectiveCapSnapshot() int {
+	if a == nil {
+		return 0
+	}
+	a.contextCapMu.RLock()
+	defer a.contextCapMu.RUnlock()
+	return a.effectiveContextCap
+}
+
+// contextCapStateLocked records a resolved cap and the user-cap snapshot it
+// was resolved against. Callers hold contextCapMu (write).
+func (a *Agent) contextCapStateLocked(effectiveCap, nativeWindow int, cfg *configuration.Config) {
+	a.effectiveContextCap = effectiveCap
+	a.nativeContextWindow = nativeWindow
+	a.lastResolvedHasCap, a.lastResolvedUserCap = userCapFromConfig(cfg)
+}
+
+// setContextCapState stores a freshly resolved context cap state under the
+// write lock. Used at agent creation and by RefreshContextCapFromConfig paths.
+func (a *Agent) setContextCapState(effectiveCap, nativeWindow int, cfg *configuration.Config) {
+	a.contextCapMu.Lock()
+	defer a.contextCapMu.Unlock()
+	a.contextCapStateLocked(effectiveCap, nativeWindow, cfg)
+}
+
+// RefreshContextCapFromConfig re-resolves the effective context cap from the
+// current config and client. Called by /max-context and the settings API after
+// they persist a MaxContextTokens change, so the running session picks up the
+// new cap without waiting for a model switch.
+func (a *Agent) RefreshContextCapFromConfig() {
+	if a == nil || a.configManager == nil {
+		return
+	}
+	a.refreshEffectiveContextCap()
+}
+
 // refreshEffectiveContextCap recomputes the agent's effective context cap
 // from the current client and config. Call this after any provider/model switch
 // so that OnIteration clamping, compaction triggers, and the UI footer all
 // see the correct value.
+//
+// The native window and config snapshot are read before taking the write lock:
+// clientMu/configManager.mu must never be acquired while holding contextCapMu
+// (SetModel holds clientMu.RLock across the whole operation and calls into
+// this function, so the consistent order is clientMu → contextCapMu).
 func (a *Agent) refreshEffectiveContextCap() {
-	cfg := a.configManager.GetConfig()
 	nativeWindow := a.getNativeModelContextLimit()
+	var cfg *configuration.Config
+	if a.configManager != nil {
+		cfg = a.configManager.GetConfig()
+	}
+	a.contextCapMu.Lock()
+	defer a.contextCapMu.Unlock()
 	cap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
 	if capErr != nil {
 		a.Logger().Debug("[context-cap] refresh failed (user cap below minimum): %v; falling back to native window", capErr)
 	}
-	a.effectiveContextCap = cap
+	a.contextCapStateLocked(cap, nativeWindow, cfg)
+}
+
+// reconcileContextCap clamps the live native window by the user's configured
+// cap, re-resolving when the live window diverges from the one the cached cap
+// was resolved against (e.g. the creation-time lookup failed to 32K and the
+// runtime lookup now succeeds with 200K) or when the user's configured cap
+// changed since the last resolution (e.g. /max-context or the settings API
+// mutated MaxContextTokens at runtime). Returns the effective context size.
+//
+// The config snapshot is read on every call (an in-memory clone under the
+// manager lock — no I/O) so a runtime cap change takes effect immediately
+// instead of staying stale until the next model switch.
+func (a *Agent) reconcileContextCap(liveNative int) int {
+	if liveNative <= 0 {
+		return liveNative
+	}
+	a.contextCapMu.Lock()
+	defer a.contextCapMu.Unlock()
+
+	var cfg *configuration.Config
+	if a.configManager != nil {
+		cfg = a.configManager.GetConfig()
+	}
+	hasCap, capVal := userCapFromConfig(cfg)
+
+	// Fast path: cached resolution is still current (same native window and
+	// same user cap). Keeps per-iteration cost to one config snapshot.
+	if a.effectiveContextCap > 0 && a.nativeContextWindow == liveNative &&
+		hasCap == a.lastResolvedHasCap && (!hasCap || capVal == a.lastResolvedUserCap) {
+		return min(a.effectiveContextCap, liveNative)
+	}
+
+	if resolved, err := configuration.ResolveEffectiveContextCap(cfg, liveNative); err == nil {
+		a.contextCapStateLocked(resolved, liveNative, cfg)
+	}
+	return min(a.effectiveContextCap, liveNative)
 }
 
 // getModelContextLimit returns the maximum context window for a model from the API,

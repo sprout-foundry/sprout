@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -932,4 +933,297 @@ func TestReviewDeepCommand_Complete_NoMatch(t *testing.T) {
 	cmd := &ReviewDeepCommand{}
 	results := cmd.Complete([]string{"zzzz_nonexistent_zzzz"}, nil)
 	assert.Nil(t, results, "no matching files should return nil")
+}
+
+// ---------------------------------------------------------------------------
+// RiskProfileCommand.Complete
+// ---------------------------------------------------------------------------
+
+func TestRiskProfileCommand_Complete_EmptyArgs(t *testing.T) {
+	cmd := &RiskProfileCommand{}
+
+	// No args -> subcommand words + all built-in profile names
+	results := cmd.Complete(nil, nil)
+	assert.ElementsMatch(t, []string{
+		"clear", "list", "show",
+		"readonly", "cautious", "default", "permissive", "unrestricted",
+	}, results, "empty args should return subcommands and built-in profiles")
+}
+
+func TestRiskProfileCommand_Complete_PrefixMatch(t *testing.T) {
+	cmd := &RiskProfileCommand{}
+
+	// args=["per"] -> returns ["permissive"]
+	results := cmd.Complete([]string{"per"}, nil)
+	assert.Equal(t, []string{"permissive"}, results, "prefix 'per' should match 'permissive'")
+
+	// args=["c"] -> returns "clear" and "cautious" (not "show" etc.)
+	results = cmd.Complete([]string{"c"}, nil)
+	assert.Contains(t, results, "clear")
+	assert.Contains(t, results, "cautious")
+	assert.NotContains(t, results, "show")
+
+	// Case insensitive: "PER" should match "permissive"
+	resultsUpper := cmd.Complete([]string{"PER"}, nil)
+	assert.Equal(t, []string{"permissive"}, resultsUpper, "case-insensitive prefix 'PER' should match 'permissive'")
+}
+
+func TestRiskProfileCommand_Complete_AgentNil(t *testing.T) {
+	cmd := &RiskProfileCommand{}
+
+	// nil agent -> static list (subcommands + built-ins), no panics
+	results := cmd.Complete(nil, nil)
+	assert.NotNil(t, results)
+	assert.Len(t, results, 8)
+
+	results = cmd.Complete([]string{"read"}, nil)
+	assert.Equal(t, []string{"readonly"}, results, "prefix match should work with nil agent")
+
+	// NewTestAgent has no config manager -> GetConfig() returns nil -> static list
+	a := agent.NewTestAgent()
+	results = cmd.Complete(nil, a)
+	assert.NotNil(t, results)
+	assert.Len(t, results, 8)
+}
+
+func TestRiskProfileCommand_Complete_TooManyArgs(t *testing.T) {
+	cmd := &RiskProfileCommand{}
+
+	results := cmd.Complete([]string{"clear", "extra"}, nil)
+	assert.Nil(t, results, "more than one arg should return nil")
+}
+
+func TestRiskProfileCommand_Complete_CustomProfiles(t *testing.T) {
+	chatAgent, err := agent.NewAgentWithModel("")
+	if err != nil {
+		t.Fatalf("NewAgentWithModel failed: %v", err)
+	}
+	t.Cleanup(func() { chatAgent.Shutdown() })
+
+	if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.RiskProfiles == nil {
+			cfg.RiskProfiles = make(map[string]configuration.AutoApproveRules)
+		}
+		cfg.RiskProfiles["my_strict"] = configuration.AutoApproveRules{
+			DefaultRisk: configuration.RiskLevelHigh,
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	cmd := &RiskProfileCommand{}
+
+	// User-defined profile names are appended to the candidate list.
+	results := cmd.Complete(nil, chatAgent)
+	assert.Contains(t, results, "my_strict", "user-defined profile names should be offered")
+
+	// Prefix matching against a custom name.
+	results = cmd.Complete([]string{"my"}, chatAgent)
+	assert.Equal(t, []string{"my_strict"}, results, "prefix 'my' should match custom profile")
+}
+
+// ---------------------------------------------------------------------------
+// MaxContextCommand.Complete
+// ---------------------------------------------------------------------------
+
+func TestMaxContextCommand_Complete_EmptyArgs(t *testing.T) {
+	cmd := &MaxContextCommand{}
+
+	// No args -> should return ["clear"]
+	results := cmd.Complete(nil, nil)
+	assert.Equal(t, []string{"clear"}, results, "empty args should return ['clear']")
+}
+
+func TestMaxContextCommand_Complete_PrefixMatch(t *testing.T) {
+	cmd := &MaxContextCommand{}
+
+	// args=["cl"] -> returns ["clear"]
+	results := cmd.Complete([]string{"cl"}, nil)
+	assert.Equal(t, []string{"clear"}, results, "prefix 'cl' should match 'clear'")
+
+	// Case insensitive: "CL" should match "clear"
+	resultsUpper := cmd.Complete([]string{"CL"}, nil)
+	assert.Equal(t, []string{"clear"}, resultsUpper, "case-insensitive prefix 'CL' should match 'clear'")
+}
+
+func TestMaxContextCommand_Complete_TooManyArgs(t *testing.T) {
+	cmd := &MaxContextCommand{}
+
+	results := cmd.Complete([]string{"clear", "extra"}, nil)
+	assert.Nil(t, results, "more than one arg should return nil")
+}
+
+// ---------------------------------------------------------------------------
+// TranscriptCommand.Complete
+// ---------------------------------------------------------------------------
+
+func TestTranscriptCommand_Complete_EmptyArgs(t *testing.T) {
+	cmd := &TranscriptCommand{}
+
+	// No args -> combinable subcommands (incl. the "md" alias)
+	results := cmd.Complete(nil, nil)
+	assert.ElementsMatch(t, []string{"preview", "markdown", "diff", "md"}, results,
+		"empty args should return combinable subcommands")
+}
+
+func TestTranscriptCommand_Complete_PrefixMatch(t *testing.T) {
+	cmd := &TranscriptCommand{}
+
+	// args=["m"] -> returns ["markdown", "md"]
+	results := cmd.Complete([]string{"m"}, nil)
+	assert.ElementsMatch(t, []string{"markdown", "md"}, results,
+		"prefix 'm' should match 'markdown' and 'md'")
+
+	// args=["d"] -> returns ["diff"]
+	results = cmd.Complete([]string{"d"}, nil)
+	assert.Equal(t, []string{"diff"}, results, "prefix 'd' should match 'diff'")
+
+	// Case insensitive: "M" should match the same set
+	resultsUpper := cmd.Complete([]string{"M"}, nil)
+	assert.ElementsMatch(t, []string{"markdown", "md"}, resultsUpper,
+		"case-insensitive prefix 'M' should match 'markdown' and 'md'")
+}
+
+func TestTranscriptCommand_Complete_TooManyArgs(t *testing.T) {
+	cmd := &TranscriptCommand{}
+
+	results := cmd.Complete([]string{"preview", "markdown", "diff", "md"}, nil)
+	assert.Nil(t, results, "more than three args should return nil")
+}
+
+// ---------------------------------------------------------------------------
+// SearchCommand.Complete
+// ---------------------------------------------------------------------------
+
+func TestSearchCommand_Complete_FlagPrefix(t *testing.T) {
+	cmd := &SearchCommand{}
+
+	// args=["--l"] -> returns ["--limit"]
+	results := cmd.Complete([]string{"--l"}, nil)
+	assert.Equal(t, []string{"--limit"}, results, "prefix '--l' should match '--limit'")
+
+	// args=["--r"] -> returns ["--reindex"]
+	results = cmd.Complete([]string{"--r"}, nil)
+	assert.Equal(t, []string{"--reindex"}, results, "prefix '--r' should match '--reindex'")
+
+	// args=["--"] -> all flags
+	results = cmd.Complete([]string{"--"}, nil)
+	assert.ElementsMatch(t, []string{"--reindex", "--cwd", "--since", "--until", "--limit"}, results,
+		"prefix '--' should match all flags")
+}
+
+func TestSearchCommand_Complete_NonFlagArg(t *testing.T) {
+	cmd := &SearchCommand{}
+
+	// Free-text query tokens are not completed.
+	results := cmd.Complete([]string{"embedding"}, nil)
+	assert.Nil(t, results, "free-text query args should return nil")
+
+	results = cmd.Complete([]string{"foo", "bar"}, nil)
+	assert.Nil(t, results, "multiple free-text args should return nil")
+}
+
+func TestSearchCommand_Complete_TooManyArgs(t *testing.T) {
+	cmd := &SearchCommand{}
+
+	results := cmd.Complete([]string{"--reindex", "--cwd", "/tmp", "--since", "2026-01-01", "--until", "x"}, nil)
+	assert.Nil(t, results, "more than six args should return nil")
+}
+
+// ---------------------------------------------------------------------------
+// RecallCommand.Complete
+// ---------------------------------------------------------------------------
+
+func TestRecallCommand_Complete_FlagPrefix(t *testing.T) {
+	cmd := &RecallCommand{}
+
+	// args=["--"] -> returns ["--limit"]
+	results := cmd.Complete([]string{"--"}, nil)
+	assert.Equal(t, []string{"--limit"}, results, "prefix '--' should match '--limit'")
+
+	// args=["--l"] -> returns ["--limit"]
+	results = cmd.Complete([]string{"--l"}, nil)
+	assert.Equal(t, []string{"--limit"}, results, "prefix '--l' should match '--limit'")
+}
+
+func TestRecallCommand_Complete_NonFlagArg(t *testing.T) {
+	cmd := &RecallCommand{}
+
+	// Free-text query tokens are not completed.
+	results := cmd.Complete([]string{"auth"}, nil)
+	assert.Nil(t, results, "free-text query args should return nil")
+
+	// A completed flag followed by its value is not completed either.
+	results = cmd.Complete([]string{"foo", "--limit", "10"}, nil)
+	assert.Nil(t, results, "non-flag last arg should return nil")
+}
+
+// ---------------------------------------------------------------------------
+// RewindCommand.Complete
+// ---------------------------------------------------------------------------
+
+func TestRewindCommand_Complete_FlagPrefix(t *testing.T) {
+	cmd := &RewindCommand{}
+
+	// args=["--no"] -> returns ["--no-revert"]
+	results := cmd.Complete([]string{"--no"}, nil)
+	assert.Equal(t, []string{"--no-revert"}, results, "prefix '--no' should match '--no-revert'")
+
+	// args=["-"] -> returns ["--no-revert"]
+	results = cmd.Complete([]string{"-"}, nil)
+	assert.Equal(t, []string{"--no-revert"}, results, "prefix '-' should match '--no-revert'")
+}
+
+func TestRewindCommand_Complete_EmptyFirstArg(t *testing.T) {
+	cmd := &RewindCommand{}
+
+	// args=[""] -> first-arg suggestion after a trailing space
+	results := cmd.Complete([]string{""}, nil)
+	assert.Equal(t, []string{"--no-revert"}, results, "empty first arg should offer '--no-revert'")
+
+	// args=["--no-revert", ""] -> nothing further to suggest
+	results = cmd.Complete([]string{"--no-revert", ""}, nil)
+	assert.Nil(t, results, "empty arg after a complete flag should return nil")
+}
+
+func TestRewindCommand_Complete_TurnNumber(t *testing.T) {
+	cmd := &RewindCommand{}
+
+	// Turn numbers are free text; no completion.
+	results := cmd.Complete([]string{"5"}, nil)
+	assert.Nil(t, results, "numeric turn args should return nil")
+}
+
+// ---------------------------------------------------------------------------
+// CommitCommand.Complete
+// ---------------------------------------------------------------------------
+
+func TestCommitCommand_Complete_FlagPrefix(t *testing.T) {
+	cmd := &CommitCommand{}
+
+	// args=["--d"] -> returns ["--dry-run"]
+	results := cmd.Complete([]string{"--d"}, nil)
+	assert.Equal(t, []string{"--dry-run"}, results, "prefix '--d' should match '--dry-run'")
+
+	// args=["--s"] -> returns ["--skip-prompt"]
+	results = cmd.Complete([]string{"--s"}, nil)
+	assert.Equal(t, []string{"--skip-prompt"}, results, "prefix '--s' should match '--skip-prompt'")
+
+	// args=["--a"] -> returns ["--allow-secrets"]
+	results = cmd.Complete([]string{"--a"}, nil)
+	assert.Equal(t, []string{"--allow-secrets"}, results, "prefix '--a' should match '--allow-secrets'")
+
+	// args=["--"] -> all flags
+	results = cmd.Complete([]string{"--"}, nil)
+	assert.ElementsMatch(t, []string{"--skip-prompt", "--dry-run", "--allow-secrets"}, results,
+		"prefix '--' should match all flags")
+}
+
+func TestCommitCommand_Complete_NonFlagArg(t *testing.T) {
+	cmd := &CommitCommand{}
+
+	// Free-text instructions are not completed.
+	results := cmd.Complete([]string{"fix"}, nil)
+	assert.Nil(t, results, "free-text instruction args should return nil")
 }

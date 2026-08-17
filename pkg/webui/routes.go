@@ -109,9 +109,12 @@ func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 // registerCommandRoutes mounts SP-114 Phase 2 endpoints. /api/command/execute
 // is the dedicated command surface (separate from /api/query/steer which is
 // for mid-turn steering of an active LLM query). Commands here must be
-// SteerCapable — destructive commands stay CLI-only.
+// SteerCapable — destructive commands stay CLI-only. /api/command/complete
+// is the command-bar argument/name completion endpoint (mirrors the
+// terminal's cmd/slash_completer.go over HTTP).
 func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/command/execute", ws.handleAPICommandExecute)
+	mux.HandleFunc("/api/command/complete", ws.handleAPICommandComplete)
 }
 
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {

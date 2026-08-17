@@ -134,6 +134,14 @@ export {
   loadCommandHistory,
   persistCommandHistory
 } from './components/command_input_history';
+export type { CommandCompletionApi, CommandCompletionResponse, CommandCompletion } from './utils/command_completion';
+export {
+  createHttpCommandCompletionApi,
+  argumentCandidatesFromResponse,
+  replaceLastWord,
+  createDebouncer,
+  ARGUMENT_COMPLETION_DEBOUNCE_MS,
+} from './utils/command_completion';
 export { FONT_SIZE_DEFAULT } from './components/terminalConstants';
 
 // ── Plugin API types ──────────────────────────────────────────────────

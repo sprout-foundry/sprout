@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/daemon"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +43,8 @@ func (f *fakeIdleServer) setQueries(n int) {
 }
 
 // TestReapIdleDaemon_FiresAfterIdle verifies the daemon self-terminates once
-// no client has been active for the idle window.
+// no client has been active for the idle window — including when the socket
+// servers are fully idle (fresh, never-touched activity trackers).
 func TestReapIdleDaemon_FiresAfterIdle(t *testing.T) {
 	oldInterval := idleCheckInterval
 	idleCheckInterval = 20 * time.Millisecond
@@ -55,7 +57,8 @@ func TestReapIdleDaemon_FiresAfterIdle(t *testing.T) {
 	var cancelled int32
 	idleCancel := func() { atomic.AddInt32(&cancelled, 1); cancel() }
 
-	go reapIdleDaemon(ctx, idleCancel, srv, 100*time.Millisecond)
+	sockets := []*daemon.DaemonActivity{daemon.NewDaemonActivity()}
+	go reapIdleDaemon(ctx, idleCancel, srv, sockets, 100*time.Millisecond)
 
 	require.Eventually(t, func() bool { return atomic.LoadInt32(&cancelled) > 0 },
 		3*time.Second, 20*time.Millisecond,
@@ -74,7 +77,7 @@ func TestReapIdleDaemon_ActiveClientSuppressesReap(t *testing.T) {
 	defer cancel()
 
 	var cancelled int32
-	go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, 100*time.Millisecond)
+	go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, nil, 100*time.Millisecond)
 
 	time.Sleep(400 * time.Millisecond)
 	require.Zero(t, atomic.LoadInt32(&cancelled),
@@ -93,7 +96,7 @@ func TestReapIdleDaemon_ActiveQuerySuppressesReap(t *testing.T) {
 	defer cancel()
 
 	var cancelled int32
-	go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, 100*time.Millisecond)
+	go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, nil, 100*time.Millisecond)
 
 	time.Sleep(400 * time.Millisecond)
 	require.Zero(t, atomic.LoadInt32(&cancelled),
@@ -111,11 +114,54 @@ func TestReapIdleDaemon_StopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var cancelled int32
-	go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, 100*time.Millisecond)
+	go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, nil, 100*time.Millisecond)
 
 	time.Sleep(50 * time.Millisecond)
 	cancel() // external shutdown (e.g. SIGTERM path)
 	time.Sleep(100 * time.Millisecond)
 	require.Zero(t, atomic.LoadInt32(&cancelled),
 		"daemon must not fire the idle cancel after external shutdown")
+}
+
+// TestReapIdleDaemon_SocketActivitySuppressesReap verifies the reaper sees
+// socket-server traffic (agent/embedding sockets) as daemon activity: a
+// daemon serving a socket request — even with zero WebUI clients or queries —
+// must not be reaped.
+func TestReapIdleDaemon_SocketActivitySuppressesReap(t *testing.T) {
+	oldInterval := idleCheckInterval
+	idleCheckInterval = 20 * time.Millisecond
+	defer func() { idleCheckInterval = oldInterval }()
+
+	srv := &fakeIdleServer{} // no web clients, no web queries
+
+	t.Run("in-flight socket request", func(t *testing.T) {
+		activity := daemon.NewDaemonActivity()
+		activity.Begin()
+		defer activity.End()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		var cancelled int32
+		go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, []*daemon.DaemonActivity{activity}, 100*time.Millisecond)
+
+		time.Sleep(400 * time.Millisecond)
+		require.Zero(t, atomic.LoadInt32(&cancelled),
+			"daemon must NOT cancel while a socket request is in flight")
+	})
+
+	t.Run("recently touched socket", func(t *testing.T) {
+		activity := daemon.NewDaemonActivity()
+		activity.Touch()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		var cancelled int32
+		go reapIdleDaemon(ctx, func() { atomic.AddInt32(&cancelled, 1); cancel() }, srv, []*daemon.DaemonActivity{activity}, time.Second)
+
+		time.Sleep(400 * time.Millisecond)
+		require.Zero(t, atomic.LoadInt32(&cancelled),
+			"daemon must NOT cancel while a socket was active within the idle window")
+	})
 }

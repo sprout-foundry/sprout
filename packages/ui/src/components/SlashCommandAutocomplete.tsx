@@ -40,7 +40,7 @@ export default function SlashCommandAutocomplete({
           tabIndex={i === selectedIndex ? 0 : -1}
           onClick={() => onSelect(cmd)}
         >
-          <span className="slash-autocomplete-name">/{cmd.name}</span>
+          <span className="slash-autocomplete-name">{cmd.isArgument ? cmd.name : `/${cmd.name}`}</span>
           <span className="slash-autocomplete-description">{cmd.description}</span>
         </button>
       ))}

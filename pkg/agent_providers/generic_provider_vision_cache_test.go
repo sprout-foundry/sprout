@@ -22,26 +22,7 @@ import (
 
 func setCacheImagesEnv(t *testing.T, value string) {
 	t.Helper()
-	oldSPROUT, _ := os.LookupEnv("SPROUT_VISION_CACHE_IMAGES")
-	oldVal, _ := os.LookupEnv("SPROUT_VISION_CACHE_IMAGES")
-	if value == "" {
-		os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
-		os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
-	} else {
-		os.Setenv("SPROUT_VISION_CACHE_IMAGES", value)
-	}
-	t.Cleanup(func() {
-		if oldSPROUT == "" {
-			os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
-		} else {
-			os.Setenv("SPROUT_VISION_CACHE_IMAGES", oldSPROUT)
-		}
-		if oldVal == "" {
-			os.Unsetenv("SPROUT_VISION_CACHE_IMAGES")
-		} else {
-			os.Setenv("SPROUT_VISION_CACHE_IMAGES", oldVal)
-		}
-	})
+	t.Setenv("SPROUT_VISION_CACHE_IMAGES", value)
 }
 
 func TestVisionCacheImagesEnabled_Default(t *testing.T) {

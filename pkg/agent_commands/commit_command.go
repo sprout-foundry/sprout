@@ -630,3 +630,28 @@ retryLoop:
 
 	return nil
 }
+
+// Complete returns flag completions for the /commit command. The primary
+// arguments are free-text instructions, so only tokens starting with "--"
+// are completed.
+func (c *CommitCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	flags := []string{"--skip-prompt", "--dry-run", "--allow-secrets"}
+	if len(args) == 0 {
+		return flags
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		return flags
+	}
+	if !strings.HasPrefix(last, "--") {
+		return nil
+	}
+
+	var matches []string
+	for _, flag := range flags {
+		if strings.HasPrefix(strings.ToLower(flag), strings.ToLower(last)) {
+			matches = append(matches, flag)
+		}
+	}
+	return matches
+}

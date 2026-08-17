@@ -7,6 +7,15 @@ import type {
 } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info } from 'lucide-react';
 import { useLog, debugLog } from '../utils/log';
+import {
+  ARGUMENT_COMPLETION_DEBOUNCE_MS,
+  argumentCandidatesFromResponse,
+  createDebouncer,
+  replaceLastWord,
+  type CommandCompletionApi,
+  type CommandCompletionResponse,
+  type Debouncer,
+} from '../utils/command_completion';
 import { getMatchingSlashCommands } from '../utils/slashCommands';
 import type { SlashCommand } from '../utils/slashCommands';
 import SlashCommandAutocomplete from './SlashCommandAutocomplete';
@@ -43,6 +52,8 @@ export interface CommandInputProps {
   onUploadImage?: (file: File) => Promise<{ path: string }>;
   /** API adapter for loading command history from server */
   historyApi?: CommandHistoryApi;
+  /** API adapter for slash-command ARGUMENT completion from the server */
+  completionApi?: CommandCompletionApi;
   /** Whether the code index is enabled */
   isIndexEnabled?: boolean;
   /** Whether the code index is currently building */
@@ -72,6 +83,7 @@ function CommandInput({
   onClearQueuedMessages,
   onUploadImage,
   historyApi: historyApiProp,
+  completionApi,
 }: CommandInputProps): JSX.Element {
   const log = useLog();
   const [draftValue, setDraftValue] = useState(value);
@@ -109,16 +121,16 @@ function CommandInput({
   const [slashAutocompletePrefix, setSlashAutocompletePrefix] = useState('');
   const [slashAutocompleteIndex, setSlashAutocompleteIndex] = useState(0);
   const [slashAutocompletePosition, setSlashAutocompletePosition] = useState({ top: 0, left: 0 });
-  // Memoize slash autocomplete matches — the cache in slashCommands.ts avoids
-  // O(n) filter+sort on repeated identical prefixes; useMemo here prevents
-  // the JSX from recomputing on every CommandInput render.
+  // Server-driven ARGUMENT completion state (set only once the user is past
+  // the command name — a space separates the name from the typed argument).
+  const [argumentCompletions, setArgumentCompletions] = useState<SlashCommand[]>([]);
+  const [isArgumentPhase, setIsArgumentPhase] = useState(false);
+  // Memoize slash autocomplete matches. In the name phase the rows come
+  // from getMatchingSlashCommands (which has its own Map cache); in the
+  // argument phase they come from the server-driven argumentCompletions.
   const slashAutocompleteMatches = useMemo(
-    () => (slashAutocompleteOpen ? getMatchingSlashCommands(slashAutocompletePrefix) : []),
-    // Depend on SLASH_COMMANDS.length as a paranoia guard; the Map cache in
-    // slashCommands.ts is the real memoization. We could import SLASH_COMMANDS
-    // directly but that requires re-export, so the length trick is a simpler
-    // proxy that still correctly invalidates if the command list ever changes.
-    [slashAutocompleteOpen, slashAutocompletePrefix],
+    () => (slashAutocompleteOpen ? (isArgumentPhase ? argumentCompletions : getMatchingSlashCommands(slashAutocompletePrefix)) : []),
+    [slashAutocompleteOpen, isArgumentPhase, argumentCompletions, slashAutocompletePrefix],
   );
   const queuePanelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -128,6 +140,13 @@ function CommandInput({
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
   const uploadInProgressRef = useRef<Set<string>>(new Set());
   const isComposingRef = useRef(false);
+  // Argument-completion plumbing: a trailing debouncer so we don't fire a
+  // request per keystroke, a request-generation counter so a completed-but-
+  // stale response is dropped, and a one-shot suppression flag so accepting
+  // a candidate (which edits the draft) doesn't immediately re-request.
+  const completionDebouncerRef = useRef<Debouncer | null>(null);
+  const completionRequestIdRef = useRef(0);
+  const completionSuppressedRef = useRef(false);
 
   // Sync from parent's `value` prop to local `draftValue`. The local
   // draft is authoritative while the user has focus — we only adopt the
@@ -246,6 +265,95 @@ function CommandInput({
       setSlashAutocompletePosition(getSlashAutocompletePosition());
     }
   }, [draftValue, slashAutocompleteOpen, slashAutocompletePrefix, detectSlashCommandAtCursor, getSlashAutocompletePosition]);
+
+  // Lazily create the shared trailing debouncer for argument-completion
+  // requests. Kept in a ref so the timer survives re-renders.
+  const getCompletionDebouncer = useCallback((): Debouncer => {
+    if (!completionDebouncerRef.current) {
+      completionDebouncerRef.current = createDebouncer(ARGUMENT_COMPLETION_DEBOUNCE_MS);
+    }
+    return completionDebouncerRef.current;
+  }, []);
+
+  // Server-driven ARGUMENT completion. Fires only when the user is past the
+  // slash-command name (a space separates the name from the argument being
+  // typed). The request is trailing-debounced (~150ms) and tagged with a
+  // request-generation counter: any response that returns after a newer
+  // request was scheduled (or the phase was exited) is dropped. A response
+  // with zero candidates closes the dropdown for the argument phase — the
+  // same "no matches" behavior as the local name phase.
+  useEffect(() => {
+    // One-shot suppression after accepting a candidate: acceptArgumentCompletion
+    // edits the draft (candidate + trailing space), which would otherwise
+    // immediately re-enter the argument phase and re-request for the now-empty
+    // next argument. We skip that single effect run; the next real keystroke
+    // re-enables completion.
+    if (completionSuppressedRef.current) {
+      completionSuppressedRef.current = false;
+      completionRequestIdRef.current++;
+      setIsArgumentPhase(false);
+      setArgumentCompletions([]);
+      return;
+    }
+
+    const info = detectSlashCommandAtCursor();
+    const cursorPos = selectionRef.current?.start ?? 0;
+    const beforeCursor = draftValue.slice(0, cursorPos);
+    const hasSpaceAfterSlash = info !== null && /[\s\t]/.test(beforeCursor.slice(info.slashIndex + 1));
+
+    if (!info || !hasSpaceAfterSlash || !completionApi) {
+      getCompletionDebouncer().cancel();
+      completionRequestIdRef.current++;
+      setIsArgumentPhase(false);
+      setArgumentCompletions([]);
+      return;
+    }
+
+    setIsArgumentPhase(true);
+    // Send the full command text from the slash up to the cursor — the server
+    // splits args with strings.Fields, matching the terminal completer.
+    const commandText = beforeCursor.slice(info.slashIndex);
+    const requestId = ++completionRequestIdRef.current;
+
+    getCompletionDebouncer().debounce(() => {
+      void (async () => {
+        let resp: CommandCompletionResponse;
+        try {
+          resp = await completionApi.completeCommand(commandText);
+        } catch {
+          resp = { command: '', completions: [] };
+        }
+        // Stale response (a newer keystroke/phase change superseded this one).
+        if (requestId !== completionRequestIdRef.current) {
+          return;
+        }
+        // Don't reopen the dropdown if the user blurred the input meanwhile.
+        if (document.activeElement !== inputRef.current) {
+          setArgumentCompletions([]);
+          return;
+        }
+        const candidates = argumentCandidatesFromResponse(resp);
+        if (candidates.length > 0) {
+          setArgumentCompletions(candidates);
+          setSlashAutocompleteIndex(0);
+          setSlashAutocompleteOpen(true);
+          setSlashAutocompletePosition(getSlashAutocompletePosition());
+        } else {
+          // Zero completions — close the argument-phase dropdown.
+          setArgumentCompletions([]);
+          setSlashAutocompleteOpen(false);
+        }
+      })();
+    });
+  }, [draftValue, completionApi, detectSlashCommandAtCursor, getCompletionDebouncer, getSlashAutocompletePosition]);
+
+  // Cancel any pending argument-completion request on unmount.
+  useEffect(() => {
+    return () => {
+      getCompletionDebouncer().cancel();
+      completionRequestIdRef.current++;
+    };
+  }, [getCompletionDebouncer]);
 
   useLayoutEffect(() => {
     if (!inputRef.current || !selectionRef.current) return;
@@ -401,6 +509,29 @@ function CommandInput({
       return cmd;
     },
     [draftValue, updateValue],
+  );
+
+  // Accept a server-provided ARGUMENT candidate: replace the last
+  // whitespace-delimited word of the command text with the candidate plus a
+  // trailing space, then close the dropdown. The one-shot suppression flag
+  // stops the completion effect from immediately re-requesting for the
+  // now-empty next argument.
+  const acceptArgumentCompletion = useCallback(
+    (index: number) => {
+      if (argumentCompletions.length === 0) return;
+      const cmd = argumentCompletions[index % argumentCompletions.length];
+      const sel = selectionRef.current;
+      const cursorPos = sel?.start ?? 0;
+      const beforeCursor = draftValue.slice(0, cursorPos);
+      const afterCursor = draftValue.slice(cursorPos);
+      const { value: newBefore, cursor: newCursor } = replaceLastWord(beforeCursor, cmd.name);
+      completionSuppressedRef.current = true;
+      updateValue(newBefore + afterCursor, { start: newCursor, end: newCursor });
+      setSlashAutocompleteOpen(false);
+      setArgumentCompletions([]);
+      setIsArgumentPhase(false);
+    },
+    [argumentCompletions, draftValue, updateValue],
   );
 
   const currentHistoryValue =
@@ -712,10 +843,29 @@ function CommandInput({
           const info = detectSlashCommandAtCursor();
           if (info) {
             const firstWord = info.prefix;
-            // Only trigger if there's no space after the slash (we're still typing the command name)
-            // or if cursor is right after the slash
             const sel = selectionRef.current;
             const cursorPos = sel?.start ?? 0;
+            // Argument phase: the user is past the command name (a space
+            // separates it from the argument being typed). Tab cycles the
+            // server-provided argument candidates; Enter accepts.
+            const hasSpaceAfterSlash = /[\s\t]/.test(draftValue.slice(0, cursorPos).slice(info.slashIndex + 1));
+            if (hasSpaceAfterSlash) {
+              if (argumentCompletions.length > 0) {
+                if (!slashAutocompleteOpen) {
+                  setSlashAutocompleteOpen(true);
+                  setSlashAutocompleteIndex(0);
+                  setSlashAutocompletePosition(getSlashAutocompletePosition());
+                } else {
+                  const nextIndex = (slashAutocompleteIndex + 1) % argumentCompletions.length;
+                  setSlashAutocompleteIndex(nextIndex);
+                }
+              }
+              // No candidates (request pending / none available) — Tab is a
+              // no-op in the argument phase, never falls into name logic.
+              return;
+            }
+            // Only trigger if there's no space after the slash (we're still typing the command name)
+            // or if cursor is right after the slash
             if (firstWord || info.slashIndex === cursorPos - 1) {
               if (!slashAutocompleteOpen) {
                 const pos = getSlashAutocompletePosition();
@@ -756,9 +906,21 @@ function CommandInput({
         break;
       case 'Enter':
         if (slashAutocompleteOpen) {
-          e.preventDefault();
-          acceptSlashCompletion(slashAutocompletePrefix, slashAutocompleteIndex);
-          return;
+          if (isArgumentPhase && argumentCompletions.length === 0) {
+            // Request still in flight or no candidates — don't swallow
+            // Enter and don't let the browser insert a newline either.
+            // Close the (visually empty) dropdown and fall through to
+            // the normal send handling below.
+            setSlashAutocompleteOpen(false);
+          } else if (isArgumentPhase) {
+            e.preventDefault();
+            acceptArgumentCompletion(slashAutocompleteIndex);
+            return;
+          } else {
+            e.preventDefault();
+            acceptSlashCompletion(slashAutocompletePrefix, slashAutocompleteIndex);
+            return;
+          }
         }
         if (multiline) {
           if (e.shiftKey) {
@@ -1037,7 +1199,11 @@ function CommandInput({
               // cmd is already from the memoized matches array — find its
               // index directly rather than re-running getMatchingSlashCommands.
               const idx = slashAutocompleteMatches.findIndex(m => m.name === cmd.name);
-              acceptSlashCompletion(slashAutocompletePrefix, idx >= 0 ? idx : slashAutocompleteIndex);
+              if (isArgumentPhase) {
+                acceptArgumentCompletion(idx >= 0 ? idx : slashAutocompleteIndex);
+              } else {
+                acceptSlashCompletion(slashAutocompletePrefix, idx >= 0 ? idx : slashAutocompleteIndex);
+              }
             }}
             onDismiss={() => setSlashAutocompleteOpen(false)}
             anchorTop={slashAutocompletePosition.top}

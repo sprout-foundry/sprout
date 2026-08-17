@@ -162,3 +162,27 @@ func promptRewindTurn(chatAgent *agent.Agent) (int, error) {
 	}
 	return n, nil
 }
+
+// Complete returns completions for the /rewind command. The primary
+// argument is a 0-based turn number (free text), so only the --no-revert
+// flag is offered, and only when the token being typed starts with "-".
+func (c *RewindCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) == 0 {
+		return []string{"--no-revert"}
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		// First-arg suggestion after a trailing space (e.g. "/rewind ").
+		if len(args) == 1 {
+			return []string{"--no-revert"}
+		}
+		return nil
+	}
+	if !strings.HasPrefix(last, "-") {
+		return nil
+	}
+	if strings.HasPrefix(strings.ToLower("--no-revert"), strings.ToLower(last)) {
+		return []string{"--no-revert"}
+	}
+	return nil
+}

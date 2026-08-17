@@ -171,6 +171,9 @@ func logLocalExchange(tag, prompt, raw string, promptTokens int, toolCalls int) 
 	log.Printf("local[%s]: prompt_tokens=%d prompt_bytes=%d raw_bytes=%d tool_calls=%d",
 		tag, promptTokens, len(prompt), len(raw), toolCalls)
 	log.Printf("local[%s]: PROMPT_TAIL=%q", tag, trunc(prompt[max(0, len(prompt)-1200):], 1200))
+	if os.Getenv("SPROUT_DUMP_PROMPT") != "" {
+		_ = os.WriteFile(os.Getenv("SPROUT_DUMP_PROMPT"), []byte(prompt), 0o600)
+	}
 	log.Printf("local[%s]: RAW_OUTPUT=%q", tag, trunc(raw, 1200))
 }
 
@@ -536,11 +539,31 @@ const localRawContentMetaKey = "sprout_local_raw"
 // the model's native chat template (via FormatChat) and architecture-
 // specific tool prompt formatting.
 func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) string {
-	arch := model.Config().Arch
+	cfg := model.Config()
+	arch := cfg.Arch
+	isGemma := arch == gemmaArch
+
+	// Gemma native format: tool responses are named — resolve each tool
+	// message's ToolCallID to the function name from the preceding
+	// assistant message's ToolCalls.
+	var callNames map[string]string
+	if isGemma {
+		callNames = map[string]string{}
+		for _, m := range messages {
+			for _, tc := range m.ToolCalls {
+				callNames[tc.ID] = tc.Function.Name
+			}
+		}
+	}
+
 	msgs := make([]llm.ChatMessage, len(messages))
 	for i, m := range messages {
 		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
 		if m.Role == "tool" {
+			if isGemma {
+				msgs[i] = llm.ChatMessage{Role: "tool", Content: gemmaFormatToolResponse(callNames[m.ToolCallID], m.Content)}
+				continue
+			}
 			msgs[i] = convertToolResponse(arch, m.Content)
 		}
 		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
@@ -550,6 +573,26 @@ func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) str
 				msgs[i].Content = formatAssistantToolCalls(arch, m.ToolCalls)
 			}
 		}
+	}
+	if isGemma {
+		// Gemma native: tool declarations live inside the system turn
+		// (FormatChat renders it), not in a prepended Qwen block. The
+		// canonical template opens a system turn whenever tools exist —
+		// synthesize one if the conversation lacks it.
+		if len(tools) > 0 {
+			hasSystem := false
+			for i := range msgs {
+				if msgs[i].Role == "system" {
+					msgs[i].Content += gemmaToolDeclarations(tools)
+					hasSystem = true
+					break
+				}
+			}
+			if !hasSystem {
+				msgs = append([]llm.ChatMessage{{Role: "system", Content: gemmaToolDeclarations(tools)}}, msgs...)
+			}
+		}
+		return model.FormatChat(msgs)
 	}
 	prompt := model.FormatChat(msgs)
 	if len(tools) > 0 {
@@ -586,6 +629,21 @@ func staticPromptPrefix(model *llm.Model, sysMsgs []api.Message, tools []api.Too
 	msgs := make([]llm.ChatMessage, len(sysMsgs))
 	for i, m := range sysMsgs {
 		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+	if arch == gemmaArch {
+		// Mirror buildPrompt's gemma branch: declarations append to the
+		// system message inside the template (no prepended Qwen block).
+		// No system message + tools can't happen here (leadingSystemMessages
+		// returns empty and warmSystemPrefix bails), so no synthesis.
+		if len(tools) > 0 {
+			for i := range msgs {
+				if msgs[i].Role == "system" {
+					msgs[i].Content += gemmaToolDeclarations(tools)
+					break
+				}
+			}
+		}
+		return model.FormatChatPrefix(msgs)
 	}
 	prefix := model.FormatChatPrefix(msgs)
 	if len(tools) > 0 {
@@ -629,6 +687,8 @@ func formatAssistantToolCalls(arch string, toolCalls []api.ToolCall) string {
 	switch arch {
 	case "lfm2":
 		return formatLFM2AssistantToolCalls(toolCalls)
+	case gemmaArch:
+		return gemmaFormatAssistantToolCalls(toolCalls)
 	default:
 		return formatQwenAssistantToolCalls(toolCalls)
 	}
@@ -702,6 +762,8 @@ func parseLocalToolCalls(arch, text string) (string, []api.ToolCall) {
 			return text, nil
 		}
 		return remaining, calls
+	case gemmaArch:
+		return parseGemmaToolCalls(text)
 	default:
 		return parseQwenToolCalls(text)
 	}

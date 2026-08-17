@@ -57,9 +57,7 @@ func (h *listChangesHandler) Validate(args map[string]any) error {
 
 func (h *listChangesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 
-	ToolFuncMu.RLock()
-	fn := ListChangesFunc
-	ToolFuncMu.RUnlock()
+	fn := env.ResolveToolFuncs().ListChanges
 	if fn == nil {
 		return ToolResult{
 			Output:  "list_changes is not available: agent integration not initialized (ListChangesFunc is nil)",

@@ -129,3 +129,26 @@ func fmtTokens(n int) string {
 	}
 	return fmt.Sprintf("%d tokens", n)
 }
+
+// Complete returns completions for the /max-context command.
+func (c *MaxContextCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) > 1 {
+		return nil
+	}
+	candidates := []string{"clear"}
+	if len(args) == 0 {
+		return candidates
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		return candidates
+	}
+
+	var matches []string
+	for _, cand := range candidates {
+		if strings.HasPrefix(strings.ToLower(cand), strings.ToLower(last)) {
+			matches = append(matches, cand)
+		}
+	}
+	return matches
+}

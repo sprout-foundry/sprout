@@ -89,7 +89,13 @@ func startDaemonEmbeddingServer(ctx context.Context, daemonMode bool) *daemon.Em
 
 	socketPath := EmbeddingSocketPath()
 	svc := newDaemonEmbeddingService()
-	srv := &daemon.EmbeddingServer{SocketPath: socketPath, Service: svc}
+	srv := &daemon.EmbeddingServer{
+		SocketPath: socketPath,
+		Service:    svc,
+		// Track socket traffic so the idle reaper sees embedding socket use
+		// even with no WebUI activity.
+		Activity: daemon.NewDaemonActivity(),
+	}
 	if err := srv.Start(ctx); err != nil {
 		console.GlyphWarning.Fprintf(os.Stderr,
 			"embedding socket server failed to start at %s: %v\n", socketPath, err)

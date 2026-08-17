@@ -232,3 +232,30 @@ func (c *SearchCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 
 	return WriteJSON(c.out(), results)
 }
+
+// Complete returns flag completions for the /search command. The query
+// itself is free text, so only tokens starting with "--" are completed.
+func (c *SearchCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) > 6 {
+		return nil
+	}
+	flags := []string{"--reindex", "--cwd", "--since", "--until", "--limit"}
+	if len(args) == 0 {
+		return flags
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		return flags
+	}
+	if !strings.HasPrefix(last, "--") {
+		return nil
+	}
+
+	var matches []string
+	for _, flag := range flags {
+		if strings.HasPrefix(strings.ToLower(flag), strings.ToLower(last)) {
+			matches = append(matches, flag)
+		}
+	}
+	return matches
+}

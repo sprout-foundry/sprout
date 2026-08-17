@@ -123,6 +123,14 @@ type AgentServer struct {
 	Service AgentService
 	// Logger receives request/error logs.
 	Logger *slog.Logger
+	// Activity, when non-nil, is marked Begin/End around each request so the
+	// daemon idle reaper can see agent socket traffic.
+	Activity *DaemonActivity
+	// OnClose, when non-nil, is invoked inside Close() after the listener and
+	// conns are closed, before Close returns. It blocks until the service's
+	// teardown finishes — mirroring webui's waitForAgentTeardown so a daemon
+	// exiting doesn't race an in-flight embedding-store flush.
+	OnClose func()
 
 	ln    net.Listener
 	mu    sync.Mutex
@@ -183,6 +191,13 @@ func (s *AgentServer) acceptLoop(ctx context.Context) {
 			continue
 		}
 		s.mu.Lock()
+		if s.conns == nil {
+			// Close() nil'd the map after we accepted — server is shutting
+			// down; drop the connection instead of panicking on nil insert.
+			s.mu.Unlock()
+			conn.Close()
+			continue
+		}
 		s.conns[conn] = struct{}{}
 		s.mu.Unlock()
 		go s.handleConn(ctx, conn)
@@ -205,29 +220,43 @@ func (s *AgentServer) handleConn(ctx context.Context, conn net.Conn) {
 		}
 		var req AgentRequest
 		if err := json.Unmarshal(line, &req); err != nil {
+			// A client talking garbage is still a client — don't let the
+			// idle reaper reap the daemon under it.
+			s.Activity.Touch()
 			s.writeAgentError(rw, "", fmt.Sprintf("malformed request: %v", err))
 			continue
 		}
+		s.serveRequest(ctx, rw, req)
+	}
+}
 
-		// Stream query is handled specially: it emits events until done,
-		// then returns; the connection stays open for the next request.
-		if req.Op == AgentOpStreamQuery {
-			s.serveStreamQuery(ctx, rw, req)
-			continue
-		}
+// serveRequest handles one protocol request: stream queries emit events,
+// everything else dispatches and writes a single response. Each request
+// Begin/Ends the Activity tracker so the daemon idle reaper sees socket use.
+func (s *AgentServer) serveRequest(ctx context.Context, rw *bufio.ReadWriter, req AgentRequest) {
+	if s.Activity != nil {
+		s.Activity.Begin()
+		defer s.Activity.End()
+	}
 
-		resp := s.dispatch(ctx, req)
-		payload, err := json.Marshal(resp)
-		if err != nil {
-			s.writeAgentError(rw, req.ID, fmt.Sprintf("marshal response: %v", err))
-			continue
-		}
-		if _, err := rw.Write(append(payload, '\n')); err != nil {
-			return
-		}
-		if err := rw.Flush(); err != nil {
-			return
-		}
+	// Stream query is handled specially: it emits events until done, then
+	// returns; the connection stays open for the next request.
+	if req.Op == AgentOpStreamQuery {
+		s.serveStreamQuery(ctx, rw, req)
+		return
+	}
+
+	resp := s.dispatch(ctx, req)
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		s.writeAgentError(rw, req.ID, fmt.Sprintf("marshal response: %v", err))
+		return
+	}
+	if _, err := rw.Write(append(payload, '\n')); err != nil {
+		return
+	}
+	if err := rw.Flush(); err != nil {
+		return
 	}
 }
 
@@ -328,6 +357,9 @@ func (s *AgentServer) Close() error {
 		}
 		s.conns = nil
 		s.mu.Unlock()
+		if s.OnClose != nil {
+			s.OnClose()
+		}
 	})
 	return firstErr
 }

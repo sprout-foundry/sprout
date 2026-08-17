@@ -14,10 +14,7 @@ func TestSafeResolvePath(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 	tempDir := filepath.Join(homeDir, ".sprout-test-path-security")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
@@ -129,10 +126,7 @@ func TestSafeResolvePathSymlinks(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 	tempDir := filepath.Join(homeDir, ".sprout-test-symlink-security")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
@@ -204,10 +198,7 @@ func TestSafeResolvePathForWrite(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 	tempDir := filepath.Join(homeDir, ".sprout-test-write-security")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
@@ -441,10 +432,7 @@ func TestSafeResolvePathTmpExemption(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 	tempDir := filepath.Join(homeDir, ".sprout-test-tmp-exemption")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
@@ -500,10 +488,7 @@ func TestSafeResolvePathForWriteTmpExemption(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 	tempDir := filepath.Join(homeDir, ".sprout-test-write-tmp-exemption")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
@@ -652,10 +637,7 @@ func TestSafeResolvePath_ResolverScope(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 
 	// Create workspace root directory (not /tmp)
 	workspaceRoot := filepath.Join(homeDir, ".sprout-test-resolver-workspace")
@@ -782,10 +764,7 @@ func TestSafeResolvePath_SymlinkInWorkspace(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 
 	// Create workspace root
 	workspaceRoot := filepath.Join(homeDir, ".sprout-test-symlink-workspace")
@@ -863,10 +842,7 @@ func TestSafeResolvePathForWrite_ResolverScope(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 
 	// Create directories
 	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-scope-ws")
@@ -945,10 +921,7 @@ func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 
 	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-symlink-ws")
 	sessionFolder := filepath.Join(homeDir, ".sprout-test-write-symlink-sess")
@@ -1064,10 +1037,7 @@ func TestSafeResolvePathForWrite_SymlinkToEffectiveCwdFolder(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 
 	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-symlink2-ws")
 	effectiveCwd := filepath.Join(homeDir, ".sprout-test-write-symlink2-cwd")
@@ -1107,7 +1077,7 @@ func TestSafeResolvePathForWrite_SymlinkToEffectiveCwdFolder(t *testing.T) {
 	)
 
 	// This should succeed because the symlink target is under effectiveCwd
-	_, err = SafeResolvePathForWriteWithBypass(ctx, link)
+	_, err := SafeResolvePathForWriteWithBypass(ctx, link)
 	if err != nil {
 		t.Errorf("Expected success, got error: %v", err)
 	}
@@ -1118,10 +1088,7 @@ func TestSafeResolvePath_MultipleSymlinkHops(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 
 	workspaceRoot := filepath.Join(homeDir, ".sprout-test-multihop-ws")
 	outsideDir := filepath.Join(homeDir, ".sprout-test-multihop-outside")
@@ -1165,7 +1132,7 @@ func TestSafeResolvePath_MultipleSymlinkHops(t *testing.T) {
 	ctx := WithWorkspaceRoot(context.Background(), workspaceRoot)
 
 	// link1 resolves to outside, should be rejected
-	_, err = SafeResolvePathWithBypass(ctx, link1)
+	_, err := SafeResolvePathWithBypass(ctx, link1)
 	if err == nil {
 		t.Errorf("Expected rejection for multi-hop symlink to outside, got success")
 	}

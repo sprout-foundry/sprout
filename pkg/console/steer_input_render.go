@@ -149,42 +149,11 @@ func (r *SteerInputReader) refreshDropdownLocked(text string, cursorByte int) bo
 // while holding r.mu, releases r.mu, and only then calls this
 // helper. The dropdown's state is therefore consistent at the
 // moment of render.
+//
+// The layout logic lives in the shared buildDropdownBlock so the
+// InputReader's pinned dropdown (input_render_dropdown.go) reuses it.
 func (r *SteerInputReader) buildDropdownLine(prefix, text string, cursorByte, cols int, candidates []CompletionCandidate, selected int) (full string, cursorRow, cursorCol int) {
-	n := len(candidates)
-	if n > maxDropdownRows {
-		n = maxDropdownRows
-	}
-
-	// Each candidate row is pre-truncated to `cols` visible columns so
-	// the footer's WrapSteerLayout sees them as single visual rows.
-	// (WrapHardLine inside WrapSteerLayout would otherwise try to soft
-	// wrap a candidate across two rows when its content overflows.)
-	rows := make([]string, 0, n+1)
-	for i := 0; i < n; i++ {
-		rows = append(rows, formatDropdownRow(candidates[i], i == selected, cols))
-	}
-
-	inputLine := prefix + text
-	rows = append(rows, inputLine)
-	full = strings.Join(rows, "\n")
-
-	// The cursor sits on the input line (last row in the combined
-	// layout). Compute the cursor's (visualRow, visualCol) relative to
-	// JUST the input line — wrappedGeometry walks byte-by-byte and
-	// would miscount if we passed the candidate rows (their ANSI
-	// bytes would inflate the row counter). Then add the number of
-	// dropdown rows that precede the input line.
-	prefixWidth := displayWidth(prefix)
-	// Build the cursor byte index within the input line: prompt bytes
-	// + buffer cursor byte.
-	cursorByteInInput := len(prefix) + cursorByte
-	_, cursorRowInInput, cursorCol, _, _ := wrappedGeometry(
-		cols, prefixWidth, inputLine, cursorByteInInput,
-	)
-	// Adjust cursorRowInInput by the number of dropdown rows that
-	// precede the input line in the combined layout.
-	cursorRow = n + cursorRowInInput
-	return full, cursorRow, cursorCol
+	return buildDropdownBlock(prefix, text, cursorByte, cols, candidates, selected)
 }
 
 // printExternalLocked prints a message in the scrollable area without

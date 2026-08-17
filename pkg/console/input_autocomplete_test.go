@@ -243,72 +243,64 @@ func TestAutocomplete_MoreCountCorrect(t *testing.T) {
 	}
 }
 
-// TestAutocomplete_RenderRowsStartAtColumnZero is a regression test for a
-// cursor-column bug in the dropdown rendering. MoveCursorDown (\033[B)
-// preserves the cursor's column, and ClearLine (\033[2K) does not move the
-// cursor to column 0. Without an intervening carriage return (\r), the row
-// text is written starting at whatever column the input prompt left the
-// cursor at — so the dropdown appears shifted right rather than at column 0.
-//
-// The fix inserts \r between the two sequences. This test verifies that
-// every "\033[B" emitted by render() is immediately followed by "\r".
-func TestAutocomplete_RenderRowsStartAtColumnZero(t *testing.T) {
-	a := &inlineAutocomplete{
-		visible:  true,
-		selected: 0,
-		candidates: []CompletionCandidate{
-			{Text: "/help", Description: "Show help"},
-			{Text: "/heart", Description: ""},
-			{Text: "/heat", Description: "Temperature"},
-		},
+// TestAutocomplete_DropdownBlockCandidatesAboveInput verifies the
+// above-input pinned rendering that replaced the old below-line
+// dropdown: the combined block fed to the footer's pinned rows has the
+// candidate rows ABOVE the prompt line, with the selected candidate
+// marked with "▶ " and unselected rows indented.
+func TestAutocomplete_DropdownBlockCandidatesAboveInput(t *testing.T) {
+	candidates := []CompletionCandidate{
+		{Text: "/help", Description: "Show help"},
+		{Text: "/heart", Description: ""},
+		{Text: "/heat", Description: "Temperature"},
 	}
 
-	output := captureStdout(t, func() { a.render(80) })
+	full, cursorRow, cursorCol := buildDropdownBlock("> ", "/he", len("/he"), 80, candidates, 1)
+	lines := strings.Split(full, "\n")
 
-	// Fixed sequence: move-down + carriage return + clear-line.
-	// MoveCursorDownSeq(1) emits "\x1b[1B" (not "\x1b[B" — it includes the
-	// explicit row count), and ClearLineSeq() emits "\x1b[2K".
-	fixedSeq := "\x1b[1B\r\x1b[2K"
-	// Buggy sequence: move-down + clear-line (no carriage return).
-	buggySeq := "\x1b[1B\x1b[2K"
-
-	// Sanity check: render() drew exactly 3 candidates, so the fixed
-	// sequence must appear 3 times.
-	if got := strings.Count(output, fixedSeq); got != 3 {
-		t.Errorf("expected 3 occurrences of %q (move-down + carriage return + clear), got %d\noutput=%q",
-			fixedSeq, got, output)
+	// 3 candidates + 1 input line.
+	if len(lines) != 4 {
+		t.Fatalf("expected 4 lines (3 candidates + 1 input), got %d: %q", len(lines), full)
 	}
-
-	// The buggy sequence (without \r) must never appear, otherwise text
-	// would start at the prompt's column instead of column 0.
-	if strings.Contains(output, buggySeq) {
-		t.Errorf("render() output contains buggy sequence %q (no carriage return before clear); "+
-			"text would start at the wrong column\noutput=%q", buggySeq, output)
+	// Selected candidate (index 1) has the ▶ marker.
+	if !strings.Contains(lines[1], "▶ ") {
+		t.Errorf("selected candidate row should have ▶ marker, got %q", lines[1])
+	}
+	if strings.Contains(lines[0], "▶") || strings.Contains(lines[2], "▶") {
+		t.Errorf("unselected candidate rows must not have ▶ marker")
+	}
+	// Last row is the input line.
+	if lines[3] != "> /he" {
+		t.Errorf("last row should be the input line, got %q", lines[3])
+	}
+	// Cursor sits on the input line (last row of the combined layout).
+	if cursorRow != 3 {
+		t.Errorf("cursorRow = %d, want 3 (input line)", cursorRow)
+	}
+	// Cursor col includes the prompt prefix width + cursor position.
+	if cursorCol != len("> /he") {
+		t.Errorf("cursorCol = %d, want %d", cursorCol, len("> /he"))
 	}
 }
 
-// TestAutocomplete_ClearRowsUseCarriageReturn is the clear()-side regression
-// companion to the render() test above. clear() erases previously drawn
-// dropdown rows using the same move-down + clear pattern, so it must also
-// emit \r between them to return to column 0.
-func TestAutocomplete_ClearRowsUseCarriageReturn(t *testing.T) {
-	a := &inlineAutocomplete{
-		visible:      true,
-		renderedRows: 4,
+// TestAutocomplete_DropdownBlockCapsAtMaxDropdownRows verifies that
+// the pinned block renders at most maxDropdownRows candidates above
+// the input line, mirroring the steer panel's cap.
+func TestAutocomplete_DropdownBlockCapsAtMaxDropdownRows(t *testing.T) {
+	candidates := make([]CompletionCandidate, 20)
+	for i := range candidates {
+		candidates[i] = CompletionCandidate{Text: fmt.Sprintf("/cmd%02d", i)}
 	}
 
-	output := captureStdout(t, func() { a.clear() })
-
-	fixedSeq := "\x1b[1B\r\x1b[2K"
-	buggySeq := "\x1b[1B\x1b[2K"
-
-	if got := strings.Count(output, fixedSeq); got != 4 {
-		t.Errorf("expected 4 occurrences of %q (move-down + carriage return + clear), got %d\noutput=%q",
-			fixedSeq, got, output)
+	full, cursorRow, _ := buildDropdownBlock("> ", "/", 1, 80, candidates, 0)
+	lines := strings.Split(full, "\n")
+	if len(lines) != maxDropdownRows+1 {
+		t.Fatalf("expected %d lines (%d candidates + 1 input), got %d",
+			maxDropdownRows+1, maxDropdownRows, len(lines))
 	}
-	if strings.Contains(output, buggySeq) {
-		t.Errorf("clear() output contains buggy sequence %q (no carriage return before clear)\noutput=%q",
-			buggySeq, output)
+	// Cursor row accounts for the capped candidate count.
+	if cursorRow != maxDropdownRows {
+		t.Errorf("cursorRow = %d, want %d (capped candidates + input line)", cursorRow, maxDropdownRows)
 	}
 }
 
@@ -424,24 +416,25 @@ func TestHandleEvent_HistoryVsAutocompleteRouting(t *testing.T) {
 
 // --- Regression tests for autocomplete fixes ---
 
-// TestAutocomplete_HideDoesNotResetRenderedRows verifies that hide()
-// preserves renderedRows so the caller can still call clear() to
-// erase the rows from the terminal. clear() resets renderedRows to 0
-// after erasing.
-func TestAutocomplete_HideDoesNotResetRenderedRows(t *testing.T) {
+// TestAutocomplete_HideClearsCandidates verifies that hide() resets the
+// candidate state so the next update() starts fresh. Rendering is
+// footer-driven now (the old below-line renderRows/clearRows are gone),
+// so there is no rendered-row bookkeeping to preserve.
+func TestAutocomplete_HideClearsCandidates(t *testing.T) {
 	a := &inlineAutocomplete{
-		visible:      true,
-		renderedRows: 4,
-		candidates:   []CompletionCandidate{{Text: "/help"}},
+		visible:    true,
+		selected:   1,
+		candidates: []CompletionCandidate{{Text: "/help"}, {Text: "/heart"}},
 	}
 	a.hide()
-	if a.renderedRows != 4 {
-		t.Errorf("renderedRows should be preserved after hide() so clear() can erase, got %d", a.renderedRows)
+	if a.visible {
+		t.Error("hide() should clear the visible flag")
 	}
-	// clear() uses renderedRows and then resets it.
-	a.clear()
-	if a.renderedRows != 0 {
-		t.Errorf("renderedRows should be 0 after clear(), got %d", a.renderedRows)
+	if len(a.candidates) != 0 {
+		t.Errorf("hide() should clear candidates, got %d", len(a.candidates))
+	}
+	if a.selected != 0 {
+		t.Errorf("hide() should reset selection to 0, got %d", a.selected)
 	}
 }
 
@@ -620,41 +613,23 @@ func TestAutocomplete_UpdateShortCircuitsOnSameLine(t *testing.T) {
 	}
 }
 
-// TestAutocomplete_ClearThenHideErasesRows verifies the Enter-accept
-// pattern: clear() emits escape sequences to erase drawn rows, then
-// hide() marks the dropdown invisible. This is the sequence used in
-// the ReadLine Enter handler.
-func TestAutocomplete_ClearThenHideErasesRows(t *testing.T) {
+// TestAutocomplete_HideMarksInvisible verifies the Enter-accept /
+// Escape pattern: hide() marks the dropdown invisible (state-only, no
+// terminal writes). The pinned-block teardown is the footer's job
+// (ClearSteerLineLocked), covered in input_render_dropdown_test.go.
+func TestAutocomplete_HideMarksInvisible(t *testing.T) {
 	a := &inlineAutocomplete{
-		visible:      true,
-		renderedRows: 3,
-		selected:     0,
-		candidates: []CompletionCandidate{
-			{Text: "/help"},
-			{Text: "/heart"},
-			{Text: "/heat"},
-		},
+		visible:    true,
+		selected:   0,
+		candidates: []CompletionCandidate{{Text: "/help"}},
 	}
 
-	output := captureStdout(t, func() {
-		a.clear()
-	})
-
-	// clear() must emit one move-down+CR+clear per rendered row.
-	fixedSeq := "\x1b[1B\r\x1b[2K"
-	if got := strings.Count(output, fixedSeq); got != 3 {
-		t.Errorf("expected 3 clear sequences, got %d\noutput=%q", got, output)
-	}
-
-	// After clear(), renderedRows is reset.
-	if a.renderedRows != 0 {
-		t.Errorf("renderedRows should be 0 after clear(), got %d", a.renderedRows)
-	}
-
-	// hide() now marks it invisible (state-only, no terminal writes).
 	a.hide()
 	if a.visible {
 		t.Error("dropdown should be invisible after hide()")
+	}
+	if len(a.candidates) != 0 {
+		t.Errorf("hide() should clear candidates, got %d", len(a.candidates))
 	}
 }
 
@@ -662,30 +637,21 @@ func TestAutocomplete_ClearThenHideErasesRows(t *testing.T) {
 // the bug where autocomplete dropdown rows persisted on screen after
 // Enter:
 //
-//  1. User types "/he" — dropdown shows 3 rows below input.
+//  1. User types "/he" — the dropdown state machine is visible (the
+//     footer renders it above the prompt line).
 //  2. User presses Enter — the Enter handler accepts the candidate
 //     ("/help"), hides the dropdown state, and calls Refresh().
-//  3. Refresh() → refreshLocked() → clear() erases the OLD rows and
-//     redraws the input line with "/help". Without the fix, it then
-//     calls update()+render() and draws NEW rows for "/help" (the
-//     rich completer still matches it, e.g. for sub-commands).
-//  4. Those NEW rows persist on screen: the streaming response pushes
-//     the cursor down past them, after which a later clear() (which
-//     walks down from the cursor) cannot reach them — they stay
-//     visible until a fresh prompt draws.
-//
-// The fix: the Enter handler sets suppressAutocompleteNextRefresh
-// before Refresh(). refreshLocked honors the flag by skipping the
-// update+render step, so no dropdown rows are drawn for the accepted
-// line. The flag is consumed and cleared after one invocation.
+//  3. Refresh() → refreshLocked() honors suppressAutocompleteNextRefresh
+//     by skipping the update() step, so the dropdown stays hidden for
+//     the accepted line instead of re-appearing (the rich completer
+//     still matches "/help", e.g. for sub-commands).
 //
 // This test asserts:
-//   - After the Enter sequence, renderedRows=0 and visible=false
-//     (no dropdown state left for the next refresh to short-circuit on).
+//   - After the Enter sequence, visible=false and no dropdown block is
+//     re-rendered for the accepted line.
 //   - The accepted text ("/help") is on the input line.
-//   - The Refresh output contains clear-sequences for the typing-phase
-//     rows (pre-accept erase) but NO render-sequences for the
-//     post-accept rows (they were never drawn).
+//   - The suppression flag is consumed (cleared) by refreshLocked.
+//   - The Refresh output contains no post-accept candidate text.
 func TestEnterHandler_ForceClearsDropdownAfterRefresh(t *testing.T) {
 	// Completer that returns matches for BOTH "/he" (typing phase) AND
 	// "/help" (post-accept phase) — this is the scenario where the
@@ -712,16 +678,12 @@ func TestEnterHandler_ForceClearsDropdownAfterRefresh(t *testing.T) {
 	ir.terminalWidth = 80
 	ir.richCompleter = rich
 
-	// Set up: user has typed "/he" and the dropdown is rendered.
+	// Set up: user has typed "/he" and the dropdown is visible.
 	ir.InsertChar("/")
 	ir.InsertChar("h")
 	ir.InsertChar("e")
 	if !ir.autocomplete.visible {
 		t.Fatal("setup: dropdown should be visible after typing /he")
-	}
-	preAcceptRows := ir.autocomplete.renderedRows
-	if preAcceptRows == 0 {
-		t.Fatal("setup: dropdown should have rendered rows")
 	}
 
 	// --- Simulate the Enter handler (with the fix). ---
@@ -735,19 +697,16 @@ func TestEnterHandler_ForceClearsDropdownAfterRefresh(t *testing.T) {
 		// Step 2: hide the dropdown state.
 		ir.autocomplete.hide()
 		// Step 3: set the suppression flag so refreshLocked skips
-		// the update+render step for the accepted line.
+		// the update step for the accepted line.
 		ir.suppressAutocompleteNextRefresh = true
-		// Step 4: Refresh erases the old rows + redraws the input
-		// line, but does NOT re-render the dropdown for "/help".
+		// Step 4: Refresh redraws the input line with "/help" but
+		// does NOT re-show the dropdown.
 		ir.Refresh()
 	})
 
-	// After the fix: no dropdown rows on screen, no stale state.
+	// After the fix: no dropdown state for the accepted line.
 	if ir.autocomplete.visible {
 		t.Error("dropdown should be invisible after Enter handler")
-	}
-	if ir.autocomplete.renderedRows != 0 {
-		t.Errorf("renderedRows should be 0, got %d", ir.autocomplete.renderedRows)
 	}
 	// The suppression flag must be consumed (cleared) by refreshLocked
 	// so subsequent Refresh calls behave normally.
@@ -760,19 +719,10 @@ func TestEnterHandler_ForceClearsDropdownAfterRefresh(t *testing.T) {
 		t.Errorf("expected accepted text /help on input line, got %q", ir.line)
 	}
 
-	// The captured output must contain clear-sequences to erase the
-	// pre-accept dropdown rows (refreshLocked's leading clear()).
-	fixedSeq := "\x1b[1B\r\x1b[2K"
-	clearCount := strings.Count(output, fixedSeq)
-	if clearCount < preAcceptRows {
-		t.Errorf("expected at least %d clear sequences (pre-accept erase), got %d\noutput=%q",
-			preAcceptRows, clearCount, output)
-	}
-
 	// The output must NOT contain the post-accept dropdown text —
-	// "/help search" is a candidate that only appears if render()
-	// was called for the accepted line. The suppression flag should
-	// have prevented it.
+	// "/help search" is a candidate that only appears if the dropdown
+	// was re-rendered for the accepted line. The suppression flag
+	// should have prevented it.
 	if strings.Contains(output, "/help search") {
 		t.Errorf("output should not contain post-accept dropdown candidates (/help search); "+
 			"suppressAutocompleteNextRefresh was not honored\noutput=%q", output)
@@ -783,7 +733,7 @@ func TestEnterHandler_ForceClearsDropdownAfterRefresh(t *testing.T) {
 // flag is safe when there is no dropdown to suppress — i.e., when the
 // user presses Enter on a non-slash line (no completer matches, no
 // dropdown was visible). The flag is set and immediately consumed;
-// no phantom rows are drawn or erased.
+// no phantom dropdown state is created.
 func TestEnterHandler_NoDropdownStillClears(t *testing.T) {
 	ir := NewInputReader("> ")
 	ir.terminalWidth = 80
@@ -798,23 +748,16 @@ func TestEnterHandler_NoDropdownStillClears(t *testing.T) {
 
 	// Simulate the Enter handler's suppression flag + Refresh.
 	ir.suppressAutocompleteNextRefresh = true
-	output := captureStdout(t, func() {
+	captureStdout(t, func() {
 		ir.Refresh()
 	})
-
-	// Should produce no dropdown clear sequences (no rows were drawn).
-	fixedSeq := "\x1b[1B\r\x1b[2K"
-	if got := strings.Count(output, fixedSeq); got != 0 {
-		t.Errorf("expected 0 clear sequences (no dropdown was rendered), got %d\noutput=%q",
-			got, output)
-	}
 
 	// Input line is preserved.
 	if ir.line != "hi" {
 		t.Errorf("input line should be preserved, got %q", ir.line)
 	}
-	if ir.autocomplete.renderedRows != 0 {
-		t.Errorf("renderedRows should be 0, got %d", ir.autocomplete.renderedRows)
+	if ir.autocomplete.visible {
+		t.Errorf("dropdown should not become visible, got visible=true")
 	}
 	// Flag consumed.
 	if ir.suppressAutocompleteNextRefresh {

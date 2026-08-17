@@ -148,14 +148,27 @@ type InputReader struct {
 	footerTooltip *FooterTooltip
 
 	// suppressAutocompleteNextRefresh is a one-shot flag consumed by
-	// refreshLocked: when true, it skips the update+render step that
-	// draws the inline dropdown after the input line. The Enter handler
-	// sets it before its Refresh call so the dropdown is erased (by
-	// refreshLocked's leading clear()) but never re-drawn for the
-	// accepted line — leaving no stale rows to persist during the
-	// upcoming streaming response. The flag is cleared immediately
-	// after the Refresh returns.
+	// refreshLocked: when true, it skips the autocomplete update() step
+	// so the dropdown stays hidden for the accepted line. The Enter
+	// handler sets it before its Refresh call so the accepted command
+	// (e.g. "/help") isn't re-shown by the completer — leaving no
+	// dropdown rows to persist during the upcoming streaming response.
+	// The flag is cleared immediately after the Refresh returns.
 	suppressAutocompleteNextRefresh bool
+
+	// footer is the optional StatusFooter used to render the live
+	// autocomplete dropdown ABOVE the prompt line (steer-panel style)
+	// by reserving scroll-region rows and drawing the candidate rows +
+	// prompt as a pinned block. When nil, the dropdown state machine
+	// still runs but nothing is rendered.
+	footer *StatusFooter
+
+	// pinnedDropdownActive tracks whether the footer is currently
+	// reserving rows for this reader's dropdown block. When the
+	// dropdown hides, refreshLocked tears the block down (via
+	// ClearSteerLineLocked) and clears this flag so the footer's scroll
+	// region returns to its 2-row baseline.
+	pinnedDropdownActive bool
 }
 
 type pasteSpan struct {

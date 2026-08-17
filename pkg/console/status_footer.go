@@ -68,13 +68,15 @@ type StatusFooter struct {
 	// registered keybindings (e.g. "Alt+T breakdown · Alt+V verbose").
 	showKeymapHint bool
 
-	// SP-078 Phase 1: when steerCursorRow >= 0, drawLocked uses the
-	// width-aware WrapSteerLayout path instead of the legacy
-	// byte-offset (steerCursor) splitSteerLines path. steerCursorRow
-	// and steerCursorCol are 0-based (row, col) into the visual row
-	// array (NOT byte offsets), so the caret lands at the correct cell
-	// even after soft wraps. Set by SetSteerLineWrapped; cleared by
-	// SetSteerLine / SetSteerLineWithCursor.
+	// SP-078 Phase 1: steerWrappedActive selects the width-aware
+	// WrapSteerLayout render path in drawLocked (instead of the legacy
+	// byte-offset steerCursor + splitSteerLines path). steerCursorRow
+	// and steerCursorCol record the caller-requested caret (0-based
+	// row/col into the visual row array) for callers that need to
+	// query it; drawLocked itself re-derives caret placement from the
+	// buffer, which — because the dropdown and steer input only render
+	// with the cursor at end-of-line — lands on the same cell. Set by
+	// SetSteerLineWrapped; cleared by SetSteerLine / SetSteerLineWithCursor.
 	steerCursorRow     int
 	steerCursorCol     int
 	steerWrappedActive bool
@@ -657,6 +659,40 @@ func (f *StatusFooter) SetSteerLineWrapped(text string, cursorRow, cursorCol int
 	f.draw()
 }
 
+// SetSteerLineWrappedLocked is the lock-free variant of
+// SetSteerLineWrapped for callers that already hold outputMu (e.g.
+// InputReader.refreshLocked runs under LockOutput). It records the
+// same wrapped-mode state and re-renders via applyScrollRegionLocked +
+// drawLocked instead of applyScrollRegion + draw, which would
+// re-acquire the non-reentrant outputMu and deadlock.
+func (f *StatusFooter) SetSteerLineWrappedLocked(text string, cursorRow, cursorCol int) {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	wasActive := f.steerActive
+	prevRows := f.lastSteerRows
+	f.steerActive = true
+	f.steerLine = text
+	f.steerCursor = -1
+	f.steerWrappedActive = true
+	f.steerCursorRow = cursorRow
+	f.steerCursorCol = cursorCol
+	active := f.active
+	newRows := f.steerRowCount()
+	f.mu.Unlock()
+	if !active {
+		return
+	}
+	if !wasActive || newRows != prevRows {
+		if wasActive && newRows < prevRows {
+			f.clearOrphanedSteerRows(prevRows, newRows)
+		}
+		f.applyScrollRegionLocked()
+	}
+	f.drawLocked()
+}
+
 // clearOrphanedSteerRows blanks rows that USED to belong to the steer
 // panel but won't be rendered this frame because the panel shrank.
 // Without this, deleting a `\n` would leave the previous row's text
@@ -738,6 +774,53 @@ func (f *StatusFooter) ClearSteerLine() {
 	}
 	f.applyScrollRegion()
 	f.draw()
+}
+
+// ClearSteerLineLocked is the lock-free variant of ClearSteerLine for
+// callers that already hold outputMu. Mirrors ClearSteerLine but uses
+// applyScrollRegionLocked + drawLocked so it can run from
+// InputReader.refreshLocked without re-acquiring the non-reentrant
+// outputMu.
+func (f *StatusFooter) ClearSteerLineLocked() {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	wasActive := f.steerActive
+	prevRows := f.lastSteerRows
+	f.steerActive = false
+	f.steerLine = ""
+	f.steerCursor = -1
+	f.steerWrappedActive = false
+	f.steerCursorRow = -1
+	f.steerCursorCol = 0
+	f.lastSteerRows = 0
+	active := f.active
+	f.mu.Unlock()
+	if !active || !wasActive {
+		return
+	}
+	// Reset region, blank each previously-occupied steer row, then
+	// re-apply with no steer reservation. Order: reset region first so
+	// we can address the previously-reserved rows by absolute number.
+	_, rows := f.terminalSize()
+	if rows > 2 && prevRows > 0 {
+		fmt.Fprint(f.w, "\033[r")
+		fmt.Fprint(f.w, "\0337")
+		f.mu.Lock()
+		hintRows := f.lastHintRows
+		f.mu.Unlock()
+		for i := 0; i < prevRows; i++ {
+			row := rows - 1 - hintRows - prevRows + i
+			if row < 1 {
+				continue
+			}
+			fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
+		}
+		fmt.Fprint(f.w, "\0338")
+	}
+	f.applyScrollRegionLocked()
+	f.drawLocked()
 }
 
 // draw renders the pinned footer rows. Always: row N-1 horizontal rule,

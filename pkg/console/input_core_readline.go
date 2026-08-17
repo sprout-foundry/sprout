@@ -302,25 +302,22 @@ func (ir *InputReader) ReadLine() (string, error) {
 							ir.cursorPos = len(ir.line)
 						}
 						// hide() marks the dropdown invisible; the next
-						// Refresh() → refreshLocked() → clear() erases
-						// the old rows, then redraws the input line with
-						// the accepted text so the user sees the final
+						// Refresh() → refreshLocked() tears down the pinned
+						// footer block and redraws the input line inline
+						// with the accepted text, so the user sees the final
 						// command (e.g. "/help") instead of the partial
 						// text they typed ("/he").
 						//
 						// suppressAutocompleteNextRefresh prevents
-						// refreshLocked from re-rendering the dropdown
-						// for the accepted line. Enter is for SUBMISSION,
-						// not completion cycling (that's Tab's job), so
-						// the dropdown must not survive into the upcoming
+						// refreshLocked from re-showing the dropdown for the
+						// accepted line. Enter is for SUBMISSION, not
+						// completion cycling (that's Tab's job), so the
+						// dropdown must not survive into the upcoming
 						// streaming response. Without the suppression,
-						// refreshLocked would call update()+render() for
-						// the accepted line (the rich completer often
-						// still matches, e.g. "/help" has sub-commands),
-						// drawing rows that the streaming response would
-						// push the cursor past — after which a later
-						// clear() walks down the wrong rows and the stale
-						// dropdown stays visible until a fresh prompt.
+						// refreshLocked would call update() for the accepted
+						// line (the rich completer often still matches, e.g.
+						// "/help" has sub-commands), re-pinning a block that
+						// the streaming response would then push past.
 						ir.autocomplete.hide()
 						ir.suppressAutocompleteNextRefresh = true
 						ir.Refresh()

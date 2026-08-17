@@ -83,10 +83,7 @@ func setupTestSearchIndex(t *testing.T) string {
 	tmpDir := t.TempDir()
 
 	// Override HOME so DefaultIndexPath() resolves into our temp tree.
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	// Also restore HOME immediately at cleanup so sibling tests don't collide.
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
 	// Create directory structure: <state-dir>/sessions/scoped/<hash>/ —
 	// the same layout search.DefaultIndexPath()/getSessionsDir() resolve,
@@ -539,9 +536,7 @@ func TestParseDate(t *testing.T) {
 
 func TestGetSessionsDir(t *testing.T) {
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
 	dir := getSessionsDir()
 	expected := filepath.Dir(scopedSessionsDir(t, tmpDir))
@@ -582,9 +577,7 @@ func TestSearchCommand_QueryBeforeAndAfterFlags(t *testing.T) {
 
 func TestSearchCommand_ReindexOnEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
 	// Create sessions dir with files but DON'T pre-build the index
 	sessionsDir := scopedSessionsDir(t, tmpDir)
@@ -608,9 +601,7 @@ func TestSearchCommand_ReindexOnEmpty(t *testing.T) {
 
 func TestSearchCommand_AutoBuildEmptyIndex(t *testing.T) {
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 
 	// Create sessions dir with files but DON'T pre-build the index
 	sessionsDir := scopedSessionsDir(t, tmpDir)

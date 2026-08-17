@@ -1,4 +1,4 @@
-import { ChatMessageContextMenu } from '@sprout/ui';
+import { ChatMessageContextMenu, createHttpCommandCompletionApi } from '@sprout/ui';
 import { ChevronDown, Download } from 'lucide-react';
 import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
@@ -78,6 +78,11 @@ function Chat(props: ChatProps): JSX.Element {
   const commandOutputState = useCommandOutput(chatId);
 
   const sessionId = chatId ?? '';
+
+  // Slash-command ARGUMENT completion for the command bar. Built once and
+  // routed through clientFetch so the client-ID header and SSH-proxy base
+  // rewriting apply exactly like every other WebUI API call.
+  const completionApi = useMemo(() => createHttpCommandCompletionApi(clientFetch), []);
 
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
@@ -497,6 +502,7 @@ function Chat(props: ChatProps): JSX.Element {
           onQueueMessageEdit={onQueueMessageEdit}
           onQueueReorder={onQueueReorder}
           onClearQueuedMessages={onClearQueuedMessages}
+          completionApi={completionApi}
           isIndexEnabled={!!stats?.embedding_index_enabled}
           isIndexBuilding={!!stats?.embedding_index_building}
           onToggleIndex={handleToggleIndex}

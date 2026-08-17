@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // ============================================================================
@@ -39,12 +40,20 @@ import (
 // highRiskApprovedForCommand. In non-interactive test mode this auto-approves,
 // so the command proceeds past the gate. The OLD "blocked by default"
 // hard-block message must never appear.
+// sandboxGitWorkspace makes a temp workspace safe for tests that execute
+// real git history-rewrite commands. See testutil.GitSandbox for the
+// rationale: initialized-empty repo + GIT_CEILING_DIRECTORIES ceiling.
+func sandboxGitWorkspace(t *testing.T) string {
+	t.Helper()
+	return testutil.GitSandbox(t)
+}
+
 func TestHandleShellCommand_Legacy_GitHistoryRewriteNotHardBlocked(t *testing.T) {
 	t.Run("AllowGitHistoryRewrite_true_proceeds_past_gate", func(t *testing.T) {
 		agent := newTestAgent(t)
 		defer agent.Shutdown()
 
-		workspace := t.TempDir()
+		workspace := sandboxGitWorkspace(t)
 		agent.SetWorkspaceRoot(workspace)
 		agent.SetShellCwd(workspace)
 
@@ -81,7 +90,7 @@ func TestHandleShellCommand_Legacy_GitHistoryRewriteNotHardBlocked(t *testing.T)
 		agent := newTestAgent(t)
 		defer agent.Shutdown()
 
-		workspace := t.TempDir()
+		workspace := sandboxGitWorkspace(t)
 		agent.SetWorkspaceRoot(workspace)
 		agent.SetShellCwd(workspace)
 
@@ -118,7 +127,7 @@ func TestHandleShellCommand_Legacy_GitResetHardNotHardBlocked(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
+	workspace := sandboxGitWorkspace(t)
 	agent.SetWorkspaceRoot(workspace)
 	agent.SetShellCwd(workspace)
 

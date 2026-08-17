@@ -20,6 +20,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/daemon"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 	"github.com/sprout-foundry/sprout/pkg/webui"
@@ -318,24 +319,14 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			}
 		}
 
-		// SP-136 P2: idle reaping for auto-started daemons.
-		// When SPROUT_DAEMON_IDLE_TIMEOUT is a positive duration, the daemon
-		// self-terminates after the web UI has had no active clients and no
-		// active queries for that long. Auto-start (cmd/daemon_autostart.go)
-		// sets this on daemons it spawns; explicitly-started daemons
-		// (sprout agent -d) are unaffected unless the operator opts in.
-		if daemonMode && webServer != nil {
-			if idleTimeout, perr := time.ParseDuration(os.Getenv("SPROUT_DAEMON_IDLE_TIMEOUT")); perr == nil && idleTimeout > 0 {
-				go reapIdleDaemon(ctx, cancel, webServer, idleTimeout)
-			}
-		}
-
 		// SP-136 P3: the daemon hosts the embedding socket so CLI processes
 		// route embedding ops through it (one model load, one index writer).
+		var socketActivities []*daemon.DaemonActivity
 		if daemonMode {
 			embedSrv := startDaemonEmbeddingServer(ctx, true)
 			if embedSrv != nil {
 				defer embedSrv.Close()
+				socketActivities = append(socketActivities, embedSrv.Activity)
 			}
 		}
 
@@ -345,6 +336,20 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			agentSrv := startDaemonAgentServer(ctx, true, chatAgent)
 			if agentSrv != nil {
 				defer agentSrv.Close()
+				socketActivities = append(socketActivities, agentSrv.Activity)
+			}
+		}
+
+		// SP-136 P2: idle reaping for auto-started daemons.
+		// When SPROUT_DAEMON_IDLE_TIMEOUT is a positive duration, the daemon
+		// self-terminates after the web UI has had no active clients and no
+		// active queries — and no socket traffic — for that long. Auto-start
+		// (cmd/daemon_autostart.go) sets this on daemons it spawns;
+		// explicitly-started daemons (sprout agent -d) are unaffected unless
+		// the operator opts in.
+		if daemonMode && webServer != nil {
+			if idleTimeout, perr := time.ParseDuration(os.Getenv("SPROUT_DAEMON_IDLE_TIMEOUT")); perr == nil && idleTimeout > 0 {
+				go reapIdleDaemon(ctx, cancel, webServer, socketActivities, idleTimeout)
 			}
 		}
 	}

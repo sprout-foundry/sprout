@@ -46,6 +46,9 @@ type EmbeddingServer struct {
 	Service EmbeddingService
 	// Logger receives request/error logs.
 	Logger *slog.Logger
+	// Activity, when non-nil, is marked Begin/End around each request so the
+	// daemon idle reaper can see embedding socket traffic.
+	Activity *DaemonActivity
 
 	ln    net.Listener
 	mu    sync.Mutex
@@ -110,6 +113,13 @@ func (s *EmbeddingServer) acceptLoop(ctx context.Context) {
 			continue
 		}
 		s.mu.Lock()
+		if s.conns == nil {
+			// Close() nil'd the map after we accepted — server is shutting
+			// down; drop the connection instead of panicking on nil insert.
+			s.mu.Unlock()
+			conn.Close()
+			continue
+		}
 		s.conns[conn] = struct{}{}
 		s.mu.Unlock()
 		go s.handleConn(ctx, conn)
@@ -132,22 +142,35 @@ func (s *EmbeddingServer) handleConn(ctx context.Context, conn net.Conn) {
 		}
 		var req embedding.RemoteRequest
 		if err := json.Unmarshal(line, &req); err != nil {
+			// A client talking garbage is still a client — don't let the
+			// idle reaper reap the daemon under it.
+			s.Activity.Touch()
 			s.writeError(rw, "", fmt.Sprintf("malformed request: %v", err))
 			continue
 		}
+		s.serveRequest(ctx, rw, req)
+	}
+}
 
-		resp := s.dispatch(ctx, req)
-		payload, err := json.Marshal(resp)
-		if err != nil {
-			s.writeError(rw, req.ID, fmt.Sprintf("marshal response: %v", err))
-			continue
-		}
-		if _, err := rw.Write(append(payload, '\n')); err != nil {
-			return
-		}
-		if err := rw.Flush(); err != nil {
-			return
-		}
+// serveRequest handles one protocol request and Begin/Ends the Activity
+// tracker so the daemon idle reaper sees socket use.
+func (s *EmbeddingServer) serveRequest(ctx context.Context, rw *bufio.ReadWriter, req embedding.RemoteRequest) {
+	if s.Activity != nil {
+		s.Activity.Begin()
+		defer s.Activity.End()
+	}
+
+	resp := s.dispatch(ctx, req)
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		s.writeError(rw, req.ID, fmt.Sprintf("marshal response: %v", err))
+		return
+	}
+	if _, err := rw.Write(append(payload, '\n')); err != nil {
+		return
+	}
+	if err := rw.Flush(); err != nil {
+		return
 	}
 }
 

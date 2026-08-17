@@ -78,9 +78,7 @@ func (h *createPullRequestHandler) Validate(args map[string]any) error {
 }
 
 func (h *createPullRequestHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	ToolFuncMu.RLock()
-	fn := CreatePullRequestFunc
-	ToolFuncMu.RUnlock()
+	fn := env.ResolveToolFuncs().CreatePullRequest
 	if fn == nil {
 		return ToolResult{
 			Output:  "create_pull_request is not available: agent integration not initialized (CreatePullRequestFunc is nil)",

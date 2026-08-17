@@ -206,6 +206,10 @@ type Agent struct {
 	changeTracker         *ChangeTracker
 	preparedTools         sync.RWMutex
 	lastToolNames         []string
+	// toolFuncs is this agent's per-agent tool dispatch set, built by
+	// wireAgentToolFuncs and carried into ToolEnv so agent-dependent tools
+	// route to THIS agent, not the most recently constructed one.
+	toolFuncs *tools.ToolFuncSet
 
 	// UI integration
 	ui UI

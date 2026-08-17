@@ -5,12 +5,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
@@ -32,7 +31,7 @@ func onboardingLocal() (string, bool) {
 
 	// Check hardware.
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		fmt.Println("⚠ Local AI is currently only available on Apple Silicon (M1/M2/M3/M4).")
+		console.GlyphWarning.Fprintln(os.Stdout, "Local AI is currently only available on Apple Silicon (M1/M2/M3/M4).")
 		fmt.Println("  Cloud providers work everywhere — try one of those instead.")
 		return "", false
 	}
@@ -51,7 +50,7 @@ func onboardingLocal() (string, bool) {
 	for i, m := range models {
 		var label string
 		if m.Installed {
-			label = fmt.Sprintf("%s  —  ✓ %.1f GB", m.Name, float64(m.Size)/1073741824)
+			label = fmt.Sprintf("%s  —  %s %.1f GB", m.Name, console.GlyphSuccess.Rune(), float64(m.Size)/1073741824)
 			if m.IsTuned {
 				label += "  [sprout-tuned]"
 			}

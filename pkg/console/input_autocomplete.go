@@ -1,7 +1,6 @@
 package console
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -21,9 +20,12 @@ type CompletionCandidate struct {
 // to render richer hints.
 type RichCompletionProvider func(line string, cursorPos int) []CompletionCandidate
 
-// inlineAutocomplete manages the live slash-command dropdown that
-// appears below the input line as the user types. It is owned by
-// InputReader and activated only when the current line starts with "/".
+// inlineAutocomplete manages the live slash-command dropdown state
+// machine: candidates, selection, accept, hide. It is owned by both
+// InputReader and SteerInputReader and activated only when the current
+// line starts with "/". Rendering is footer-driven — the candidate
+// rows + input line are drawn as a pinned block above the prompt
+// (steer-panel style) by the StatusFooter.
 type inlineAutocomplete struct {
 	// visible tracks whether the dropdown is currently rendered.
 	visible bool
@@ -31,9 +33,6 @@ type inlineAutocomplete struct {
 	candidates []CompletionCandidate
 	// selected is the 0-based index into candidates.
 	selected int
-	// renderedRows is how many rows were last drawn, so clear() can
-	// erase exactly that many lines before a re-render or dismissal.
-	renderedRows int
 	// lastLine tracks the input line from the previous update call.
 	// When the line changes, selection resets to the top candidate.
 	lastLine string
@@ -141,8 +140,9 @@ func formatDropdownRow(c CompletionCandidate, selected bool, cols int) string {
 }
 
 // hide marks the dropdown as invisible and clears candidate state.
-// Does NOT erase rendered rows from the terminal — the caller must
-// invoke clear() (or Refresh → refreshLocked → clear) to erase them.
+// Does NOT tear down a rendered pinned block — the caller's
+// refreshLocked detects the hidden state and calls the footer's
+// ClearSteerLineLocked to release the reserved rows.
 func (a *inlineAutocomplete) hide() {
 	a.visible = false
 	a.candidates = nil
@@ -165,74 +165,6 @@ func (a *inlineAutocomplete) accept() string {
 		return ""
 	}
 	return a.candidates[a.selected].Text
-}
-
-// render draws the dropdown below the input cursor position. The caller
-// must already hold the output lock and must have just finished drawing
-// the input line via refreshInputLine(). cols is the terminal width used
-// to truncate each candidate to a single visual row.
-func (a *inlineAutocomplete) render(cols int) {
-	if a == nil || !a.visible || len(a.candidates) == 0 {
-		return
-	}
-	if cols <= 0 {
-		cols = 80
-	}
-
-	n := len(a.candidates)
-	more := 0
-	if n > maxDropdownRows {
-		more = n - maxDropdownRows
-		n = maxDropdownRows
-	}
-
-	// Compute the scroll window so the selected item is always visible.
-	offset := 0
-	if a.selected >= n && more > 0 {
-		offset = a.selected - n + 1
-		if offset > more {
-			offset = more
-		}
-	}
-
-	// Save cursor position.
-	fmt.Print("\0337")
-
-	for i := 0; i < n; i++ {
-		idx := i + offset
-		if idx >= len(a.candidates) {
-			break
-		}
-		c := a.candidates[idx]
-		row := formatDropdownRow(c, idx == a.selected, cols)
-		fmt.Printf("%s\r%s%s", MoveCursorDownSeq(1), ClearLineSeq(), row)
-	}
-
-	drawnRows := n
-
-	if more > 0 {
-		fmt.Printf("%s\r%s\033[2m ↓ %d more\033[0m", MoveCursorDownSeq(1), ClearLineSeq(), more)
-		drawnRows++
-	}
-
-	// Restore cursor position.
-	fmt.Print("\0338")
-	a.renderedRows = drawnRows
-}
-
-// clear erases any previously drawn dropdown rows. The caller must hold
-// the output lock.
-func (a *inlineAutocomplete) clear() {
-	if a == nil || a.renderedRows == 0 {
-		return
-	}
-
-	fmt.Print("\0337")
-	for i := 0; i < a.renderedRows; i++ {
-		fmt.Printf("%s\r%s", MoveCursorDownSeq(1), ClearLineSeq())
-	}
-	fmt.Print("\0338")
-	a.renderedRows = 0
 }
 
 // moveSelection changes the selected index by delta (-1 for up, +1 for

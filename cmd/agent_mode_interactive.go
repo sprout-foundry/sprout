@@ -136,6 +136,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	inputReader.SetCompleter(completer)
 	inputReader.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent, false))
 
+	// SP-078 Phase 4: the idle REPL dropdown renders above the prompt
+	// line as a pinned block in the status footer's reserved rows
+	// (steer-panel style), instead of the fragile below-line overlay.
+	inputReader.SetStatusFooter(footer)
+
 	// SP-055: steer coordinator owns the pinned steer-input panel for
 	// the lifetime of this REPL. Constructed once with the agent +
 	// footer references; StartTurn / EndTurn drive the per-iteration

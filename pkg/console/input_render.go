@@ -19,34 +19,50 @@ func (ir *InputReader) Refresh() {
 // lock. Callers must already hold LockOutput(). This separation allows
 // PrintExternal to clear the line, print an external message, and redraw
 // the input in a single atomic lock-held sequence.
+//
+// Rendering is split into two modes:
+//
+//   - Pinned (dropdown visible + footer attached): the prompt line and
+//     the autocomplete candidate rows are drawn as a multi-line block in
+//     the footer's reserved rows (steer-panel style). The footer shrinks
+//     the scroll region so the block is pinned; the prompt is NOT drawn
+//     inline.
+//   - Inline (default): the prompt is drawn at the bottom of the scroll
+//     region exactly as before. If a pinned block was active it is torn
+//     down first so no stale rows remain.
 func (ir *InputReader) refreshLocked() {
-	// Clear any existing autocomplete dropdown before redrawing the input
-	// line, so stale rows don't persist.
-	if ir.autocomplete != nil {
-		ir.autocomplete.clear()
-	}
-	ir.refreshInputLine()
-	// After the input line is drawn, update and render the autocomplete
-	// dropdown if the line starts with "/" and the user has manually
-	// edited the buffer. History-recalled lines (hasEditedLine == false)
-	// don't get a dropdown — arrow keys navigate history instead of the
-	// dropdown, and showing one the user can't interact with is confusing.
-	//
+	// Update the dropdown state from the current buffer BEFORE choosing
+	// the render path so visibility reflects the latest edit.
 	// suppressAutocompleteNextRefresh (set by the Enter handler) skips
-	// this step for one invocation so the dropdown is erased by the
-	// leading clear() above but never re-rendered for the accepted line.
+	// this step for one invocation so the dropdown stays hidden for the
+	// accepted line instead of re-appearing via the completer.
 	if ir.autocomplete != nil && ir.hasEditedLine && !ir.suppressAutocompleteNextRefresh {
 		ir.autocomplete.update(ir.line, ir.cursorPos, ir.completer, ir.richCompleter)
-		ir.autocomplete.render(ir.terminalWidth)
 	}
+
+	pinned := ir.autocomplete != nil &&
+		ir.autocomplete.visible &&
+		ir.footer != nil &&
+		ir.footer.canPinInput()
+	if pinned {
+		ir.pinnedDropdownActive = true
+		ir.renderPinnedDropdownLocked()
+	} else {
+		if ir.pinnedDropdownActive {
+			ir.prepareInlineRenderLocked()
+		}
+		ir.refreshInputLine()
+	}
+
 	if ir.suppressAutocompleteNextRefresh {
 		ir.suppressAutocompleteNextRefresh = false
 	}
 }
 
-// refreshInputLine is the original refreshLocked body — draws the
-// prompt + input buffer and positions the cursor. Called by
-// refreshLocked after clearing the autocomplete dropdown.
+// refreshInputLine is the inline render path — draws the prompt +
+// input buffer and positions the cursor at the bottom of the scroll
+// region. Called by refreshLocked whenever the dropdown is hidden or
+// no footer is attached.
 func (ir *InputReader) refreshInputLine() {
 	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()

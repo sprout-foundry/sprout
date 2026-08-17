@@ -72,6 +72,19 @@ func (f *StatusFooter) reservedRows() int {
 	return 2 + f.steerRowCount() + f.hintRowCount()
 }
 
+// canPinInput reports whether the footer can host pinned input rows
+// (the steer panel or an InputReader dropdown): it is a live TTY and
+// has been started. Callers use this to decide whether to route an
+// input line through the pinned-block renderer.
+func (f *StatusFooter) canPinInput() bool {
+	if f == nil || !f.isTTY {
+		return false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.active
+}
+
 // applyScrollRegion sets the scroll region to rows 1..(rows-reserved) so the
 // bottom pinned rows are excluded. Reserves 2 rows by default (rule + content),
 // 3 rows when a steer input is active (steer + rule + content). No-op when

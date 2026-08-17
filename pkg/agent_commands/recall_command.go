@@ -164,3 +164,28 @@ func joinQueryFromArgs(args []string) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// Complete returns flag completions for the /recall command. The query
+// is free text; --json is stripped by the registry before Execute and
+// parseRecallFlags rejects it, so only --limit is offered.
+func (c *RecallCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	flags := []string{"--limit"}
+	if len(args) == 0 {
+		return flags
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		return flags
+	}
+	if !strings.HasPrefix(last, "--") {
+		return nil
+	}
+
+	var matches []string
+	for _, flag := range flags {
+		if strings.HasPrefix(strings.ToLower(flag), strings.ToLower(last)) {
+			matches = append(matches, flag)
+		}
+	}
+	return matches
+}

@@ -209,6 +209,14 @@ type EstimatedTokenStore interface {
 	SetEstimatedTokenResponses(int)
 }
 
+// ContinuationNudgeStore observes seed transient continuation nudges.
+// Seed's "Please continue…" messages are discarded before state sync,
+// so they are invisible in transcripts; the provider seam counts them.
+type ContinuationNudgeStore interface {
+	RecordContinuationNudges(int)
+	GetContinuationNudges() int
+}
+
 // ToolGuidanceStore manages tool call guidance state.
 type ToolGuidanceStore interface {
 	IsToolCallGuidanceAdded() bool
@@ -249,6 +257,7 @@ type StateManager interface {
 	SessionIntentStore
 	ProviderErrorStore
 	EstimatedTokenStore
+	ContinuationNudgeStore
 	ToolGuidanceStore
 	FalseStopStore
 }

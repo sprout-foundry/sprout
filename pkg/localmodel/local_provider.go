@@ -219,7 +219,10 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 
 	prompt := buildPrompt(model, messages, tools)
 	cfg := llm.DefaultGenerateConfig()
-	cfg.PromptLookupMaxDrafts = 4
+	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
+	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
+	// novel prose from wasted candidate search.
+	cfg.PromptLookupMaxDrafts = 6
 	// MaxMTPDrafts is deliberately left disabled (0). It was enabled once
 	// tonight after TestMTPParityLiveModel passed cleanly against a correct
 	// (non-pipelined) baseline on 4 short synthetic prompts — but a real
@@ -301,7 +304,10 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 
 	prompt := buildPrompt(model, messages, tools)
 	cfg := llm.DefaultGenerateConfig()
-	cfg.PromptLookupMaxDrafts = 4
+	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
+	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
+	// novel prose from wasted candidate search.
+	cfg.PromptLookupMaxDrafts = 6
 	// MaxMTPDrafts is deliberately left disabled — see the matching comment
 	// in SendChatRequest (real commit-message output corrupted with leaked
 	// chat-template tokens even after fixing a real bug in the MTP decode

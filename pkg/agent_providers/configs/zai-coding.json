@@ -35,7 +35,8 @@
       "glm-4.5-air",
       "glm-4.6",
       "glm-4.7-flash",
-      "glm-5.2:batch"
+      "glm-5.2:batch",
+      "glm-5.2:free"
     ],
     "default_context_limit": 200000,
     "default_model": "glm-5",
@@ -214,6 +215,18 @@
           "tools",
           "reasoning",
           "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 128000,
+        "description": "GLM-5.2 free tier from Z.ai. Large-scale reasoning model suited for long-horizon agent workflows and software engineering, available at no cost with a 128K-token context window.",
+        "id": "glm-5.2:free",
+        "input_cost": 0,
+        "name": "GLM-5.2 (free)",
+        "output_cost": 0,
+        "tags": [
+          "reasoning"
         ]
       }
     ],

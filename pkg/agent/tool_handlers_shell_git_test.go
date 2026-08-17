@@ -2,11 +2,11 @@ package agent
 
 import (
 	"context"
-	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // ============================================================================
@@ -41,18 +41,11 @@ import (
 // so the command proceeds past the gate. The OLD "blocked by default"
 // hard-block message must never appear.
 // sandboxGitWorkspace makes a temp workspace safe for tests that execute
-// real git history-rewrite commands. The repo is initialized (so the
-// commands fail harmlessly inside it — "no commits yet" — instead of
-// walking up into a real checkout), and GIT_CEILING_DIRECTORIES caps
-// repo discovery at the sandbox even if a cwd bug regresses.
+// real git history-rewrite commands. See testutil.GitSandbox for the
+// rationale: initialized-empty repo + GIT_CEILING_DIRECTORIES ceiling.
 func sandboxGitWorkspace(t *testing.T) string {
 	t.Helper()
-	workspace := t.TempDir()
-	if out, err := exec.Command("git", "-C", workspace, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("git init sandbox: %v: %s", err, out)
-	}
-	t.Setenv("GIT_CEILING_DIRECTORIES", workspace)
-	return workspace
+	return testutil.GitSandbox(t)
 }
 
 func TestHandleShellCommand_Legacy_GitHistoryRewriteNotHardBlocked(t *testing.T) {

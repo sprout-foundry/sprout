@@ -148,9 +148,58 @@ type ToolEnv struct {
 	// turn. Background goroutines must use this instead of the per-turn
 	// ctx so they survive turn boundaries. Cancelled when the agent shuts down.
 	LifetimeCtx context.Context
+	// ToolFuncs carries the agent-dependent tool dispatch closures for the
+	// specific agent this env belongs to. When nil, ResolveToolFuncs falls
+	// back to the package-level vars (the legacy single-agent path).
+	ToolFuncs *ToolFuncSet
 	// Agent is the *pkg/agent.Agent instance. Only set for tools that
 	// explicitly need agent access (e.g., run_subagent). Nil for all others.
 	Agent interface{} `json:"-"`
+}
+
+// ToolFuncSet carries the per-agent closures that delegate agent-dependent
+// tools (subagent spawn, clarification, change tracking, PR creation,
+// automate) back to a specific *Agent instance. The closures are installed
+// by pkg/agent's wireAgentToolFuncs at agent construction and travel with
+// the agent's ToolEnv, so in a daemon serving multiple agents each tool
+// call dispatches to its own agent instead of the most recently constructed
+// one (the package-level vars' behavior).
+type ToolFuncSet struct {
+	RunSubagent          func(ctx context.Context, args map[string]any) (string, error)
+	RunParallelSubagents func(ctx context.Context, args map[string]any) (string, error)
+	RequestClarification func(ctx context.Context, args map[string]any) (string, error)
+	RespondClarification func(ctx context.Context, args map[string]any) (string, error)
+	ListChanges          func(ctx context.Context, args map[string]any) (string, error)
+	RecoverFile          func(ctx context.Context, args map[string]any) (string, error)
+	RevertMyChanges      func(ctx context.Context, args map[string]any) (string, error)
+	MCPRefresh           func(ctx context.Context, args map[string]any) (string, error)
+	RunAutomate          func(ctx context.Context, args map[string]any) (string, error)
+	CreatePullRequest    func(ctx context.Context, args map[string]any) (string, error)
+}
+
+// ResolveToolFuncs returns the tool func set to dispatch through. It prefers
+// the per-agent set carried in the env; when none is set (callers that build
+// ToolEnv directly, e.g. commit_handler's internal ToolEnv{} and existing
+// tests), it snapshots the package-level vars under ToolFuncMu so the
+// legacy single-agent path keeps working.
+func (e ToolEnv) ResolveToolFuncs() *ToolFuncSet {
+	if e.ToolFuncs != nil {
+		return e.ToolFuncs
+	}
+	ToolFuncMu.RLock()
+	defer ToolFuncMu.RUnlock()
+	return &ToolFuncSet{
+		RunSubagent:          RunSubagentFunc,
+		RunParallelSubagents: RunParallelSubagentsFunc,
+		RequestClarification: RequestClarificationFunc,
+		RespondClarification: RespondClarificationFunc,
+		ListChanges:          ListChangesFunc,
+		RecoverFile:          RecoverFileFunc,
+		RevertMyChanges:      RevertMyChangesFunc,
+		MCPRefresh:           MCPRefreshFunc,
+		RunAutomate:          RunAutomateFunc,
+		CreatePullRequest:    CreatePullRequestFunc,
+	}
 }
 
 // AskUserService routes ask_user prompts through the active interactive

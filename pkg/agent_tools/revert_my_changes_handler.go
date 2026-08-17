@@ -51,9 +51,7 @@ func (h *revertMyChangesHandler) Validate(args map[string]any) error {
 }
 
 func (h *revertMyChangesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	ToolFuncMu.RLock()
-	fn := RevertMyChangesFunc
-	ToolFuncMu.RUnlock()
+	fn := env.ResolveToolFuncs().RevertMyChanges
 	if fn == nil {
 		return ToolResult{
 			Output:  "revert_my_changes is not available: agent integration not initialized (RevertMyChangesFunc is nil)",

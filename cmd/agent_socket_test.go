@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/daemon"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -199,4 +201,189 @@ func TestTryDaemonOneShot_EmptyQuery(t *testing.T) {
 	handled, err := tryDaemonOneShot(context.Background(), "", false)
 	require.NoError(t, err)
 	assert.False(t, handled, "empty query must not be routed")
+}
+
+// newTestAgent builds a minimal agent for cmd tests backed by an isolated
+// temp config directory (mirrors pkg/agent's newTestAgent — never the real
+// user config). The test client is auto-selected under go test.
+func newTestAgent(t *testing.T) *agent.Agent {
+	t.Helper()
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	a, err := agent.NewAgentWithModel("test:test")
+	if err != nil {
+		t.Fatalf("newTestAgent: %v", err)
+	}
+	return a
+}
+
+// TestSharedAgentService_ReleasesEphemeralAgents is the regression test for
+// the daemon one-shot resource leak: Query/StreamQuery build a fresh agent
+// per call and used to drop the reference without Shutdown(), leaking a
+// shared embedding-manager refcount (the workspace's HNSW store could never
+// close again) plus MCP child processes and lifetime contexts. Every
+// ephemeral agent must now be shut down once the query returns.
+func TestSharedAgentService_ReleasesEphemeralAgents(t *testing.T) {
+	origFn := newEphemeralDaemonAgentFn
+	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
+
+	var mu sync.Mutex
+	var created []*agent.Agent
+	newEphemeralDaemonAgentFn = func(workDir string) (*agent.Agent, error) {
+		a := newTestAgent(t)
+		a.SetWorkspaceRoot(workDir)
+		mu.Lock()
+		created = append(created, a)
+		mu.Unlock()
+		return a, nil
+	}
+
+	svc := NewSharedAgentService(nil) // Query/StreamQuery don't use the wrapped agent
+	_, err := svc.Query(context.Background(), "hi", t.TempDir())
+	require.NoError(t, err)
+
+	mu.Lock()
+	require.NotEmpty(t, created, "the query must have created an ephemeral agent")
+	agents := append([]*agent.Agent(nil), created...)
+	mu.Unlock()
+
+	for _, a := range agents {
+		require.Eventually(t, func() bool { return a.IsShutdown() },
+			10*time.Second, 20*time.Millisecond,
+			"ephemeral agent must be shut down after the query returns")
+	}
+}
+
+// TestSharedAgentService_WaitForTeardown_BlocksUntilShutdown pins the
+// teardown ordering contract: once a query returns, WaitForTeardown must
+// not return until every agent released by that query has fully shut down
+// (it may not return early, before Shutdown finishes). Teardown itself is
+// covered by TestSharedAgentService_ReleasesEphemeralAgents; this test
+// asserts the wait observes completed shutdowns.
+func TestSharedAgentService_WaitForTeardown_BlocksUntilShutdown(t *testing.T) {
+	origFn := newEphemeralDaemonAgentFn
+	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
+
+	var mu sync.Mutex
+	var created []*agent.Agent
+	newEphemeralDaemonAgentFn = func(workDir string) (*agent.Agent, error) {
+		a := newTestAgent(t)
+		a.SetWorkspaceRoot(workDir)
+		mu.Lock()
+		created = append(created, a)
+		mu.Unlock()
+		return a, nil
+	}
+
+	svc := NewSharedAgentService(nil) // Query/StreamQuery don't use the wrapped agent
+	_, err := svc.Query(context.Background(), "hi", t.TempDir())
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		svc.WaitForTeardown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("WaitForTeardown must return once released agents finish shutting down")
+	}
+
+	mu.Lock()
+	agents := append([]*agent.Agent(nil), created...)
+	mu.Unlock()
+	require.NotEmpty(t, agents, "the query must have created an ephemeral agent")
+	for _, a := range agents {
+		assert.True(t, a.IsShutdown(),
+			"by the time WaitForTeardown returns every released agent must be shut down")
+	}
+}
+
+// TestSharedAgentService_WaitForTeardown_ReturnsWhenNothingReleased verifies
+// WaitForTeardown does not hang when no ephemeral agents were ever released.
+func TestSharedAgentService_WaitForTeardown_ReturnsWhenNothingReleased(t *testing.T) {
+	svc := NewSharedAgentService(nil)
+	done := make(chan struct{})
+	go func() {
+		svc.WaitForTeardown()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForTeardown must return promptly when nothing was released")
+	}
+}
+
+// TestSharedAgentService_QueryRejectedAfterTeardownBegins verifies teardown
+// is a one-way door: once WaitForTeardown has begun, a late query must be
+// rejected before the agent constructor is even called — otherwise it would
+// Add to a WaitGroup whose Wait is already running (the narrow crash path
+// this restructure eliminates).
+func TestSharedAgentService_QueryRejectedAfterTeardownBegins(t *testing.T) {
+	origFn := newEphemeralDaemonAgentFn
+	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
+
+	var seamCalls atomic.Int64
+	newEphemeralDaemonAgentFn = func(workDir string) (*agent.Agent, error) {
+		seamCalls.Add(1)
+		return nil, nil
+	}
+
+	svc := &SharedAgentService{} // zero value is fine — Query only needs the tracker
+	svc.WaitForTeardown()        // nothing tracked → returns fast
+
+	_, err := svc.Query(context.Background(), "x", "/tmp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "shutting down")
+	assert.Zero(t, seamCalls.Load(), "the query must be rejected before the agent constructor is invoked")
+}
+
+// TestAgentServer_OnClose_Invoked pins AgentServer.Close's blocking teardown
+// contract: Close must not return while OnClose is still running (it blocks
+// until service teardown finishes), and a second Close must never re-invoke
+// OnClose (once-only). This is the hook startDaemonAgentServer uses to wait
+// for ephemeral agent teardown before the daemon exits.
+func TestAgentServer_OnClose_Invoked(t *testing.T) {
+	svc := &stubAgentForCmd{}
+	sockPath := shortSocketPath(t, "agent-onclose")
+
+	var calls atomic.Int64
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	srv := &daemon.AgentServer{
+		SocketPath: sockPath,
+		Service:    svc,
+		OnClose: func() {
+			calls.Add(1)
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+			<-release
+		},
+	}
+	require.NoError(t, srv.Start(context.Background()))
+
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- srv.Close() }()
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close must invoke OnClose")
+	}
+
+	select {
+	case err := <-closeDone:
+		t.Fatalf("Close returned while OnClose was still blocked: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	close(release)
+	require.NoError(t, <-closeDone, "Close must return once OnClose finishes")
+
+	require.NoError(t, srv.Close(), "a second Close must be a no-op")
+	assert.Equal(t, int64(1), calls.Load(), "OnClose must be invoked exactly once")
 }

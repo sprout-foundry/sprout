@@ -200,6 +200,10 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	env.Notifier = agent
 	env.LifetimeCtx = agent.LifetimeCtx()
 	env.SubagentDepth = agent.subagentDepth
+	// Carry this agent's per-agent tool dispatch set so agent-dependent
+	// tools (run_subagent, run_automate, ...) route to THIS agent even when
+	// other agents exist in the process.
+	env.ToolFuncs = agent.toolFuncs
 	// Propagate Gate 1's auto-approve decision so handler-level gates
 	// (Gate 2) skip their interactive prompt, matching Gate 1. Covers
 	// both --unsafe mode and elevated risk profiles; hard blocks are

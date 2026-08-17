@@ -13,17 +13,23 @@ import (
 // creation and automate workflows. These are gated by isProduction because
 // they require a live agent with full desktop/daemon infrastructure.
 //
+// Populates the agent's ToolFuncSet (the per-agent dispatch path) AND the
+// package-level vars (the legacy fallback). Called under ToolFuncMu by
+// wireAgentToolFuncs, so the package-var writes are guarded.
+//
 // This is the native (non-WASM) implementation. The WASM counterpart in
 // agent_tool_wiring_js.go wires clear-error stubs instead, since the host
 // code (process spawning, exec) cannot run in the browser. See AUDIT-C2.
-func wireHostOnlyToolFuncs(agent *Agent, isProduction bool) {
+func wireHostOnlyToolFuncs(agent *Agent, isProduction bool, set *tools.ToolFuncSet) {
 	if agent == nil || !isProduction {
 		return
 	}
-	tools.RunAutomateFunc = func(ctx context.Context, args map[string]any) (string, error) {
+	set.RunAutomate = func(ctx context.Context, args map[string]any) (string, error) {
 		return handleRunAutomate(ctx, agent, args)
 	}
-	tools.CreatePullRequestFunc = func(ctx context.Context, args map[string]any) (string, error) {
+	set.CreatePullRequest = func(ctx context.Context, args map[string]any) (string, error) {
 		return handleCreatePullRequest(ctx, agent, args)
 	}
+	tools.RunAutomateFunc = set.RunAutomate
+	tools.CreatePullRequestFunc = set.CreatePullRequest
 }

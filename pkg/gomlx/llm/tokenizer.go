@@ -26,6 +26,13 @@ type Tokenizer struct {
 	// the Special flag — <think>/</think> are added but not Special, and must
 	// still encode atomically or the model never sees the thinking boundary.
 	specialTokens map[string]int
+	// sentencePiece marks a raw-Unicode vocab (Gemma-style: ▁ U+2581 spaces,
+	// standalone \n tokens, <0xXX> byte fallback) as opposed to a byte-level
+	// vocab (Qwen/GPT-2: every byte remapped into U+0100+ codepoints). The
+	// two families need different decode paths: running a raw-Unicode token
+	// through the byte-level decoder corrupts it (é U+00E9 → byte 0xE9, č
+	// U+010D → byte 0x0D — mojibake in every accented word).
+	sentencePiece bool
 }
 
 // BPEDecoder handles the BPE merge ranking
@@ -81,13 +88,25 @@ func LoadTokenizer(path string) (*Tokenizer, error) {
 		tok.encoder.ranks[joined] = i
 	}
 
-	// Find special tokens
+	// Find special tokens. Both token families terminate generation with a
+	// chat-boundary token; cover each family's names so the fallback below
+	// never fires for a known vocabulary.
 	for _, at := range raw.AddedTokens {
 		switch at.Content {
 		case "<|endoftext|>":
 			tok.bosID = at.ID
-		case "<|im_end|>":
+		case "<|im_end|>", "<eos>", "<|end|>":
 			tok.eosID = at.ID
+		}
+	}
+
+	// Gemma/SentencePiece detection: the vocab carries standalone tokens for
+	// "▁" and "\n" (SentencePiece markers) while byte-level vocabularies
+	// never do — the space/newline bytes are remapped to Ġ/Ċ there. This
+	// picks the decode path (see Decode) and byte-fallback encoding.
+	if _, hasBar := tok.vocab["▁"]; hasBar {
+		if _, hasNewline := tok.vocab["\n"]; hasNewline {
+			tok.sentencePiece = true
 		}
 	}
 
@@ -96,7 +115,20 @@ func LoadTokenizer(path string) (*Tokenizer, error) {
 		tok.bosID = -1 // no BOS
 	}
 	if tok.eosID == 0 {
-		tok.eosID = 151645 // Qwen3 default
+		if tok.sentencePiece {
+			tok.eosID = 1 // <eos> — Gemma's canonical EOS id
+		} else {
+			tok.eosID = 151645 // Qwen3 default
+		}
+	}
+
+	// A 0 fallback is indistinguishable from "not found" above when the
+	// vocab legitimately maps the token to id 0 (<pad> on Gemma). Resolve
+	// by direct vocab lookup in that case.
+	if tok.eosID == 0 {
+		if id, ok := tok.vocab["<eos>"]; ok {
+			tok.eosID = id
+		}
 	}
 
 	tok.spaceTok = "Ġ" // The BPE space marker used by GPT-2/Qwen tokenizers
@@ -149,8 +181,9 @@ func (t *Tokenizer) Encode(text string) []int {
 
 // encodeBPE applies BPE to regular (non-special) text.
 func (t *Tokenizer) encodeBPE(text string) []int {
-	// Gemma/SentencePiece: \n is a standalone vocab token. Check and emit directly.
-	if _, hasNewline := t.vocab["\n"]; hasNewline {
+	// Gemma/SentencePiece: ▁ space markers and standalone \n tokens (same
+	// predicate Decode uses — keep encode/decode routing identical).
+	if t.sentencePiece {
 		return t.encodeGemma(text)
 	}
 	// Qwen/GPT-2 byte-level: split via the HF pre-tokenizer regex (which
@@ -187,6 +220,16 @@ func (t *Tokenizer) encodeGemma(text string) []int {
 			tokenIDs = append(tokenIDs, id)
 			continue
 		}
+		// Byte fallback: out-of-vocab runes become their UTF-8 bytes as
+		// <0xXX> tokens. Skipping them (the old behavior) silently deletes
+		// content — every character this vocab never merges (box-drawing,
+		// rare scripts) vanished from the prompt the model saw.
+		if bytes := []byte(string(r)); t.allBytesInVocab(bytes) {
+			for _, by := range bytes {
+				tokenIDs = append(tokenIDs, t.vocab[fmt.Sprintf("<0x%02X>", by)])
+			}
+			continue
+		}
 		// BPE merge
 		tokens := t.bpe(bpeWord)
 		for _, tokStr := range tokens {
@@ -200,27 +243,62 @@ func (t *Tokenizer) encodeGemma(text string) []int {
 	return t.mergeGemmaTokens(tokenIDs)
 }
 
+// allBytesInVocab reports whether every byte has a <0xXX> fallback token,
+// so the caller can emit a byte-fallback sequence for the whole rune.
+func (t *Tokenizer) allBytesInVocab(bs []byte) bool {
+	for _, by := range bs {
+		if _, ok := t.vocab[fmt.Sprintf("<0x%02X>", by)]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // mergeGemmaTokens applies a second pass of BPE merging on the tokenized
-// output for Gemma's SentencePiece-style merges.
+// output for Gemma's SentencePiece-style merges. Byte-fallback tokens
+// (<0xXX>) act as barriers: HF's byte_fallback emits them as final tokens
+// that never participate in merges, so re-joining them into the mergeable
+// string (the naive approach) lets BPE eat their literal "<0xE2>" text and
+// produces character soup. Each run between barriers is merged
+// independently, with the barrier tokens passed through in place.
 func (t *Tokenizer) mergeGemmaTokens(ids []int) []int {
 	if len(ids) < 2 {
 		return ids
 	}
-	// Convert IDs back to strings, then run BPE
-	var tokens []string
-	for _, id := range ids {
-		if s, ok := t.idToTok[id]; ok {
-			tokens = append(tokens, s)
-		}
+	isFallback := func(id int) bool {
+		s, ok := t.idToTok[id]
+		return ok && strings.HasPrefix(s, "<0x") && len(s) == 6 && s[5] == '>'
 	}
-	// Re-merge the full sequence
-	merged := t.bpe(strings.Join(tokens, ""))
 	var result []int
-	for _, tokStr := range merged {
-		if id, ok := t.vocab[tokStr]; ok {
+	run := make([]string, 0, len(ids))
+	flush := func() {
+		if len(run) < 2 {
+			for _, s := range run {
+				if id, ok := t.vocab[s]; ok {
+					result = append(result, id)
+				}
+			}
+			run = run[:0]
+			return
+		}
+		for _, tokStr := range t.bpe(strings.Join(run, "")) {
+			if id, ok := t.vocab[tokStr]; ok {
+				result = append(result, id)
+			}
+		}
+		run = run[:0]
+	}
+	for _, id := range ids {
+		if isFallback(id) {
+			flush()
 			result = append(result, id)
+			continue
+		}
+		if s, ok := t.idToTok[id]; ok {
+			run = append(run, s)
 		}
 	}
+	flush()
 	if len(result) == 0 {
 		return ids // fallback
 	}
@@ -230,16 +308,78 @@ func (t *Tokenizer) mergeGemmaTokens(ids []int) []int {
 // Decode converts token IDs back to text.
 func (t *Tokenizer) Decode(ids []int) string {
 	var sb strings.Builder
+	var pending []byte // accumulating <0xXX> byte-fallback run
+	flushPending := func() {
+		if len(pending) > 0 {
+			sb.Write(pending) // raw bytes: valid UTF-8 when encode produced them
+			pending = pending[:0]
+		}
+	}
 	for _, id := range ids {
 		tok, ok := t.idToTok[id]
 		if !ok {
+			flushPending()
 			continue
 		}
+		if t.sentencePiece {
+			// Gemma/SentencePiece: tokens are raw Unicode. ▁ is the space
+			// marker; <0xXX> tokens are byte-fallback and must be joined
+			// with their neighbors before interpreting as UTF-8. Running
+			// raw-Unicode tokens through the GPT-2 byte-level decoder
+			// corrupts them (é is the literal rune U+00E9 in this vocab,
+			// not byte 0xE9 remapped).
+			if b, isFB := byteFallbackToken(tok); isFB {
+				pending = append(pending, b)
+				continue
+			}
+			flushPending()
+			sb.WriteString(decodeSentencePiece(tok))
+			continue
+		}
+		flushPending()
 		// Convert BPE space-encoding back to regular spaces
 		decoded := fromBPESpace(tok)
 		sb.WriteString(decoded)
 	}
+	flushPending()
 	return sb.String()
+}
+
+// byteFallbackToken reports whether tok is a <0xNN> byte-fallback token and
+// its byte value.
+func byteFallbackToken(tok string) (byte, bool) {
+	if len(tok) != 6 || !strings.HasPrefix(tok, "<0x") || tok[5] != '>' {
+		return 0, false
+	}
+	return hexByte(tok[3:5])
+}
+
+// decodeSentencePiece decodes one Gemma-style token: ▁ → space, anything
+// else verbatim (byte-fallback <0xNN> tokens are handled by Decode).
+func decodeSentencePiece(tok string) string {
+	if !strings.Contains(tok, "▁") {
+		return tok
+	}
+	return strings.ReplaceAll(tok, "▁", " ")
+}
+
+// hexByte parses two lowercase hex digits ("e2") into a byte.
+func hexByte(s string) (byte, bool) {
+	var b byte
+	for i := 0; i < 2; i++ {
+		c := s[i]
+		switch {
+		case c >= '0' && c <= '9':
+			b = b<<4 | (c - '0')
+		case c >= 'a' && c <= 'f':
+			b = b<<4 | (c - 'a' + 10)
+		case c >= 'A' && c <= 'F':
+			b = b<<4 | (c - 'A' + 10)
+		default:
+			return 0, false
+		}
+	}
+	return b, true
 }
 
 // bpe applies the BPE algorithm to a word, returning the subword tokens.
@@ -491,20 +631,40 @@ func (t *Tokenizer) formatLFM2Body(messages []ChatMessage) string {
 }
 
 func (t *Tokenizer) formatGemmaChat(messages []ChatMessage) string {
+	// The generation cue is always appended: even when the prompt ends
+	// with tool responses (the model's open turn), the model needs the
+	// <|turn>model marker to start emitting — verified empirically on the
+	// stock e2b (without it, the first sampled token is <eos> and the turn
+	// produces nothing).
 	return t.formatGemmaBody(messages) + "<|turn>model\n"
 }
 
 func (t *Tokenizer) formatGemmaBody(messages []ChatMessage) string {
 	var sb strings.Builder
-	for _, msg := range messages {
-		role := msg.Role
-		if role == "user" {
+	for i, msg := range messages {
+		switch msg.Role {
+		case "system", "developer":
+			sb.WriteString("<|turn>system\n")
+			sb.WriteString(msg.Content)
+			sb.WriteString("<turn|>\n")
+		case "tool":
+			// Tool responses arrive pre-rendered by the provider layer
+			// (<|tool_response>response:name{...}<tool_response|>) and
+			// continue the model's open turn — no markers around them.
+			sb.WriteString(msg.Content)
+		case "user":
 			sb.WriteString("<|turn>user\n")
-		} else {
+			sb.WriteString(msg.Content)
+			sb.WriteString("<turn|>\n")
+		default: // assistant/model
 			sb.WriteString("<|turn>model\n")
+			sb.WriteString(msg.Content)
+			// The model turn stays open when tool responses follow (they
+			// append into it); otherwise close it.
+			if !(i+1 < len(messages) && messages[i+1].Role == "tool") {
+				sb.WriteString("<turn|>\n")
+			}
 		}
-		sb.WriteString(msg.Content)
-		sb.WriteString("<turn|>\n")
 	}
 	return sb.String()
 }

@@ -194,17 +194,20 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		return agenterrors.NewAgent("persistence", "failed to marshal state", err)
 	}
 
-	err = os.WriteFile(stateFile, data, 0600)
-	if err == nil {
-		search.MarkSessionDirty(cleanSessionID)
-
-		// Fire-and-forget training data push. This never blocks or fails
-		// the session save — the goroutine logs errors to stderr.
-		// The push function (if wired) applies PII redaction before
-		// sending data over the network.
-		a.pushTrainingSession(state)
+	if err := backupFileWithExt(stateFile, ".bak"); err != nil {
+		a.Logger().Debug("[WARN] Failed to back up session state before save: %v\n", err)
 	}
-	return err
+	if err := writeFileAtomic(stateFile, data, 0o600); err != nil {
+		return agenterrors.NewAgent("persistence", "failed to write session state atomically", err)
+	}
+	search.MarkSessionDirty(cleanSessionID)
+
+	// Fire-and-forget training data push. This never blocks or fails
+	// the session save — the goroutine logs errors to stderr.
+	// The push function (if wired) applies PII redaction before
+	// sending data over the network.
+	a.pushTrainingSession(state)
+	return nil
 }
 
 // LoadStateWithoutAgent loads a conversation state by session ID without an Agent instance
@@ -231,9 +234,24 @@ func LoadStateWithoutAgentScoped(sessionID, workingDir string) (*ConversationSta
 
 	var state ConversationState
 	if err := json.Unmarshal(data, &state); err != nil {
+		if bak, bakErr := loadBackupState(stateFile); bakErr == nil {
+			return bak, nil
+		}
 		return nil, agenterrors.NewAgent("persistence", "failed to unmarshal state", err)
 	}
 
+	return &state, nil
+}
+
+func loadBackupState(stateFile string) (*ConversationState, error) {
+	data, err := os.ReadFile(stateFile + ".bak")
+	if err != nil {
+		return nil, agenterrors.Wrap(err, "failed to read state backup")
+	}
+	var state ConversationState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, agenterrors.Wrap(err, "failed to unmarshal state backup")
+	}
 	return &state, nil
 }
 

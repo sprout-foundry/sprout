@@ -42,6 +42,14 @@ func (ir *InputReader) SetFooterTooltip(t *FooterTooltip) {
 	ir.footerTooltip = t
 }
 
+// SetStatusFooter installs the StatusFooter used to render the live
+// autocomplete dropdown above the prompt line (steer-panel style).
+// Pass nil to disable dropdown rendering entirely — the autocomplete
+// state machine still tracks candidates, but nothing is drawn.
+func (ir *InputReader) SetStatusFooter(f *StatusFooter) {
+	ir.footer = f
+}
+
 // tooltipVisible returns true if the footer tooltip is currently rendered.
 func (ir *InputReader) tooltipVisible() bool {
 	if ir.footerTooltip == nil {

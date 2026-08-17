@@ -40,6 +40,7 @@ type ConversationState struct {
 	PromptTokens            int              `json:"prompt_tokens"`
 	CompletionTokens        int              `json:"completion_tokens"`
 	EstimatedTokenResponses int              `json:"estimated_token_responses"`
+	ContinuationNudges      int              `json:"continuation_nudges,omitempty"` // seed transient "continue" nudges observed (invisible in messages)
 	CachedTokens            int              `json:"cached_tokens"`
 	CacheWriteTokens        int              `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64          `json:"cached_cost_savings"`

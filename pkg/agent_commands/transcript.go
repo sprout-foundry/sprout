@@ -282,3 +282,28 @@ func printTranscriptDiff(w io.Writer, olderPath, newerPath string) error {
 	}
 	return nil
 }
+
+// Complete returns completions for the /transcript command. The
+// subcommands are combinable, so they are offered at any argument
+// position; cap at three so a fully-specified invocation stops offering.
+func (c *TranscriptCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) > 3 {
+		return nil
+	}
+	candidates := []string{"preview", "markdown", "diff", "md"}
+	if len(args) == 0 {
+		return candidates
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		return candidates
+	}
+
+	var matches []string
+	for _, cand := range candidates {
+		if strings.HasPrefix(strings.ToLower(cand), strings.ToLower(last)) {
+			matches = append(matches, cand)
+		}
+	}
+	return matches
+}

@@ -253,7 +253,54 @@ func TieredModelInfos(ram uint64) []api.ModelInfo {
 		}
 		infos = append(infos, info)
 	}
+
+	// Installed sprout-tuned builds beyond the catalog tiers (a tuned 9B/12B
+	// with no matching catalog entry would otherwise be invisible to every
+	// model picker — resolvable only by exact directory basename). Append
+	// them as explicit rows so /model and the WebUI picker can select them
+	// directly; a tier whose catalog entry already resolves to this same
+	// directory (ResolveModelID's tuned preference) is skipped to avoid
+	// duplicate rows for one set of weights.
+	resolved := make(map[string]bool, len(infos))
+	for i := range infos {
+		if status, err := ResolveModelID(infos[i].ID); err == nil {
+			resolved[status.Dir] = true
+		}
+	}
+	for _, s := range ListModels() {
+		if !s.Installed || !s.IsTuned || resolved[s.Dir] {
+			continue
+		}
+		warn := ""
+		if s.Size*2 > int64(ram) {
+			warn = fmt.Sprintf("Weights %.1f GB exceed half this machine's RAM (%.0f GB) — needs SPROUT_ALLOW_OVERWEIGHT=1 and risks swapping",
+				float64(s.Size)/1073741824, ramGB)
+		}
+		infos = append(infos, api.ModelInfo{
+			ID:   filepath.Base(s.Dir),
+			Name: fmt.Sprintf("%s (sprout-tuned %s)", s.Name, s.QuantBits),
+			Description: fmt.Sprintf("Sprout-tuned build installed on this machine — %s, %.1f GB%s",
+				s.ParamSize, float64(s.Size)/1073741824, ternaryStr(warn != "", " — overweight", "")),
+			EligibleRoles: []string{"primary", "subagent"},
+			Warnings:      ternaryWarn(warn),
+			Tags:          []string{"local", "sprout-tuned"},
+		})
+	}
 	return infos
+}
+
+func ternaryStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
+}
+
+func ternaryWarn(w string) []string {
+	if w == "" {
+		return nil
+	}
+	return []string{w}
 }
 
 // EnsureModel downloads a model if it's not already installed.

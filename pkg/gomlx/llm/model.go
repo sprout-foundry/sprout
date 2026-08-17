@@ -42,6 +42,15 @@ type Model struct {
 	endThinkID   int
 	inThinkBlock bool
 
+	// multimodalIDs are vocab entries for modalities this text-only engine
+	// can never legitimately emit — image/audio/video placeholders inherited
+	// from multimodal checkpoints (<audio|>, <image_pad|>, ...). Aggressive
+	// quants occasionally surface one mid-sentence (observed on the 12B q5:
+	// "using a<audio|> called a hash function"); they stay in the KV stream
+	// (the model chose them; rewriting history would desync the cache) but
+	// are masked on CPU sampling paths and fenced from callbacks.
+	multimodalIDs map[int]bool
+
 	// Prefix-cache state: retained snapshots of prior generations' prompt-only
 	// K/V, one per active conversation. sprout runs subagents concurrently
 	// (pkg/agent/subagent_runners.go RunParallel) and they all share this one
@@ -307,6 +316,7 @@ func (m *Model) initThinking() {
 	m.thinkID = m.tokenizer.IDOf("<think>")
 	m.endThinkID = m.tokenizer.IDOf("</think>")
 	m.inThinkBlock = false
+	m.multimodalIDs = m.tokenizer.multimodalTokenIDs()
 }
 
 // warmupAndPreCache compiles Metal kernels with a dummy forward pass so the
@@ -1451,6 +1461,9 @@ func (m *Model) shouldFilterToken(tokenID int, genCfg GenerateConfig) bool {
 
 	if m.inThinkBlock && !genCfg.ThinkingTokens {
 		return true // inside the thinking block — hide unless asked for it
+	}
+	if m.multimodalIDs[tokenID] {
+		return true // modality placeholder this text-only engine can't emit
 	}
 	return false
 }

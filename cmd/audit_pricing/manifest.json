@@ -1500,7 +1500,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-08-15",
+    "last_verified": "2026-08-17",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -3826,12 +3826,17 @@
         "id": "qwen/qwen3.8-27b",
         "input_per_mtok": 0.45,
         "output_per_mtok": 3.2
+      },
+      {
+        "id": "z-ai/glm-5.2:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-10",
+    "last_verified": "2026-08-17",
     "models": [
       {
         "id": "glm-4.5v",
@@ -3902,12 +3907,17 @@
         "input_per_mtok": 0.7,
         "output_per_mtok": 2.2,
         "cached_per_mtok": 0.13
+      },
+      {
+        "id": "glm-5.2:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       }
     ]
   },
   "zai-coding": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-10",
+    "last_verified": "2026-08-17",
     "models": [
       {
         "id": "glm-4.5",
@@ -3986,6 +3996,11 @@
         "input_per_mtok": 0.7,
         "output_per_mtok": 2.2,
         "cached_per_mtok": 0.13
+      },
+      {
+        "id": "glm-5.2:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       }
     ]
   }

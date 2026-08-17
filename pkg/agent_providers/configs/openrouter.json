@@ -5712,6 +5712,17 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 128000,
+        "description": "GLM-5.2 free tier from Z.ai. Large-scale reasoning model suited for long-horizon agent workflows and software engineering, available at no cost with a 128K-token context window.",
+        "id": "z-ai/glm-5.2:free",
+        "input_cost": 0,
+        "name": "Z.ai: GLM 5.2 (free)",
+        "output_cost": 0,
+        "tags": [
+          "reasoning"
+        ]
       }
     ],
     "model_overrides": {

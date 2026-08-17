@@ -226,6 +226,14 @@ func TieredModelInfos(ram uint64) []api.ModelInfo {
 		installed := status != nil && status.Installed
 
 		info := api.ModelInfo{ID: tm.Model.Name, Name: tm.Model.Name}
+		// A tier whose ResolveModelID pick is an installed sprout-tuned
+		// variant will load those weights, not the plain catalog download —
+		// without this annotation the tuned build hides behind the bare
+		// catalog name with no visible trace in the picker.
+		if installed && status.IsTuned {
+			info.Name = tunedLabel(tm.Model.Name, status.QuantBits)
+			info.Tags = append(info.Tags, "sprout-tuned")
+		}
 		selectGB := float64(tm.Model.MinRAMSelect) / (1024 * 1024 * 1024)
 
 		switch tm.Status {
@@ -278,7 +286,7 @@ func TieredModelInfos(ram uint64) []api.ModelInfo {
 		}
 		infos = append(infos, api.ModelInfo{
 			ID:   filepath.Base(s.Dir),
-			Name: fmt.Sprintf("%s (sprout-tuned %s)", s.Name, s.QuantBits),
+			Name: tunedLabel(s.Name, s.QuantBits),
 			Description: fmt.Sprintf("Sprout-tuned build installed on this machine — %s, %.1f GB%s",
 				s.ParamSize, float64(s.Size)/1073741824, ternaryStr(warn != "", " — overweight", "")),
 			EligibleRoles: []string{"primary", "subagent"},
@@ -294,6 +302,19 @@ func ternaryStr(cond bool, a, b string) string {
 		return a
 	}
 	return b
+}
+
+// tunedLabel renders a picker label for a model backed by an installed
+// sprout-tuned variant, e.g. "qwen3.5-9b (sprout-tuned mlx-q5)". Shared by
+// tier rows whose ResolveModelID pick resolves to a tuned variant and the
+// explicit beyond-tier rows in TieredModelInfos. Quant is the variant's
+// extractQuantBits hint ("" → no quant suffix, dropping the stray trailing
+// space the old direct Sprintf produced: "(sprout-tuned )").
+func tunedLabel(catalogName, quant string) string {
+	if quant == "" {
+		return fmt.Sprintf("%s (sprout-tuned)", catalogName)
+	}
+	return fmt.Sprintf("%s (sprout-tuned %s)", catalogName, quant)
 }
 
 func ternaryWarn(w string) []string {

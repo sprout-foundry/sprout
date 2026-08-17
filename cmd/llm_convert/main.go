@@ -27,6 +27,7 @@ func main() {
 	input := flag.String("input", "", "path to raw HF model directory")
 	output := flag.String("output", "", "path to output directory for quantized model")
 	bits := flag.Int("bits", 6, "quantization bits (4, 6, or 8)")
+	embedBits := flag.Int("embed-bits", 0, "bits for embed_tokens/lm_head (0 = same as -bits). Use 8 for q5 bodies: the loader must materialize a full fp32 embedding table for widths outside {2,3,4,6,8}, which costs several GB at large vocab sizes")
 	groupSize := flag.Int("group-size", 64, "quantization group size")
 	mode := flag.String("mode", "affine", "quantization mode")
 	flag.Parse()
@@ -43,8 +44,16 @@ func main() {
 		Bits:      *bits,
 		Mode:      *mode,
 	}
+	embedQuantCfg := quantCfg
+	if *embedBits != 0 && *embedBits != *bits {
+		embedQuantCfg = &llm.QuantConfig{
+			GroupSize: *groupSize,
+			Bits:      *embedBits,
+			Mode:      *mode,
+		}
+	}
 
-	log.Printf("converting %s → %s (Q%d, group=%d)", *input, *output, *bits, *groupSize)
+	log.Printf("converting %s → %s (Q%d, embed Q%d, group=%d)", *input, *output, *bits, embedQuantCfg.Bits, *groupSize)
 
 	if err := os.MkdirAll(*output, 0o755); err != nil {
 		log.Fatalf("mkdir %s: %v", *output, err)
@@ -82,7 +91,15 @@ func main() {
 	var totalSize int64
 
 	for _, key := range keys {
-		arr, err := sf.Get(key, stream)
+		// Skip multimodal towers entirely: the language-model loaders probe
+		// for language-model keys and never touch visual/audio tensors, so
+		// quantizing them only bloats the output (a 2.5 GB vision tower on
+		// the 9B) and some have dims indivisible by the group size, which
+		// makes quantize fail outright.
+		if isTowerTensor(key) {
+			continue
+		}
+		arr, err := sf.Get(key, backend, stream)
 		if err != nil {
 			log.Printf("skip %s: %v", key, err)
 			continue
@@ -104,18 +121,31 @@ func main() {
 			}
 		}
 
-		if !shouldQuantize {
+		if !shouldQuantize && !strings.Contains(key, "embed_tokens") && !strings.Contains(key, "lm_head") {
 			queue = append(queue, pending{name: key, arr: arr})
 			totalSize += int64(dataSize(arr))
+			continue
+		}
+		// embed_tokens/lm_head fall through to the dedicated loop below, which
+		// quantizes them (optionally at separate embed bits) — queueing the
+		// raw copy here too would write both versions to the file: the
+		// safetensors header keeps only the quantized triplet, but the raw
+		// bytes still land in the file as dead weight (~4 GB on a 9B with
+		// untied lm_head) and the RAM gate measures file size, not live
+		// weights.
+		if !shouldQuantize {
+			arr.Free()
 			continue
 		}
 
 		// Quantize this weight.
 		parts, err := backend.Quantize(arr, *groupSize, *bits, *mode, stream)
 		if err != nil {
-			log.Printf("quantize %s failed: %v", key, err)
-			arr.Free()
+			// Dims not divisible by the group size can't be quantized — keep
+			// the tensor as-is rather than queueing a freed array.
+			log.Printf("keep %s unquantized: %v", key, err)
 			queue = append(queue, pending{name: key, arr: arr})
+			totalSize += int64(dataSize(arr))
 			continue
 		}
 		arr.Free()
@@ -134,10 +164,16 @@ func main() {
 		totalSize += int64(dataSize(parts[0])) + int64(dataSize(parts[1]))
 	}
 
-	// Also quantize embed_tokens (tied lm_head)
+	// Also quantize embed_tokens (tied lm_head). Matches the same key set
+	// the first loop defers here (contains "embed_tokens"/"lm_head") —
+	// including gemma4's embed_tokens_per_layer — optionally at separate
+	// embed bits.
 	for _, key := range keys {
-		if strings.Contains(key, "embed_tokens.weight") || strings.Contains(key, "lm_head.weight") {
-			arr, err := sf.Get(key, stream)
+		if strings.Contains(key, "embed_tokens") || strings.Contains(key, "lm_head") {
+			if !strings.HasSuffix(key, ".weight") {
+				continue
+			}
+			arr, err := sf.Get(key, backend, stream)
 			if err != nil {
 				continue
 			}
@@ -146,7 +182,7 @@ func main() {
 				arr.Free()
 				continue
 			}
-			parts, err := backend.Quantize(arr, *groupSize, *bits, *mode, stream)
+			parts, err := backend.Quantize(arr, embedQuantCfg.GroupSize, embedQuantCfg.Bits, embedQuantCfg.Mode, stream)
 			if err != nil {
 				log.Printf("quantize %s failed: %v", key, err)
 				arr.Free()
@@ -196,6 +232,21 @@ func copyConfigWithQuant(input, output string, quant *llm.QuantConfig) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 	return os.WriteFile(filepath.Join(output, "config.json"), out, 0o644)
+}
+
+// isTowerTensor reports whether a tensor belongs to a multimodal tower that
+// the language-model loaders never read (vision/audio encoders and their
+// embedders/projectors).
+func isTowerTensor(key string) bool {
+	for _, p := range []string{
+		"visual.", "vision_tower.", "audio_tower.", "embed_audio.", "embed_vision.",
+		"vision_embedder.", "multi_modal_projector.",
+	} {
+		if strings.Contains(key, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func copyAuxFiles(input, output string) error {
@@ -322,7 +373,17 @@ func writeSafetensors(f *os.File, queue []pending, b tensor.Backend, s tensor.St
 
 // sfKeys returns all tensor keys in a SafetensorsFile.
 func sfKeys(sf *llm.SafetensorsFile) []string {
-	return sf.Keys()
+	keys := sf.Keys()
+	out := keys[:0]
+	for _, k := range keys {
+		// __metadata__ is a safetensors file-level metadata record, not a
+		// tensor — it has no data_offsets and panics the reader.
+		if k == "__metadata__" {
+			continue
+		}
+		out = append(out, k)
+	}
+	return out
 }
 
 type pending struct {

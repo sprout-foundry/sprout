@@ -555,6 +555,27 @@ func (t *Tokenizer) IDOf(content string) int {
 // model actually emits).
 func (t *Tokenizer) EOSID() int { return t.eosID }
 
+// multimodalTokenIDs returns IDs of modality-placeholder tokens — the
+// image/audio/video entries a multimodal checkpoint's vocab carries that a
+// text-only decode loop can never legitimately emit (<image_pad|>,
+// <audio|>, <vision_start|>, ...; spelling varies per family). Matched on
+// substring over added tokens rather than an exact list. Text-side markers
+// like Gemma4's <|channel>/<channel|> contain none of these substrings and
+// are unaffected.
+func (t *Tokenizer) multimodalTokenIDs() map[int]bool {
+	banned := map[int]bool{}
+	for content, id := range t.specialTokens {
+		lower := strings.ToLower(content)
+		if strings.Contains(lower, "image") ||
+			strings.Contains(lower, "audio") ||
+			strings.Contains(lower, "video") ||
+			strings.Contains(lower, "vision") {
+			banned[id] = true
+		}
+	}
+	return banned
+}
+
 // SortedTokens returns tokens sorted by ID (for debugging).
 func (t *Tokenizer) SortedTokens() []string {
 	ids := make([]int, 0, len(t.idToTok))

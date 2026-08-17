@@ -202,6 +202,14 @@ func (a *Agent) GetEstimatedTokenResponses() int {
 	return a.state.GetEstimatedTokenResponses()
 }
 
+// GetContinuationNudges returns how many seed transient continuation
+// nudges ("Please continue…") were observed at the provider seam. These
+// messages never enter conversation state, so this count explains
+// consecutive assistant messages in transcripts.
+func (a *Agent) GetContinuationNudges() int {
+	return a.state.GetContinuationNudges()
+}
+
 // MarkEstimatedTokenUsageResponse records that token usage for one response was estimated.
 func (a *Agent) MarkEstimatedTokenUsageResponse() {
 	a.state.SetEstimatedTokenResponses(a.state.GetEstimatedTokenResponses() + 1)

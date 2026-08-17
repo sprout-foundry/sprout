@@ -27,6 +27,9 @@ type sproutProvider struct {
 	tokenAnchor     tokenAnchor
 	maxTokensHint   int
 	maxTokensHintMu sync.RWMutex
+	// specialTokenGuard bounds corrective hints for the special-token
+	// truncation failure (see seed_special_token_guard.go).
+	specialTokenGuard specialTokenGuardState
 }
 
 // currentClient returns the agent's live client if available, otherwise the snapshot.
@@ -325,6 +328,12 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
 	messages = sp.stampTurnTimestamp(messages)
+	// Special-token truncation guard: observe seed nudges, add corrective
+	// hint if the last assistant message ends in a control-token literal.
+	// Runs AFTER stampTurnTimestamp so the turn timestamp lands on the
+	// user's real message, not on the appended hint.
+	messages = sp.observeAndHint(messages)
+	sp.recordContinuationNudges(messages)
 
 	sproutReq := seedRequestToSprout(req)
 
@@ -348,6 +357,9 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
 	messages = sp.stampTurnTimestamp(messages)
+	// Special-token truncation guard (see doChatNonStream).
+	messages = sp.observeAndHint(messages)
+	sp.recordContinuationNudges(messages)
 
 	sproutReq := seedRequestToSprout(req)
 
@@ -489,6 +501,8 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 
 	messages := sp.attachPastedImages(req.Messages)
 	messages = sp.stampTurnTimestamp(messages)
+	messages = sp.observeAndHint(messages)
+	sp.recordContinuationNudges(messages)
 
 	sp.computeMaxTokensHint(req)
 

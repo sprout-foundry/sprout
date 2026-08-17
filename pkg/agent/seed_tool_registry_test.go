@@ -70,6 +70,8 @@ func (m *mockStateManager) SetTotalToolCalls(int)                         {}
 func (m *mockStateManager) IncrementTotalToolCalls()                      {}
 func (m *mockStateManager) GetEstimatedTokenResponses() int               { return 0 }
 func (m *mockStateManager) SetEstimatedTokenResponses(int)                {}
+func (m *mockStateManager) RecordContinuationNudges(int)                  {}
+func (m *mockStateManager) GetContinuationNudges() int                    { return 0 }
 func (m *mockStateManager) GetCachedTokens() int                          { return 0 }
 func (m *mockStateManager) SetCachedTokens(int)                           {}
 func (m *mockStateManager) GetCacheWriteTokens() int                      { return 0 }

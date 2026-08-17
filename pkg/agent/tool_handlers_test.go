@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConvertToStringFromHandlers(t *testing.T) {
@@ -189,4 +190,55 @@ func TestWireAgentToolFuncs_NonProductionSkipsInfraTools(t *testing.T) {
 func TestWireAgentToolFuncs_NilAgentIsNoop(t *testing.T) {
 	// Should not panic.
 	wireAgentToolFuncs(nil, true)
+}
+
+// TestWireAgentToolFuncs_PopulatesAgentSet verifies the per-agent dispatch
+// fix: wireAgentToolFuncs stores the tool closures on the agent itself
+// (agent.toolFuncs), so a daemon serving multiple agents can route each tool
+// call to its own agent via ToolEnv rather than through the shared
+// package-level vars. Constructing a second agent must not change the first
+// agent's set.
+func TestWireAgentToolFuncs_PopulatesAgentSet(t *testing.T) {
+	a1 := newTestAgent(t)
+	defer a1.Shutdown()
+	require.NotNil(t, a1.toolFuncs, "agent construction must store its tool func set")
+
+	// Core agent-dependent funcs are wired for every agent (including the
+	// non-production test path).
+	coreFuncs := []struct {
+		name string
+		fn   func(ctx context.Context, args map[string]any) (string, error)
+	}{
+		{"RunSubagent", a1.toolFuncs.RunSubagent},
+		{"RunParallelSubagents", a1.toolFuncs.RunParallelSubagents},
+		{"RequestClarification", a1.toolFuncs.RequestClarification},
+		{"RespondClarification", a1.toolFuncs.RespondClarification},
+		{"ListChanges", a1.toolFuncs.ListChanges},
+		{"RecoverFile", a1.toolFuncs.RecoverFile},
+		{"RevertMyChanges", a1.toolFuncs.RevertMyChanges},
+		{"MCPRefresh", a1.toolFuncs.MCPRefresh},
+	}
+	for _, c := range coreFuncs {
+		if c.fn == nil {
+			t.Errorf("wireAgentToolFuncs left %s nil in the agent's set", c.name)
+		}
+	}
+
+	// Host-only funcs (RunAutomate, CreatePullRequest) only apply under
+	// production wiring; assert they populate when that wiring runs.
+	wireAgentToolFuncs(a1, true)
+	require.NotNil(t, a1.toolFuncs.RunAutomate, "production wiring must populate RunAutomate in the agent's set")
+	require.NotNil(t, a1.toolFuncs.CreatePullRequest, "production wiring must populate CreatePullRequest in the agent's set")
+
+	// A second agent's construction must not change the first agent's set.
+	firstSet := a1.toolFuncs
+	a2 := newTestAgent(t)
+	defer a2.Shutdown()
+	require.NotNil(t, a2.toolFuncs, "second agent must get its own tool func set")
+	if a1.toolFuncs != firstSet {
+		t.Error("constructing a second agent changed the first agent's tool func set")
+	}
+	if a2.toolFuncs == firstSet {
+		t.Error("each agent must get its own tool func set, not share the first agent's")
+	}
 }

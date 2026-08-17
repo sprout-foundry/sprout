@@ -105,9 +105,7 @@ func (h *runSubagentHandler) Validate(args map[string]any) error {
 }
 
 func (h *runSubagentHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	ToolFuncMu.RLock()
-	fn := RunSubagentFunc
-	ToolFuncMu.RUnlock()
+	fn := env.ResolveToolFuncs().RunSubagent
 	if fn == nil {
 		return ToolResult{
 			Output:  "subagent support not configured: agent integration not initialized (RunSubagentFunc is nil)",

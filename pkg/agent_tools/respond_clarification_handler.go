@@ -64,9 +64,7 @@ func (h *respondClarificationHandler) Validate(args map[string]any) error {
 }
 
 func (h *respondClarificationHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	ToolFuncMu.RLock()
-	fn := RespondClarificationFunc
-	ToolFuncMu.RUnlock()
+	fn := env.ResolveToolFuncs().RespondClarification
 	if fn == nil {
 		return ToolResult{
 			Output:  "respond_clarification is not available: agent integration not initialized (RespondClarificationFunc is nil)",

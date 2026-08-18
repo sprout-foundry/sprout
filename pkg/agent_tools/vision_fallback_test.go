@@ -26,29 +26,20 @@ import (
 
 func setEnvSuffix(t *testing.T, suffix, value string) {
 	t.Helper()
-	// configuration.GetEnvSimple looks up SPROUT_<suffix> then SPROUT_<suffix>.
-	// Set both forms so the helper sees a value.
-	oldSPROUT, _ := os.LookupEnv("SPROUT_" + suffix)
-	oldVal, _ := os.LookupEnv("SPROUT_" + suffix)
-	if value == "" {
-		os.Unsetenv("SPROUT_" + suffix)
-		os.Unsetenv("SPROUT_" + suffix)
-	} else {
-		os.Setenv("SPROUT_"+suffix, value)
-		os.Setenv("SPROUT_"+suffix, value)
-	}
+	key := "SPROUT_" + suffix
+	orig, wasSet := os.LookupEnv(key)
 	t.Cleanup(func() {
-		if oldSPROUT == "" {
-			os.Unsetenv("SPROUT_" + suffix)
+		if wasSet {
+			os.Setenv(key, orig)
 		} else {
-			os.Setenv("SPROUT_"+suffix, oldSPROUT)
-		}
-		if oldVal == "" {
-			os.Unsetenv("SPROUT_" + suffix)
-		} else {
-			os.Setenv("SPROUT_"+suffix, oldVal)
+			os.Unsetenv(key)
 		}
 	})
+	if value == "" {
+		os.Unsetenv(key)
+	} else {
+		os.Setenv(key, value)
+	}
 }
 
 func TestIsFallbackEnabled_DisabledByEnv(t *testing.T) {

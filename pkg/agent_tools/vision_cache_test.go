@@ -337,24 +337,9 @@ func TestVisionCacheStats_Reporting(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestVisionLRU_CapacityFromEnv(t *testing.T) {
-	// Save original env
-	orig := os.Getenv("SPROUT_VISION_CACHE_SIZE")
-	orig2 := os.Getenv("VISION_CACHE_SIZE")
-	defer func() {
-		if orig != "" {
-			os.Setenv("SPROUT_VISION_CACHE_SIZE", orig)
-		} else {
-			os.Unsetenv("SPROUT_VISION_CACHE_SIZE")
-		}
-		if orig2 != "" {
-			os.Setenv("VISION_CACHE_SIZE", orig2)
-		} else {
-			os.Unsetenv("VISION_CACHE_SIZE")
-		}
-	}()
-
-	// Set env var — configuration.GetEnvSimple checks SPROUT_* prefix first
-	os.Setenv("SPROUT_VISION_CACHE_SIZE", "10")
+	// configuration.GetEnvSimple checks SPROUT_* prefix first
+	t.Setenv("SPROUT_VISION_CACHE_SIZE", "10")
+	t.Setenv("VISION_CACHE_SIZE", "10")
 
 	// Note: newDefaultVisionLRU() calls configuration.GetEnvSimple which may
 	// have caching. We test the parsing logic directly instead.

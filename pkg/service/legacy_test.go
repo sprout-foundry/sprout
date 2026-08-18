@@ -11,10 +11,7 @@ import (
 func TestDetectLegacyServiceLinux(t *testing.T) {
 	testDir := t.TempDir()
 
-	// Save the real home dir and replace with our test dir
-	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
-	os.Setenv("HOME", testDir)
+	t.Setenv("HOME", testDir)
 
 	// Create legacy systemd service files
 	legacyDir := filepath.Join(testDir, ".config", "systemd", "user")
@@ -59,10 +56,7 @@ func TestDetectLegacyServiceLinux(t *testing.T) {
 func TestDetectLegacyServiceNone(t *testing.T) {
 	testDir := t.TempDir()
 
-	// Save and replace home dir
-	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
-	os.Setenv("HOME", testDir)
+	t.Setenv("HOME", testDir)
 
 	// Ensure the legacy directory exists but has no legacy files
 	legacyDir := filepath.Join(testDir, ".config", "systemd", "user")

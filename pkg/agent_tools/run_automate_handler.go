@@ -55,9 +55,7 @@ func (h *runAutomateHandler) Validate(args map[string]any) error {
 }
 
 func (h *runAutomateHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	ToolFuncMu.RLock()
-	fn := RunAutomateFunc
-	ToolFuncMu.RUnlock()
+	fn := env.ResolveToolFuncs().RunAutomate
 	if fn == nil {
 		return ToolResult{
 			Output:  "run_automate is not available: agent integration not initialized (RunAutomateFunc is nil)",

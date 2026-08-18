@@ -392,6 +392,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 						console.StopGlobalStatusFooter()
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
+						if chatAgent != nil {
+							chatAgent.ForceSaveAndExit(1)
+						}
 						os.Exit(1)
 					}
 
@@ -437,6 +440,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					case <-sigCh:
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
+						if chatAgent != nil {
+							chatAgent.ForceSaveAndExit(1)
+						}
 						os.Exit(1)
 					case <-ctx.Done():
 						return

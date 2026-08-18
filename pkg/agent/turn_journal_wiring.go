@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	core "github.com/sprout-foundry/seed/core"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -44,44 +46,47 @@ func (a *Agent) beginTurnJournal(query string) {
 	}
 }
 
-// journalMessagesSnapshot appends the messages appended since turn start
-// plus the running token totals. Called at iteration boundaries where
-// sprout's message slice was just refreshed from the seed agent. Replay
-// replaces the tail from Base, so overlapping snapshots are idempotent.
-func (a *Agent) journalMessagesSnapshot() {
-	if a == nil || a.state == nil {
+// journalSeedState appends a messages event (delta since the journal
+// high-water mark) and a token_totals event from seed's live state. Called
+// from OnIteration at every iteration start and from the end-of-turn sync
+// points in handleQueryResult. seed's list is the full history (base +
+// turn), so only messages beyond the mark are recorded; the mark advances
+// so each call appends only its own delta.
+func (a *Agent) journalSeedState(st *core.State) {
+	if a == nil || st == nil {
 		return
 	}
+	seedMsgs := st.Messages()
 	a.journalMu.Lock()
 	j := a.turnJournal
 	base := a.journalBase
 	a.journalMu.Unlock()
-	if j == nil {
+	if j == nil || len(seedMsgs) <= base {
 		return
 	}
-	msgs := a.state.GetMessages()
-	if base > len(msgs) {
-		return
-	}
-	newMsgs := append([]api.Message(nil), msgs[base:]...)
+	newMsgs := append([]api.Message(nil), seedMsgs[base:]...)
 	if err := j.AppendTurnEvent(TurnJournalEvent{
 		Type: "messages",
 		Base: base,
 		Msgs: newMsgs,
 	}); err != nil {
 		a.Logger().Debug("[WARN] failed to append journal messages: %v\n", err)
+		return
 	}
 	if err := j.AppendTurnEvent(TurnJournalEvent{
 		Type: "token_totals",
 		TokenTotals: &TurnJournalTokens{
-			TotalTokens:      a.state.GetTotalTokens(),
-			PromptTokens:     a.state.GetPromptTokens(),
-			CompletionTokens: a.state.GetCompletionTokens(),
-			TotalCost:        a.state.GetTotalCost(),
+			TotalTokens: st.TotalTokens(),
+			TotalCost:   st.TotalCost(),
 		},
 	}); err != nil {
 		a.Logger().Debug("[WARN] failed to append journal token totals: %v\n", err)
 	}
+	a.journalMu.Lock()
+	if len(seedMsgs) > a.journalBase {
+		a.journalBase = len(seedMsgs)
+	}
+	a.journalMu.Unlock()
 }
 
 // journalTurnCheckpoint appends a checkpoint event. Called from the

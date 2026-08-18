@@ -431,6 +431,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					console.StopGlobalStatusFooter()
 					fmt.Println()
 					console.GlyphStopped.Printf("Force quitting...")
+					if chatAgent != nil {
+						chatAgent.ForceSaveAndExit(1)
+					}
 					os.Exit(1)
 				}()
 

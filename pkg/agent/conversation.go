@@ -53,7 +53,7 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 		a.Logger().Debug("DEFER: Auto-saved memory state\n")
 	}()
 
-	if a.state.GetPreviousSummary() != "" {
+	if a.state.GetPreviousSummary() != "" && a.state.GetPendingSystemSupplement() == "" {
 		a.setPendingSystemSupplement(fmt.Sprintf(
 			"## Context From Previous Session\n\n%s\n\nNote: The user cannot see the previous session's responses. Build upon that work but present your response as if it's the first time addressing this topic.",
 			a.state.GetPreviousSummary()))

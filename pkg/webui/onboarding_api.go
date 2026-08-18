@@ -650,6 +650,22 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	_ = ws.syncAgentStateForClient(clientID)
 	ws.publishProviderState(clientID)
 
+	// The catalog default persisted earlier can diverge from the model the
+	// agent actually resolved (e.g. ram-tiered local-model catalog on hosts
+	// where the tier-0 default isn't runnable). Re-align persisted config
+	// with the live agent so a restart doesn't silently change models.
+	if req.Model == "" {
+		if actualModel := clientAgent.GetModel(); actualModel != "" && actualModel != modelToPersist {
+			if agentCM := clientAgent.GetConfigManager(); agentCM != nil {
+				if persistErr := agentCM.SetModelForProvider(providerType, actualModel); persistErr != nil {
+					ws.log().Warn("failed to re-persist resolved default model", slog.String("model", actualModel), slog.Any("err", persistErr))
+				} else {
+					_ = agentCM.SaveConfig()
+				}
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
 		"message":  "Onboarding completed",

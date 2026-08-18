@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/daemon"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // defaultAgentSocketName is the Unix socket the daemon serves the SP-136 P4
@@ -51,11 +54,78 @@ func AgentSocketPath() string {
 // callers fall back to in-process for full tool workflows.
 type SharedAgentService struct {
 	a *agent.Agent
+
+	// teardownWg tracks ephemeral agent shutdowns started off the response
+	// path so WaitForTeardown can block until they finish (mirrors
+	// pkg/webui/agent_teardown.go's agentTeardownWg). teardownMu and
+	// teardownClosed gate Adds so an Add can never race a blocked Wait.
+	teardownWg     sync.WaitGroup
+	teardownMu     sync.Mutex
+	teardownClosed bool
 }
 
 // NewSharedAgentService wraps an agent for socket serving.
 func NewSharedAgentService(a *agent.Agent) *SharedAgentService {
 	return &SharedAgentService{a: a}
+}
+
+// beginQuery reserves a teardown slot for one in-flight query, returning
+// false once WaitForTeardown has begun — Add must not run concurrently with
+// a blocked Wait, so every Add happens under teardownMu before the close
+// flag is set, or not at all.
+func (s *SharedAgentService) beginQuery() bool {
+	s.teardownMu.Lock()
+	defer s.teardownMu.Unlock()
+	if s.teardownClosed {
+		return false
+	}
+	s.teardownWg.Add(1)
+	return true
+}
+
+// releaseAgent starts shutting down an ephemeral query agent on a background
+// goroutine, off the response path. Dropping the pointer is not enough:
+// Agent.Shutdown is what releases the shared embedding manager refcount
+// (acquired at construction), stops MCP child processes, cancels
+// lifetime/interrupt contexts, waits background goroutines, and closes the
+// async output channel. Without it each one-shot query leaks a refcount and
+// the workspace's HNSW store can never close again.
+func (s *SharedAgentService) releaseAgent(a *agent.Agent) {
+	if a == nil {
+		// Agent never created — release the slot beginQuery reserved.
+		s.teardownWg.Done()
+		return
+	}
+	utils.SafeGo(slog.Default(), "daemon-ephemeral-agent-shutdown", func() {
+		defer s.teardownWg.Done()
+		a.Shutdown()
+	})
+}
+
+// WaitForTeardown blocks until every ephemeral agent released so far has
+// finished shutting down, bounded to 10s so a hung Agent.Shutdown can't
+// wedge daemon exit forever. AgentServer.OnClose calls it so the daemon
+// does not exit while an agent is still flushing its embedding store.
+func (s *SharedAgentService) WaitForTeardown() {
+	// The closed flag — not a held lock — is what excludes new Adds: set it
+	// under teardownMu so no beginQuery can slip in, then unlock before Wait
+	// so in-flight queries can still reach their Done.
+	s.teardownMu.Lock()
+	s.teardownClosed = true
+	s.teardownMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.teardownWg.Wait()
+		close(done)
+	}()
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		slog.Default().Warn("daemon teardown did not complete within 10s; exiting without waiting for agent shutdown")
+	}
 }
 
 // ListSessions implements daemon.AgentService.
@@ -82,26 +152,44 @@ func (s *SharedAgentService) SwitchSession(_ context.Context, sessionID string) 
 // Query implements daemon.AgentService: a fresh, isolated agent per call
 // (see the type doc for why), scoped to the caller's workDir.
 func (s *SharedAgentService) Query(_ context.Context, prompt, workDir string) (string, error) {
-	callAgent, err := newEphemeralDaemonAgent(workDir)
+	if !s.beginQuery() {
+		return "", errors.New("daemon is shutting down")
+	}
+	callAgent, err := newEphemeralDaemonAgentFn(workDir)
 	if err != nil {
+		// Agent never created — release the tracking slot beginQuery reserved.
+		s.releaseAgent(nil)
 		return "", err
 	}
+	// Shutdown starts as soon as the query returns, off the response path.
+	defer s.releaseAgent(callAgent)
 	return callAgent.ProcessQuery(prompt)
 }
 
 // StreamQuery implements daemon.AgentService (one-shot result as a single
 // delta; full token streaming is a future protocol refinement).
 func (s *SharedAgentService) StreamQuery(_ context.Context, prompt, workDir string, emit func(daemon.StreamEvent) error) error {
-	callAgent, err := newEphemeralDaemonAgent(workDir)
+	if !s.beginQuery() {
+		return errors.New("daemon is shutting down")
+	}
+	callAgent, err := newEphemeralDaemonAgentFn(workDir)
 	if err != nil {
+		// Agent never created — release the tracking slot beginQuery reserved.
+		s.releaseAgent(nil)
 		return err
 	}
+	// Shutdown starts as soon as the query returns, off the response path.
+	defer s.releaseAgent(callAgent)
 	result, err := callAgent.ProcessQuery(prompt)
 	if err != nil {
 		return err
 	}
 	return emit(daemon.StreamEvent{Type: "delta", Content: result})
 }
+
+// newEphemeralDaemonAgentFn is a test seam so cmd tests can substitute a
+// capturing constructor and assert teardown of the agents a query creates.
+var newEphemeralDaemonAgentFn = newEphemeralDaemonAgent
 
 // newEphemeralDaemonAgent builds a minimal agent for one daemon-routed
 // one-shot query: no onboarding (not appropriate for a background socket
@@ -168,7 +256,16 @@ func startDaemonAgentServer(ctx context.Context, daemonMode bool, chatAgent *age
 	}
 
 	svc := NewSharedAgentService(chatAgent)
-	srv := &daemon.AgentServer{SocketPath: AgentSocketPath(), Service: svc}
+	srv := &daemon.AgentServer{
+		SocketPath: AgentSocketPath(),
+		Service:    svc,
+		// Track socket traffic so the idle reaper sees agent socket use even
+		// with no WebUI activity.
+		Activity: daemon.NewDaemonActivity(),
+		// Block daemon exit until ephemeral query agents have flushed their
+		// embedding stores — mirrors webui's waitForAgentTeardown.
+		OnClose: svc.WaitForTeardown,
+	}
 	if err := srv.Start(ctx); err != nil {
 		console.GlyphWarning.Fprintf(os.Stderr,
 			"agent socket server failed to start at %s: %v\n", AgentSocketPath(), err)

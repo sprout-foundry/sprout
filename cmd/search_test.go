@@ -67,9 +67,7 @@ func setupCLISearchIndex(t *testing.T) string {
 	tmpDir := t.TempDir()
 
 	// Override HOME so DefaultIndexPath() resolves into our temp tree.
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 	// SP-133: sessions live under the state root. Bind it explicitly so an
 	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
 	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
@@ -336,9 +334,7 @@ func TestParseSearchDate(t *testing.T) {
 
 func TestGetCLISessionsDir(t *testing.T) {
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 	// SP-133: sessions live under the state root. Bind it explicitly so an
 	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
 	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
@@ -382,9 +378,7 @@ func TestSearchCmd_CombinedFlags(t *testing.T) {
 
 func TestSearchCmd_ReindexEmptyIndex(t *testing.T) {
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 	// SP-133: sessions live under the state root. Bind it explicitly so an
 	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
 	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")
@@ -407,9 +401,7 @@ func TestSearchCmd_ReindexEmptyIndex(t *testing.T) {
 
 func TestSearchCmd_AutoBuildEmptyIndex(t *testing.T) {
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	t.Cleanup(func() { os.Setenv("HOME", origHome) })
 	// SP-133: sessions live under the state root. Bind it explicitly so an
 	// ambient $XDG_STATE_HOME / $SPROUT_STATE_DIR can't redirect the test.
 	stateDir := filepath.Join(tmpDir, ".local", "state", "sprout")

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 
+	core "github.com/sprout-foundry/seed/core"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -224,7 +226,13 @@ func TestBeginTurnJournal_SnapshotsBaseAndSkipsSubagents(t *testing.T) {
 	if a.journalBase != 2 {
 		t.Fatalf("journalBase = %d, want 2", a.journalBase)
 	}
-	a.journalMessagesSnapshot()
+	seedSt := core.NewState()
+	for _, m := range a.state.GetMessages() {
+		seedSt.AddMessage(m)
+	}
+	seedSt.AddMessage(api.Message{Role: "user", Content: "new query"})
+	seedSt.AddMessage(api.Message{Role: "assistant", Content: "mid-turn"})
+	a.journalSeedState(seedSt)
 	a.endTurnJournal()
 
 	events := readJournalLines(t, mustJournalPath(t, "jbase", workingDir))
@@ -232,11 +240,7 @@ func TestBeginTurnJournal_SnapshotsBaseAndSkipsSubagents(t *testing.T) {
 		t.Fatalf("expected turn_start+messages+token_totals with Base=2, got %+v", events)
 	}
 
-	a.state.SetMessages(append(a.state.GetMessages(),
-		api.Message{Role: "user", Content: "new query"},
-		api.Message{Role: "assistant", Content: "mid-turn"},
-	))
-	a.journalMessagesSnapshot()
+	a.journalSeedState(seedSt)
 	events = readJournalLines(t, mustJournalPath(t, "jbase", workingDir))
 	if len(events) != 3 {
 		t.Fatalf("snapshot with closed journal must not append, got %d events", len(events))
@@ -251,28 +255,37 @@ func TestJournalMessagesSnapshot_RecordsNewMessagesOnly(t *testing.T) {
 	a.SetWorkspaceRoot(workingDir)
 
 	a.beginTurnJournal("query")
-	a.state.SetMessages(append(a.state.GetMessages(),
-		api.Message{Role: "assistant", Content: "iteration one"},
-		api.Message{Role: "user", Content: "steer"},
-	))
-	a.journalMessagesSnapshot()
-	a.journalMessagesSnapshot()
+
+	seedSt := core.NewState()
+	seedSt.AddMessage(api.Message{Role: "user", Content: "base"})
+	seedSt.AddMessage(api.Message{Role: "assistant", Content: "iteration one"})
+	a.journalSeedState(seedSt)
+
+	seedSt.AddMessage(api.Message{Role: "user", Content: "steer"})
+	a.journalSeedState(seedSt)
 	a.endTurnJournal()
 
 	events := readJournalLines(t, mustJournalPath(t, "jsnap", workingDir))
 	var msgEvents int
+	wantBase := 1
+	seen := map[string]bool{}
 	for _, ev := range events {
 		if ev.Type != "messages" {
 			continue
 		}
 		msgEvents++
-		if ev.Base != 1 {
-			t.Fatalf("messages Base = %d, want 1", ev.Base)
+		if ev.Base != wantBase {
+			t.Fatalf("messages Base = %d, want %d (monotonic high-water mark)", ev.Base, wantBase)
 		}
+		wantBase += len(ev.Msgs)
 		for _, m := range ev.Msgs {
 			if m.Content == "base" {
 				t.Fatal("snapshot must not re-record pre-turn messages")
 			}
+			if seen[m.Content] {
+				t.Fatalf("message %q journaled twice", m.Content)
+			}
+			seen[m.Content] = true
 		}
 	}
 	if msgEvents != 2 {
@@ -301,7 +314,9 @@ func TestEndTurnJournalKeepsFileForFinalizeToRemove(t *testing.T) {
 	a.SetWorkspaceRoot(workingDir)
 
 	a.beginTurnJournal("work")
-	a.journalMessagesSnapshot()
+	seedSt := core.NewState()
+	seedSt.AddMessage(api.Message{Role: "user", Content: "crash sim"})
+	a.journalSeedState(seedSt)
 	a.endTurnJournal()
 
 	if !turnJournalExists("jcrash", workingDir) {

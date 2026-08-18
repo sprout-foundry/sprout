@@ -161,6 +161,9 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	if clientAgent, err := ws.getClientAgent(clientID); err == nil && clientAgent != nil {
 		_ = clientAgent.ImportState(stateData)
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
+		if recovered {
+			clientAgent.NoteRecoveredSession()
+		}
 	}
 
 	// Restore config overrides from the saved session into the active chat session.

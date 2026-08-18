@@ -14,10 +14,7 @@ func TestSafeResolvePathWithBypass(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 	testDir := filepath.Join(homeDir, ".sprout-test-security")
 	if err := os.MkdirAll(testDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
@@ -86,10 +83,7 @@ func TestSafeResolvePathForWriteWithBypass(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home dir: %v", err)
-	}
+	homeDir := scratchHome(t)
 	testDir := filepath.Join(homeDir, ".sprout-test-write")
 	if err := os.MkdirAll(testDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)

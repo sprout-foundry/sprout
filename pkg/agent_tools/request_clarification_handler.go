@@ -65,9 +65,7 @@ func (h *requestClarificationHandler) Validate(args map[string]any) error {
 }
 
 func (h *requestClarificationHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	ToolFuncMu.RLock()
-	fn := RequestClarificationFunc
-	ToolFuncMu.RUnlock()
+	fn := env.ResolveToolFuncs().RequestClarification
 	if fn == nil {
 		return ToolResult{
 			Output:  "request_clarification is not available: agent integration not initialized (RequestClarificationFunc is nil)",

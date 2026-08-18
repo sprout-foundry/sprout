@@ -102,7 +102,22 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
-	// When UnifiedRiskResolver is enabled, use the single
+	// Enrich context with workspace root, effective cwd, and session folders
+	// BEFORE any dispatch: every execution path below (unified, legacy,
+	// background) shells out through runShellCommand, which resolves cmd.Dir
+	// from this context and falls back to os.Getwd() when it is missing —
+	// the daemon's start directory in daemon mode, or the package source dir
+	// inside a real repo during tests.
+	workspaceRoot := a.GetWorkspaceRoot()
+	effectiveCwd := a.effectiveCwd()
+	sessionFolders := a.SnapshotSessionAllowedFolders()
+	ctx = filesystem.WithAgentContext(
+		filesystem.WithWorkspaceRoot(ctx, workspaceRoot),
+		effectiveCwd,
+		sessionFolders,
+	)
+
+	// When UnifiedRiskResolver is enabled, return the single
 	// ResolveToolRisk assessment instead of the individual gates below.
 	if cfg := a.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
 		return a.handleShellCommandUnified(ctx, command, background)
@@ -280,19 +295,6 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 			)
 		}
 	}
-
-	// Enrich context with workspace root, effective cwd, and session folders so
-	// executeGitCommand runs in the correct directory. The seed execution path
-	// passes a bare context without workspace metadata, so we inject it from
-	// the agent's config.
-	workspaceRoot := a.GetWorkspaceRoot()
-	effectiveCwd := a.effectiveCwd()
-	sessionFolders := a.SnapshotSessionAllowedFolders()
-	ctx = filesystem.WithAgentContext(
-		filesystem.WithWorkspaceRoot(ctx, workspaceRoot),
-		effectiveCwd,
-		sessionFolders,
-	)
 
 	// Basic git ops (add/push/pull/fetch) skip the approval prompt for any
 	// persona with CapabilityGitWrite that has cleared isGitWriteAllowed

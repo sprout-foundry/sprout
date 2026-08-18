@@ -257,6 +257,10 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.RawArgsJSON = rawArgsJSON
 		env.Notifier = agent
 		env.LifetimeCtx = agent.LifetimeCtx()
+		// Carry this agent's per-agent tool dispatch set so agent-dependent
+		// tools (run_subagent, run_automate, ...) route to THIS agent even
+		// when other agents exist in the process.
+		env.ToolFuncs = agent.toolFuncs
 		// Propagate subagent depth for memory gate and other subagent-specific behaviors.
 		env.SubagentDepth = agent.subagentDepth
 		// Propagate Gate 1's auto-approve decision so handler-level gates skip their interactive prompt.

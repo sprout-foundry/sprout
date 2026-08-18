@@ -145,6 +145,21 @@ func TestIsSeedContinuationNudge(t *testing.T) {
 	}
 }
 
+func TestObserveAndHintPublishesEvent(t *testing.T) {
+	a := newTestAgent(t)
+	sp := &sproutProvider{agent: a}
+	msgs := []core.Message{
+		{Role: "assistant", Content: "cut <|im_end|>"},
+		{Role: "user", Content: "Please continue your response from where you left off."},
+	}
+	// No event bus wired on a bare test agent — must not panic, and the
+	// hint still appends.
+	out := sp.observeAndHint(msgs)
+	if len(out) != 3 {
+		t.Fatalf("expected hint appended, got %d", len(out))
+	}
+}
+
 func TestRecordContinuationNudges(t *testing.T) {
 	a := newTestAgent(t)
 	sp := &sproutProvider{agent: a}

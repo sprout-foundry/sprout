@@ -19,6 +19,7 @@ type SessionInfo struct {
 	Name             string    `json:"name"`              // Human-readable session name
 	WorkingDirectory string    `json:"working_directory"` // Directory where session was created
 	StoragePath      string    `json:"storage_path,omitempty"`
+	Interrupted      bool      `json:"interrupted,omitempty"` // Turn journal survived — session ended mid-turn
 }
 
 type fileInfoDirEntry struct {
@@ -66,7 +67,13 @@ func readSessionInfo(path string, d os.DirEntry) (SessionInfo, bool) {
 		Name:             name,
 		WorkingDirectory: workingDir,
 		StoragePath:      path,
+		Interrupted:      journalSurvives(path),
 	}, true
+}
+
+func journalSurvives(stateFilePath string) bool {
+	_, err := os.Stat(turnJournalPath(stateFilePath))
+	return err == nil
 }
 
 func listSessionFilesForScope(stateDir, workingDir string) ([]string, error) {

@@ -192,6 +192,8 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		}
 	}()
 
+	a.journalTurnCheckpoint(checkpoint)
+
 	// Embed and schedule rollup asynchronously so the synchronous path
 	// (summary building + add to list) stays fast. The checkpoint is
 	// already in the list at this point, so the next query sees it

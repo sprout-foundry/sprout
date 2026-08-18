@@ -341,6 +341,9 @@ func DeleteSessionScoped(sessionID, workingDir string) error {
 	if err := os.Remove(stateFile + ".bak"); err != nil && !os.IsNotExist(err) {
 		return agenterrors.NewAgent("persistence", fmt.Sprintf("failed to delete session backup %q", stateFile+".bak"), err)
 	}
+	if err := os.Remove(turnJournalPath(stateFile)); err != nil && !os.IsNotExist(err) {
+		return agenterrors.NewAgent("persistence", fmt.Sprintf("failed to delete turn journal %q", turnJournalPath(stateFile)), err)
+	}
 	return nil
 }
 

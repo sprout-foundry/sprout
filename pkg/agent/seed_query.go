@@ -327,11 +327,23 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement
 	}
 
+	var seedAgentRef *core.Agent
+
 	// OnIteration callback: sync per-iteration context token estimates back to sprout's state
 	// so the UI can show real-time token usage, and emit the context-management diagnostic.
 	opts.OnIteration = func(iteration, messages, tokenEstimate, contextSize int) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
+
+		// SP-138: journal seed's live conversation at each iteration start.
+		// This is the mid-turn WAL — a hard kill between iterations loses at
+		// most one iteration. State read under the closure-captured ref,
+		// which is assigned before Run() begins iterating.
+		if seedAgentRef != nil {
+			if st := seedAgentRef.State(); st != nil {
+				a.journalSeedState(st)
+			}
+		}
 
 		// SP-126: clamp to the effective cap (user MaxContextTokens or native window).
 		// After a model switch, effectiveContextCap is refreshed by
@@ -388,6 +400,7 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	if err != nil {
 		return nil, agenterrors.NewAgent("seed-query", "failed to create seed agent", err)
 	}
+	seedAgentRef = seedAgent
 
 	// Run the query through seed's conversation loop.
 	// Use the processed (cleaned) query so image placeholders are replaced.
@@ -487,7 +500,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 			}
 
 			a.state.SetLastRunTerminationReason(RunTerminationFleetBudgetExceeded)
-			a.journalMessagesSnapshot()
+			a.journalSeedState(qc.seedAgent.State())
 			a.finalizeConversationPostHooks(truncatedResult, qc.processedQuery, qc.preSeedMsgCount)
 
 			return truncatedResult, nil
@@ -504,7 +517,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 
 		// Sync whatever state we can before returning
 		a.syncSeedStateToSprout(qc.seedAgent)
-		a.journalMessagesSnapshot()
+		a.journalSeedState(qc.seedAgent.State())
 		a.finalizeConversationPostHooks(wrapped, qc.processedQuery, qc.preSeedMsgCount)
 
 		// Return the classified error so CLI/webui display it properly.
@@ -514,7 +527,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 
 	// Sync state back to sprout's agent manager
 	a.syncSeedStateToSprout(qc.seedAgent)
-	a.journalMessagesSnapshot()
+	a.journalSeedState(qc.seedAgent.State())
 
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 

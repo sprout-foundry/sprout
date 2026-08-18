@@ -240,6 +240,11 @@ func LoadStateWithoutAgentScoped(sessionID, workingDir string) (*ConversationSta
 		return nil, agenterrors.NewAgent("persistence", "failed to unmarshal state", err)
 	}
 
+	// Cooperative interrupts (Ctrl+C → deferred save) delete the journal but
+	// can leave dangling tool_calls at the tail — repair so resume doesn't
+	// send a malformed history to the provider.
+	state.Messages, _ = RepairMessageTail(state.Messages)
+
 	return &state, nil
 }
 

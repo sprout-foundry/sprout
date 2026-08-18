@@ -235,6 +235,18 @@ const recoveredSessionSupplement = "## Recovered Session\n\nThis session was int
 	"State is recovered to the last completed tool iteration. The working tree may contain " +
 	"edits from the lost portion of the turn — verify with list_changes / view_history before redoing work."
 
+// NoteRecoveredSession primes the recovery supplement on an agent whose
+// state was restored via ImportState (WebUI path), where
+// ApplyRecoveredState wasn't used.
+func (a *Agent) NoteRecoveredSession() {
+	if a == nil || a.state == nil {
+		return
+	}
+	if a.state.GetPendingSystemSupplement() == "" {
+		a.setPendingSystemSupplement(recoveredSessionSupplement)
+	}
+}
+
 // ApplyRecoveredState applies a recovered state and primes a system
 // supplement so the model knows the session was interrupted.
 func (a *Agent) ApplyRecoveredState(state *ConversationState) RecoveryReport {

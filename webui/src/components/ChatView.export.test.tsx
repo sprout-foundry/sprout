@@ -29,6 +29,7 @@ vi.mock('lucide-react', async (importOriginal) => {
 /* --- @sprout/ui --- */
 vi.mock('@sprout/ui', () => ({
   ChatMessageContextMenu: () => null,
+  createHttpCommandCompletionApi: () => ({}),
 }));
 
 /* --- react-virtuoso --- */

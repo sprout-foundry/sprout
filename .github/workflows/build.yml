@@ -47,6 +47,10 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Install MLX C library (macOS)
+      if: runner.os == 'macOS' && runner.arch == 'ARM64'
+      run: brew install mlx-c
+
     - name: Run go vet
       run: make vet
 

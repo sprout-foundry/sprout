@@ -142,11 +142,15 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	a.turnTimestamp = time.Now()
 	a.turnTimestampMu.Unlock()
 
+	a.beginTurnJournal(userQuery)
+
 	qc, err := a.prepareQueryRun(userQuery)
 	if err != nil {
+		a.endTurnJournal()
 		return "", err
 	}
 	defer func() {
+		a.endTurnJournal()
 		qc.runCancel()
 		<-qc.steerDone
 	}()
@@ -483,6 +487,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 			}
 
 			a.state.SetLastRunTerminationReason(RunTerminationFleetBudgetExceeded)
+			a.journalMessagesSnapshot()
 			a.finalizeConversationPostHooks(truncatedResult, qc.processedQuery, qc.preSeedMsgCount)
 
 			return truncatedResult, nil
@@ -499,6 +504,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 
 		// Sync whatever state we can before returning
 		a.syncSeedStateToSprout(qc.seedAgent)
+		a.journalMessagesSnapshot()
 		a.finalizeConversationPostHooks(wrapped, qc.processedQuery, qc.preSeedMsgCount)
 
 		// Return the classified error so CLI/webui display it properly.
@@ -508,6 +514,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 
 	// Sync state back to sprout's agent manager
 	a.syncSeedStateToSprout(qc.seedAgent)
+	a.journalMessagesSnapshot()
 
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 

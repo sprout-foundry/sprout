@@ -4,6 +4,7 @@ package gemma4
 
 import (
 	"fmt"
+	"math"
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
@@ -467,10 +468,62 @@ func (g *Gemma4) attention(h tensor.Array, lw *layerWeights, layerIdx int, isFul
 	// Attention — scale=1.0 for Gemma4
 	// No ExpandKVHeads needed: MLX's SDPA natively handles GQA (numKVHeads < numHeads).
 	maskMode := ""
-	if seqLen > 1 {
+	var maskArr tensor.Array
+	kvLen := kForAttn.Shape()[2]
+	window := 0
+	if !isFull {
+		window = g.cfg.SlidingWindow
+	}
+	switch {
+	case window > 0 && kvLen > window && seqLen == 1:
+		// Single-token decode on a local (sliding) layer: every key in the
+		// trailing `window` slice is valid for this query, so slice K/V and
+		// attend unmasked. Keys older than the window are dropped — with
+		// theta=10000 RoPE these layers are trained to see at most `window`
+		// of history; attending further back (the old behavior) pushed 4 of
+		// every 5 layers far outside their trained distribution, which is
+		// why prompts longer than the window decoded to garbage.
+		sl, err := g.sliceKV(kForAttn, vForAttn, kvLen-window)
+		if err != nil {
+			return nil, nil, err
+		}
+		defer sl.k.Free()
+		defer sl.v.Free()
+		kForAttn, vForAttn = sl.k, sl.v
+	case window > 0 && seqLen > 1:
+		// Prefill on a local layer: queries at startPos+i attend keys in
+		// [startPos+i-window+1, startPos+i]. Drop keys no query can see,
+		// then apply an additive band mask over the remainder (causal minus
+		// the lower-left triangle outside the window). Full-attention
+		// layers keep the plain causal mask.
+		lo := 0
+		if startPos > window-1 {
+			lo = startPos - window + 1
+		}
+		if lo > 0 {
+			sl, err := g.sliceKV(kForAttn, vForAttn, lo)
+			if err != nil {
+				return nil, nil, err
+			}
+			defer sl.k.Free()
+			defer sl.v.Free()
+			kForAttn, vForAttn = sl.k, sl.v
+			kvLen -= lo
+		}
+		if kvLen > window {
+			maskArr, err = g.bandMask(qRot.Dtype(), seqLen, kvLen, startPos, window, lo)
+			if err != nil {
+				return nil, nil, err
+			}
+			defer maskArr.Free()
+			maskMode = "array"
+		} else {
+			maskMode = "causal" // window already spans everything: causal is exact
+		}
+	case seqLen > 1:
 		maskMode = "causal"
 	}
-	ctx, err := g.backend.FastScaledDotProductAttention(qRot, kForAttn, vForAttn, 1.0, maskMode, nil, nil, s)
+	ctx, err := g.backend.FastScaledDotProductAttention(qRot, kForAttn, vForAttn, 1.0, maskMode, maskArr, nil, s)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -501,6 +554,108 @@ func (g *Gemma4) applyRoPE(x tensor.Array, isFull bool, offset, headDim int) (te
 		return g.backend.FastRoPE(x, headDim, false, 0, 1.0, offset, g.propRoPEFreqs, s)
 	}
 	return llm.ApplyRoPEFast(x, offset, headDim, 10000.0, g.backend, s)
+}
+
+type kvPair struct{ k, v tensor.Array }
+
+// sliceKV returns the K/V suffix starting at sequence offset `from` (axis 2),
+// retaining the originals. Caller owns the returned arrays.
+func (g *Gemma4) sliceKV(k, v tensor.Array, from int) (kvPair, error) {
+	s := g.stream
+	slice := func(a tensor.Array) (tensor.Array, error) {
+		shape := a.Shape()
+		return g.backend.Slice(a, []int{0, 0, from, 0}, []int{shape[0], shape[1], shape[2], shape[3]}, []int{1, 1, 1, 1}, s)
+	}
+	ks, err := slice(k)
+	if err != nil {
+		return kvPair{}, fmt.Errorf("window slice K: %w", err)
+	}
+	vs, err := slice(v)
+	if err != nil {
+		ks.Free()
+		return kvPair{}, fmt.Errorf("window slice V: %w", err)
+	}
+	return kvPair{ks, vs}, nil
+}
+
+// bandMask builds the additive sliding-window causal mask for a local-layer
+// prefill: [1,1,qLen,kvLen], 0 where the key is visible to the query and
+// -inf where it is not. Query i sits at absolute position startPos+i; key j
+// (in the sliced frame, whose absolute base is kvBase) is visible iff
+// kvBase+j <= startPos+i (causal) and startPos+i-(kvBase+j) < window.
+// Cast to dtype so SDPA's additive-mask promotion matches q/k/v (an fp32
+// mask would promote the scores to fp32 and round differently).
+func (g *Gemma4) bandMask(dtype tensor.Dtype, qLen, kvLen, startPos, window, kvBase int) (tensor.Array, error) {
+	s := g.stream
+	b := g.backend
+	qPos, err := b.Arange(float64(startPos), float64(startPos+qLen), 1, tensor.Int32, s)
+	if err != nil {
+		return nil, fmt.Errorf("band mask q arange: %w", err)
+	}
+	defer qPos.Free()
+	qPos4, err := b.Reshape(qPos, []int{1, 1, qLen, 1}, s)
+	if err != nil {
+		return nil, err
+	}
+	defer qPos4.Free()
+	kPos, err := b.Arange(float64(kvBase), float64(kvBase+kvLen), 1, tensor.Int32, s)
+	if err != nil {
+		return nil, fmt.Errorf("band mask k arange: %w", err)
+	}
+	defer kPos.Free()
+	kPos4, err := b.Reshape(kPos, []int{1, 1, 1, kvLen}, s)
+	if err != nil {
+		return nil, err
+	}
+	defer kPos4.Free()
+
+	diff, err := b.Subtract(qPos4, kPos4, s)
+	if err != nil {
+		return nil, err
+	}
+	defer diff.Free()
+	winEdge, err := b.NewArrayFromInt32([]int32{int32(window - 1)}, []int{1})
+	if err != nil {
+		return nil, err
+	}
+	defer winEdge.Free()
+	inWindow, err := mlx.LessEqual(diff.(*mlx.Array), winEdge.(*mlx.Array), s.(*mlx.Stream))
+	if err != nil {
+		return nil, err
+	}
+	defer inWindow.Free()
+	causal, err := mlx.LessEqual(kPos4.(*mlx.Array), qPos4.(*mlx.Array), s.(*mlx.Stream))
+	if err != nil {
+		return nil, err
+	}
+	defer causal.Free()
+
+	zero, err := b.NewArrayFromFloat32([]float32{0}, []int{1})
+	if err != nil {
+		return nil, err
+	}
+	defer zero.Free()
+	negInf, err := b.NewArrayFromFloat32([]float32{float32(math.Inf(-1))}, []int{1})
+	if err != nil {
+		return nil, err
+	}
+	defer negInf.Free()
+	mCausal, err := b.Where(causal, zero, negInf, s)
+	if err != nil {
+		return nil, err
+	}
+	defer mCausal.Free()
+	mWindow, err := b.Where(inWindow, zero, negInf, s)
+	if err != nil {
+		return nil, err
+	}
+	defer mWindow.Free()
+	add, err := b.Add(mCausal, mWindow, s)
+	if err != nil {
+		return nil, err
+	}
+	defer add.Free()
+	return b.AsType(add, dtype, s)
 }
 
 func (g *Gemma4) mlp(h tensor.Array, lw *layerWeights) (tensor.Array, error) {

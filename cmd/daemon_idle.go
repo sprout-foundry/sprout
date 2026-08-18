@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/daemon"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
@@ -19,8 +20,8 @@ type idleServer interface {
 	ActiveQueryCount() int
 }
 
-// reapIdleDaemon watches the daemon's web server and terminates it once the
-// web UI has had no active clients and no active queries for idleTimeout.
+// reapIdleDaemon watches the daemon's web server and socket servers and
+// terminates it once none of them have had activity for idleTimeout.
 //
 // SP-136 P2: auto-started daemons should not outlive their usefulness. The
 // CLI spawns the daemon with SPROUT_DAEMON_IDLE_TIMEOUT set (see
@@ -28,9 +29,15 @@ type idleServer interface {
 // context after the idle window, which unblocks the daemon's serve loop
 // (`<-ctx.Done()`) and runs the normal graceful-shutdown path.
 //
+// `sockets` carries the activity trackers of the daemon's other listeners
+// (agent socket, embedding socket). The daemon's liveness is not the WebUI's
+// liveness: an auto-started daemon actively serving socket requests must not
+// be reaped, or CLI clients silently fall back to in-process execution and
+// load their own model copy — the duplication SP-136 exists to prevent.
+//
 // Explicitly-started daemons (`sprout agent -d`) are unaffected unless the
 // operator sets the env var themselves.
-func reapIdleDaemon(ctx context.Context, cancel context.CancelFunc, ws idleServer, idleTimeout time.Duration) {
+func reapIdleDaemon(ctx context.Context, cancel context.CancelFunc, web idleServer, sockets []*daemon.DaemonActivity, idleTimeout time.Duration) {
 	// Poll faster than the idle window so we notice the last disconnect
 	// promptly, but not so fast that we burn CPU on an idle daemon.
 	interval := idleCheckInterval
@@ -48,8 +55,12 @@ func reapIdleDaemon(ctx context.Context, cancel context.CancelFunc, ws idleServe
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Active clients OR an in-flight query counts as "in use".
-			if ws.ActiveClientCount(idleTimeout) > 0 || ws.ActiveQueryCount() > 0 {
+			// Active web clients, an in-flight web query, OR socket traffic
+			// counts as "in use". Socket activity uses the same window as web
+			// activity: SP-136 P2's idle timeout is a single knob for the
+			// whole daemon, not per-listener.
+			if web.ActiveClientCount(idleTimeout) > 0 || web.ActiveQueryCount() > 0 ||
+				anySocketActive(sockets, time.Now(), idleTimeout) {
 				idleSince = time.Time{}
 				continue
 			}
@@ -65,6 +76,17 @@ func reapIdleDaemon(ctx context.Context, cancel context.CancelFunc, ws idleServe
 			}
 		}
 	}
+}
+
+// anySocketActive reports whether a socket server has in-flight work or
+// activity within the window.
+func anySocketActive(activities []*daemon.DaemonActivity, now time.Time, window time.Duration) bool {
+	for _, a := range activities {
+		if a != nil && !a.Idle(now, window) {
+			return true
+		}
+	}
+	return false
 }
 
 // compile-time assertion: ReactWebServer satisfies idleServer.

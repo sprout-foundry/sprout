@@ -955,14 +955,36 @@ func (m *Model) generateLocked(ctx context.Context, prompt string, genCfg Genera
 			}
 
 			if accepted < len(candidates) {
-				// Rollback: restore snapshot and re-run accepted prefix only.
-				cache.RestorePrefix(snap)
-				snap.Free()
-				if accepted > 0 {
-					rerunIDs := append([]int{nextToken}, candidates[:accepted]...)
-					verifyArch.ForwardPrefillArgmaxAll(rerunIDs, pos, cache)
+				// Rollback: restore snapshot and re-run the accepted prefix.
+				if err := cache.RestorePrefix(snap); err != nil {
+					snap.Free()
+					return fmt.Errorf("prompt-lookup rollback: %w", err)
 				}
-				pos += accepted
+				snap.Free()
+				// The re-run is unconditional and always includes nextToken,
+				// even when accepted == 0: the restore just rolled the cache
+				// back to pos, and nextToken (already emitted upstream) must
+				// be re-fed to re-cache its K/V. Skipping it — as this path
+				// once did for accepted == 0 — leaves a permanent hole in
+				// the cache: the token is in the output stream but absent
+				// from every later attention round.
+				//
+				// pos also advances by accepted+1, not accepted: after
+				// re-feeding [nextToken, candidates[:accepted]...] the cache
+				// holds pos+accepted+1 tokens, and every subsequent forward
+				// must start there. Advancing by `accepted` alone desyncs
+				// RoPE offsets from the cache by one position per partial
+				// round — accumulating drift that turns output to garbage on
+				// any workload where drafts are rejected mid-batch (novel
+				// prose). Full accepts (the echo-heavy case the k-tuning was
+				// benchmarked on) never hit this branch, which is why the
+				// corruption looked model-specific. Matches ForwardDecodeMTP's
+				// rollback accounting exactly.
+				rerunIDs := append([]int{nextToken}, candidates[:accepted]...)
+				if _, err := verifyArch.ForwardPrefillArgmaxAll(rerunIDs, pos, cache); err != nil {
+					return fmt.Errorf("prompt-lookup re-run: %w", err)
+				}
+				pos += accepted + 1
 			} else {
 				snap.Free()
 				pos += len(verifyIDs)

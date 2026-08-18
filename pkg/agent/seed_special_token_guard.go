@@ -10,6 +10,13 @@ import (
 // specialTokenGuardState tracks the guard's per-streak budget. Reset on
 // any assistant message that does NOT end in a special token (a clean
 // response proves the model escaped the loop).
+//
+// Lifecycle: a sproutProvider is created per query (processQueryWithSeed
+// → NewSproutProvider), so this state is per-query, not per-agent. The
+// streak semantics therefore span seed's iterations within one user turn
+// — which is exactly where the truncation failure loops — and do NOT
+// carry across turns. Subagents build their own providers and are
+// isolated by design.
 type specialTokenGuardState struct {
 	mu sync.Mutex
 	// fired counts hints appended in the current streak (capped).
@@ -116,7 +123,25 @@ func (sp *sproutProvider) observeAndHint(messages []core.Message) []core.Message
 	out := make([]core.Message, len(messages), len(messages)+1)
 	copy(out, messages)
 	out = append(out, core.Message{Role: "user", Content: specialTokenHint})
+	sp.publishSpecialTokenEvent()
 	return out
+}
+
+// publishSpecialTokenEvent surfaces the guard firing so users see it in
+// real time rather than discovering it in a post-mortem transcript. The
+// message names the remedy: enable neutralize_special_tokens on the
+// provider (Qwen-family via vLLM and similar tokenizer-sensitive
+// stacks). Best-effort — a nil event bus is normal in tests and the
+// wasm build.
+func (sp *sproutProvider) publishSpecialTokenEvent() {
+	if sp.agent == nil {
+		return
+	}
+	sp.agent.PublishEvent("special_token_truncation", map[string]interface{}{
+		"message": "Assistant response terminated at a special-token boundary (likely EOS collision on a tokenizer-sensitive provider). Sending corrective hint. To prevent recurrence, enable neutralize_special_tokens for this provider.",
+		"hint_no": sp.specialTokenGuard.fired,
+		"model":   sp.currentClient().GetModel(),
+	})
 }
 
 // resetSpecialTokenGuard clears the hint budget after a clean response.

@@ -1,6 +1,6 @@
 # SP-138 — Crash-Safe Session Persistence & Interrupted-Turn Recovery
 
-Status: 📋 Specified (not started)
+Status: ✅ Shipped (2026-08-18) — all 5 phases + review fixes in v0.17.17
 
 ## Problem
 

@@ -81,7 +81,7 @@ type SteerInputReader struct {
 
 	footer      *StatusFooter
 	submitFn    func(string) // STEER mode: mid-turn injection
-	queueFn     func(string) // QUEUE mode: deferred to next user turn
+	queueFn     func(string) // QUEUE mode: auto-run at turn end
 	interruptFn func()
 
 	// submitMode controls how Enter is interpreted. Tab toggles. The
@@ -199,13 +199,13 @@ const SteerHistoryCap = 50
 // SteerSubmitMode controls what happens on Enter (SP-055 Phase 3b).
 // STEER (default) injects mid-turn via the submit callback (typically
 // Agent.InjectInputContext → seed.InjectInput). QUEUE buffers the
-// message into the agent's deferred queue, which the REPL drains and
-// prepends to the next user-typed prompt.
+// message into the agent's deferred queue, which auto-submits as its
+// own turn(s) when the current turn ends.
 type SteerSubmitMode int
 
 const (
 	SteerSubmitModeNow   SteerSubmitMode = iota // mid-turn injection (default)
-	SteerSubmitModeQueue                        // hold until next turn
+	SteerSubmitModeQueue                        // auto-run at turn end
 )
 
 // SteerPromptPrefix is the visible glyph + space rendered at the start

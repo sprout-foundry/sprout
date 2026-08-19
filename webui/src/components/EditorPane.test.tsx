@@ -735,16 +735,19 @@ vi.mock('@codemirror/view', () => ({
 }));
 
 vi.mock('@codemirror/state', () => {
-  const mockCompartment = {
-    of: vi.fn((ext: any) => ext),
-    reconfigure: vi.fn((ext: any) => ({ reconfigure: ext })),
+  // Constructible: useEditorExtensions mock does `new Compartment()` for each
+  // compartment, and Vitest 4's spy invokes the mock implementation with `new`
+  // — arrow impls are not constructible.
+  const MockCompartment = function (this: any) {
+    this.of = vi.fn((ext: any) => ext);
+    this.reconfigure = vi.fn((ext: any) => ({ reconfigure: ext }));
   };
   return {
     EditorState: {
       create: vi.fn(),
       allowMultipleSelections: { of: (v: any) => v },
     },
-    Compartment: vi.fn(() => mockCompartment),
+    Compartment: vi.fn(MockCompartment),
     Facet: {
       define: vi.fn(() => ({
         of: vi.fn((v: any) => ({ facetOf: v })),
@@ -975,10 +978,13 @@ describe('EditorPane', () => {
 
     // ── CodeMirror mock setup (resetMocks clears before each test) ──
     EditorState.create.mockImplementation(({ doc }) => createMockState(typeof doc === 'string' ? doc : ''));
-    (Compartment as vi.Mock).mockImplementation(() => ({
-      of: vi.fn().mockReturnValue([]),
-      reconfigure: vi.fn().mockReturnValue({}),
-    }));
+    // Constructible: useEditorExtensions mock does `new Compartment()`, and
+    // Vitest 4's spy invokes the mock implementation with `new` — arrows are not
+    // constructible.
+    (Compartment as vi.Mock).mockImplementation(function (this: any) {
+      this.of = vi.fn().mockReturnValue([]);
+      this.reconfigure = vi.fn().mockReturnValue({});
+    });
 
     // ── copyToClipboard — tests assert on .toHaveBeenCalledWith ──
     (copyToClipboard as vi.Mock).mockResolvedValue(undefined);

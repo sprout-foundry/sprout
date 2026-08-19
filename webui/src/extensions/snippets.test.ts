@@ -34,10 +34,13 @@ vi.mock('@codemirror/state', () => ({
       of: vi.fn((v: any) => ({ facetOf: v })),
     })),
   },
-  Compartment: vi.fn(() => ({
-    of: vi.fn((v: any) => v),
-    reconfigure: vi.fn((v: any) => ({ reconfigure: v })),
-  })),
+  // Constructible: snippets.ts does `new Compartment()` at module level,
+  // and Vitest 4's spy invokes the mock implementation with `new` —
+  // arrow impls are not constructible.
+  Compartment: vi.fn(function (this: any) {
+    this.of = vi.fn((v: any) => v);
+    this.reconfigure = vi.fn((v: any) => ({ reconfigure: v }));
+  }),
 }));
 
 vi.mock('@codemirror/autocomplete', () => ({

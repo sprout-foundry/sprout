@@ -137,11 +137,14 @@ beforeEach(() => {
   exportDialogProps.sessionId = '';
 
   // Re-establish ResizeObserver mock (vi.restoreAllMocks in afterEach clears it)
-  global.ResizeObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  }));
+  // Constructible: ChatView.tsx does `new ResizeObserver(updateHeight)`, and
+  // Vitest 4's spy invokes the mock implementation with `new` — arrows are not
+  // constructible.
+  global.ResizeObserver = vi.fn(function (this: any) {
+    this.observe = vi.fn();
+    this.unobserve = vi.fn();
+    this.disconnect = vi.fn();
+  });
 });
 
 afterEach(() => {

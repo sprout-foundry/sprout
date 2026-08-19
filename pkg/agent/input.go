@@ -20,7 +20,8 @@ func (a *Agent) deferredQueue() *deferredQueue {
 	return actual.(*deferredQueue)
 }
 
-// EnqueueDeferredMessage appends a steer message for the next user-prompted turn. FIFO, capped at 32.
+// EnqueueDeferredMessage appends a steer message that auto-submits as its
+// own turn when the current turn ends. FIFO, capped at 32.
 const deferredQueueCap = 32
 
 func (a *Agent) EnqueueDeferredMessage(text string) {
@@ -64,8 +65,9 @@ func (a *Agent) DeferredMessageCount() int {
 }
 
 // RetractLatestDeferredMessage removes and returns the newest queued message.
-// Queue messages are only drained at the next user-prompted turn, so any of
-// them is retractable mid-turn. This powers steer-panel recall.
+// Queue messages sit in the queue until the current turn ends (they then
+// auto-run), so any of them is retractable mid-turn. This powers steer-panel
+// recall.
 func (a *Agent) RetractLatestDeferredMessage() (string, bool) {
 	if a == nil {
 		return "", false

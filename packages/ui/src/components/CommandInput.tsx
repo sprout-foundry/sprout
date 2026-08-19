@@ -44,6 +44,7 @@ export interface CommandInputProps {
   isProcessing?: boolean;
   queuedCount?: number;
   onStop?: () => void;
+  onRetractSteer?: () => boolean | Promise<boolean>;
   queuedMessages?: string[];
   onQueueMessageRemove?: (index: number) => void;
   onQueueMessageEdit?: (index: number, newText: string) => void;
@@ -76,6 +77,7 @@ function CommandInput({
   isProcessing = false,
   queuedCount = 0,
   onStop,
+  onRetractSteer,
   queuedMessages = [],
   onQueueMessageRemove,
   onQueueMessageEdit,
@@ -794,6 +796,29 @@ function CommandInput({
             setSlashAutocompleteIndex(prevIndex);
           }
           return;
+        }
+        // While processing (steer-capable), an Up on an empty line first
+        // tries to pull back the newest un-picked steer for editing. Only
+        // when nothing is retractable does history navigation take over.
+        if (
+          isProcessing &&
+          onRetractSteer &&
+          !isHistoryMode &&
+          draftValue.length === 0 &&
+          textarea.selectionStart === 0 &&
+          textarea.selectionEnd === 0 &&
+          !e.altKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.shiftKey
+        ) {
+          e.preventDefault();
+          void Promise.resolve(onRetractSteer()).then((retracted) => {
+            if (!retracted) {
+              navigateHistory(1);
+            }
+          });
+          break;
         }
         const shouldNavigateHistory =
           !e.altKey &&

@@ -210,14 +210,14 @@ func (r *SubagentRunner) InjectInputIntoActive(input string) (string, bool) {
 		return "", false
 	}
 
-	// Primary agent first.
-	if r.parentAgent != nil && r.parentAgent.inputInjectionChan != nil {
-		select {
-		case r.parentAgent.inputInjectionChan <- input:
+	// Primary agent first. StageSteerInput keeps the message retractable
+	// (RetractLatestSteer) until a conversation-loop boundary hands it to
+	// seed; a cap rejection falls through to the subagent fallback.
+	if r.parentAgent != nil {
+		if err := r.parentAgent.InjectInputContext(input); err == nil {
 			return "primary", true
-		default:
-			// Primary channel full or unavailable; fall through to subagent.
 		}
+		// Primary staging full or unavailable; fall through to subagent.
 	}
 
 	// Deepest-subagent routing as fallback.

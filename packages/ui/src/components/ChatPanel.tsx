@@ -272,6 +272,7 @@ function Chat({
   subagentActivities = [],
   onToolPillClick,
   onStopProcessing,
+  onRetractSteer,
   // Worktree support — chatId, workspaceRoot, onWorktreeChange available for future worktree switching
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   chatId: _chatId,
@@ -584,6 +585,7 @@ function Chat({
           onSend={onSendMessage}
           onQueue={onQueueMessage}
           onStop={onStopProcessing}
+          onRetractSteer={onRetractSteer}
           placeholder={
             providerAvailable === false
               ? 'Configure a provider to start chatting...'

@@ -113,12 +113,14 @@ All REST endpoints are prefixed with `/api/`. Every endpoint accepts the `?clien
 |--------|------|-------------|--------------|-----------------|
 | `POST` | `/api/query` | Submit a query to the agent for processing | `{ "query": string, "image_path?: string, "image_data?: string, "conversation_id?: string, "context?: string, "persona?: string, "mode?: string, "model?: string }` | `{ "success": bool, "query_id?: string, "message?: string }` |
 | `POST` | `/api/query/steer` | Send a steering message to influence a running query | `{ "steer": string, "conversation_id?: string }` | `{ "success": bool, "message": string }` |
+| `POST` | `/api/query/steer/retract` | Pull back the newest submitted-but-unpicked steer message for editing (Up-arrow on empty input) | — (body optional) | `{ "success": bool, "message": string }` (`message` is the retracted text; empty when nothing pending) |
 | `POST` | `/api/query/stop` | Stop an active query | `{ "conversation_id?: string }` (body optional) | `{ "success": bool, "message": string }` |
 | `GET` | `/api/query/status` | Check the status of a running query | Query: `?conversation_id=<id>` (optional) | `{ "is_processing": bool, "query": string, "conversation_id": string }` |
 
 **Details:**
 - `POST /api/query` (handler: `handleQuery` in `api_query.go`): Initiates an agent query. Accepts JSON body with query text. Optionally includes `image_path` (file path to a pasted image), `image_data` (base64-encoded image), `persona` (persona alias), `model` (specific model), and `context` (additional context). If `conversation_id` is omitted, a new conversation is created. Returns a `query_id` on success.
 - `POST /api/query/steer` (handler: `handleQuerySteer` in `api_query.go`): Sends a steering/influence message to a running query. The agent incorporates it into its current reasoning.
+- `POST /api/query/steer/retract` (handler: `handleAPIQuerySteerRetract` in `api_query.go`): Pulls back the newest staged-but-unpicked steer message so the user can edit it. Returns the retracted text in `message` when `success` is true; returns `success: false` with an empty `message` when nothing is pending (not an error).
 - `POST /api/query/stop` (handler: `handleQueryStop` in `api_query.go`): Stops the current query. Can target a specific `conversation_id` or defaults to the active query for this client.
 - `GET /api/query/status` (handler: `handleQueryStatus` in `api_query.go`): Returns whether the agent is currently processing a query and the active query text.
 

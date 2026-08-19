@@ -254,6 +254,15 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 		workflowAgent.clarificationManager = parentAgent.clarificationManager
 	}
 
+	// Re-resolve the context profile from the workflow agent's OWN client and
+	// config instead of leaving it as a zero-value (full mode). A workflow agent
+	// running under a smaller-context model than its parent should get LCM
+	// auto-activated. (SP-125 R4)
+	if err := workflowAgent.resolveAndApplyContextProfile(); err != nil {
+		interruptCancel()
+		return nil, agenterrors.Wrap(err, "resolve context profile for workflow agent")
+	}
+
 	// Enable lightweight change tracking.
 	workflowAgent.EnableChangeTracking("workflow loop")
 

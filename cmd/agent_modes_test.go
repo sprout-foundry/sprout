@@ -550,7 +550,7 @@ func TestWriteKeyboardHelp_IncludesSteerKeys(t *testing.T) {
 	for _, want := range []string{
 		"Steer panel",
 		"Tab",
-		"toggle steer ↔ queue mode",
+		"toggle steer ↔ queue (queue auto-runs at turn end)",
 		"↑ / ↓",
 		"pull back un-picked steer; else recall prior steers",
 		"Ctrl+C",

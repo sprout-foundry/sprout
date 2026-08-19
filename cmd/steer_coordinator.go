@@ -32,10 +32,10 @@ import (
 // Non-TTY runs construct a coordinator whose reader is a no-op, so
 // callers don't need to gate the calls.
 //
-// Future polish (SP-055 Phase 3) hooks here: mode-indicator glyphs,
-// steer history recall, "done queue" mode. Keeping the coordinator
-// behind a single small surface (StartTurn / EndTurn) means those
-// features can land without touching the REPL loop.
+// Future polish hooks here: mode-indicator glyphs and steer history
+// recall ("done queue" auto-run shipped as SP-055 Phase 3b). Keeping the
+// coordinator behind a single small surface (StartTurn / EndTurn) means
+// future features can land without touching the REPL loop.
 type SteerCoordinator struct {
 	agent  *agent.Agent
 	reader *console.SteerInputReader
@@ -106,10 +106,9 @@ type PendingInput struct {
 	// steer text the user may want to edit before submitting).
 	InitialContent string
 
-	// QueuedPrefix is the formatted block of deferred messages to
-	// prepend to the user's next submitted query. Empty when no
-	// messages are queued.
-	QueuedPrefix string
+	// QueuedMessages are raw deferred messages in FIFO order, ready to
+	// auto-submit as their own turns when the REPL loop processes them.
+	QueuedMessages []string
 
 	// QueuedCount is how many deferred messages were drained (for
 	// footer badge clearing and logging).
@@ -122,11 +121,8 @@ type PendingInput struct {
 // DrainUnsentBuffer and DrainDeferredMessages.
 //
 // When both paths have content, the unsent text becomes the initial
-// content (pre-filled for editing) and the queued messages become the
-// prefix. This is the correct priority: the user was actively composing
-// the unsent text, so it goes into the editable buffer; the queued
-// messages are context they already decided on, so they prepend
-// silently as before.
+// content (pre-filled for editing) and the queued messages are returned
+// raw so the REPL can auto-submit each as its own turn.
 func (c *SteerCoordinator) DrainPendingInput() PendingInput {
 	var pi PendingInput
 
@@ -136,19 +132,12 @@ func (c *SteerCoordinator) DrainPendingInput() PendingInput {
 		c.reader.ResetBuffer()
 	}
 
-	// 2. Drain deferred queue messages → formatted prefix.
+	// 2. Drain deferred queue messages → raw slice for auto-submit.
 	if c != nil && c.agent != nil {
 		queued := c.agent.DrainDeferredMessages()
 		pi.QueuedCount = len(queued)
 		if len(queued) > 0 {
-			var b strings.Builder
-			b.WriteString("Queued from prior turn:\n")
-			for _, msg := range queued {
-				b.WriteString("  • ")
-				b.WriteString(msg)
-				b.WriteByte('\n')
-			}
-			pi.QueuedPrefix = strings.TrimSpace(b.String())
+			pi.QueuedMessages = queued
 		}
 	}
 
@@ -277,26 +266,33 @@ func (c *SteerCoordinator) handleSteerInterrupt(_ string) {
 }
 
 // handleQueueSubmit is the QUEUE-mode counterpart to handleSteerSubmit.
-// The message is enqueued on the agent's deferred queue and will be
-// joined with the user's next typed prompt when the REPL drains it
-// (SP-055 Phase 3b). Mid-turn streaming is unaffected — nothing is
-// injected into the active turn.
+// The message is enqueued on the agent's deferred queue and will auto-
+// submit as its own turn(s) when the current turn ends (SP-055 Phase 3b).
+// Mid-turn streaming is unaffected — nothing is injected into the active
+// turn.
 func (c *SteerCoordinator) handleQueueSubmit(text string) {
 	if c.agent == nil || text == "" {
 		return
 	}
 	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
-		// Queue mode wraps drained messages into a "Queued from prior
-		// turn:" blockquote at the next prompt, which strips the leading
-		// '/' or '!' and the prompt's IsSlashCommand / fast-path checks
-		// stop matching. Rather than silently demoting the command to
-		// LLM text, reject and tell the user where to send it.
+		// Queue-mode messages auto-run as their own turns at turn end,
+		// where the leading '/' or '!' is stripped and the prompt's
+		// IsSlashCommand / fast-path checks no longer apply. Rather
+		// than silently demoting the command to LLM text, reject and
+		// tell the user where to send it.
 		rejectCommandIntent(intent, text, "queue", "type it at the prompt after this turn ends")
+		return
+	}
+	// "exit"/"quit" are not slash commands so the intent check misses
+	// them, but a queued one would auto-run into the REPL's exit branch
+	// and terminate the session without the user at the prompt.
+	if lower := strings.ToLower(strings.TrimSpace(text)); lower == "exit" || lower == "quit" {
+		rejectCommandIntent("REPL exit", text, "queue", "type it at the prompt after this turn ends")
 		return
 	}
 	c.agent.EnqueueDeferredMessage(text)
 	fmt.Fprintln(os.Stderr)
-	console.GlyphPaused.Fprintf(os.Stderr, "queued: %s", text)
+	console.GlyphPaused.Fprintf(os.Stderr, "queued → runs when this turn ends: %s", text)
 	// Refresh the footer so the new "⏸ N queued" badge appears in the
 	// same frame the user submitted. Without this nudge the badge
 	// would lag until the next tool/cost event fires.

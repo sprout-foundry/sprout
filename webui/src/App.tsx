@@ -426,6 +426,7 @@ function AppInner() {
                         onSendMessage={chatManager.handleSendMessage}
                         onQueueMessage={chatManager.handleQueueMessage}
                         onStopProcessing={chatManager.handleStopProcessing}
+                        onRetractSteer={chatManager.handleRetractSteer}
                         queuedMessagesCount={chatManager.queuedMessagesCount}
                         onGitCommit={handleGitCommit}
                         onGitAICommit={handleGitAICommit}

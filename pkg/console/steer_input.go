@@ -65,7 +65,7 @@ func isEAGAIN(err error) bool {
 //	Alt+B/F          → move cursor back / forward one word
 //	Ctrl+Left/Right  → move cursor back / forward one word
 //	Left/Right       → move cursor back / forward one rune
-//	Up/Down          → recall steer history
+//	Up/Down          → pull back newest un-picked steer/queue message when the line is empty; otherwise recall history
 //	Alt+Enter/Shift+Enter → insert a literal newline (multi-line compose)
 //
 // Submission UX: when Enter is pressed, submitFn receives the buffer.
@@ -170,6 +170,12 @@ type SteerInputReader struct {
 	// edit so the next press starts fresh.
 	completer       CompletionProvider
 	completionCycle *CompletionCycle
+
+	// retractFn pulls back the newest un-picked steer/queue message for
+	// re-editing. Called by the Up-arrow handler when the buffer is empty
+	// and no history navigation is active. Returns ("", false) when nothing
+	// is pending. Set via SetRetractFn; nil = retract is a no-op.
+	retractFn func() (string, bool)
 
 	// autocomplete is the live dropdown that mirrors the InputReader's
 	// (slash command) affordance on the steer panel. SP-078 Phase 3.
@@ -396,6 +402,17 @@ func (r *SteerInputReader) SetGroundTruth(gt *GroundTruthTermios) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.groundTruth = gt
+}
+
+// SetRetractFn installs a callback that pulls back the newest un-picked
+// steer/queue message for re-editing. The callback receives no arguments
+// and returns the text to restore plus a boolean indicating success.
+// Called by the Up-arrow handler when the line is empty and no history
+// navigation is active. Set to nil to disable (the default).
+func (r *SteerInputReader) SetRetractFn(fn func() (string, bool)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.retractFn = fn
 }
 
 // DrainUnsentBuffer returns any text the user typed into the steer

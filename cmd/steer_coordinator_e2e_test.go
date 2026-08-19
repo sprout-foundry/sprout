@@ -48,3 +48,55 @@ func TestSteerCoordinator_QueueWithNilAgentDropsSilently(t *testing.T) {
 	c.handleQueueSubmit("anything")
 	// no assertion — survival without panic is the contract.
 }
+
+func TestSteerCoordinator_RetractPullsBackStagedSteer(t *testing.T) {
+	a := &agent.Agent{}
+	c := &SteerCoordinator{agent: a}
+
+	if err := a.InjectInputContext("fix typo plz"); err != nil {
+		t.Fatalf("stage steer: %v", err)
+	}
+
+	text, ok := c.handleSteerRetract()
+	if !ok || text != "fix typo plz" {
+		t.Fatalf("expected staged steer pulled back, got %q ok=%v", text, ok)
+	}
+	if _, ok := c.handleSteerRetract(); ok {
+		t.Fatal("second retract should find nothing pending")
+	}
+}
+
+func TestSteerCoordinator_RetractFallsBackToDeferredQueue(t *testing.T) {
+	a := &agent.Agent{}
+	c := &SteerCoordinator{agent: a}
+
+	c.handleQueueSubmit("queued for next turn")
+
+	text, ok := c.handleSteerRetract()
+	if !ok || text != "queued for next turn" {
+		t.Fatalf("expected queued message pulled back, got %q ok=%v", text, ok)
+	}
+	if got := a.DeferredMessageCount(); got != 0 {
+		t.Fatalf("queue should be empty after retract, got %d", got)
+	}
+}
+
+func TestSteerCoordinator_RetractPrefersSteerOverQueue(t *testing.T) {
+	a := &agent.Agent{}
+	c := &SteerCoordinator{agent: a}
+
+	_ = a.InjectInputContext("staged steer")
+	c.handleQueueSubmit("queued message")
+
+	text, ok := c.handleSteerRetract()
+	if !ok || text != "staged steer" {
+		t.Fatalf("steer staging should win over queue, got %q ok=%v", text, ok)
+	}
+}
+
+func TestSteerCoordinator_RetractNilAgentSafe(t *testing.T) {
+	c := &SteerCoordinator{agent: nil}
+	if _, ok := c.handleSteerRetract(); ok {
+		t.Fatal("nil-agent retract must return false")
+	}
+}

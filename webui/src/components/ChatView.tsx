@@ -43,6 +43,7 @@ function Chat(props: ChatProps): JSX.Element {
     subagentActivities: _subagentActivities = [],
     onToolPillClick,
     onStopProcessing,
+    onRetractSteer,
     chatId,
     worktreePath,
     workspaceRoot: _workspaceRoot,
@@ -484,6 +485,7 @@ function Chat(props: ChatProps): JSX.Element {
           onSendCommand={handleSendCommand}
           onQueue={onQueueMessage}
           onStop={onStopProcessing}
+          onRetractSteer={onRetractSteer}
           placeholder={
             providerAvailable === false
               ? 'Configure a provider to start chatting...'

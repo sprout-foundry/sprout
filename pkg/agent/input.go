@@ -2,11 +2,7 @@ package agent
 
 import (
 	"sync"
-
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-)
-
-// deferredQueue holds steer messages deferred until the NEXT user-prompted turn.
+) // deferredQueue holds steer messages deferred until the NEXT user-prompted turn.
 // Distinct from inputInjectionChan so the two delivery semantics never collide.
 type deferredQueue struct {
 	mu    sync.Mutex
@@ -67,18 +63,30 @@ func (a *Agent) DeferredMessageCount() int {
 	return len(q.items)
 }
 
-// InjectInputContext injects a new user input using the context-based interrupt system.
-func (a *Agent) InjectInputContext(input string) error {
-	a.inputInjectionMutex.Lock()
-	defer a.inputInjectionMutex.Unlock()
-
-	// Send the new input to the injection channel
-	select {
-	case a.inputInjectionChan <- input:
-		return nil
-	default:
-		return agenterrors.NewTransientError("failed to inject input: input injection channel is full", nil)
+// RetractLatestDeferredMessage removes and returns the newest queued message.
+// Queue messages are only drained at the next user-prompted turn, so any of
+// them is retractable mid-turn. This powers steer-panel recall.
+func (a *Agent) RetractLatestDeferredMessage() (string, bool) {
+	if a == nil {
+		return "", false
 	}
+	q := a.deferredQueue()
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.items) == 0 {
+		return "", false
+	}
+	last := q.items[len(q.items)-1]
+	q.items = q.items[:len(q.items)-1]
+	return last, true
+}
+
+// InjectInputContext injects a new user input using the context-based interrupt system.
+// Delivery goes through the retractable staging queue (steer_staging.go):
+// the message sits staged until a conversation-loop boundary hands it to
+// seed. Until that moment it can be pulled back with RetractLatestSteer.
+func (a *Agent) InjectInputContext(input string) error {
+	return a.StageSteerInput(input)
 }
 
 // GetInputInjectionContext returns the input injection channel for the new system
@@ -95,7 +103,12 @@ func (a *Agent) SteeringChannel() <-chan string {
 	return a.inputInjectionChan
 }
 
-// ClearInputInjectionContext clears any pending input injections
+// ClearInputInjectionContext clears any pending input injections.
+//
+// Lock ordering invariant: steerStage.mu is never held while
+// inputInjectionMutex is acquired. StageSteerInput releases steerStage.mu
+// before its non-blocking channel mirror; here inputInjectionMutex is held
+// only during the channel drain and steerStage.mu is acquired afterwards.
 func (a *Agent) ClearInputInjectionContext() {
 	a.inputInjectionMutex.Lock()
 	defer a.inputInjectionMutex.Unlock()
@@ -107,6 +120,7 @@ func (a *Agent) ClearInputInjectionContext() {
 			// Remove item
 		default:
 			// Channel empty
+			a.clearSteerStaging()
 			return
 		}
 	}

@@ -369,6 +369,108 @@ func TestSteerHistory_EmptyHistoryNoOpOnArrow(t *testing.T) {
 	}
 }
 
+func TestSteerRetract_UpArrowPullsBackPendingSteer(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	retractCalls := 0
+	r.SetRetractFn(func() (string, bool) {
+		retractCalls++
+		return "fix typo plz", true
+	})
+
+	r.handleEvent(&InputEvent{Type: EventUp})
+
+	if got := string(r.buffer); got != "fix typo plz" {
+		t.Fatalf("expected pulled-back text in buffer, got %q", got)
+	}
+	if r.cursorPos != len("fix typo plz") {
+		t.Fatalf("cursor should be at end, got %d", r.cursorPos)
+	}
+	if retractCalls != 1 {
+		t.Fatalf("retract consulted once, got %d", retractCalls)
+	}
+	if r.historyIndex != -1 {
+		t.Fatalf("history nav must not activate on retract, got index %d", r.historyIndex)
+	}
+}
+
+func TestSteerRetract_SecondUpFallsBackToHistory(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	for _, b := range []byte("earlier steer") {
+		r.insertAtCursor([]byte{b})
+	}
+	r.handleSubmit()
+
+	retractCalls := 0
+	r.SetRetractFn(func() (string, bool) {
+		retractCalls++
+		return "earlier steer", true
+	})
+
+	r.handleEvent(&InputEvent{Type: EventUp})
+	if got := string(r.buffer); got != "earlier steer" {
+		t.Fatalf("first Up should retract, got %q", got)
+	}
+
+	// Buffer now non-empty: second Up must NOT consult retract again —
+	// it navigates history instead.
+	r.handleEvent(&InputEvent{Type: EventUp})
+	if retractCalls != 1 {
+		t.Fatalf("retract must not fire on non-empty buffer, got %d calls", retractCalls)
+	}
+}
+
+func TestSteerRetract_FallthroughToHistoryWhenNothingPending(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	for _, b := range []byte("past message") {
+		r.insertAtCursor([]byte{b})
+	}
+	r.handleSubmit()
+
+	r.SetRetractFn(func() (string, bool) { return "", false })
+
+	r.handleEvent(&InputEvent{Type: EventUp})
+	if got := string(r.buffer); got != "past message" {
+		t.Fatalf("Up should fall back to history recall, got %q", got)
+	}
+}
+
+func TestSteerRetract_SkippedWhenBufferNonEmpty(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	retractCalls := 0
+	r.SetRetractFn(func() (string, bool) {
+		retractCalls++
+		return "should not fire", true
+	})
+
+	for _, b := range []byte("typing") {
+		r.insertAtCursor([]byte{b})
+	}
+	r.handleEvent(&InputEvent{Type: EventUp})
+
+	if retractCalls != 0 {
+		t.Fatal("retract must not fire when buffer is non-empty")
+	}
+	if got := string(r.buffer); got != "typing" {
+		t.Fatalf("buffer must be unchanged, got %q", got)
+	}
+}
+
 // Done-queue mode (SP-055 Phase 3b)
 
 func TestSteerSubmitMode_DefaultIsNow(t *testing.T) {

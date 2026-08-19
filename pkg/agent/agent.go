@@ -167,6 +167,12 @@ type Agent struct {
 	inputInjectionChan  chan string
 	inputInjectionMutex sync.Mutex
 
+	// Retractable steer staging (steer_staging.go). inputInjectionChan is
+	// no longer the delivery path — StageSteerInput mirrors submissions
+	// into it for legacy SteeringChannel readers only.
+	steerStage   *steerStage
+	steerStageMu sync.Mutex
+
 	// Notification queue for background task completions.
 	pendingNotifications []Notification
 	notifMu              sync.Mutex

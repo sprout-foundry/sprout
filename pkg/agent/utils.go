@@ -11,6 +11,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // debugLog logs a message only if debug mode is enabled.
@@ -181,6 +182,40 @@ func (a *Agent) getModelContextLimit() int {
 		}
 	}
 	return native
+}
+
+// resolveAndApplyContextProfile re-resolves the context profile and cap state
+// from this agent's OWN client and config. Mirrors the primary-creation path
+// (agent_creation.go) so delegated agents (subagents, workflow loops) that
+// resolve to a smaller-context model than their parent get LCM auto-activated
+// instead of inheriting the parent's full-mode profile (SP-125 R4).
+//
+// Does not print the LCM activation / context-cap stderr notices — those are
+// primary-agent UX; the parent already printed them.
+func (a *Agent) resolveAndApplyContextProfile() error {
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
+	a.state.SetContextWarningIssued(false)
+
+	var cfg *configuration.Config
+	if a.configManager != nil {
+		cfg = a.configManager.GetConfig()
+	}
+
+	profile, err := configuration.ResolveContextProfile(cfg, a.state.GetMaxContextTokens())
+	if err != nil {
+		return agenterrors.NewConfig("resolving context profile", err)
+	}
+	a.contextProfile = profile
+
+	nativeWindow := a.getNativeModelContextLimit()
+	resolvedCap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
+	if capErr != nil {
+		return agenterrors.NewConfig("resolving effective context cap", capErr)
+	}
+	a.setContextCapState(resolvedCap, nativeWindow, cfg)
+
+	return nil
 }
 
 // PrintLine prints a line of text to the console content area synchronously.

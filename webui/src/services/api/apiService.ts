@@ -291,6 +291,10 @@ class ApiService {
     return chatApi.steerQuery(clientFetch, query, chatId);
   }
 
+  async retractSteer(chatId?: string): Promise<chatApi.RetractSteerResponse> {
+    return chatApi.retractSteer(clientFetch, chatId);
+  }
+
   async stopQuery(): Promise<void> {
     return chatApi.stopQuery(clientFetch);
   }

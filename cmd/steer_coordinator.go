@@ -60,6 +60,7 @@ func NewSteerCoordinator(chatAgent *agent.Agent, footer *console.StatusFooter) *
 		c.handleQueueSubmit,
 		c.handleSteerInterrupt,
 	)
+	c.reader.SetRetractFn(c.handleSteerRetract)
 	return c
 }
 
@@ -243,6 +244,21 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 	}
 	fmt.Fprintln(os.Stderr)
 	console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
+}
+
+// handleSteerRetract pulls back the newest un-picked message for re-editing
+// (Up-arrow on an empty steer line). STEER-mode submissions live in the
+// agent's staging queue until seed's conversation loop picks them up;
+// QUEUE-mode submissions sit in the deferred queue until the next turn —
+// both windows are retractable, steer-staging first.
+func (c *SteerCoordinator) handleSteerRetract() (string, bool) {
+	if c == nil || c.agent == nil {
+		return "", false
+	}
+	if text, ok := c.agent.RetractLatestSteer(); ok {
+		return text, true
+	}
+	return c.agent.RetractLatestDeferredMessage()
 }
 
 // handleSteerInterrupt routes Ctrl+C-while-steering to the same

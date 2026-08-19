@@ -99,7 +99,7 @@ func writeKeyboardHelp(w io.Writer) {
 		{"Steer panel (while a turn is running)", ""},
 		{"  Enter", "send mid-turn steer (default)"},
 		{"  Tab", "toggle steer ↔ queue mode"},
-		{"  ↑ / ↓", "recall prior steer messages"},
+		{"  ↑ / ↓", "pull back un-picked steer; else recall prior steers"},
 		{"  Esc", "clear the input"},
 		{"  Ctrl+C", "interrupt the current turn"},
 	}

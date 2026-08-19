@@ -552,7 +552,7 @@ func TestWriteKeyboardHelp_IncludesSteerKeys(t *testing.T) {
 		"Tab",
 		"toggle steer ↔ queue mode",
 		"↑ / ↓",
-		"recall prior steer messages",
+		"pull back un-picked steer; else recall prior steers",
 		"Ctrl+C",
 		"interrupt the current turn",
 		"Idle prompt",

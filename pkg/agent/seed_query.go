@@ -39,12 +39,6 @@ func registerPastedImagesWithProvider(a *Agent, prov core.Provider, images map[s
 	sp.RegisterPastedImages(images)
 }
 
-// injectInputMsg carries a user-steer message from the forwarder goroutine
-// into the injector goroutine in processQueryWithSeed.
-type injectInputMsg struct {
-	content string
-}
-
 // InjectUserMessageTimestamp prepends a <current-time>...</current-time> tag
 // to the user message so the model sees the exact moment of each turn without
 // invalidating the prompt-prefix cache. The system prompt stays static across
@@ -119,7 +113,6 @@ type queryRunContext struct {
 	processedQuery  string
 	runCtx          context.Context
 	runCancel       context.CancelFunc
-	steerDone       chan struct{}
 }
 
 // processQueryWithSeed runs the conversation loop through seed's core.Agent
@@ -152,7 +145,6 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	defer func() {
 		a.endTurnJournal()
 		qc.runCancel()
-		<-qc.steerDone
 	}()
 
 	result, err := qc.seedAgent.Run(qc.runCtx, qc.processedQuery)
@@ -287,10 +279,20 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	}
 	seedRegistry := newSeedToolRegistryWithPublisher(a, seedPublisher)
 
+	// Steer delivery: staged messages (steer_staging.go) are handed to seed
+	// one per conversation-loop boundary by hooks that run inside seed's
+	// loop goroutine — provider return (Chat/ChatStream) and tool-batch
+	// return (executor wrapper). Both fire immediately before seed's own
+	// injection pickup checks, preserving the eager pipeline's timing while
+	// keeping every message retractable until pickup. Messages still staged
+	// when the run ends simply wait for the next run's boundaries.
+	steerDeliverer := &steerBoundaryDeliverer{agent: a}
+	setProviderSteerHook(prov, func() { steerDeliverer.deliverOne() })
+
 	// Build seed Agent options
 	opts := core.Options{
 		Provider:       prov,
-		Executor:       seedRegistry,
+		Executor:       &steerFlushExecutor{inner: seedRegistry, deliverer: steerDeliverer},
 		MaxIterations:  a.maxIterations,
 		Debug:          a.debug,
 		EventPublisher: seedPublisher,
@@ -409,59 +411,12 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
-	// Bridge sprout's user-facing inputInjectionChan to seed's InjectInput.
-	// Callers (CLI prompt goroutine, webui /api/query/steer) push into the sprout channel;
-	// this forwarder drains it and hands the message to seed at the next natural break point.
-	// runCtx is scoped to this query so the forwarder exits cleanly when the model returns.
 	runCtx, runCancel := context.WithCancel(ctx)
-	injectChan := make(chan injectInputMsg, 8)
-	steerDone := make(chan struct{})
 
-	// Forwarder: reads from sprout's input channel and sends to injectChan
-	go func() {
-		defer close(injectChan)
-		ch := a.GetInputInjectionContext()
-		for {
-			select {
-			case <-runCtx.Done():
-				return
-			case msg, ok := <-ch:
-				if !ok {
-					return
-				}
-				select {
-				case injectChan <- injectInputMsg{content: msg}:
-				case <-runCtx.Done():
-					return
-				}
-			}
-		}
-	}()
-
-	// Injector: reads from injectChan and applies to seed agent
-	go func() {
-		defer close(steerDone)
-		for msg := range injectChan {
-			retries := 0
-			for !seedAgent.InjectInput(msg.content) {
-				retries++
-				if retries > 4000 {
-					// 4000 × 25ms = 100s of continuous retrying means
-					// seedAgent.Run is either not running or has a full
-					// injection channel that won't drain. Log and drop
-					// rather than spinning indefinitely.
-					a.Logger().Debug("[WARN] InjectInput giving up after %d retries (100s) — steering message dropped\n", retries)
-					break
-				}
-				select {
-				case <-runCtx.Done():
-					return
-				case <-time.After(25 * time.Millisecond):
-				}
-			}
-		}
-	}()
+	// Steer delivery wiring, phase 2: the deliverer needs the constructed
+	// seed agent. Everything else (provider hook, executor wrapper) was
+	// wired above before core.NewAgent consumed the options.
+	steerDeliverer.setSeedAgent(seedAgent)
 
 	return &queryRunContext{
 		seedAgent:       seedAgent,
@@ -469,7 +424,6 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 		processedQuery:  processedQuery,
 		runCtx:          runCtx,
 		runCancel:       runCancel,
-		steerDone:       steerDone,
 	}, nil
 }
 

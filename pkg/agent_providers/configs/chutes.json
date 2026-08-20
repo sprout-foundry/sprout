@@ -45,7 +45,8 @@
       "unsloth/Mistral-Nemo-Instruct-2407-TEE",
       "zai-org/GLM-5.1-TEE",
       "zai-org/GLM-5.2-TEE",
-      "deepseek-ai/DeepSeek-V4-Flash-0731-TEE"
+      "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
+      "Qwen/Qwen3.8-27B-TEE"
     ],
     "default_context_limit": 64000,
     "default_model": "deepseek-ai/DeepSeek-R1-0528",
@@ -138,9 +139,9 @@
         "context_length": 262144,
         "description": "Moonshot Kimi K2.6 on confidential TEE compute",
         "id": "moonshotai/Kimi-K2.6-TEE",
-        "input_cost": 0.66,
+        "input_cost": 0.58,
         "name": "Kimi K2.6 (TEE)",
-        "output_cost": 3.5,
+        "output_cost": 3.4,
         "tags": [
           "vision",
           "tools",
@@ -202,6 +203,19 @@
         "name": "DeepSeek V4 Flash 0731 (TEE)",
         "output_cost": 0.28,
         "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.8 27B on confidential TEE compute",
+        "id": "Qwen/Qwen3.8-27B-TEE",
+        "input_cost": 0.4,
+        "name": "Qwen3.8 27B (TEE)",
+        "output_cost": 3,
+        "tags": [
+          "vision",
           "tools",
           "reasoning"
         ]

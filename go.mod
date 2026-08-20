@@ -33,7 +33,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	github.com/sprout-foundry/sinter v0.1.1
+	github.com/sprout-foundry/sinter v0.1.2
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/zricethezav/gitleaks/v8 v8.30.1

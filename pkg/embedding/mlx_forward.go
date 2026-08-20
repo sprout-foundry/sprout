@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/sprout-foundry/sprout/pkg/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 // forward runs the full transformer forward pass: embeddings → 12 layers →

@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/sprout-foundry/sprout/pkg/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 // mlxProviderAvailable reports whether the MLX Metal provider should be used.

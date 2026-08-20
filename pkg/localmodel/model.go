@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sinter/llm/catalog"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // ModelStatus describes a model from the user's perspective — either a

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	"github.com/sprout-foundry/sinter/llm/catalog"
 )
 
 // sproutLocalProviderID is the provider identifier for the local LLM.
@@ -77,7 +77,7 @@ func resolveModelForCurrentMachine() (modelDir string, backend string, err error
 		return rec.Dir, rec.ServerBackend, nil
 	}
 
-	if rec := llm.RecommendModelForRAM(ram); rec != nil {
+	if rec := catalog.RecommendModelForRAM(ram); rec != nil {
 		dir := filepath.Join(DefaultModelsDir, rec.Dir)
 		if hasModelWeights(dir) {
 			return dir, rec.ServerBackend, nil

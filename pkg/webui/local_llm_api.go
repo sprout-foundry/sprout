@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	"github.com/sprout-foundry/sinter/llm/catalog"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 
@@ -36,7 +36,7 @@ type localLLMModel struct {
 	Present  bool   `json:"present"`
 	SizeHint string `json:"size_hint"`
 	// Tier is "suggested", "stretch", or "blocked" for this machine's RAM —
-	// see llm.TieredCatalogForRAM. Additive field (omitempty): older
+	// see catalog.TieredCatalogForRAM. Additive field (omitempty): older
 	// frontend builds that don't know about it simply ignore it.
 	Tier string `json:"tier,omitempty"`
 	// Description explains the tier classification (e.g. why a model is
@@ -54,12 +54,12 @@ const localLLMCacheTTL = 10 * time.Second
 const localLLMEndpoint = "http://127.0.0.1:18081"
 
 // catalogModelsForRAM builds the local model list from the real RAM-tier
-// catalog (pkg/gomlx/llm.TieredCatalogForRAM / pkg/localmodel), the same
+// catalog (pkg/gomlx/catalog.TieredCatalogForRAM / pkg/localmodel), the same
 // source /model in the CLI uses — this used to be a separate hardcoded
 // single-entry list here, disconnected from the real catalog and RAM-aware
 // selection logic used everywhere else.
 func catalogModelsForRAM(ram uint64) []localLLMModel {
-	tiered := llm.TieredCatalogForRAM(ram)
+	tiered := catalog.TieredCatalogForRAM(ram)
 	models := make([]localLLMModel, 0, len(tiered))
 	for _, tm := range tiered {
 		sizeHint := ""
@@ -68,11 +68,11 @@ func catalogModelsForRAM(ram uint64) []localLLMModel {
 		}
 		description := ""
 		switch tm.Status {
-		case llm.TierSuggested:
+		case catalog.TierSuggested:
 			description = "Suggested for this machine"
-		case llm.TierEligible:
+		case catalog.TierEligible:
 			description = "Smaller than suggested — a safe, lighter-weight choice"
-		case llm.TierStretch:
+		case catalog.TierStretch:
 			description = "Fits, but risks running out of memory"
 		default:
 			description = fmt.Sprintf("Requires more RAM than this machine has (%.0f GB)", float64(ram)/(1024*1024*1024))
@@ -117,7 +117,7 @@ func probeLocalLLMStatus() *localLLMStatus {
 
 	ram := localmodel.TotalSystemRAM()
 	status.Models = catalogModelsForRAM(ram)
-	status.RecommendedModel = llm.RecommendModelForRAM(ram).Dir
+	status.RecommendedModel = catalog.RecommendModelForRAM(ram).Dir
 
 	// Check for downloaded models. localmodel.DefaultModelsDir is the same
 	// directory the in-process provider and llm_server use

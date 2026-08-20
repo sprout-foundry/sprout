@@ -29,9 +29,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm/openaisserver"
-	"github.com/sprout-foundry/sprout/pkg/tensor"
+	"github.com/sprout-foundry/sinter/llm"
+	"github.com/sprout-foundry/sinter/llm/catalog"
+	"github.com/sprout-foundry/sinter/llm/openaisserver"
+	"github.com/sprout-foundry/sinter/tensor"
 )
 
 func main() {
@@ -58,7 +59,7 @@ func main() {
 		if backend != nil {
 			ram = backend.TotalSystemRAM()
 		}
-		picked, err := llm.SelectModelForRAM(modelsRoot, ram)
+		picked, err := catalog.SelectModelForRAM(modelsRoot, ram)
 		if err != nil {
 			log.Fatalf("auto-select model: %v", err)
 		}

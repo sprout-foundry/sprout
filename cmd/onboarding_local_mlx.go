@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 

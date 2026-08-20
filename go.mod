@@ -4,12 +4,6 @@ go 1.25.0
 
 toolchain go1.26.6
 
-replace github.com/sprout-foundry/sprout/pkg/gomlx => ./pkg/gomlx
-
-replace github.com/sprout-foundry/sprout/pkg/tensor => ./pkg/tensor
-
-replace github.com/sprout-foundry/sprout/pkg/tensor/ggml => ./pkg/tensor/ggml
-
 require (
 	filippo.io/age v1.3.1
 	github.com/creack/pty v1.1.24
@@ -39,9 +33,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	github.com/sprout-foundry/sprout/pkg/gomlx v0.0.0-00010101000000-000000000000
-	github.com/sprout-foundry/sprout/pkg/tensor v0.0.0
-	github.com/sprout-foundry/sprout/pkg/tensor/ggml v0.0.0-00010101000000-000000000000
+	github.com/sprout-foundry/sinter v0.1.1
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/zricethezav/gitleaks/v8 v8.30.1

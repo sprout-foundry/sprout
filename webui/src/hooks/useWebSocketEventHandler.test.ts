@@ -758,3 +758,166 @@ describe('workspace_changed', () => {
     cleanup();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: primary-agent content must not be attributed to a subagent run
+//
+// Bug: after an inline subagent run is spawned, the subagent-run message
+// (isSubagentRun) sits at the END of the messages array. Every
+// "append to the last assistant message" path then lands in that message,
+// whose content renders inside the subagent's collapsible block — so all
+// follow-up primary-agent output (streaming text, tool badges, warnings)
+// looks like it came from the subagent.
+// ---------------------------------------------------------------------------
+
+describe('subagent-run attribution', () => {
+  const mkSubagentRun = (id: string): Record<string, unknown> => ({
+    id,
+    type: 'assistant',
+    content: '',
+    reasoning: 'subagent output line\n',
+    timestamp: new Date(),
+    persona: 'coder',
+    subagentDepth: 1,
+    isSubagentRun: true,
+    subagentRunComplete: true,
+    subagentPersona: 'coder',
+  });
+
+  const mkPrimary = (id: string, content: string): Record<string, unknown> => ({
+    id,
+    type: 'assistant',
+    content,
+    timestamp: new Date(),
+  });
+
+  function setup(initialMessages: Array<Record<string, unknown>>) {
+    const stateHolder = { current: { ...createDefaultState(), messages: initialMessages } };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+    return { stateHolder };
+  }
+
+  it('stream_chunk after a completed subagent run creates a NEW primary message, not appending to the subagent run', () => {
+    const subagentRun = mkSubagentRun('subagent-tc-1');
+    const { stateHolder } = setup([
+      { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+      mkPrimary('a1', 'Working on it. Delegating to coder.'),
+      subagentRun,
+    ]);
+
+    act(() => {
+      hookHandleEvent!({ id: 'e1', type: 'stream_chunk', data: { chunk: 'The subagent finished. Summary of results.' } });
+    });
+
+    const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+    // A new primary assistant message was appended — total 4.
+    expect(messages).toHaveLength(4);
+    // The subagent run message is untouched.
+    expect(messages[2]).toBe(subagentRun);
+    // The new message is a plain primary assistant message with the chunk.
+    expect(messages[3].type).toBe('assistant');
+    expect(messages[3].isSubagentRun).toBeFalsy();
+    expect(messages[3].content).toBe('The subagent finished. Summary of results.');
+  });
+
+  it('stream_chunk still appends to the existing primary message when the subagent run is NOT the last message', () => {
+    const { stateHolder } = setup([
+      { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+      mkPrimary('a1', 'partial answer '),
+    ]);
+
+    act(() => {
+      hookHandleEvent!({ id: 'e2', type: 'stream_chunk', data: { chunk: 'more text' } });
+    });
+
+    const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+    // No new message — appended to the existing primary assistant.
+    expect(messages).toHaveLength(2);
+    expect(messages[1].content).toBe('partial answer more text');
+  });
+
+  it('tool_start after a subagent run attaches the marker to a new primary message, not the subagent block', () => {
+    const subagentRun = mkSubagentRun('subagent-tc-2');
+    const { stateHolder } = setup([
+      { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+      mkPrimary('a1', 'Delegating to coder.'),
+      subagentRun,
+    ]);
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'e3',
+        type: 'tool_start',
+        data: { tool_call_id: 'tc-9', tool_name: 'edit_file', display_name: 'Edit file' },
+      });
+    });
+
+    const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+    expect(messages).toHaveLength(4);
+    // Subagent run message untouched — no tool marker, no toolRefs.
+    expect(messages[2]).toBe(subagentRun);
+    // The tool marker + toolRef landed on the fresh primary message.
+    const fresh = messages[3];
+    expect(fresh.type).toBe('assistant');
+    expect(fresh.isSubagentRun).toBeFalsy();
+    expect(String(fresh.content)).toContain('[executing tool [edit_file]]');
+    const toolRefs = fresh.toolRefs as Array<{ toolId: string }>;
+    expect(toolRefs).toHaveLength(1);
+    expect(toolRefs[0].toolId).toBe('tc-9');
+  });
+
+  it('agent_message warning after a subagent run appends to the last PRIMARY message, not the subagent run', () => {
+    const subagentRun = mkSubagentRun('subagent-tc-3');
+    const { stateHolder } = setup([
+      { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+      mkPrimary('a1', 'Delegating to coder.'),
+      subagentRun,
+    ]);
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'e4',
+        type: 'agent_message',
+        data: { category: 'warning', message: '[~] build cache is stale' },
+      });
+    });
+
+    const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+    expect(messages).toHaveLength(3);
+    // Subagent run content is untouched.
+    expect(messages[2].content).toBe('');
+    // The note landed on the primary message.
+    expect(String(messages[1].content)).toContain('Note: [~] build cache is stale');
+  });
+
+  it('does not append a warning when no primary assistant message exists yet', () => {
+    const subagentRun = mkSubagentRun('subagent-tc-4');
+    const { stateHolder } = setup([
+      { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+      subagentRun,
+    ]);
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'e5',
+        type: 'agent_message',
+        data: { category: 'warning', message: '[~] something odd' },
+      });
+    });
+
+    const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+    expect(messages).toHaveLength(2);
+    expect(messages[1].content).toBe('');
+  });
+});

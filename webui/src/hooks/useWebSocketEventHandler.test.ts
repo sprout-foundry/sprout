@@ -817,7 +817,11 @@ describe('subagent-run attribution', () => {
     ]);
 
     act(() => {
-      hookHandleEvent!({ id: 'e1', type: 'stream_chunk', data: { chunk: 'The subagent finished. Summary of results.' } });
+      hookHandleEvent!({
+        id: 'e1',
+        type: 'stream_chunk',
+        data: { chunk: 'The subagent finished. Summary of results.' },
+      });
     });
 
     const messages = stateHolder.current.messages as Array<Record<string, unknown>>;

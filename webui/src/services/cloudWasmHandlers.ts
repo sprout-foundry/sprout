@@ -84,6 +84,10 @@ export function handleWasmLocal(
       case '/api/query/steer':
         return handleWasmAgentSteer(shell, bodyStr);
 
+      // ── Ask user response (delivers answer to WASM agent) ────
+      case '/api/ask-user/response':
+        return handleWasmAskUserResponse(shell, bodyStr);
+
       // ── Terminal stubs ──────────────────────────────────────
       case '/api/terminal/sessions':
         return jsonOk({ active_count: 0, count: 0 });
@@ -756,6 +760,74 @@ function handleWasmAgentSteer(shell: WasmShell, bodyStr?: string): Response {
     return jsonOk(result);
   }
   return jsonOk({ steered: false, error: 'steerAgent not available' });
+}
+
+/**
+ * POST /api/ask-user/response — delivers the user's answer to a pending
+ * ask_user request in the WASM agent. The agent's AskUserManager blocks
+ * on the request; this call unblocks it so the agent loop continues.
+ */
+function handleWasmAskUserResponse(shell: WasmShell, bodyStr?: string): Response {
+  if (!bodyStr) return jsonError('Missing request body', 400);
+  let parsed: { request_id?: string; response?: string };
+  try {
+    parsed = JSON.parse(bodyStr);
+  } catch {
+    return jsonError('Invalid JSON body', 400);
+  }
+  const requestId = parsed.request_id || '';
+  const response = parsed.response || '';
+  if (!requestId) return jsonError('request_id is required', 400);
+
+  const result = shell.respondToAskUser?.(requestId, response);
+  if (!result) {
+    return jsonError('respondToAskUser not available (WASM binary too old)', 501);
+  }
+  if (!result.delivered) {
+    return jsonError(`Ask user request ${requestId} not found or already expired`, 404);
+  }
+  return jsonOk({ delivered: result.delivered });
+}
+
+/**
+ * POST /api/edits/{id}/decision — delivers the user's edit approval
+ * decision to a pending edit approval request in the WASM agent.
+ *
+ * This handler is called from cloudAdapter.ts via dynamic path matching
+ * (the registry is static-only and cannot express the dynamic {id} segment).
+ * See the comment in cloudEndpointRegistry/endpoints/wasm-local.ts for context.
+ *
+ * Body: { accepted_hunks: string[], rejected: boolean }
+ * Response: { edit_id: string, decided: true, accepted: number, rejected: boolean }
+ * (matches the local-mode response format from pkg/webui/api_edits.go)
+ */
+export function handleWasmEditDecision(shell: WasmShell, editId: string, bodyStr?: string): Response {
+  if (!bodyStr) return jsonError('Missing request body', 400);
+  let parsed: { accepted_hunks?: string[]; rejected?: boolean };
+  try {
+    parsed = JSON.parse(bodyStr);
+  } catch {
+    return jsonError('Invalid JSON body', 400);
+  }
+
+  const acceptedHunks = parsed.accepted_hunks ?? [];
+  const rejected = parsed.rejected ?? false;
+
+  const result = shell.respondToEditDecision?.(editId, !rejected, acceptedHunks);
+  if (!result) {
+    return jsonError('respondToEditDecision not available (WASM binary too old)', 501);
+  }
+
+  if (!result.delivered) {
+    return jsonError(`Edit approval request ${editId} not found or already expired`, 404);
+  }
+
+  return jsonOk({
+    edit_id: editId,
+    decided: true,
+    accepted: acceptedHunks.length,
+    rejected,
+  });
 }
 
 function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {

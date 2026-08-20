@@ -113,4 +113,14 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     category: 'wasm-local',
     description: 'Steer agent mid-conversation (WASM shell injects into steering channel)',
   },
+  {
+    path: '/api/ask-user/response',
+    methods: ['POST'],
+    category: 'wasm-local',
+    description: 'Deliver ask_user response to the WASM agent (unblocks pending ask_user request)',
+  },
+  // NOTE: /api/edits/{id}/decision is NOT listed here because the registry
+  // is static-only and cannot express the dynamic {id} segment. The path is
+  // intercepted via regex in cloudAdapter.ts (see the "Dynamic edit-decision
+  // interception" block near the isWasmLocalEndpoint check).
 ];

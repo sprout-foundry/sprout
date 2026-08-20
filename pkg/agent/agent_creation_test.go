@@ -13,6 +13,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
@@ -802,5 +803,30 @@ func TestCLIPath_LCM_HelperConcurrencySmoke(t *testing.T) {
 		if mode != configuration.ContextModeLowContext {
 			t.Errorf("concurrent construction produced non-LCM mode %q", mode)
 		}
+	}
+}
+
+func TestInjectWebUIManagers_AskUser(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Verify GetAskUserMgr returns nil by default.
+	if agent.security.GetAskUserMgr() != nil {
+		t.Fatal("expected GetAskUserMgr() to be nil by default")
+	}
+
+	// Create an AskUserManager and inject it.
+	mgr := tools.NewAskUserManager()
+	agent.InjectWebUIManagers(nil, mgr)
+
+	// Verify GetAskUserMgr returns the injected manager.
+	if agent.security.GetAskUserMgr() != mgr {
+		t.Error("expected GetAskUserMgr() to return the injected manager")
+	}
+
+	// Nil approval mgr is tolerated by the code (no panic).
+	// Passing nil replaces the existing manager, so it becomes nil.
+	if agent.GetSecurityApprovalMgr() != nil {
+		t.Error("expected GetSecurityApprovalMgr() to be nil after injecting nil approval mgr")
 	}
 }

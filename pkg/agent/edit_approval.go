@@ -425,6 +425,13 @@ func (a *Agent) RespondToEditApproval(requestID string, decision EditDecision) b
 	return editApprovalBroker.respond(requestID, decision)
 }
 
+// DeliverEditDecision delivers a user decision to a pending edit approval
+// request without requiring an Agent instance. This is used by the WASM JS
+// bridge so the webui can resolve edit approval requests in cloud mode.
+func DeliverEditDecision(requestID string, decision EditDecision) bool {
+	return editApprovalBroker.respond(requestID, decision)
+}
+
 // applyEditDecision applies the accepted hunks to the original content.
 func (a *Agent) applyEditDecision(p EditProposal, decision EditDecision) (string, string, error) {
 	applied := ApplyHunks(p.Original, p.Hunks, decision.AcceptedHunks)

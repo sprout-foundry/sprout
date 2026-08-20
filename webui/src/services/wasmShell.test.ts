@@ -406,3 +406,42 @@ describe('initWasmShell — configurable paths', () => {
     });
   });
 });
+
+describe('respondToAskUser', () => {
+  it('returns { delivered: false } when SproutWasm.respondToAskUser is undefined', async () => {
+    const shell = await initWasmShell();
+    const result = shell.respondToAskUser('req-1', 'answer');
+    expect(result).toEqual({ delivered: false });
+  });
+
+  it('delegates to SproutWasm.respondToAskUser when defined', async () => {
+    // Override the Go mock so that SproutWasm includes respondToAskUser
+    const mockRespond = vi.fn((_requestId: string, _response: string) => ({ delivered: true }));
+    (window as unknown as Record<string, unknown>).Go = function Go() {
+      return {
+        run: () => {
+          (window as unknown as Record<string, unknown>).SproutWasm = {
+            init: (_cfg?: string) => '',
+            executeCommand: (_input: string) => '{"stdout":"","stderr":"","exitCode":0}',
+            autoComplete: (_input: string) => '{"completions":[]}',
+            getCwd: () => '/home/user',
+            changeDir: (_dir: string) => '{"cwd":"/home/user"}',
+            writeFile: (_path: string, _content: string) => '',
+            readFile: (_path: string) => '{"content":""}',
+            listDir: (_path: string) => '{"entries":[]}',
+            deleteFile: (_path: string) => '',
+            getHistory: () => '[]',
+            getEnv: () => '{}',
+            respondToAskUser: mockRespond,
+          };
+        },
+        importObject: {},
+      };
+    };
+
+    const shell = await initWasmShell();
+    const result = shell.respondToAskUser('req-2', 'yes');
+    expect(result).toEqual({ delivered: true });
+    expect(mockRespond).toHaveBeenCalledWith('req-2', 'yes');
+  });
+});

@@ -62,6 +62,8 @@ const mockWasmShell = {
   runAgent: vi.fn(() => Promise.resolve({})),
   steerAgent: vi.fn(() => ({ steered: true })),
   stopAgent: vi.fn(() => {}),
+  respondToAskUser: vi.fn(() => ({ delivered: true })),
+  respondToEditDecision: vi.fn(() => ({ delivered: true })),
 };
 vi.mock('./wasmShell', () => ({
   initWasmShell: vi.fn(() => Promise.resolve(mockWasmShell)),
@@ -406,6 +408,12 @@ describe('CloudAdapter Integration Tests', () => {
         response = await adapter.fetch(endpoint.path, {
           method: 'POST',
           body: JSON.stringify({}),
+        });
+      } else if (endpoint.path === '/api/ask-user/response') {
+        // Ask-user response needs a body with { request_id, response }.
+        response = await adapter.fetch(endpoint.path, {
+          method: 'POST',
+          body: JSON.stringify({ request_id: 'test-123', response: 'answer' }),
         });
       } else {
         response = await adapter.fetch(endpoint.path, { method: firstMethod });

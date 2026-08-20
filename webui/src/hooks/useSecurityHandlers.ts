@@ -7,7 +7,9 @@
 
 import type { EventsProvider } from '@sprout/events';
 import { useCallback } from 'react';
+import { isCloud } from '../config/mode';
 import type { AppStoreSetState } from '../contexts/AppStore';
+import { clientFetch } from '../services/clientSession';
 
 // The action names must match the server-side ApprovalDecisionFromString in
 // pkg/security/approval_manager.go.
@@ -83,6 +85,67 @@ export function useSecurityHandlers({
 
   const handleAskUserResponse = useCallback(
     (requestId: string, response: string) => {
+      // Cloud mode: the agent loop runs in the WASM binary, so the
+      // ask_user response must be delivered to the in-process
+      // AskUserManager via the wasm-local endpoint (no backend is
+      // listening for the WebSocket event in cloud mode).
+      if (isCloud) {
+        clientFetch('/api/ask-user/response', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request_id: requestId, response }),
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              const text = await res.text().catch(() => '');
+              setState((prev) =>
+                prev.askUserRequest?.requestId === requestId
+                  ? {
+                      askUserRequest: {
+                        ...prev.askUserRequest,
+                        deliveryError:
+                          `Failed to deliver response (HTTP ${res.status}).`,
+                      },
+                    }
+                  : prev,
+              );
+              console.warn('[ask_user] Failed to deliver response to WASM agent:', text);
+              return;
+            }
+            const body = await res.json().catch(() => null);
+            if (body && body.delivered === true) {
+              setState((_prev) => ({ askUserRequest: null }));
+            } else {
+              setState((prev) =>
+                prev.askUserRequest?.requestId === requestId
+                  ? {
+                      askUserRequest: {
+                        ...prev.askUserRequest,
+                        deliveryError:
+                          'Ask user request not found or already expired.',
+                      },
+                    }
+                  : prev,
+              );
+              console.warn('[ask_user] Response not delivered (unknown/expired request ID)');
+            }
+          })
+          .catch((err) => {
+            setState((prev) =>
+              prev.askUserRequest?.requestId === requestId
+                ? {
+                    askUserRequest: {
+                      ...prev.askUserRequest,
+                      deliveryError:
+                        `Failed to deliver response: ${err instanceof Error ? err.message : String(err)}`,
+                    },
+                  }
+                : prev,
+            );
+            console.warn('[ask_user] Failed to deliver response to WASM agent:', err);
+          });
+        return;
+      }
       if (!eventsProvider.isConnected()) return;
       eventsProvider.sendEvent({
         type: 'ask_user_response',

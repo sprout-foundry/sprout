@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -88,6 +89,281 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 	}
 	if len(unknown) != 1 || unknown[0] != "definitely_not_a_real_key" {
 		t.Errorf("expected exactly [definitely_not_a_real_key] in unknown, got %v", unknown)
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_PartialPatchPreservesBudgets pins down the
+// field-level merge contract: a patch that only sets "enabled" must not zero
+// the token/resume budgets. This is the regression that produced an all-zeros
+// wakeup block (Enabled:false, budgets 0) in a real user config.
+func TestApplyPartialSettings_Wakeup_PartialPatchPreservesBudgets(t *testing.T) {
+	cfg := &configuration.Config{
+		Wakeup: configuration.WakeupConfig{
+			Enabled:              false,
+			MaxTokensPerSession:  12345,
+			MaxResumesPerSession: 7,
+		},
+	}
+	patch := map[string]interface{}{
+		"wakeup": map[string]interface{}{"enabled": true},
+	}
+	unknown, err := applyPartialSettings(cfg, patch)
+	if err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	for _, u := range unknown {
+		if u == "wakeup" {
+			t.Error("wakeup should not be in unknown keys list")
+		}
+	}
+	if !cfg.Wakeup.Enabled {
+		t.Error("Enabled = false, want true")
+	}
+	if cfg.Wakeup.MaxTokensPerSession != 12345 {
+		t.Errorf("MaxTokensPerSession = %d, want 12345 (clobbered by partial patch)", cfg.Wakeup.MaxTokensPerSession)
+	}
+	if cfg.Wakeup.MaxResumesPerSession != 7 {
+		t.Errorf("MaxResumesPerSession = %d, want 7 (clobbered by partial patch)", cfg.Wakeup.MaxResumesPerSession)
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_EmptyObjectPreservesAll asserts that an
+// empty {} patch is a no-op: every existing value survives.
+func TestApplyPartialSettings_Wakeup_EmptyObjectPreservesAll(t *testing.T) {
+	cfg := &configuration.Config{
+		Wakeup: configuration.WakeupConfig{
+			Enabled:              false,
+			MaxTokensPerSession:  999,
+			MaxResumesPerSession: 3,
+		},
+	}
+	patch := map[string]interface{}{
+		"wakeup": map[string]interface{}{},
+	}
+	if _, err := applyPartialSettings(cfg, patch); err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	want := configuration.WakeupConfig{
+		Enabled:              false,
+		MaxTokensPerSession:  999,
+		MaxResumesPerSession: 3,
+	}
+	if cfg.Wakeup != want {
+		t.Errorf("Wakeup = %+v, want %+v (empty object must not zero fields)", cfg.Wakeup, want)
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_NullResetsToDefaults asserts that an
+// explicit null resets the whole block to DefaultWakeupConfig.
+func TestApplyPartialSettings_Wakeup_NullResetsToDefaults(t *testing.T) {
+	cfg := &configuration.Config{
+		Wakeup: configuration.WakeupConfig{
+			Enabled:              false,
+			MaxTokensPerSession:  1,
+			MaxResumesPerSession: 2,
+		},
+	}
+	patch := map[string]interface{}{
+		"wakeup": nil,
+	}
+	if _, err := applyPartialSettings(cfg, patch); err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	want := configuration.DefaultWakeupConfig()
+	if cfg.Wakeup != want {
+		t.Errorf("Wakeup = %+v, want %+v (null must reset to defaults)", cfg.Wakeup, want)
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_FullPatchReplacesAll asserts that a patch
+// with all three fields replaces every value.
+func TestApplyPartialSettings_Wakeup_FullPatchReplacesAll(t *testing.T) {
+	cfg := &configuration.Config{
+		Wakeup: configuration.DefaultWakeupConfig(),
+	}
+	patch := map[string]interface{}{
+		"wakeup": map[string]interface{}{
+			"enabled":                 false,
+			"max_tokens_per_session":  float64(42),
+			"max_resumes_per_session": float64(5),
+		},
+	}
+	if _, err := applyPartialSettings(cfg, patch); err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	want := configuration.WakeupConfig{
+		Enabled:              false,
+		MaxTokensPerSession:  42,
+		MaxResumesPerSession: 5,
+	}
+	if cfg.Wakeup != want {
+		t.Errorf("Wakeup = %+v, want %+v", cfg.Wakeup, want)
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_NonObjectRejected asserts that a non-object
+// wakeup value (string, number, bool, array) is rejected with a clear error.
+func TestApplyPartialSettings_Wakeup_NonObjectRejected(t *testing.T) {
+	cases := []struct {
+		name  string
+		value interface{}
+	}{
+		{"string", "banana"},
+		{"number", float64(42)},
+		{"bool", true},
+		{"array", []interface{}{"a", "b"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &configuration.Config{Wakeup: configuration.DefaultWakeupConfig()}
+			patch := map[string]interface{}{"wakeup": tc.value}
+			_, err := applyPartialSettings(cfg, patch)
+			if err == nil {
+				t.Fatal("expected error for non-object wakeup value, got nil")
+			}
+			if !strings.Contains(err.Error(), "invalid wakeup config") {
+				t.Errorf("error should mention 'invalid wakeup config', got: %v", err)
+			}
+			// The config must be untouched on failure.
+			if cfg.Wakeup != configuration.DefaultWakeupConfig() {
+				t.Errorf("Wakeup mutated on error: %+v", cfg.Wakeup)
+			}
+		})
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_BadFieldTypeRejected asserts that a wrong
+// JSON type for a known field (e.g. enabled:"yes") is rejected rather than
+// silently dropped.
+func TestApplyPartialSettings_Wakeup_BadFieldTypeRejected(t *testing.T) {
+	cases := []struct {
+		name  string
+		patch map[string]interface{}
+	}{
+		{"enabled string", map[string]interface{}{"enabled": "yes"}},
+		{"enabled number", map[string]interface{}{"enabled": float64(1)}},
+		{"max_tokens_per_session string", map[string]interface{}{"max_tokens_per_session": "lots"}},
+		{"max_resumes_per_session bool", map[string]interface{}{"max_resumes_per_session": true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &configuration.Config{Wakeup: configuration.DefaultWakeupConfig()}
+			patch := map[string]interface{}{"wakeup": tc.patch}
+			_, err := applyPartialSettings(cfg, patch)
+			if err == nil {
+				t.Fatal("expected error for wrong field type, got nil")
+			}
+			if !strings.Contains(err.Error(), "invalid wakeup config") {
+				t.Errorf("error should mention 'invalid wakeup config', got: %v", err)
+			}
+		})
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_NegativeBudgetsRejected asserts that
+// negative budget values are rejected and cfg is left untouched.
+func TestApplyPartialSettings_Wakeup_NegativeBudgetsRejected(t *testing.T) {
+	cases := []struct {
+		name  string
+		patch map[string]interface{}
+	}{
+		{"negative max_tokens_per_session", map[string]interface{}{"max_tokens_per_session": float64(-1)}},
+		{"negative max_resumes_per_session", map[string]interface{}{"max_resumes_per_session": float64(-1)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &configuration.Config{
+				Wakeup: configuration.WakeupConfig{
+					Enabled:              true,
+					MaxTokensPerSession:  12345,
+					MaxResumesPerSession: 7,
+				},
+			}
+			want := cfg.Wakeup
+			patch := map[string]interface{}{"wakeup": tc.patch}
+			_, err := applyPartialSettings(cfg, patch)
+			if err == nil {
+				t.Fatal("expected error for negative budget, got nil")
+			}
+			if !strings.Contains(err.Error(), "invalid wakeup config") {
+				t.Errorf("error should mention 'invalid wakeup config', got: %v", err)
+			}
+			if cfg.Wakeup != want {
+				t.Errorf("Wakeup mutated on error: %+v, want %+v", cfg.Wakeup, want)
+			}
+		})
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_DottedKeyPath exercises the real WebUI
+// path: the frontend sends {"wakeup.enabled": true} (flat dotted key), not
+// a nested object. expandDottedKeys seeds the section from the current
+// config values before the applier merges, so budgets must survive.
+func TestApplyPartialSettings_Wakeup_DottedKeyPath(t *testing.T) {
+	cfg := &configuration.Config{
+		Wakeup: configuration.WakeupConfig{
+			Enabled:              false,
+			MaxTokensPerSession:  12345,
+			MaxResumesPerSession: 7,
+		},
+	}
+	// This is the actual payload shape the WebUI sends.
+	patch := map[string]interface{}{
+		"wakeup.enabled": true,
+	}
+	unknown, err := applyPartialSettings(cfg, patch)
+	if err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	if len(unknown) > 0 {
+		t.Errorf("unknown keys = %v, want none (dotted key should expand to 'wakeup')", unknown)
+	}
+	if !cfg.Wakeup.Enabled {
+		t.Error("Enabled = false, want true (dotted key path)")
+	}
+	if cfg.Wakeup.MaxTokensPerSession != 12345 {
+		t.Errorf("MaxTokensPerSession = %d, want 12345 (dotted key path must preserve budgets)", cfg.Wakeup.MaxTokensPerSession)
+	}
+	if cfg.Wakeup.MaxResumesPerSession != 7 {
+		t.Errorf("MaxResumesPerSession = %d, want 7 (dotted key path must preserve budgets)", cfg.Wakeup.MaxResumesPerSession)
+	}
+}
+
+// TestApplyPartialSettings_Wakeup_UnknownKeyIgnored asserts that unknown keys
+// inside the wakeup object are ignored (matching the tolerant style of the
+// surrounding appliers) while known keys still apply.
+func TestApplyPartialSettings_Wakeup_UnknownKeyIgnored(t *testing.T) {
+	cfg := &configuration.Config{
+		Wakeup: configuration.WakeupConfig{
+			Enabled:              false,
+			MaxTokensPerSession:  111,
+			MaxResumesPerSession: 222,
+		},
+	}
+	patch := map[string]interface{}{
+		"wakeup": map[string]interface{}{
+			"enabled":                true,
+			"totally_made_up_field":  "whatever",
+			"max_tokens_per_session": float64(333),
+		},
+	}
+	unknown, err := applyPartialSettings(cfg, patch)
+	if err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	for _, u := range unknown {
+		if u == "wakeup" {
+			t.Error("wakeup should not be in unknown keys list")
+		}
+	}
+	if !cfg.Wakeup.Enabled {
+		t.Error("Enabled = false, want true")
+	}
+	if cfg.Wakeup.MaxTokensPerSession != 333 {
+		t.Errorf("MaxTokensPerSession = %d, want 333", cfg.Wakeup.MaxTokensPerSession)
+	}
+	if cfg.Wakeup.MaxResumesPerSession != 222 {
+		t.Errorf("MaxResumesPerSession = %d, want 222 (should be preserved)", cfg.Wakeup.MaxResumesPerSession)
 	}
 }
 

@@ -166,7 +166,7 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			processResults: []error{nil, nil}, // first call + retry call
 			// Counter-based: fails on first invocation (count=0), passes on
 			// second (count=1). The retry processQueryFn writes the counter.
-			buildCmd:      `count=$(cat /tmp/test_sprout_retry_count 2>/dev/null || echo 0); echo $((count+1)) > /tmp/test_sprout_retry_count; [ $count -gt 0 ]`,
+			buildCmd:      `count=$(cat __COUNTER_FILE__ 2>/dev/null || echo 0); echo $((count+1)) > __COUNTER_FILE__; [ $count -gt 0 ]`,
 			wantComplete:  true,
 			wantError:     false,
 			wantChecked:   1,
@@ -234,10 +234,9 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			// Clean up stateful files used by some test scenarios.
-			os.Remove("/tmp/test_sprout_retry_count")
-
 			dir := t.TempDir()
+			counterPath := filepath.Join(dir, "retry_count")
+			buildCmd := strings.ReplaceAll(tt.buildCmd, "__COUNTER_FILE__", counterPath)
 			todoPath := writeTempTodoFile(t, dir, tt.items)
 			// For the resume test, Item 1 was already processed before the
 			// interruption — mark it [x] so the loop doesn't re-find it.
@@ -267,13 +266,6 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 				err := tt.processResults[callCount]
 				callCount++
 
-				// For the retry scenario: write the build counter so the
-				// retry build check passes.
-				if tt.name == "build_failure_then_retry_then_success" && callCount > 1 {
-					// Second (retry) call: prime the counter so `[ $count -gt 0 ]` passes.
-					os.WriteFile("/tmp/test_sprout_retry_count", []byte("1\n"), 0644)
-				}
-
 				_ = query
 				return err
 			}
@@ -284,7 +276,7 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 					GatePromptFile: gatePromptPath,
 					MaxRetries:     1,
 					MaxIterations:  50,
-					BuildCommand:   tt.buildCmd,
+					BuildCommand:   buildCmd,
 				},
 			}
 

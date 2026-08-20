@@ -3,7 +3,7 @@
 // (weight + .scales + .biases triplets) that load instantly without GO_QUANTIZE
 // and use the fast quantized matmul kernel at full speed.
 //
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 package main
 

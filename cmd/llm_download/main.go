@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 // Command llm_download fetches the recommended model for this machine's RAM
 // from HuggingFace (mlx-community quantized releases) into
@@ -13,7 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/sprout-foundry/sinter/llm"
+	"github.com/sprout-foundry/sinter/llm/catalog"
 	"github.com/sprout-foundry/sinter/mlx"
 )
 

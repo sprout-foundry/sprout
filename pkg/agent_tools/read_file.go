@@ -87,7 +87,7 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}
 
 	// Gate 1 precheck — resolves the path and classifies it.
-	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "read_file", path)
+	resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "read_file", path)
 	if decision == "deny" {
 		// A deny on read_file is not a read_only violation — reads are
 		// always allowed under read_only grants. Surface a neutral message.
@@ -95,7 +95,12 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 			fmt.Errorf("read blocked: %s is not accessible", path)
 	}
 	// "allow"  → path is workspace/tmp/allowlisted; proceed directly.
-	// "prompt" → fall through; will fail with raw filesystem error.
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "read_file", path, resolvedPath, "read"); approved {
+			ctx = ctx2
+		}
+	}
 
 	// Parse view_range (defensive — Validate() should have been called,
 	// but we guard against panic if it wasn't or input is malformed)

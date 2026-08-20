@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sinter/llm/catalog"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sinter/llm/catalog"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 

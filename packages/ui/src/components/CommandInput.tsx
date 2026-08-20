@@ -663,25 +663,28 @@ function CommandInput({
     setPreviewImageId((current) => (current === id ? null : current));
   }, []);
 
-  // Upload image to server
+  // Attach image: copy it into the workspace so the model can read it
   const uploadImageAsync = useCallback(async (imageId: string, imageFile: File) => {
     if (uploadInProgressRef.current.has(imageId)) return;
     uploadInProgressRef.current.add(imageId);
 
     try {
-      const result = onUploadImage ? await onUploadImage(imageFile) : { path: '' };
+      if (!onUploadImage) {
+        throw new Error('Image attachment not available');
+      }
+      const result = await onUploadImage(imageFile);
       setAttachedImages((prev) =>
         prev.map((img) => (img.id === imageId ? { ...img, uploadedPath: result.path, error: undefined } : img)),
       );
     } catch (error) {
-      debugLog('Failed to upload image:', error);
+      debugLog('Failed to attach image:', error);
       setAttachedImages((prev) =>
         prev.map((img) =>
-          img.id === imageId ? { ...img, error: error instanceof Error ? error.message : 'Upload failed' } : img,
+          img.id === imageId ? { ...img, error: error instanceof Error ? error.message : 'Failed to attach image' } : img,
         ),
       );
     }
-  }, []);
+  }, [onUploadImage]);
 
   // Auto-upload images when they are added
   useEffect(() => {
@@ -1273,7 +1276,7 @@ function CommandInput({
 
       {hasUploadingImage && (
         <div className="uploading-status" role="status" aria-live="polite">
-          Uploading {uploadingCount} image{uploadingCount !== 1 ? 's' : ''}…
+          Attaching {uploadingCount} image{uploadingCount !== 1 ? 's' : ''}…
         </div>
       )}
 
@@ -1340,7 +1343,7 @@ function CommandInput({
           data-testid="chat-send"
           data-tooltip={
             hasUploadingImage
-              ? 'Uploading image…'
+              ? 'Attaching image…'
               : !isConnected
                 ? 'Reconnecting...'
                 : isProcessing
@@ -1349,7 +1352,7 @@ function CommandInput({
           }
           aria-label={
             hasFailedImage
-              ? `Send message (${failedCount} image${failedCount !== 1 ? 's' : ''} failed to upload)`
+              ? `Send message (${failedCount} image${failedCount !== 1 ? 's' : ''} failed to attach)`
               : 'Send message'
           }
         >

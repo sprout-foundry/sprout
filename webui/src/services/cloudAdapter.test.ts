@@ -40,6 +40,7 @@ const mockWasmShell = {
   runAgent: vi.fn(() => Promise.resolve({})),
   steerAgent: vi.fn(() => ({ steered: true })),
   stopAgent: vi.fn(() => {}),
+  respondToEditDecision: vi.fn(() => ({ delivered: true })),
 };
 vi.mock('./wasmShell', () => ({
   initWasmShell: vi.fn(() => Promise.resolve(mockWasmShell)),
@@ -1083,6 +1084,36 @@ describe('CloudAdapter', () => {
       expect(mockFetch).not.toHaveBeenCalled();
       expect(mockWasmShell.stopAgent).toHaveBeenCalledTimes(1);
       expect(response.ok).toBe(true);
+    });
+
+    it('should route POST /api/edits/{id}/decision to the WASM shell (dynamic path, no fetch)', async () => {
+      // /api/edits/{id}/decision is wasm-local but has a dynamic {id} segment
+      // the static registry cannot express — cloudAdapter.ts intercepts it
+      // via regex (INT-2/cloud edit-approval wiring).
+      const response = await adapter.fetch('/api/edits/edit_42/decision', {
+        method: 'POST',
+        body: JSON.stringify({ accepted_hunks: ['hunk-0'], rejected: false }),
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockWasmShell.respondToEditDecision).toHaveBeenCalledWith('edit_42', true, ['hunk-0']);
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toMatchObject({ edit_id: 'edit_42', decided: true, accepted: 1, rejected: false });
+    });
+
+    it('should return 404 for POST /api/edits/{id}/decision when no pending request matches', async () => {
+      // delivered:false means the broker had no pending request for that ID
+      // (unknown or expired) — matches local-mode 404 semantics.
+      mockWasmShell.respondToEditDecision.mockReturnValueOnce({ delivered: false });
+
+      const response = await adapter.fetch('/api/edits/edit_gone/decision', {
+        method: 'POST',
+        body: JSON.stringify({ accepted_hunks: [], rejected: true }),
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(response.status).toBe(404);
     });
 
     it('should translate GET /api/query/status URL to /proxy/chat/status', async () => {

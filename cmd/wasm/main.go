@@ -78,6 +78,12 @@ func main() {
 	for name, fn := range embeddingJSFuncs() {
 		apiSurface[name] = fn
 	}
+	for name, fn := range askUserJSFuncs() {
+		apiSurface[name] = fn
+	}
+	for name, fn := range editApprovalJSFuncs() {
+		apiSurface[name] = fn
+	}
 
 	js.Global().Set("SproutWasm", js.ValueOf(apiSurface))
 

@@ -87,6 +87,7 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
+	mux.HandleFunc("/api/query/steer/retract", ws.handleAPIQuerySteerRetract)
 	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
 	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
 	// SP-071-3: rewind the conversation to a prior turn.

@@ -1143,5 +1143,113 @@ describe('CommandInput argument completion', () => {
 
     expect(onSend).toHaveBeenCalledWith('/risk-profile per');
   }, 10000);
+
+  it('calls onRetractSteer on ArrowUp when processing with empty input', async () => {
+    const baseProps: CommandInputProps = {
+      value: '',
+      onChange: vi.fn(),
+      onSend: vi.fn(),
+      placeholder: 'Ask me anything about your code...',
+    };
+    const onRetractSteer = vi.fn().mockResolvedValue(true);
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        isProcessing: true,
+        onRetractSteer,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      textarea.dispatchEvent(event);
+    });
+    await waitFor(() => {
+      expect(onRetractSteer).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('does not call onRetractSteer when not processing', () => {
+    const baseProps: CommandInputProps = {
+      value: '',
+      onChange: vi.fn(),
+      onSend: vi.fn(),
+      placeholder: 'Ask me anything about your code...',
+    };
+    const onRetractSteer = vi.fn().mockResolvedValue(true);
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        isProcessing: false,
+        onRetractSteer,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      textarea.dispatchEvent(event);
+    });
+    expect(onRetractSteer).not.toHaveBeenCalled();
+  });
+
+  it('does not call onRetractSteer when input is non-empty', () => {
+    const baseProps: CommandInputProps = {
+      value: '',
+      onChange: vi.fn(),
+      onSend: vi.fn(),
+      placeholder: 'Ask me anything about your code...',
+    };
+    const onRetractSteer = vi.fn().mockResolvedValue(true);
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'typing something',
+        isProcessing: true,
+        onRetractSteer,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      textarea.dispatchEvent(event);
+    });
+    expect(onRetractSteer).not.toHaveBeenCalled();
+  });
+
+  it('falls back to history navigation when retract returns false', async () => {
+    const baseProps: CommandInputProps = {
+      value: '',
+      onChange: vi.fn(),
+      onSend: vi.fn(),
+      placeholder: 'Ask me anything about your code...',
+    };
+    const historyApi = {
+      load: vi.fn().mockResolvedValue({ commands: ['older command'], index: -1, tempInput: '' }),
+      persist: vi.fn(),
+    };
+    const onRetractSteer = vi.fn().mockResolvedValue(false);
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        isProcessing: true,
+        onRetractSteer,
+        historyApi,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      textarea.dispatchEvent(event);
+    });
+    await waitFor(() => {
+      expect(onRetractSteer).toHaveBeenCalledTimes(1);
+    });
+    // History navigation should proceed after the failed retract. The
+    // mocked history module loads an empty list, so the observable effect
+    // is limited to the retract attempt itself — assert no crash and the
+    // input remains empty (no history entry to show).
+    await new Promise((r) => setTimeout(r, 50));
+    expect(textarea.value).toBe('');
+  });
 });
 

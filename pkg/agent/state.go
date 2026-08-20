@@ -308,6 +308,8 @@ func (a *Agent) autoSaveState() {
 		return
 	}
 
+	a.finalizeTurnJournal()
+
 	if a.debug {
 		a.Logger().Debug("[save] Auto-saved scoped conversation state for session %s\n", a.state.GetSessionID())
 	}

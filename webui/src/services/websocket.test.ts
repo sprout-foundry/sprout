@@ -1,5 +1,14 @@
 import { WebSocketService } from './websocket';
 
+// ---------------------------------------------------------------------------
+// Mock config/mode so cloud mode can be toggled per test (INT-3)
+// ---------------------------------------------------------------------------
+const { cloudModeRef } = vi.hoisted(() => ({ cloudModeRef: { value: false } }));
+vi.mock('../config/mode', () => ({
+  get isCloud() { return cloudModeRef.value; },
+  get mode() { return cloudModeRef.value ? 'cloud' : 'local'; },
+}));
+
 // Mock the modules that websocket.ts depends on
 vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
@@ -1106,6 +1115,44 @@ describe('WebSocketService - lifecycle signals (pause / session_close)', () => {
 
     window.dispatchEvent(new Event('pagehide'));
 
+    expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'session_close' }));
+  });
+});
+
+describe('WebSocketService - control frames in cloud mode (INT-3)', () => {
+  beforeEach(() => {
+    cloudModeRef.value = true;
+  });
+
+  afterEach(() => {
+    cloudModeRef.value = false;
+  });
+
+  it('does NOT send a pause frame on freeze() in cloud mode', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    ws.freeze();
+
+    // freeze() should NOT send pause in cloud mode
+    expect(mockSend).not.toHaveBeenCalledWith(JSON.stringify({ type: 'pause' }));
+    // but freeze() still closes the connection
+    expect(ws.isConnected()).toBe(false);
+  });
+
+  it('still sends session_close on pagehide in cloud mode (best-effort, unchanged)', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    // session_close is fire-and-forget; platform hub tolerates it (no error)
     expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'session_close' }));
   });
 });

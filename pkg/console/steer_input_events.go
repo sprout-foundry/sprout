@@ -39,6 +39,26 @@ func (r *SteerInputReader) handleEvent(event *InputEvent) {
 	case EventTab:
 		r.toggleSubmitMode()
 	case EventUp:
+		// When the line is empty and no history navigation is active,
+		// try to pull back the newest un-picked steer/queue message
+		// before falling through to history recall.
+		if r.retractFn != nil {
+			r.mu.Lock()
+			canRetract := len(r.buffer) == 0 && r.historyIndex == -1
+			r.mu.Unlock()
+			if canRetract {
+				// Called without r.mu: the callback reaches the agent's
+				// staging queue and must never re-enter the reader.
+				if text, ok := r.retractFn(); ok {
+					r.mu.Lock()
+					r.buffer = []byte(text)
+					r.cursorPos = len(r.buffer)
+					r.mu.Unlock()
+					r.renderLine()
+					return
+				}
+			}
+		}
 		r.recallHistory(-1)
 	case EventDown:
 		r.recallHistory(1)

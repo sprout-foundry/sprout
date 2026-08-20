@@ -158,6 +158,10 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		return "", agenterrors.NewTool("automate", "failed to resolve sprout binary", err)
 	}
 
+	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
+		return "", agenterrors.NewTool("automate", "memory floor check failed", floorErr)
+	}
+
 	// Build the command — filename is validated by the shared automate
 	// package (IsValidFilename), preventing shell injection.
 	cmdStr := execPath + " agent --workflow-config " + wfPath + " --skip-prompt --no-web-ui"
@@ -206,6 +210,10 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 				status := "success"
 				if exitCode != 0 {
 					status = "error"
+				}
+				if finErr := automate.FinalizeSessionFile(sproutDir, sessionID, exitCode); finErr != nil {
+					// Non-fatal: the session_ended event and notification
+					// still carry the outcome.
 				}
 				a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
 					sessionID, wfName, status, 0,

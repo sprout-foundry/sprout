@@ -65,7 +65,7 @@ func isEAGAIN(err error) bool {
 //	Alt+B/F          → move cursor back / forward one word
 //	Ctrl+Left/Right  → move cursor back / forward one word
 //	Left/Right       → move cursor back / forward one rune
-//	Up/Down          → recall steer history
+//	Up/Down          → pull back newest un-picked steer/queue message when the line is empty; otherwise recall history
 //	Alt+Enter/Shift+Enter → insert a literal newline (multi-line compose)
 //
 // Submission UX: when Enter is pressed, submitFn receives the buffer.
@@ -81,7 +81,7 @@ type SteerInputReader struct {
 
 	footer      *StatusFooter
 	submitFn    func(string) // STEER mode: mid-turn injection
-	queueFn     func(string) // QUEUE mode: deferred to next user turn
+	queueFn     func(string) // QUEUE mode: auto-run at turn end
 	interruptFn func()
 
 	// submitMode controls how Enter is interpreted. Tab toggles. The
@@ -171,6 +171,12 @@ type SteerInputReader struct {
 	completer       CompletionProvider
 	completionCycle *CompletionCycle
 
+	// retractFn pulls back the newest un-picked steer/queue message for
+	// re-editing. Called by the Up-arrow handler when the buffer is empty
+	// and no history navigation is active. Returns ("", false) when nothing
+	// is pending. Set via SetRetractFn; nil = retract is a no-op.
+	retractFn func() (string, bool)
+
 	// autocomplete is the live dropdown that mirrors the InputReader's
 	// (slash command) affordance on the steer panel. SP-078 Phase 3.
 	// Initialized in NewSteerInputReader so callers can drive it
@@ -193,13 +199,13 @@ const SteerHistoryCap = 50
 // SteerSubmitMode controls what happens on Enter (SP-055 Phase 3b).
 // STEER (default) injects mid-turn via the submit callback (typically
 // Agent.InjectInputContext → seed.InjectInput). QUEUE buffers the
-// message into the agent's deferred queue, which the REPL drains and
-// prepends to the next user-typed prompt.
+// message into the agent's deferred queue, which auto-submits as its
+// own turn(s) when the current turn ends.
 type SteerSubmitMode int
 
 const (
 	SteerSubmitModeNow   SteerSubmitMode = iota // mid-turn injection (default)
-	SteerSubmitModeQueue                        // hold until next turn
+	SteerSubmitModeQueue                        // auto-run at turn end
 )
 
 // SteerPromptPrefix is the visible glyph + space rendered at the start
@@ -396,6 +402,17 @@ func (r *SteerInputReader) SetGroundTruth(gt *GroundTruthTermios) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.groundTruth = gt
+}
+
+// SetRetractFn installs a callback that pulls back the newest un-picked
+// steer/queue message for re-editing. The callback receives no arguments
+// and returns the text to restore plus a boolean indicating success.
+// Called by the Up-arrow handler when the line is empty and no history
+// navigation is active. Set to nil to disable (the default).
+func (r *SteerInputReader) SetRetractFn(fn func() (string, bool)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.retractFn = fn
 }
 
 // DrainUnsentBuffer returns any text the user typed into the steer

@@ -117,6 +117,17 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		agent.clarificationManager = r.parentAgent.clarificationManager
 	}
 
+	// Re-resolve the context profile from the subagent's OWN client and config
+	// instead of blindly copying the parent's profile. A 200K parent delegating
+	// to a 32K subagent model would otherwise run the subagent in full mode
+	// — 41+ tool definitions overflowing its 32K window. (SP-125 R4)
+	// Runs before EnableChangeTracking so a below-floor model never spawns the
+	// revision-compaction goroutine on an agent that is about to be discarded.
+	if err := agent.resolveAndApplyContextProfile(); err != nil {
+		interruptCancel()
+		return nil, err
+	}
+
 	// Enable a lightweight change tracker on the subagent so the returned
 	// envelope can include a structured FilesModified manifest. Tracking
 	// just records writes in memory; it does not participate in the
@@ -158,13 +169,6 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// so this propagation is what makes readonly actually readonly
 	// during delegation.
 	agent.riskProfileOverride = r.parentAgent.riskProfileOverride
-
-	// Inherit the parent's context profile so LCM (Low-Context Mode)
-	// settings — tool allowlist, system prompt path, compaction fraction —
-	// propagate into subagents. Without this, subagents get a zero-value
-	// profile (full mode, all tools), which undoes LCM's context savings
-	// and sends 41+ tool definitions instead of the curated 12.
-	agent.contextProfile = r.parentAgent.contextProfile
 
 	// Propagate session folder allowlist into the subagent so paths
 	// the user already approved at the root level don't re-prompt

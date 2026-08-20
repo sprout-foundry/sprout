@@ -1,5 +1,5 @@
 import type { Message, ToolRef } from '@sprout/ui';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import {
@@ -48,6 +48,7 @@ export interface UseChatSessionManagerReturn {
   handleSendMessage: (message: string, options?: { allowConcurrent?: boolean }) => Promise<void>;
   handleQueueMessage: (message: string) => void;
   handleStopProcessing: () => Promise<void>;
+  handleRetractSteer: () => Promise<boolean>;
   queuedMessagesCount: number;
   setQueuedMessagesCount: React.Dispatch<React.SetStateAction<number>>;
 }
@@ -65,6 +66,12 @@ export function useChatSessionManager({
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const apiService = ApiService.getInstance();
+
+  // Retract state: tracks the last steer message so the user can pull it
+  // back for editing with Up-arrow. Cleared when the query completes or
+  // the user explicitly stops processing.
+  const lastSteerMessageRef = useRef<string>('');
+  const lastSteerBubbleIdRef = useRef<string>('');
 
   const loadChatSessions = useCallback(async () => {
     try {
@@ -333,12 +340,13 @@ export function useChatSessionManager({
       }
 
       if (!allowConcurrent && activeRequestsRef.current > 0) {
+        const bubbleId = generateMessageId();
         setState((prev) => ({
           lastError: null,
           messages: trimMessages([
             ...prev.messages,
             {
-              id: generateMessageId(),
+              id: bubbleId,
               type: 'user',
               content: trimmedMessage,
               timestamp: new Date(),
@@ -346,6 +354,9 @@ export function useChatSessionManager({
           ]),
         }));
         await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
+        // Remember the steer for possible retraction via Up-arrow.
+        lastSteerMessageRef.current = trimmedMessage;
+        lastSteerBubbleIdRef.current = bubbleId;
         setState((prev) => ({ inputValue: '' }));
         return;
       }
@@ -408,6 +419,8 @@ export function useChatSessionManager({
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
       setQueuedMessagesCount(0);
+      lastSteerMessageRef.current = '';
+      lastSteerBubbleIdRef.current = '';
       setState((prev) => ({
         isProcessing: false,
         queryProgress: null,
@@ -417,6 +430,8 @@ export function useChatSessionManager({
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
       setQueuedMessagesCount(0);
+      lastSteerMessageRef.current = '';
+      lastSteerBubbleIdRef.current = '';
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
       setState((prev) => ({
         isProcessing: false,
@@ -434,6 +449,37 @@ export function useChatSessionManager({
       }));
     }
   }, [apiService, setQueuedMessagesCount]);
+
+  // Pull back the newest un-picked steer message for editing. Removes the
+  // optimistic bubble and restores the text to the input. Returns false when
+  // nothing is retractable (already picked up, or none sent). Refs are only
+  // cleared on success so a transient API failure can be retried.
+  const retractInFlightRef = useRef(false);
+  const handleRetractSteer = useCallback(async (): Promise<boolean> => {
+    if (!lastSteerMessageRef.current || retractInFlightRef.current) {
+      return false;
+    }
+    retractInFlightRef.current = true;
+    const bubbleId = lastSteerBubbleIdRef.current;
+    try {
+      const response = await apiService.retractSteer(activeChatIdRef.current ?? undefined);
+      if (!response.success || !response.message) {
+        retractInFlightRef.current = false;
+        return false;
+      }
+      lastSteerMessageRef.current = '';
+      lastSteerBubbleIdRef.current = '';
+      retractInFlightRef.current = false;
+      setState((prev) => ({
+        messages: prev.messages.filter((m) => m.id !== bubbleId),
+        inputValue: response.message,
+      }));
+      return true;
+    } catch {
+      retractInFlightRef.current = false;
+      return false;
+    }
+  }, [apiService]);
 
   // Handle session-restored window event
   useEffect(() => {
@@ -563,6 +609,7 @@ export function useChatSessionManager({
     handleSendMessage,
     handleQueueMessage,
     handleStopProcessing,
+    handleRetractSteer,
     queuedMessagesCount,
     setQueuedMessagesCount,
   };

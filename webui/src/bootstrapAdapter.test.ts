@@ -26,6 +26,18 @@ function restoreWindowLocation() {
   });
 }
 
+/**
+ * Import bootstrapAdapter and drive the async adapter install to completion.
+ *
+ * bootstrapAdapter.ts auto-runs fetchRuntimeConfig() on import, but adapter
+ * installation is now async (dynamic import of CloudAdapter). This helper
+ * ensures the fire-and-forget bootstrap settles before assertions run.
+ */
+async function importWithBootstrap() {
+  const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+  await fetchRuntimeConfig();
+}
+
 describe('bootstrapAdapter', () => {
   describe('cloud mode (VITE_SPROUT_MODE=cloud)', () => {
     beforeEach(() => {
@@ -46,15 +58,14 @@ describe('bootstrapAdapter', () => {
     });
 
     it('installs CloudAdapter at startup', async () => {
-      // Import bootstrapAdapter — this triggers the adapter installation
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { hasAdapter } = await import('./services/apiAdapter');
       expect(hasAdapter()).toBe(true);
     });
 
     it('installs an adapter named "foundry-cloud"', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -63,7 +74,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('installs a CloudAdapter instance', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const { CloudAdapter: CloudAdapterClass } = await import('./services/cloudAdapter');
@@ -72,7 +83,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('configures adapter with correct WebSocket URL from env var', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -80,7 +91,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('configures adapter with cloud platform nav items', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter() as CloudAdapter | null;
@@ -94,7 +105,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('adapter has correct capability flags for cloud mode', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -181,7 +192,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('installs CloudAdapter with same-origin defaults', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -190,7 +201,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('derives WebSocket URL from window.location when VITE_FOUNDRY_WS_URL is not set', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();

@@ -106,7 +106,7 @@
   "scripts": {
     "build": "tsc && vite build",
     "build:cloud": "vite build --mode cloud",
-    "build:local": "vite build --mode local",
+    "build:local": "vite build --mode localbuild",
     "dev": "vite",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",

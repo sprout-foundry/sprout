@@ -13,13 +13,13 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sinter/llm"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 func main() {
 	ram := mlx.TotalSystemRAM()
-	rec := llm.RecommendModelForRAM(ram)
+	rec := catalog.RecommendModelForRAM(ram)
 	if rec == nil {
 		log.Fatalf("no model recommended for %d bytes RAM", ram)
 	}

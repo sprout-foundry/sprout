@@ -13,7 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
+	"github.com/sprout-foundry/sinter/llm/catalog"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 
@@ -640,12 +640,12 @@ func ensureLocalModelDownloaded(modelID string) error {
 	}
 
 	ram := localmodel.TotalSystemRAM()
-	if tier, known := llm.SelectableForRAM(status.Name, ram); known {
+	if tier, known := catalog.SelectableForRAM(status.Name, ram); known {
 		switch {
-		case tier == llm.TierBlocked && os.Getenv("SPROUT_ALLOW_OVERWEIGHT") != "1":
+		case tier == catalog.TierBlocked && os.Getenv("SPROUT_ALLOW_OVERWEIGHT") != "1":
 			return fmt.Errorf("%s needs more RAM than this machine has (%.0f GB) — set SPROUT_ALLOW_OVERWEIGHT=1 to force it anyway",
 				status.Name, float64(ram)/(1024*1024*1024))
-		case tier == llm.TierStretch:
+		case tier == catalog.TierStretch:
 			console.GlyphWarning.Printf("%s risks running out of memory on this machine — downloading anyway since you selected it explicitly.", status.Name)
 		}
 	}

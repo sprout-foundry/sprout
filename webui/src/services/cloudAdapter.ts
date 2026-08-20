@@ -17,7 +17,7 @@ import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegistry';
 import { CHAT_ENDPOINT_MAP, translateAndProxyChat, proxyStatsRequest, proxySettingsRequest, handleFoundryAuthError } from './cloudProxyRoutes';
 import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
-import { handleWasmLocal, handleWasmEditDecision, trackFileWrite } from './cloudWasmHandlers';
+import { handleWasmLocal, handleWasmEditDecision, handleWasmShellApprovalDecision, trackFileWrite } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
 export interface CloudAdapterConfig {
@@ -286,6 +286,27 @@ export class CloudAdapter implements APIAdapter {
       } catch (err) {
         console.warn(
           `[CloudAdapter] WASM shell unavailable for edit-decision endpoint "${urlPath}", falling through to server safety-net:`,
+          err,
+        );
+        // Fall through to standard proxy below.
+      }
+    }
+
+    // ── Dynamic shell-approval-decision interception (INT-5/cloud shell-approval) ──
+    // The ShellApprovalPanel POSTs to /api/shell-approvals/{id}/decision. The
+    // registry is static-only and cannot express the dynamic {id} segment, so
+    // we intercept here with a regex match before the wasm-local check.
+    const shellApprovalMatch = urlPath.match(/^\/api\/shell-approvals\/([^/]+)\/decision$/);
+    if (shellApprovalMatch && method === 'POST') {
+      const requestId = shellApprovalMatch[1];
+      const requestBody = await this.extractRequestBody(input);
+      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
+      try {
+        const shell = await this.ensureWasmShell();
+        return handleWasmShellApprovalDecision(shell, requestId, bodyStr);
+      } catch (err) {
+        console.warn(
+          `[CloudAdapter] WASM shell unavailable for shell-approval endpoint "${urlPath}", falling through to server safety-net:`,
           err,
         );
         // Fall through to standard proxy below.

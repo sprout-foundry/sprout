@@ -12,7 +12,6 @@
 
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
-import { CloudAdapter } from './services/cloudAdapter';
 import type { RuntimeConfig } from './types/runtimeConfig';
 
 /** Shape of the JSON returned by /api/bootstrap (all fields optional). */
@@ -186,7 +185,7 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
       lastConfig = config;
       currentUserIdentity = config.user;
       // eslint-disable-next-line no-console
-      installAdapterForConfig(config);
+      await installAdapterForConfig(config);
 
       // Load any plugin scripts advertised by the server.
       if (data.pluginScripts && Array.isArray(data.pluginScripts)) {
@@ -206,14 +205,14 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
     lastConfig = fromEnv;
     // eslint-disable-next-line no-console
     console.warn('bootstrap: using VITE env vars (fetch failed: %s)', fetchError);
-    installAdapterForConfig(fromEnv);
+    await installAdapterForConfig(fromEnv);
     return fromEnv;
   }
 
   // — Tier 3: localhost defaults —
   lastConfig = LOCALHOST_DEFAULTS;
   // eslint-disable-next-line no-console
-  installAdapterForConfig(LOCALHOST_DEFAULTS);
+  await installAdapterForConfig(LOCALHOST_DEFAULTS);
   return LOCALHOST_DEFAULTS;
 }
 
@@ -227,9 +226,16 @@ export function getBootstrapConfig(): RuntimeConfig {
 
 /**
  * Install the appropriate adapter based on the resolved config's appMode.
+ *
+ * Cloud-adapter-only rule (Trust-Boundary Principle, see root AGENTS.md):
+ * platform-auth behaviors (401 → /login?return_to=) live inside the
+ * CloudAdapter proxy path only — they must NOT be in local-mode entry chunks.
+ * The dynamic import below ensures cloudAdapter code is excluded from the
+ * local-mode build entirely.
  */
-function installAdapterForConfig(config: RuntimeConfig): void {
+async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
   if (config.appMode === 'cloud') {
+    const { CloudAdapter } = await import('./services/cloudAdapter');
     // eslint-disable-next-line no-console
     const adapter = new CloudAdapter({
       apiBase: config.apiBaseURL,

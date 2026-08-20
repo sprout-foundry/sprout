@@ -6,7 +6,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { isCloud } from '../config/mode';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { supportsExport, supportsSSH } from '../config/mode';
-import { rewindQuery, executeCommand } from '../services/api/chatApi';
+import { rewindQuery, executeCommand, uploadImage } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
@@ -70,6 +70,14 @@ function Chat(props: ChatProps): JSX.Element {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [commandOutputPanelVisible, setCommandOutputPanelVisible] = useState(false);
   const [commandOutputError, setCommandOutputError] = useState<Error | null>(null);
+
+  const handleUploadImage = useCallback(
+    async (file: File) => {
+      const result = await uploadImage(clientFetch, file);
+      return { path: result.path };
+    },
+    [],
+  );
 
   // SP-114 Phase 2d: subscribe to streaming command_output events so the
   // CommandOutputPanel can render chunks as they arrive. The hook filters
@@ -508,6 +516,7 @@ function Chat(props: ChatProps): JSX.Element {
           isIndexEnabled={!!stats?.embedding_index_enabled}
           isIndexBuilding={!!stats?.embedding_index_building}
           onToggleIndex={handleToggleIndex}
+          onUploadImage={handleUploadImage}
         />
         {indexingError && (
           <div

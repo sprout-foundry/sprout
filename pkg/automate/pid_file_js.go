@@ -32,3 +32,8 @@ func ReadSessionFile(sproutDir string, sessionID string) (*AutomateSessionInfo, 
 func ListSessionFiles(sproutDir string) ([]AutomateSessionInfo, error) {
 	return nil, fmt.Errorf("session file listing is not supported on JS/WASM platforms")
 }
+
+// FinalizeSessionFile is a no-op for JS/WASM builds.
+func FinalizeSessionFile(sproutDir string, sessionID string, exitCode int) error {
+	return fmt.Errorf("session finalization is not supported on JS/WASM platforms")
+}

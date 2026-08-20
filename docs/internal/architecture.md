@@ -23,7 +23,7 @@ Two load-bearing invariants (`pkg/embedding/IndexManager.BuildIndex`):
 1. **Partial builds must persist progress** — every 50 files flush to store + manifest. Moving flush to end-of-build breaks slow devices.
 2. **ORT `session.Run` must be ctx-cancellable** — route through `runSessionWithOptions` (`pkg/embedding/onnx_run_options.go`).
 
-Model/threshold details: `roadmap/SP-135-code-embedding-model.md`, `roadmap/SP-134-gpu-macos-embeddings.md`.
+Model/threshold details: `git log --grep=SP-135` and `--grep=SP-134` (spec bodies deleted from `roadmap/`; Jina Code v2 is the code model, MLX/ONNX the providers).
 
 ## Security Risk Classification
 

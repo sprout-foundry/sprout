@@ -34,14 +34,16 @@ import (
 // sessionResponse is the JSON shape returned for automate session
 // detail and list endpoints, enriched with live process status.
 type sessionResponse struct {
-	SessionID      string    `json:"session_id,omitempty"`
-	Workflow       string    `json:"workflow"`
-	PID            int       `json:"pid"`
-	Status         string    `json:"status"`
-	StartedAt      time.Time `json:"started_at"`
-	Kind           string    `json:"kind"`
-	OutputFilePath string    `json:"output_file_path,omitempty"`
-	BudgetUSD      *float64  `json:"budget_usd,omitempty"`
+	SessionID      string     `json:"session_id,omitempty"`
+	Workflow       string     `json:"workflow"`
+	PID            int        `json:"pid"`
+	Status         string     `json:"status"`
+	StartedAt      time.Time  `json:"started_at"`
+	Kind           string     `json:"kind"`
+	OutputFilePath string     `json:"output_file_path,omitempty"`
+	BudgetUSD      *float64   `json:"budget_usd,omitempty"`
+	EndedAt        *time.Time `json:"ended_at,omitempty"`
+	ExitCode       *int       `json:"exit_code,omitempty"`
 }
 
 // registerAutomateRoutes adds the automate panel endpoints to the mux.
@@ -198,6 +200,36 @@ func (ws *ReactWebServer) handleAPIAutomateSessionStop(w http.ResponseWriter, r 
 		return
 	}
 
+	if info.EndedAt != nil {
+		// Finalized record — retained for post-mortem observability.
+		// Status maps to the frontend's union ('running' | 'exited' |
+		// 'stopped'); the raw outcome travels in exit_code.
+		exit := 0
+		if info.ExitCode != nil {
+			exit = *info.ExitCode
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"session_id": sessionID,
+			"status":     "exited",
+			"exit_code":  exit,
+			"stopped":    false,
+		})
+		return
+	}
+
+	if !automate.IsProcessAlive(info.PID) {
+		// Dead but never finalized (parent killed before its defer ran) —
+		// finalize with -1 rather than deleting, preserving the post-mortem.
+		_ = automate.FinalizeSessionFile(sproutDir, sessionID, -1)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"session_id": sessionID,
+			"status":     "exited",
+			"exit_code":  -1,
+			"stopped":    false,
+		})
+		return
+	}
+
 	// Stop the process if it's still alive.
 	if automate.IsProcessAlive(info.PID) {
 		// Process stop is best-effort; session file cleanup proceeds regardless.
@@ -207,9 +239,10 @@ func (ws *ReactWebServer) handleAPIAutomateSessionStop(w http.ResponseWriter, r 
 	// Clean up the session file.
 	_ = automate.RemoveSessionFile(sproutDir, sessionID)
 
-	writeJSON(w, http.StatusOK, map[string]string{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"session_id": sessionID,
 		"status":     "stopped",
+		"stopped":    true,
 	})
 }
 
@@ -456,7 +489,12 @@ func (ws *ReactWebServer) getSproutDir(r *http.Request) string {
 // makeSessionResponse enriches a raw session info with live process status.
 func makeSessionResponse(s automate.AutomateSessionInfo) sessionResponse {
 	status := "exited"
-	if automate.IsProcessAlive(s.PID) {
+	if s.EndedAt != nil {
+		status = s.Status
+		if status == "" {
+			status = "exited"
+		}
+	} else if automate.IsProcessAlive(s.PID) {
 		status = "running"
 	}
 	return sessionResponse{
@@ -467,5 +505,7 @@ func makeSessionResponse(s automate.AutomateSessionInfo) sessionResponse {
 		Kind:           s.Kind,
 		OutputFilePath: s.OutputFilePath,
 		BudgetUSD:      s.BudgetUSD,
+		EndedAt:        s.EndedAt,
+		ExitCode:       s.ExitCode,
 	}
 }

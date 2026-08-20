@@ -30,6 +30,29 @@ type sproutProvider struct {
 	// specialTokenGuard bounds corrective hints for the special-token
 	// truncation failure (see seed_special_token_guard.go).
 	specialTokenGuard specialTokenGuardState
+
+	// steerFlushHook is invoked at the end of every Chat/ChatStream call —
+	// a conversation-loop boundary in seed's loop goroutine where staged
+	// steer messages can be handed to seed before its injection checks.
+	steerFlushHookMu sync.RWMutex
+	steerFlushHook   func()
+}
+
+// setSteerFlushHook installs (or with nil, removes) the boundary hook.
+func (sp *sproutProvider) setSteerFlushHook(hook func()) {
+	sp.steerFlushHookMu.Lock()
+	sp.steerFlushHook = hook
+	sp.steerFlushHookMu.Unlock()
+}
+
+// fireSteerFlushHook runs the boundary hook if installed.
+func (sp *sproutProvider) fireSteerFlushHook() {
+	sp.steerFlushHookMu.RLock()
+	hook := sp.steerFlushHook
+	sp.steerFlushHookMu.RUnlock()
+	if hook != nil {
+		hook()
+	}
 }
 
 // currentClient returns the agent's live client if available, otherwise the snapshot.
@@ -493,7 +516,9 @@ func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) er
 
 // Chat implements core.Provider
 func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	return sp.doChatWithRetry(ctx, req)
+	resp, err := sp.doChatWithRetry(ctx, req)
+	sp.fireSteerFlushHook()
+	return resp, err
 }
 
 func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest, handler core.StreamHandler) error {
@@ -526,6 +551,7 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 
 	// Use doChatWithRetry for streaming too, but wrap it to deliver through the handler
 	resp, err := sp.doChatWithRetryStreaming(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, callback)
+	sp.fireSteerFlushHook()
 	if err != nil {
 		handler.OnError(err)
 		return err

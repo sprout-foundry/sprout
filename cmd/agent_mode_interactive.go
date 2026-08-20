@@ -193,72 +193,74 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	var lastInterruptAt time.Time
 
 	// pending holds carry-over text between turns: unsent steer text
-	// (→ SetInitialContent) and deferred queue messages (→ prepend to
-	// next query). Drained once per turn via DrainPendingInput.
+	// (→ SetInitialContent). Drained once per turn via DrainPendingInput.
 	var pending PendingInput
+
+	// autoQueued holds deferred queue messages that auto-submit as their
+	// own turns without waiting for user input. Drained at the top of
+	// each loop iteration; refilled from DrainPendingInput at turn end.
+	var autoQueued []string
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			// SP-048-5d follow-up: refresh the prompt prefix each loop so
-			// it tracks model changes (e.g. an LLM-driven /model switch
-			// from inside a previous turn, or interactive provider/model
-			// selection during recovery).
-			inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
+			var query string
+			var rawQuery string
 
-			query, err := inputReader.ReadLine()
+			// Check for auto-queued messages before blocking on ReadLine.
+			if len(autoQueued) > 0 {
+				query = autoQueued[0]
+				autoQueued = autoQueued[1:]
+				fmt.Fprintln(os.Stderr)
+				console.GlyphPaused.Fprintf(os.Stderr, "auto-run queued: %s", query)
+				rawQuery = ""
+			} else {
+				// SP-048-5d follow-up: refresh the prompt prefix each loop so
+				// it tracks model changes (e.g. an LLM-driven /model switch
+				// from inside a previous turn, or interactive provider/model
+				// selection during recovery).
+				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 
-			if err != nil {
-				if err.Error() == "interrupted" {
-					// Standard REPL convention (psql, redis-cli, node):
-					// first Ctrl+C at an empty prompt clears the line and
-					// shows a brief hint; a second Ctrl+C within a short
-					// window exits. The input reader has already cleared
-					// and re-rendered the prompt line; we just track the
-					// timing to detect the double-press.
-					now := time.Now()
-					if now.Sub(lastInterruptAt) < 2*time.Second {
-						fmt.Println()
-						console.GlyphInfo.Printf("Goodbye!")
-						printContinuationHint(chatAgent)
+				var err error
+				query, err = inputReader.ReadLine()
+
+				if err != nil {
+					if err.Error() == "interrupted" {
+						// Standard REPL convention (psql, redis-cli, node):
+						// first Ctrl+C at an empty prompt clears the line and
+						// shows a brief hint; a second Ctrl+C within a short
+						// window exits. The input reader has already cleared
+						// and re-rendered the prompt line; we just track the
+						// timing to detect the double-press.
+						now := time.Now()
+						if now.Sub(lastInterruptAt) < 2*time.Second {
+							fmt.Println()
+							console.GlyphInfo.Printf("Goodbye!")
+							printContinuationHint(chatAgent)
+							return nil
+						}
+						lastInterruptAt = now
+						fmt.Println("(press Ctrl+C again to exit)")
+						continue
+					}
+					// EOF and context cancellation are graceful exits, not
+					// errors. When the web server shuts down or the context
+					// is cancelled, ReadLine returns io.EOF — treating it as
+					// an error prints "✗ failed to run agent: EOF" on exit,
+					// which looks like a crash.
+					if err == io.EOF || errors.Is(err, context.Canceled) || errors.Is(err, io.ErrClosedPipe) {
 						return nil
 					}
-					lastInterruptAt = now
-					fmt.Println("(press Ctrl+C again to exit)")
-					continue
+					return fmt.Errorf("failed to read input: %w", err)
 				}
-				// EOF and context cancellation are graceful exits, not
-				// errors. When the web server shuts down or the context
-				// is cancelled, ReadLine returns io.EOF — treating it as
-				// an error prints "✗ failed to run agent: EOF" on exit,
-				// which looks like a crash.
-				if err == io.EOF || errors.Is(err, context.Canceled) || errors.Is(err, io.ErrClosedPipe) {
-					return nil
-				}
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-			// A successful read resets the double-Ctrl+C window so the
-			// next interrupt cycle starts fresh.
-			lastInterruptAt = time.Time{}
+				// A successful read resets the double-Ctrl+C window so the
+				// next interrupt cycle starts fresh.
+				lastInterruptAt = time.Time{}
 
-			query = strings.TrimSpace(query)
-			rawQuery := query // user's typed text, before deferred-message prepend
-
-			// Prepend deferred queue messages (drained at the end of the
-			// previous turn via DrainPendingInput). The queued prefix is
-			// stored on the steer coordinator so the REPL loop has a
-			// single source of truth for carry-over text.
-			if pending.QueuedPrefix != "" {
-				if query == "" {
-					query = pending.QueuedPrefix
-				} else {
-					query = pending.QueuedPrefix + "\n" + query
-				}
-				pending.QueuedPrefix = "" // consumed
-				// Refresh the footer so the "⏸ N queued" badge clears.
-				footer.Refresh()
+				query = strings.TrimSpace(query)
+				rawQuery = query
 			}
 			if query == "" {
 				continue
@@ -306,10 +308,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Add to agent history — only genuine LLM-bound prompts
 			// are persisted. `?`, exit/quit, and slash commands are
 			// intentionally excluded so they don't pollute ↑/Ctrl-R.
-			// We persist rawQuery (the user's typed text) rather than
-			// the composite `query`, so recalling a deferred-message
-			// turn via ↑ doesn't replay the "Queued from prior turn:"
-			// template — only the user's actual input.
+			// Auto-submitted queued turns have rawQuery="" so they are
+			// also excluded — only the user's actual typed input is
+			// persisted.
 			if rawQuery != "" {
 				chatAgent.AddToHistory(rawQuery)
 				inputReader.SetHistory(chatAgent.GetHistory())
@@ -400,12 +401,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Drain all pending carry-over text (unsent steer buffer +
 			// deferred queue messages) in a single call. Unsent text
 			// becomes initial content for the next prompt; queued
-			// messages become a prefix that prepends to the next
-			// submitted query.
+			// messages are appended to autoQueued for auto-submit.
 			pending = steerCoord.DrainPendingInput()
 			if pending.InitialContent != "" {
 				inputReader.SetInitialContent(pending.InitialContent)
 			}
+			autoQueued = append(autoQueued, pending.QueuedMessages...)
+			// Refresh the footer so the "⏸ N queued" badge clears.
+			footer.Refresh()
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).
 			indicator.Stop()

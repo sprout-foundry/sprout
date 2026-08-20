@@ -43,6 +43,26 @@ export async function steerQuery(fetchFn: typeof fetch, query: string, chatId?: 
   }
 }
 
+export interface RetractSteerResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function retractSteer(fetchFn: typeof fetch, chatId?: string): Promise<RetractSteerResponse> {
+  const reqBody: Record<string, string> = {};
+  if (chatId) reqBody.chat_id = chatId;
+  const response = await fetchFn('/api/query/steer/retract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reqBody),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ message: 'Retract failed' }));
+    throw new Error(data.message || data.error || 'Failed to retract steer');
+  }
+  return response.json();
+}
+
 /**
  * SP-114 Phase 2: execute a slash command on the dedicated /api/command/execute
  * surface. Returns the captured stdout from the command. Throws on error.

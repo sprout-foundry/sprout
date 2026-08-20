@@ -87,6 +87,7 @@ func (ws *ReactWebServer) buildSessionList(sessionInfos []agent.SessionInfo) []m
 			"last_updated":      info.LastUpdated.Format(time.RFC3339),
 			"message_count":     messageCount,
 			"total_tokens":      totalTokens,
+			"interrupted":       info.Interrupted,
 		}
 		sessions = append(sessions, session)
 	}
@@ -120,12 +121,19 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	sessionID := strings.TrimSpace(req.SessionID)
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
-	// Load the session state
-	state, err := agent.LoadStateWithoutAgentScoped(sessionID, workspaceRoot)
-	if err != nil {
-		ws.log().Error("failed to load session", slog.String("session_id", sessionID), slog.Any("err", err))
-		writeJSONErr(w, http.StatusBadRequest, "failed_to_load_session", fmt.Sprintf("Failed to load session: %v", err))
-		return
+	var state *agent.ConversationState
+	recovered := false
+	if baseState, _, journalErr := agent.LoadStateRecoverable(sessionID, workspaceRoot); journalErr == nil {
+		state = baseState
+		recovered = state.RecoveredFromJournal
+	} else {
+		loaded, loadErr := agent.LoadStateWithoutAgentScoped(sessionID, workspaceRoot)
+		if loadErr != nil {
+			ws.log().Error("failed to load session", slog.String("session_id", sessionID), slog.Any("err", loadErr))
+			writeJSONErr(w, http.StatusBadRequest, "failed_to_load_session", fmt.Sprintf("Failed to load session: %v", loadErr))
+			return
+		}
+		state = loaded
 	}
 
 	// Build a live agent snapshot for this client
@@ -153,6 +161,9 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	if clientAgent, err := ws.getClientAgent(clientID); err == nil && clientAgent != nil {
 		_ = clientAgent.ImportState(stateData)
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
+		if recovered {
+			clientAgent.NoteRecoveredSession()
+		}
 	}
 
 	// Restore config overrides from the saved session into the active chat session.
@@ -182,6 +193,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		"connected":     true,
 		"session_id":    state.SessionID,
 		"restored":      true,
+		"recovered":     recovered,
 		"message_count": len(state.Messages),
 	})
 

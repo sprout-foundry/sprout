@@ -199,6 +199,7 @@ export interface ChatProps {
   subagentActivities?: SubagentActivity[];
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
+  onRetractSteer?: () => boolean | Promise<boolean>;
   // Worktree support
   chatId?: string;
   worktreePath?: string;

@@ -85,9 +85,15 @@ auto-activates LCM, 128K stays full, 4K floor errors, explicit config works).
 - **R3 (probe at 32K)** — the capability probe's own token usage at 32K has
   not been measured. May need a lite probe variant if the probe itself
   overflows small windows.
-- **R4 (subagent inheritance)** — a 128K primary delegating to a 32K
-  subagent does not auto-activate LCM on the subagent. Needs a hook in
-  `subagent_creation.go`; separate decision.
+- **R4 (subagent inheritance)** — ✅ Shipped 2026-08-19. Subagents and
+  workflow-loop agents now re-resolve their context profile from their OWN
+  model window via `Agent.resolveAndApplyContextProfile()`
+  (`pkg/agent/utils.go`), replacing the blind parent-profile copy in
+  `subagent_creation.go` and the zero-value profile in `workflow_runner.go`.
+  A 200K primary delegating to a 32K subagent model gets LCM auto-activated
+  on the subagent; below-floor subagent models fail creation with the
+  context-floor error. Covered by
+  `pkg/agent/subagent_context_profile_test.go` (7 tests).
 
 ## Problem
 
@@ -836,10 +842,10 @@ reasons unrelated to the model's actual capability.
 probe variant.
 
 ### R4: What about subagents on large-context primaries?
-If a user runs sprout with a 128K primary model and delegates to a 32K
-subagent, should the subagent auto-activate LCM? Probably yes — but this
-needs a separate decision because subagent context limits flow through
-`subagent_creation.go`, not the primary eligibility path.
+✅ Shipped 2026-08-19 — subagents and workflow agents now re-resolve their
+context profile from their own model window (`Agent.resolveAndApplyContextProfile`,
+called from `subagent_creation.go` and `workflow_runner.go`). A large-context
+primary delegating to a 32K subagent model auto-activates LCM on the subagent.
 
 ### R5: Stream ordering
 Tool filtering happens in `conversation.go:80-130`. Prompt selection and

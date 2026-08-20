@@ -150,26 +150,18 @@ export default defineConfig(({ mode }) => {
         '../test/webui/**/*.test.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
       ],
       // SP-104: Cap the worker pool. The default forks all CPU cores;
-      // each jsdom worker is ~1–4 GB RSS. Webui uses Vitest 2.x which
-      // uses poolOptions.forks.maxForks (Vitest 4 uses top-level
-      // maxWorkers). Both minForks and maxForks must be set — tinypool
-      // errors if maxForks is set without a matching minForks.
+      // each jsdom worker is ~1–4 GB RSS. Vitest 4 uses top-level
+      // maxWorkers / execArgv (poolOptions.forks was removed).
       pool: 'forks',
-      poolOptions: {
-        forks: {
-          minForks: 1,
-          maxForks: process.env.VITEST_MAX_FORKS
-            ? parseInt(process.env.VITEST_MAX_FORKS, 10)
-            : 4,
-          singleFork: process.env.VITEST_MAX_FORKS === '1',
-          // jsdom workers accumulate RSS across the ~50 files each fork
-          // runs (CodeMirror/xterm DOM state is not fully released between
-          // files). Node's default 4 GB heap cap OOMs a worker mid-suite;
-          // raise it so the full suite completes. NODE_OPTIONS does not
-          // propagate to fork workers — this execArgv does.
-          execArgv: ['--max-old-space-size=8192'],
-        },
-      },
+      maxWorkers: process.env.VITEST_MAX_FORKS
+        ? parseInt(process.env.VITEST_MAX_FORKS, 10)
+        : 4,
+      // jsdom workers accumulate RSS across the ~50 files each fork
+      // runs (CodeMirror/xterm DOM state is not fully released between
+      // files). Node's default 4 GB heap cap OOMs a worker mid-suite;
+      // raise it so the full suite completes. NODE_OPTIONS does not
+      // propagate to fork workers — this execArgv does.
+      execArgv: ['--max-old-space-size=8192'],
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],

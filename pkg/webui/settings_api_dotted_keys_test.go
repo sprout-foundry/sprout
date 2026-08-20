@@ -30,12 +30,14 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 		verify func(*testing.T, *configuration.Config)
 	}{
 		{`{"embedding_index.enabled":true}`, func(t *testing.T, c *configuration.Config) {
-			if !c.EmbeddingIndex.IsEnabled() {
+			// Check the raw pointer: IsEnabled() additionally requires the
+			// Experimental gate (SP-137), which this test doesn't exercise.
+			if c.EmbeddingIndex == nil || c.EmbeddingIndex.Enabled == nil || !*c.EmbeddingIndex.Enabled {
 				t.Errorf("embedding_index.enabled did not persist: %+v", c.EmbeddingIndex)
 			}
 		}},
 		{`{"embedding_index.auto_index":true}`, func(t *testing.T, c *configuration.Config) {
-			if !c.EmbeddingIndex.IsAutoIndex() {
+			if c.EmbeddingIndex == nil || c.EmbeddingIndex.AutoIndex == nil || !*c.EmbeddingIndex.AutoIndex {
 				t.Errorf("embedding_index.auto_index did not persist: %+v", c.EmbeddingIndex)
 			}
 		}},
@@ -83,6 +85,7 @@ func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	cfg := &configuration.Config{
 		EmbeddingIndex: &configuration.EmbeddingIndexConfig{
 			Enabled:      ptrTo(true),
+			Experimental: ptrTo(true),
 			AutoIndex:    ptrTo(true),
 			MaxResults:   5,
 			ExcludePaths: []string{"node_modules", ".git"},

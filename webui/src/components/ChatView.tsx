@@ -71,13 +71,10 @@ function Chat(props: ChatProps): JSX.Element {
   const [commandOutputPanelVisible, setCommandOutputPanelVisible] = useState(false);
   const [commandOutputError, setCommandOutputError] = useState<Error | null>(null);
 
-  const handleUploadImage = useCallback(
-    async (file: File) => {
-      const result = await uploadImage(clientFetch, file);
-      return { path: result.path };
-    },
-    [],
-  );
+  const handleUploadImage = useCallback(async (file: File) => {
+    const result = await uploadImage(clientFetch, file);
+    return { path: result.path };
+  }, []);
 
   // SP-114 Phase 2d: subscribe to streaming command_output events so the
   // CommandOutputPanel can render chunks as they arrive. The hook filters

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -553,9 +554,16 @@ func TestHandleAPIAutomateSessionStop_MethodNotAllowed(t *testing.T) {
 
 func TestHandleAPIAutomateSessionStop_Success(t *testing.T) {
 	ws, daemonRoot := newAutomateTestServer(t)
+	// Live PID (a throwaway child) so the genuine stop path runs — dead
+	// sessions now finalize instead of deleting (covered by their own tests).
+	sleeper := exec.Command("sleep", "300")
+	if err := sleeper.Start(); err != nil {
+		t.Skipf("cannot spawn fixture process: %v", err)
+	}
+	defer func() { _ = sleeper.Process.Kill(); _ = sleeper.Wait() }()
 	sproutDir := createSessionFile(daemonRoot, "stop-success", &automate.AutomateSessionInfo{
 		Workflow:  "stop-wf",
-		PID:       99999999,
+		PID:       sleeper.Process.Pid,
 		StartedAt: time.Now(),
 		Kind:      "automate",
 	})
@@ -569,7 +577,7 @@ func TestHandleAPIAutomateSessionStop_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp map[string]string
+	var resp map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -579,11 +587,95 @@ func TestHandleAPIAutomateSessionStop_Success(t *testing.T) {
 	if resp["status"] != "stopped" {
 		t.Errorf("expected status 'stopped', got %q", resp["status"])
 	}
+	if stopped, ok := resp["stopped"].(bool); !ok || !stopped {
+		t.Errorf("expected stopped=true, got %v", resp["stopped"])
+	}
 
 	// Session file should be removed.
 	_, err := automate.ReadSessionFile(sproutDir, "stop-success")
 	if err == nil {
 		t.Error("session file should be removed after stop")
+	}
+}
+
+func TestHandleAPIAutomateSessionStop_DeadUnfinalizedFinalizesNotDeletes(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+	sproutDir := createSessionFile(daemonRoot, "stop-dead", &automate.AutomateSessionInfo{
+		Workflow:  "stop-wf",
+		PID:       99999999,
+		StartedAt: time.Now(),
+		Kind:      "automate",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/sessions/stop-dead/stop", nil)
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateSessionStop(rec, req, "stop-dead")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["status"] != "exited" {
+		t.Errorf("expected status 'exited', got %v", resp["status"])
+	}
+
+	info, err := automate.ReadSessionFile(sproutDir, "stop-dead")
+	if err != nil {
+		t.Fatal("dead-unfinalized record must be finalized, not deleted")
+	}
+	if info.Status != "error" || info.ExitCode == nil || *info.ExitCode != -1 {
+		t.Errorf("expected finalized error/-1, got %+v", info)
+	}
+}
+
+func TestHandleAPIAutomateSessionStop_FinalizedRecordRetained(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+	ended := time.Now().Add(-time.Minute)
+	exit := -1
+	sproutDir := createSessionFile(daemonRoot, "stop-final", &automate.AutomateSessionInfo{
+		Workflow:  "stop-wf",
+		PID:       0,
+		StartedAt: time.Now().Add(-2 * time.Minute),
+		Kind:      "automate",
+		EndedAt:   &ended,
+		ExitCode:  &exit,
+		Status:    "error",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/sessions/stop-final/stop", nil)
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateSessionStop(rec, req, "stop-final")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["status"] != "exited" {
+		t.Errorf("expected status 'exited', got %v", resp["status"])
+	}
+	if stopped, ok := resp["stopped"].(bool); !ok || stopped {
+		t.Errorf("expected stopped=false, got %v", resp["stopped"])
+	}
+	if code, ok := resp["exit_code"].(float64); !ok || code != -1 {
+		t.Errorf("expected exit_code -1, got %v", resp["exit_code"])
+	}
+
+	info, err := automate.ReadSessionFile(sproutDir, "stop-final")
+	if err != nil {
+		t.Fatal("finalized record must NOT be deleted by stop")
+	}
+	if info.Status != "error" || info.ExitCode == nil || *info.ExitCode != -1 {
+		t.Errorf("record outcome mutated: %+v", info)
 	}
 }
 

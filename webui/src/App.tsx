@@ -483,6 +483,7 @@ function AppInner() {
                           options={state.askUserRequest.options}
                           multiSelect={state.askUserRequest.multiSelect}
                           defaultValue={state.askUserRequest.default}
+                          deliveryError={state.askUserRequest.deliveryError}
                           onRespond={handleAskUserResponse}
                         />
                       )}

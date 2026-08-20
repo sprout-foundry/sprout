@@ -207,6 +207,21 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			// response is ready.
 			ag.SetStreamingEnabled(true)
 
+			// Inject the WASM-owned AskUserManager so ask_user routes through
+			// the event bus instead of falling back to stdin (which doesn't
+			// exist in a browser). The approval manager is left nil — WASM
+			// security paths nil-check before use and fall through to the
+			// non-interactive auto-approve path.
+			ag.InjectWebUIManagers(nil, wasmAskUserMgr)
+			// In WASM the browser IS always the interactive surface.
+			// Call sites guard with the specific manager they need:
+			// askUserMgr for ask_user, GetSecurityApprovalMgr() for
+			// approval paths, and the package-level edit broker needs
+			// no manager. Returning true is safe because the approval
+			// manager is nil in WASM and the edit-approval path has its
+			// own package broker with the cloud response route.
+			ag.SetHasActiveWebUIClients(func() bool { return true })
+
 			persistentAgentMu.Lock()
 			persistentAgent = ag
 			persistentAgentPv = provider
@@ -304,6 +319,10 @@ func runPlanFunc(_ js.Value, args []js.Value) interface{} {
 
 		// Enable streaming so tokens appear in real-time (same as runAgentFunc).
 		ag.SetStreamingEnabled(true)
+
+		// Same ask_user wiring as runAgentFunc (see that function's comment).
+		ag.InjectWebUIManagers(nil, wasmAskUserMgr)
+		ag.SetHasActiveWebUIClients(func() bool { return true })
 
 		planningPrompt, err := agent.GetEmbeddedPlanningPrompt(true)
 		if err != nil {

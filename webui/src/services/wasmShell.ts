@@ -82,6 +82,14 @@ export interface WasmShell {
   stopAgent(): void;
   /** Steer the running agent (inject a follow-up message). */
   steerAgent?(message: string): Record<string, unknown>;
+  /** Deliver a response to a pending ask_user request. */
+  respondToAskUser?(requestId: string, response: string): { delivered: boolean };
+  /** Deliver an edit approval decision to a pending edit approval request. */
+  respondToEditDecision?(
+    requestId: string,
+    approved: boolean,
+    acceptedHunks: string[],
+  ): { delivered: boolean };
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -214,6 +222,12 @@ export interface SproutWasmAPI {
   clearConversation?(): void;
   stopAgent?(): void;
   steerAgent?(message: string): Record<string, unknown>;
+  respondToAskUser?(requestId: string, response: string): { delivered: boolean };
+  respondToEditDecision?(
+    requestId: string,
+    approved: boolean,
+    acceptedHunks: string[],
+  ): { delivered: boolean };
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
@@ -436,6 +450,26 @@ export async function initWasmShell(config?: {
           return api.steerAgent(message);
         }
         return { steered: false, error: 'steerAgent not available' };
+      },
+
+      respondToAskUser(requestId: string, response: string): { delivered: boolean } {
+        const api = wasm as SproutWasmAPI;
+        if (api.respondToAskUser) {
+          return api.respondToAskUser(requestId, response);
+        }
+        return { delivered: false };
+      },
+
+      respondToEditDecision(
+        requestId: string,
+        approved: boolean,
+        acceptedHunks: string[],
+      ): { delivered: boolean } {
+        const api = wasm as SproutWasmAPI;
+        if (api.respondToEditDecision) {
+          return api.respondToEditDecision(requestId, approved, acceptedHunks);
+        }
+        return { delivered: false };
       },
 
       get wasm() {

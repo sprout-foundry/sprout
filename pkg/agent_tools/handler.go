@@ -92,15 +92,15 @@ type ToolEnv struct {
 	// ApprovalManager for security approvals; nil if approvals are not supported
 	ApprovalManager ApprovalManager
 	// FileAccessClassifier provides Gate 1's path-tier verdict before
-// a file operation runs. Nil means no classifier is available.
+	// a file operation runs. Nil means no classifier is available.
 	FileAccessClassifier FileAccessClassifier
 	// FileAccessPrompter restores the interactive off-workspace approval
 	// flow for "prompt" verdicts. When set, handlers consult it before
 	// failing with the raw off-workspace error; when nil (no agent
 	// context, or a surface that cannot prompt), handlers keep the
 	// SP-127 M4 behavior of returning the raw filesystem error.
-	FileAccessPrompter FileAccessPrompter// MaxTokensFunc returns the current token budget limit
-	MaxTokensFunc func() int
+	FileAccessPrompter FileAccessPrompter // MaxTokensFunc returns the current token budget limit
+	MaxTokensFunc      func() int
 	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
 	ConfigManager *configuration.Manager
 	// EmbeddingMgr is the agent's long-lived embedding manager. When set,

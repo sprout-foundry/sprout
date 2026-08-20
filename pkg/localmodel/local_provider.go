@@ -16,7 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sinter/llm"
 	"github.com/sprout-foundry/sinter/llm/catalog"
 	_ "github.com/sprout-foundry/sinter/llm/gemma4"
@@ -24,6 +23,7 @@ import (
 	_ "github.com/sprout-foundry/sinter/llm/qwen3"
 	_ "github.com/sprout-foundry/sinter/llm/qwen35"
 	"github.com/sprout-foundry/sinter/mlx"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // LocalProvider implements api.ClientInterface by calling the MLX model

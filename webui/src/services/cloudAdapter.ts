@@ -17,7 +17,7 @@ import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegistry';
 import { CHAT_ENDPOINT_MAP, translateAndProxyChat, proxyStatsRequest, proxySettingsRequest, handleFoundryAuthError } from './cloudProxyRoutes';
 import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
-import { handleWasmLocal, trackFileWrite } from './cloudWasmHandlers';
+import { handleWasmLocal, handleWasmEditDecision, trackFileWrite } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
 export interface CloudAdapterConfig {
@@ -268,6 +268,27 @@ export class CloudAdapter implements APIAdapter {
       const synthetic = getSyntheticResponse(urlPath, method);
       if (synthetic) {
         return synthetic;
+      }
+    }
+
+    // ── Dynamic edit-decision interception (INT-2/cloud edit-approval) ──
+    // The EditApprovalPanel POSTs to /api/edits/{id}/decision. The registry
+    // is static-only and cannot express the dynamic {id} segment, so we
+    // intercept here with a regex match before the wasm-local check.
+    const editDecisionMatch = urlPath.match(/^\/api\/edits\/([^/]+)\/decision$/);
+    if (editDecisionMatch && method === 'POST') {
+      const editId = editDecisionMatch[1];
+      const requestBody = await this.extractRequestBody(input);
+      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
+      try {
+        const shell = await this.ensureWasmShell();
+        return handleWasmEditDecision(shell, editId, bodyStr);
+      } catch (err) {
+        console.warn(
+          `[CloudAdapter] WASM shell unavailable for edit-decision endpoint "${urlPath}", falling through to server safety-net:`,
+          err,
+        );
+        // Fall through to standard proxy below.
       }
     }
 

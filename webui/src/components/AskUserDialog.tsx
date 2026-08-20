@@ -18,6 +18,9 @@ export interface AskUserDialogProps {
   options?: AskUserDialogOption[];
   multiSelect?: boolean;
   defaultValue?: string;
+  // Visible error when the user's response could not be delivered.
+  // The dialog stays open for retry instead of silently hanging.
+  deliveryError?: string;
   onRespond: (requestId: string, response: string) => void;
 }
 
@@ -31,6 +34,7 @@ function AskUserDialog({
   options,
   multiSelect,
   defaultValue,
+  deliveryError,
   onRespond,
 }: AskUserDialogProps): JSX.Element {
   const hasOptions = Array.isArray(options) && options.length > 0;
@@ -186,6 +190,15 @@ function AskUserDialog({
               {question}
             </ReactMarkdown>
           </div>
+
+          {/* Delivery failure — the response did not reach the WASM agent.
+              Kept visible so the retry affordance is obvious; the dialog
+              stays open until the user retries successfully. */}
+          {deliveryError && (
+            <div className="security-approval-delivery-error" role="alert">
+              {deliveryError}
+            </div>
+          )}
 
           {hasOptions ? (
             <div

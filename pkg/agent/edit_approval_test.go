@@ -797,6 +797,37 @@ func TestRespondToEditApproval_UnblocksRequest(t *testing.T) {
 	}
 }
 
+// TestDeliverEditDecision_UnblocksRequest verifies that DeliverEditDecision
+// (the package-level, agent-free entry point used by the WASM JS bridge)
+// delivers a decision to a pending broker request.
+func TestDeliverEditDecision_UnblocksRequest(t *testing.T) {
+	reqID := "edit_deliver_test"
+	// This test is same-package and registers directly on the broker because
+	// the production registration path (requestWebUIEditApproval) is covered
+	// by existing RequestEditApproval tests.
+	ch := editApprovalBroker.register(reqID)
+	defer editApprovalBroker.cleanup(reqID)
+
+	decision := EditDecision{Approved: true, AcceptedHunks: []string{"hunk-0"}}
+	ok := DeliverEditDecision(reqID, decision)
+	assert.True(t, ok, "DeliverEditDecision should deliver to a registered request")
+
+	select {
+	case received := <-ch:
+		assert.True(t, received.Approved)
+		assert.Equal(t, []string{"hunk-0"}, received.AcceptedHunks)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for decision to be received")
+	}
+}
+
+// TestDeliverEditDecision_UnknownRequest verifies that delivering a
+// decision for an unknown or already-cleaned-up request returns false.
+func TestDeliverEditDecision_UnknownRequest(t *testing.T) {
+	ok := DeliverEditDecision("edit_deliver_unknown", EditDecision{Approved: true})
+	assert.False(t, ok, "DeliverEditDecision should return false for unknown request")
+}
+
 // TestRequestEditApproval_TimeoutFallback verifies that when the
 // WebUI path times out (no response), the request falls through
 // gracefully. We test this by setting a very short timeout and

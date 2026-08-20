@@ -164,6 +164,11 @@ export interface AppState {
     options?: Array<{ label: string; value?: string; description?: string }>;
     multiSelect?: boolean;
     default?: string;
+    // Set when the user's response could not be delivered (network error,
+    // non-2xx, or delivered:false from the WASM endpoint). The dialog stays
+    // open so the user can retry; this message explains the failure.
+    // Cleared on the next successful delivery.
+    deliveryError?: string;
   } | null;
   passwordRequest: {
     requestId: string;

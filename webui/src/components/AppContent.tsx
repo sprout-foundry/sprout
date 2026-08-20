@@ -70,6 +70,7 @@ interface AppContentProps {
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
   onStopProcessing: () => void;
+  onRetractSteer: () => boolean | Promise<boolean>;
   queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
@@ -117,6 +118,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onSendMessage,
   onQueueMessage,
   onStopProcessing,
+  onRetractSteer,
   queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
@@ -626,6 +628,7 @@ const AppContent: React.FC<AppContentProps> = ({
       queryProgress: state.queryProgress,
       currentTodos,
       onStopProcessing,
+      onRetractSteer,
       onToolPillClick: handleToolPillClick,
       stats: state.stats,
       isConnected: state.isConnected,
@@ -649,6 +652,7 @@ const AppContent: React.FC<AppContentProps> = ({
       state.queryProgress,
       currentTodos,
       onStopProcessing,
+      onRetractSteer,
       handleToolPillClick,
       state.stats,
       state.isConnected,

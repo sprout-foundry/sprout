@@ -167,9 +167,23 @@ type Agent struct {
 	inputInjectionChan  chan string
 	inputInjectionMutex sync.Mutex
 
+	// Retractable steer staging (steer_staging.go). inputInjectionChan is
+	// no longer the delivery path — StageSteerInput mirrors submissions
+	// into it for legacy SteeringChannel readers only.
+	steerStage   *steerStage
+	steerStageMu sync.Mutex
+
 	// Notification queue for background task completions.
 	pendingNotifications []Notification
 	notifMu              sync.Mutex
+
+	// Turn journal for crash recovery (SP-138). Non-nil only while a turn is
+	// in flight; presence of the journal file on disk means a session ended
+	// with a turn in progress. journalMu guards open/close against appends
+	// from the checkpoint goroutine.
+	turnJournal *TurnJournal
+	journalMu   sync.Mutex
+	journalBase int
 
 	// Wakeup budget tracking for auto-resume.
 	wakeupTokensConsumed int

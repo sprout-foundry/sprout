@@ -27,7 +27,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25
+        go-version: 1.26
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -46,6 +46,10 @@ jobs:
 
     - name: Install dependencies
       run: go mod download
+
+    - name: Install MLX C library (macOS)
+      if: runner.os == 'macOS' && runner.arch == 'ARM64'
+      run: brew install mlx-c
 
     - name: Run go vet
       run: make vet
@@ -196,7 +200,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25
+        go-version: 1.26
 
     - name: Prepare grammar blobs
       # The WASM build embeds grammar .bin files (pkg/ast/grammars/bin/*.bin)
@@ -224,7 +228,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25
+        go-version: 1.26
 
     - name: Install dependencies
       run: go mod download

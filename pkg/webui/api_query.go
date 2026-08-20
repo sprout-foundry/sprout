@@ -415,6 +415,50 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusAccepted, resp)
 }
 
+// handleAPIQuerySteerRetract pulls back the newest staged-but-unpicked steer
+// message so the user can edit it (Up-arrow on empty input while processing).
+// On success returns 200 with the retracted text. When nothing is pending
+// returns 200 with success=false (not an error — the frontend treats it as
+// "nothing to pull back").
+//
+// Note: if the steer was delivered to a SUBAGENT (rare fallback path in
+// handleAPIQuerySteer), RetractLatestSteer on the primary agent returns
+// false — the subagent's input channel is separate and not retractable.
+// This is acceptable; the steer is already in-flight.
+func (ws *ReactWebServer) handleAPIQuerySteerRetract(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+	chatID := ws.resolveChatID(r, clientID)
+
+	clientAgent, err := ws.getChatAgent(clientID, chatID)
+	if err != nil {
+		if isProviderConfigError(err) {
+			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
+		} else {
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
+		}
+		return
+	}
+
+	message, ok := clientAgent.RetractLatestSteer()
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"message": "",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": message,
+	})
+}
+
 // handleAPIQueryStop interrupts the currently running query loop. Thin
 // wrapper over the shared stopActiveQuery helper — the body parsing
 // and chat-id resolution stay here so the HTTP method gate runs first,

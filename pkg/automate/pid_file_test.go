@@ -503,10 +503,11 @@ func TestListSessionFiles_MixedContent(t *testing.T) {
 
 func TestSweepStaleSessions_RemovesDeadProcess(t *testing.T) {
 	sproutDir := t.TempDir()
+	// Dead + unfinalized + started beyond the retention window → swept.
 	info := &AutomateSessionInfo{
 		Workflow:  "dead-wf",
 		PID:       99999999,
-		StartedAt: time.Now().UTC(),
+		StartedAt: time.Now().UTC().Add(-8 * 24 * time.Hour),
 		Kind:      "automate",
 	}
 	if err := WriteSessionFile(sproutDir, "dead-sess", info); err != nil {
@@ -597,11 +598,11 @@ func TestSweepStaleSessions_MixedAliveAndDead(t *testing.T) {
 		t.Fatalf("setup A failed: %v", err)
 	}
 
-	// Session B: dead (non-existent PID)
+	// Session B: dead (non-existent PID), started beyond retention → swept.
 	infoB := &AutomateSessionInfo{
 		Workflow:  "dead-wf",
 		PID:       99999999,
-		StartedAt: time.Now().UTC(),
+		StartedAt: time.Now().UTC().Add(-8 * 24 * time.Hour),
 		Kind:      "automate",
 	}
 	if err := WriteSessionFile(sproutDir, "sess-b", infoB); err != nil {

@@ -49,6 +49,8 @@ type ConversationState struct {
 	SessionID               string           `json:"session_id"`
 	Name                    string           `json:"name"`              // Human-readable session name
 	WorkingDirectory        string           `json:"working_directory"` // Directory where session was created
+	InterruptedAt           *time.Time       `json:"interrupted_at,omitempty"`
+	RecoveredFromJournal    bool             `json:"recovered_from_journal,omitempty"`
 
 	// ConfigOverrides stores session-scoped configuration overrides.
 	// Applied on top of global and workspace config when the session is restored.

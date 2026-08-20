@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 package main
 
@@ -30,7 +30,7 @@ func main() {
 	}
 
 	cfg := llm.DefaultGenerateConfig()
-	cfg.MaxTokens = 60
+	cfg.MaxTokens = 300
 	cfg.Temperature = 0.0
 
 	for i, prompt := range prompts {

@@ -90,6 +90,11 @@ export interface WasmShell {
     approved: boolean,
     acceptedHunks: string[],
   ): { delivered: boolean };
+  /** Deliver a shell approval decision to a pending shell approval request. */
+  respondToShellApproval?(
+    requestId: string,
+    decisions: Record<string, boolean>,
+  ): { delivered: boolean };
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -227,6 +232,10 @@ export interface SproutWasmAPI {
     requestId: string,
     approved: boolean,
     acceptedHunks: string[],
+  ): { delivered: boolean };
+  respondToShellApproval?(
+    requestId: string,
+    decisions: Record<string, boolean>,
   ): { delivered: boolean };
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
@@ -468,6 +477,17 @@ export async function initWasmShell(config?: {
         const api = wasm as SproutWasmAPI;
         if (api.respondToEditDecision) {
           return api.respondToEditDecision(requestId, approved, acceptedHunks);
+        }
+        return { delivered: false };
+      },
+
+      respondToShellApproval(
+        requestId: string,
+        decisions: Record<string, boolean>,
+      ): { delivered: boolean } {
+        const api = wasm as SproutWasmAPI;
+        if (api.respondToShellApproval) {
+          return api.respondToShellApproval(requestId, decisions);
         }
         return { delivered: false };
       },

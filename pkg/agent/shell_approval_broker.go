@@ -82,3 +82,11 @@ func generateShellApprovalRequestID() string {
 func (a *Agent) RespondToShellApproval(requestID string, decisions map[string]bool) bool {
 	return shellApprovalBroker.respond(requestID, decisions)
 }
+
+// DeliverShellDecision delivers a per-part approval decision to a pending
+// shell approval request without requiring an Agent instance. This is used
+// by the WASM JS bridge so the webui can resolve shell approval requests in
+// cloud mode. Mirrors DeliverEditDecision (edit_approval.go).
+func DeliverShellDecision(requestID string, decisions map[string]bool) bool {
+	return shellApprovalBroker.respond(requestID, decisions)
+}

@@ -830,6 +830,42 @@ export function handleWasmEditDecision(shell: WasmShell, editId: string, bodyStr
   });
 }
 
+/**
+ * POST /api/shell-approvals/{id}/decision — delivers the user's shell approval
+ * decision to a pending shell approval request in the WASM agent.
+ *
+ * This handler is called from cloudAdapter.ts via dynamic path matching.
+ *
+ * Body: { request_id?: string, decisions: Record<string, boolean> }
+ * Response: { ok: true, request_id: string, delivered: true }
+ * (matches the local-mode response format from pkg/webui/shell_approval_api.go)
+ */
+export function handleWasmShellApprovalDecision(shell: WasmShell, requestId: string, bodyStr?: string): Response {
+  if (!bodyStr) return jsonError('Missing request body', 400);
+  let parsed: { request_id?: string; decisions?: unknown };
+  try {
+    parsed = JSON.parse(bodyStr);
+  } catch {
+    return jsonError('Invalid JSON body', 400);
+  }
+
+  const decisions = parsed.decisions;
+  if (decisions == null || typeof decisions !== 'object' || Array.isArray(decisions)) {
+    return jsonError('decisions map required', 400);
+  }
+
+  const result = shell.respondToShellApproval?.(requestId, decisions as Record<string, boolean>);
+  if (!result) {
+    return jsonError('respondToShellApproval not available (WASM binary too old)', 501);
+  }
+
+  if (!result.delivered) {
+    return jsonError('decision not delivered (unknown or expired request)', 410);
+  }
+
+  return jsonOk({ ok: true, request_id: requestId, delivered: true });
+}
+
 function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   if (!bodyStr) {
     return jsonError('Missing request body', 400);

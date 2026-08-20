@@ -65,4 +65,54 @@ describe('ensureCompletedAssistantMessage', () => {
 
     expect(result).toEqual(messages);
   });
+
+  it('does not write the completion into an inline subagent-run message (regression: primary output misattributed to subagent)', () => {
+    const subagentRun = {
+      id: 'subagent-tc-1',
+      type: 'assistant',
+      content: '',
+      timestamp: new Date('2026-03-28T00:00:02Z'),
+      reasoning: 'subagent output\n',
+      isSubagentRun: true,
+      subagentPersona: 'coder'
+    };
+    const messages = [
+      { id: '1', type: 'user', content: 'hello', timestamp: new Date('2026-03-28T00:00:00Z') },
+      subagentRun
+    ];
+
+    const result = ensureCompletedAssistantMessage(messages, 'final answer', makeAssistant);
+
+    // A NEW primary assistant message is appended — the subagent run
+    // message is left untouched so the completion does not render inside
+    // the subagent's collapsible block.
+    expect(result).toHaveLength(3);
+    expect(result[1]).toBe(subagentRun);
+    expect(result[1].content).toBe('');
+    expect(result[2]).toMatchObject({ type: 'assistant', content: 'final answer' });
+    expect(result[2].isSubagentRun).toBeUndefined();
+  });
+
+  it('fills the primary assistant message before a trailing subagent-run message', () => {
+    const primary = makeAssistant('');
+    const subagentRun = {
+      id: 'subagent-tc-2',
+      type: 'assistant',
+      content: '',
+      timestamp: new Date('2026-03-28T00:00:03Z'),
+      isSubagentRun: true
+    };
+    const messages = [
+      { id: '1', type: 'user', content: 'hello', timestamp: new Date('2026-03-28T00:00:00Z') },
+      primary,
+      subagentRun
+    ];
+
+    const result = ensureCompletedAssistantMessage(messages, 'final answer', makeAssistant);
+
+    expect(result).toHaveLength(3);
+    expect(result[1]).toMatchObject({ id: 'assistant-new', content: 'final answer' });
+    expect(result[2]).toBe(subagentRun);
+    expect(result[2].content).toBe('');
+  });
 });

@@ -17,10 +17,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/tensor"
+	"github.com/sprout-foundry/sinter/llm"
+	"github.com/sprout-foundry/sinter/tensor"
 
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
+	_ "github.com/sprout-foundry/sinter/llm/qwen35"
 )
 
 func main() {

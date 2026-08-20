@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 func main() {

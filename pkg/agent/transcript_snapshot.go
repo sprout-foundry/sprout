@@ -137,6 +137,7 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 		PromptTokens:            a.state.GetPromptTokens(),
 		CompletionTokens:        a.state.GetCompletionTokens(),
 		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
+		ContinuationNudges:      a.state.GetContinuationNudges(),
 		CachedTokens:            a.state.GetCachedTokens(),
 		CachedCostSavings:       a.state.GetCachedCostSavings(),
 		LastUpdated:             time.Now(),

@@ -109,6 +109,13 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	}
 	flush()
 
+	// Special-token neutralization (opt-in via provider config). Must run
+	// before the repair passes so their content comparisons operate on the
+	// same neutralized form that goes on the wire.
+	if p.config.Conversion.NeutralizeSpecialTokens {
+		converted = neutralizeSpecialTokensInConverted(converted)
+	}
+
 	// Conversation state repair: clean up orphaned tool calls and tool
 	// results that arise from checkpoint compaction, session persistence
 	// gaps, or any path that leaves assistant tool_calls without matching

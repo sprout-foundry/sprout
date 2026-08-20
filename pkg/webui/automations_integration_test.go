@@ -185,7 +185,7 @@ func TestAutomateIntegration_FullWorkflow(t *testing.T) {
 		t.Fatalf("stop session: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var stopResp map[string]string
+	var stopResp map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&stopResp); err != nil {
 		t.Fatalf("decode stop response: %v", err)
 	}

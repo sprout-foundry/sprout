@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -949,4 +950,99 @@ func TestCountLinesByType(t *testing.T) {
 	assert.Equal(t, 2, countLinesByType(lines, DiffLineAdd))
 	assert.Equal(t, 1, countLinesByType(lines, DiffLineRemove))
 	assert.Equal(t, 1, countLinesByType(lines, DiffLineContext))
+}
+
+// ---------------------------------------------------------------------------
+// TestRequestEditApproval_WebUITimeout_NoTTY_AutoApproves
+// ---------------------------------------------------------------------------
+
+// TestRequestEditApproval_WebUITimeout_NoTTY_AutoApproves verifies that when the
+// WebUI path is active (HasActiveWebUIClients returns true, event bus is wired)
+// but no decision arrives before the timeout, the agent auto-approves all hunks
+// (because there is no TTY for a CLI fallback) and returns without hanging.
+func TestRequestEditApproval_WebUITimeout_NoTTY_AutoApproves(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Wire the event bus exactly as the WASM agent does (see cmd/wasm/agent_funcs.go).
+	bus := events.NewEventBus()
+	agent.SetEventBus(bus)
+	agent.SetHasActiveWebUIClients(func() bool { return true })
+
+	// Pin the timeout short so the test doesn't take 30 minutes.
+	// editApprovalTimeout is a package-level var; SetEditApprovalTimeout doesn't
+	// return the old value, so save/restore manually.
+	oldTimeout := editApprovalTimeout
+	SetEditApprovalTimeout(50 * time.Millisecond)
+	t.Cleanup(func() { editApprovalTimeout = oldTimeout })
+
+	// Subscribe BEFORE calling so we catch the published event.
+	ch := bus.Subscribe("edit-approval-test")
+
+	// Run in a goroutine with a deadline to prove the call doesn't hang.
+	done := make(chan struct{})
+	var applied, summary string
+	var err error
+	go func() {
+		applied, summary, err = agent.RequestEditApproval(context.Background(), EditProposal{
+			Path:     "wasm_test.go",
+			Original: "a\nb\nc",
+			Proposed: "a\nB\nc",
+		})
+		close(done)
+	}()
+
+	// Wait for completion with a deadline to prove the call doesn't hang.
+	select {
+	case <-done:
+		// Good — returned without hanging.
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: RequestEditApproval did not return within 5s")
+	}
+
+	require.NoError(t, err, "should not error on timeout auto-approve")
+	assert.Equal(t, "a\nB\nc", applied, "should auto-approve all hunks and return proposed content")
+	assert.Contains(t, summary, "applied", "summary should indicate hunks were applied")
+
+	// Verify exactly one edit_approval_request event was published to the bus
+	// (proves the WebUI path was taken and the event payload has the right keys).
+	// Note: requestWebUIEditApproval also publishes an input_required event,
+	// so we filter by type.
+	eventCount := 0
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type != events.EventTypeEditApprovalRequest {
+				continue
+			}
+			eventCount++
+			if eventCount == 1 {
+				assert.Equal(t, events.EventTypeEditApprovalRequest, ev.Type, "should publish edit_approval_request event")
+				data, ok := ev.Data.(map[string]interface{})
+				require.True(t, ok, "event data should be a map")
+
+				// Assert the four required payload keys are present (pins the Go-side
+				// wire field-name contract the WebUI handler reads).
+				assert.Contains(t, data, "request_id", "payload must contain request_id")
+				assert.Contains(t, data, "file_path", "payload must contain file_path")
+				assert.Contains(t, data, "unified_diff", "payload must contain unified_diff")
+				assert.Contains(t, data, "hunks", "payload must contain hunks")
+
+				// request_id must be a non-empty string.
+				reqID, ok := data["request_id"].(string)
+				require.True(t, ok, "request_id should be a string")
+				assert.NotEmpty(t, reqID, "request_id should not be empty")
+
+				assert.Equal(t, "wasm_test.go", data["file_path"], "event should carry the file path")
+			}
+		case <-time.After(500 * time.Millisecond):
+			// No more events — drain complete.
+			goto done
+		}
+	}
+done:
+	assert.Equal(t, 1, eventCount, "should have received exactly one edit_approval_request event")
+
+	// Unsubscribe the bus subscription.
+	bus.Unsubscribe("edit-approval-test")
 }

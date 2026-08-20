@@ -758,3 +758,145 @@ describe('workspace_changed', () => {
     cleanup();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: edit_approval_request handler (SP-072-3)
+//
+// Verifies that the WebUI correctly parses the edit_approval_request event
+// payload from the backend and populates the editApprovalRequest state
+// with the hunks, file path, and request ID.
+// ---------------------------------------------------------------------------
+
+describe('edit_approval_request', () => {
+  function setup() {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+    return { stateHolder, setStateMock };
+  }
+
+  it('populates editApprovalRequest with the Go payload shape', () => {
+    const { stateHolder } = setup();
+    act(() => {
+      hookHandleEvent!({
+        id: 'e',
+        type: 'edit_approval_request',
+        data: {
+          request_id: 'edit_42',
+          file_path: 'src/main.go',
+          unified_diff: '@@ -1,3 +1,3 @@\n-a\n+B\n c',
+          timestamp: '2026-08-20T00:00:00Z',
+          hunks: [
+            {
+              id: 'hunk-0',
+              old_start: 1,
+              old_lines: 3,
+              new_start: 1,
+              new_lines: 3,
+              lines: [
+                { type: 'remove', content: 'a' },
+                { type: 'add', content: 'B' },
+                { type: 'context', content: 'c' },
+              ],
+              add_count: 1,
+              del_count: 1,
+            },
+          ],
+        },
+      });
+    });
+
+    const req = stateHolder.current.editApprovalRequest;
+    expect(req).not.toBeNull();
+    expect(req.requestId).toBe('edit_42');
+    expect(req.filePath).toBe('src/main.go');
+    expect(req.unifiedDiff).toBe('@@ -1,3 +1,3 @@\n-a\n+B\n c');
+    expect(req.hunks).toHaveLength(1);
+    const h = req.hunks[0];
+    expect(h.id).toBe('hunk-0');
+    expect(h.oldStart).toBe(1);
+    expect(h.oldLines).toBe(3);
+    expect(h.newStart).toBe(1);
+    expect(h.newLines).toBe(3);
+    expect(h.addCount).toBe(1);
+    expect(h.delCount).toBe(1);
+    expect(h.lines).toHaveLength(3);
+    expect(h.lines[0]).toEqual({ type: 'remove', content: 'a' });
+    expect(h.lines[1]).toEqual({ type: 'add', content: 'B' });
+    expect(h.lines[2]).toEqual({ type: 'context', content: 'c' });
+  });
+
+  it('ignores events missing request_id or file_path', () => {
+    const { stateHolder } = setup();
+
+    // Missing file_path
+    act(() => {
+      hookHandleEvent!({
+        id: 'e1',
+        type: 'edit_approval_request',
+        data: {
+          request_id: 'edit_99',
+          hunks: [],
+        },
+      });
+    });
+    expect(stateHolder.current.editApprovalRequest).toBeNull();
+
+    // Missing request_id
+    act(() => {
+      hookHandleEvent!({
+        id: 'e2',
+        type: 'edit_approval_request',
+        data: {
+          file_path: 'foo.go',
+          hunks: [],
+        },
+      });
+    });
+    expect(stateHolder.current.editApprovalRequest).toBeNull();
+  });
+
+  it('maps unknown line types to context', () => {
+    const { stateHolder } = setup();
+    act(() => {
+      hookHandleEvent!({
+        id: 'e',
+        type: 'edit_approval_request',
+        data: {
+          request_id: 'edit_weird',
+          file_path: 'src/main.go',
+          unified_diff: '',
+          hunks: [
+            {
+              id: 'hunk-0',
+              old_start: 1,
+              old_lines: 1,
+              new_start: 1,
+              new_lines: 1,
+              lines: [
+                { type: 'weird', content: 'mystery line' },
+              ],
+              add_count: 0,
+              del_count: 0,
+            },
+          ],
+        },
+      });
+    });
+
+    const req = stateHolder.current.editApprovalRequest;
+    expect(req).not.toBeNull();
+    expect(req.hunks[0].lines[0].type).toBe('context');
+    expect(req.hunks[0].lines[0].content).toBe('mystery line');
+  });
+});

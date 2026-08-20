@@ -145,6 +145,10 @@ func runWorkflowByPath(path string) error {
 
 	args := buildAgentSubprocessArgs(path, summary)
 
+	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
+		return fmt.Errorf("not starting workflow: %w", floorErr)
+	}
+
 	cmd := exec.Command(execPath, args...)
 	// Close stdin and detach into a new process group so the workflow
 	// survives the parent process exiting. Inherited std streams keep
@@ -193,9 +197,6 @@ func runWorkflowByPath(path string) error {
 		fmt.Fprintf(os.Stderr, "warn: failed to write PID file: %v\n", err)
 	}
 
-	// Remove PID file when process exits
-	defer automate.RemoveSessionFile(sproutDir, sessionID)
-
 	// Print session info
 	fmt.Fprintf(os.Stderr, "\nWorkflow session: %s\n", sessionID)
 	fmt.Fprintf(os.Stderr, "PID: %d\n", cmd.Process.Pid)
@@ -210,8 +211,22 @@ func runWorkflowByPath(path string) error {
 	defer signal.Stop(sigCh)
 
 	waitDone := make(chan error, 1)
+	// The real wait error is captured exactly once here; a second cmd.Wait()
+	// call returns "Wait was already called" (a plain error), so the deferred
+	// finalizer must read this variable, not re-Wait. waitDone is buffered so
+	// the goroutine always completes even on return paths that don't drain it.
+	var finalWaitErr error
+	waitCompleted := make(chan struct{})
 	go func() {
-		waitDone <- cmd.Wait()
+		defer close(waitCompleted)
+		finalWaitErr = cmd.Wait()
+		waitDone <- finalWaitErr
+	}()
+	defer func() {
+		<-waitCompleted
+		if finErr := automate.FinalizeSessionFile(sproutDir, sessionID, exitCodeFromWaitErr(finalWaitErr)); finErr != nil {
+			fmt.Fprintf(os.Stderr, "warn: %v\n", finErr)
+		}
 	}()
 
 	for {
@@ -255,6 +270,21 @@ func runWorkflowByPath(path string) error {
 			}
 		}
 	}
+}
+
+// exitCodeFromWaitErr maps a cmd.Wait error to a process exit code.
+// nil → 0; *exec.ExitError carries the real code (signal deaths report -1);
+// any other error (wait-system failure) is conservatively -1 so the session
+// record still shows a non-success outcome.
+func exitCodeFromWaitErr(waitErr error) int {
+	if waitErr == nil {
+		return 0
+	}
+	var exitErr *exec.ExitError
+	if errors.As(waitErr, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	return -1
 }
 
 // buildAgentSubprocessArgs constructs the argument list for the sprout agent

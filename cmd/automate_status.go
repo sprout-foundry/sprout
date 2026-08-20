@@ -39,11 +39,23 @@ func runAutomateStatus() error {
 		return nil
 	}
 
-	// Filter to running only unless --all
+	// Default view: running sessions plus those that ended (or died
+	// unfinalized — crash post-mortems) within the last 24h. --all shows
+	// every retained record.
 	if !automateStatusAll {
 		filtered := make([]sessionEntry, 0, len(sessions))
 		for _, s := range sessions {
+			if s.EndedAt != nil {
+				if time.Since(*s.EndedAt) <= 24*time.Hour {
+					filtered = append(filtered, s)
+				}
+				continue
+			}
 			if automate.IsProcessAlive(s.PID) {
+				filtered = append(filtered, s)
+				continue
+			}
+			if time.Since(s.StartedAt) <= 24*time.Hour {
 				filtered = append(filtered, s)
 			}
 		}
@@ -109,19 +121,28 @@ func readAllSessions(sproutDir string) ([]sessionEntry, error) {
 
 func printStatusTable(sessions []sessionEntry) {
 	fmt.Println()
-	fmt.Printf("  %-30s %-25s %-10s %-8s %-10s %s\n",
-		"SESSION", "WORKFLOW", "STATUS", "PID", "STARTED", "ELAPSED")
+	fmt.Printf("  %-30s %-25s %-10s %-6s %-10s %s\n",
+		"SESSION", "WORKFLOW", "STATUS", "EXIT", "STARTED", "ELAPSED")
 	fmt.Println()
 	for _, s := range sessions {
 		status := "exited"
-		if automate.IsProcessAlive(s.PID) {
+		if s.EndedAt != nil {
+			status = s.Status
+			if status == "" {
+				status = "exited"
+			}
+		} else if automate.IsProcessAlive(s.PID) {
 			status = "running"
 		}
-		fmt.Printf("  %-30s %-25s %-10s %-8d %-10s %s\n",
+		exitCol := "-"
+		if s.ExitCode != nil {
+			exitCol = fmt.Sprintf("%d", *s.ExitCode)
+		}
+		fmt.Printf("  %-30s %-25s %-10s %-8s %-10s %s\n",
 			s.SessionID,
 			s.Workflow,
 			status,
-			s.PID,
+			exitCol,
 			s.StartedAt.Format("15:04:05"),
 			time.Since(s.StartedAt).Round(time.Second),
 		)
@@ -137,22 +158,34 @@ func printStatusJSON(sessions []sessionEntry) error {
 		PID            int    `json:"pid"`
 		StartedAt      string `json:"started_at"`
 		ElapsedSeconds int64  `json:"elapsed_seconds"`
+		EndedAt        string `json:"ended_at,omitempty"`
+		ExitCode       *int   `json:"exit_code,omitempty"`
 	}
 
 	entries := make([]statusEntry, 0, len(sessions))
 	for _, s := range sessions {
 		status := "exited"
-		if automate.IsProcessAlive(s.PID) {
+		if s.EndedAt != nil {
+			status = s.Status
+			if status == "" {
+				status = "exited"
+			}
+		} else if automate.IsProcessAlive(s.PID) {
 			status = "running"
 		}
-		entries = append(entries, statusEntry{
+		e := statusEntry{
 			SessionID:      s.SessionID,
 			Workflow:       s.Workflow,
 			Status:         status,
 			PID:            s.PID,
 			StartedAt:      s.StartedAt.Format(time.RFC3339),
 			ElapsedSeconds: int64(time.Since(s.StartedAt).Seconds()),
-		})
+			ExitCode:       s.ExitCode,
+		}
+		if s.EndedAt != nil {
+			e.EndedAt = s.EndedAt.Format(time.RFC3339)
+		}
+		entries = append(entries, e)
 	}
 
 	data, err := json.MarshalIndent(entries, "", "  ")

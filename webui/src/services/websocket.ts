@@ -3,6 +3,7 @@ import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 import { appendClientIdToUrl, clientFetch, getProxyBase } from './clientSession';
 import { notificationBus } from './notificationBus';
+import { isCloud } from '../config/mode';
 
 export type { WsEvent };
 
@@ -36,6 +37,8 @@ class WebSocketService {
     // run out the heartbeat timeout. Best-effort: the send may not flush during
     // unload, in which case the server's heartbeat still cancels it (the client
     // isn't marked paused on a close).
+    // Targets the LOCAL sprout server; in cloud mode the platform hub
+    // tolerates the unknown frame (no error, no disconnect), so it is a no-op.
     if (typeof window !== 'undefined') {
       window.addEventListener('pagehide', () => {
         this.sendControl('session_close');
@@ -44,7 +47,9 @@ class WebSocketService {
   }
 
   /** Send a small control frame if the socket is open. Used for lifecycle
-   *  signals (pause / session_close) that the server acts on immediately. */
+   *  signals (pause / session_close) that the server acts on immediately.
+   *  Frames are lifecycle signals for the local server; unknown types are
+   *  safely ignored by the platform hub in cloud mode. */
   private sendControl(type: string): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
@@ -308,6 +313,8 @@ class WebSocketService {
         // Handle session_conflict: the backend detected another active WebSocket
         // for this user/client and is waiting for a session_takeover confirmation.
         // Auto-respond so the connection proceeds without a 60s hang.
+        // Only the LOCAL sprout server ever emits session_conflict (the platform
+        // hub never does), so this branch is local-only in practice.
         if (data.type === 'session_conflict') {
           debugLog('[WebSocket] Session conflict detected, sending takeover confirmation');
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -402,7 +409,11 @@ class WebSocketService {
     // Tell the server we're backgrounding (not closing) so it keeps any
     // in-flight query running and reattaches when we return, rather than
     // cancelling it on heartbeat staleness. Sent before the close below.
-    this.sendControl('pause');
+    // In cloud mode the platform hub ignores this frame (lifecycle-only WS) and
+    // the in-browser WASM agent keeps running by construction — skip the dead-letter.
+    if (!isCloud) {
+      this.sendControl('pause');
+    }
     this.intentionalClose = true;
     this.connecting = false;
     // Intentionally do NOT reset wasConnectedBefore — see comment above.

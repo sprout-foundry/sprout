@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/sprout-foundry/sprout/pkg/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 // MLXEmbeddingProvider implements EmbeddingProvider using Jina Code v2 via

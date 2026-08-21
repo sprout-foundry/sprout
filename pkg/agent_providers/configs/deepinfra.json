@@ -380,6 +380,7 @@
       },
       {
         "context_length": 262144,
+        "description": "Qwen3.6 27B is a dense 27-billion-parameter language model from the Qwen Team at Alibaba, released in April 2026. It features hybrid multimodal capabilities, accepting text, image, and video inputs, and is optimized for agentic and general-purpose use with strong reasoning.",
         "id": "Qwen/Qwen3.6-27B",
         "input_cost": 0.32,
         "name": "Qwen/Qwen3.6-27B",
@@ -668,9 +669,9 @@
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is an MoE model with 1.6T total parameters (49B active) and a 1M-token context window. It's built for advanced reasoning, coding, and long-running agent tasks, and performs well on knowledge, math, and software engineering benchmarks.",
         "id": "deepseek-ai/DeepSeek-V4-Pro",
-        "input_cost": 1.2999999999999998,
+        "input_cost": 1.3,
         "name": "deepseek-ai/DeepSeek-V4-Pro",
-        "output_cost": 2.5999999999999996,
+        "output_cost": 2.6,
         "tags": [
           "tools",
           "structured_output"
@@ -841,6 +842,7 @@
       },
       {
         "context_length": 131072,
+        "description": "Efficient, low-cost variant of Gemma 4. Gemma is a family of open models built by Google DeepMind. Gemma 4 models are multimodal, handling text and image input and generating text output.",
         "id": "google/gemma-4-E4B-it",
         "input_cost": 0.02,
         "name": "google/gemma-4-E4B-it",
@@ -1076,6 +1078,7 @@
       },
       {
         "context_length": 131072,
+        "description": "Turbo-speed serving variant of gpt-oss-120b, OpenAI's open-weight 117B-parameter Mixture-of-Experts (MoE) language model designed for high-reasoning, agentic, and general-purpose production use cases.",
         "id": "openai/gpt-oss-120b-Turbo",
         "input_cost": 0.15,
         "name": "openai/gpt-oss-120b-Turbo",
@@ -1244,15 +1247,112 @@
         ]
       },
       {
+        "cached_input_cost": 0.206,
         "context_length": 256000,
         "description": "Qwen's latest 2.4-trillion-parameter MoE flagship model delivering a comprehensive leap in coding and professional work.",
         "id": "Qwen/Qwen3.8-Max",
         "input_cost": 1.65,
         "name": "Qwen/Qwen3.8-Max",
         "output_cost": 4.951,
-        "cached_input_cost": 0.206,
         "tags": [
           "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 131072,
+        "description": "The model prioritizes token efficiency and agentic inference at production scale, stretching what developers can achieve within limited token, latency, and serving-cost budgets.",
+        "id": "inclusionAI/Ling-3.0-flash",
+        "input_cost": 0.075,
+        "name": "inclusionAI/Ling-3.0-flash",
+        "output_cost": 0.22,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.27,
+        "context_length": 1048576,
+        "description": "Kimi K3 is Moonshot AI's 2.8T-parameter open-weight multimodal reasoning model. Built for complex coding, knowledge work, and long-horizon agentic workflows, it excels at navigating large repositories, calling tools, debugging, and iterating on images, logs, tests, and runtime feedback. Its architecture relies on KDA and Attention Residuals for computational efficiency.",
+        "id": "moonshotai/Kimi-K3",
+        "input_cost": 2.7,
+        "name": "moonshotai/Kimi-K3",
+        "output_cost": 13.5,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 131072,
+        "description": "Muse Glimmer is a 30B multimodal agentic model distilled from Muse Spark — reasoning, tool use, and failure recovery in a single model that runs locally on consumer hardware.",
+        "id": "meta-models/Muse-Glimmer-30B",
+        "input_cost": 0.3,
+        "name": "meta-models/Muse-Glimmer-30B",
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 28672,
+        "description": "NVIDIA Nemotron 3.5 Lightning is NVIDIA's fastest open model for always-on agents and high-volume specialized tasks. It delivers a substantial leap in agentic capability over its predecessor Nemotron 3 Nano, with up to 4x higher throughput on a 1M-token context.",
+        "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning",
+        "input_cost": 0.05,
+        "name": "nvidia/NVIDIA-Nemotron-3.5-Lightning",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 262144,
+        "description": "Qwen3.8 2.4T A95B is an open-weight sparse mixture-of-experts model from Qwen and the open-weight variant of Qwen3.8 Max, with 95 billion active parameters out of 2.4 trillion total. It is suited for coding, research, complex reasoning, and agentic workflows.",
+        "id": "Qwen/Qwen3.8-2.4T-A95B",
+        "input_cost": 2,
+        "name": "Qwen/Qwen3.8-2.4T-A95B",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "DeepSeek-V4-Pro-0813 is the official release of DeepSeek-V4-Pro, superseding the preview version, with greatly enhanced agentic capabilities and performance improvements that are especially pronounced in production environments. It is built on the DeepSeek-V4-Pro (Preview) model structure, with a DSpark speculative decoding module attached.",
+        "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "input_cost": 1.3,
+        "name": "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "output_cost": 2.6,
+        "cached_input_cost": 0.1,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Gemini 3.7 Flash delivers near-Pro intelligence at Flash-tier cost and speed; exceeding Pro’s performance for most agentic tasks.",
+        "id": "google/gemini-3.7-flash",
+        "input_cost": 0.75,
+        "name": "google/gemini-3.7-flash",
+        "output_cost": 3.75,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
           "structured_output"
         ]
       }

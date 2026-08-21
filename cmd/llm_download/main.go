@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 // Command llm_download fetches the recommended model for this machine's RAM
 // from HuggingFace (mlx-community quantized releases) into
@@ -13,13 +13,13 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sinter/llm/catalog"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 func main() {
 	ram := mlx.TotalSystemRAM()
-	rec := llm.RecommendModelForRAM(ram)
+	rec := catalog.RecommendModelForRAM(ram)
 	if rec == nil {
 		log.Fatalf("no model recommended for %d bytes RAM", ram)
 	}

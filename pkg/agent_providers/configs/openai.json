@@ -856,6 +856,512 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 16385,
+        "description": "GPT-3.5 Turbo via the Batch API at 50% of standard pricing.",
+        "id": "gpt-3.5-turbo:batch",
+        "input_cost": 0.25,
+        "name": "GPT-3.5 Turbo (batch)",
+        "output_cost": 0.75,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "GPT-4 Turbo via the Batch API at 50% of standard pricing.",
+        "id": "gpt-4-turbo:batch",
+        "input_cost": 5,
+        "name": "GPT-4 Turbo (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1047576,
+        "description": "GPT-4.1 Mini via the Batch API at 50% of standard pricing. Mid-sized model with a 1M-token context window.",
+        "id": "gpt-4.1-mini:batch",
+        "input_cost": 0.2,
+        "name": "GPT-4.1 Mini (batch)",
+        "output_cost": 0.8,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0125,
+        "context_length": 1047576,
+        "description": "GPT-4.1 Nano via the Batch API at 50% of standard pricing. Fastest, cheapest GPT-4.1 model.",
+        "id": "gpt-4.1-nano:batch",
+        "input_cost": 0.05,
+        "name": "GPT-4.1 Nano (batch)",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1047576,
+        "description": "GPT-4.1 via the Batch API at 50% of standard pricing. Flagship model optimized for software engineering and long-context reasoning.",
+        "id": "gpt-4.1:batch",
+        "input_cost": 1,
+        "name": "GPT-4.1 (batch)",
+        "output_cost": 4,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 128000,
+        "description": "GPT-4o mini via the Batch API at 50% of standard pricing.",
+        "id": "gpt-4o-mini:batch",
+        "input_cost": 0.075,
+        "name": "GPT-4o Mini (batch)",
+        "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.625,
+        "context_length": 128000,
+        "description": "GPT-4o via the Batch API at 50% of standard pricing. Multimodal flagship supporting text and image inputs.",
+        "id": "gpt-4o:batch",
+        "input_cost": 1.25,
+        "name": "GPT-4o (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0625,
+        "context_length": 400000,
+        "description": "GPT-5 Codex via the Batch API at 50% of standard pricing. Specialized for software engineering and coding workflows.",
+        "id": "gpt-5-codex:batch",
+        "input_cost": 0.625,
+        "name": "GPT-5 Codex (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0125,
+        "context_length": 400000,
+        "description": "GPT-5 Mini via the Batch API at 50% of standard pricing. Compact GPT-5 variant for lighter-weight reasoning tasks.",
+        "id": "gpt-5-mini:batch",
+        "input_cost": 0.125,
+        "name": "GPT-5 Mini (batch)",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0025,
+        "context_length": 400000,
+        "description": "GPT-5 Nano via the Batch API at 50% of standard pricing. Smallest, fastest GPT-5 variant for ultra-low-latency workloads.",
+        "id": "gpt-5-nano:batch",
+        "input_cost": 0.025,
+        "name": "GPT-5 Nano (batch)",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5 Pro via the Batch API at 50% of standard pricing. Premium GPT-5 variant for complex reasoning tasks.",
+        "id": "gpt-5-pro:batch",
+        "input_cost": 7.5,
+        "name": "GPT-5 Pro (batch)",
+        "output_cost": 60,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0625,
+        "context_length": 400000,
+        "description": "GPT-5.1 via the Batch API at 50% of standard pricing. Frontier-grade general-purpose reasoning model.",
+        "id": "gpt-5.1:batch",
+        "input_cost": 0.625,
+        "name": "GPT-5.1 (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5.2 Pro via the Batch API at 50% of standard pricing. Advanced agentic coding and long-context performance.",
+        "id": "gpt-5.2-pro:batch",
+        "input_cost": 10.5,
+        "name": "GPT-5.2 Pro (batch)",
+        "output_cost": 84,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0875,
+        "context_length": 400000,
+        "description": "GPT-5.2 via the Batch API at 50% of standard pricing. Frontier model with stronger agentic and long-context performance.",
+        "id": "gpt-5.2:batch",
+        "input_cost": 0.875,
+        "name": "GPT-5.2 (batch)",
+        "output_cost": 7,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 400000,
+        "description": "GPT-5.4 mini via the Batch API at 50% of standard pricing. Efficient model for high-throughput workloads.",
+        "id": "gpt-5.4-mini:batch",
+        "input_cost": 0.375,
+        "name": "GPT-5.4 Mini (batch)",
+        "output_cost": 2.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 400000,
+        "description": "GPT-5.4 nano via the Batch API at 50% of standard pricing. Most lightweight GPT-5.4 variant.",
+        "id": "gpt-5.4-nano:batch",
+        "input_cost": 0.1,
+        "name": "GPT-5.4 Nano (batch)",
+        "output_cost": 0.625,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1050000,
+        "description": "GPT-5.4 Pro via the Batch API at 50% of standard pricing. Enhanced reasoning for complex, high-stakes tasks.",
+        "id": "gpt-5.4-pro:batch",
+        "input_cost": 15,
+        "name": "GPT-5.4 Pro (batch)",
+        "output_cost": 90,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.125,
+        "context_length": 1050000,
+        "description": "GPT-5.4 via the Batch API at 50% of standard pricing. Frontier model unifying the Codex and GPT lines.",
+        "id": "gpt-5.4:batch",
+        "input_cost": 1.25,
+        "name": "GPT-5.4 (batch)",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1050000,
+        "description": "GPT-5.5 Pro via the Batch API at 50% of standard pricing. High-capability model for deep reasoning and accuracy.",
+        "id": "gpt-5.5-pro:batch",
+        "input_cost": 15,
+        "name": "GPT-5.5 Pro (batch)",
+        "output_cost": 90,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1050000,
+        "description": "GPT-5.5 via the Batch API at 50% of standard pricing. Frontier model for complex professional workloads.",
+        "id": "gpt-5.5:batch",
+        "input_cost": 2.5,
+        "name": "GPT-5.5 (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Luna Pro via the Batch API at 50% of standard pricing. Cost-efficient model with pro reasoning mode.",
+        "id": "gpt-5.6-luna-pro:batch",
+        "input_cost": 0.1,
+        "name": "GPT-5.6 Luna Pro (batch)",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Luna via the Batch API at 50% of standard pricing. Fast, cost-efficient model for high-volume, latency-sensitive tasks.",
+        "id": "gpt-5.6-luna:batch",
+        "input_cost": 0.1,
+        "name": "GPT-5.6 Luna (batch)",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Sol Pro via the Batch API at 50% of standard pricing. Flagship with pro reasoning mode.",
+        "id": "gpt-5.6-sol-pro:batch",
+        "input_cost": 2.5,
+        "name": "GPT-5.6 Sol Pro (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Sol via the Batch API at 50% of standard pricing. Flagship model for complex reasoning, coding, and agentic workflows.",
+        "id": "gpt-5.6-sol:batch",
+        "input_cost": 2.5,
+        "name": "GPT-5.6 Sol (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Terra Pro via the Batch API at 50% of standard pricing. Balanced model with pro reasoning mode.",
+        "id": "gpt-5.6-terra-pro:batch",
+        "input_cost": 1,
+        "name": "GPT-5.6 Terra Pro (batch)",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Terra via the Batch API at 50% of standard pricing. Balanced model between the Sol flagship and Luna cost-efficient tiers.",
+        "id": "gpt-5.6-terra:batch",
+        "input_cost": 1,
+        "name": "GPT-5.6 Terra (batch)",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0625,
+        "context_length": 400000,
+        "description": "GPT-5 via the Batch API at 50% of standard pricing. Flagship model with major improvements in reasoning and code quality.",
+        "id": "gpt-5:batch",
+        "input_cost": 0.625,
+        "name": "GPT-5 (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "o1 Pro via the Batch API at 50% of standard pricing. Premium reasoning model.",
+        "id": "o1-pro:batch",
+        "input_cost": 75,
+        "name": "o1 Pro (batch)",
+        "output_cost": 300,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 3.75,
+        "context_length": 200000,
+        "description": "o1 via the Batch API at 50% of standard pricing. Reasoning model for complex multi-step problems.",
+        "id": "o1:batch",
+        "input_cost": 7.5,
+        "name": "o1 (batch)",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.275,
+        "context_length": 200000,
+        "description": "o3-mini-high via the Batch API at 50% of standard pricing. High reasoning effort variant of o3-mini.",
+        "id": "o3-mini-high:batch",
+        "input_cost": 0.55,
+        "name": "o3 Mini High (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.275,
+        "context_length": 200000,
+        "description": "o3-mini via the Batch API at 50% of standard pricing. Fast, efficient reasoning model.",
+        "id": "o3-mini:batch",
+        "input_cost": 0.55,
+        "name": "o3 Mini (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "o3 Pro via the Batch API at 50% of standard pricing. Highest-capability o-series reasoning model.",
+        "id": "o3-pro:batch",
+        "input_cost": 10,
+        "name": "o3 Pro (batch)",
+        "output_cost": 40,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 200000,
+        "description": "o3 via the Batch API at 50% of standard pricing. Reasoning model strong in math, science, coding, and visual reasoning.",
+        "id": "o3:batch",
+        "input_cost": 1,
+        "name": "o3 (batch)",
+        "output_cost": 4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1375,
+        "context_length": 200000,
+        "description": "o4-mini-high via the Batch API at 50% of standard pricing. High reasoning effort variant of o4-mini.",
+        "id": "o4-mini-high:batch",
+        "input_cost": 0.55,
+        "name": "o4 Mini High (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1375,
+        "context_length": 200000,
+        "description": "o4 Mini via the Batch API at 50% of standard pricing. Compact reasoning model with multimodal and agentic capabilities.",
+        "id": "o4-mini:batch",
+        "input_cost": 0.55,
+        "name": "o4 Mini (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

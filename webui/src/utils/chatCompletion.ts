@@ -3,6 +3,9 @@ export type ChatMessageLike = {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  /** Inline subagent-run marker — see Message type. Completion content must
+   *  not be written into these messages. */
+  isSubagentRun?: boolean;
 };
 
 export const ensureCompletedAssistantMessage = <T extends ChatMessageLike>(
@@ -26,7 +29,13 @@ export const ensureCompletedAssistantMessage = <T extends ChatMessageLike>(
 
   let assistantIndex = -1;
   for (let i = updatedMessages.length - 1; i > lastUserIndex; i -= 1) {
-    if (updatedMessages[i].type === 'assistant') {
+    const m = updatedMessages[i];
+    // Skip inline subagent-run messages: they represent a delegated run,
+    // not the primary agent's response. Writing the completion into one of
+    // them (or letting a later chunk append into it) makes primary-agent
+    // output render inside the subagent's collapsible block.
+    if (m.type === 'assistant' && m.isSubagentRun) continue;
+    if (m.type === 'assistant') {
       assistantIndex = i;
       break;
     }

@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 package main
 
@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 func main() {

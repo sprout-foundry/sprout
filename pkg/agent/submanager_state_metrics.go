@@ -29,6 +29,12 @@ type AgentMetricsManager struct {
 	// EstimatedTokenStore
 	estimatedTokenResponses int
 
+	// Continuation-nudge observation: seed's transient "Please continue…"
+	// messages never enter conversation state, so they are invisible in
+	// transcripts. Counted at the provider seam and surfaced in snapshot
+	// annotations. Monotonic — never reset within a session.
+	continuationNudges int
+
 	// CacheStats
 	cachedTokens      int
 	cacheWriteTokens  int
@@ -270,6 +276,25 @@ func (m *AgentMetricsManager) SetEstimatedTokenResponses(n int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.estimatedTokenResponses = n
+}
+
+// Continuation-nudge observation (see field comment).
+func (m *AgentMetricsManager) RecordContinuationNudges(n int) {
+	if m == nil || n <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.continuationNudges += n
+}
+
+func (m *AgentMetricsManager) GetContinuationNudges() int {
+	if m == nil {
+		return 0
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.continuationNudges
 }
 
 // CacheStats

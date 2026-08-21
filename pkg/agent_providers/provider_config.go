@@ -68,6 +68,14 @@ type MessageConversion struct {
 	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
 	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
 	ForceToolCallType        string `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
+	// NeutralizeSpecialTokens replaces special-token literals (<|im_end|> etc.)
+	// in message content with inert look-alikes before sending. Opt-in: enable
+	// only for providers whose tokenizer treats those byte sequences as control
+	// tokens (Qwen-family via vLLM, Llama). Trade-off: the model reads a
+	// visually-near-identical but byte-different string, so sessions that must
+	// round-trip the exact literal (e.g. writing tokenizer code) should not
+	// enable it. Tool-call arguments are never touched (work product).
+	NeutralizeSpecialTokens bool `json:"neutralize_special_tokens,omitempty"`
 	// CacheControl enables provider prompt-prefix caching (Anthropic-style
 	// cache_control: {type: "ephemeral"} markers). When true, cache breakpoints
 	// are injected at three locations:

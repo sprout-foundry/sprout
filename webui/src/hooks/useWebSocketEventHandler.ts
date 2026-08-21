@@ -46,6 +46,22 @@ import {
   shouldSuppressAgentMessageInChat,
 } from './webSocketEventHelpers';
 
+/**
+ * Returns the index of the last message that is a valid append target for
+ * primary-agent content (a non-subagent assistant message). Inline
+ * subagent-run messages (isSubagentRun) render their content inside the
+ * subagent's collapsible block — appending primary output into them makes
+ * it look like the subagent produced it. Returns -1 when no such message
+ * exists (caller should create a new primary assistant message).
+ */
+const lastPrimaryAssistantIndex = (messages: Message[]): number => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m.type === 'assistant' && !m.isSubagentRun) return i;
+  }
+  return -1;
+};
+
 // Handle connection_status event
 const handleConnectionStatus = (ctx: EventHandlerContext): void => {
   const { event, setState, connectionTimeoutRef, lastConnectionStateRef, activeRequestsRef } = ctx;
@@ -191,7 +207,13 @@ const handleStreamChunk = (ctx: EventHandlerContext): void => {
   setState((prev) => {
     const newMessages = [...prev.messages];
     const lastMessage = newMessages[newMessages.length - 1];
-    if (lastMessage && lastMessage.type === 'assistant') {
+    // An inline subagent-run message (isSubagentRun) is never a valid
+    // append target for primary-agent chunks: its content is rendered inside
+    // the subagent's collapsible block, so any chunk landed there makes
+    // primary output look like it came from the subagent. Create a fresh
+    // primary assistant message instead.
+    const canAppendToLast = lastMessage != null && lastMessage.type === 'assistant' && !lastMessage.isSubagentRun;
+    if (canAppendToLast) {
       if (chunkType === 'reasoning') {
         newMessages[newMessages.length - 1] = {
           ...lastMessage,
@@ -263,6 +285,7 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
       const lastMsg = nextMessages[nextMessages.length - 1] as Message;
       if (
         lastMsg.type === 'assistant' &&
+        !lastMsg.isSubagentRun &&
         lastMsg.reasoning?.trim() &&
         lastMsg.content?.trim() &&
         lastMsg.content === lastMsg.reasoning
@@ -271,15 +294,16 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
       }
     }
 
-    // SP-053-perTurnCost: annotate last assistant message with per-turn cost
-    if (!wasClearCommand && (tokensUsed != null || cost != null) && nextMessages.length > 0) {
-      const lastIdx = nextMessages.length - 1;
-      const lastMsg = nextMessages[lastIdx] as Message;
-      if (lastMsg.type === 'assistant') {
-        const annotated: Message = { ...lastMsg };
+    // SP-053-perTurnCost: annotate the turn's primary assistant message with
+    // per-turn cost. Never an inline subagent-run message — the cost belongs
+    // to the primary turn, not the delegated run.
+    if (!wasClearCommand && (tokensUsed != null || cost != null)) {
+      const idx = lastPrimaryAssistantIndex(nextMessages);
+      if (idx >= 0) {
+        const annotated: Message = { ...nextMessages[idx] };
         if (tokensUsed != null) annotated.tokensUsed = tokensUsed;
         if (cost != null) annotated.cost = cost;
-        nextMessages = [...nextMessages.slice(0, -1), annotated];
+        nextMessages = [...nextMessages.slice(0, idx), annotated, ...nextMessages.slice(idx + 1)];
       }
     }
 
@@ -330,19 +354,42 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
     // position in the text flow. Without this, all tool badges pile up at the
     // end of the message because there's no positional information linking
     // them to where in the text the tool was called.
-    const messagesWithToolMarker = prev.messages.map((msg, idx) => {
-      if (idx === prev.messages.length - 1 && msg.type === 'assistant') {
-        const trimmed = msg.content.replace(/\n+$/, '');
-        return { ...msg, content: trimmed + '\n[executing tool [' + toolName + ']]\n' };
-      }
-      return msg;
-    });
+    //
+    // Never mark a subagent-run message: its content renders inside the
+    // subagent's collapsible block, so a primary-agent tool badge inserted
+    // there looks like the subagent's tool call. When the last message is a
+    // subagent run, attach the marker to a fresh primary assistant message
+    // instead (mirrors the start-of-turn case where streaming will append
+    // into it).
+    const lastMsg = prev.messages[prev.messages.length - 1];
+    let messagesWithToolMarker: Message[];
+    if (lastMsg && lastMsg.type === 'assistant' && lastMsg.isSubagentRun) {
+      messagesWithToolMarker = [
+        ...prev.messages,
+        {
+          id: generateMessageId(),
+          type: 'assistant',
+          content: '\n[executing tool [' + toolName + ']]\n',
+          timestamp: new Date(),
+        },
+      ];
+    } else {
+      messagesWithToolMarker = prev.messages.map((msg, idx) => {
+        if (idx === prev.messages.length - 1 && msg.type === 'assistant') {
+          const trimmed = msg.content.replace(/\n+$/, '');
+          return { ...msg, content: trimmed + '\n[executing tool [' + toolName + ']]\n' };
+        }
+        return msg;
+      });
+    }
 
     const existingIdx = prev.toolExecutions.findIndex((t) => (getToolCallId(t.details) || t.id) === toolCallID);
     const addToolRefToMessage = (messages: Message[], toolId: string) => {
       for (let i = messages.length - 1; i >= 0; i -= 1) {
         const msg = messages[i];
-        if (msg.type !== 'assistant') continue;
+        // Skip subagent-run messages — the badge would render inside the
+        // subagent's collapsible block.
+        if (msg.type !== 'assistant' || msg.isSubagentRun) continue;
         const toolRefs = Array.isArray(msg.toolRefs) ? [...msg.toolRefs] : [];
         if (!toolRefs.some((ref) => ref.toolId === toolId)) {
           toolRefs.push({ toolId, toolName, label: displayName, parallel: subagentType === 'parallel' || undefined });
@@ -629,10 +676,10 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
     logEntry.level = category === 'error' ? 'error' : 'warning';
     setState((prev) => {
       const newMessages = [...prev.messages];
-      const lastMessage = newMessages[newMessages.length - 1];
-      if (lastMessage && lastMessage.type === 'assistant') {
+      const idx = lastPrimaryAssistantIndex(newMessages);
+      if (idx >= 0) {
         const prefixedMsg = category === 'error' ? `\n\nWarning: ${cleanedMsg}` : `\n\nNote: ${cleanedMsg}`;
-        newMessages[newMessages.length - 1] = { ...lastMessage, content: (lastMessage.content || '') + prefixedMsg };
+        newMessages[idx] = { ...newMessages[idx], content: (newMessages[idx].content || '') + prefixedMsg };
       }
       return { messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
     });
@@ -641,11 +688,11 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
     logEntry.level = 'info';
     setState((prev) => {
       const newMessages = [...prev.messages];
-      const lastMessage = newMessages[newMessages.length - 1];
-      if (lastMessage && lastMessage.type === 'assistant') {
-        newMessages[newMessages.length - 1] = {
-          ...lastMessage,
-          content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`,
+      const idx = lastPrimaryAssistantIndex(newMessages);
+      if (idx >= 0) {
+        newMessages[idx] = {
+          ...newMessages[idx],
+          content: (newMessages[idx].content || '') + `\n\nInfo: ${cleanedMsg}`,
         };
       }
       return { messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };

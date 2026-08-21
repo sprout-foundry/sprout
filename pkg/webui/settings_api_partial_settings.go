@@ -624,6 +624,19 @@ func applySkillsSettings(cfg *configuration.Config, patch map[string]interface{}
 	return nil
 }
 
+// wakeupPatch is the field-level decode target for the "wakeup" section.
+// Pointers distinguish "key present in the patch" from "key absent": only the
+// fields the client actually sent are applied, so an unmentioned field keeps
+// its current value instead of being zeroed. This is the regression behind the
+// all-zeros wakeup block (Enabled:false, budgets 0) found in a real user config:
+// a partial patch like {"wakeup":{"enabled":true}} used to unmarshal into a
+// zero-valued WakeupConfig and wipe the budgets.
+type wakeupPatch struct {
+	Enabled              *bool `json:"enabled"`
+	MaxTokensPerSession  *int  `json:"max_tokens_per_session"`
+	MaxResumesPerSession *int  `json:"max_resumes_per_session"`
+}
+
 func applyWakeupSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
 	if v, ok := patch["wakeup"]; ok {
 		knownKeys["wakeup"] = true
@@ -635,11 +648,32 @@ func applyWakeupSettings(cfg *configuration.Config, patch map[string]interface{}
 		if err != nil {
 			return fmt.Errorf("invalid wakeup config: %w", err)
 		}
-		var wc configuration.WakeupConfig
+		// Field-level merge: decode into typed pointers so only the keys
+		// present in the patch are applied. Unknown keys are ignored (matching
+		// the tolerant style of the surrounding appliers); a wrong JSON type
+		// for a known key (e.g. enabled:"yes") or a non-object payload
+		// (string/number/bool/array) fails the unmarshal.
+		var wc wakeupPatch
 		if err := json.Unmarshal(raw, &wc); err != nil {
 			return fmt.Errorf("invalid wakeup config: %w", err)
 		}
-		cfg.Wakeup = wc
+		// Validate budget values before mutating cfg so an error leaves the
+		// config untouched (atomicity, asserted by the tests).
+		if wc.MaxTokensPerSession != nil && *wc.MaxTokensPerSession < 0 {
+			return fmt.Errorf("invalid wakeup config: max_tokens_per_session must be >= 0")
+		}
+		if wc.MaxResumesPerSession != nil && *wc.MaxResumesPerSession < 0 {
+			return fmt.Errorf("invalid wakeup config: max_resumes_per_session must be >= 0")
+		}
+		if wc.Enabled != nil {
+			cfg.Wakeup.Enabled = *wc.Enabled
+		}
+		if wc.MaxTokensPerSession != nil {
+			cfg.Wakeup.MaxTokensPerSession = *wc.MaxTokensPerSession
+		}
+		if wc.MaxResumesPerSession != nil {
+			cfg.Wakeup.MaxResumesPerSession = *wc.MaxResumesPerSession
+		}
 	}
 	return nil
 }

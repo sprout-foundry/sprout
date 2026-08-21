@@ -50,8 +50,12 @@ type RiskAssessment struct {
 // ResolveToolRisk produces the unified risk assessment for a tool call by
 // folding all security inputs onto the Low/Medium/High/Critical scale.
 func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) RiskAssessment {
-	// 1. Static classifier (always)
-	secResult := tools.ClassifyToolCall(toolName, args)
+	// 1. Static classifier (always), workspace-augmented for shell commands
+	var wsRoot string
+	if a != nil {
+		wsRoot = a.GetWorkspaceRoot()
+	}
+	secResult := tools.ClassifyToolCallWithWorkspace(toolName, args, wsRoot)
 	assessment := assessmentFromClassifier(secResult)
 
 	// Downgrade privileged commands when a password prompter is registered.

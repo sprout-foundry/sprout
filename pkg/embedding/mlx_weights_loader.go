@@ -10,7 +10,7 @@ import (
 	"math"
 	"os"
 
-	"github.com/sprout-foundry/sprout/pkg/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 type safetensorEntry struct {

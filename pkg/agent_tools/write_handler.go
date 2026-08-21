@@ -79,7 +79,7 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	// resolve so Deny paths return a typed error immediately and Allow
 	// paths bypass the gate entirely (the path is already
 	// workspace/tmp/allowlisted).
-	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_file", path)
+	resolvedWrite, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
 			agenterrors.NewPermission(fmt.Sprintf("write blocked: %s is declared read_only", path), nil)
@@ -87,6 +87,12 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	if decision == "allow" {
 		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.
 		ctx = filesystem.WithSecurityBypass(ctx)
+	}
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "write_file", path, resolvedWrite, "write"); approved {
+			ctx = ctx2
+		}
 	}
 
 	// SP-046-2: Check staleness before writing

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -116,4 +117,11 @@ func emitAllowedPathHit(ctx context.Context, toolName, filePath, mode string) {
 		return
 	}
 	_ = logger.LogJSON(data)
+}
+
+// isHTTPURL reports whether path is an http(s) URL. File-access gating only
+// applies to local filesystem paths; URLs are fetched over the network and
+// must skip the path-tier classifier entirely.
+func isHTTPURL(path string) bool {
+	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://")
 }

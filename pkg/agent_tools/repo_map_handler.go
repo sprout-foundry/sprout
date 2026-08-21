@@ -39,6 +39,25 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		directory = "."
 	}
 
+	// Gate 1 precheck — only when the caller named a non-default directory.
+	// The default "." resolves to the workspace root, which is already
+	// allowlisted; gating it would prompt on every vanilla repo_map call.
+	if directory != "." {
+		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "repo_map", directory)
+		if decision == "deny" {
+			return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", directory), IsError: true},
+				fmt.Errorf("read blocked: %s is not accessible", directory)
+		}
+		if decision == "prompt" && env.FileAccessPrompter != nil {
+			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "repo_map", directory, resolvedPath, "read"); approved {
+				ctx = ctx2
+			} else {
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", directory), IsError: true},
+					fmt.Errorf("read blocked: off-workspace access to %s was not approved", directory)
+			}
+		}
+	}
+
 	depth := env.RepoMapDefaultDepth // profile override (1 in LCM, 0 = default 3)
 	if depth <= 0 {
 		depth = 3 // default: full symbols

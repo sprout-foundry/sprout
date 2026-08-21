@@ -200,7 +200,12 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 		return
 	}
 	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
-		if intent == IntentSlash {
+		switch intent {
+		case IntentBangShell:
+			if c.executeSteerShell(text) {
+				return
+			}
+		case IntentSlash:
 			// Try to execute safe commands mid-turn
 			if c.executeSteerCommand(text) {
 				return
@@ -274,19 +279,21 @@ func (c *SteerCoordinator) handleQueueSubmit(text string) {
 	if c.agent == nil || text == "" {
 		return
 	}
-	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
-		// Queue-mode messages auto-run as their own turns at turn end,
-		// where the leading '/' or '!' is stripped and the prompt's
-		// IsSlashCommand / fast-path checks no longer apply. Rather
-		// than silently demoting the command to LLM text, reject and
-		// tell the user where to send it.
+	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone && intent != IntentBangShell {
+		// Bang commands are allowed to queue because the auto-run path
+		// dispatches them through registry.Execute, which handles the
+		// ! → exec translation. Slash commands and detected shell
+		// commands are still rejected.
 		rejectCommandIntent(intent, text, "queue", "type it at the prompt after this turn ends")
 		return
 	}
 	// "exit"/"quit" are not slash commands so the intent check misses
 	// them, but a queued one would auto-run into the REPL's exit branch
-	// and terminate the session without the user at the prompt.
-	if lower := strings.ToLower(strings.TrimSpace(text)); lower == "exit" || lower == "quit" {
+	// and terminate the session without the user at the prompt. Bang
+	// variants (!exit) run as exec subshells instead — harmless, but
+	// still not what the user meant, so reject them here too.
+	if lower := strings.ToLower(strings.TrimSpace(text)); lower == "exit" || lower == "quit" ||
+		lower == "!exit" || lower == "!quit" {
 		rejectCommandIntent("REPL exit", text, "queue", "type it at the prompt after this turn ends")
 		return
 	}
@@ -358,6 +365,35 @@ func (c *SteerCoordinator) executeSteerCommand(text string) bool {
 		}()
 		if err := cmd.Execute(parts[1:], c.agent); err != nil {
 			console.GlyphError.Fprintf(os.Stderr, "command /%s: %v", cmdName, err)
+		}
+	}()
+	return true
+}
+
+// executeSteerShell runs a bang-prefixed shell command mid-turn through the
+// command registry (which translates "!cmd" → exec cmd). Returns true when
+// the command was dispatched (or rejected by the exec guards) and the
+// caller should stop; false when the agent has no registry set, so the
+// caller can fall back to rejectCommandIntent.
+func (c *SteerCoordinator) executeSteerShell(text string) bool {
+	registryRaw := c.agent.SlashCommands()
+	if registryRaw == nil {
+		return false
+	}
+	registry, ok := registryRaw.(*agent_commands.CommandRegistry)
+	if !ok {
+		return false
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				console.GlyphError.Fprintf(os.Stderr, "command failed: %v", r)
+			}
+		}()
+		fmt.Fprintln(os.Stderr)
+		console.GlyphShell.Fprintf(os.Stderr, "exec (steer): %s", text)
+		if err := registry.Execute(text, c.agent); err != nil {
+			console.GlyphError.Fprintf(os.Stderr, "command failed: %v", err)
 		}
 	}()
 	return true

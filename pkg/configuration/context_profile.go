@@ -11,7 +11,7 @@ const (
 	// ContextModeFull is the default: all tools, full prompt, proactive context enabled.
 	ContextModeFull ContextMode = "full"
 
-	// ContextModeLowContext activates the LCM levers: curated 12-tool allowlist, lite prompt, etc.
+	// ContextModeLowContext activates the LCM levers: curated tool allowlist, lite prompt, etc.
 	ContextModeLowContext ContextMode = "low_context"
 )
 
@@ -36,6 +36,11 @@ var fullContextProfile = ContextProfile{
 }
 
 // lowContextProfile is the baked LCM preset.
+//
+// ask_user is deliberately part of the allowlist: it is the agent's
+// interactive channel with the human, and LCM must never disable the
+// ability to ask the user a question (the cloud IDE's ask_user/edit-approval
+// flows depend on it).
 var lowContextProfile = ContextProfile{
 	Mode: ContextModeLowContext,
 	ToolAllowlist: []string{
@@ -51,6 +56,7 @@ var lowContextProfile = ContextProfile{
 		"list_changes",
 		"recover_file",
 		"run_subagent",
+		"ask_user",
 	},
 	SystemPromptPath:          "prompts/system_prompt.lite.md",
 	SkipProactiveContext:      true,

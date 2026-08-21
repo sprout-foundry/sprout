@@ -248,9 +248,12 @@ func TestAutomateStop_AlreadyDead(t *testing.T) {
 	err := runAutomateStop("cli-automate-stopped")
 	require.NoError(t, err)
 
-	// PID file should be cleaned up
-	_, readErr := os.ReadFile(filepath.Join(sproutDir, "automate", "cli-automate-stopped.json"))
-	assert.True(t, os.IsNotExist(readErr), "expected PID file to be removed")
+	// Dead-unfinalized sessions are finalized (post-mortem retained), not deleted.
+	info, readErr := automate.ReadSessionFile(sproutDir, "cli-automate-stopped")
+	require.NoError(t, readErr)
+	assert.Equal(t, "error", info.Status)
+	require.NotNil(t, info.ExitCode)
+	assert.Equal(t, -1, *info.ExitCode)
 }
 
 func TestAutomateStop_UnknownSession(t *testing.T) {
@@ -489,7 +492,7 @@ func TestPrintStatusTable_FormatsCorrectly(t *testing.T) {
 	assert.Contains(t, got, "SESSION")
 	assert.Contains(t, got, "WORKFLOW")
 	assert.Contains(t, got, "STATUS")
-	assert.Contains(t, got, "PID")
+	assert.Contains(t, got, "EXIT")
 	assert.Contains(t, got, "sess-table")
 	assert.Contains(t, got, "running")
 }
@@ -623,15 +626,16 @@ func TestAutomateIntegration_LaunchStatusStop(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, sessions, 1, "session file should still exist before sweep")
 
-	// Sweep stale sessions and verify the file is removed
+	// Sweep stale sessions — a recently-ended session must be RETAINED
+	// (post-mortem observability); only records past the 7-day window go.
 	removed, err := automate.SweepStaleSessions(sproutDir)
 	require.NoError(t, err)
-	assert.Equal(t, 1, removed, "sweep should remove the stale session file")
+	assert.Equal(t, 0, removed, "sweep must keep recently-ended sessions")
 
-	// Confirm the session file is gone
+	// Confirm the session file is still there
 	sessions, err = automate.ListSessionFiles(sproutDir)
 	require.NoError(t, err)
-	assert.Len(t, sessions, 0, "no sessions should remain after sweep")
+	assert.Len(t, sessions, 1, "session record retained for post-mortem")
 }
 
 // =============================================================================
@@ -703,15 +707,14 @@ func TestAutomateCrossProcess_Discovery(t *testing.T) {
 	// Verify automate.IsProcessAlive(pid) returns false after stop
 	assert.False(t, automate.IsProcessAlive(pid), "process should be dead after stop")
 
-	// Verify cleanup via sweep
+	// Verify retention via sweep — recently dead sessions are kept now
 	removed, err := automate.SweepStaleSessions(sproutDir)
 	require.NoError(t, err)
-	assert.Equal(t, 1, removed, "sweep should remove the stale session file")
+	assert.Equal(t, 0, removed, "sweep must keep recently-ended session records")
 
-	// Confirm the session file is gone
 	sessions, err := automate.ListSessionFiles(sproutDir)
 	require.NoError(t, err)
-	assert.Len(t, sessions, 0, "no sessions should remain after sweep")
+	assert.Len(t, sessions, 1, "record retained")
 }
 
 // =============================================================================

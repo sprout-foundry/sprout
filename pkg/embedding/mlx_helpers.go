@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/sprout-foundry/sprout/pkg/mlx"
+	"github.com/sprout-foundry/sinter/mlx"
 )
 
 // linear computes y = x @ W^T + b. MLX matmul computes x @ W, so we transpose

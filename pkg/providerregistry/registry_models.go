@@ -31,6 +31,7 @@ type RemoteMessageConversion struct {
 	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
 	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"`
 	ForceToolCallType        string `json:"force_tool_call_type"`
+	NeutralizeSpecialTokens  bool   `json:"neutralize_special_tokens,omitempty"`
 }
 
 // RemoteStreamingConfig duplicates StreamingConfig.
@@ -154,6 +155,7 @@ func (r *RemoteProviderConfig) conversionToNative() providers.MessageConversion 
 		ArgumentsAsJSON:          r.Conversion.ArgumentsAsJSON,
 		SkipToolExecutionSummary: r.Conversion.SkipToolExecutionSummary,
 		ForceToolCallType:        r.Conversion.ForceToolCallType,
+		NeutralizeSpecialTokens:  r.Conversion.NeutralizeSpecialTokens,
 	}
 	// Enforce standard OpenAI tool-calling defaults for remote configs that
 	// omit message_conversion settings. Same rationale as custom providers.

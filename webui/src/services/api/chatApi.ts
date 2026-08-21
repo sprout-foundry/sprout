@@ -23,8 +23,8 @@ export async function uploadImage(fetchFn: typeof fetch, file: File | Blob): Pro
   formData.append('image', file);
   const response = await fetchFn('/api/upload/image', { method: 'POST', body: formData });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ message: 'Upload failed' }));
-    throw new Error(data.message || data.error || 'Failed to upload image');
+    const data = await response.json().catch(() => ({ message: 'Failed to attach image' }));
+    throw new Error(data.message || data.error || 'Failed to attach image');
   }
   return response.json();
 }

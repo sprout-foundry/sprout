@@ -96,7 +96,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
 	// resolve so Deny paths return a typed error immediately and Allow
 	// paths bypass the gate entirely.
-	_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_structured_file", path)
+	resolvedStructured, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_structured_file", path)
 	if decision == "deny" {
 		return ToolResult{Output: fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
 			agenterrors.NewPermission(fmt.Sprintf("write blocked: %s is declared read_only", path), nil)
@@ -104,6 +104,12 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	if decision == "allow" {
 		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.
 		ctx = filesystem.WithSecurityBypass(ctx)
+	}
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "write_structured_file", path, resolvedStructured, "write"); approved {
+			ctx = ctx2
+		}
 	}
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))

@@ -8,9 +8,12 @@
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
 vi.mock('@codemirror/state', () => {
-  const mockCompartment = vi.fn(() => ({
-    reconfigure: vi.fn(() => ({ type: 'StateEffect' })),
-  }));
+  // Constructible: production code does `new Compartment()`, and Vitest 4's
+  // spy invokes the mock implementation with `new` — arrow impls are not
+  // constructible.
+  const mockCompartment = vi.fn(function (this: any) {
+    this.reconfigure = vi.fn(() => ({ type: 'StateEffect' }));
+  });
 
   return {
     Extension: {},

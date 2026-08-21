@@ -790,7 +790,7 @@ describe('CommandInput', () => {
     });
 
     const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
-    expect(sendBtn?.getAttribute('data-tooltip')).toBe('Uploading image…');
+    expect(sendBtn?.getAttribute('data-tooltip')).toBe('Attaching image…');
     expect(container.querySelector('.uploading-status')).not.toBeNull();
   });
 
@@ -866,7 +866,7 @@ describe('CommandInput', () => {
     const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
     await waitFor(() => {
       expect(sendBtn.disabled).toBe(false);
-      expect(sendBtn.getAttribute('aria-label')).toContain('failed to upload');
+      expect(sendBtn.getAttribute('aria-label')).toContain('failed to attach');
     });
   });
 });

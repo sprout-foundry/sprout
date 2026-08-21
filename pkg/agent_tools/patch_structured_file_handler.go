@@ -71,6 +71,12 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		// Actually, simpler: just continue with resolvedPath already set
 		// and let the individual branches handle it.
 	}
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "patch_structured_file", path, resolvedPath, "write"); approved {
+			ctx = ctx2
+		}
+	}
 
 	format, _ := extractString(args, "format")
 

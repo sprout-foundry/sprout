@@ -50,19 +50,22 @@ if (!isNodeEnv) {
     })),
   });
 
-  // Mock ResizeObserver
-  global.ResizeObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  }));
+  // Mock ResizeObserver. The implementation MUST be a constructible
+  // function (not an arrow): CodeMirror instantiates it with `new`, and
+  // Vitest 4's spy invokes the implementation as a constructor — arrows
+  // throw "is not a constructor".
+  global.ResizeObserver = vi.fn().mockImplementation(function (this: any) {
+    this.observe = vi.fn();
+    this.unobserve = vi.fn();
+    this.disconnect = vi.fn();
+  });
 
-  // Mock IntersectionObserver
-  global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  }));
+  // Mock IntersectionObserver (same constructibility requirement)
+  global.IntersectionObserver = vi.fn().mockImplementation(function (this: any) {
+    this.observe = vi.fn();
+    this.unobserve = vi.fn();
+    this.disconnect = vi.fn();
+  });
 
   // Mock File API
   global.File = class MockFile extends File {
@@ -72,13 +75,13 @@ if (!isNodeEnv) {
     }
   };
 
-  // Mock Worker for CodeMirror
-  global.Worker = vi.fn().mockImplementation(() => ({
-    postMessage: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    terminate: vi.fn(),
-  }));
+  // Mock Worker for CodeMirror (constructible — see ResizeObserver note)
+  global.Worker = vi.fn().mockImplementation(function (this: any) {
+    this.postMessage = vi.fn();
+    this.addEventListener = vi.fn();
+    this.removeEventListener = vi.fn();
+    this.terminate = vi.fn();
+  });
 
   // Mock getClientRects for text ranges (CodeMirror requirement)
   originalCreateRange = document.createRange;

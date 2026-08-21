@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -150,18 +151,34 @@ func TestAutomateSessionsAll_DispatchStop(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var resp map[string]string
+	var resp map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp["status"] != "stopped" {
-		t.Errorf("expected status 'stopped', got %q", resp["status"])
+	if resp["status"] != "exited" {
+		t.Errorf("expected status 'exited', got %q", resp["status"])
+	}
+	if resp["exit_code"] != float64(-1) {
+		t.Errorf("expected exit_code -1, got %v", resp["exit_code"])
+	}
+	if resp["stopped"] != false {
+		t.Errorf("expected stopped=false, got %v", resp["stopped"])
 	}
 
-	// Session file should be removed.
-	_, err := automate.ReadSessionFile(sproutDir, "stop-1")
-	if err == nil {
-		t.Error("session file should be removed after stop")
+	// Dead-PID sessions are finalized (not deleted): file is retained with
+	// EndedAt, ExitCode=-1, PID=0.
+	info, err := automate.ReadSessionFile(sproutDir, "stop-1")
+	if err != nil {
+		t.Fatalf("session file should be retained after dead-PID stop: %v", err)
+	}
+	if info.EndedAt == nil {
+		t.Error("expected EndedAt to be set after finalization")
+	}
+	if info.ExitCode == nil || *info.ExitCode != -1 {
+		t.Errorf("expected ExitCode -1, got %v", info.ExitCode)
+	}
+	if info.PID != 0 {
+		t.Errorf("expected PID 0 after finalization, got %d", info.PID)
 	}
 }
 
@@ -553,9 +570,16 @@ func TestHandleAPIAutomateSessionStop_MethodNotAllowed(t *testing.T) {
 
 func TestHandleAPIAutomateSessionStop_Success(t *testing.T) {
 	ws, daemonRoot := newAutomateTestServer(t)
+	// Live PID (a throwaway child) so the genuine stop path runs — dead
+	// sessions now finalize instead of deleting (covered by their own tests).
+	sleeper := exec.Command("sleep", "300")
+	if err := sleeper.Start(); err != nil {
+		t.Skipf("cannot spawn fixture process: %v", err)
+	}
+	defer func() { _ = sleeper.Process.Kill(); _ = sleeper.Wait() }()
 	sproutDir := createSessionFile(daemonRoot, "stop-success", &automate.AutomateSessionInfo{
 		Workflow:  "stop-wf",
-		PID:       99999999,
+		PID:       sleeper.Process.Pid,
 		StartedAt: time.Now(),
 		Kind:      "automate",
 	})
@@ -569,7 +593,7 @@ func TestHandleAPIAutomateSessionStop_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp map[string]string
+	var resp map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -579,11 +603,95 @@ func TestHandleAPIAutomateSessionStop_Success(t *testing.T) {
 	if resp["status"] != "stopped" {
 		t.Errorf("expected status 'stopped', got %q", resp["status"])
 	}
+	if stopped, ok := resp["stopped"].(bool); !ok || !stopped {
+		t.Errorf("expected stopped=true, got %v", resp["stopped"])
+	}
 
 	// Session file should be removed.
 	_, err := automate.ReadSessionFile(sproutDir, "stop-success")
 	if err == nil {
 		t.Error("session file should be removed after stop")
+	}
+}
+
+func TestHandleAPIAutomateSessionStop_DeadUnfinalizedFinalizesNotDeletes(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+	sproutDir := createSessionFile(daemonRoot, "stop-dead", &automate.AutomateSessionInfo{
+		Workflow:  "stop-wf",
+		PID:       99999999,
+		StartedAt: time.Now(),
+		Kind:      "automate",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/sessions/stop-dead/stop", nil)
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateSessionStop(rec, req, "stop-dead")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["status"] != "exited" {
+		t.Errorf("expected status 'exited', got %v", resp["status"])
+	}
+
+	info, err := automate.ReadSessionFile(sproutDir, "stop-dead")
+	if err != nil {
+		t.Fatal("dead-unfinalized record must be finalized, not deleted")
+	}
+	if info.Status != "error" || info.ExitCode == nil || *info.ExitCode != -1 {
+		t.Errorf("expected finalized error/-1, got %+v", info)
+	}
+}
+
+func TestHandleAPIAutomateSessionStop_FinalizedRecordRetained(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+	ended := time.Now().Add(-time.Minute)
+	exit := -1
+	sproutDir := createSessionFile(daemonRoot, "stop-final", &automate.AutomateSessionInfo{
+		Workflow:  "stop-wf",
+		PID:       0,
+		StartedAt: time.Now().Add(-2 * time.Minute),
+		Kind:      "automate",
+		EndedAt:   &ended,
+		ExitCode:  &exit,
+		Status:    "error",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/sessions/stop-final/stop", nil)
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateSessionStop(rec, req, "stop-final")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["status"] != "exited" {
+		t.Errorf("expected status 'exited', got %v", resp["status"])
+	}
+	if stopped, ok := resp["stopped"].(bool); !ok || stopped {
+		t.Errorf("expected stopped=false, got %v", resp["stopped"])
+	}
+	if code, ok := resp["exit_code"].(float64); !ok || code != -1 {
+		t.Errorf("expected exit_code -1, got %v", resp["exit_code"])
+	}
+
+	info, err := automate.ReadSessionFile(sproutDir, "stop-final")
+	if err != nil {
+		t.Fatal("finalized record must NOT be deleted by stop")
+	}
+	if info.Status != "error" || info.ExitCode == nil || *info.ExitCode != -1 {
+		t.Errorf("record outcome mutated: %+v", info)
 	}
 }
 
@@ -1507,26 +1615,36 @@ func TestAutomateRoutes_EndToEnd_SessionLifecycle(t *testing.T) {
 		t.Fatalf("stop: expected 200, got %d", rec.Code)
 	}
 
-	// 5. Verify session file is gone — single should return 404 now.
+	// 5. Session retained after dead-PID stop — single returns 200 with the
+	// finalized record's status ("error" for a non-zero exit).
 	req = httptest.NewRequest(http.MethodGet, "/api/automate/sessions/e2e-sess", nil)
 	req.Header.Set(webClientIDHeader, "test-client")
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("after stop: expected 404, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("after stop: expected 200 (retained), got %d", rec.Code)
+	}
+	var retained sessionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&retained); err != nil {
+		t.Fatalf("decode retained session: %v", err)
+	}
+	if retained.Status != "error" {
+		t.Errorf("expected status 'error' (finalized record) after dead-PID stop, got %q", retained.Status)
+	}
+	if retained.ExitCode == nil || *retained.ExitCode != -1 {
+		t.Errorf("expected ExitCode -1 after dead-PID stop, got %v", retained.ExitCode)
 	}
 
-	// 6. Output should also be 404 now.
+	// 6. Output is still accessible since the session record is retained.
 	req = httptest.NewRequest(http.MethodGet, "/api/automate/sessions/e2e-sess/output", nil)
 	req.Header.Set(webClientIDHeader, "test-client")
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("output after stop: expected 404, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("output after stop: expected 200 (retained), got %d", rec.Code)
 	}
 
-	// Cleanup: the sproutDir variable is used for verification but not needed
-	// since the session file is removed.
+	// Cleanup: session file is retained (finalized) after dead-PID stop.
 	_ = sproutDir
 }
 

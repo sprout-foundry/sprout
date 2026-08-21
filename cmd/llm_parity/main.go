@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 package main
 
@@ -7,10 +7,10 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
-	"github.com/sprout-foundry/sprout/pkg/tensor"
+	"github.com/sprout-foundry/sinter/llm"
+	"github.com/sprout-foundry/sinter/llm/qwen35"
+	"github.com/sprout-foundry/sinter/mlx"
+	"github.com/sprout-foundry/sinter/tensor"
 )
 
 // Dumps the hidden state after each layer for a fixed prompt so the parity

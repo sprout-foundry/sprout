@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sinter/llm/catalog"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
 )
 
 // ModelStatus describes a model from the user's perspective — either a
 // downloadable catalog entry or an installed model discovered on disk.
 // Thresholds here are RAM-agnostic (the raw catalog values); classifying a
 // model as suggested/stretch/blocked for a specific machine is done
-// separately via llm.TieredCatalogForRAM, which needs actual RAM in hand.
+// separately via catalog.TieredCatalogForRAM, which needs actual RAM in hand.
 type ModelStatus struct {
 	Name      string `json:"name"`
 	Dir       string `json:"dir"`
@@ -59,7 +59,7 @@ func TotalSystemRAM() uint64 {
 // catalog entries that aren't installed. Installed models are listed first,
 // sorted by param size (largest first).
 func ListModels() []ModelStatus {
-	installed := llm.ListInstalledModels(DefaultModelsDir)
+	installed := catalog.ListInstalledModels(DefaultModelsDir)
 	var statuses []ModelStatus
 
 	// dirBasenameToCatalogName maps a catalog entry's default install
@@ -73,8 +73,8 @@ func ListModels() []ModelStatus {
 	// catalog Name: nothing in the returned list would carry it, so
 	// ResolveModelID("qwen3.5-9b") and the /model listing's installed-status
 	// check both fail even though the model is fully downloaded.
-	dirBasenameToCatalogName := make(map[string]string, len(llm.ModelCatalog))
-	for _, m := range llm.ModelCatalog {
+	dirBasenameToCatalogName := make(map[string]string, len(catalog.ModelCatalog))
+	for _, m := range catalog.ModelCatalog {
 		dirBasenameToCatalogName[m.Dir] = m.Name
 	}
 
@@ -100,7 +100,7 @@ func ListModels() []ModelStatus {
 	}
 
 	// Add downloadable catalog entries that aren't installed.
-	for _, m := range llm.ModelCatalog {
+	for _, m := range catalog.ModelCatalog {
 		dir := filepath.Join(DefaultModelsDir, m.Dir)
 		if seen[m.Name] {
 			continue
@@ -127,7 +127,7 @@ func ListModels() []ModelStatus {
 			MinRAM:          m.MinRAMSelect / (1024 * 1024 * 1024),
 			MinRAMSuggested: minRAMSuggestedGB,
 			Installed:       installedOnDisk,
-			ParamSize:       llm.ExtractParamSize(m.Name),
+			ParamSize:       catalog.ExtractParamSize(m.Name),
 			ServerBackend:   m.ServerBackend,
 		})
 		seen[m.Name] = true
@@ -138,11 +138,11 @@ func ListModels() []ModelStatus {
 
 // RecommendedModel returns the best model for the machine's RAM that is
 // already installed, preferring sprout-tuned variants. Delegates to
-// llm.SelectModelForRAM so this shares the same RAM-gate and quant
+// catalog.SelectModelForRAM so this shares the same RAM-gate and quant
 // preference (mlx-q5 > q5 > q8 > unquantized) logic as onboarding and
 // the standalone server — see preferTunedQuant.
 func RecommendedModel(ramBytes uint64) *ModelStatus {
-	picked, err := llm.SelectModelForRAM(DefaultModelsDir, ramBytes)
+	picked, err := catalog.SelectModelForRAM(DefaultModelsDir, ramBytes)
 	if err != nil || picked == nil {
 		return nil
 	}
@@ -151,7 +151,7 @@ func RecommendedModel(ramBytes uint64) *ModelStatus {
 		Dir:           picked.Dir,
 		HFRepo:        picked.HFRepo,
 		Installed:     true,
-		ParamSize:     llm.ExtractParamSize(picked.Name),
+		ParamSize:     catalog.ExtractParamSize(picked.Name),
 		ServerBackend: picked.ServerBackend,
 	}
 }
@@ -180,11 +180,11 @@ func quantScore(q string) int {
 func ResolveModelID(id string) (*ModelStatus, error) {
 	statuses := ListModels()
 
-	for _, cm := range llm.ModelCatalog {
+	for _, cm := range catalog.ModelCatalog {
 		if !strings.EqualFold(cm.Name, id) {
 			continue
 		}
-		targetSize := llm.ExtractParamSize(cm.Name)
+		targetSize := catalog.ExtractParamSize(cm.Name)
 		var best *ModelStatus
 		for i := range statuses {
 			s := &statuses[i]
@@ -209,7 +209,7 @@ func ResolveModelID(id string) (*ModelStatus, error) {
 }
 
 // TieredModelInfos builds the RAM-tier catalog matrix as api.ModelInfo
-// entries for a given RAM budget — see llm.TieredCatalogForRAM. Every tier
+// entries for a given RAM budget — see catalog.TieredCatalogForRAM. Every tier
 // is included (so /model shows the full roadmap, not just what's pickable
 // today), but only the suggested and stretch tiers carry EligibleRoles;
 // blocked tiers get an explanatory Description and no eligible/recommended
@@ -217,7 +217,7 @@ func ResolveModelID(id string) (*ModelStatus, error) {
 // Actual selection is enforced separately in LocalProvider.SetModel — this
 // only informs the picker.
 func TieredModelInfos(ram uint64) []api.ModelInfo {
-	tiered := llm.TieredCatalogForRAM(ram)
+	tiered := catalog.TieredCatalogForRAM(ram)
 	infos := make([]api.ModelInfo, 0, len(tiered))
 	ramGB := float64(ram) / (1024 * 1024 * 1024)
 
@@ -237,14 +237,14 @@ func TieredModelInfos(ram uint64) []api.ModelInfo {
 		selectGB := float64(tm.Model.MinRAMSelect) / (1024 * 1024 * 1024)
 
 		switch tm.Status {
-		case llm.TierSuggested:
+		case catalog.TierSuggested:
 			info.Description = fmt.Sprintf("Suggested for this machine (%.0f GB RAM)", ramGB)
 			info.EligibleRoles = []string{"primary", "subagent"}
 			info.RecommendedRoles = []string{"primary", "subagent"}
-		case llm.TierEligible:
+		case catalog.TierEligible:
 			info.Description = "Smaller than the suggested model for this machine — a safe, lighter-weight choice"
 			info.EligibleRoles = []string{"primary", "subagent"}
-		case llm.TierStretch:
+		case catalog.TierStretch:
 			if tm.Model.MinRAMSuggested == math.MaxUint64 {
 				info.Description = fmt.Sprintf("Fits, but risks running out of memory — top-of-line model, always a manual choice (this machine has %.0f GB)", ramGB)
 			} else {
@@ -485,5 +485,5 @@ func dirSizeBytes(dir string) int64 {
 }
 
 func hasModelWeights(dir string) bool {
-	return llm.HasWeights(dir)
+	return catalog.HasWeights(dir)
 }

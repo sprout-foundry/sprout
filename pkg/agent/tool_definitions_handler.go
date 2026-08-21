@@ -204,6 +204,13 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// tools (run_subagent, run_automate, ...) route to THIS agent even when
 	// other agents exist in the process.
 	env.ToolFuncs = agent.toolFuncs
+	// Wire Gate 1's path-tier classifier into ToolEnv so handlers can
+	// consult it up-front (same wiring as ExecuteTool's env construction).
+	env.FileAccessClassifier = agent
+	// Interactive off-workspace approval: handlers consult this for
+	// "prompt" verdicts (WebUI dialog via handleFileSecurityError when a
+	// browser client is connected, CLI prompt otherwise).
+	env.FileAccessPrompter = agent
 	// Propagate Gate 1's auto-approve decision so handler-level gates
 	// (Gate 2) skip their interactive prompt, matching Gate 1. Covers
 	// both --unsafe mode and elevated risk profiles; hard blocks are

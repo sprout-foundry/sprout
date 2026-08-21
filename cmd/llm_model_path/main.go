@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && cgo && mlx
+//go:build darwin && arm64 && cgo
 
 package main
 
@@ -7,10 +7,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/gemma4"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
+	"github.com/sprout-foundry/sinter/llm"
+	_ "github.com/sprout-foundry/sinter/llm/gemma4"
+	_ "github.com/sprout-foundry/sinter/llm/qwen3"
+	_ "github.com/sprout-foundry/sinter/llm/qwen35"
 )
 
 func main() {

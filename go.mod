@@ -2,11 +2,7 @@ module github.com/sprout-foundry/sprout
 
 go 1.25.0
 
-replace github.com/sprout-foundry/sprout/pkg/gomlx => ./pkg/gomlx
-
-replace github.com/sprout-foundry/sprout/pkg/tensor => ./pkg/tensor
-
-replace github.com/sprout-foundry/sprout/pkg/tensor/ggml => ./pkg/tensor/ggml
+toolchain go1.26.6
 
 require (
 	filippo.io/age v1.3.1
@@ -20,10 +16,10 @@ require (
 	github.com/sergi/go-diff v1.3.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/net v0.55.0
-	golang.org/x/sync v0.21.0
-	golang.org/x/term v0.43.0
-	golang.org/x/text v0.38.0
+	golang.org/x/net v0.58.0
+	golang.org/x/sync v0.22.0
+	golang.org/x/term v0.45.0
+	golang.org/x/text v0.41.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -37,13 +33,11 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	github.com/sprout-foundry/sprout/pkg/gomlx v0.0.0-00010101000000-000000000000
-	github.com/sprout-foundry/sprout/pkg/tensor v0.0.0
-	github.com/sprout-foundry/sprout/pkg/tensor/ggml v0.0.0-00010101000000-000000000000
+	github.com/sprout-foundry/sinter v0.1.2
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/zricethezav/gitleaks/v8 v8.30.1
-	golang.org/x/image v0.22.0
+	golang.org/x/image v0.45.0
 	modernc.org/sqlite v1.53.0
 )
 
@@ -76,7 +70,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
-	github.com/klauspost/compress v1.18.3 // indirect
+	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/magiconair/properties v1.8.9 // indirect
@@ -136,8 +130,8 @@ require (
 	github.com/ysmood/gson v0.7.3 // indirect
 	github.com/ysmood/leakless v0.9.0 // indirect
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/sys v0.45.0
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/sys v0.47.0
 )
 
 // Vendored fork of coder/hnsw v0.6.1 with a Windows-compat patch for

@@ -249,6 +249,25 @@ func (h *findDeadCodeHandler) Definition() ToolDefinition {
 func (h *findDeadCodeHandler) Validate(args map[string]any) error { return nil }
 
 func (h *findDeadCodeHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	dir, _ := args["directory"].(string)
+
+	// Gate 1 precheck — only when the caller named a directory.
+	if dir != "" {
+		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "find_dead_code", dir)
+		if decision == "deny" {
+			return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", dir), IsError: true},
+				fmt.Errorf("read blocked: %s is not accessible", dir)
+		}
+		if decision == "prompt" && env.FileAccessPrompter != nil {
+			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "find_dead_code", dir, resolvedPath, "read"); approved {
+				ctx = ctx2
+			} else {
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", dir), IsError: true},
+					fmt.Errorf("read blocked: off-workspace access to %s was not approved", dir)
+			}
+		}
+	}
+
 	store, err := openCodegraphStoreHandler()
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to open code graph store: %v", err), IsError: true}, nil
@@ -258,7 +277,6 @@ func (h *findDeadCodeHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 	defer store.Close()
 
-	dir, _ := args["directory"].(string)
 	candidates, err := store.FindDeadCodeWithMeta(ctx, dir)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Query failed: %v", err), IsError: true}, nil

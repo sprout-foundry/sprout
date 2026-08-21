@@ -47,6 +47,25 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// Gate 1 precheck — local filesystem paths only. http(s) URLs are
+	// fetched over the network and skip the classifier. Local paths are
+	// gated on the raw path here, before any file:// URL conversion.
+	if !isHTTPURL(imagePath) {
+		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "analyze_ui_screenshot", imagePath)
+		if decision == "deny" {
+			return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", imagePath), IsError: true},
+				fmt.Errorf("read blocked: %s is not accessible", imagePath)
+		}
+		if decision == "prompt" && env.FileAccessPrompter != nil {
+			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "analyze_ui_screenshot", imagePath, resolvedPath, "read"); approved {
+				ctx = ctx2
+			} else {
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", imagePath), IsError: true},
+					fmt.Errorf("read blocked: off-workspace access to %s was not approved", imagePath)
+			}
+		}
+	}
+
 	analysisPrompt := ""
 	if v, ok := args["analysis_prompt"].(string); ok {
 		analysisPrompt = v

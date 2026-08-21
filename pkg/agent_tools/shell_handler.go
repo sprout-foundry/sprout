@@ -228,7 +228,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	// --- Security classification ---
-	secResult := ClassifyToolCall("shell_command", args)
+	secResult := ClassifyToolCallWithWorkspace("shell_command", args, env.WorkspaceRoot)
 
 	// Only truly unrecoverable operations (IsHardBlock) are blocked outright.
 	// ShouldBlock without IsHardBlock falls through to the approval prompt

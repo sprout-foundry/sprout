@@ -16,13 +16,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sprout-foundry/sinter/llm"
+	"github.com/sprout-foundry/sinter/llm/catalog"
+	_ "github.com/sprout-foundry/sinter/llm/gemma4"
+	_ "github.com/sprout-foundry/sinter/llm/lfm2"
+	_ "github.com/sprout-foundry/sinter/llm/qwen3"
+	_ "github.com/sprout-foundry/sinter/llm/qwen35"
+	"github.com/sprout-foundry/sinter/mlx"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/llm"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/gemma4"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/lfm2"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen3"
-	_ "github.com/sprout-foundry/sprout/pkg/gomlx/llm/qwen35"
-	"github.com/sprout-foundry/sprout/pkg/gomlx/mlx"
 )
 
 // LocalProvider implements api.ClientInterface by calling the MLX model
@@ -388,7 +389,7 @@ func (p *LocalProvider) SetDebug(debug bool) { p.debug = debug }
 // SetModel selects which model this provider should load, by stable ID
 // (catalog Name like "qwen3.5-9b", or an installed directory basename —
 // see ResolveModelID). Validates the pick against this machine's RAM tier
-// (llm.SelectableForRAM): a tier-blocked pick is refused unless
+// (catalog.SelectableForRAM): a tier-blocked pick is refused unless
 // SPROUT_ALLOW_OVERWEIGHT=1 is set. Does not download or load anything
 // itself — callers that want a not-yet-installed catalog pick to actually
 // become available must call EnsureModel first (the CLI's /model command
@@ -406,7 +407,7 @@ func (p *LocalProvider) SetModel(model string) error {
 		return fmt.Errorf("model %q is not installed — download it first", status.Name)
 	}
 	ram := tensorTotalSystemRAM()
-	if tier, known := llm.SelectableForRAM(status.Name, ram); known && tier == llm.TierBlocked {
+	if tier, known := catalog.SelectableForRAM(status.Name, ram); known && tier == catalog.TierBlocked {
 		if os.Getenv("SPROUT_ALLOW_OVERWEIGHT") != "1" {
 			return fmt.Errorf("%s needs more RAM than this machine has (%.0f GB) — set SPROUT_ALLOW_OVERWEIGHT=1 to force it anyway",
 				status.Name, float64(ram)/(1024*1024*1024))
@@ -466,7 +467,7 @@ func (p *LocalProvider) GetModelContextLimit() (int, error) {
 // ListModels returns the full RAM-tier catalog matrix for this machine —
 // every model tier is visible, but only the suggested and stretch tiers
 // carry EligibleRoles (selection is enforced separately, in SetModel; this
-// just informs the picker). See llm.TieredCatalogForRAM for the tier logic.
+// just informs the picker). See catalog.TieredCatalogForRAM for the tier logic.
 func (p *LocalProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return TieredModelInfos(tensorTotalSystemRAM()), nil
 }

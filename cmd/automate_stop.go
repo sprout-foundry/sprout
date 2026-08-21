@@ -26,12 +26,24 @@ func runAutomateStop(sessionID string) error {
 		return err
 	}
 
+	if info.EndedAt != nil {
+		// Finalized record — retained deliberately for post-mortem
+		// observability; stopping must not delete it.
+		exit := "?"
+		if info.ExitCode != nil {
+			exit = fmt.Sprint(*info.ExitCode)
+		}
+		console.GlyphInfo.Printf("Session %s already finished (status: %s, exit: %s). Record retained until the retention window passes.", sessionID, info.Status, exit)
+		return nil
+	}
+
 	if !automate.IsProcessAlive(info.PID) {
-		// Already dead — just clean up the PID file
-		if err := automate.RemoveSessionFile(sproutDir, sessionID); err != nil {
+		// Dead but never finalized (parent killed before its defer ran) —
+		// finalize with -1 rather than deleting, preserving the post-mortem.
+		if err := automate.FinalizeSessionFile(sproutDir, sessionID, -1); err != nil {
 			fmt.Fprintf(os.Stderr, "warn: %v\n", err)
 		}
-		console.GlyphInfo.Printf("Session %s (PID %d) was already stopped. PID file cleaned up.", sessionID, info.PID)
+		console.GlyphInfo.Printf("Session %s (PID %d) was already stopped. Record finalized for post-mortem (exit -1).", sessionID, info.PID)
 		return nil
 	}
 
@@ -83,9 +95,15 @@ func runAutomateStopAll() error {
 
 	stopped := 0
 	for _, s := range sessions {
+		if s.EndedAt != nil {
+			// Finalized records are not running — and are retained for
+			// post-mortem observability, so stop --all must not delete them.
+			continue
+		}
 		if !automate.IsProcessAlive(s.PID) {
-			// Already dead, just clean up
-			_ = automate.RemoveSessionFile(sproutDir, s.SessionID)
+			// Dead but unfinalized — finalize rather than delete so the
+			// post-mortem record survives stop --all.
+			_ = automate.FinalizeSessionFile(sproutDir, s.SessionID, -1)
 			continue
 		}
 		// PID-reuse guard (same as runAutomateStop).

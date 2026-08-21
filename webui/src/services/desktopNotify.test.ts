@@ -19,14 +19,16 @@
 // Use vi.hoisted so everything is available before module evaluation
 const { MockNotification, mockRequestPermission } = vi.hoisted(() => {
   const reqPerm = vi.fn().mockResolvedValue<'default' | 'granted' | 'denied'>('granted');
-  const fn = vi.fn().mockImplementation((_title: string, _options?: NotificationOptions) => {
-    return {
-      title: _title,
-      body: _options?.body,
-      icon: _options?.icon,
-      tag: _options?.tag,
-      onclick: null as (() => void) | null,
-    };
+  // Constructible: desktopNotify.ts does `new Notification(title, {...})`, and
+  // Vitest 4's spy invokes the mock implementation with `new` — arrow impls are
+  // not constructible. `mock.results[i].value` is the instance (`this`), so
+  // properties set on it after construction (e.g. `onclick`) are still visible.
+  const fn = vi.fn(function (this: any, _title: string, _options?: NotificationOptions) {
+    this.title = _title;
+    this.body = _options?.body;
+    this.icon = _options?.icon;
+    this.tag = _options?.tag;
+    this.onclick = null as (() => void) | null;
   });
   // Attach static properties so getPermission / requestPermission work on the constructor
   fn.permission = 'default' as 'default' | 'granted' | 'denied';

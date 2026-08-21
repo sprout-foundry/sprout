@@ -164,13 +164,22 @@ describe('createTransport', () => {
     // Save original WebSocket constants before mocking
     const OriginalWebSocket = globalThis.WebSocket;
 
-    // Mock the global WebSocket constructor while preserving constants
-    vi.spyOn(globalThis, 'WebSocket').mockImplementation(() => mockWsInstance as unknown as WebSocket);
+    // Mock the global WebSocket constructor.
+    // Vitest 4's spy invokes the mock implementation with `new` when production
+    // does `new WebSocket(...)` — arrow impls are not constructible.
+    // A regular function that returns a non-primitive object short-circuits
+    // `new` — the returned object IS the instance, so mockWsInstance.onopen
+    // stays live when production sets ws.onopen = handler.
+    const mockWs = vi.fn(function () {
+      return mockWsInstance;
+    });
+    // Set static constants on the mock function (production reads WebSocket.OPEN)
+    mockWs.OPEN = OriginalWebSocket.OPEN;
+    mockWs.CLOSING = OriginalWebSocket.CLOSING;
+    mockWs.CLOSED = OriginalWebSocket.CLOSED;
+    mockWs.CONNECTING = OriginalWebSocket.CONNECTING;
 
-    // Restore WebSocket.OPEN, CLOSING, CLOSED constants that jest.mock removes
-    (globalThis.WebSocket as unknown as { OPEN: number }).OPEN = OriginalWebSocket.OPEN;
-    (globalThis.WebSocket as unknown as { CLOSING: number }).CLOSING = OriginalWebSocket.CLOSING;
-    (globalThis.WebSocket as unknown as { CLOSED: number }).CLOSED = OriginalWebSocket.CLOSED;
+    vi.spyOn(globalThis, 'WebSocket').mockImplementation(mockWs);
 
     vi.useFakeTimers();
   });

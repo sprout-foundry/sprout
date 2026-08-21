@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -70,6 +71,18 @@ func PrecheckFileAccess(ctx context.Context, classifier FileAccessClassifier, to
 	return resolved, verdict
 }
 
+// promptForOffWorkspacePath runs the interactive approval flow for a
+// "prompt" verdict. Returns the bypass-carrying context and true when
+// the user approved. Returns (ctx, false) when no prompter is wired or
+// the user denied, leaving the caller to surface the raw off-workspace
+// error (SP-127 M4 behavior).
+func promptForOffWorkspacePath(ctx context.Context, env ToolEnv, toolName, filePath, resolvedPath, mode string) (context.Context, bool) {
+	if env.FileAccessPrompter == nil {
+		return ctx, false
+	}
+	return env.FileAccessPrompter.PromptFileAccess(ctx, toolName, filePath, resolvedPath, mode)
+}
+
 // accessModeForTool returns "write" for mutation tools and "read" for read tools.
 func accessModeForTool(toolName string) string {
 	switch toolName {
@@ -104,4 +117,11 @@ func emitAllowedPathHit(ctx context.Context, toolName, filePath, mode string) {
 		return
 	}
 	_ = logger.LogJSON(data)
+}
+
+// isHTTPURL reports whether path is an http(s) URL. File-access gating only
+// applies to local filesystem paths; URLs are fetched over the network and
+// must skip the path-tier classifier entirely.
+func isHTTPURL(path string) bool {
+	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://")
 }

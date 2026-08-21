@@ -143,43 +143,68 @@ func runWorkflowByPath(path string) error {
 		return fmt.Errorf("failed to resolve sprout binary: %w", err)
 	}
 
-	args := buildAgentSubprocessArgs(path, summary)
-
-	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
-		return fmt.Errorf("not starting workflow: %w", floorErr)
-	}
-
-	cmd := exec.Command(execPath, args...)
-	// Close stdin and detach into a new process group so the workflow
-	// survives the parent process exiting. Inherited std streams keep
-	// a reference to the parent's terminal pipe — when that closes,
-	// the child receives EOF/SIGPIPE and dies.
-	cmd.Stdin = nil
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	setProcessGroup(cmd)
-
-	// Apply subagent timeout override if the workflow specifies one.
-	if summary != nil && summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("SPROUT_TOOL_TIMEOUT=%d", *summary.SubagentTimeoutSeconds))
-	}
-
-	// Generate a session ID for PID file tracking
+	// Generate session ID up front so the log path (detach mode) and the
+	// PID file both exist before the child starts.
 	randomHex := make([]byte, 8)
 	if _, err := rand.Read(randomHex); err != nil {
 		return fmt.Errorf("failed to generate session ID: %w", err)
 	}
 	sessionID := fmt.Sprintf("cli-automate-%s", hex.EncodeToString(randomHex))
 
-	// Start the process
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start workflow: %w", err)
-	}
-
-	// Resolve sprout directory relative to current working dir
+	// Resolve sprout directory relative to current working dir — needed
+	// before start so the detach log path exists pre-launch.
 	sproutDir, err := filepath.Abs(".sprout")
 	if err != nil {
 		return fmt.Errorf("resolve sprout directory: %w", err)
+	}
+
+	args := buildAgentSubprocessArgs(path, summary)
+
+	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
+		return fmt.Errorf("not starting workflow: %w", floorErr)
+	}
+
+	cmd := buildAgentCommandFn(execPath, args)
+	cmd.Stdin = nil
+	setProcessGroup(cmd)
+
+	// In detach mode, redirect the child's output to a session log file
+	// instead of inheriting this process's stdio. Inherited stdio is a
+	// pipe (or TTY) owned by the launcher — when the launcher dies, the
+	// read end closes and the child receives SIGPIPE on its next write.
+	// A file has no such lifetime coupling: the workflow survives the
+	// launcher, the terminal, and even this CLI exiting.
+	var detachLogPath string
+	if automateDetach {
+		var f *os.File
+		f, detachLogPath, err = openDetachLogFile(sproutDir, sessionID)
+		if err != nil {
+			return err
+		}
+		cmd.Stdout = f
+		cmd.Stderr = f
+		defer func() {
+			// The child holds its own dup'd descriptors once started;
+			// the launcher's copy closes on return either way.
+			f.Close()
+		}()
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+
+	// Apply subagent timeout override if the workflow specifies one.
+	if summary != nil && summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		cmd.Env = append(os.Environ(), fmt.Sprintf("SPROUT_TOOL_TIMEOUT=%d", *summary.SubagentTimeoutSeconds))
+	}
+
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		// Don't leave a 0-byte orphan log with no session record.
+		if detachLogPath != "" {
+			_ = os.Remove(detachLogPath)
+		}
+		return fmt.Errorf("start workflow: %w", err)
 	}
 
 	// Write PID file
@@ -188,6 +213,9 @@ func runWorkflowByPath(path string) error {
 		PID:       cmd.Process.Pid,
 		StartedAt: time.Now(),
 		Kind:      "automate",
+	}
+	if detachLogPath != "" {
+		pidInfo.OutputFilePath = detachLogPath
 	}
 	if automateBudgetUSD > 0 {
 		pidInfo.BudgetUSD = &automateBudgetUSD
@@ -201,7 +229,18 @@ func runWorkflowByPath(path string) error {
 	fmt.Fprintf(os.Stderr, "\nWorkflow session: %s\n", sessionID)
 	fmt.Fprintf(os.Stderr, "PID: %d\n", cmd.Process.Pid)
 	fmt.Fprintf(os.Stderr, "PID file: %s/automate/%s.json\n", sproutDir, sessionID)
+	if detachLogPath != "" {
+		fmt.Fprintf(os.Stderr, "Log file: %s\n", detachLogPath)
+		fmt.Fprintln(os.Stderr, "\nDetached: workflow runs in the background; use 'sprout automate status' and 'sprout automate logs' to monitor.")
+	}
 	fmt.Println()
+
+	if automateDetach {
+		// No waiter, no signal forwarding, no finalizer. The child owns
+		// its log file; session end-state falls back to PID-liveness per
+		// the AutomateSessionInfo schema (pkg/automate/pid_file.go).
+		return nil
+	}
 
 	// Wait for the process to complete with signal forwarding.
 	// The child is in its own session (setProcessGroup), so terminal
@@ -425,4 +464,32 @@ func confirmStartAutomation(name string) bool {
 	}
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "y" || response == "yes"
+}
+
+// openDetachLogFile creates the session log directory under sproutDir and
+// opens the per-session log file the detached workflow child will write to.
+// Returned path is recorded in the session PID file (OutputFilePath) so
+// `sprout automate logs` can find it.
+func openDetachLogFile(sproutDir, sessionID string) (*os.File, string, error) {
+	// 0o700 dir / 0o600 file match the session-dir convention
+	// (WriteSessionFile/GetAutomateSessionDir): workflow output can
+	// contain source and secrets, so no group/world access.
+	logDir := filepath.Join(sproutDir, "automate", "logs")
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
+		return nil, "", fmt.Errorf("create automate log directory: %w", err)
+	}
+	logPath := filepath.Join(logDir, sessionID+".log")
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return nil, "", fmt.Errorf("open detach log file: %w", err)
+	}
+	return f, logPath, nil
+}
+
+// buildAgentCommandFn is a test seam over child-process construction.
+// Production behavior execs the sprout agent subprocess; tests swap it to
+// launch a stand-in child so the launch machinery (stdio wiring, PID file,
+// immediate-return contract) can be exercised without a real agent.
+var buildAgentCommandFn = func(execPath string, args []string) *exec.Cmd {
+	return exec.Command(execPath, args...)
 }

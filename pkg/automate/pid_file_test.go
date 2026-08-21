@@ -529,6 +529,40 @@ func TestSweepStaleSessions_RemovesDeadProcess(t *testing.T) {
 	}
 }
 
+func TestSweepStaleSessions_RemovesExpiredDetachedLog(t *testing.T) {
+	sproutDir := t.TempDir()
+	// Detached session with a log file, dead and past retention → the
+	// session record AND its log file are both swept (shared retention).
+	logPath := filepath.Join(sproutDir, "automate", "logs", "dead-detach.log")
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(logPath, []byte("stale output\n"), 0o600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	info := &AutomateSessionInfo{
+		Workflow:       "dead-wf",
+		PID:            99999999,
+		StartedAt:      time.Now().UTC().Add(-8 * 24 * time.Hour),
+		OutputFilePath: logPath,
+		Kind:           "automate",
+	}
+	if err := WriteSessionFile(sproutDir, "dead-detach", info); err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	removed, err := SweepStaleSessions(sproutDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if removed != 1 {
+		t.Errorf("expected removed=1, got %d", removed)
+	}
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatal("expired detach log file was not removed with its session record")
+	}
+}
+
 func TestSweepStaleSessions_KeepsAliveProcess(t *testing.T) {
 	sproutDir := t.TempDir()
 	info := &AutomateSessionInfo{

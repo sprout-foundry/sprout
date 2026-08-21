@@ -33,6 +33,7 @@ func resetAutomateGlobals() func() {
 	savedLogsLines := automateLogsLines
 	savedDir := automateDir
 	savedAssumeYes := automateAssumeYes
+	savedDetach := automateDetach
 	savedBudgetUSD := automateBudgetUSD
 	savedBudgetWarn := automateBudgetWarn
 	savedHeartbeat := automateHeartbeatSeconds
@@ -45,6 +46,7 @@ func resetAutomateGlobals() func() {
 		automateLogsLines = savedLogsLines
 		automateDir = savedDir
 		automateAssumeYes = savedAssumeYes
+		automateDetach = savedDetach
 		automateBudgetUSD = savedBudgetUSD
 		automateBudgetWarn = savedBudgetWarn
 		automateHeartbeatSeconds = savedHeartbeat
@@ -124,7 +126,7 @@ func writeTestSessionWithOutput(t *testing.T, sproutDir, sessionID, outputFilePa
 // =============================================================================
 
 func TestAutomateStatus_NoSessions(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = false
 
@@ -144,7 +146,7 @@ func TestAutomateStatus_NoSessions(t *testing.T) {
 }
 
 func TestAutomateStatus_RunningSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = false
 
@@ -165,7 +167,7 @@ func TestAutomateStatus_RunningSession(t *testing.T) {
 }
 
 func TestAutomateStatus_ExitedSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = false
 
@@ -187,7 +189,7 @@ func TestAutomateStatus_ExitedSession(t *testing.T) {
 }
 
 func TestAutomateStatus_AllFlag(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = true
 	automateStatusJSON = false
 
@@ -210,7 +212,7 @@ func TestAutomateStatus_AllFlag(t *testing.T) {
 }
 
 func TestAutomateStatus_JsonOutput(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = true
 
@@ -240,7 +242,7 @@ func TestAutomateStatus_JsonOutput(t *testing.T) {
 // =============================================================================
 
 func TestAutomateStop_AlreadyDead(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 
 	sproutDir := setupTestSproutDir(t)
 	writeTestSession(t, sproutDir, "cli-automate-stopped", 99999)
@@ -257,7 +259,7 @@ func TestAutomateStop_AlreadyDead(t *testing.T) {
 }
 
 func TestAutomateStop_UnknownSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 
 	setupTestSproutDir(t)
 
@@ -271,7 +273,7 @@ func TestAutomateStop_UnknownSession(t *testing.T) {
 // =============================================================================
 
 func TestAutomateLogs_NoOutputFile(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -291,7 +293,7 @@ func TestAutomateLogs_NoOutputFile(t *testing.T) {
 }
 
 func TestAutomateLogs_WithOutput(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -320,7 +322,7 @@ func TestAutomateLogs_WithOutput(t *testing.T) {
 }
 
 func TestAutomateLogs_LastNLines(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 2 // only last 2 lines
 
@@ -350,7 +352,7 @@ func TestAutomateLogs_LastNLines(t *testing.T) {
 }
 
 func TestAutomateLogs_MissingSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -362,7 +364,7 @@ func TestAutomateLogs_MissingSession(t *testing.T) {
 }
 
 func TestAutomateLogs_MissingOutputFile(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -371,9 +373,16 @@ func TestAutomateLogs_MissingOutputFile(t *testing.T) {
 	// Create a session pointing to a file that doesn't exist
 	writeTestSessionWithOutput(t, sproutDir, "cli-automate-missing-file", "/tmp/definitely-not-here-12345.log", os.Getpid())
 
+	// A recorded-but-missing log file is a friendly notice, not an error:
+	// detached sessions record their log path at launch, and the file can
+	// legitimately be absent (cleaned up, different machine) — the session
+	// record itself is still valid.
+	var buf bytes.Buffer
+	cap := captureAutomateStdout(&buf)
 	err := runAutomateLogs("cli-automate-missing-file")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read output file")
+	cap.Restore()
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Log file recorded but not found")
 }
 
 // =============================================================================
@@ -722,7 +731,7 @@ func TestAutomateCrossProcess_Discovery(t *testing.T) {
 // =============================================================================
 
 func TestBuildAgentSubprocessArgs_Basic(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateBudgetUSD = 0
 	automateBudgetWarn = ""
 	automateHeartbeatSeconds = 0
@@ -738,7 +747,7 @@ func TestBuildAgentSubprocessArgs_Basic(t *testing.T) {
 }
 
 func TestBuildAgentSubprocessArgs_WithMaxIterations(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateBudgetUSD = 0
 	automateBudgetWarn = ""
 	automateHeartbeatSeconds = 0
@@ -754,7 +763,7 @@ func TestBuildAgentSubprocessArgs_WithMaxIterations(t *testing.T) {
 }
 
 func TestBuildAgentSubprocessArgs_WithBudget(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateBudgetUSD = 10.0
 	automateBudgetWarn = "0.5,0.8"
 	automateHeartbeatSeconds = 600
@@ -770,7 +779,7 @@ func TestBuildAgentSubprocessArgs_WithBudget(t *testing.T) {
 }
 
 func TestBuildAgentSubprocessArgs_AllFlags(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateBudgetUSD = 25.0
 	automateBudgetWarn = "0.5,0.8"
 	automateHeartbeatSeconds = 300
@@ -786,7 +795,7 @@ func TestBuildAgentSubprocessArgs_AllFlags(t *testing.T) {
 }
 
 func TestBuildAgentSubprocessArgs_NilSummary(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateBudgetUSD = 0
 	automateBudgetWarn = ""
 	automateHeartbeatSeconds = 0
@@ -796,7 +805,7 @@ func TestBuildAgentSubprocessArgs_NilSummary(t *testing.T) {
 }
 
 func TestBuildAgentSubprocessArgs_NilInitial(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateBudgetUSD = 0
 	automateBudgetWarn = ""
 	automateHeartbeatSeconds = 0

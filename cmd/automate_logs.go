@@ -35,8 +35,14 @@ func runAutomateLogs(sessionID string) error {
 		return nil
 	}
 
-	data, err := os.ReadFile(info.OutputFilePath)
+		data, err := os.ReadFile(info.OutputFilePath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// stdout notice, matching the surrounding log-content output
+			// convention (this command prints file contents to stdout).
+			fmt.Printf("Log file recorded but not found: %s\n", info.OutputFilePath)
+			return nil
+		}
 		return fmt.Errorf("read output file: %w", err)
 	}
 

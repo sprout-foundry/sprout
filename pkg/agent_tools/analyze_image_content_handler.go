@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -33,6 +34,24 @@ func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, a
 	imagePath, err := extractString(args, "image_path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
+	// Gate 1 precheck — local filesystem paths only; http(s) URLs are
+	// fetched over the network and skip the path-tier classifier.
+	if !isHTTPURL(imagePath) {
+		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "analyze_image_content", imagePath)
+		if decision == "deny" {
+			return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", imagePath), IsError: true},
+				fmt.Errorf("read blocked: %s is not accessible", imagePath)
+		}
+		if decision == "prompt" && env.FileAccessPrompter != nil {
+			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "analyze_image_content", imagePath, resolvedPath, "read"); approved {
+				ctx = ctx2
+			} else {
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", imagePath), IsError: true},
+					fmt.Errorf("read blocked: off-workspace access to %s was not approved", imagePath)
+			}
+		}
 	}
 
 	analysisPrompt := ""

@@ -62,11 +62,35 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
-	directory, _ := extractString(args, "directory")
-	directory, err = resolveSearchDirectory(directory, env.WorkspaceRoot)
+	// Capture whether the user explicitly named a directory before
+	// resolveSearchDirectory normalises it to the workspace root.
+	rawDir, _ := extractString(args, "directory")
+
+	directory, err := resolveSearchDirectory(rawDir, env.WorkspaceRoot)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
+
+	// Gate 1 precheck — only when the user explicitly named a non-default
+	// directory. An empty or "." directory resolves to the workspace root,
+	// which is already allowlisted; gating the default would prompt on every
+	// vanilla search.
+	if rawDir != "" && rawDir != "." {
+		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "search", directory)
+		if decision == "deny" {
+			return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", directory), IsError: true},
+				fmt.Errorf("read blocked: %s is not accessible", directory)
+		}
+		if decision == "prompt" && env.FileAccessPrompter != nil {
+			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "search", directory, resolvedPath, "read"); approved {
+				ctx = ctx2
+			} else {
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", directory), IsError: true},
+					fmt.Errorf("read blocked: off-workspace access to %s was not approved", directory)
+			}
+		}
+	}
+
 	limit, _ := extractInt(args, "max_results")
 	if limit <= 0 {
 		limit = searchDefaultLimit

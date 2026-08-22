@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-20T09:52:36Z",
+  "updated_at": "2026-08-22T09:45:44Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -443,6 +443,12 @@
           ]
         },
         {
+          "id": "deepseek-v4-flash-vision-exp",
+          "name": "deepseek-v4-flash-vision-exp",
+          "input_cost": 0.44,
+          "output_cost": 1.32
+        },
+        {
           "id": "deepseek-v4-pro",
           "name": "deepseek-v4-pro",
           "description": "DeepSeek-V4 Pro - 1.6T parameter MoE model with 49B activated parameters",
@@ -501,8 +507,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.088606,
-          "output_cost": 0.177212
+          "input_cost": 0.06846000000000001,
+          "output_cost": 0.13692000000000001
         },
         {
           "id": "deepseek-v4-flash:0731",
@@ -516,7 +522,13 @@
         },
         {
           "id": "deepseek-v4-flash:preview",
-          "name": "deepseek-v4-flash:preview"
+          "name": "deepseek-v4-flash:preview",
+          "description": "DeepSeek V4 Flash preview - Mixture-of-Experts model (284B total, 13B active) built for efficient reasoning across a 1M-token context window",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
         },
         {
           "id": "deepseek-v4-pro",
@@ -527,16 +539,28 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 1.5999999999999999,
-          "output_cost": 3.1999999999999997
+          "input_cost": 0.43065000000000003,
+          "output_cost": 0.8613000000000001
         },
         {
           "id": "deepseek-v4-pro:0813",
-          "name": "deepseek-v4-pro:0813"
+          "name": "deepseek-v4-pro:0813",
+          "description": "DeepSeek V4 Pro 0813 - official release of DeepSeek V4 Pro with enhanced agentic capabilities",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
         },
         {
           "id": "deepseek-v4-pro:preview",
-          "name": "deepseek-v4-pro:preview"
+          "name": "deepseek-v4-pro:preview",
+          "description": "DeepSeek V4 Pro preview - flagship MoE model (1.6T total, 49B active) with 1M context",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
         },
         {
           "id": "gemma4:31b",
@@ -601,8 +625,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.95,
-          "output_cost": 4
+          "input_cost": 0.5415,
+          "output_cost": 2.2800000000000002
         },
         {
           "id": "kimi-k2.7-code",
@@ -612,8 +636,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.71,
-          "output_cost": 3.5
+          "input_cost": 0.67,
+          "output_cost": 3.4
         },
         {
           "id": "kimi-k3",
@@ -1472,9 +1496,7 @@
           "tags": [
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 1.25,
-          "output_cost": 1.25
+          ]
         },
         {
           "id": "deepseek/deepseek-chat",
@@ -1510,8 +1532,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.25,
-          "output_cost": 0.95
+          "input_cost": 0.55,
+          "output_cost": 1.6500000000000001
         },
         {
           "id": "deepseek/deepseek-r1",
@@ -1573,8 +1595,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.26899999999999996,
-          "output_cost": 0.39999999999999997
+          "input_cost": 0.26,
+          "output_cost": 0.38
         },
         {
           "id": "deepseek/deepseek-v3.2-exp",
@@ -1599,8 +1621,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.088606,
-          "output_cost": 0.177212
+          "input_cost": 0.06846000000000001,
+          "output_cost": 0.13692000000000001
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -1612,8 +1634,22 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.14,
-          "output_cost": 0.28
+          "input_cost": 0.08,
+          "output_cost": 0.18
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-vision-exp",
+          "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
+          "description": "DeepSeek V4 Flash Vision Exp is an experimental vision-enabled version of [DeepSeek V4 Flash 0731](https://openrouter.ai/deepseek/deepseek-v4-flash-0731) from DeepSeek, adding image understanding while matching the base model on text capabilities including agents,...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.44,
+          "output_cost": 1.32
         },
         {
           "id": "deepseek/deepseek-v4-pro",
@@ -1625,8 +1661,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.5999999999999999,
-          "output_cost": 3.1999999999999997
+          "input_cost": 0.43065000000000003,
+          "output_cost": 0.8613000000000001
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -2164,7 +2200,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09,
+          "input_cost": 0.09999999999999999,
           "output_cost": 0.33999999999999997
         },
         {
@@ -2294,6 +2330,16 @@
           ]
         },
         {
+          "id": "inclusionai/ling-3.0-tiny:free",
+          "name": "inclusionAI: Ling 3.0 Tiny (free)",
+          "description": "inclusionAI Ling 3.0 Tiny (free tier). No-cost model for high-volume experimentation.",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "reasoning"
+          ]
+        },
+        {
           "id": "inclusionai/ring-2.6-1t",
           "name": "inclusionAI: Ring-2.6-1T",
           "description": "Ring-2.6-1T is a 1T-parameter-scale thinking model with 63B active parameters, built for real-world agent workflows that require both strong capability and operational efficiency. It is optimized for coding agents, tool...",
@@ -2346,7 +2392,7 @@
           "id": "liquid/lfm-2.5-2.6b:free",
           "name": "LiquidAI: LFM2.5-2.6B (free)",
           "description": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises against using it for agentic coding or...",
-          "context_length": 128000,
+          "context_length": 65536,
           "tags": [
             "tools",
             "reasoning",
@@ -2360,7 +2406,9 @@
           "context_length": 8000,
           "tags": [
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.5,
+          "output_cost": 0.75
         },
         {
           "id": "meituan/longcat-2.0",
@@ -2478,8 +2526,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.35,
-          "output_cost": 1.5
+          "input_cost": 0.3,
+          "output_cost": 1.1
         },
         {
           "id": "meta/muse-spark-1.1",
@@ -2508,6 +2556,20 @@
           ],
           "input_cost": 1.25,
           "output_cost": 4.25
+        },
+        {
+          "id": "meta/muse-spark-1.2-contributor",
+          "name": "Meta: Muse Spark 1.2 Contributor",
+          "description": "Muse Spark 1.2 contributor tier is a reasoning model from Meta designed for developers who want to start building at an even lower cost. It’s meaningfully cheaper than Muse Spark...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.19999999999999998
         },
         {
           "id": "microsoft/phi-4",
@@ -2598,8 +2660,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.22499999999999998,
-          "output_cost": 0.8999999999999999
+          "input_cost": 0.27,
+          "output_cost": 1.08
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -2679,6 +2741,17 @@
           ],
           "input_cost": 0.09999999999999999,
           "output_cost": 0.09999999999999999
+        },
+        {
+          "id": "mistralai/ministral-8b",
+          "name": "Mistral: Ministral 8B",
+          "description": "Ministral 8B is an 8B parameter model featuring a unique interleaved sliding-window attention pattern for faster, memory-efficient inference. Designed for edge use cases, it supports up to 128k context length...",
+          "context_length": 128000,
+          "tags": [
+            "structured_output"
+          ],
+          "input_cost": 0.11,
+          "output_cost": 0.11
         },
         {
           "id": "mistralai/ministral-8b-2512",
@@ -2834,14 +2907,14 @@
           "id": "mistralai/mistral-small-3.2-24b-instruct",
           "name": "Mistral: Mistral Small 3.2 24B",
           "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
-          "context_length": 256000,
+          "context_length": 131072,
           "tags": [
             "tools",
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.09375,
-          "output_cost": 0.25
+          "input_cost": 0.075,
+          "output_cost": 0.19999999999999998
         },
         {
           "id": "mistralai/mixtral-8x22b-instruct",
@@ -2928,8 +3001,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.95,
-          "output_cost": 4
+          "input_cost": 0.5415,
+          "output_cost": 2.2800000000000002
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -2942,8 +3015,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.71,
-          "output_cost": 3.5
+          "input_cost": 0.67,
+          "output_cost": 3.4
         },
         {
           "id": "moonshotai/kimi-k2.7-code:batch",
@@ -3173,7 +3246,7 @@
           "id": "nvidia/nemotron-3.5-lightning",
           "name": "NVIDIA: Nemotron 3.5 Lightning",
           "description": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agentic workloads and specialized tasks that...",
-          "context_length": 1000000,
+          "context_length": 262144,
           "tags": [
             "tools",
             "reasoning",
@@ -4069,8 +4142,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.5,
-          "output_cost": 15
+          "input_cost": 2,
+          "output_cost": 10
         },
         {
           "id": "openai/gpt-5.6-sol-pro",
@@ -4083,8 +4156,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.5,
-          "output_cost": 15
+          "input_cost": 2,
+          "output_cost": 10
         },
         {
           "id": "openai/gpt-5.6-sol-pro:batch",
@@ -4097,8 +4170,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.25,
-          "output_cost": 7.5
+          "input_cost": 1,
+          "output_cost": 5
         },
         {
           "id": "openai/gpt-5.6-sol:batch",
@@ -4111,8 +4184,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.25,
-          "output_cost": 7.5
+          "input_cost": 1,
+          "output_cost": 5
         },
         {
           "id": "openai/gpt-5.6-terra",
@@ -4906,7 +4979,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09,
+          "input_cost": 0.09999999999999999,
           "output_cost": 1.1
         },
         {
@@ -5387,6 +5460,18 @@
           "output_cost": 0.75
         },
         {
+          "id": "stealth/ox-alpha",
+          "name": "Ox Alpha",
+          "description": "Ox Alpha is a reasoning model designed for coding, sustained agentic work, and production workloads. It is suited for long-horizon software engineering, complex reasoning, and workflows that combine text with...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ]
+        },
+        {
           "id": "stepfun/step-3.5-flash",
           "name": "StepFun: Step 3.5 Flash",
           "description": "Step 3.5 Flash is StepFun's most capable open-source foundation model. Built on a sparse Mixture of Experts (MoE) architecture, it selectively activates only 11B of its 196B parameters per token....",
@@ -5423,6 +5508,25 @@
           ],
           "input_cost": 0.14,
           "output_cost": 0.5700000000000001
+        },
+        {
+          "id": "tencent/hy-mt2-1.8b",
+          "name": "Tencent: Hy-MT2-1.8B",
+          "description": "Hy-MT2-1.8B is a compact 1.8B-parameter translation model from Tencent. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and style-guided...",
+          "context_length": 8192,
+          "input_cost": 0.044,
+          "output_cost": 0.17700000000000002
+        },
+        {
+          "id": "tencent/hy-mt2-30b-a3b",
+          "name": "Tencent: Hy-MT2-30B-A3B",
+          "description": "Hy-MT2-30B-A3B is Tencent's flagship translation model in the Hy-MT2 family. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and...",
+          "context_length": 8192,
+          "tags": [
+            "structured_output"
+          ],
+          "input_cost": 0.074,
+          "output_cost": 0.295
         },
         {
           "id": "tencent/hy3",
@@ -5512,7 +5616,7 @@
           "id": "thinkingmachines/inkling-small",
           "name": "Thinking Machines: Inkling Small",
           "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of...",
-          "context_length": 524288,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "vision",
@@ -5521,6 +5625,17 @@
           ],
           "input_cost": 0.44999999999999996,
           "output_cost": 1.2
+        },
+        {
+          "id": "thinkingmachines/inkling-small:free",
+          "name": "Thinking Machines: Inkling Small (free)",
+          "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ]
         },
         {
           "id": "thinkingmachines/inkling:batch",
@@ -5534,6 +5649,17 @@
           ],
           "input_cost": 1,
           "output_cost": 4.05
+        },
+        {
+          "id": "thinkingmachines/inkling:free",
+          "name": "Thinking Machines: Inkling (free)",
+          "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ]
         },
         {
           "id": "undi95/remm-slerp-l2-13b",
@@ -5838,7 +5964,7 @@
           "id": "z-ai/glm-5.2:batch",
           "name": "Z.ai: GLM 5.2 (batch)",
           "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
-          "context_length": 512000,
+          "context_length": 1048575,
           "tags": [
             "tools",
             "reasoning",
@@ -5952,7 +6078,7 @@
             "structured_output"
           ],
           "input_cost": 0.065,
-          "output_cost": 0.14
+          "output_cost": 0.18
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -6007,8 +6133,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.5,
-          "output_cost": 15
+          "input_cost": 2,
+          "output_cost": 10
         },
         {
           "id": "~openai/gpt-mini-latest",
@@ -6525,6 +6651,7 @@
         {
           "id": "google/gemma-4-E4B-it",
           "name": "google/gemma-4-E4B-it",
+          "description": "Efficient, low-cost variant of Gemma 4. Gemma is a family of open models built by Google DeepMind. Gemma 4 models are multimodal, handling text and image input and generating text output.",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -6885,6 +7012,7 @@
         {
           "id": "openai/gpt-oss-120b-Turbo",
           "name": "openai/gpt-oss-120b-Turbo",
+          "description": "Turbo-speed serving variant of gpt-oss-120b, OpenAI's open-weight 117B-parameter Mixture-of-Experts (MoE) language model designed for high-reasoning, agentic, and general-purpose production use cases.",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -7140,6 +7268,7 @@
         {
           "id": "Qwen/Qwen3.6-27B",
           "name": "Qwen/Qwen3.6-27B",
+          "description": "Qwen3.6 27B is a dense 27-billion-parameter language model from the Qwen Team at Alibaba, released in April 2026. It features hybrid multimodal capabilities, accepting text, image, and video inputs, and is optimized for agentic and general-purpose use with strong reasoning.",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -7456,8 +7585,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.66,
-          "output_cost": 3.5
+          "input_cost": 0.58,
+          "output_cost": 3.4
         },
         {
           "id": "moonshotai/Kimi-K3-TEE",
@@ -7533,7 +7662,16 @@
         },
         {
           "id": "Qwen/Qwen3.8-27B-TEE",
-          "name": "Qwen/Qwen3.8-27B-TEE"
+          "name": "Qwen/Qwen3.8-27B-TEE",
+          "description": "Qwen3.8 27B on confidential TEE compute",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.4,
+          "output_cost": 3
         },
         {
           "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",

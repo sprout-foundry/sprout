@@ -479,6 +479,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		SetupAgentEvents(chatAgent, eventBus, indicator)
 	}
 
+	// Start progress event emitter (opt-in via --progress-events flag).
+	// Works for both interactive and direct modes. Emits one-line milestones
+	// to stderr, stdout, or a file. Safe no-op when flag is not set.
+	progressEmitter := startProgressEmitter(ctx, eventBus)
+	defer progressEmitter.stop()
+
 	// When agent is nil (provider not configured in daemon mode), skip to
 	// the daemon wait path. The web UI handles provider setup interactively.
 	if chatAgent == nil && daemonMode && webServer != nil && webServer.IsRunning() {

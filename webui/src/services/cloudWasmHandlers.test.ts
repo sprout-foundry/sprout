@@ -54,7 +54,13 @@ describe('handleWasmLocal — /api/ask-user/response', () => {
   it('returns 501 when respondToAskUser is not available on the shell', async () => {
     const shellWithoutMethod = createMockShell({ respondToAskUser: undefined });
     const bodyStr = JSON.stringify({ request_id: 'abc123', response: 'hello' });
-    const res = handleWasmLocal(shellWithoutMethod, '/api/ask-user/response', 'POST', '/api/ask-user/response', bodyStr);
+    const res = handleWasmLocal(
+      shellWithoutMethod,
+      '/api/ask-user/response',
+      'POST',
+      '/api/ask-user/response',
+      bodyStr,
+    );
     expect(res.status).toBe(501);
     const body = JSON.parse(await res.text());
     expect(body.error).toBe('respondToAskUser not available (WASM binary too old)');

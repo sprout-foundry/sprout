@@ -33,6 +33,13 @@ func TestAutomateRun_Detach_EndToEnd(t *testing.T) {
 	automateAssumeYes = true
 	automateDetach = true
 
+	// The stand-in child is /bin/sh — the production memory floor (1.5 GB
+	// available) is a guard against OOM-killing real workflow agents and
+	// must not flake this test on memory-starved CI runners (macOS shared
+	// runners report <1 GB "Pages free" under load). Same backstop as
+	// pkg/automate/pid_file_lifecycle_test.go.
+	t.Setenv("SPROUT_AUTOMATE_MIN_MEM_MB", "0")
+
 	// Stand-in child: /bin/sh emitting a line every 100ms for ~5s — long
 	// enough to inspect /proc fd targets and observe log content while
 	// alive. The production machinery under test (exec.Command

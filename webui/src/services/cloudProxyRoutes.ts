@@ -47,15 +47,12 @@ function notifySessionExpired(): void {
   redirectScheduled = true;
 
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(
-      new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { status: 401 } }),
-    );
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { status: 401 } }));
     // Defer redirect so event listeners (toast, analytics, etc.) can react
     // before full-page navigation.
     setTimeout(() => {
       window.location.href =
-        '/login?return_to=' +
-        encodeURIComponent(window.location.pathname + window.location.search);
+        '/login?return_to=' + encodeURIComponent(window.location.pathname + window.location.search);
     }, 750);
   }
 }

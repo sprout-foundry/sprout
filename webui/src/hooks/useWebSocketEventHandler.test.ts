@@ -884,9 +884,7 @@ describe('edit_approval_request', () => {
               old_lines: 1,
               new_start: 1,
               new_lines: 1,
-              lines: [
-                { type: 'weird', content: 'mystery line' },
-              ],
+              lines: [{ type: 'weird', content: 'mystery line' }],
               add_count: 0,
               del_count: 0,
             },
@@ -1066,19 +1064,5 @@ describe('subagent-run attribution', () => {
     const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
     expect(messages).toHaveLength(2);
     expect(messages[1].content).toBe('');
-  });
-});
-    const setStateMock = vi.fn((updater: unknown) => {
-      if (typeof updater === 'function') {
-        const prev = stateHolder.current;
-        stateHolder.current = { ...prev, ...(updater(prev) as object) };
-      } else {
-        stateHolder.current = updater as typeof stateHolder.current;
-      }
-    });
-    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
-    act(() => {
-      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
-    });
   });
 });

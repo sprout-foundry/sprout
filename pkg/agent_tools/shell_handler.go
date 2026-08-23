@@ -241,10 +241,14 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	if (secResult.ShouldPrompt || secResult.ShouldBlock) && env.ApprovalManager != nil && !(env.Gate1AutoApproved && !secResult.IsHardBlock) {
+		approvalExtras := map[string]string{}
+		if command != "" {
+			approvalExtras["command"] = command
+		}
 		result := env.ApprovalManager.RequestApproval(
 			"", "shell_command", secResult.Risk.String(),
 			fmt.Sprintf("Execute shell command: %s\n\n%s", command, secResult.Reasoning),
-			nil,
+			approvalExtras,
 		)
 		if !result.Approved {
 			reason := result.Reason

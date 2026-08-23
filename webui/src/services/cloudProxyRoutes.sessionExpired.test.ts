@@ -116,9 +116,7 @@ describe('handleFoundryAuthError — 401 → event + deferred redirect', () => {
     handleFoundryAuthError(new Response(null, { status: 401 }));
     vi.advanceTimersByTime(750);
     expect(hrefSetter).toHaveBeenCalledTimes(1);
-    expect(hrefSetter).toHaveBeenCalledWith(
-      '/login?return_to=' + encodeURIComponent('/repo/demos?tab=chat&x=1'),
-    );
+    expect(hrefSetter).toHaveBeenCalledWith('/login?return_to=' + encodeURIComponent('/repo/demos?tab=chat&x=1'));
   });
 });
 
@@ -240,9 +238,7 @@ describe('translateAndProxyChat — pipes 401 through handleFoundryAuthError', (
     // Deferred redirect
     vi.advanceTimersByTime(750);
     expect(hrefSetter).toHaveBeenCalledTimes(1);
-    expect(hrefSetter).toHaveBeenCalledWith(
-      '/login?return_to=' + encodeURIComponent('/repo/demos?tab=chat&x=1'),
-    );
+    expect(hrefSetter).toHaveBeenCalledWith('/login?return_to=' + encodeURIComponent('/repo/demos?tab=chat&x=1'));
 
     // Fetch was called with the Foundry proxy URL
     expect(global.fetch).toHaveBeenCalledWith(
@@ -339,9 +335,7 @@ describe('CloudAdapter — catch-all proxy pipes 401 through handleFoundryAuthEr
     // Deferred redirect
     vi.advanceTimersByTime(750);
     expect(hrefSetter).toHaveBeenCalledTimes(1);
-    expect(hrefSetter).toHaveBeenCalledWith(
-      '/login?return_to=' + encodeURIComponent('/repo/demos?tab=chat&x=1'),
-    );
+    expect(hrefSetter).toHaveBeenCalledWith('/login?return_to=' + encodeURIComponent('/repo/demos?tab=chat&x=1'));
 
     // Fetch was called with the rewritten URL on the Foundry backend
     expect(global.fetch).toHaveBeenCalledWith(

@@ -9,8 +9,8 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"sync"
 	"strings"
+	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )

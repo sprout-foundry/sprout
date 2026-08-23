@@ -78,7 +78,17 @@ func TestAutomateRun_Detach_EndToEnd(t *testing.T) {
 	var info automate.AutomateSessionInfo
 	require.NoError(t, json.Unmarshal(raw, &info))
 	require.NotZero(t, info.PID, "session must record the child PID")
-	require.True(t, strings.HasPrefix(info.OutputFilePath, filepath.Join(sproutDir, "automate", "logs")),
+	// macOS: t.TempDir() yields the unresolved /var/folders/... form, but
+	// the production path builds the log path from os.Getwd(), which after
+	// the chdir in setupTestSproutDir falls back to the syscall (stale
+	// $PWD) and returns the canonical /private/var/folders/... form. Same
+	// directory, different strings — resolve the expected prefix first.
+	// On Linux both forms coincide, so this is a no-op.
+	expectedPrefix := filepath.Join(sproutDir, "automate", "logs")
+	if resolved, rerr := filepath.EvalSymlinks(sproutDir); rerr == nil {
+		expectedPrefix = filepath.Join(resolved, "automate", "logs")
+	}
+	require.True(t, strings.HasPrefix(info.OutputFilePath, expectedPrefix),
 		"OutputFilePath must point under .sprout/automate/logs/, got %q", info.OutputFilePath)
 	require.Nil(t, info.EndedAt, "detached sessions are never finalized by the launcher")
 	require.Nil(t, info.ExitCode, "detached sessions record no exit code at launch")

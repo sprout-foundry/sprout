@@ -35,7 +35,7 @@ func runAutomateLogs(sessionID string) error {
 		return nil
 	}
 
-		data, err := os.ReadFile(info.OutputFilePath)
+	data, err := os.ReadFile(info.OutputFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// stdout notice, matching the surrounding log-content output

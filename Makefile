@@ -188,9 +188,15 @@ test-coverage: prepare-grammars
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
-		if grep -qE "^--- FAIL" /tmp/sprout-test-coverage.log; then \
-			echo "Tests failed with race detection enabled. Last 200 lines:"; \
-			tail -n 200 /tmp/sprout-test-coverage.log || true; \
+		if grep -qE "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log; then \
+			echo "Tests failed. Failing test names:"; \
+			grep -E "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log | head -40 || true; \
+			echo ""; \
+			echo "Failure detail (5 lines before / 25 after each failure):"; \
+			grep -B5 -A25 -E "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log | head -400 || true; \
+			echo ""; \
+			echo "Last 100 lines of test log:"; \
+			tail -n 100 /tmp/sprout-test-coverage.log || true; \
 			exit $$status; \
 		fi; \
 		echo "WARNING: go test exited with status $$status, but no test failures found in the log."; \

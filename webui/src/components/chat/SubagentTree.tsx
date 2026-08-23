@@ -2,17 +2,9 @@ import { getPersonaColor, formatCost, formatTokens } from '@sprout/ui';
 import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, Bot } from 'lucide-react';
 import { useState, useMemo, useCallback } from 'react';
 import { subagentDepthLabel } from './SubagentActivityFeed';
+import { formatDuration } from '../../utils/format';
 import type { SubagentRun } from './types';
 import './SubagentTree.css';
-
-// ── Duration Formatting ──────────────────────────────────────────────
-
-const formatDuration = (start: Date, end?: Date): string => {
-  const ms = (end || new Date()).getTime() - start.getTime();
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-};
 
 // ── Depth Colors ─────────────────────────────────────────────────────
 

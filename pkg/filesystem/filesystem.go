@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -392,6 +393,17 @@ func isInTmpPath(path string) bool {
 		return true
 	}
 
+	// The caller often hands us a *symlink-resolved* path (SafeResolvePath*
+	// runs EvalSymlinks). os.TempDir() may not be in resolved form: on macOS
+	// it is /var/folders/.../T, but everything under /var resolves to
+	// /private/var/..., so a resolved temp path fails the prefix check above
+	// and the fetch_url temp-file read-back hit "outside working directory"
+	// errors. Compare against the resolved form as well.
+	if resolvedTemp, ok := resolvedTempDir(); ok &&
+		isUnderPrefix(cleanPath, resolvedTemp) {
+		return true
+	}
+
 	// Also check for /tmp and /private/tmp as fallbacks (for cross-platform compatibility
 	// even if os.TempDir() returns something else on some platforms).
 	if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" ||
@@ -406,6 +418,29 @@ func isInTmpPath(path string) bool {
 	}
 
 	return false
+}
+
+// resolvedTempDirOnce caches the symlink-resolved os.TempDir() (e.g.
+// /private/var/folders/.../T on macOS). Evaluated lazily and once because
+// os.TempDir() is process-static and EvalSymlinks touches the filesystem.
+var (
+	resolvedTempDirOnce sync.Once
+	resolvedTempDirVal  string
+	resolvedTempDirOK   bool
+)
+
+// resolvedTempDir returns the symlink-resolved form of os.TempDir().
+// The second return value is false when resolution fails (e.g. temp dir
+// unavailable) or when the resolved form is empty.
+func resolvedTempDir() (string, bool) {
+	resolvedTempDirOnce.Do(func() {
+		resolved, err := filepath.EvalSymlinks(os.TempDir())
+		if err == nil {
+			resolvedTempDirVal = filepath.Clean(resolved)
+			resolvedTempDirOK = resolvedTempDirVal != ""
+		}
+	})
+	return resolvedTempDirVal, resolvedTempDirOK
 }
 
 // IsUnderTmpPath is the exported wrapper around isInTmpPath.

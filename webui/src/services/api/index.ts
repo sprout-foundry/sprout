@@ -57,3 +57,4 @@ export * as editorApi from './editorApi';
 export * as onboardingApi from './onboardingApi';
 export * as sessionApi from './sessionApi';
 export * as miscApi from './miscApi';
+export * as editApprovalApi from './editApprovalApi';

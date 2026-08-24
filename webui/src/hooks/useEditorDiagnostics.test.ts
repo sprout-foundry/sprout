@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => {
   const mockClearDiagnostics = vi.fn();
   const mockDebouncedUpdate = vi.fn();
   const mockGetClientForLanguageSync = vi.fn();
+  const mockGetLSPClientService = vi.fn();
+  const mockGetLSPState = vi.fn();
   const mockGetInstance = vi.fn();
   const mockGetSemanticDiagnostics = vi.fn();
   const mockGetDiagnostics = vi.fn();
@@ -43,6 +45,10 @@ const mocks = vi.hoisted(() => {
     getInstance: (...a) => mockGetInstance(...a),
     getSemanticDiagnostics: (...a) => mockGetSemanticDiagnostics(...a),
     getDiagnostics: (...a) => mockGetDiagnostics(...a),
+  };
+
+  const mockLSPClientService = {
+    getLSPState: (...a) => mockGetLSPState(...a),
   };
 
   let _debouncedInstance = null;
@@ -59,10 +65,13 @@ const mocks = vi.hoisted(() => {
     mockClearDiagnostics,
     mockDebouncedUpdate,
     mockGetClientForLanguageSync,
+    mockGetLSPClientService,
+    mockGetLSPState,
     mockGetInstance,
     mockGetSemanticDiagnostics,
     mockGetDiagnostics,
     mockApiService,
+    mockLSPClientService,
     createDebouncedDiagnosticsUpdater,
     getDebouncedInstance: () => _debouncedInstance,
   };
@@ -82,6 +91,7 @@ vi.mock('../extensions/lintDiagnostics', () => ({
 
 vi.mock('../extensions/lspExtensions', () => ({
   getClientForLanguageSync: (...a) => mocks.mockGetClientForLanguageSync(...a),
+  getLSPClientService: (...a) => mocks.mockGetLSPClientService(...a),
 }));
 
 vi.mock('../services/api', () => ({
@@ -94,10 +104,13 @@ const {
   mockClearDiagnostics,
   mockDebouncedUpdate,
   mockGetClientForLanguageSync,
+  mockGetLSPClientService,
+  mockGetLSPState,
   mockGetInstance,
   mockGetSemanticDiagnostics,
   mockGetDiagnostics,
   mockApiService,
+  mockLSPClientService,
 } = mocks;
 
 // Static imports — Vitest hoists vi.mock above all imports automatically
@@ -154,6 +167,11 @@ beforeEach(() => {
 
   mockGetClientForLanguageSync.mockReset();
   mockGetClientForLanguageSync.mockReturnValue(null);
+
+  mockGetLSPClientService.mockReset();
+  mockGetLSPClientService.mockReturnValue(mockLSPClientService);
+  mockGetLSPState.mockReset();
+  mockGetLSPState.mockReturnValue('disconnected');
 
   mockClearDiagnostics.mockReset();
   mockDebouncedUpdate.mockReset();
@@ -347,6 +365,64 @@ describe('LSP client active', () => {
 
     // For non-semantic languages, should fall through to basic diagnostics
     expect(mockGetDiagnostics).toHaveBeenCalled();
+  });
+
+  it('skips semantic diagnostics while LSP client is connecting', async () => {
+    // File open races the LSP bootstrap: loadFile fires fetchDiagnostics
+    // before the LSP client exists (getClientForLanguageSync → null) but
+    // while getClientForLanguage is mid-flight. The LSP will push
+    // diagnostics via serverDiagnostics() once installed, so the semantic
+    // HTTP fallback must not fire (it would duplicate work and can paint
+    // stale results over the LSP's fresher push).
+    mockGetClientForLanguageSync.mockReturnValue(null);
+    mockGetLSPState.mockReturnValue('connecting');
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.tsx', name: 'test.tsx' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.tsx', 'const x = 1;');
+    });
+    await flushFetches();
+
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('skips semantic diagnostics while LSP client is reconnecting', async () => {
+    mockGetClientForLanguageSync.mockReturnValue(null);
+    mockGetLSPState.mockReturnValue('reconnecting');
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+    await flushFetches();
+
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('still uses semantic diagnostics when LSP is fully disconnected', async () => {
+    // LSP unavailable entirely (no binary, status said not-supported):
+    // semantic fallback must keep working.
+    mockGetClientForLanguageSync.mockReturnValue(null);
+    mockGetLSPState.mockReturnValue('disconnected');
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+    await flushFetches();
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalled();
   });
 });
 

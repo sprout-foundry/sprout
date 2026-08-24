@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 
 func TestProgressEmitter_QueryStarted(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	target := &buf
 
 	pe := startProgressEmitterDirect(context.Background(), bus, target)
@@ -36,7 +37,7 @@ func TestProgressEmitter_QueryStarted(t *testing.T) {
 
 func TestProgressEmitter_QueryStarted_DuplicatesSuppressed(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
@@ -55,7 +56,7 @@ func TestProgressEmitter_QueryStarted_DuplicatesSuppressed(t *testing.T) {
 
 func TestProgressEmitter_DedupResetsAfterCompletion(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
@@ -79,7 +80,7 @@ func TestProgressEmitter_MilestoneAlwaysStartsOwnLine(t *testing.T) {
 	// prose (stdout) ends without a trailing newline, then the milestone
 	// (stderr) arrives. The milestone must not be glued onto the prose.
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
@@ -101,7 +102,7 @@ func TestProgressEmitter_MilestoneAlwaysStartsOwnLine(t *testing.T) {
 
 func TestProgressEmitter_QueryCompleted(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -114,7 +115,7 @@ func TestProgressEmitter_QueryCompleted(t *testing.T) {
 
 func TestProgressEmitter_ToolStart_EditableTools(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -152,7 +153,7 @@ func TestProgressEmitter_ToolStart_EditableTools(t *testing.T) {
 
 func TestProgressEmitter_ToolStart_Shell(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -177,7 +178,7 @@ func TestProgressEmitter_ToolStart_Shell(t *testing.T) {
 
 func TestProgressEmitter_ToolStart_Search(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -202,7 +203,7 @@ func TestProgressEmitter_ToolStart_Search(t *testing.T) {
 
 func TestProgressEmitter_ToolStart_UnknownTool(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -218,7 +219,7 @@ func TestProgressEmitter_ToolStart_UnknownTool(t *testing.T) {
 
 func TestProgressEmitter_ToolStart_NoArgs(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -233,7 +234,7 @@ func TestProgressEmitter_ToolStart_NoArgs(t *testing.T) {
 
 func TestProgressEmitter_ToolStart_120CharTruncation(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -252,7 +253,7 @@ func TestProgressEmitter_ToolStart_120CharTruncation(t *testing.T) {
 
 func TestProgressEmitter_ToolStart_FirstLineOnly(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -267,7 +268,7 @@ func TestProgressEmitter_ToolStart_FirstLineOnly(t *testing.T) {
 
 func TestProgressEmitter_Error(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -281,7 +282,7 @@ func TestProgressEmitter_Error(t *testing.T) {
 
 func TestProgressEmitter_Error_200CharTruncation(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -298,7 +299,7 @@ func TestProgressEmitter_Error_200CharTruncation(t *testing.T) {
 
 func TestProgressEmitter_Error_Unknown(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -312,7 +313,7 @@ func TestProgressEmitter_Error_Unknown(t *testing.T) {
 
 func TestProgressEmitter_IgnoresOtherEvents(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -327,7 +328,7 @@ func TestProgressEmitter_IgnoresOtherEvents(t *testing.T) {
 
 func TestProgressEmitter_FullSequence(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -350,7 +351,7 @@ func TestProgressEmitter_FullSequence(t *testing.T) {
 
 func TestProgressEmitter_ControlCharsStripped(t *testing.T) {
 	bus := events.NewEventBus()
-	var buf bytes.Buffer
+	var buf safeBuffer
 	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
 	defer pe.stop()
 
@@ -482,6 +483,39 @@ func TestProgressEvents_E2E_DirectMode(t *testing.T) {
 
 // --- Helper functions ---
 
+// safeBuffer is a bytes.Buffer guarded by a mutex. The progress emitter's
+// goroutine writes concurrently while the test goroutine reads/resets;
+// production writers (*os.File) are inherently thread-safe, but the test
+// buffer needs synchronization or -race fails.
+type safeBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *safeBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *safeBuffer) WriteString(p string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.WriteString(p)
+}
+
+func (s *safeBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func (s *safeBuffer) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.b.Reset()
+}
+
 // startProgressEmitterDirect creates a progressEmitter writing to the given
 // io.Writer, bypassing the flag-based target resolution. Used by tests.
 func startProgressEmitterDirect(ctx context.Context, bus *events.EventBus, target io.Writer) *progressEmitter {
@@ -536,12 +570,16 @@ func startProgressEmitterToFile(ctx context.Context, bus *events.EventBus, path 
 	return pe
 }
 
-// readLines reads all non-blank lines from a bytes.Buffer. Blank lines are
-// skipped because every milestone is prefixed with a newline (see
+// readLines reads all non-blank lines from a safeBuffer, snapshotting under
+// the lock so the emitter goroutine's concurrent writes can't race. Blank
+// lines are skipped because every milestone is prefixed with a newline (see
 // progressEmitter.handleEvent), which adds a leading blank line to the raw
 // output; the milestone text itself is what the tests assert on.
-func readLines(buf *bytes.Buffer) []string {
-	return readLinesFromData(buf.Bytes())
+func readLines(buf *safeBuffer) []string {
+	buf.mu.Lock()
+	data := append([]byte(nil), buf.b.Bytes()...)
+	buf.mu.Unlock()
+	return readLinesFromData(data)
 }
 
 // readLinesFromData is readLines over a byte slice.

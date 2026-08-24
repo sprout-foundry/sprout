@@ -97,7 +97,7 @@ test-unit: prepare-grammars
 		tail -n 200 /tmp/sprout-test-unit.log || true; \
 		echo ""; \
 		echo "Failing packages:"; \
-		grep -nE "^(FAIL|--- FAIL:|panic:)" /tmp/sprout-test-unit.log || true; \
+		grep -naE "^(FAIL|--- FAIL:|panic:)" /tmp/sprout-test-unit.log || true; \
 		exit $$status; \
 	fi'
 
@@ -188,12 +188,12 @@ test-coverage: prepare-grammars
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
-		if grep -qE "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log; then \
+		if grep -qaE "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log; then \
 			echo "Tests failed. Failing test names:"; \
-			grep -E "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log | head -40 || true; \
+			grep -aE "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log | head -40 || true; \
 			echo ""; \
 			echo "Failure detail (5 lines before / 25 after each failure):"; \
-			grep -B5 -A25 -E "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log | head -400 || true; \
+			grep -aB5 -A25 -E "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log | head -400 || true; \
 			echo ""; \
 			echo "Last 100 lines of test log:"; \
 			tail -n 100 /tmp/sprout-test-coverage.log || true; \

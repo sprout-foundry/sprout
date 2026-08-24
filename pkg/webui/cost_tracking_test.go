@@ -179,7 +179,13 @@ func TestGetDailyCosts(t *testing.T) {
 
 	cs.records = []CostRecord{
 		{Timestamp: now, Provider: "openai", Model: "gpt-4", Cost: 0.05},
-		{Timestamp: now.Add(-30 * time.Minute), Provider: "openai", Model: "gpt-3.5", Cost: 0.03},
+		// Noon on now's own calendar day. A relative offset like
+		// now.Add(-30 * time.Minute) rolls into the PREVIOUS day when the
+		// test runs in the first 30 minutes after midnight (CI runners are
+		// UTC — failed at 00:19 UTC on 2026-08-24 with today/yesterday
+		// totals swapped). A fixed same-day clock time never crosses
+		// midnight relative to `now`.
+		{Timestamp: time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location()), Provider: "openai", Model: "gpt-3.5", Cost: 0.03},
 		{Timestamp: yesterday, Provider: "anthropic", Model: "claude", Cost: 0.10},
 		{Timestamp: twoDaysAgo, Provider: "openai", Model: "gpt-4", Cost: 0.07},
 	}

@@ -20,9 +20,9 @@ func editApprovalJSFuncs() map[string]interface{} {
 // per-hunk accept/reject decision back to the blocking agent.
 //
 // Arguments:
-//   1. requestID  — string  (the edit approval request ID)
-//   2. approved   — bool    (true = accept, false = reject)
-//   3. acceptedHunks — array of strings (hunk IDs to accept)
+//  1. requestID  — string  (the edit approval request ID)
+//  2. approved   — bool    (true = accept, false = reject)
+//  3. acceptedHunks — array of strings (hunk IDs to accept)
 //
 // Returns { delivered: bool }.
 func respondToEditDecisionFunc(_ js.Value, args []js.Value) interface{} {

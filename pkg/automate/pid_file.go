@@ -189,6 +189,12 @@ func SweepStaleSessions(sproutDir string) (int, error) {
 		if err := RemoveSessionFile(sproutDir, sessionID); err != nil {
 			continue // log but don't fail
 		}
+		// Also remove the session's detach log, if any — session records
+		// and their logs share the retention window; sweeping one without
+		// the other leaks disk under .sprout/automate/logs/.
+		if info.OutputFilePath != "" {
+			_ = os.Remove(info.OutputFilePath)
+		}
 		removed++
 	}
 

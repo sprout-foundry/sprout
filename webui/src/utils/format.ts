@@ -1,5 +1,13 @@
 import { debugLog } from './log';
 
+/** Format a duration between two Date objects (or from start to now) into a compact string. */
+export function formatDuration(start: Date, end?: Date): string {
+  const ms = (end || new Date()).getTime() - start.getTime();
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60000).toFixed(1)}m`;
+}
+
 /** Simple relative date formatter (e.g. "3 days ago", "2 hours ago") */
 export function formatRelativeDate(dateStr: string): string {
   try {

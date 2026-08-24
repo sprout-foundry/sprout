@@ -156,9 +156,9 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			if !explicit {
 				_, _ = fmt.Fprintf(os.Stderr,
 					"⚠ %dK context detected — Low-Context Mode active\n"+
-						"  8 tools, lite prompt, AGENTS.md kept\n"+
+						"  %d tools, lite prompt, AGENTS.md kept\n"+
 						"  Set context_mode: \"full\" in config to override, or /model to switch.\n",
-					agent.state.GetMaxContextTokens()/1000)
+					agent.state.GetMaxContextTokens()/1000, len(profile.ToolAllowlist))
 			} else if params.debug {
 				_, _ = fmt.Fprintf(os.Stderr,
 					"[low-context] explicit config: tools=%d prompt=%s trigger=%.2f\n",

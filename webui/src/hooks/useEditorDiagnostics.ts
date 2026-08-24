@@ -18,7 +18,7 @@ import type { EditorView } from '@codemirror/view';
 import { useRef, useCallback, useEffect } from 'react';
 import { resolveLanguageId } from '../extensions/languageRegistry';
 import { clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
-import { getClientForLanguageSync } from '../extensions/lspExtensions';
+import { getClientForLanguageSync, getLSPClientService } from '../extensions/lspExtensions';
 import { ApiService } from '../services/api';
 import type { EditorBuffer } from '../types/editor';
 import { debugLog } from '../utils/log';
@@ -130,6 +130,18 @@ export function useEditorDiagnostics(
         // - skip old semantic diagnostics to avoid duplication
         if (isSemanticLanguage(languageId) && getClientForLanguageSync(languageId)) {
           debugLog('[fetchDiagnostics] LSP client active, skipping semantic diagnostics');
+          return;
+        }
+
+        // LSP mid-connection: the client is being created right now and will
+        // push diagnostics via serverDiagnostics() once installed. Falling
+        // through to the semantic HTTP path here is wrong twice over: it
+        // duplicates work, and a slow semantic backend (or one whose worker
+        // stalls) would paint stale/empty diagnostics over the LSP's fresher
+        // push a moment later. Wait for the LSP instead.
+        const lspState = getLSPClientService().getLSPState(languageId);
+        if (isSemanticLanguage(languageId) && (lspState === 'connecting' || lspState === 'reconnecting')) {
+          debugLog('[fetchDiagnostics] LSP connecting, deferring to LSP diagnostics');
           return;
         }
 

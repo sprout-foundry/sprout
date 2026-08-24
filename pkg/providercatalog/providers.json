@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-22T09:45:44Z",
+  "updated_at": "2026-08-23T09:46:09Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -445,8 +445,8 @@
         {
           "id": "deepseek-v4-flash-vision-exp",
           "name": "deepseek-v4-flash-vision-exp",
-          "input_cost": 0.44,
-          "output_cost": 1.32
+          "input_cost": 0.22,
+          "output_cost": 0.66
         },
         {
           "id": "deepseek-v4-pro",
@@ -507,8 +507,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.06846000000000001,
-          "output_cost": 0.13692000000000001
+          "input_cost": 0.05166,
+          "output_cost": 0.10332
         },
         {
           "id": "deepseek-v4-flash:0731",
@@ -539,8 +539,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.43065000000000003,
-          "output_cost": 0.8613000000000001
+          "input_cost": 0.396894,
+          "output_cost": 0.793788
         },
         {
           "id": "deepseek-v4-pro:0813",
@@ -625,8 +625,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.5415,
-          "output_cost": 2.2800000000000002
+          "input_cost": 0.95,
+          "output_cost": 4
         },
         {
           "id": "kimi-k2.7-code",
@@ -1621,8 +1621,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06846000000000001,
-          "output_cost": 0.13692000000000001
+          "input_cost": 0.05166,
+          "output_cost": 0.10332
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -1648,8 +1648,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44,
-          "output_cost": 1.32
+          "input_cost": 0.22,
+          "output_cost": 0.66
         },
         {
           "id": "deepseek/deepseek-v4-pro",
@@ -1661,8 +1661,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.43065000000000003,
-          "output_cost": 0.8613000000000001
+          "input_cost": 0.396894,
+          "output_cost": 0.793788
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -1674,8 +1674,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.1880000000000002,
-          "output_cost": 3.564
+          "input_cost": 1.122,
+          "output_cost": 3.366
         },
         {
           "id": "dots-studio/dots-3-note-preview:free",
@@ -2526,8 +2526,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.1
+          "input_cost": 0.35,
+          "output_cost": 1.5
         },
         {
           "id": "meta/muse-spark-1.1",
@@ -3001,8 +3001,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.5415,
-          "output_cost": 2.2800000000000002
+          "input_cost": 0.95,
+          "output_cost": 4
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -4304,7 +4304,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.03,
+          "input_cost": 0.037,
           "output_cost": 0.16999999999999998
         },
         {
@@ -4831,8 +4831,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.13,
-          "output_cost": 0.52
+          "input_cost": 0.12,
+          "output_cost": 0.5
         },
         {
           "id": "qwen/qwen3-30b-a3b-instruct-2507",
@@ -5335,8 +5335,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44999999999999996,
-          "output_cost": 3.1999999999999997
+          "input_cost": 0.39999999999999997,
+          "output_cost": 3
         },
         {
           "id": "qwen/qwen3.8-max",
@@ -5529,6 +5529,17 @@
           "output_cost": 0.295
         },
         {
+          "id": "tencent/hy-mt2-7b",
+          "name": "Tencent: Hy-MT2-7B",
+          "description": "Hy-MT2-7B is a 7B-parameter translation model from Tencent. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and style-guided translation.",
+          "context_length": 8192,
+          "tags": [
+            "structured_output"
+          ],
+          "input_cost": 0.074,
+          "output_cost": 0.295
+        },
+        {
           "id": "tencent/hy3",
           "name": "Tencent: Hy3",
           "description": "Hy3 is a 295B-parameter Mixture-of-Experts model from Tencent (21B active, 192 experts with top-8 routing) built for reasoning, agentic workflows, and real-world production use. It supports a configurable reasoning effort:...",
@@ -5609,7 +5620,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.95,
+          "input_cost": 1,
           "output_cost": 4.05
         },
         {
@@ -6077,8 +6088,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.065,
-          "output_cost": 0.18
+          "input_cost": 0.04,
+          "output_cost": 0.13
         },
         {
           "id": "~google/gemini-flash-latest",

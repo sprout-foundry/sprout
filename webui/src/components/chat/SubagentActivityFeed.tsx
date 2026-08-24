@@ -6,19 +6,13 @@ import type { SubagentActivity, SubagentRun } from './types';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types';
 import './SubagentActivityFeed.css';
 import { SubagentTree } from './SubagentTree';
+import { formatDuration } from '../../utils/format';
 
 // SP-053-1a: getPersonaColor + PERSONA_COLORS now live in @sprout/ui so the
 // chat-bubble badges, the tool timeline, and this activity feed all read
 // from one source. Re-exported here for any older importers in this package
 // that referenced this module directly.
 export { getPersonaColor };
-
-export const formatDuration = (start: Date, end?: Date): string => {
-  const ms = (end || new Date()).getTime() - start.getTime();
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-};
 
 // "Dn" is a compact subagent-depth badge. Surface a human-readable label
 // via tooltip / aria-label so users hovering a "D1" know it means an

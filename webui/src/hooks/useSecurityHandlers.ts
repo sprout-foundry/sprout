@@ -103,8 +103,7 @@ export function useSecurityHandlers({
                   ? {
                       askUserRequest: {
                         ...prev.askUserRequest,
-                        deliveryError:
-                          `Failed to deliver response (HTTP ${res.status}).`,
+                        deliveryError: `Failed to deliver response (HTTP ${res.status}).`,
                       },
                     }
                   : prev,
@@ -121,8 +120,7 @@ export function useSecurityHandlers({
                   ? {
                       askUserRequest: {
                         ...prev.askUserRequest,
-                        deliveryError:
-                          'Ask user request not found or already expired.',
+                        deliveryError: 'Ask user request not found or already expired.',
                       },
                     }
                   : prev,
@@ -136,8 +134,7 @@ export function useSecurityHandlers({
                 ? {
                     askUserRequest: {
                       ...prev.askUserRequest,
-                      deliveryError:
-                        `Failed to deliver response: ${err instanceof Error ? err.message : String(err)}`,
+                      deliveryError: `Failed to deliver response: ${err instanceof Error ? err.message : String(err)}`,
                     },
                   }
                 : prev,

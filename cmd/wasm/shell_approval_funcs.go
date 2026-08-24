@@ -20,8 +20,8 @@ func shellApprovalJSFuncs() map[string]interface{} {
 // per-part accept/reject decision back to the blocking agent.
 //
 // Arguments:
-//   1. requestID — string  (the shell approval request ID)
-//   2. decisions — object  { partID: boolean } (per-part accept/reject)
+//  1. requestID — string  (the shell approval request ID)
+//  2. decisions — object  { partID: boolean } (per-part accept/reject)
 //
 // Returns { delivered: bool }.
 func respondToShellApprovalFunc(_ js.Value, args []js.Value) interface{} {

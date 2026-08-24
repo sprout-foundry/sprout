@@ -687,23 +687,24 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	// configuration additions alter the loaded prompt's exact text).
 	assertPromptContainsBody(t, ag.GetSystemPrompt(), ag.contextProfile, "lite")
 
-	// Regression sanity: the 8-tool LCM allowlist should also be
-	// active on the CLI path (proves the profile flowed all the way
-	// through, not just the prompt).
+	// Regression sanity: the LCM allowlist (now 13 tools — ask_user was
+	// added in a83ced640 for the cloud IDE ask_user/edit-approval flows)
+	// should also be active on the CLI path (proves the profile flowed
+	// all the way through, not just the prompt).
 	tools := ag.getOptimizedToolDefinitions(nil)
 	lcmTools := map[string]bool{
 		"shell_command": true, "read_file": true, "write_file": true,
-		"edit_file": true, "search_files": true, "repo_map": true,
+		"edit_file": true, "search": true, "repo_map": true,
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
-		"run_subagent": true,
+		"run_subagent": true, "ask_user": true,
 	}
 	if len(tools) != len(lcmTools) {
 		var names []string
 		for _, tool := range tools {
 			names = append(names, tool.Function.Name)
 		}
-		t.Errorf("CLI path should produce LCM 12-tool allowlist at 32K; got %d tools: %v", len(tools), names)
+		t.Errorf("CLI path should produce LCM 13-tool allowlist at 32K; got %d tools: %v", len(tools), names)
 	}
 }
 

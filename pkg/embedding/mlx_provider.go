@@ -113,9 +113,27 @@ func NewMLXEmbeddingProvider(ctx context.Context, modelPath, tokenizerPath strin
 		maxSeqLen: 2048,
 	}
 
+	// Bound MLX's freed-buffer pool. MLX caches every freed buffer by
+	// default (it makes long-running generation look like a leak — RSS
+	// climbs, the Go heap stays flat). The limit is process-global and
+	// shared with the local LLM provider, which sets the same value via
+	// llm.ApplyMemoryLimits — the two subsystems must agree so whichever
+	// initializes first isn't silently overridden by the other.
+	if err := mlx.SetCacheLimit(embeddingCacheLimit); err != nil {
+		cleanupWeights(weights, stream)
+		return nil, fmt.Errorf("mlx: set cache limit: %w", err)
+	}
+
 	log.Printf("mlx: Jina Code v2 loaded on GPU (%d layers, %d-dim)", numJinaLayers, jinaHidden)
 	return p, nil
 }
+
+// embeddingCacheLimit caps MLX's pooled freed-buffer cache. It MUST match
+// the cacheCap in sinter's llm.ApplyMemoryLimits — the MLX cache limit is
+// process-global and the daemon hosts both the embedding model and (when
+// selected) the local LLM, so a mismatch here would override whichever
+// subsystem initialized first.
+const embeddingCacheLimit = 1536 << 20 // 1.5 GB — matches llm.ApplyMemoryLimits
 
 func computeFileSHA256(path string) (string, error) {
 	data, err := os.ReadFile(path)
@@ -170,26 +188,24 @@ func (p *MLXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) (
 		return nil, nil
 	}
 
+	// Pre-tokenize every row so the chunk planner (batch_planner.go) can
+	// size each inference call by the longest row IN that call. Padding
+	// every chunk to the batch-wide max made a single long unit re-price
+	// all 32 rows of every chunk — attention cost rows × seq², so a
+	// 2048-token unit forced ~6.4 GB of transient [batch,heads,seq,seq]
+	// score tensors per chunk, which MLX's caching allocator then pooled
+	// indefinitely (observed as a multi-GB daemon footprint).
 	seqs := make([][]int32, len(texts))
-	maxLen := 0
+	lens := make([]int32, len(texts))
+	results := make([][]float32, len(texts))
 	for i, text := range texts {
 		seqs[i] = p.tokenize(text)
-		if len(seqs[i]) > maxLen {
-			maxLen = len(seqs[i])
-		}
-	}
-	if maxLen == 0 {
-		results := make([][]float32, len(texts))
-		for i := range results {
+		lens[i] = int32(len(seqs[i]))
+		if len(seqs[i]) == 0 {
+			// Empty input → zero vector, no inference call.
 			results[i] = make([]float32, p.dims)
 		}
-		return results, nil
 	}
-	if maxLen > p.maxSeqLen {
-		maxLen = p.maxSeqLen
-	}
-
-	results := make([][]float32, len(texts))
 
 	release, err := acquireInference(ctx)
 	if err != nil {
@@ -197,21 +213,31 @@ func (p *MLXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) (
 	}
 	defer release()
 
-	chunkSize := defaultBatchChunkSize
-	for start := 0; start < len(texts); start += chunkSize {
+	for _, chunk := range planInferenceChunks(lens) {
 		if err := ctx.Err(); err != nil {
 			return results, err
 		}
-		end := start + chunkSize
-		if end > len(texts) {
-			end = len(texts)
+
+		rows := make([][]int32, len(chunk.Rows))
+		for bi, idx := range chunk.Rows {
+			rows[bi] = seqs[idx]
 		}
 
-		batchVecs, err := p.runInferenceBatch(ctx, seqs[start:end], maxLen)
+		batchVecs, err := p.runInferenceBatch(ctx, rows, chunk.SeqLen)
 		if err != nil {
-			return results, fmt.Errorf("mlx embedding: batch [%d:%d]: %w", start, end, err)
+			return results, fmt.Errorf("mlx embedding: batch [%d rows, seq %d]: %w", len(rows), chunk.SeqLen, err)
 		}
-		copy(results[start:end], batchVecs)
+		for bi, idx := range chunk.Rows {
+			results[idx] = batchVecs[bi]
+		}
+	}
+
+	// Return pooled Metal buffers to the OS. MLX caches every freed buffer
+	// by default; without this, a single EmbedBatch's transient score
+	// tensors stay resident in the pool forever (see provider init for the
+	// cache cap, which bounds — but does not flush — the pool).
+	if err := mlx.ClearCache(); err != nil {
+		log.Printf("mlx embedding: clear cache: %v", err)
 	}
 
 	return results, nil
@@ -416,6 +442,9 @@ func (p *MLXEmbeddingProvider) Close() error {
 		return nil
 	}
 	p.closed = true
+	if err := mlx.ClearCache(); err != nil {
+		log.Printf("mlx embedding: clear cache on close: %v", err)
+	}
 	cleanupWeights(p.weights, p.stream)
 	if p.stream != nil {
 		p.stream.Free()

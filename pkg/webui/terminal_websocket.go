@@ -307,6 +307,18 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			}
 
 			switch msgType {
+			case "ping":
+				// The frontend TerminalWebSocketService pings every 30s and runs a
+				// pong watchdog (90s). Before this case existed, an idle-but-healthy
+				// terminal was force-disconnected by that watchdog, and the
+				// reconnect's term.reset() destroyed any running full-screen TUI
+				// (vim et al.) mid-session. Output traffic alone doesn't satisfy
+				// the watchdog — it only counts pongs.
+				safeConn.WriteJSON(map[string]interface{}{
+					"type": "pong",
+					"data": map[string]interface{}{"timestamp": time.Now().Unix()},
+				})
+
 			case "input":
 				data, ok := msg["data"].(map[string]interface{})
 				if !ok {

@@ -207,14 +207,30 @@ describe('pong watchdog liveness', () => {
       readyState = 1;
       send = vi.fn();
       close = vi.fn(() => {});
-      set onopen(cb: () => void) { listeners.open = cb; }
-      get onopen() { return listeners.open; }
-      set onmessage(cb: (e: { data: string }) => void) { listeners.message = cb; }
-      get onmessage() { return listeners.message; }
-      set onclose(cb: () => void) { listeners.close = cb; }
-      get onclose() { return listeners.close; }
-      set onerror(cb: () => void) { listeners.error = cb; }
-      get onerror() { return listeners.error; }
+      set onopen(cb: () => void) {
+        listeners.open = cb;
+      }
+      get onopen() {
+        return listeners.open;
+      }
+      set onmessage(cb: (e: { data: string }) => void) {
+        listeners.message = cb;
+      }
+      get onmessage() {
+        return listeners.message;
+      }
+      set onclose(cb: () => void) {
+        listeners.close = cb;
+      }
+      get onclose() {
+        return listeners.close;
+      }
+      set onerror(cb: () => void) {
+        listeners.error = cb;
+      }
+      get onerror() {
+        return listeners.error;
+      }
     }
     globalThis.WebSocket = StubWebSocket as unknown as typeof WebSocket;
 

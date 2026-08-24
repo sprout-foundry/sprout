@@ -25,6 +25,7 @@
       "glm-5",
       "glm-5.1",
       "glm-5.2",
+      "glm-5.3",
       "glm-5-turbo",
       "glm-5v-turbo",
       "glm-4.7",
@@ -74,6 +75,20 @@
         "id": "glm-5.2",
         "input_cost": 1.4,
         "name": "GLM-5.2",
+        "output_cost": 4.4,
+        "tags": [
+          "tools",
+          "coding",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.26,
+        "context_length": 1048576,
+        "description": "Z.AI GLM-5.3 - Latest flagship with 1M-token context for long-horizon tasks",
+        "id": "glm-5.3",
+        "input_cost": 1.4,
+        "name": "GLM-5.3",
         "output_cost": 4.4,
         "tags": [
           "tools",
@@ -242,13 +257,10 @@
       "glm-5-turbo": 200000,
       "glm-5.1": 200000,
       "glm-5.2": 1048576,
+      "glm-5.3": 1048576,
       "glm-5v-turbo": 200000
     },
     "pattern_overrides": [
-      {
-        "context_limit": 200000,
-        "pattern": "glm-5.*"
-      },
       {
         "context_limit": 200000,
         "pattern": "glm-4\\.6.*"

@@ -437,6 +437,17 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 	var done <-chan struct{}
 	var getExitCode func() int
 
+	notifier := env.Notifier
+	if notifier == nil {
+		return
+	}
+
+	// Cap the deadline so absurd values can't overflow time.Duration
+	// (a wrapped-negative duration fires the timer immediately).
+	if timeoutSec > maxWakeupTimeoutSeconds {
+		timeoutSec = maxWakeupTimeoutSeconds
+	}
+
 	// Use the agent's lifetime context for the watcher goroutines so they
 	// survive turn boundaries. The per-turn ctx is cancelled when the model
 	// finishes its response, which would kill watchers that are waiting for
@@ -449,33 +460,24 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 	if tm := TerminalManagerFromContext(ctx); tm != nil {
 		doneCh := make(chan struct{})
 		done = doneCh
-		exitCh := make(chan int, 1)
 		go func() {
-			defer close(doneCh)
 			ticker := time.NewTicker(500 * time.Millisecond)
 			defer ticker.Stop()
-			var deadline time.Time
-			hasDeadline := timeoutSec > 0
-			if hasDeadline {
-				deadline = time.Now().Add(time.Duration(timeoutSec) * time.Second)
-			}
-			for {
-				if !tm.IsSessionActive(sessionID) {
-					exitCh <- 0
-					return
-				}
-				if hasDeadline && time.Now().After(deadline) {
-					exitCh <- -1
-					return
-				}
+			for tm.IsSessionActive(sessionID) {
 				select {
 				case <-ticker.C:
 				case <-watchCtx.Done():
+					// Cancelled before the session finished: leave doneCh
+					// open so the completion goroutine also takes the
+					// cancellation branch instead of emitting a spurious
+					// completion notification.
 					return
 				}
 			}
+			close(doneCh)
 		}()
-		getExitCode = func() int { return <-exitCh }
+		// TerminalManager does not expose exit codes for PTY sessions.
+		getExitCode = func() int { return 0 }
 	} else if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
 		if proc, exists := bpm.GetProcess(sessionID); exists {
 			done = proc.Done()
@@ -487,19 +489,41 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 		return
 	}
 
+	// Deadline heads-up: fires at most once if the session is still running
+	// after timeoutSec seconds. It never stops the completion watch below —
+	// the deadline is a heads-up, not a give-up.
+	if timeoutSec > 0 {
+		go func() {
+			timer := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				// Completion can win the race with the timer; suppress the
+				// heads-up in that case so the message always means "still
+				// running" and stays ordered before the completion notice.
+				select {
+				case <-done:
+					return
+				default:
+				}
+				notifier.NotifyCompletion(sessionID, "shell_bg_timeout",
+					fmt.Sprintf("Background session %s still running after %ds (wakeup deadline reached).\nIt will be notified again when it completes.",
+						sessionID, timeoutSec))
+			case <-done:
+				// Completed before the deadline; the completion goroutine
+				// already reported it — no heads-up needed.
+			case <-watchCtx.Done():
+			}
+		}()
+	}
+
+	// Completion watch: exactly one notification when the session exits.
 	go func() {
 		select {
 		case <-done:
-			exitCode := getExitCode()
-			if exitCode == -1 {
-				env.Notifier.NotifyCompletion(sessionID, "shell_bg_timeout",
-					fmt.Sprintf("Timed out waiting for background session %s after %ds.\nUse shell_command(check_background=%q) to check status.",
-						sessionID, timeoutSec, sessionID))
-			} else {
-				env.Notifier.NotifyCompletion(sessionID, "shell_bg",
-					fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.",
-						sessionID, exitCode, sessionID))
-			}
+			notifier.NotifyCompletion(sessionID, "shell_bg",
+				fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.",
+					sessionID, getExitCode(), sessionID))
 		case <-watchCtx.Done():
 		}
 	}()

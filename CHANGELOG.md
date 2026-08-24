@@ -2,6 +2,11 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.19] - 2026-08-24
+
+- Fix flaky log-capture race in pkg/workflow allowed_paths_test: the 4 log-capture tests used defer Unlock() + t.Cleanup(SetOutput restore), so cleanup ran AFTER the lock released, letting a waiting test install its buffer before the first test's cleanup stomped the global writer — causing intermittent 'got logs: ""' failures under -race. Restore writer/flags inside a single defer that unlocks last. Verified: 25x race iterations + full package pass. (025740c3a)
+- fix(shell): wakeup deadline is a heads-up, not a give-up; BPM path honors wakeup_timeout (743c6e12f)
+
 ## [v0.17.17] - 2026-08-18
 
 - test(e2e): Environment section has 3 subsection tabs (Local LLM added) (c4182d402)

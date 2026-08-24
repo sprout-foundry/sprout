@@ -1,0 +1,85 @@
+name: Sprout PR Review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: sprout-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review-pr:
+    # Run on PRs (non-draft), changes_requested reviews, review comments,
+    # and issue comments with /sprout-review. Skip if labeled "no-sprout".
+    if: |
+      ((github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
+       (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' &&
+        github.event.review.author.login != 'github-actions[bot]') ||
+       (github.event_name == 'pull_request_review_comment' &&
+        contains(github.event.comment.body, '/sprout-review')) ||
+       (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        contains(github.event.comment.body, '/sprout-review')))
+      && !contains(github.event.pull_request.labels.*.name, 'no-sprout')
+      && !contains(github.event.issue.labels.*.name, 'no-sprout')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.event.issue.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - uses: sprout-foundry/sprout-agent@v1
+        with:
+          mode: "review"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Primary reviewer — deepinfra is the repo's established agent
+          # provider (see pricing-audit-agent.yml); secrets overlap.
+          primary-provider: "deepinfra"
+          primary-model: "deepseek-ai/DeepSeek-V3.1"
+
+          # Subagent overrides (optional cost optimization)
+          coder-provider: "deepinfra"
+          coder-model: "deepseek-ai/DeepSeek-V3.1"
+
+          deepinfra-api-key: ${{ secrets.DEEPINFRA_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+
+          review-type: "comprehensive"
+          comment-threshold: "medium"
+
+          timeout-minutes: "30"
+          debug: "false"
+
+      # Sprout installs from GitHub releases on every run; a single
+      # transient 503 from the release CDN fails the whole job. Retry
+      # once; skipped when the first attempt succeeds.
+      - name: Retry review (transient install failures)
+        if: failure()
+        uses: sprout-foundry/sprout-agent@v1
+        with:
+          mode: "review"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          primary-provider: "deepinfra"
+          primary-model: "deepseek-ai/DeepSeek-V3.1"
+          coder-provider: "deepinfra"
+          coder-model: "deepseek-ai/DeepSeek-V3.1"
+          deepinfra-api-key: ${{ secrets.DEEPINFRA_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          review-type: "comprehensive"
+          comment-threshold: "medium"
+          timeout-minutes: "30"
+          debug: "false"

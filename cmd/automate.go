@@ -18,6 +18,7 @@ import (
 var (
 	automateDir              string
 	automateAssumeYes        bool
+	automateDetach           bool
 	automateBudgetUSD        float64
 	automateBudgetWarn       string
 	automateHeartbeatSeconds int
@@ -32,6 +33,7 @@ func init() {
 
 	automateCmd.PersistentFlags().StringVar(&automateDir, "dir", "", "Workflow directory (default: ./automate)")
 	automateCmd.PersistentFlags().BoolVarP(&automateAssumeYes, "yes", "y", false, "Skip the confirmation prompt before starting the workflow")
+	automateCmd.PersistentFlags().BoolVar(&automateDetach, "detach", false, "Run the workflow in the background: log output to .sprout/automate/logs/<session>.log and return immediately instead of streaming to the terminal")
 	automateCmd.PersistentFlags().Float64Var(&automateBudgetUSD, "budget-usd", 0, "Hard cap on workflow USD spend (overrides workflow JSON budget.usd; 0 = no cap)")
 	automateCmd.PersistentFlags().StringVar(&automateBudgetWarn, "budget-warn", "", "Comma-separated warning thresholds as fractions of the budget, e.g. '0.5,0.8'")
 	automateCmd.PersistentFlags().IntVar(&automateHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides workflow JSON progress.heartbeat_seconds)")

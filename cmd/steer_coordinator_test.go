@@ -40,30 +40,58 @@ func TestSteerCoordinator_SubmitWithNilAgentNoPanic(t *testing.T) {
 	c.handleSteerInterrupt("")
 }
 
-func TestSteerCoordinator_RejectsCommandIntents(t *testing.T) {
-	// Slash and bang inputs must NOT reach the agent's injection / queue
-	// channels — the main-prompt dispatch is the only correct path for
-	// them, and silently routing them here would either echo the command
-	// to the LLM (steer) or wrap it as blockquote text on the next turn
-	// (queue), both of which drop the user's command semantics.
-	//
-	// Note: shell shortcuts like "pwd" and "git status" are no longer
-	// intercepted statically (the directCommands table was removed).
-	// They only get rejected when zsh detection catches them, which is
-	// disabled in the test agent. See TestSteerCoordinator_AllowsFreeformText.
+func TestSteerCoordinator_RejectsSlashCommands(t *testing.T) {
+	// Slash commands are rejected in both STEER and QUEUE modes. They
+	// must not reach the injection / queue channels — the main-prompt
+	// dispatch is the only correct path for them.
 	a := newTestAgentForIntent(t)
 	c := NewSteerCoordinator(a, nil)
-	// Drain any pre-existing queue state so we can assert "zero"
-	// after the rejection paths run.
 	_ = a.DrainDeferredMessages()
 
-	for _, in := range []string{"/commit", "!ls"} {
+	for _, in := range []string{"/commit"} {
 		c.handleSteerSubmit(in)
 		c.handleQueueSubmit(in)
 	}
 
 	if drained := a.DrainDeferredMessages(); len(drained) != 0 {
-		t.Errorf("rejected command intents leaked into deferred queue: %v", drained)
+		t.Errorf("rejected slash command leaked into deferred queue: %v", drained)
+	}
+}
+
+// TestSteerCoordinator_BangShell_SteerWithoutRegistryRejected verifies that
+// a bang command in STEER mode falls back to rejection when no command
+// registry is set on the agent (executeSteerShell returns false). The
+// message must not leak into the deferred queue or the steering channel.
+func TestSteerCoordinator_BangShell_SteerWithoutRegistryRejected(t *testing.T) {
+	a := newTestAgentForIntent(t)
+	c := NewSteerCoordinator(a, nil)
+	_ = a.DrainDeferredMessages()
+
+	c.handleSteerSubmit("!ls")
+
+	if drained := a.DrainDeferredMessages(); len(drained) != 0 {
+		t.Errorf("rejected bang command leaked into deferred queue: %v", drained)
+	}
+	select {
+	case msg := <-a.SteeringChannel():
+		t.Errorf("rejected bang command leaked into steering channel: %s", msg)
+	default:
+	}
+}
+
+// TestSteerCoordinator_BangShell_QueuedAndAutoRun verifies that a bang
+// command in QUEUE mode is enqueued (not rejected) so it auto-runs as its
+// own turn at turn end through the REPL dispatch.
+func TestSteerCoordinator_BangShell_QueuedAndAutoRun(t *testing.T) {
+	a := newTestAgentForIntent(t)
+	c := NewSteerCoordinator(a, nil)
+	_ = a.DrainDeferredMessages()
+
+	c.handleQueueSubmit("!echo hi")
+
+	drained := a.DrainDeferredMessages()
+	if len(drained) != 1 || drained[0] != "!echo hi" {
+		t.Errorf("expected bang command in queue, got %v", drained)
 	}
 }
 

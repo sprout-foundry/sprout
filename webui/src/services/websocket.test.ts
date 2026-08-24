@@ -5,8 +5,12 @@ import { WebSocketService } from './websocket';
 // ---------------------------------------------------------------------------
 const { cloudModeRef } = vi.hoisted(() => ({ cloudModeRef: { value: false } }));
 vi.mock('../config/mode', () => ({
-  get isCloud() { return cloudModeRef.value; },
-  get mode() { return cloudModeRef.value ? 'cloud' : 'local'; },
+  get isCloud() {
+    return cloudModeRef.value;
+  },
+  get mode() {
+    return cloudModeRef.value ? 'cloud' : 'local';
+  },
 }));
 
 // Mock the modules that websocket.ts depends on

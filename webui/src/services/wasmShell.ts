@@ -85,16 +85,9 @@ export interface WasmShell {
   /** Deliver a response to a pending ask_user request. */
   respondToAskUser?(requestId: string, response: string): { delivered: boolean };
   /** Deliver an edit approval decision to a pending edit approval request. */
-  respondToEditDecision?(
-    requestId: string,
-    approved: boolean,
-    acceptedHunks: string[],
-  ): { delivered: boolean };
+  respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
   /** Deliver a shell approval decision to a pending shell approval request. */
-  respondToShellApproval?(
-    requestId: string,
-    decisions: Record<string, boolean>,
-  ): { delivered: boolean };
+  respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -228,15 +221,8 @@ export interface SproutWasmAPI {
   stopAgent?(): void;
   steerAgent?(message: string): Record<string, unknown>;
   respondToAskUser?(requestId: string, response: string): { delivered: boolean };
-  respondToEditDecision?(
-    requestId: string,
-    approved: boolean,
-    acceptedHunks: string[],
-  ): { delivered: boolean };
-  respondToShellApproval?(
-    requestId: string,
-    decisions: Record<string, boolean>,
-  ): { delivered: boolean };
+  respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
+  respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
@@ -469,11 +455,7 @@ export async function initWasmShell(config?: {
         return { delivered: false };
       },
 
-      respondToEditDecision(
-        requestId: string,
-        approved: boolean,
-        acceptedHunks: string[],
-      ): { delivered: boolean } {
+      respondToEditDecision(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean } {
         const api = wasm as SproutWasmAPI;
         if (api.respondToEditDecision) {
           return api.respondToEditDecision(requestId, approved, acceptedHunks);
@@ -481,10 +463,7 @@ export async function initWasmShell(config?: {
         return { delivered: false };
       },
 
-      respondToShellApproval(
-        requestId: string,
-        decisions: Record<string, boolean>,
-      ): { delivered: boolean } {
+      respondToShellApproval(requestId: string, decisions: Record<string, boolean>): { delivered: boolean } {
         const api = wasm as SproutWasmAPI;
         if (api.respondToShellApproval) {
           return api.respondToShellApproval(requestId, decisions);

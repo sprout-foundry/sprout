@@ -17,6 +17,9 @@ import (
 // Used by the steer / queue submit handlers (cmd/steer_coordinator.go)
 // to reject submissions that would silently lose their command meaning
 // if injected mid-turn or wrapped into the deferred-queue blockquote.
+// Bang-prefixed shell commands are an exception: they execute mid-turn
+// (steer) or enqueue for auto-run (queue), both of which dispatch them
+// through the command registry's ! → exec translation.
 type PromptIntent string
 
 const (

@@ -14,6 +14,16 @@ const reactPlugin = useSwc
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production';
 
+  // Cloud-mode builds are served by the platform under /webui/ (Mode C
+  // browser IDE). The platform's root catch-all is the dashboard SPA, so
+  // root-absolute asset URLs (/assets/*) from this build would be answered
+  // with the dashboard's index.html (text/html) and the browser would
+  // reject the module scripts — blank page. Local E2E builds already pass
+  // --base=/webui/ explicitly (platform/scripts/run-e2e-tests.sh); this
+  // default makes plain `vite build --mode cloud` (platform CI's
+  // build:cloud) correct too. An explicit --base flag still wins.
+  const isCloud = mode === 'cloud';
+
   // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
   // These are overridden at build time by .env files or CI environment vars.
   //
@@ -44,8 +54,9 @@ export default defineConfig(({ mode }) => {
     define: defineEntries,
     plugins: [reactPlugin()],
     
-    // Base URL for production builds
-    base: '/',
+    // Base URL for production builds. Cloud builds are mounted at /webui/
+    // (see isCloud above); local/desktop builds are served from the root.
+    base: isCloud ? '/webui/' : '/',
     
     // Resolve aliases
     resolve: {

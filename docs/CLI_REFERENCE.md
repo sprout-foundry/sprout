@@ -176,6 +176,66 @@ Export session data to training formats (ShareGPT, OpenAI, Alpaca).
 sprout export-training [flags]
 ```
 
+### `sprout automate`
+
+Discover and run automated agent workflows from your project's `automate/` directory. Workflows are JSON configuration files that define automated agent behavior — building, testing, reviewing, and committing code without manual intervention. Running `sprout automate` with no subcommand opens an interactive workflow picker.
+
+**Basic Usage:**
+```bash
+sprout automate [flags]
+sprout automate <command> [flags]
+```
+
+**Commands:**
+```bash
+sprout automate list               # List available workflows
+sprout automate run <workflow>     # Run a workflow by name or filename
+sprout automate status             # Show running automate sessions
+sprout automate stop <session_id>  # Stop a running session (SIGINT → SIGTERM → SIGKILL)
+sprout automate logs <session_id>  # View output from a session
+```
+
+**Examples:**
+```bash
+sprout automate run full_autonomous          # Foreground: output streams to this terminal
+sprout automate run review --detach          # Background: returns immediately, logs to a file
+sprout automate run review --yes --budget-usd 5
+sprout automate status --all                 # Include exited sessions
+sprout automate status --json                # Machine-readable JSON array
+sprout automate logs abc123 -f -n 100        # Follow last 100 lines until the process exits
+sprout automate stop --all
+```
+
+**Persistent Flags:**
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--dir <path>` | Workflow directory (default: `./automate`) | `sprout automate run --dir my-workflows review` |
+| `-y`, `--yes` | Skip the confirmation prompt before starting the workflow | `sprout automate run --yes review` |
+| `--detach` | Run the workflow in the background: child stdio is redirected to `.sprout/automate/logs/<sessionID>.log` under the discovered sprout root (recorded in the session file), and the command returns immediately instead of streaming to the terminal | `sprout automate run review --detach` |
+| `--budget-usd <amount>` | Hard cap on workflow USD spend (overrides workflow JSON `budget.usd`; 0 = no cap) | `sprout automate run review --budget-usd 5` |
+| `--budget-warn <fractions>` | Comma-separated warning thresholds as fractions of the budget, e.g. `'0.5,0.8'` | `sprout automate run review --budget-warn 0.5,0.8` |
+| `--heartbeat <seconds>` | Print `[budget]` progress every N seconds during the run (overrides workflow JSON `progress.heartbeat_seconds`) | `sprout automate run review --heartbeat 30` |
+
+**Detached Runs:**
+
+With `--detach`, child stdio is redirected to `.sprout/automate/logs/<sessionID>.log` under the discovered sprout root (the nearest `.sprout/automate/` found walking up from the current directory), the log path is recorded in the session file (`output_file_path`), and the command returns immediately. Monitor a detached run with `sprout automate status` and `sprout automate logs <session_id>`. Attached (foreground) sessions stream to the terminal and have no captured output file.
+
+**Session Discovery (`status` / `stop` / `logs`):**
+
+Sessions are found by walking up from the current directory to the nearest `.sprout/automate/` (then the central registry), so these commands work from any project subdirectory — not just the repo root. Each accepts a local `--dir` flag that overrides the session root; note this shadows the parent `automate --dir` flag, which selects the *workflow* directory instead.
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--dir <path>` | Path to the `.sprout` session root (default: nearest `.sprout/automate/` found walking up from the current directory) | `sprout automate status --dir ../other-project/.sprout` |
+| `--all` (status) | Include exited sessions (default: running sessions plus those that ended within the last 24h) | `sprout automate status --all` |
+| `--json` (status) | Output sessions as a JSON array (machine-readable) | `sprout automate status --json` |
+| `--all` (stop) | Stop all running sessions (session ID not required) | `sprout automate stop --all` |
+| `-f`, `--follow` (logs) | Follow output in real time — keeps tailing the log file until the process exits | `sprout automate logs abc123 -f` |
+| `-n`, `--lines <N>` (logs) | Show only the last N lines (0 = all) | `sprout automate logs abc123 -n 100` |
+
+To create workflows, activate the `workflow-automation` skill in an agent session or run `sprout skill list`.
+
 ---
 
 ## Advanced Agent Flags

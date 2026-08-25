@@ -37,3 +37,8 @@ func ListSessionFiles(sproutDir string) ([]AutomateSessionInfo, error) {
 func FinalizeSessionFile(sproutDir string, sessionID string, exitCode int) error {
 	return fmt.Errorf("session finalization is not supported on JS/WASM platforms")
 }
+
+// FinalizeSessionFileByPath is a no-op for JS/WASM builds.
+func FinalizeSessionFileByPath(path string, exitCode int) error {
+	return fmt.Errorf("session finalization is not supported on JS/WASM platforms")
+}

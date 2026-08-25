@@ -38,6 +38,11 @@ func GetAutomateSessionDir(baseDir string) (string, error) {
 	return dir, nil
 }
 
+// sessionFilePath returns the record path for sessionID under sproutDir.
+func sessionFilePath(sproutDir, sessionID string) string {
+	return filepath.Join(sproutDir, "automate", sessionID+".json")
+}
+
 // WriteSessionFile writes a session info JSON to .sprout/automate/<sessionID>.json.
 // Creates the directory if needed. A record with empty Status is normalized
 // to "running" so consumers never see a third state.
@@ -45,11 +50,13 @@ func WriteSessionFile(sproutDir string, sessionID string, info *AutomateSessionI
 	if info != nil && info.Status == "" && info.EndedAt == nil {
 		info.Status = "running"
 	}
-	dir := filepath.Join(sproutDir, "automate")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(sproutDir, "automate"), 0o700); err != nil {
 		return fmt.Errorf("create automate session directory: %w", err)
 	}
-	path := filepath.Join(dir, sessionID+".json")
+	return writeSessionFileAt(sessionFilePath(sproutDir, sessionID), info)
+}
+
+func writeSessionFileAt(path string, info *AutomateSessionInfo) error {
 	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal session info: %w", err)
@@ -71,7 +78,10 @@ func RemoveSessionFile(sproutDir string, sessionID string) error {
 
 // ReadSessionFile reads and parses a single session file.
 func ReadSessionFile(sproutDir string, sessionID string) (*AutomateSessionInfo, error) {
-	path := filepath.Join(sproutDir, "automate", sessionID+".json")
+	return readSessionFileAt(sessionFilePath(sproutDir, sessionID))
+}
+
+func readSessionFileAt(path string) (*AutomateSessionInfo, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read session file: %w", err)
@@ -127,9 +137,17 @@ const sessionRetention = 7 * 24 * time.Hour
 // record: EndedAt, ExitCode, and a Status of "success" (exit 0) or "error".
 // The PID is zeroed so IsProcessAlive never matches a recycled PID later.
 func FinalizeSessionFile(sproutDir string, sessionID string, exitCode int) error {
-	info, err := ReadSessionFile(sproutDir, sessionID)
+	return FinalizeSessionFileByPath(sessionFilePath(sproutDir, sessionID), exitCode)
+}
+
+// FinalizeSessionFileByPath is FinalizeSessionFile for callers that hold the
+// record path itself — the detached workflow child, which only knows the
+// path the launcher passed it via --automate-session-file and must write its
+// own end state because no process is waiting on it.
+func FinalizeSessionFileByPath(path string, exitCode int) error {
+	info, err := readSessionFileAt(path)
 	if err != nil {
-		return fmt.Errorf("finalize session %s: %w", sessionID, err)
+		return fmt.Errorf("finalize session %s: %w", filepath.Base(path), err)
 	}
 	now := time.Now()
 	code := exitCode
@@ -141,7 +159,7 @@ func FinalizeSessionFile(sproutDir string, sessionID string, exitCode int) error
 	} else {
 		info.Status = "error"
 	}
-	return WriteSessionFile(sproutDir, sessionID, info)
+	return writeSessionFileAt(path, info)
 }
 
 // SweepStaleSessions removes session files for dead sessions whose retention

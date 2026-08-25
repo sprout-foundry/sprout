@@ -37,6 +37,7 @@ func resetAutomateGlobals() func() {
 	savedBudgetUSD := automateBudgetUSD
 	savedBudgetWarn := automateBudgetWarn
 	savedHeartbeat := automateHeartbeatSeconds
+	savedSessionDir := automateSessionDir
 
 	return func() {
 		automateStatusAll = savedAll
@@ -50,6 +51,7 @@ func resetAutomateGlobals() func() {
 		automateBudgetUSD = savedBudgetUSD
 		automateBudgetWarn = savedBudgetWarn
 		automateHeartbeatSeconds = savedHeartbeat
+		automateSessionDir = savedSessionDir
 	}
 }
 
@@ -88,6 +90,10 @@ func setupTestSproutDir(t *testing.T) string {
 	tmpDir := t.TempDir()
 	sproutDir := filepath.Join(tmpDir, ".sprout")
 	require.NoError(t, os.MkdirAll(filepath.Join(sproutDir, "automate"), 0o700))
+
+	// Isolate the central-registry fallback so no test can discover real
+	// user state (~/.local/state/sprout) when the fixture walk-up misses.
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
 
 	// Change CWD so os.Getwd() returns tmpDir
 	origWd, err := os.Getwd()

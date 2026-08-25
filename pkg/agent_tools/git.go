@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	git "github.com/sprout-foundry/sprout/pkg/git"
 )
 
 // GitOperationType defines the type of git operation
@@ -64,6 +64,17 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 			return "", fmt.Errorf("commit operation requires a commit flow executor")
 		}
 		return commitFlowExecutor.ExecuteGitCommitFlow()
+	}
+
+	// AGENTS.md: rebase is unconditionally banned. The git tool refuses it
+	// even though the shell_command path also blocks it. This is defense-in-depth.
+	// The only permitted rebase invocation is --abort (recovery from a prior session).
+	if op.Operation == GitOpRebase {
+		// If args contain --abort, allow the recovery operation through.
+		// All other rebase forms are banned.
+		if !strings.Contains(op.Args, "--abort") {
+			return "", fmt.Errorf("git rebase is not supported: AGENTS.md bans rebase unconditionally (interactive, non-interactive, `git rebase --continue`, `git rebase --skip`, and `git pull --rebase`). The only permitted invocation is `git rebase --abort` to recover from a prior session's interrupted rebase. Use `git merge` to integrate upstream")
+		}
 	}
 
 	// Validate git arguments for dangerous patterns before proceeding
@@ -147,13 +158,11 @@ func executeGitCommand(ctx context.Context, op GitOperationType, args string) (s
 		cmdArgs = append(cmdArgs, strings.Fields(args)...)
 	}
 
-	// Execute the command
-	cmd := exec.Command("git", cmdArgs...)
-
-	// Set working directory from the workspace on context (multi-window daemon support)
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
-		cmd.Dir = wd
-	}
+	// Use SafeGitCmd so mutating operations are blocked when running under
+	// `go test` without an explicit working directory, preventing accidental
+	// mutations to the host repository.
+	wd := filesystem.WorkspaceRootFromContext(ctx)
+	cmd := git.SafeGitCmd(wd, cmdArgs...)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

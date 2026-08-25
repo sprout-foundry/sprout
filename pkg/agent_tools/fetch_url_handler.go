@@ -2,10 +2,13 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"mime"
 	"net/url"
+	"path/filepath"
 	"strings"
+	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // fetchURLHandler implements ToolHandler for the fetch_url tool.
@@ -18,7 +21,7 @@ func (h *fetchURLHandler) Name() string {
 func (h *fetchURLHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "fetch_url",
-		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly.",
+		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly. Large pages are saved to a temp file with a section index — use read_file with view_range to read specific sections.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "url",
@@ -39,16 +42,16 @@ func (h *fetchURLHandler) Validate(args map[string]any) error {
 
 	u := strings.TrimSpace(raw)
 	if u == "" {
-		return fmt.Errorf("parameter 'url' must not be empty")
+		return agenterrors.NewValidation("parameter 'url' must not be empty", nil)
 	}
 
 	// Must be an absolute HTTP(S) URL.
 	parsed, perr := url.ParseRequestURI(u)
 	if perr != nil {
-		return fmt.Errorf("parameter 'url' must be an absolute HTTP(S) URL")
+		return agenterrors.NewValidation("parameter 'url' must be an absolute HTTP(S) URL", nil)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("parameter 'url' must be an absolute HTTP(S) URL")
+		return agenterrors.NewValidation("parameter 'url' must be an absolute HTTP(S) URL", nil)
 	}
 
 	return nil
@@ -68,13 +71,33 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		}, err
 	}
 
-	result := ToolResult{
-		Output:     content,
-		TokenUsage: int64(estimateTokenUsage(content)),
+	// For small content, return inline as before.
+	if len(content) <= fetchContentThreshold {
+		result := ToolResult{
+			Output:     content,
+			TokenUsage: int64(estimateTokenUsage(content)),
+		}
+		if imageData := classifyURL(urlVal); imageData != nil {
+			result.Images = []ImageData{*imageData}
+		}
+		return result, nil
 	}
 
-	// Detect image / PDF URLs and attach an ImageData entry so vision-capable
-	// models can render the resource directly.
+	// Large content: save to temp file and return section TOC.
+	filePath, err := saveFetchContent(urlVal, content)
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
+	toc := buildSectionTOC(content)
+	output := toc + "\nFile path: " + filePath + "\n"
+
+	result := ToolResult{
+		Output:     output,
+		TokenUsage: int64(estimateTokenUsage(output)),
+	}
+
+	// Still attach image data for vision-capable models.
 	if imageData := classifyURL(urlVal); imageData != nil {
 		result.Images = []ImageData{*imageData}
 	}
@@ -82,8 +105,14 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	return result, nil
 }
 
-// classifyURL checks whether a URL points to an image or PDF resource and, if
-// so, returns a populated ImageData.  Returns nil for non-media URLs.
+func (h *fetchURLHandler) Aliases() []string      { return nil }
+func (h *fetchURLHandler) Timeout() time.Duration { return 0 }
+func (h *fetchURLHandler) MaxResultSize() int     { return 0 }
+func (h *fetchURLHandler) SafeForParallel() bool  { return false }
+func (h *fetchURLHandler) Interactive() bool      { return false }
+
+// classifyURL checks if the URL points to an image or PDF and, if so,
+// returns a populated ImageData. Returns nil for non-media URLs.
 func classifyURL(rawURL string) *ImageData {
 	_, path := splitURLScheme(rawURL)
 	ext := strings.ToLower(fileURLExtension(path))
@@ -110,7 +139,7 @@ func classifyURL(rawURL string) *ImageData {
 }
 
 // splitURLScheme returns the scheme and the remainder of the URL (after
-// scheme://).  Handles both absolute and relative paths gracefully.
+// scheme://). Handles both absolute and relative paths gracefully.
 func splitURLScheme(rawURL string) (string, string) {
 	if u, err := url.Parse(rawURL); err == nil {
 		return u.Scheme, u.Path
@@ -124,11 +153,7 @@ func splitURLScheme(rawURL string) (string, string) {
 }
 
 // fileURLExtension returns the file extension from a URL path.
-// Returns an empty string if there is no extension.
+// Uses filepath.Ext which handles query strings correctly (stops at ?).
 func fileURLExtension(path string) string {
-	idx := strings.LastIndex(path, ".")
-	if idx == -1 {
-		return ""
-	}
-	return path[idx:]
+	return filepath.Ext(path)
 }

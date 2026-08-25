@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import { ExternalLink, CheckCircle, Circle, Loader2, Minus, Wrench, Bot, Terminal, BookOpen, Pencil, FileEdit, Search, Eye, FlaskConical, Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw } from 'lucide-react';
+import { ExternalLink, CheckCircle, XCircle, Circle, Loader2, Minus, Wrench, Bot, Terminal, BookOpen, Pencil, FileEdit, Search, Eye, FlaskConical, Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw } from 'lucide-react';
 import { parseMessageSegments, type MessageSegment } from '../utils/messageSegments';
 import { stripAnsiCodes } from '../utils/ansi';
 import MessageContent from './MessageContent';
@@ -111,7 +111,10 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
               (toolStatus === undefined || toolStatus === 'completed' || toolStatus === 'error');
 
             if (isDone && matchingRef) {
-              // Completed tool: render a compact footnote superscript link [shortname]
+              // Completed tool: render a compact inline badge that matches the
+              // running pill shape but with muted styling. This eliminates the
+              // flicker caused by transitioning from pill to superscript footnote.
+              const Icon = toolStatus === 'error' ? XCircle : CheckCircle;
               return (
                 <span
                   key={`seg-${idx}`}
@@ -128,8 +131,9 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                   title={matchingRef.label}
                   aria-label={`View tool: ${matchingRef.label}`}
                 >
-                  [{getShortToolName(baseName)}]
-                </span >
+                  <Icon size={12} className="tool-footnote-icon" />
+                  <span className="tool-footnote-name">{getShortToolName(baseName)}</span>
+                </span>
               );
             }
 

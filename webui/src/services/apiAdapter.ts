@@ -17,12 +17,27 @@ export type { APIAdapter, PlatformNavItem } from '@sprout/ui';
 let activeAdapter: APIAdapter | null = null;
 
 /**
+ * Fired after installAdapter() sets the active adapter singleton.
+ *
+ * The adapter is installed asynchronously (after the bootstrap fetch resolves),
+ * so providers that cache the adapter at mount time listen for this event to
+ * re-read it.
+ */
+export const ADAPTER_INSTALLED_EVENT = 'sprout:adapter-installed';
+
+/**
  * Install an API adapter. Called once at app startup.
  * If never called, clientFetch uses the default local behavior.
  */
 export function installAdapter(adapter: APIAdapter): void {
   activeAdapter = adapter;
+  // Log first so console order matches: install log, then provider updates.
   console.warn(`[apiAdapter] Installed: ${adapter.name}`);
+  // Notify React providers (PlatformNavProvider, SproutAdapterProvider) that
+  // the adapter is available so they re-read the singleton.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(ADAPTER_INSTALLED_EVENT));
+  }
 }
 
 /**

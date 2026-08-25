@@ -6,55 +6,6 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// containsFrontendKeywords checks if the query contains frontend-related keywords
-func containsFrontendKeywords(query string) bool {
-	// High-priority frontend indicators
-	highPriorityKeywords := []string{
-		"react", "vue", "angular", "nextjs", "next.js", "svelte",
-		"app", "website", "webpage", "web app", "web application",
-		"frontend", "front-end", "ui", "user interface", "interface",
-		"layout", "design", "responsive", "mobile-first",
-		"css", "html", "styling", "styles", "stylesheet",
-		"component", "components", "widget", "widgets",
-		"dashboard", "landing page", "homepage", "navigation",
-		"mockup", "wireframe", "prototype", "screenshot",
-	}
-
-	// Secondary frontend indicators
-	secondaryKeywords := []string{
-		"colors", "palette", "theme", "branding",
-		"bootstrap", "tailwind", "material", "chakra",
-		"sass", "scss", "less", "styled-components",
-		"button", "form", "input", "modal", "dropdown",
-		"header", "footer", "sidebar", "menu",
-		"grid", "flexbox", "margin", "padding", "border",
-		"typography", "font", "text", "heading",
-		"animation", "transition", "hover", "interactive",
-	}
-
-	queryLower := strings.ToLower(query)
-
-	// Check high-priority keywords first (any match = frontend)
-	for _, keyword := range highPriorityKeywords {
-		if strings.Contains(queryLower, keyword) {
-			return true
-		}
-	}
-
-	// Check for multiple secondary keywords (2+ matches = frontend)
-	matches := 0
-	for _, keyword := range secondaryKeywords {
-		if strings.Contains(queryLower, keyword) {
-			matches++
-			if matches >= 2 {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // determineReasoningEffort determines the appropriate reasoning effort level based on the query
 func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 	if override := a.configuredReasoningEffort(); override != "" {

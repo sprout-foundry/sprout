@@ -126,7 +126,8 @@ func Initialize() (*Config, *APIKeys, error) {
 		if currentProvider != "editor" && RequiresAPIKey(currentProvider) && !HasProviderAuth(currentProvider) {
 			needsSetup = true
 			if !isCI {
-				fmt.Printf("\n[WARN] Current provider '%s' requires an API key but none is configured.\n", GetProviderDisplayName(currentProvider))
+				fmt.Println()
+				bracketWarn(os.Stdout, fmt.Sprintf("Current provider '%s' requires an API key but none is configured.", GetProviderDisplayName(currentProvider)))
 			}
 		}
 	}
@@ -138,18 +139,26 @@ func Initialize() (*Config, *APIKeys, error) {
 			fmt.Printf("   Config directory: %s\n\n", configDir)
 		}
 
-		// Set a default provider that works in CI
-		if HasProviderAuth("openrouter") {
-			config.LastUsedProvider = "openrouter"
-			fmt.Printf("[OK] Using OpenRouter provider from environment\n")
-		} else if HasProviderAuth("openai") {
-			config.LastUsedProvider = "openai"
-			fmt.Printf("[OK] Using OpenAI provider from environment\n")
+		// Set a default provider that works in CI. The historical chain
+		// (openrouter → openai → fall through) was alphabetical and ignored
+		// the user's actual usage history; instead, prefer a provider the
+		// user has already used (ProviderModels entry), then any provider
+		// with credentials configured. See orderProvidersByUsage.
+		chosen := ""
+		for _, name := range orderProvidersByUsage(KnownProviderNames(), config) {
+			if HasProviderAuth(name) {
+				chosen = name
+				break
+			}
+		}
+		if chosen != "" {
+			config.LastUsedProvider = chosen
+			bracketOK(os.Stdout, fmt.Sprintf("Using %s provider from environment", GetProviderDisplayName(chosen)))
 		} else {
 			// Don't save test provider as default - it's for testing only
 			// Leave LastUsedProvider empty and let callers handle the test provider
-			fmt.Printf("[OK] No real provider available; using test provider for CI\n")
-			fmt.Printf("[WARN] Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)\n")
+			bracketOK(os.Stdout, "No real provider available; using test provider for CI")
+			bracketWarn(os.Stdout, "Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)")
 		}
 
 		if err := config.Save(); err != nil {
@@ -168,7 +177,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		}
 
 		// First run or setup needed - select initial provider
-		provider, err := selectInitialProvider(apiKeys)
+		provider, err := selectInitialProvider(apiKeys, config)
 		if err != nil {
 			return nil, nil, fmt.Errorf("provider setup failed: %w", err)
 		}
@@ -201,7 +210,7 @@ func Initialize() (*Config, *APIKeys, error) {
 }
 
 // selectInitialProvider guides user through initial provider selection
-func selectInitialProvider(apiKeys *APIKeys) (string, error) {
+func selectInitialProvider(apiKeys *APIKeys, cfg *Config) (string, error) {
 	// Non-interactive environments cannot prompt for provider selection.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
@@ -231,6 +240,14 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			}
 		}
 	}
+	// Reorder envProviders by user history (used-before first, then any
+	// creds, then the rest). The display menu and selection index both
+	// reference this slice, so the order is what the user sees and what
+	// the default pick points at. Without this reordering the first
+	// entry would be whatever KnownProviderNames() happens to return
+	// first alphabetically (often openrouter), regardless of which
+	// provider the user actually runs day-to-day.
+	envProviders = orderProvidersByUsage(envProviders, cfg)
 
 	// If we have providers with environment variables, offer them with skip option
 	if len(envProviders) > 0 {
@@ -256,7 +273,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		if choice > 0 && choice <= len(envProviders) {
 			selected = envProviders[choice-1]
 		}
-		fmt.Printf("[OK] Using %s (environment variable detected)\n", GetProviderDisplayName(selected))
+		bracketOK(os.Stdout, fmt.Sprintf("Using %s (environment variable detected)", GetProviderDisplayName(selected)))
 		return selected, nil
 	}
 
@@ -276,10 +293,15 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			providersWithKeys = append(providersWithKeys, name)
 		}
 	}
+	// Same tiered reordering as envProviders: prefer providers the user
+	// has actually used before, then any provider with credentials, then
+	// the rest. Without this, the "Ready to use" list defaults to
+	// openrouter-first purely by alphabetical chance.
+	providersWithKeys = orderProvidersByUsage(providersWithKeys, cfg)
 
 	// If we have providers ready to use, show them first
 	if len(providersWithKeys) > 0 {
-		fmt.Println("[OK] Ready to use (configured or no API key needed):")
+		bracketOK(os.Stdout, "Ready to use (configured or no API key needed):")
 		for i, providerName := range providersWithKeys {
 			fmt.Printf("  %d. %s", i+1, GetProviderDisplayName(providerName))
 			if !RequiresAPIKey(providerName) {
@@ -367,11 +389,11 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			return "", fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s (%d models available)\n", GetProviderDisplayName(selectedProvider), modelCount)
+		bracketOK(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(selectedProvider), modelCount))
 	} else if metadata.RequiresAPIKey {
-		fmt.Printf("[OK] Using existing API key for %s\n", GetProviderDisplayName(selectedProvider))
+		bracketOK(os.Stdout, fmt.Sprintf("Using existing API key for %s", GetProviderDisplayName(selectedProvider)))
 	} else {
-		fmt.Printf("[OK] Selected %s (no API key required)\n", GetProviderDisplayName(selectedProvider))
+		bracketOK(os.Stdout, fmt.Sprintf("Selected %s (no API key required)", GetProviderDisplayName(selectedProvider)))
 	}
 
 	return selectedProvider, nil
@@ -393,7 +415,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("[WARN] No API key found for %s\n", GetProviderDisplayName(provider))
+	bracketWarn(os.Stdout, fmt.Sprintf("No API key found for %s", GetProviderDisplayName(provider)))
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  1. Enter API key now")
@@ -417,7 +439,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 			return fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s (%d models available)\n", GetProviderDisplayName(provider), modelCount)
+		bracketOK(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(provider), modelCount))
 		return nil
 	}
 
@@ -431,11 +453,15 @@ func GetAvailableProviders() []string {
 	providerFactory := providers.GlobalFactory()
 	factoryProviders := providerFactory.GetAvailableProviders()
 
-	// Add the special providers that aren't in the factory (built-in ones)
+	// Add the special providers that aren't in the factory (built-in ones).
+	// `test` (api.TestClientType) is intentionally excluded — it's an in-process
+	// mock sentinel for unit tests; if a user selected it from a settings
+	// dropdown and it landed on disk as LastUsedProvider, the next session
+	// would silently route to a no-op mock client. Tests that need the mock
+	// construct api.TestClientType directly.
 	specialProviders := []string{
 		"ollama-local",
 		"ollama-cloud",
-		"test",
 		"editor",
 	}
 
@@ -458,14 +484,26 @@ func GetAvailableProviders() []string {
 		result = append(result, provider)
 	}
 
-	if cfg, err := Load(); err == nil {
-		for provider := range cfg.CustomProviders {
+	// Add custom providers to the result set before sorting.
+	var cfg *Config
+	if c, err := Load(); err == nil {
+		for provider := range c.CustomProviders {
 			if !providerSet[provider] {
 				result = append(result, provider)
 			}
 		}
+		cfg = c
 	}
 	sort.Strings(result)
+
+	// Reorder by user history: previously-used credentialed providers
+	// first, then credentialed-but-unused, then the rest. The default
+	// alphabetical sort put openrouter first almost every time, which
+	// doesn't reflect what the user actually runs day-to-day. Tier 1
+	// (ProviderModels history) needs cfg; if Load failed above, cfg is
+	// nil and the helper degrades to a 2-tier sort by credentials
+	// alone.
+	result = orderProvidersByUsage(result, cfg)
 
 	return result
 }
@@ -567,7 +605,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("failed to validate and save API key: %w", err)
 	}
 
-	fmt.Printf("[OK] Added %s (%d models available)\n", GetProviderDisplayName(provider), modelCount)
+	bracketOK(os.Stdout, fmt.Sprintf("Added %s (%d models available)", GetProviderDisplayName(provider), modelCount))
 	return provider, nil
 }
 
@@ -695,7 +733,7 @@ func ShowNextSteps(provider, configDir string) {
 		fmt.Println()
 		fmt.Println("To enable AI features:")
 		fmt.Println("  • Run 'sprout agent -d' to launch the webui and configure providers")
-		fmt.Println("  • Or set the SPROUT_PROVIDER environment variable (LEDIT_PROVIDER also supported)")
+		fmt.Println("  • Or set the SPROUT_PROVIDER environment variable (SPROUT_PROVIDER also supported)")
 		fmt.Println()
 		return
 	}

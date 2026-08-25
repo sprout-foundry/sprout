@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.15,
-    "output_token_cost": 1.15
+    "input_token_cost": 0.3,
+    "output_token_cost": 1.2
   },
   "defaults": {
     "model": "MiniMax-M2.5",
@@ -16,6 +16,7 @@
     "temperature": 1,
     "top_p": 1
   },
+  "display_name": "MiniMax",
   "endpoint": "https://api.minimax.io/v1/chat/completions",
   "headers": {},
   "message_conversion": {
@@ -32,7 +33,11 @@
       "MiniMax-M2.7",
       "MiniMax-M2-Stable",
       "MiniMax-M2.5-Lightning",
-      "MiniMax-VL-01"
+      "MiniMax-VL-01",
+      "MiniMax-M2.1-highspeed",
+      "MiniMax-M2.5-highspeed",
+      "MiniMax-M2.7-highspeed",
+      "MiniMax-M3"
     ],
     "completion_pattern_overrides": [
       {
@@ -53,10 +58,13 @@
     },
     "model_info": [
       {
+        "cached_input_cost": 0.03,
         "context_length": 196608,
         "description": "MiniMax-M2.5 - SOTA large language model for real-world productivity with 196K context",
         "id": "MiniMax-M2.5",
+        "input_cost": 0.3,
         "name": "MiniMax M2.5",
+        "output_cost": 1.2,
         "tags": [
           "coding",
           "tools",
@@ -64,10 +72,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.06,
         "context_length": 196608,
         "description": "MiniMax-M2.7 - Enhanced M2.5 with improved reasoning and coding capabilities",
         "id": "MiniMax-M2.7",
+        "input_cost": 0.3,
         "name": "MiniMax M2.7",
+        "output_cost": 1.2,
         "tags": [
           "coding",
           "tools",
@@ -75,53 +86,121 @@
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 196608,
         "description": "MiniMax-M2.5-Lightning - Cost-effective variant with 1M context window",
         "id": "MiniMax-M2.5-Lightning",
+        "input_cost": 0.6,
         "name": "MiniMax M2.5 Lightning",
+        "output_cost": 2.4,
         "tags": [
           "coding",
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 196608,
         "description": "MiniMax-M2 - Previous generation model",
         "id": "MiniMax-M2",
+        "input_cost": 0.3,
         "name": "MiniMax M2",
+        "output_cost": 1.2,
         "tags": [
           "coding",
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 196608,
         "description": "MiniMax-M2.1 - Enhanced version of M2",
         "id": "MiniMax-M2.1",
+        "input_cost": 0.3,
         "name": "MiniMax M2.1",
+        "output_cost": 1.2,
         "tags": [
           "coding",
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 196608,
         "description": "MiniMax-M2-Stable - Stable variant of M2",
         "id": "MiniMax-M2-Stable",
+        "input_cost": 0.3,
         "name": "MiniMax M2 Stable",
+        "output_cost": 1.2,
         "tags": [
           "coding",
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 204800,
         "description": "MiniMax-VL-01 - Vision language model",
         "id": "MiniMax-VL-01",
+        "input_cost": 0.3,
         "name": "MiniMax VL-01",
+        "output_cost": 1.2,
         "tags": [
           "vision",
           "multimodal"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 196608,
+        "description": "MiniMax-M2.1 Highspeed - same performance as M2.1 with significantly faster inference",
+        "id": "MiniMax-M2.1-highspeed",
+        "input_cost": 0.6,
+        "name": "MiniMax M2.1 Highspeed",
+        "output_cost": 2.4,
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 196608,
+        "description": "MiniMax-M2.5 Highspeed - same performance as M2.5 with significantly faster inference",
+        "id": "MiniMax-M2.5-highspeed",
+        "input_cost": 0.6,
+        "name": "MiniMax M2.5 Highspeed",
+        "output_cost": 2.4,
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0.06,
+        "context_length": 196608,
+        "description": "MiniMax-M2.7 Highspeed - same performance as M2.7 with significantly faster inference",
+        "id": "MiniMax-M2.7-highspeed",
+        "input_cost": 0.6,
+        "name": "MiniMax M2.7 Highspeed",
+        "output_cost": 2.4,
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0.12,
+        "context_length": 1048576,
+        "description": "MiniMax-M3 - frontier multimodal coding model with 1M context window",
+        "id": "MiniMax-M3",
+        "input_cost": 0.6,
+        "name": "MiniMax M3",
+        "output_cost": 2.4,
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning"
         ]
       }
     ],
@@ -158,6 +237,5 @@
     "chunk_timeout_ms": 300000,
     "done_marker": "[DONE]",
     "format": "sse"
-  },
-  "display_name": "MiniMax"
+  }
 }

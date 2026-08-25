@@ -371,7 +371,13 @@ func TestValidateSessionID(t *testing.T) {
 		{"", false},
 		{"session with spaces", false},
 		{"session/slash", false},
-		{func() string { s := make([]byte, 129); for i := range s { s[i] = 'a' }; return string(s) }(), false},
+		{func() string {
+			s := make([]byte, 129)
+			for i := range s {
+				s[i] = 'a'
+			}
+			return string(s)
+		}(), false},
 	}
 
 	for _, tc := range cases {

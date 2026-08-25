@@ -12,12 +12,11 @@ import (
 // TestCommitCommandUsesConfiguredProvider tests that commit command uses configured provider
 func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
 	// Create a test agent with temp config directory.
-	// Set SPROUT_CONFIG/LEDIT_CONFIG explicitly so the test is isolated
+	// Set SPROUT_CONFIG/SPROUT_CONFIG explicitly so the test is isolated
 	// even if the user has those env vars set in their shell.
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -54,12 +53,12 @@ func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
 	}
 }
 
-// TestCommitCommandFallsBackToLastUsedProvider tests fallback behavior
+// TestCommitCommandFallsBackToLastUsedProvider tests that GetCommitProvider
+// returns empty when only LastUsedProvider is set (no implicit fallback).
 func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -81,8 +80,8 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	}
 
 	config := cm.GetConfig()
-	if provider := config.GetCommitProvider(); provider != "openrouter" {
-		t.Errorf("GetCommitProvider() should fall back to LastUsedProvider, got %q", provider)
+	if provider := config.GetCommitProvider(); provider != "" {
+		t.Errorf("GetCommitProvider() should return empty when CommitProvider is not set, got %q", provider)
 	}
 }
 
@@ -91,7 +90,6 @@ func TestCommitCommandPersistsToDisk(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	// Create first agent and set config
@@ -130,7 +128,6 @@ func TestCommitConfigSaveLoadRoundTrip(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
 
 	// Create a config with commit settings
 	cfg := configuration.NewConfig()

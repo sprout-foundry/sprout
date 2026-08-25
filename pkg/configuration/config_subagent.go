@@ -8,21 +8,12 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
-// GetSubagentProvider returns the configured provider for subagents
-// If not explicitly set, falls back to the last used provider
+// GetSubagentProvider returns the configured provider for subagents.
+// Returns an empty string if no explicit subagent provider is set; callers
+// inherit from the parent agent's provider or treat empty as a signal that
+// no explicit subagent provider is configured.
 func (c *Config) GetSubagentProvider() string {
-	if c.SubagentProvider != "" {
-		return c.SubagentProvider
-	}
-	// Fall back to last used provider
-	if c.LastUsedProvider != "" {
-		return c.LastUsedProvider
-	}
-	// Fall back to first priority provider
-	if len(c.ProviderPriority) > 0 {
-		return c.ProviderPriority[0]
-	}
-	return "ollama-local" // Ultimate fallback
+	return c.SubagentProvider
 }
 
 // GetSubagentModel returns the configured model for subagents

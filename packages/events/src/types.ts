@@ -127,6 +127,34 @@ export interface AgentMessageData {
   chat_id?: string;
 }
 
+export interface DelegateClarificationRequestedData {
+  subagent_id: string;
+  request_id: string;
+  question: string;
+  timestamp: string;
+  chat_id?: string;
+}
+
+export interface DelegateClarificationRespondedData {
+  subagent_id: string;
+  request_id: string;
+  response: string;
+  timestamp: string;
+  chat_id?: string;
+}
+
+export interface SessionChangedData {
+  change: string;
+  summary: Record<string, unknown>;
+  chat_id?: string;
+}
+
+export interface ProviderNoCredentialData {
+  provider: string;
+  message: string;
+  chat_id?: string;
+}
+
 export interface TodoUpdateData {
   todos: unknown;
   chat_id?: string;
@@ -154,6 +182,33 @@ export interface FileContentChangedData {
   size?: number;
 }
 
+/** Real-time file content synchronization payload from WorkspacePatchEvent. */
+export interface WorkspacePatchData {
+  file_path: string;
+  content: string;
+  action: string;
+  seq: number;
+  conflict?: boolean;
+  theirs_path?: string;
+  chat_id?: string;
+}
+
+/** Streamed output from a safe slash command. */
+export interface CommandOutputData {
+  command: string;
+  chunk: string;
+  is_final: boolean;
+  seq: number;
+  chat_id?: string;
+}
+
+/** Backpressure warning emitted when streamed command output is discarded. */
+export interface CommandOutputDroppedData {
+  command: string;
+  dropped_bytes: number;
+  chat_id?: string;
+}
+
 export interface MetricsUpdateData {
   total_tokens?: number;
   context_tokens?: number;
@@ -163,6 +218,43 @@ export interface MetricsUpdateData {
   provider?: string;
   model?: string;
   persona?: string;
+  chat_id?: string;
+}
+
+/** Per-iteration context-management diagnostic emitted by the backend agent
+ *  loop (see pkg/events.ContextManagementDiagnosticEvent). The fields mirror
+ *  the Go payload 1:1 — `cached_tokens`, `prompt_tokens`, and
+ *  `cache_write_tokens` are cumulative session counters (not per-iteration),
+ *  and `cache_hit_rate` is the backend-computed `cached/prompt` ratio. The
+ *  frontend treats this as telemetry: the typed payload lets the dedicated
+ *  handler in useWebSocketEventHandler render a compact summary instead of
+ *  letting the event fall through to the generic "unknown event" branch and
+ *  show up as raw JSON in the Logs pane. */
+export interface ContextManagementDiagnosticData {
+  current_tokens?: number;
+  max_tokens?: number;
+  native_max_tokens?: number;
+  effective_max?: number;
+  trigger_fraction?: number;
+  reserved_response?: number;
+  reserved_thinking?: number;
+  reserved_tool_io?: number;
+  iteration?: number;
+  message_count?: number;
+  cached_tokens?: number;
+  prompt_tokens?: number;
+  cache_write_tokens?: number;
+  cache_hit_rate?: number;
+  chat_id?: string;
+}
+
+export interface RecallDiagnosticData {
+  embed_duration_ms: number;
+  candidates_considered: number;
+  injected: number;
+  injected_chars: number;
+  top_scores: number[];
+  timestamp: string;
   chat_id?: string;
 }
 
@@ -183,6 +275,40 @@ export interface SecurityApprovalRequestData {
   risk_type?: string;
   target?: string;
   status?: string;
+  /** SP-058: "true" when the server opts the dialog into the 4-option
+   *  layout (Approve once / Deny / Always approve / Always ask / Elevate)
+   *  instead of the legacy Allow / Block pair. Only shell_command sends
+   *  this today. The backend sends it as a string in `extras`. */
+  allow_options?: string;
+  /** Filesystem approval dialog mode ("fs_external" | "fs_sensitive").
+   *  Sent by the backend (extras["kind"]) for out-of-workspace file
+   *  accesses. */
+  kind?: string;
+  /** Folder proposed for the session allowlist (fs_external only).
+   *  Backend extras["folder"]. */
+  folder?: string;
+  /** The exact path being accessed (filesystem dialog).
+   *  Backend extras["path"]; falls back to `target`. */
+  path?: string;
+  /** LLM-generated analysis attached by the backend (SP-124-2). The Go broker
+   *  JSON-marshals `pkg/agent.SecurityAnalysis` into a string and shoves it
+   *  into `extras["security_analysis"]`, which then lands here verbatim —
+   *  a JSON-encoded string, not an object. Consumers (the WebUI handler)
+   *  parse it on receive. We expose both shapes: `security_analysis` is the
+   *  raw wire value (string for true CSP-safe transport), and the typed
+   *  `SecurityAnalysisData` interface documents the parsed shape. */
+  security_analysis?: string;
+}
+
+/** LLM-generated analysis of a shell command. The full struct lives in
+ *  `pkg/agent.SecurityAnalysis` (Go) and serializes to JSON over the
+ *  wire — callers receive it as the SecurityAnalysisData shape, not a
+ *  string. SP-124-2. */
+export interface SecurityAnalysisData {
+  summary: string;
+  modifies: string;
+  risk_assessment: 'low' | 'moderate' | 'high';
+  recommendation: 'approve' | 'review' | 'reject';
 }
 
 export interface SecurityPromptRequestData {
@@ -216,6 +342,71 @@ export interface AskUserRequestData {
   default?: string;
   client_id?: string;
   status?: string;
+}
+
+export interface InputRequiredData {
+  reason: string;
+  request_id?: string;
+  timestamp: string;
+  chat_id?: string;
+}
+
+/** Payload for a password_request event. Password responses are never included. */
+export interface PasswordRequestData {
+  request_id: string;
+  command: string;
+  prompt: string;
+  timestamp: string;
+  status?: string;
+  chat_id?: string;
+}
+
+/** A single line in a diff hunk with its change type. */
+export interface EditHunkLine {
+  type: 'context' | 'add' | 'remove';
+  content: string;
+}
+
+/** A discrete change region in a unified diff for edit approval. */
+export interface EditHunk {
+  id: string;
+  old_start: number;
+  old_lines: number;
+  new_start: number;
+  new_lines: number;
+  lines: EditHunkLine[];
+  add_count: number;
+  del_count: number;
+}
+
+/** Payload for an edit_approval_request event (SP-072-3). */
+export interface EditApprovalRequestData {
+  request_id: string;
+  file_path: string;
+  unified_diff?: string;
+  hunks: EditHunk[];
+  timestamp?: string;
+  /** "responded" suppresses the dialog (echo from the decision POST). */
+  status?: string;
+}
+
+/** A single part of a shell command in a shell_approval_request event (SP-093-3). */
+export interface ShellApprovalPartData {
+  id: string;
+  text: string;
+  kind: string;
+  semantic: string;
+  risk: string;
+}
+
+/** Payload for a shell_approval_request event (SP-093-3). */
+export interface ShellApprovalRequestData {
+  request_id: string;
+  command: string;
+  parts: ShellApprovalPartData[];
+  unified_view: string;
+  risk_level: string;
+  timestamp?: string;
 }
 
 // ── Terminal Session Data Types ─────────────────────────────────────
@@ -254,16 +445,29 @@ export type WsEvent =
   | { type: 'tool_start'; data?: ToolStartData; id?: string; timestamp?: string }
   | { type: 'tool_end'; data?: ToolEndData; id?: string; timestamp?: string }
   | { type: 'tool_execution'; data?: Record<string, unknown>; id?: string; timestamp?: string }
+  | { type: 'command_output'; data?: CommandOutputData; id?: string; timestamp?: string }
+  | { type: 'command_output_dropped'; data?: CommandOutputDroppedData; id?: string; timestamp?: string }
   | { type: 'subagent_activity'; data?: SubagentActivityData; id?: string; timestamp?: string }
+  | { type: 'delegate_clarification_requested'; data?: DelegateClarificationRequestedData; id?: string; timestamp?: string }
+  | { type: 'delegate_clarification_responded'; data?: DelegateClarificationRespondedData; id?: string; timestamp?: string }
   | { type: 'agent_message'; data?: AgentMessageData; id?: string; timestamp?: string }
+  | { type: 'provider_no_credential'; data?: ProviderNoCredentialData; id?: string; timestamp?: string }
   | { type: 'todo_update'; data?: TodoUpdateData; id?: string; timestamp?: string }
   | { type: 'file_changed'; data?: FileChangedData; id?: string; timestamp?: string }
+  | { type: 'workspace_patch'; data?: WorkspacePatchData; id?: string; timestamp?: string }
   | { type: 'file_content_changed'; data?: FileContentChangedData; id?: string; timestamp?: string }
   | { type: 'metrics_update'; data?: MetricsUpdateData; id?: string; timestamp?: string }
   | { type: 'workspace_changed'; data?: WorkspaceChangedData; id?: string; timestamp?: string }
+  | { type: 'session_changed'; data?: SessionChangedData; id?: string; timestamp?: string }
+  | { type: 'context_management_diagnostic'; data?: ContextManagementDiagnosticData; id?: string; timestamp?: string }
+  | { type: 'recall_diagnostic'; data?: RecallDiagnosticData; id?: string; timestamp?: string }
   | { type: 'security_approval_request'; data?: SecurityApprovalRequestData; id?: string; timestamp?: string }
   | { type: 'security_prompt_request'; data?: SecurityPromptRequestData; id?: string; timestamp?: string }
   | { type: 'ask_user_request'; data?: AskUserRequestData; id?: string; timestamp?: string }
+  | { type: 'input_required'; data?: InputRequiredData; id?: string; timestamp?: string }
+  | { type: 'edit_approval_request'; data?: EditApprovalRequestData; id?: string; timestamp?: string }
+  | { type: 'shell_approval_request'; data?: ShellApprovalRequestData; id?: string; timestamp?: string }
+  | { type: 'password_request'; data?: PasswordRequestData; id?: string; timestamp?: string }
   | { type: 'validation'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'terminal_output'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'session_terminated'; data?: Record<string, unknown>; id?: string; timestamp?: string }
@@ -273,10 +477,9 @@ export type WsEvent =
   | { type: 'error_output'; data?: TerminalOutputData; id?: string; timestamp?: string }
   | { type: 'pty_exit'; data?: TerminalPtyExitData; id?: string; timestamp?: string }
   | { type: 'drift_detected'; data?: DriftDetectedData; id?: string; timestamp?: string }
-  // Catch-all: must be last. Provides SproutEvent compatibility and handles
-  // dev-server noise (liveReload, hot, ping, etc.). Note: this prevents
-  // automatic narrowing in switch/case — use typed casts in handlers instead.
-  | { type: string; data?: unknown; id?: string; timestamp?: string; [key: string]: unknown };
+  // Fallback for transport/dev-server events not represented above. Keep the
+  // shape closed so excess-property checking still catches misspelled fields.
+  | { type: string; data?: unknown; id?: string; timestamp?: string };
 
 /**
  * EventsProvider — abstraction over the real-time event transport.

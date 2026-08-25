@@ -1,8 +1,8 @@
+import { ContextMenu } from '@sprout/ui';
 import { Copy, FileText, Ban, FolderOpen } from 'lucide-react';
 import { useCallback } from 'react';
 import type { MouseEvent } from 'react';
 import { copyToClipboard } from '../../utils/clipboard';
-import { ContextMenu } from '@sprout/ui';
 import type { SearchContextMenuState } from './types';
 import { getRelativePath, getParentDirectory } from './useSearchState';
 

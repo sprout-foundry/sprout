@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // NOTE: This handler is part of the SP-038-4 migration. The old implementation
@@ -23,7 +25,7 @@ func (h *writeStructuredFileHandler) Name() string {
 func (h *writeStructuredFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "write_structured_file",
-		Description: "Write schema-validated structured data to JSON/YAML with deterministic formatting",
+		Description: "Write schema-validated structured data to JSON/YAML with deterministic formatting. Key insertion order is preserved — fields appear in the file in the order you provide them, producing predictable diffs.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "path",
@@ -60,19 +62,19 @@ func (h *writeStructuredFileHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("parameter 'path' must not be empty")
+		return agenterrors.NewValidation("parameter 'path' must not be empty", nil)
 	}
 
 	// Check that 'data' exists (required)
 	if _, exists := args["data"]; !exists {
-		return fmt.Errorf("parameter 'data' is required")
+		return agenterrors.NewValidation("parameter 'data' is required", nil)
 	}
 
 	// Validate format if provided
 	if fmtRaw, exists := args["format"]; exists && fmtRaw != nil {
 		if fmtStr, ok := fmtRaw.(string); ok {
 			if strings.TrimSpace(fmtStr) == "" {
-				return fmt.Errorf("parameter 'format' must not be empty if provided")
+				return agenterrors.NewValidation("parameter 'format' must not be empty if provided", nil)
 			}
 		}
 	}
@@ -81,21 +83,45 @@ func (h *writeStructuredFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass the gate entirely. Prompt paths fall through and will
+	// fail with the raw filesystem error.
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass the gate entirely.
+	resolvedStructured, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_structured_file", path)
+	if decision == "deny" {
+		return ToolResult{Output: fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
+			agenterrors.NewPermission(fmt.Sprintf("write blocked: %s is declared read_only", path), nil)
+	}
+	if decision == "allow" {
+		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.
+		ctx = filesystem.WithSecurityBypass(ctx)
+	}
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "write_structured_file", path, resolvedStructured, "write"); approved {
+			ctx = ctx2
+		}
+	}
+
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
 		return ToolResult{Output: "unsupported structured format: use json or yaml", IsError: true},
-			fmt.Errorf("unsupported structured format: use json or yaml")
+			agenterrors.NewValidation("unsupported structured format: use json or yaml", nil)
 	}
 
 	data, exists := args["data"]
 	if !exists {
 		return ToolResult{Output: "parameter 'data' is required", IsError: true},
-			fmt.Errorf("parameter 'data' is required")
+			agenterrors.NewValidation("parameter 'data' is required", nil)
 	}
 
 	// Validate against schema if provided
@@ -110,18 +136,20 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		}
 	}
 
-	content, err := serializeStructuredContent(format, data)
+	// SP-082-1: Preserve key insertion order from the LLM's original JSON.
+	// When RawArgsJSON is available, parse the "data" sub-object directly from
+	// the source text into a *yaml.Node (which preserves map key order), then
+	// serialize that.  Fall back to converting args data through mapToYamlNode
+	// when RawArgsJSON is absent (e.g., unit tests that construct args as Go maps).
+	var content string
+	if env.RawArgsJSON != "" {
+		content, err = serializeWithOrder(env.RawArgsJSON, format)
+	} else {
+		node := mapToYamlNode(data)
+		content, err = serializeYamlNode(format, node)
+	}
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("failed to serialize structured content: %v", err), IsError: true}, err
-	}
-
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   "write_structured_file",
-			"path":   path,
-			"format": format,
-		})
 	}
 
 	result, err := WriteFile(ctx, path, content)
@@ -129,17 +157,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{
 			Output:  "",
 			IsError: true,
-		}, fmt.Errorf("write structured file %q: %w", path, err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "write_structured_file",
-			"path":   path,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(result),
-		})
+		}, agenterrors.NewTool("write_structured_file", fmt.Sprintf("write structured file %q: %v", path, err), err)
 	}
 
 	// Write to output writer if available
@@ -152,6 +170,12 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
+
+func (h *writeStructuredFileHandler) Aliases() []string      { return nil }
+func (h *writeStructuredFileHandler) Timeout() time.Duration { return 0 }
+func (h *writeStructuredFileHandler) MaxResultSize() int     { return 0 }
+func (h *writeStructuredFileHandler) SafeForParallel() bool  { return false }
+func (h *writeStructuredFileHandler) Interactive() bool      { return false }
 
 // getOptionalString extracts an optional string from args, returning "" if not present.
 func getOptionalString(args map[string]any, key string) string {

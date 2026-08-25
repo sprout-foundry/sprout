@@ -21,14 +21,26 @@ import (
 type Bridge struct {
 	wsConn *websocket.Conn
 
-	lspProcess  *LSPProcess
-	lspCh       <-chan string
-	unsubscribe func()
+	lspProcess *LSPProcess
+	session    *Session
 
 	doneCh    chan struct{}
 	doneOnce  sync.Once // guards close(doneCh) — both goroutines race to signal it
 	closeOnce sync.Once // guards Close() — both shutdown paths invoke it
 }
+
+// Keepalive window for the LSP WebSocket. The client (@codemirror/lsp-client)
+// sends no application messages while the user is idle, so without a ping the
+// read deadline expires after lspPongWait of silence and the bridge kills the
+// connection — the browser then sees a 1006 and enters a reconnect loop
+// (perpetual "LSP connecting" spinner, re-published diagnostics, and a stale
+// editor plugin wired to the dead client). The ping ticker keeps the
+// connection alive: the browser auto-replies with a pong, and the pong
+// handler refreshes the read deadline.
+const (
+	lspPongWait   = 60 * time.Second
+	lspPingPeriod = (lspPongWait * 9) / 10 // 54s — pong well inside the wait window
+)
 
 // NewBridge creates a new bridge for the given WebSocket connection and LSP process.
 func NewBridge(wsConn *websocket.Conn, process *LSPProcess) *Bridge {
@@ -46,16 +58,23 @@ func NewBridge(wsConn *websocket.Conn, process *LSPProcess) *Bridge {
 // 4. Handle graceful shutdown when either side closes
 // 5. Use two goroutines (ws→lsp and lsp→ws)
 func (b *Bridge) Run(ctx context.Context) error {
-	// Subscribe to LSP process messages
-	ch, unsubscribe, err := b.lspProcess.Subscribe()
+	// Open an isolated session on the (possibly shared) LSP process so this
+	// client's request ids can't collide with another connected client's.
+	session, err := b.lspProcess.NewSession()
 	if err != nil {
 		return err
 	}
-	b.lspCh = ch
-	b.unsubscribe = unsubscribe
+	b.session = session
 
-	// Set up WebSocket read deadline (for heartbeat)
-	b.wsConn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	// Set up WebSocket keepalive. The pong handler refreshes the read
+	// deadline, so as long as the browser answers pings the connection
+	// stays open through idle stretches (the lsp-client sends no messages
+	// while the user is reading).
+	b.wsConn.SetReadDeadline(time.Now().Add(lspPongWait))
+	b.wsConn.SetPongHandler(func(string) error {
+		b.wsConn.SetReadDeadline(time.Now().Add(lspPongWait))
+		return nil
+	})
 	b.wsConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 
 	// Use context cancellation for graceful shutdown
@@ -66,12 +85,35 @@ func (b *Bridge) Run(ctx context.Context) error {
 	go b.runWSToLSP(ctx)
 	go b.runLSPToWS(ctx)
 
+	// Ping the client on a ticker so idle connections stay alive. The
+	// browser auto-responds with a pong, which refreshes the read deadline.
+	go b.pingLoop(ctx)
+
 	// Wait for either goroutine to finish
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-b.doneCh:
 		return nil
+	}
+}
+
+// pingLoop sends WebSocket pings at lspPingPeriod. Stops when ctx is
+// cancelled (Run defers cancel, so it exits when either direction closes).
+func (b *Bridge) pingLoop(ctx context.Context) {
+	ticker := time.NewTicker(lspPingPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := b.wsConn.WriteControl(websocket.PingMessage, nil, time.Now().Add(10*time.Second)); err != nil {
+				// Write failing means the connection is gone; the read/write
+				// goroutines will notice and tear the bridge down.
+				return
+			}
+		}
 	}
 }
 
@@ -92,8 +134,10 @@ func (b *Bridge) runWSToLSP(ctx context.Context) {
 		default:
 		}
 
-		// Set read deadline for heartbeat
-		b.wsConn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		// Set read deadline for the keepalive window. The pong handler in
+		// Run refreshes it on each pong, so idle-but-alive connections never
+		// hit it; a truly dead peer expires here.
+		b.wsConn.SetReadDeadline(time.Now().Add(lspPongWait))
 
 		// Read raw JSON-RPC message from WebSocket
 		msgType, reader, err := b.wsConn.NextReader()
@@ -119,8 +163,8 @@ func (b *Bridge) runWSToLSP(ctx context.Context) {
 			continue
 		}
 
-		// Write to LSP process (with Content-Length framing)
-		if err := b.lspProcess.Send(string(msg)); err != nil {
+		// Hand to the session, which translates ids before framing to stdin
+		if err := b.session.Send(string(msg)); err != nil {
 			log.Printf("LSP bridge: Failed to send to LSP: %v", err)
 			return
 		}
@@ -141,7 +185,7 @@ func (b *Bridge) runLSPToWS(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
-		case msg, ok := <-b.lspCh:
+		case msg, ok := <-b.session.Out():
 			if !ok {
 				// Channel closed — LSP process exited. Close() (deferred)
 				// will close the WS conn; no direct field access here so
@@ -167,8 +211,8 @@ func (b *Bridge) runLSPToWS(ctx context.Context) {
 // which raced with the still-running runLSPToWS reading wsConn.
 func (b *Bridge) Close() {
 	b.closeOnce.Do(func() {
-		if b.unsubscribe != nil {
-			b.unsubscribe()
+		if b.session != nil {
+			b.session.Close()
 		}
 		if b.wsConn != nil {
 			b.wsConn.Close()
@@ -179,7 +223,6 @@ func (b *Bridge) Close() {
 // BridgeHandler creates a http.HandlerFunc that handles LSP WebSocket connections.
 // It upgrades the WebSocket connection and bridges it to the LSP process from the manager.
 // The upgrader parameter should have a proper CheckOrigin function configured by the caller.
-// The workspaceRoot parameter is used to validate that requested workspaces are within the allowed root.
 func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, workspaceRoot string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse query parameters
@@ -195,9 +238,9 @@ func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, workspaceRoot 
 			return
 		}
 
-		// Resolve and validate workspace path
-		absWorkspace, err := filepath.Abs(workspacePath)
-		if err != nil || absWorkspace != workspaceRoot {
+		// Resolve workspace path
+		_, err := filepath.Abs(workspacePath)
+		if err != nil {
 			http.Error(w, "workspace not allowed", http.StatusForbidden)
 			return
 		}

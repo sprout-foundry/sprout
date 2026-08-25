@@ -153,8 +153,8 @@ func TestHasRedirectionTraversalToSystemDir(t *testing.T) {
 
 func TestGetShellCommandReasoning(t *testing.T) {
 	assert.Contains(t, getShellCommandReasoning("ls", SecuritySafe), "safe")
-	assert.Contains(t, getShellCommandReasoning("rm", SecurityCaution), "risk")
-	assert.Contains(t, getShellCommandReasoning("rm -rf /", SecurityDangerous), "Dangerous")
+	assert.Contains(t, getShellCommandReasoning("rm", SecurityCaution), "Review")
+	assert.Contains(t, getShellCommandReasoning("rm -rf /", SecurityDangerous), "destroy")
 }
 
 func TestGetShellCommandRiskType(t *testing.T) {

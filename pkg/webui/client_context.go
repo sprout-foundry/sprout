@@ -3,10 +3,10 @@
 package webui
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -68,6 +68,16 @@ type webClientContext struct {
 	ChatSessions   map[string]*chatSession
 	DefaultChatID  string
 	nextChatNumber int
+
+	// DeletedChats records chat IDs that were deleted but whose deletion may
+	// still be settling (the delete handler removes the session from the map
+	// and then recomputes the top-level ActiveQuery flag in a later lock
+	// block). A query targeting an absent chat falls back to the top-level
+	// ActiveQuery, which the recompute may have reset to false — allowing a
+	// query to start on a chat that was just deleted. Tombstones make an
+	// absent-but-deleted chat permanently non-queryable until a new chat
+	// with the same ID is created (which clears the tombstone).
+	DeletedChats map[string]struct{}
 }
 
 func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncherURL, sshHomePath string) *webClientContext {
@@ -81,6 +91,7 @@ func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncher
 		FileConsents:   newFileConsentManager(),
 		AgentState:     emptyAgentStateSnapshot(),
 		LastSeenAt:     time.Now(),
+		DeletedChats:   map[string]struct{}{},
 	}
 	ctx.ensureDefaultChatSession()
 	return ctx
@@ -193,6 +204,28 @@ func (ws *ReactWebServer) getOrCreateClientContext(clientID string) *webClientCo
 }
 
 func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webClientContext {
+	// SP-136 isolation invariants (enforced by this function):
+	//   1. clientContexts is keyed by clientID — each browser tab / client
+	//      session gets its own context.
+	//   2. Each webClientContext owns its own WorkspaceRoot, Agent,
+	//      Terminal, FileConsents, and ChatSessions.  When the workspace
+	//      root changes (setClientWorkspaceRoot), old agents are released
+	//      and chat sessions are reset.
+	//   3. Agents are created per-chat via NewAgentWithLayersInWorkspace
+	//      using the workspace-specific config directory
+	//      (configuration.WorkspaceConfigDir(workspaceRoot)), ensuring
+	//      per-workspace config isolation.
+	//   4. Embedding managers are further isolated per workspace via
+	//      embedding.AcquireManager keyed by (indexDir, workspaceRoot).
+	//
+	// EXCEPTIONS (intentional shared state):
+	//   - The defaultWebClientID context shares ws.terminalManager and
+	//     ws.fileConsents with the server.  This is the shared CLI+WebUI
+	//     mode where the CLI and default WebUI tab share one conversation.
+	//     Non-default clients always get fresh per-client Terminal/FileConsents.
+	//   - The eventBus is shared across all clients but events route by
+	//     client_id/chat_id via shouldForwardEventToConnection.
+	//
 	if ws.clientContexts == nil {
 		ws.clientContexts = make(map[string]*webClientContext)
 	}
@@ -260,29 +293,6 @@ func (ws *ReactWebServer) getClientContextForRequest(r *http.Request) *webClient
 	return ctx
 }
 
-// startTerminalCleanupIfNeeded starts the idle-session cleanup worker for a
-// per-client TerminalManager. The server-level TM gets its worker during
-// Start(); per-client TMs created later (e.g. via setClientWorkspaceRoot or
-// new non-default client contexts) need their own worker to prevent PTY
-// process leaks from idle hidden sessions.
-//
-// Safe to call while holding ws.mutex — reads ws.serverCtx via atomic.Value.
-func (ws *ReactWebServer) startTerminalCleanupIfNeeded(tm *TerminalManager) {
-	if tm == nil {
-		return
-	}
-	val := ws.serverCtx.Load()
-	if val == nil {
-		return
-	}
-	ctx, ok := val.(context.Context)
-	if !ok || ctx == nil {
-		return
-	}
-	// Same intervals as the server-level worker: every 5 min, 30-min timeout, 2-hr for background.
-	tm.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute, 2*time.Hour)
-}
-
 func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
@@ -309,76 +319,6 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 			ws.sshHomePath = ""
 		}
 	}
-}
-
-func (ws *ReactWebServer) getWorkspaceRootForRequest(r *http.Request) string {
-	root := ws.getClientContextForRequest(r).WorkspaceRoot
-	// Resolve symlinks so that canonicalizePath comparisons are consistent
-	// (macOS /var → /private/var). The daemonRoot/workspaceRoot are resolved
-	// at server construction, but per-client context roots may not be.
-	if evaled, err := filepath.EvalSymlinks(root); err == nil {
-		return evaled
-	}
-	return root
-}
-
-// getLayeredConfigManager creates a config manager using the layered approach
-// (global → workspace → session) for the given client ID.
-// This is used as a fallback when no live agent's config manager is available.
-func (ws *ReactWebServer) getLayeredConfigManager(clientID string) (*configuration.Manager, error) {
-	configBase, err := configuration.GetConfigDir()
-	if err != nil {
-		return nil, fmt.Errorf("get config directory: %w", err)
-	}
-
-	// Resolve workspace root for this client
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	ws.mutex.RUnlock()
-	var workspaceRoot string
-	if ctx != nil {
-		workspaceRoot = ctx.WorkspaceRoot
-	}
-
-	var workspaceDir string
-	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
-	}
-
-	return configuration.NewManagerWithLayers(configBase, workspaceDir)
-}
-
-func (ws *ReactWebServer) getTerminalManagerForRequest(r *http.Request) *TerminalManager {
-	return ws.getClientContextForRequest(r).Terminal
-}
-
-func (ws *ReactWebServer) getFileConsentManagerForRequest(r *http.Request) *fileConsentManager {
-	return ws.getClientContextForRequest(r).FileConsents
-}
-
-// getActiveAgentForRequest resolves the agent backing the request's
-// active chat session. Returns nil when there's no live agent (e.g.,
-// the browser is making a file-API call before any chat session has
-// been initialized).
-//
-// The file-API handlers use this to consult the agent's session
-// folder allowlist — paths the user previously approved via the
-// approval dialog auto-pass without needing the 2-minute token flow.
-func (ws *ReactWebServer) getActiveAgentForRequest(r *http.Request) *agent.Agent {
-	clientID := ws.resolveClientID(r)
-	_, chatID := ws.getActiveChatContext(clientID)
-	if chatID == "" {
-		return nil
-	}
-	a, err := ws.getChatAgent(clientID, chatID)
-	if err != nil {
-		return nil
-	}
-	return a
-}
-
-func (ws *ReactWebServer) getCurrentSessionIDForRequest(r *http.Request) string {
-	return ws.getClientContextForRequest(r).CurrentSessionID
 }
 
 func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string, error) {
@@ -409,6 +349,15 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
 	}
 
+	// Defense-in-depth: reject the home directory as a workspace without
+	// explicit consent. The API handler (handleAPIWorkspaceSet) is the
+	// primary gate and surfaces a structured consent error to the frontend;
+	// this prevents any other internal caller from silently setting home as
+	// the workspace root. SP-130.
+	if isHomeWorkspace(workspaceRoot) && !hasHomeWorkspaceConsent() {
+		return "", fmt.Errorf("workspace root must not be the home directory without explicit consent")
+	}
+
 	if ws.clientContexts == nil {
 		ws.clientContexts = make(map[string]*webClientContext)
 	}
@@ -434,6 +383,11 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.SSHHomePath = ""
 	ctx.Terminal = NewTerminalManager(workspaceRoot)
 	ws.startTerminalCleanupIfNeeded(ctx.Terminal)
+	// Collect the outgoing agents before clearing the fields below. They are
+	// bound to the OLD workspace root, and without an explicit Shutdown their
+	// embedding managers keep building — and writing — that workspace's index
+	// for the rest of the daemon's life. Released after ws.mutex is dropped.
+	releasing := chatSessionAgents(ctx)
 	ctx.Agent = nil
 	ctx.AgentState = emptyAgentStateSnapshot()
 	ctx.CurrentSessionID = ""
@@ -459,6 +413,10 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		ws.terminalManager = ctx.Terminal
 		ws.fileConsents = ctx.FileConsents
 	}
+
+	// Non-blocking: hands each agent to its own goroutine, so this is safe
+	// under the deferred ws.mutex unlock.
+	ws.releaseAgents("workspace_switch", releasing...)
 
 	return workspaceRoot, nil
 }
@@ -512,16 +470,11 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		terminal := ctx.Terminal
 		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.RUnlock()
-		agentInst.SetWorkspaceRoot(workspaceRoot)
-		meta := map[string]interface{}{"client_id": clientID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		agentInst.SetEventMetadata(meta)
-		agentInst.EnableStreaming(func(string) {})
-		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
-		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
-		// Wire the TerminalManager from the client context into the agent for WebUI mode.
+		rearmWebUIAgent(agentInst, ws, agentSetupConfig{
+			WorkspaceRoot: workspaceRoot,
+			ClientID:      clientID,
+			UserID:        userID,
+		})
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
 		}
@@ -539,16 +492,11 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 				ctx.Agent = agentInst // cache for next time
 				workspaceRoot := ctx.WorkspaceRoot
 				ws.mutex.RUnlock()
-				agentInst.SetWorkspaceRoot(workspaceRoot)
-				meta := map[string]interface{}{"client_id": clientID}
-				if userID != "" {
-					meta["user_id"] = userID
-				}
-				agentInst.SetEventMetadata(meta)
-				agentInst.EnableStreaming(func(string) {})
-				agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
-				agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
-				// Wire the TerminalManager from the client context into the agent for WebUI mode.
+				rearmWebUIAgent(agentInst, ws, agentSetupConfig{
+					WorkspaceRoot: workspaceRoot,
+					ClientID:      clientID,
+					UserID:        userID,
+				})
 				if terminal != nil {
 					agentInst.SetTerminalManager(terminal)
 				}
@@ -567,16 +515,11 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		terminal := ctx.Terminal
 		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.Unlock()
-		agentInst.SetWorkspaceRoot(workspaceRoot)
-		meta := map[string]interface{}{"client_id": clientID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		agentInst.SetEventMetadata(meta)
-		agentInst.EnableStreaming(func(string) {})
-		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
-		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
-		// Wire the TerminalManager from the client context into the agent for WebUI mode.
+		rearmWebUIAgent(agentInst, ws, agentSetupConfig{
+			WorkspaceRoot: workspaceRoot,
+			ClientID:      clientID,
+			UserID:        userID,
+		})
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
 		}
@@ -608,19 +551,27 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	// Workspace config is in {workspaceRoot}/.sprout/ (if workspace exists)
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+		// Ensure the workspace .sprout/ dir exists with a .gitignore
+		// covering personal overrides and state directories.
+		if err := configuration.EnsureWorkspaceConfigDir(workspaceRoot); err != nil {
+			ws.log().Warn("failed to ensure workspace config dir", slog.String("workspace_root", workspaceRoot), slog.Any("err", err))
+		}
+		// Auto-bootstrap workspace config when opening a git repo that
+		// doesn't have .sprout/config.json yet. Same logic as
+		// PersistentPreRunE auto-detection, applied at workspace-switch time.
+		gitPath := filepath.Join(workspaceRoot, ".git")
+		if info, statErr := os.Stat(gitPath); statErr == nil && info.IsDir() {
+			configPath := filepath.Join(workspaceDir, "config.json")
+			if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
+				if err := configuration.BootstrapIsolatedConfig(workspaceDir); err != nil {
+					ws.log().Warn("isolated daemon workspace configuration bootstrap failed", slog.String("workspace_root", workspaceRoot), slog.Any("err", err))
+				}
+			}
+		}
 	}
 
-	err = ws.withAgentWorkspace(workspaceRoot, func() error {
-		created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
-		return createErr
-	})
-	if err != nil {
-		if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("create agent in workspace: %w", err)
-	}
+	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, workspaceRoot, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr
@@ -628,25 +579,20 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return nil, fmt.Errorf("create agent: %w", createErr)
 	}
 
-	created.SetEventBus(ws.eventBus)
-	created.SetWorkspaceRoot(workspaceRoot)
-	// Get chat_id while holding the lock
 	ws.mutex.RLock()
 	chatID := ""
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		chatID = ctx.getActiveChatID()
 	}
 	ws.mutex.RUnlock()
-	// Build metadata map
-	meta := map[string]interface{}{
-		"client_id": clientID,
-		"chat_id":   chatID,
-	}
-	if userID != "" {
-		meta["user_id"] = userID
-	}
-	created.SetEventMetadata(meta)
-	created.EnableStreaming(func(string) {})
+
+	setupWebUIAgent(created, agentSetupConfig{
+		EventBus:      ws.eventBus,
+		WorkspaceRoot: workspaceRoot,
+		ClientID:      clientID,
+		ChatID:        chatID,
+		UserID:        userID,
+	})
 	created.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 	created.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 
@@ -667,6 +613,12 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 	ctx = ws.getOrCreateClientContextLocked(clientID)
+	if ctx.Agent != nil {
+		// Lost the creation race. `created` is fully constructed — its
+		// embedding manager is already building the workspace index — so it
+		// must be shut down, not just dropped on the floor.
+		ws.releaseAgents("agent_creation_race", created)
+	}
 	if ctx.Agent == nil {
 		ctx.Agent = created
 		ctx.CurrentSessionID = strings.TrimSpace(created.GetSessionID())
@@ -684,67 +636,6 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		}
 	}
 	return ctx.Agent, nil
-}
-
-// clearCachedAgent removes the cached agent from both the client context
-// and its active chat session. Used after a config change (e.g. switching
-// away from "editor" mode) so the next agent access creates a fresh agent
-// with the updated provider.
-func (ws *ReactWebServer) clearCachedAgent(clientID string) {
-	clientID = strings.TrimSpace(clientID)
-	if clientID == "" {
-		clientID = defaultWebClientID
-	}
-
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil {
-		return
-	}
-	ctx.Agent = nil
-
-	// Also clear from all chat sessions so per-session agents are recreated.
-	for _, cs := range ctx.ChatSessions {
-		if cs != nil {
-			cs.mu.Lock()
-			cs.Agent = nil
-			cs.mu.Unlock()
-		}
-	}
-}
-
-func (ws *ReactWebServer) syncAgentStateForClient(clientID string) error {
-	clientID = strings.TrimSpace(clientID)
-	if clientID == "" {
-		clientID = defaultWebClientID
-	}
-
-	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil {
-		// If no provider is configured, that's expected — just return.
-		if errors.Is(err, ErrNoProviderConfigured) {
-			return nil
-		}
-		return fmt.Errorf("get client agent for state sync: %w", err)
-	}
-
-	snapshot, err := agentInst.ExportState()
-	if err != nil {
-		return fmt.Errorf("export agent state: %w", err)
-	}
-
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-	ctx := ws.getOrCreateClientContextLocked(clientID)
-	// Sync to the active chat session as well as the top-level state.
-	ctx.setChatSessionState(ctx.getActiveChatID(), snapshot)
-	ctx.LastSeenAt = time.Now()
-	if clientID == defaultWebClientID {
-		ws.workspaceRoot = ctx.WorkspaceRoot
-	}
-	return nil
 }
 
 // getChatAgent returns the agent for a specific chat session, creating one
@@ -805,7 +696,30 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	}
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+	}
+
+	// In shared mode (CLI + WebUI in the same process), seed the default
+	// chat session with the CLI's agent instance so both frontends share
+	// one conversation history, one session, and one state. This bypasses
+	// the lazy-create path in getOrCreateAgent.
+	//
+	// SP-136 isolation guarantee: the seed is gated on BOTH
+	// clientID == defaultWebClientID AND chatID == defaultChatID.
+	// Therefore a WebUI session for a different workspace (which uses a
+	// non-default clientID) never receives the CLI agent.  Furthermore,
+	// even if the CLI agent IS seeded, getOrCreateAgent calls
+	// rearmWebUIAgent which re-sets the workspace root to the context's
+	// WorkspaceRoot — preventing workspace-A agents from leaking into
+	// workspace-B sessions.
+	if ws.IsSharedMode() && clientID == defaultWebClientID && chatID == defaultChatID {
+		if ws.agent != nil && cs.Agent == nil {
+			cs.mu.Lock()
+			if cs.Agent == nil {
+				cs.Agent = ws.agent
+			}
+			cs.mu.Unlock()
+		}
 	}
 
 	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, userID, ws.withAgentWorkspace)
@@ -842,126 +756,4 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	}
 
 	return agentInst, nil
-}
-
-func (ws *ReactWebServer) setClientQueryActive(clientID string, active bool) {
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-	ctx := ws.getOrCreateClientContextLocked(clientID)
-	ctx.ActiveQuery = active
-}
-
-func (ws *ReactWebServer) hasActiveQueryForClient(clientID string) bool {
-	ws.mutex.RLock()
-	defer ws.mutex.RUnlock()
-	ctx := ws.clientContexts[clientID]
-	return ctx != nil && ctx.ActiveQuery
-}
-
-func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) int {
-	if maxIdle <= 0 {
-		return 0
-	}
-
-	now := time.Now()
-	connectedClientIDs := make(map[string]struct{})
-	ws.connections.Range(func(_, value interface{}) bool {
-		info, ok := value.(*ConnectionInfo)
-		if !ok || info == nil {
-			return true
-		}
-		if clientID := strings.TrimSpace(info.ClientID); clientID != "" {
-			connectedClientIDs[clientID] = struct{}{}
-		}
-		return true
-	})
-
-	type staleContext struct {
-		id       string
-		terminal *TerminalManager
-	}
-
-	stale := make([]staleContext, 0)
-
-	ws.mutex.Lock()
-	for clientID, ctx := range ws.clientContexts {
-		if clientID == defaultWebClientID || ctx == nil {
-			continue
-		}
-		if _, connected := connectedClientIDs[clientID]; connected {
-			continue
-		}
-		if ctx.ActiveQuery {
-			continue
-		}
-		if ctx.LastSeenAt.IsZero() || now.Sub(ctx.LastSeenAt) < maxIdle {
-			continue
-		}
-		delete(ws.clientContexts, clientID)
-		stale = append(stale, staleContext{id: clientID, terminal: ctx.Terminal})
-	}
-	ws.lastClientContextCleanupAt = now
-	ws.lastClientContextCleanupRemoved = len(stale)
-	ws.totalClientContextsRemoved += len(stale)
-	ws.mutex.Unlock()
-
-	for _, clientCtx := range stale {
-		if clientCtx.terminal != nil {
-			_ = clientCtx.terminal.CloseAllSessions()
-		}
-	}
-
-	return len(stale)
-}
-
-func (ws *ReactWebServer) startClientContextCleanupWorker(ctx context.Context, interval, maxIdle time.Duration) {
-	if interval <= 0 || maxIdle <= 0 {
-		return
-	}
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			ws.cleanupInactiveClientContexts(maxIdle)
-		}
-	}
-}
-
-// resolveWorkspaceRootForChat returns the appropriate workspace root for a given chat session.
-// If the chat session has a worktree path set, it returns that. Otherwise, it returns the
-// client context's workspace root.
-func (ws *ReactWebServer) resolveWorkspaceRootForChat(clientID, chatID string) string {
-	ws.mutex.RLock()
-	defer ws.mutex.RUnlock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil {
-		return ""
-	}
-	wtPath := ctx.getChatSessionWorktree(chatID)
-	if wtPath != "" {
-		return wtPath
-	}
-	return ctx.WorkspaceRoot
-}
-
-// userIDForClient safely retrieves the UserID for a given clientID.
-// Returns empty string if the client context doesn't exist or has no UserID.
-func (ws *ReactWebServer) userIDForClient(clientID string) string {
-	clientID = strings.TrimSpace(clientID)
-	if clientID == "" {
-		return ""
-	}
-
-	ws.mutex.RLock()
-	defer ws.mutex.RUnlock()
-
-	if ctx := ws.clientContexts[clientID]; ctx != nil {
-		return ctx.UserID
-	}
-	return ""
 }

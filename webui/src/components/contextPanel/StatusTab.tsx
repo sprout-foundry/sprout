@@ -16,7 +16,7 @@ export function StatusTab({ chatProps, statusMetrics, liveDurationMs }: StatusTa
   const chatStats = chatProps?.stats ?? null;
 
   return (
-    <div className="context-panel-status">
+    <div className="context-panel-status" data-testid="context-panel-status">
       <div className="status-section">
         <div className="status-section-title">
           <Activity size={12} /> Processing
@@ -120,11 +120,15 @@ export function StatusTab({ chatProps, statusMetrics, liveDurationMs }: StatusTa
             <span className="status-metric-label">Files</span>
           </div>
           <div className="status-metric">
-            <span className="status-metric-value status-metric-add">+{statusMetrics.totalAdditions}</span>
+            <span className={`status-metric-value${statusMetrics.totalAdditions > 0 ? ' status-metric-add' : ''}`}>
+              +{statusMetrics.totalAdditions}
+            </span>
             <span className="status-metric-label">Added</span>
           </div>
           <div className="status-metric">
-            <span className="status-metric-value status-metric-del">-{statusMetrics.totalDeletions}</span>
+            <span className={`status-metric-value${statusMetrics.totalDeletions > 0 ? ' status-metric-del' : ''}`}>
+              -{statusMetrics.totalDeletions}
+            </span>
             <span className="status-metric-label">Removed</span>
           </div>
         </div>

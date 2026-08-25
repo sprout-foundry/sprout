@@ -24,8 +24,8 @@ func TestGenerateMarker(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		m, err := generateMarker()
-	if err != nil {
-		t.Fatalf("generateMarker failed on iteration %d: %v", i, err)
+		if err != nil {
+			t.Fatalf("generateMarker failed on iteration %d: %v", i, err)
 		}
 
 		if len(m) != 32 {
@@ -208,6 +208,9 @@ func createAndReadySession(t *testing.T, tm *TerminalManager, id string) *Termin
 }
 
 func TestExecuteCommandAndWait_Success(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("PTY echo behavior differs on macOS (zsh default shell)")
+	}
 	dir := t.TempDir()
 	tm := NewTerminalManager(dir)
 
@@ -528,8 +531,8 @@ func TestExecuteCommandAndWait_MarkerUniqueness(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		cmd := fmt.Sprintf("echo run%d", i)
 		output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, cmd)
-	if err != nil {
-		t.Fatalf("command %d failed: %v", i, err)
+		if err != nil {
+			t.Fatalf("command %d failed: %v", i, err)
 		}
 		if exitCode != 0 {
 			t.Errorf("command %d: expected exit code 0, got %d", i, exitCode)

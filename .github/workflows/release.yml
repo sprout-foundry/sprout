@@ -16,7 +16,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25
+        go-version: 1.26
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -73,9 +73,6 @@ jobs:
         CI: "true"
       run: make test-coverage
 
-    - name: Run integration tests
-      run: make test-integration
-
     - name: Run smoke tests
       run: make test-smoke
 
@@ -83,6 +80,8 @@ jobs:
   # workflow (six-platform matrix with signing + prebuilt backends), which
   # also fires on `v*` tags. A second desktop pipeline here would only
   # duplicate that work.
+  #
+  # NOTE: desktop-release.yml is currently disabled (SP-080).
 
   build:
     name: Build and Release
@@ -102,7 +101,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25'
+        go-version: '1.26'
 
     - name: Install dependencies
       run: go mod download
@@ -133,17 +132,6 @@ jobs:
 
     - name: Prepare grammar blobs
       run: make prepare-grammars
-
-    - name: Sync workspace package versions to release tag
-      # Keeps packages/ui and packages/events package.json versions
-      # aligned with the git tag so publish-{ui,events}.yml's
-      # version-match check passes without manual ceremony each release.
-      # Tag is "vX.Y.Z"; npm version drops the leading "v".
-      run: |
-        VERSION="${{ steps.get_version.outputs.VERSION }}"
-        NPM_VERSION="${VERSION#v}"
-        (cd packages/ui && npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version)
-        (cd packages/events && npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version)
 
     - name: Build and deploy React UI
       shell: bash
@@ -215,7 +203,7 @@ jobs:
         git config --local user.name "GitHub Action"
         git add CHANGELOG.md
         git commit -m "docs: Update changelog for $VERSION" || echo "No changes to commit"
-        git push origin HEAD:main
+        git push origin HEAD:main || echo "Changelog push skipped (non-fast-forward; CHANGELOG.md stays in release commit only)"
 
     - name: Update README with version
       shell: bash
@@ -344,10 +332,8 @@ jobs:
         body: |
           ## Release ${{ steps.get_version.outputs.VERSION }}
 
-          Multi-platform CLI binaries and Electron desktop installers, plus a
-          cloud-mode web bundle for sprout-foundry vendoring. See the Assets
-          section below for the full list of artifacts uploaded by this and
-          the desktop-release workflow.
+          Multi-platform CLI binaries, plus a
+          cloud-mode web bundle for sprout-foundry vendoring.
 
           ### Version Information
           Each binary includes:

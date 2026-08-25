@@ -46,6 +46,7 @@ export interface UseEditorEventsOptions {
   onGoToWorkspaceSymbol?: () => void;
   onToggleInlayHints?: () => void;
   onToggleSignatureHelp?: () => void;
+  onToggleAiCompletions?: () => void;
   onCycleTabSize?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -53,6 +54,10 @@ export interface UseEditorEventsOptions {
   onToggleFormatOnSave?: () => void;
   onOpenLivePreview?: () => void;
   onToggleMarkdownPreview?: () => void;
+  /** Ref tracking whether this pane is the active one. When false, the
+   *  document-level event listeners early-return so commands (format, undo,
+   *  goto-line, etc.) only affect the focused pane, not every mounted pane. */
+  isActiveRef: React.MutableRefObject<boolean>;
 }
 
 /**
@@ -91,7 +96,14 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         toggleLinkedScroll,
         handleFindAllReferences,
         onGoToWorkspaceSymbol,
+        isActiveRef,
       } = optionsRef.current;
+
+      // Guard: only the active editor pane should respond to document-level
+      // command events. Without this check, every mounted EditorPane (split
+      // panes, background tabs) processes the same command — format, undo,
+      // goto-line, etc. would fire across all panes simultaneously.
+      if (!isActiveRef.current) return;
 
       if (e.type === 'editor-goto-line') {
         const customEvent = e as CustomEvent;
@@ -174,6 +186,8 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         optionsRef.current.onToggleInlayHints?.();
       } else if (e.type === 'editor-toggle-signature-help') {
         optionsRef.current.onToggleSignatureHelp?.();
+      } else if (e.type === 'editor-toggle-ai-completions') {
+        optionsRef.current.onToggleAiCompletions?.();
       } else if (e.type === 'editor-cycle-tab-size') {
         optionsRef.current.onCycleTabSize?.();
       } else if (e.type === 'editor-zoom-in') {

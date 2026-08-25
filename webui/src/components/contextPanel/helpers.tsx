@@ -84,13 +84,9 @@ export const getStatusIcon = (status: string): ReactNode => {
 
 // ── Formatting utilities ───────────────────────────────────────────
 
-export const formatDuration = (startTime: Date, endTime?: Date) => {
-  const end = endTime || new Date();
-  const duration = end.getTime() - startTime.getTime();
-  if (duration < 1000) return `${duration}ms`;
-  if (duration < 60000) return `${(duration / 1000).toFixed(1)}s`;
-  return `${(duration / 60000).toFixed(1)}m`;
-};
+// formatDuration lives in utils/format (single source of truth); re-exported
+// here so existing consumers of './helpers' keep working unchanged.
+export { formatDuration } from '../../utils/format';
 
 export const formatRelativeTime = (value: string) => {
   const date = new Date(value);

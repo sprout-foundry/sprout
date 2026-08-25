@@ -5,6 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,13 +20,45 @@ import (
 var (
 	projectsCache     []ProjectInfo
 	projectsCacheTime time.Time
+	projectsCacheRoot string
 	projectsCacheMu   sync.RWMutex
 )
+
+// cachedProjectsIn returns the discovered projects under root, reusing a
+// recent scan when one is available.
+//
+// The scan reads every non-hidden directory under root to depth 2, which on a
+// home directory is both slow and privacy-prompt-inducing. A single page load
+// calls GET /api/workspace from ~10 places (useAppInitialization, useWorkspace,
+// WorkspaceBar, useFileIndex, lspClientService, …); without this the walk ran
+// once per call.
+// The cache holds the raw scan only. Callers that decorate the list (e.g.
+// prepending the daemon root) must do so on the returned copy, or the
+// decoration leaks into the next reader.
+func cachedProjectsIn(root string) (projects []ProjectInfo, wasCached bool) {
+	projectsCacheMu.RLock()
+	if projectsCacheRoot == root && time.Since(projectsCacheTime) < projectsCacheTTL {
+		cached := projectsCache
+		projectsCacheMu.RUnlock()
+		return cached, true
+	}
+	projectsCacheMu.RUnlock()
+
+	projects = FindProjectsInDirectory(root, 2)
+
+	projectsCacheMu.Lock()
+	projectsCache = projects
+	projectsCacheRoot = root
+	projectsCacheTime = time.Now()
+	projectsCacheMu.Unlock()
+
+	return projects, false
+}
 
 // handleAPIStats handles API requests for server statistics
 func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -62,8 +95,7 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	writeJSON(w, http.StatusOK, stats)
 }
 
 // handleAPIWorkspace handles API requests for reading and updating the active workspace root.
@@ -74,7 +106,7 @@ func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Requ
 	case http.MethodPost:
 		ws.handleAPIWorkspaceSet(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
@@ -83,18 +115,42 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 	workspaceRoot := clientCtx.WorkspaceRoot
 	isProject, markers := IsProjectDirectory(workspaceRoot)
 
-	response := map[string]interface{}{
-		"daemon_root":                ws.GetDaemonRoot(),
-		"workspace_root":             workspaceRoot,
-		"is_project":                 isProject,
-		"project_markers":            markers,
-		"needs_workspace_selection":  !isProject,
-		"recent_workspaces":          GetRecentWorkspaces(),
+	// Home-workspace gate (SP-130). The two cases are decided by different
+	// evidence and must not be mixed:
+	//
+	//   home     → consent decides, full stop. Project markers are meaningless
+	//              here; `.sprout` exists in $HOME on every install because
+	//              sprout put it there.
+	//   non-home → project markers decide, as before.
+	//
+	// The old form (`!isProject || (isHome && !consented)`) leaned on $HOME
+	// scoring as a project via that `.sprout` marker, so down-weighting the
+	// marker would otherwise have kept re-prompting users who had already
+	// consented.
+	workspaceIsHome := isHomeWorkspace(workspaceRoot)
+	homeConsented := hasHomeWorkspaceConsent()
+	needsSelection := !isProject
+	if workspaceIsHome {
+		needsSelection = !homeConsented
 	}
 
-	// If workspace is not a project, suggest nearby projects
-	if !isProject {
-		suggested := FindProjectsInDirectory(ws.GetDaemonRoot(), 2)
+	response := map[string]interface{}{
+		"daemon_root":               ws.GetDaemonRoot(),
+		"workspace_root":            workspaceRoot,
+		"is_project":                isProject,
+		"project_markers":           markers,
+		"needs_workspace_selection": needsSelection,
+		"recent_workspaces":         GetRecentWorkspaces(),
+		"workspace_is_home":         workspaceIsHome,
+		"home_dir":                  resolveHomeDir(),
+	}
+
+	// Suggest nearby projects only when selection is actually needed. Moving
+	// this out of the unconditional !isProject path means we no longer perform
+	// the recursive home-directory walk on every page load once a real project
+	// is selected — that walk was tripping macOS TCC media-library prompts.
+	if needsSelection {
+		suggested, _ := cachedProjectsIn(ws.GetDaemonRoot())
 		response["suggested_projects"] = suggested
 	}
 
@@ -113,25 +169,25 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 		}
 		response["ssh_context"] = sshContext
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 
 	var req struct {
-		Path string `json:"path"`
+		Path        string `json:"path"`
+		ConsentHome bool   `json:"consent_home"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	req.Path = strings.TrimSpace(req.Path)
 	if req.Path == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "Path is required")
 		return
 	}
 
@@ -141,7 +197,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	// absolute path. We need to store the remote path format instead so that
 	// relative path resolution (like for pasted images) works correctly on the
 	// remote backend.
-	// 
+	//
 	// The SSH session already has the remote workspace path (e.g., "$HOME/project").
 	// We use that directly instead of the locally-resolved absolute path.
 	if req.Path != "" && ws.isSSHProxyRequest(r) {
@@ -155,9 +211,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 
 	// Reject workspace changes only for the window that currently owns an active run.
 	if ws.hasActiveQueryForClient(clientID) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
 			"code":           "query_in_progress",
 			"active_queries": 1,
@@ -165,12 +219,42 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Home-workspace consent gate (SP-130): selecting the home directory as
+	// the workspace is an intentional, high-blast-radius choice (the agent
+	// gains access to all files under ~). Require explicit consent on the
+	// request and persist it so it is not re-prompted on every launch.
+	//
+	// Skipped for SSH proxy requests — the remote home is not the local home,
+	// and SSH workspaces are explicitly selected via the remote picker.
+	// Canonicalize the path before checking so that ~ / $HOME / relative
+	// paths are resolved to their real target (otherwise a raw "~" bypasses
+	// this gate and only gets caught by the defense-in-depth check in
+	// setClientWorkspaceRoot, which returns a generic error instead of the
+	// structured consent error the frontend expects).
+	if !ws.isSSHProxyRequest(r) {
+		if canonicalPath, cerr := filepathAbsEval(req.Path); cerr == nil {
+			if isHomeWorkspace(canonicalPath) && !hasHomeWorkspaceConsent() {
+				if req.ConsentHome {
+					if err := recordHomeWorkspaceConsent(); err != nil {
+						ws.log().Warn("failed to record home-workspace consent", slog.Any("err", err))
+					}
+				} else {
+					writeJSON(w, http.StatusForbidden, map[string]interface{}{
+						"error": "Selecting the home directory as workspace requires explicit consent. The agent will have access to all files under your home directory.",
+						"code":  "home_workspace_requires_consent",
+					})
+					return
+				}
+			}
+		}
+	}
+
 	// Capture the previous workspace root before setting the new one
 	previousWorkspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	workspaceRoot, err := ws.setClientWorkspaceRoot(clientID, req.Path)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to set workspace: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "workspace_update_failed", fmt.Sprintf("Failed to set workspace: %v", err))
 		return
 	}
 
@@ -183,7 +267,6 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		"previous_workspace_root": previousWorkspaceRoot,
 	})
 
-	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
 		"message":        "Workspace updated",
@@ -205,12 +288,12 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		}
 		response["ssh_context"] = sshContext
 	}
-	_ = json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -229,17 +312,17 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 
 	canonicalDir, err := canonicalizePath(dir, resolvedDaemonRoot, false)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_directory", fmt.Sprintf("Invalid directory: %v", err))
 		return
 	}
 	if canonicalDir != resolvedDaemonRoot && !isWithinWorkspace(canonicalDir, resolvedDaemonRoot) {
-		http.Error(w, "Directory outside daemon root", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "directory_outside_daemon_root", "Directory outside daemon root")
 		return
 	}
 
 	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "directory_read_failed", fmt.Sprintf("Failed to read directory: %v", err))
 		return
 	}
 
@@ -263,8 +346,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 		files = append(files, fileInfo)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":        "success",
 		"path":           canonicalDir,
 		"daemon_root":    daemonRoot,
@@ -317,45 +399,28 @@ const projectsCacheTTL = 5 * time.Minute
 
 func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
-	var projects []ProjectInfo
-	var cached bool
+	daemonRoot := ws.GetDaemonRoot()
+	scanned, cached := cachedProjectsIn(daemonRoot)
 
-	projectsCacheMu.RLock()
-	if time.Since(projectsCacheTime) < projectsCacheTTL {
-		projects = projectsCache
-		cached = true
-		projectsCacheMu.RUnlock()
-	} else {
-		projectsCacheMu.RUnlock()
-
-		// Cache miss — rebuild
-		projects = FindProjectsInDirectory(ws.GetDaemonRoot(), 2)
-
-		// Check if daemon root itself is a project and prepend it
-		if isProj, markers := IsProjectDirectory(ws.GetDaemonRoot()); isProj {
-			rootInfo := ProjectInfo{
-				Path:    ws.GetDaemonRoot(),
-				Name:    filepath.Base(ws.GetDaemonRoot()),
-				Markers: markers,
-			}
-			projects = append([]ProjectInfo{rootInfo}, projects...)
+	// Check if daemon root itself is a project and prepend it. Built on a copy
+	// so the prepended entry never lands in the shared cache.
+	projects := scanned
+	if isProj, markers := IsProjectDirectory(daemonRoot); isProj {
+		rootInfo := ProjectInfo{
+			Path:    daemonRoot,
+			Name:    filepath.Base(daemonRoot),
+			Markers: markers,
 		}
-
-		projectsCacheMu.Lock()
-		projectsCache = projects
-		projectsCacheTime = time.Now()
-		projectsCacheMu.Unlock()
+		projects = append([]ProjectInfo{rootInfo}, scanned...)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"projects":    projects,
 		"daemon_root": ws.GetDaemonRoot(),
 		"cached":      cached,
 	})
 }
-

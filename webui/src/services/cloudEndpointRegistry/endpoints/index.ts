@@ -12,6 +12,9 @@ import { wasmLocalEndpoints } from './wasm-local';
  *
  * Category (b) — foundry-backend: Must be proxied to the Foundry backend.
  *
+ * Category (b2) — browser-git: Git endpoints handled in-browser via
+ * isomorphic-git (lightning-fs / IndexedDB). Never proxied to the backend.
+ *
  * Category (c) — synthetic: Should return pre-defined synthetic responses.
  *
  * Category (d) — no-op: Endpoints that are not applicable in cloud mode.

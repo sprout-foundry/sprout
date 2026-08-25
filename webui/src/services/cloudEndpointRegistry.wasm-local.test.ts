@@ -48,6 +48,7 @@ import {
  *   - handleWebuiPrettierConfig        → GET  /api/files/prettier-config
  *   - handleWebuiSearch                → GET  /api/search
  *   - handleWebuiSearchReplace         → POST /api/search/replace
+ *   - handleWasmAskUserResponse        → POST /api/ask-user/response
  */
 interface WasmLocalEndpointSpec {
   path: string;
@@ -85,6 +86,9 @@ const wasmLocalEndpointSpecs: WasmLocalEndpointSpec[] = [
   // ── Search (WASM manages locally) ────────────────────────────────
   { path: '/api/search', method: 'GET', handler: 'handleWebuiSearch' },
   { path: '/api/search/replace', method: 'POST', handler: 'handleWebuiSearchReplace' },
+
+  // ── Ask-user response (WASM agent cloud mode) ────────────────────
+  { path: '/api/ask-user/response', method: 'POST', handler: 'handleWasmAskUserResponse' },
 ];
 
 describe('WASM-local endpoint cross-validation (Go server ↔ TypeScript registry)', () => {
@@ -191,14 +195,17 @@ describe('WASM-local endpoint cross-validation (Go server ↔ TypeScript registr
   });
 
   describe('WASM-local endpoint count matches expected coverage', () => {
-    it('registry has exactly 15 wasm-local endpoint definitions', () => {
-      // Count from wasm-local.ts:
+    it('registry has expected number of wasm-local endpoint definitions', () => {
+      // Count from wasm-local.ts (19 as of the ask_user cloud mode additions):
       // /api/files, /api/create, /api/delete, /api/rename, /api/browse,
       // /api/file/check-modified, /api/file/consent, /api/terminal/sessions,
       // /api/terminal/shells, /api/terminal/history, /api/search/replace,
-      // /api/file, /api/files/prettier-config, /api/workspace/browse, /api/search
+      // /api/file, /api/files/prettier-config, /api/workspace/browse, /api/search,
+      // /api/query (the in-browser agent loop endpoint),
+      // /api/query/stop (in-browser interrupt), /api/query/steer (in-browser steer),
+      // /api/ask-user/response (deliver ask_user response to WASM agent).
       const wasmEndpoints = getEndpointsByCategory('wasm-local');
-      expect(wasmEndpoints.length).toBe(15);
+      expect(wasmEndpoints.length).toBe(19);
     });
 
     it('wasm-local endpoints cover all 3 categories: file, terminal, search', () => {

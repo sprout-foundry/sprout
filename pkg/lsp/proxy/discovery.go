@@ -165,17 +165,24 @@ func FindLanguageServerByID(id string, configs []LanguageServerConfig) *Language
 
 // ResolveBinaryPath resolves the full path to a binary on PATH.
 // Returns an error if not found.
+//
+// The PATH entry is returned as-is rather than resolved through symlinks.
+// Language servers are routinely installed behind a symlink that is part of
+// how they launch: npm's global bin links `typescript-language-server` at a
+// package-internal `lib/cli.mjs`, and version managers (nvm, volta, asdf,
+// pyenv) link shims that select the right runtime. Resolving those away hands
+// exec a bare script that runs only if it happens to carry a shebang and an
+// exec bit, and bypasses the shim's version selection entirely.
 func ResolveBinaryPath(binary string) (string, error) {
 	path, err := exec.LookPath(binary)
 	if err != nil {
 		return "", fmt.Errorf("%s not found on PATH: %w", binary, err)
 	}
-	// Resolve symlinks to get the real path
-	realPath, err := filepath.EvalSymlinks(path)
+	abs, err := filepath.Abs(path)
 	if err != nil {
-		return path, nil // Return original path if symlink resolution fails
+		return path, nil
 	}
-	return realPath, nil
+	return abs, nil
 }
 
 // NormalizeLanguageID normalizes a language ID string (lowercase, trim whitespace).

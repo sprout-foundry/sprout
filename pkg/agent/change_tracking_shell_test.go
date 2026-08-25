@@ -2,8 +2,11 @@ package agent
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1449,5 +1452,571 @@ func TestRecordShellMutations_NoRaceWithConcurrentReads(t *testing.T) {
 	// the point is that the race detector stays silent.
 	if got := tracker.GetChangeCount(); got == 0 {
 		t.Errorf("expected some changes to be recorded, got 0")
+	}
+}
+
+// BenchmarkCaptureShellSnapshot_SproutRepo measures a COLD full snapshot
+// — the prime cost paid once per agent session.
+//
+// Run with:
+//
+//	go test -tags grammar_blobs_external -run X -bench BenchmarkCaptureShellSnapshot_SproutRepo -benchmem ./pkg/agent/
+func BenchmarkCaptureShellSnapshot_SproutRepo(b *testing.B) {
+	tracker := &ChangeTracker{enabled: true}
+	root := "../.."
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		snap := tracker.captureShellSnapshot(root)
+		if len(snap) == 0 {
+			b.Fatal("empty snapshot — root not resolving correctly")
+		}
+	}
+}
+
+// BenchmarkTrackShellTurn_WarmNoChanges measures the per-shell_command
+// cost AFTER the cache has been primed and the workspace hasn't
+// changed. This is the realistic steady-state cost — most agent
+// shell commands don't mutate files (ls, grep, build, test, …). The
+// fast path lets us stat-walk without re-reading content for unchanged
+// files, so this should be ~5–20 ms regardless of repo size.
+//
+// Compare against BenchmarkCaptureShellSnapshot_SproutRepo (~30 ms)
+// for the cold-walk baseline to see the speedup.
+func BenchmarkTrackShellTurn_WarmNoChanges(b *testing.B) {
+	tracker := &ChangeTracker{enabled: true}
+	root := "../.."
+	tracker.PrimeShellTracking(root) // pay the cold cost once
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tracker.TrackShellTurn(root, "shell_command", false)
+	}
+}
+
+// BenchmarkShellLooksReadOnly measures the cost of the read-only
+// classifier. This runs on every shell_command before deciding whether
+// to snapshot — needs to be cheap (microseconds) so the short-circuit
+// itself isn't a bottleneck.
+func BenchmarkShellLooksReadOnly(b *testing.B) {
+	cmds := []string{
+		"ls -la",
+		"grep -r foo .",
+		"git status",
+		"cat README.md",
+		"sed -i 's/foo/bar/' file.txt",      // unsafe path
+		"go build ./...",                    // unsafe path
+		"find . -name '*.go' | xargs wc -l", // pipe path
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = shellLooksReadOnly(cmds[i%len(cmds)])
+	}
+}
+
+// withShellSkipDirsFile redirects the config dir to a temp dir for the
+// duration of the test, so tests don't touch the user's real
+// shell_skip_dirs.json. Returns the temp dir path for inspection.
+func withShellSkipDirsFile(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	// SPROUT_CONFIG (canonical) + SPROUT_CONFIG (legacy) take precedence
+	// over $HOME in envutil.GetConfigDir — without these, the test's
+	// pre-populated file in tmpDir is bypassed and saveAutoSkipDirsFor
+	// writes to the test-runner's real config dir instead.
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
+	return tmpDir
+}
+
+// readShellSkipDirsFile reads the persisted file from the temp config
+// dir and returns the parsed schema. Returns an empty schema if the
+// file doesn't exist.
+func readShellSkipDirsFile(t *testing.T, tmpDir string) shellSkipDirsFileSchema {
+	t.Helper()
+	// SPROUT_CONFIG takes precedence over HOME in envutil.GetConfigDir,
+	// so the persisted file lives directly under tmpDir.
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return shellSkipDirsFileSchema{
+			Workspaces: map[string][]string{},
+			LastUsed:   map[string]int64{},
+		}
+	}
+	var schema shellSkipDirsFileSchema
+	if err := json.Unmarshal(data, &schema); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if schema.Workspaces == nil {
+		schema.Workspaces = map[string][]string{}
+	}
+	if schema.LastUsed == nil {
+		schema.LastUsed = map[string]int64{}
+	}
+	return schema
+}
+
+// TestShellSkipDirs_EvictsLRUWhenOverCap verifies that saving with
+// more than maxPersistedWorkspaces entries evicts the least-recently-used.
+func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
+	tmpDir := withShellSkipDirsFile(t)
+
+	// Pre-populate the file with maxPersistedWorkspaces + 2 entries,
+	// each with a distinct LastUsed timestamp.
+	schema := shellSkipDirsFileSchema{
+		Version:    1,
+		Workspaces: make(map[string][]string),
+		LastUsed:   make(map[string]int64),
+	}
+	baseTime := time.Now().Unix() - int64(maxPersistedWorkspaces*100)
+	for i := 0; i < maxPersistedWorkspaces+2; i++ {
+		root := filepath.Join(tmpDir, "ws", string(rune('a'+i)))
+		schema.Workspaces[root] = []string{"bigdir"}
+		schema.LastUsed[root] = baseTime + int64(i*100)
+	}
+	// Write initial state.
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.MarshalIndent(&schema, "", "  ")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Save a new workspace — should trigger eviction of the 2 oldest.
+	newRoot := filepath.Join(tmpDir, "ws", "newest")
+	newDirs := map[string]bool{"bigdir": true}
+	if err := saveAutoSkipDirsFor(newRoot, newDirs); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	got := readShellSkipDirsFile(t, tmpDir)
+	if len(got.Workspaces) > maxPersistedWorkspaces {
+		t.Fatalf("expected at most %d workspaces, got %d", maxPersistedWorkspaces, len(got.Workspaces))
+	}
+	if _, ok := got.Workspaces[newRoot]; !ok {
+		t.Errorf("new workspace %q not persisted", newRoot)
+	}
+
+	// The 2 oldest (by LastUsed) should have been evicted.
+	roots := make([]string, 0, len(got.Workspaces))
+	for r := range got.Workspaces {
+		roots = append(roots, r)
+	}
+	sort.Strings(roots)
+	// First alphabetized root should NOT be 'a' (the oldest) or 'b'
+	// (second oldest). Verify by checking LastUsed values.
+	for _, r := range roots {
+		if r == filepath.Join(tmpDir, "ws", "a") || r == filepath.Join(tmpDir, "ws", "b") {
+			t.Errorf("oldest workspace %q should have been evicted", r)
+		}
+	}
+}
+
+// TestShellSkipDirs_BumpsLastUsedOnSave verifies that saving updates
+// the LastUsed timestamp for the current workspace.
+func TestShellSkipDirs_BumpsLastUsedOnSave(t *testing.T) {
+	tmpDir := withShellSkipDirsFile(t)
+	root := filepath.Join(tmpDir, "ws", "test")
+	dirs := map[string]bool{"a": true, "b": true}
+
+	before := time.Now().Unix()
+	if err := saveAutoSkipDirsFor(root, dirs); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	after := time.Now().Unix()
+
+	got := readShellSkipDirsFile(t, tmpDir)
+	ts, ok := got.LastUsed[root]
+	if !ok {
+		t.Fatalf("LastUsed[%q] not set", root)
+	}
+	if ts < before || ts > after {
+		t.Errorf("LastUsed[%q] = %d, expected in [%d, %d]", root, ts, before, after)
+	}
+}
+
+// TestShellSkipDirs_HandlesMissingLastUsed verifies backward
+// compatibility with files written by older versions (no LastUsed
+// field).
+func TestShellSkipDirs_HandlesMissingLastUsed(t *testing.T) {
+	tmpDir := withShellSkipDirsFile(t)
+
+	// Write a file with only Workspaces (old format).
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"version": 1, "workspaces": {"/old/ws": ["fatdir"]}}`
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load should work and return the old workspace's dirs.
+	loaded := loadAutoSkipDirsFor("/old/ws")
+	if !loaded["fatdir"] {
+		t.Errorf("expected fatdir in loaded set, got %v", loaded)
+	}
+
+	// Save should populate LastUsed for the current workspace.
+	if err := saveAutoSkipDirsFor("/new/ws", map[string]bool{"x": true}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got := readShellSkipDirsFile(t, tmpDir)
+	if ts, ok := got.LastUsed["/new/ws"]; !ok || ts == 0 {
+		t.Errorf("LastUsed[/new/ws] not populated: %v", got.LastUsed)
+	}
+}
+
+// TestShellSkipDirs_AtomicWriteProducesValidJSON verifies that the
+// temp+rename pattern doesn't produce partial JSON.
+func TestShellSkipDirs_AtomicWriteProducesValidJSON(t *testing.T) {
+	tmpDir := withShellSkipDirsFile(t)
+	root := filepath.Join(tmpDir, "ws", "atomic")
+	for i := 0; i < 5; i++ {
+		dirs := map[string]bool{"d" + string(rune('0'+i)): true}
+		if err := saveAutoSkipDirsFor(root, dirs); err != nil {
+			t.Fatalf("save %d: %v", i, err)
+		}
+	}
+
+	got := readShellSkipDirsFile(t, tmpDir)
+	if len(got.Workspaces[root]) != 5 {
+		t.Errorf("expected 5 dirs, got %d: %v", len(got.Workspaces[root]), got.Workspaces[root])
+	}
+}
+
+// TestShellSkipDirs_EmptyWorkspaceNoOp verifies that saving with an
+// empty workspace or empty dirs is a no-op (no file written).
+func TestShellSkipDirs_EmptyWorkspaceNoOp(t *testing.T) {
+	tmpDir := withShellSkipDirsFile(t)
+	if err := saveAutoSkipDirsFor("", map[string]bool{"a": true}); err != nil {
+		t.Errorf("save with empty workspace: %v", err)
+	}
+	if err := saveAutoSkipDirsFor("/ws", map[string]bool{}); err != nil {
+		t.Errorf("save with empty dirs: %v", err)
+	}
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
+	if _, err := os.Stat(path); err == nil {
+		t.Errorf("file should not exist for no-op saves")
+	}
+}
+
+// TestShellSkipDirs_LoadRecordsWorkspaceForBump verifies that loading
+// a workspace returns the persisted set without mutating it.
+func TestShellSkipDirs_LoadRecordsWorkspaceForBump(t *testing.T) {
+	tmpDir := withShellSkipDirsFile(t)
+	root := filepath.Join(tmpDir, "ws", "loaded")
+
+	// Pre-populate with an old LastUsed.
+	path := filepath.Join(tmpDir, shellSkipDirsFilename)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := shellSkipDirsFileSchema{
+		Version:    1,
+		Workspaces: map[string][]string{root: {"x"}},
+		LastUsed:   map[string]int64{root: 1000}, // ancient
+	}
+	data, _ := json.MarshalIndent(&old, "", "  ")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load the workspace — should return the persisted set.
+	loaded := loadAutoSkipDirsFor(root)
+	if !loaded["x"] {
+		t.Fatalf("expected x in loaded set")
+	}
+
+	// Load must not mutate LastUsed on disk.
+	got := readShellSkipDirsFile(t, tmpDir)
+	if got.LastUsed[root] != 1000 {
+		t.Errorf("LastUsed[%q] should still be 1000 after load, got %d", root, got.LastUsed[root])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SP-077: ChangeTracker must not record recoverable snapshots for deltas
+// caused by git operations (merge, checkout, reset, pull).
+//
+// The root cause: when a git command brings committed content into the
+// working tree, the shell-mutation walker sees the resulting file changes
+// as agent-authored mutations. The "before" bytes (stale relative to the
+// now-current HEAD) get recorded as recoverable OriginalCode, and a later
+// recovery/rollback writes them back — silently reverting committed work.
+//
+// The fix (filterGitSourcedDeltas) checks each delta's post-operation
+// content against HEAD: if it matches, the delta was git-sourced and is
+// suppressed.
+//
+// These tests reproduce the incident in real git repos to exercise the
+// full git.CommittedFilePaths → filterGitSourcedDeltas path.
+// ---------------------------------------------------------------------------
+
+// runGitInDirCT runs a git command in dir, failing the test on error.
+func runGitInDirCT(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+// setupGitRepoCT initializes a fresh git repo in a temp directory with a
+// dummy user config and an initial commit (so HEAD exists).
+func setupGitRepoCT(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runGitInDirCT(t, dir, "init", "-b", "main")
+	runGitInDirCT(t, dir, "config", "user.email", "test@test.com")
+	runGitInDirCT(t, dir, "config", "user.name", "Test")
+
+	// Initial commit so HEAD exists.
+	mustWriteFile(t, filepath.Join(dir, "init.go"), []byte("package x\n"))
+	runGitInDirCT(t, dir, "add", "init.go")
+	runGitInDirCT(t, dir, "commit", "-m", "initial commit")
+	return dir
+}
+
+// TestSP077_SuppressesGitMergeDeltas reproduces the core incident: after
+// a git merge brings committed content into the working tree, the shell
+// tracker must NOT record those files as recoverable mutations.
+//
+// Setup: a committed file exists at HEAD. We simulate the pre-merge
+// state by putting stale content on disk (mimicking a pre-merge tree),
+// priming the tracker against it, then restoring HEAD content (mimicking
+// the merge). The tracker should detect that the post-operation content
+// matches HEAD and suppress the delta.
+func TestSP077_SuppressesGitMergeDeltas(t *testing.T) {
+	dir := setupGitRepoCT(t)
+
+	// Create and commit a file at HEAD.
+	committed := filepath.Join(dir, "feature.go")
+	mustWriteFile(t, committed, []byte("package main\n\nfunc Feature() {}\n"))
+	runGitInDirCT(t, dir, "add", "feature.go")
+	runGitInDirCT(t, dir, "commit", "-m", "add feature")
+
+	// Simulate the pre-merge state: put stale (pre-merge) content on
+	// disk. This represents what the working tree looked like before
+	// the merge brought in the committed content.
+	staleContent := []byte("package main // pre-merge stub\n")
+	mustWriteFile(t, committed, staleContent)
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+
+	// Simulate the merge: restore the committed content. The walker
+	// will see this as an edit (stale → committed). Without SP-077,
+	// it would record staleContent as recoverable OriginalCode.
+	mustWriteFile(t, committed, []byte("package main\n\nfunc Feature() {}\n"))
+	bumpMtime(t, committed)
+
+	tracker.TrackShellTurn(dir, "git merge feature/something", false)
+
+	// The delta should have been suppressed — no changes recorded.
+	for _, ch := range tracker.changes {
+		if ch.FilePath == committed && ch.OriginalCode != "" && ch.OriginalCode != "[CONTENT NOT CAPTURED: " {
+			t.Errorf("SP-077: committed file delta was NOT suppressed — recorded OriginalCode for %s: op=%s", ch.FilePath, ch.Operation)
+		}
+	}
+	if len(tracker.changes) == 0 {
+		return // clean: no changes at all
+	}
+	// If any changes were recorded, they must not be for the committed file.
+	for _, ch := range tracker.changes {
+		if ch.FilePath == committed {
+			t.Errorf("SP-077: expected zero changes for committed file, but got: %+v", ch)
+		}
+	}
+}
+
+// TestSP077_PreservesGitCheckoutDeltas confirms that `git checkout --
+// file` — a destructive command that destroys uncommitted work — is
+// PRESERVED by the filter so the destroyed content is recoverable via
+// recover_file. This is the key behavior change from the original
+// SP-077: destructive commands that align files to HEAD but destroy
+// uncommitted work in the process must keep the delta so the work can
+// be recovered.
+func TestSP077_PreservesGitCheckoutDeltas(t *testing.T) {
+	dir := setupGitRepoCT(t)
+
+	// Create and commit a file at HEAD.
+	file := filepath.Join(dir, "config.go")
+	mustWriteFile(t, file, []byte("port = 8080\n"))
+	runGitInDirCT(t, dir, "add", "config.go")
+	runGitInDirCT(t, dir, "commit", "-m", "add config")
+
+	// Simulate uncommitted changes (what the agent might have done).
+	mustWriteFile(t, file, []byte("port = 9090\n"))
+	bumpMtime(t, file)
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+
+	// Run the actual git checkout to revert to HEAD.
+	runGitInDirCT(t, dir, "checkout", "--", "config.go")
+
+	tracker.TrackShellTurn(dir, "git checkout -- config.go", true)
+
+	// The checkout destroyed uncommitted work (port=9090). The delta
+	// should be PRESERVED so the destroyed content is recoverable.
+	var found bool
+	for _, ch := range tracker.changes {
+		if ch.FilePath == file {
+			found = true
+			if ch.OriginalCode != "port = 9090\n" {
+				t.Errorf("expected OriginalCode 'port = 9090\\n', got %q", ch.OriginalCode)
+			}
+			if ch.NewCode != "port = 8080\n" {
+				t.Errorf("expected NewCode 'port = 8080\\n', got %q", ch.NewCode)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("SP-077: git checkout delta was NOT preserved — expected recoverable entry for destroyed uncommitted work on %s", file)
+	}
+}
+
+// TestSP077_KeepsLegitimateEdits confirms that normal agent edits (sed,
+// awk, formatters) which produce content DIFFERENT from HEAD are still
+// tracked. This is the critical non-regression: the filter must not
+// suppress real agent work, only git-sourced deltas.
+func TestSP077_KeepsLegitimateEdits(t *testing.T) {
+	dir := setupGitRepoCT(t)
+
+	// Create and commit a file at HEAD.
+	file := filepath.Join(dir, "main.go")
+	mustWriteFile(t, file, []byte("package main\n\nfunc main() {}\n"))
+	runGitInDirCT(t, dir, "add", "main.go")
+	runGitInDirCT(t, dir, "commit", "-m", "add main")
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+
+	// Simulate a legitimate agent edit (sed -i, formatter, etc.) that
+	// produces content DIFFERENT from HEAD.
+	mustWriteFile(t, file, []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n"))
+	bumpMtime(t, file)
+
+	tracker.TrackShellTurn(dir, "sed -i 's/}/.../' main.go", false)
+
+	// The edit should be tracked — it's real agent work, not a git op.
+	found := false
+	for _, ch := range tracker.changes {
+		if ch.FilePath == file {
+			found = true
+			if ch.OriginalCode != "package main\n\nfunc main() {}\n" {
+				t.Errorf("expected OriginalCode to be the committed content, got %q", ch.OriginalCode)
+			}
+			if ch.Operation != "edit" {
+				t.Errorf("expected op=edit, got %q", ch.Operation)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("SP-077: legitimate edit was incorrectly suppressed for %s", file)
+	}
+}
+
+// TestSP077_KeepsFileDeletions confirms that real file deletions (rm)
+// are still tracked even in a git repo. Deletes have After==nil so they
+// can never match HEAD — the filter must pass them through.
+func TestSP077_KeepsFileDeletions(t *testing.T) {
+	dir := setupGitRepoCT(t)
+
+	// Create and commit a file.
+	file := filepath.Join(dir, "temp.go")
+	mustWriteFile(t, file, []byte("package main\n"))
+	runGitInDirCT(t, dir, "add", "temp.go")
+	runGitInDirCT(t, dir, "commit", "-m", "add temp")
+
+	// Now delete it (simulating `rm`).
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+
+	if err := os.Remove(file); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	tracker.TrackShellTurn(dir, "rm temp.go", false)
+
+	// The deletion should be tracked — it's a real file removal, not
+	// a git-sourced delta. The content is gone from disk and does NOT
+	// match HEAD, so the filter correctly passes it through.
+	found := false
+	for _, ch := range tracker.changes {
+		if ch.FilePath == file {
+			found = true
+			if ch.Operation != "delete" {
+				t.Errorf("expected op=delete, got %q", ch.Operation)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("SP-077: real file deletion was incorrectly suppressed for %s", file)
+	}
+}
+
+// TestSP077_KeepsUntrackedFileCreations confirms that newly-created
+// untracked files (not yet committed) are still tracked. These are the
+// primary recovery value of the ChangeTracker — the user wants to
+// recover accidentally-created files.
+func TestSP077_KeepsUntrackedFileCreations(t *testing.T) {
+	dir := setupGitRepoCT(t)
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+
+	// Create a new untracked file (simulating `echo ... > newfile`).
+	newFile := filepath.Join(dir, "scratch.txt")
+	mustWriteFile(t, newFile, []byte("scratch content"))
+
+	tracker.TrackShellTurn(dir, "echo 'scratch content' > scratch.txt", false)
+
+	// The creation should be tracked — untracked files are never in
+	// the committed set, so the filter passes them through.
+	found := false
+	for _, ch := range tracker.changes {
+		if ch.FilePath == newFile {
+			found = true
+			if ch.Operation != "create" {
+				t.Errorf("expected op=create, got %q", ch.Operation)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("SP-077: untracked file creation was incorrectly suppressed for %s", newFile)
+	}
+}
+
+// TestSP077_NoGitRepoRecordsEverything confirms that in a non-git
+// workspace, ALL deltas are recorded (no filtering). The filter is a
+// no-op when git is not available.
+func TestSP077_NoGitRepoRecordsEverything(t *testing.T) {
+	dir := t.TempDir() // NO git init
+
+	file := filepath.Join(dir, "config.txt")
+	mustWriteFile(t, file, []byte("port=8080"))
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+
+	// Edit the file.
+	mustWriteFile(t, file, []byte("port=9090"))
+	bumpMtime(t, file)
+
+	tracker.TrackShellTurn(dir, "sed -i 's/8080/9090/' config.txt", false)
+
+	if len(tracker.changes) != 1 {
+		t.Fatalf("expected 1 change in non-git repo, got %d: %+v", len(tracker.changes), tracker.changes)
+	}
+	ch := tracker.changes[0]
+	if ch.FilePath != file {
+		t.Errorf("expected change for %s, got %s", file, ch.FilePath)
+	}
+	if ch.OriginalCode != "port=8080" {
+		t.Errorf("expected OriginalCode 'port=8080', got %q", ch.OriginalCode)
 	}
 }

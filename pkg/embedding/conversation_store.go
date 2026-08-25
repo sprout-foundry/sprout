@@ -14,7 +14,7 @@ import (
 // The store uses the same static embedding provider as the code index,
 // and maintains its own in-memory cache of records for fast queries.
 type ConversationStore struct {
-	store    VectorStore // underlying store for conversation turns
+	store    VectorStore       // underlying store for conversation turns
 	provider EmbeddingProvider // shared static embedding provider
 }
 

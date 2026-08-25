@@ -18,11 +18,17 @@ import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegist
 import {
   CHAT_ENDPOINT_MAP,
   translateAndProxyChat,
-  proxyGitRequest,
   proxyStatsRequest,
   proxySettingsRequest,
+  handleFoundryAuthError,
 } from './cloudProxyRoutes';
-import { handleWasmLocal } from './cloudWasmHandlers';
+import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
+import {
+  handleWasmLocal,
+  handleWasmEditDecision,
+  handleWasmShellApprovalDecision,
+  trackFileWrite,
+} from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
 export interface CloudAdapterConfig {
@@ -40,9 +46,13 @@ export class CloudAdapter implements APIAdapter {
   readonly fileOpsViaAPI = false; // WASM handles files locally
   readonly showOnboarding = false; // Cloud is pre-configured
   readonly supportsSSH = false;
+  readonly supportsGit = true;
+  readonly supportsChat = true;
+  readonly supportsWorkspaceSwitching = false;
+  readonly supportsExport = false;
   readonly supportsInstances = true;
   readonly supportsLocalTerminal = false;
-  readonly supportsSettings = false;
+  readonly supportsSettings = true;
   readonly platformNavItems?: PlatformNavItem[];
 
   private config: CloudAdapterConfig;
@@ -53,6 +63,31 @@ export class CloudAdapter implements APIAdapter {
   constructor(config: CloudAdapterConfig) {
     this.config = config;
     this.platformNavItems = config.navItems;
+  }
+
+  /**
+   * Eagerly preload the WASM shell before any wasm-local request.
+   * Called from useAppInitialization on mount in cloud mode so the
+   * shell is ready when file/terminal/search requests fire.  The
+   * promise resolves to true on success, false on failure (failure
+   * is cached so subsequent ensureWasmShell calls short-circuit).
+   */
+  preloadWasmShell(): Promise<boolean> {
+    // Debug: set localStorage.setItem('sprout-debug-wasm', '1') to see logs
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('sprout-debug-wasm')) {
+      console.warn('[CloudAdapter] preloadWasmShell called');
+    }
+    return this.ensureWasmShell()
+      .then(() => true)
+      .catch((err) => {
+        console.warn('[CloudAdapter] WASM shell preload failed:', err);
+        return false;
+      });
+  }
+
+  /** Return the cached WASM shell if initialized, or null. */
+  getWasmShell(): WasmShell | null {
+    return this.wasmShell;
   }
 
   /**
@@ -84,6 +119,68 @@ export class CloudAdapter implements APIAdapter {
     return this.wasmInitPromise;
   }
 
+  /**
+   * Auto-import a repo from a URL. Calls the platform's /api/repo/import
+   * endpoint to clone and fetch the file tree, then writes each file to
+   * the WASM VFS directly via the shell (not through fetch interception).
+   */
+  async importRepo(repoURL: string): Promise<{ success: boolean; repo?: string; error?: string }> {
+    try {
+      // The repo/import endpoint is a real platform endpoint (not wasm-local).
+      // It clones the repo server-side and returns the file tree as JSON.
+      const response = await fetch(`${this.config.apiBase}/api/repo/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          [WEBUI_CLIENT_ID_HEADER]: getWebUIClientId(),
+        },
+        body: JSON.stringify({ url: repoURL }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        return { success: false, error: errData.error || `HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      const files: Array<{ path: string; content: string }> = data.files || [];
+
+      if (files.length === 0) {
+        return { success: true, repo: data.repo, error: 'No files found in repository' };
+      }
+
+      // Write files to the WASM VFS via the shell directly, not through
+      // fetch(). The CloudAdapter's own fetch() interception would route
+      // /api/create and /api/file back to this adapter's handleWasmLocal(),
+      // creating a circular dependency. Going through the shell avoids that.
+      const shell = await this.ensureWasmShell();
+      for (const file of files) {
+        try {
+          shell.writeFile(file.path, file.content);
+          // Track in the manifest so the file browser can list it
+          // (the old WASM binary has a broken listDir).
+          trackFileWrite(file.path);
+        } catch (writeErr) {
+          console.warn(`[CloudAdapter] failed to write file ${file.path}:`, writeErr);
+        }
+      }
+
+      return { success: true, repo: data.repo };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * Returns the repo URL from the ?repo= query param if present, or null.
+   */
+  static getRepoFromQuery(): string | null {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('repo');
+  }
+
   async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     let url: string;
     let method: string = 'GET';
@@ -109,9 +206,12 @@ export class CloudAdapter implements APIAdapter {
     const clientIdHeader = WEBUI_CLIENT_ID_HEADER;
     const clientIdValue = getWebUIClientId();
 
-    // ── Chat endpoint translation ──────────────────────────────────
+    // ── Chat endpoint translation (steer, stop, status) ───────────
     // NOTE: Chat endpoint mapping takes priority over the synthetic response
     // registry. No chat-mapped path should be added to the synthetic registry.
+    // /api/query POST is handled as wasm-local via the registry below — the
+    // WASM shell runs the full agent loop in-browser; steering/stop/status
+    // remain proxied because they need platform chat state.
     const foundryPath = CHAT_ENDPOINT_MAP[urlPath];
     if (foundryPath) {
       // When input is a Request object, pre-read the body for translation
@@ -129,11 +229,14 @@ export class CloudAdapter implements APIAdapter {
       );
     }
 
-    // ── Git endpoint translation ────────────────────────────────────
-    // Rewrite /api/git/* paths to /api/proxy/git/*
+    // ── Git operations (in-browser via isomorphic-git) ──────────────
+    // In cloud mode, git runs entirely in the browser using isomorphic-git
+    // + lightning-fs (IndexedDB). No server-side state required.
     if (urlPath.startsWith('/api/git/')) {
       const requestBody = await this.extractRequestBody(input);
-      return proxyGitRequest(this.config.apiBase, url, method, clientIdHeader, clientIdValue, init, requestBody);
+      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
+      const { handleBrowserGitRequest } = await import('./browserGitHandler');
+      return handleBrowserGitRequest(urlPath, method, url, bodyStr);
     }
 
     // ── Stats endpoint translation ────────────────────────────────────
@@ -144,10 +247,31 @@ export class CloudAdapter implements APIAdapter {
     }
 
     // ── Settings endpoint translation ───────────────────────────────
-    // Rewrite /api/settings and /api/settings/* paths to /api/proxy/settings/*
-    if (urlPath === '/api/settings' || urlPath.startsWith('/api/settings/')) {
+    // Only proxy CORE settings (user prefs, credentials, providers) to the
+    // platform backend. Subagent-types, MCP, skills, hotkeys are intercepted
+    // as synthetic below — those endpoints are not available in browser mode
+    // and returning a safe default is better than triggering a 401/404 error
+    // toast from the platform backend.
+    const isProxiedSettings =
+      urlPath === '/api/settings' ||
+      urlPath.startsWith('/api/settings/credentials') ||
+      urlPath.startsWith('/api/settings/providers');
+    if (isProxiedSettings) {
       const requestBody = await this.extractRequestBody(input);
       return proxySettingsRequest(this.config.apiBase, url, method, clientIdHeader, clientIdValue, init, requestBody);
+    }
+
+    // ── Cloud session persistence (localStorage-backed) ───────────
+    // In cloud mode the platform has no per-client session store, so GET
+    // /api/sessions would otherwise return an empty synthetic list and
+    // POST /api/sessions/restore would 400. Intercept these BEFORE the
+    // generic synthetic fallback and route them to the browser-local
+    // cloudSessionStore so conversations survive page reloads.
+    if (urlPath === '/api/sessions' || urlPath.startsWith('/api/sessions/')) {
+      const bodyStr = await this.extractRequestBody(input);
+      const handled = handleCloudSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
+      if (handled) return handled;
+      // Unknown sub-path — fall through to synthetic / standard proxy below.
     }
 
     // ── Synthetic response interception ────────────────────────────
@@ -155,6 +279,48 @@ export class CloudAdapter implements APIAdapter {
       const synthetic = getSyntheticResponse(urlPath, method);
       if (synthetic) {
         return synthetic;
+      }
+    }
+
+    // ── Dynamic edit-decision interception (INT-2/cloud edit-approval) ──
+    // The EditApprovalPanel POSTs to /api/edits/{id}/decision. The registry
+    // is static-only and cannot express the dynamic {id} segment, so we
+    // intercept here with a regex match before the wasm-local check.
+    const editDecisionMatch = urlPath.match(/^\/api\/edits\/([^/]+)\/decision$/);
+    if (editDecisionMatch && method === 'POST') {
+      const editId = editDecisionMatch[1];
+      const requestBody = await this.extractRequestBody(input);
+      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
+      try {
+        const shell = await this.ensureWasmShell();
+        return handleWasmEditDecision(shell, editId, bodyStr);
+      } catch (err) {
+        console.warn(
+          `[CloudAdapter] WASM shell unavailable for edit-decision endpoint "${urlPath}", falling through to server safety-net:`,
+          err,
+        );
+        // Fall through to standard proxy below.
+      }
+    }
+
+    // ── Dynamic shell-approval-decision interception (INT-5/cloud shell-approval) ──
+    // The ShellApprovalPanel POSTs to /api/shell-approvals/{id}/decision. The
+    // registry is static-only and cannot express the dynamic {id} segment, so
+    // we intercept here with a regex match before the wasm-local check.
+    const shellApprovalMatch = urlPath.match(/^\/api\/shell-approvals\/([^/]+)\/decision$/);
+    if (shellApprovalMatch && method === 'POST') {
+      const requestId = shellApprovalMatch[1];
+      const requestBody = await this.extractRequestBody(input);
+      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
+      try {
+        const shell = await this.ensureWasmShell();
+        return handleWasmShellApprovalDecision(shell, requestId, bodyStr);
+      } catch (err) {
+        console.warn(
+          `[CloudAdapter] WASM shell unavailable for shell-approval endpoint "${urlPath}", falling through to server safety-net:`,
+          err,
+        );
+        // Fall through to standard proxy below.
       }
     }
 
@@ -196,7 +362,7 @@ export class CloudAdapter implements APIAdapter {
       body: body ?? undefined,
       headers,
       credentials: 'include',
-    });
+    }).then(handleFoundryAuthError);
   }
 
   /**

@@ -30,13 +30,16 @@ locations in order, stopping at the first hit:
    | macOS, arm64       | `onnxruntime_arm64.dylib` |
    | macOS, amd64       | `onnxruntime.dylib`       |
    | Windows, any       | `onnxruntime.dll`         |
+   | Android, arm64     | `libonnxruntime.so`       |
 
 3. **Auto-download from the official `microsoft/onnxruntime` release** —
    when step 2 is empty, sprout fetches the platform-appropriate archive
-   from `github.com/microsoft/onnxruntime/releases/download/v<ver>/...`,
-   extracts the shared library, and atomically writes it to the path from
+   from `github.com/microsoft/onnxruntime/releases/download/v<ver>/...`
+   (Linux, macOS, Windows) or from Maven Central
+   `repo1.maven.org/.../onnxruntime-android-<ver>.aar` (Android), extracts
+   the shared library, and atomically writes it to the path from
    step 2. Version is pinned in `pkg/embedding/onnx_runtime_install.go`
-   (currently 1.20.1, matching the yalue/onnxruntime_go v1.30.x ABI). This
+   (currently 1.25.1, matching the yalue/onnxruntime_go v1.30.x ABI). This
    is the production-grade fallback — the source is the same one Microsoft
    distributes everywhere else, the writes are atomic, and the bytes can
    be hash-verified by pinning `SHA256` in `onnxRuntimeReleaseConfig`.
@@ -103,6 +106,54 @@ when ONNX is unavailable. All workspace search, duplicate detection, and
 memory retrieval continue to function with reduced retrieval precision (see
 `pkg/embedding/retrieval_eval.go` for measured deltas on this codebase: 42%
 static vs. 75% ONNX hit rate on the curated test queries).
+
+## Termux / Android
+
+Android (via Termux or a native NDK build) is a supported resolver target.
+End-to-end verified on Termux (`GOOS=android GOARCH=arm64`, Termux's
+`clang 21.1.8` targeting `aarch64-unknown-linux-android24`, Go 1.24,
+yalue/onnxruntime_go v1.30.1, ONNX Runtime Android 1.25.1):
+
+- The resolver looks for `libonnxruntime.so` (no `_arm64` suffix — the
+  Android AAR layout puts per-arch variants in different directories, not
+  different filenames).
+- **Auto-download from Maven Central.** Microsoft distributes the Android
+  ONNX Runtime exclusively as a Maven AAR
+  (`com.microsoft.onnxruntime:onnxruntime-android`), not as an asset on
+  the GitHub releases page. On first ONNX use, sprout downloads the AAR
+  from `repo1.maven.org`, extracts the per-ABI `.so` (e.g.
+  `jni/arm64-v8a/libonnxruntime.so`), and stages it at the step-2 path.
+  No manual setup is required on Termux — just enable the embedding index
+  (`/index on`).
+- Bionic CGO is already enabled in this build — `CGO_ENABLED=1`, Termux's
+  `clang` links against Bionic as the C library. A statically-linked,
+  glibc-targeting Go binary would NOT load the Bionic `.so`; this is
+  not a sprout bug, it's an ELF ABI mismatch. Verify with
+  `file libonnxruntime.so`: a working Termux-loaded build should report
+  `ELF 64-bit LSB shared object, ARM aarch64, ... for Android NN`.
+- If `dlopen` still fails after a correctly-named Bionic `.so` is on
+  disk, the most likely cause is **the wrong architecture** (the AAR
+  contains all of `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`; sprout
+  selects the ABI matching `runtime.GOARCH` automatically).
+- For manual staging (air-gapped Termux, custom ONNX build, or to avoid
+  the ~41 MB AAR download), download the AAR from Maven Central and
+  extract the Bionic-linked `.so`:
+
+  ```sh
+  # Pick the version that matches pkg/embedding/onnx_runtime_install.go:onnxRuntimeVersion (currently 1.25.1).
+  curl -fsSL -o onnxruntime-android.aar \
+    "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.25.1/onnxruntime-android-1.25.1.aar"
+  python3 -c "
+  import zipfile, shutil, sys
+  with zipfile.ZipFile('onnxruntime-android.aar') as z:
+      z.extract('jni/arm64-v8a/libonnxruntime.so', '.')
+  shutil.copy2('jni/arm64-v8a/libonnxruntime.so', '/data/data/com.termux/files/home/sprout-models/onnxruntime/libonnxruntime.so')
+  "  # or any directory your SPROUT_MODELS_DIR/onnxruntime resolves to
+  ```
+
+  Then either export `SPROUT_ONNX_RUNTIME_LIB=$PWD/libonnxruntime.so`,
+  or stage it at `$SPROUT_MODELS_DIR/onnxruntime/libonnxruntime.so` so
+  step 2 of the resolver order picks it up automatically.
 
 ## Where ONNX Runtime binaries come from
 

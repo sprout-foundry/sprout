@@ -15,8 +15,12 @@ func EditFile(ctx context.Context, filePath, oldString, newString string) (strin
 		return "", fmt.Errorf("validate edit inputs: %w", err)
 	}
 
-	// Step 2: Resolve and validate file
-	cleanPath, originalMode, err := resolveAndValidateFile(ctx, filePath)
+	// Step 2: Resolve and validate file. The gate is consulted only
+	// here — the rest of the edit operates on an already-resolved
+	// path, so a successful resolve means the work happens inside the
+	// approved scope (workspace, session-allowed folder, or bypass
+	// from a one-shot / elevation approval).
+	cleanPath, originalMode, err := resolveAndValidateFileWithGate(ctx, filePath)
 	if err != nil {
 		return "", fmt.Errorf("resolve and validate file %s: %w", filePath, err)
 	}
@@ -45,6 +49,12 @@ func EditFile(ctx context.Context, filePath, oldString, newString string) (strin
 
 	// Return concise confirmation with character counts
 	return fmt.Sprintf("Edited %s: replaced %d characters with %d characters", cleanPath, len(oldString), len(newString)), nil
+}
+
+// resolveAndValidateFileWithGate resolves and validates the file. PrecheckFileAccess
+// should have already set up the bypass context for "allow" paths.
+func resolveAndValidateFileWithGate(ctx context.Context, filePath string) (string, os.FileMode, error) {
+	return resolveAndValidateFile(ctx, filePath)
 }
 
 // validateEditInputs validates filePath, oldString, newString and checks for suspicious patterns

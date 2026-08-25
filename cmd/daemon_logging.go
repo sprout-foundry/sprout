@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
@@ -30,14 +32,20 @@ const (
 // It creates a pair of os.Pipe per stream: the write end replaces
 // os.Stdout/os.Stderr (it is an *os.File), while a background goroutine
 // copies from the read end into the rotating lumberjack.Logger.
-func setupDaemonLogging(homeDir string) {
+// Takes no homeDir: the log directory comes from envutil.StateDir(), which is
+// XDG-based and not necessarily under any given home. Redirect it in tests via
+// $SPROUT_STATE_DIR.
+func setupDaemonLogging() {
 	if os.Getenv("SPROUT_SERVICE") != "1" {
 		return
 	}
 
-	logDir := filepath.Join(homeDir, ".sprout", "logs")
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return
+	}
+	logDir := filepath.Join(stateDir, "logs")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		// Can't log anything meaningful here; just skip rotation.
 		return
 	}
 

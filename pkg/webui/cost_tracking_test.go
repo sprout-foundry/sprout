@@ -4,6 +4,7 @@ package webui
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -178,7 +179,13 @@ func TestGetDailyCosts(t *testing.T) {
 
 	cs.records = []CostRecord{
 		{Timestamp: now, Provider: "openai", Model: "gpt-4", Cost: 0.05},
-		{Timestamp: now.Add(-30 * time.Minute), Provider: "openai", Model: "gpt-3.5", Cost: 0.03},
+		// Noon on now's own calendar day. A relative offset like
+		// now.Add(-30 * time.Minute) rolls into the PREVIOUS day when the
+		// test runs in the first 30 minutes after midnight (CI runners are
+		// UTC — failed at 00:19 UTC on 2026-08-24 with today/yesterday
+		// totals swapped). A fixed same-day clock time never crosses
+		// midnight relative to `now`.
+		{Timestamp: time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location()), Provider: "openai", Model: "gpt-3.5", Cost: 0.03},
 		{Timestamp: yesterday, Provider: "anthropic", Model: "claude", Cost: 0.10},
 		{Timestamp: twoDaysAgo, Provider: "openai", Model: "gpt-4", Cost: 0.07},
 	}
@@ -273,7 +280,7 @@ func TestGetCostSummary_AllFields(t *testing.T) {
 		{Timestamp: lastMonthDate, Provider: "anthropic", Model: "claude", Cost: 0.08},
 	}
 
-	summary := cs.GetCostSummary()
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
 
 	// Total cost should be sum of all
 	if !floatEq(summary.TotalCost, 0.05+0.03+0.10+0.02+0.08, 0.0001) {
@@ -332,12 +339,38 @@ func TestGetCostSummary_AllFields(t *testing.T) {
 	if !floatEq(summary.LastMonth, expectedLastMonth, 0.0001) {
 		t.Errorf("LastMonth = %f, want %f", summary.LastMonth, expectedLastMonth)
 	}
+
+	// ByProviderThisMonth
+	var expectedThisMonthProvider = make(map[string]float64)
+	for _, r := range cs.records {
+		if r.Timestamp.After(startOfThisMonth) {
+			expectedThisMonthProvider[r.Provider] += r.Cost
+		}
+	}
+	for provider, expected := range expectedThisMonthProvider {
+		if !floatEq(summary.ByProviderThisMonth[provider], expected, 0.0001) {
+			t.Errorf("ByProviderThisMonth[%s] = %f, want %f", provider, summary.ByProviderThisMonth[provider], expected)
+		}
+	}
+
+	// ByProviderLastMonth
+	var expectedLastMonthProvider = make(map[string]float64)
+	for _, r := range cs.records {
+		if r.Timestamp.After(startOfLastMonth) && r.Timestamp.Before(startOfThisMonth) {
+			expectedLastMonthProvider[r.Provider] += r.Cost
+		}
+	}
+	for provider, expected := range expectedLastMonthProvider {
+		if !floatEq(summary.ByProviderLastMonth[provider], expected, 0.0001) {
+			t.Errorf("ByProviderLastMonth[%s] = %f, want %f", provider, summary.ByProviderLastMonth[provider], expected)
+		}
+	}
 }
 
 func TestGetCostSummary_Empty(t *testing.T) {
 	cs := makeCostStore(t)
 
-	summary := cs.GetCostSummary()
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
 
 	if summary.TotalCost != 0 {
 		t.Errorf("TotalCost = %f, want 0", summary.TotalCost)
@@ -359,6 +392,115 @@ func TestGetCostSummary_Empty(t *testing.T) {
 	}
 	if len(summary.ByModel) != 0 {
 		t.Errorf("ByModel should be empty, got %v", summary.ByModel)
+	}
+	if len(summary.ByProviderThisMonth) != 0 {
+		t.Errorf("ByProviderThisMonth should be empty, got %v", summary.ByProviderThisMonth)
+	}
+	if len(summary.ByProviderLastMonth) != 0 {
+		t.Errorf("ByProviderLastMonth should be empty, got %v", summary.ByProviderLastMonth)
+	}
+	if summary.FirstActivity != nil {
+		t.Errorf("FirstActivity should be nil for empty store, got %v", summary.FirstActivity)
+	}
+	if summary.LastActivity != nil {
+		t.Errorf("LastActivity should be nil for empty store, got %v", summary.LastActivity)
+	}
+}
+
+// --- SP-080: All-time activity bounds for stale-data banner ---
+
+func TestCostSummary_ActivityBounds_Populated(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Records in non-sorted order so the min/max has to scan, not just
+	// grab the first/last slice element.
+	cs.records = []CostRecord{
+		{Timestamp: now.Add(-10 * 24 * time.Hour), Provider: "openai", Model: "gpt-4", Cost: 0.05},
+		{Timestamp: now.Add(-90 * 24 * time.Hour), Provider: "anthropic", Model: "claude", Cost: 0.10},
+		{Timestamp: now.Add(-45 * 24 * time.Hour), Provider: "openai", Model: "gpt-3.5", Cost: 0.03},
+		{Timestamp: now.Add(-1 * time.Hour), Provider: "openai", Model: "gpt-4", Cost: 0.02},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.FirstActivity == nil {
+		t.Fatal("FirstActivity should not be nil for populated store")
+	}
+	if summary.LastActivity == nil {
+		t.Fatal("LastActivity should not be nil for populated store")
+	}
+
+	wantFirst := now.Add(-90 * 24 * time.Hour)
+	wantLast := now.Add(-1 * time.Hour)
+
+	// Allow 1s slack because the recorded timestamps are derived from
+	// `now` at test start; comparing with millisecond precision would
+	// be flaky on slower machines.
+	if diff := summary.FirstActivity.Sub(wantFirst); diff > time.Second || diff < -time.Second {
+		t.Errorf("FirstActivity = %v, want ~%v (diff %v)", summary.FirstActivity, wantFirst, diff)
+	}
+	if diff := summary.LastActivity.Sub(wantLast); diff > time.Second || diff < -time.Second {
+		t.Errorf("LastActivity = %v, want ~%v (diff %v)", summary.LastActivity, wantLast, diff)
+	}
+
+	// Bounds are emitted in UTC.
+	if summary.FirstActivity.Location() != time.UTC {
+		t.Errorf("FirstActivity location = %v, want UTC", summary.FirstActivity.Location())
+	}
+	if summary.LastActivity.Location() != time.UTC {
+		t.Errorf("LastActivity location = %v, want UTC", summary.LastActivity.Location())
+	}
+}
+
+func TestCostSummary_ActivityBounds_IndependentOfRangeFilter(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// All records are older than the 7-day range we'll filter by, but
+	// the all-time bounds must still reflect min/max across ALL records.
+	old := now.AddDate(0, 0, -60)
+	older := now.AddDate(0, 0, -90)
+	oldest := now.AddDate(0, 0, -120)
+
+	cs.records = []CostRecord{
+		{Timestamp: old, Provider: "openai", Model: "gpt-4", Cost: 0.05},
+		{Timestamp: older, Provider: "openai", Model: "gpt-4", Cost: 0.05},
+		{Timestamp: oldest, Provider: "openai", Model: "gpt-4", Cost: 0.05},
+	}
+
+	startDate := now.AddDate(0, 0, -7)
+	endDate := now
+	summary := cs.GetCostSummary(startDate, endDate)
+
+	if summary.FirstActivity == nil || summary.LastActivity == nil {
+		t.Fatal("activity bounds should be populated regardless of range filter")
+	}
+	if diff := summary.FirstActivity.Sub(oldest); diff > time.Second || diff < -time.Second {
+		t.Errorf("FirstActivity = %v, want ~%v", summary.FirstActivity, oldest)
+	}
+	if diff := summary.LastActivity.Sub(old); diff > time.Second || diff < -time.Second {
+		t.Errorf("LastActivity = %v, want ~%v", summary.LastActivity, old)
+	}
+}
+
+func TestCostSummary_ActivityBounds_SingleRecord(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{Timestamp: now.Add(-2 * time.Hour), Provider: "openai", Model: "gpt-4", Cost: 0.05},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.FirstActivity == nil || summary.LastActivity == nil {
+		t.Fatal("single record should produce non-nil bounds")
+	}
+	// For one record, first and last should be the same instant.
+	if !summary.FirstActivity.Equal(*summary.LastActivity) {
+		t.Errorf("single-record bounds should be equal: first=%v last=%v",
+			summary.FirstActivity, summary.LastActivity)
 	}
 }
 
@@ -416,5 +558,524 @@ func TestForcePersist_EmptyStore(t *testing.T) {
 	// Empty array should be written
 	if string(data) != "[]" {
 		t.Errorf("persisted data = %q, want []", string(data))
+	}
+}
+
+func TestCostSummary_TopSessions_Populated(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Create 12 sessions with descending costs
+	for i := 0; i < 12; i++ {
+		cost := float64(12-i) * 0.01
+		cs.records = append(cs.records, CostRecord{
+			Timestamp:   now.Add(-time.Duration(i) * time.Hour),
+			Provider:    "openai",
+			Model:       "gpt-4",
+			Cost:        cost,
+			SessionID:   fmt.Sprintf("sess-%d", i),
+			Title:       fmt.Sprintf("Session %d", i),
+			WorkingDir:  fmt.Sprintf("/workspace/%d", i),
+			LastUpdated: now.Format(time.RFC3339),
+		})
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// Should have exactly 10 rows (top 10 of 12)
+	if len(summary.TopSessions) != 10 {
+		t.Fatalf("expected 10 top sessions, got %d", len(summary.TopSessions))
+	}
+
+	// Should be sorted by cost descending
+	for i := 0; i < len(summary.TopSessions)-1; i++ {
+		if summary.TopSessions[i].TotalCost < summary.TopSessions[i+1].TotalCost {
+			t.Errorf("TopSessions not sorted desc: row %d cost %f < row %d cost %f",
+				i, summary.TopSessions[i].TotalCost, i+1, summary.TopSessions[i+1].TotalCost)
+		}
+	}
+
+	// Most expensive should be sess-0 (cost=0.12)
+	if summary.TopSessions[0].SessionID != "sess-0" {
+		t.Errorf("top session = %q, want %q", summary.TopSessions[0].SessionID, "sess-0")
+	}
+	if !floatEq(summary.TopSessions[0].TotalCost, 0.12, 0.0001) {
+		t.Errorf("top session cost = %f, want 0.12", summary.TopSessions[0].TotalCost)
+	}
+}
+
+func TestCostSummary_TopSessions_FilteredByTimeRange(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Old session (outside range)
+	cs.records = append(cs.records, CostRecord{
+		Timestamp:   now.AddDate(0, 0, -60),
+		Provider:    "openai",
+		Model:       "gpt-4",
+		Cost:        1.00,
+		SessionID:   "old-sess",
+		Title:       "Old Session",
+		WorkingDir:  "/old",
+		LastUpdated: now.AddDate(0, 0, -60).Format(time.RFC3339),
+	})
+
+	// Recent session (inside range)
+	cs.records = append(cs.records, CostRecord{
+		Timestamp:   now.Add(-1 * time.Hour),
+		Provider:    "openai",
+		Model:       "gpt-4",
+		Cost:        0.05,
+		SessionID:   "new-sess",
+		Title:       "New Session",
+		WorkingDir:  "/new",
+		LastUpdated: now.Format(time.RFC3339),
+	})
+
+	startDate := now.AddDate(0, 0, -30)
+	endDate := now
+
+	summary := cs.GetCostSummary(startDate, endDate)
+
+	// Should only include the recent session
+	if len(summary.TopSessions) != 1 {
+		t.Fatalf("expected 1 top session, got %d", len(summary.TopSessions))
+	}
+	if summary.TopSessions[0].SessionID != "new-sess" {
+		t.Errorf("top session = %q, want %q", summary.TopSessions[0].SessionID, "new-sess")
+	}
+}
+
+func TestCostSummary_TopSessions_Empty(t *testing.T) {
+	cs := makeCostStore(t)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.TopSessions == nil {
+		t.Error("TopSessions should be empty slice, not nil")
+	}
+	if len(summary.TopSessions) != 0 {
+		t.Errorf("expected 0 top sessions, got %d", len(summary.TopSessions))
+	}
+}
+
+func TestCostSummary_TopSessions_MultipleRecordsPerSession(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Two records for the same session
+	cs.records = append(cs.records,
+		CostRecord{
+			Timestamp:   now.Add(-2 * time.Hour),
+			Provider:    "openai",
+			Model:       "gpt-4",
+			Cost:        0.05,
+			SessionID:   "sess-multi",
+			Title:       "Multi-record Session",
+			WorkingDir:  "/workspace",
+			LastUpdated: now.Add(-2 * time.Hour).Format(time.RFC3339),
+		},
+		CostRecord{
+			Timestamp:   now.Add(-1 * time.Hour),
+			Provider:    "anthropic",
+			Model:       "claude",
+			Cost:        0.10,
+			SessionID:   "sess-multi",
+			Title:       "Multi-record Session",
+			WorkingDir:  "/workspace",
+			LastUpdated: now.Format(time.RFC3339),
+		},
+	)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if len(summary.TopSessions) != 1 {
+		t.Fatalf("expected 1 top session, got %d", len(summary.TopSessions))
+	}
+	row := summary.TopSessions[0]
+	if row.SessionID != "sess-multi" {
+		t.Errorf("session = %q, want %q", row.SessionID, "sess-multi")
+	}
+	if !floatEq(row.TotalCost, 0.15, 0.0001) {
+		t.Errorf("cost = %f, want 0.15", row.TotalCost)
+	}
+	if row.Title != "Multi-record Session" {
+		t.Errorf("title = %q, want %q", row.Title, "Multi-record Session")
+	}
+	if row.WorkingDir != "/workspace" {
+		t.Errorf("working_dir = %q, want %q", row.WorkingDir, "/workspace")
+	}
+}
+
+func TestCostSummary_TopSessions_NoSessionID(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Records without session IDs should not appear in TopSessions
+	cs.records = append(cs.records,
+		CostRecord{
+			Timestamp: now.Add(-1 * time.Hour),
+			Provider:  "openai",
+			Model:     "gpt-4",
+			Cost:      0.05,
+			SessionID: "", // no session
+		},
+	)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if len(summary.TopSessions) != 0 {
+		t.Errorf("expected 0 top sessions (no session IDs), got %d", len(summary.TopSessions))
+	}
+}
+
+// --- SP-080: Billing-type-aware cost tracking tests ---
+
+func TestCostSummaryBillingType_MixedBillingTypes(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.10,
+			TokenCost:    0.10,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "zai-coding",
+			Model:        "glm-4",
+			PromptTokens: 2000,
+			OutputTokens: 1000,
+			Cost:         0,
+			BillingType:  "subscription",
+			ChargedCost:  0,
+			TokenCost:    0.05,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "local",
+			Model:        "llama-3",
+			PromptTokens: 500,
+			OutputTokens: 250,
+			Cost:         0,
+			BillingType:  "free",
+			ChargedCost:  0,
+			TokenCost:    0.02,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// ByBillingType should have 3 entries
+	if len(summary.ByBillingType) != 3 {
+		t.Fatalf("ByBillingType has %d entries, want 3", len(summary.ByBillingType))
+	}
+
+	// pay_per_token bucket
+	ppt, ok := summary.ByBillingType["pay_per_token"]
+	if !ok {
+		t.Fatal("missing pay_per_token in ByBillingType")
+	}
+	if !floatEq(ppt.Cost, 0.10, 0.0001) {
+		t.Errorf("pay_per_token cost = %f, want 0.10", ppt.Cost)
+	}
+	if ppt.Tokens != 1500 {
+		t.Errorf("pay_per_token tokens = %d, want 1500", ppt.Tokens)
+	}
+
+	// subscription bucket
+	sub, ok := summary.ByBillingType["subscription"]
+	if !ok {
+		t.Fatal("missing subscription in ByBillingType")
+	}
+	if !floatEq(sub.Cost, 0.0, 0.0001) {
+		t.Errorf("subscription cost = %f, want 0.0", sub.Cost)
+	}
+	if sub.Tokens != 3000 {
+		t.Errorf("subscription tokens = %d, want 3000", sub.Tokens)
+	}
+
+	// free bucket
+	free, ok := summary.ByBillingType["free"]
+	if !ok {
+		t.Fatal("missing free in ByBillingType")
+	}
+	if !floatEq(free.Cost, 0.0, 0.0001) {
+		t.Errorf("free cost = %f, want 0.0", free.Cost)
+	}
+	if free.Tokens != 750 {
+		t.Errorf("free tokens = %d, want 750", free.Tokens)
+	}
+}
+
+func TestCostSummaryBillingType_ChargedCostAndTokenValue(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.10,
+			TokenCost:    0.12,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "zai-coding",
+			Model:        "glm-4",
+			PromptTokens: 2000,
+			OutputTokens: 1000,
+			Cost:         0,
+			BillingType:  "subscription",
+			ChargedCost:  0,
+			TokenCost:    0.05,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "local",
+			Model:        "llama-3",
+			PromptTokens: 500,
+			OutputTokens: 250,
+			Cost:         0,
+			BillingType:  "free",
+			ChargedCost:  0,
+			TokenCost:    0.02,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// ChargedCost should sum all ChargedCost fields (with fallback to Cost)
+	if !floatEq(summary.ChargedCost, 0.10, 0.0001) {
+		t.Errorf("ChargedCost = %f, want 0.10", summary.ChargedCost)
+	}
+
+	// TokenValue should sum all TokenCost fields
+	if !floatEq(summary.TokenValue, 0.19, 0.0001) {
+		t.Errorf("TokenValue = %f, want 0.19", summary.TokenValue)
+	}
+}
+
+func TestCostSummaryBillingType_OldRecordsDefaultToPayPerToken(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Old record with no BillingType and no ChargedCost — should default to pay_per_token
+	// and fall back to Cost field for charged cost.
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "", // missing — should default to pay_per_token
+			ChargedCost:  0,  // missing — should fall back to Cost
+			TokenCost:    0,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// Should be categorized as pay_per_token
+	ppt, ok := summary.ByBillingType["pay_per_token"]
+	if !ok {
+		t.Fatal("missing pay_per_token in ByBillingType")
+	}
+	// ChargedCost falls back to Cost (0.10)
+	if !floatEq(ppt.Cost, 0.10, 0.0001) {
+		t.Errorf("pay_per_token cost = %f, want 0.10 (fallback to Cost field)", ppt.Cost)
+	}
+	if ppt.Tokens != 1500 {
+		t.Errorf("pay_per_token tokens = %d, want 1500", ppt.Tokens)
+	}
+
+	// ChargedCost total should use the fallback
+	if !floatEq(summary.ChargedCost, 0.10, 0.0001) {
+		t.Errorf("ChargedCost = %f, want 0.10", summary.ChargedCost)
+	}
+}
+
+func TestCostSummaryBillingType_MultipleRecordsPerType(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.10,
+			TokenCost:    0.10,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "anthropic",
+			Model:        "claude-3",
+			PromptTokens: 2000,
+			OutputTokens: 1000,
+			Cost:         0.20,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.20,
+			TokenCost:    0.20,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "zai-coding",
+			Model:        "glm-4",
+			PromptTokens: 3000,
+			OutputTokens: 1500,
+			Cost:         0,
+			BillingType:  "subscription",
+			ChargedCost:  0,
+			TokenCost:    0.08,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// pay_per_token should aggregate both records
+	ppt, ok := summary.ByBillingType["pay_per_token"]
+	if !ok {
+		t.Fatal("missing pay_per_token in ByBillingType")
+	}
+	if !floatEq(ppt.Cost, 0.30, 0.0001) {
+		t.Errorf("pay_per_token cost = %f, want 0.30", ppt.Cost)
+	}
+	if ppt.Tokens != 4500 {
+		t.Errorf("pay_per_token tokens = %d, want 4500", ppt.Tokens)
+	}
+
+	// subscription should have its own totals
+	sub, ok := summary.ByBillingType["subscription"]
+	if !ok {
+		t.Fatal("missing subscription in ByBillingType")
+	}
+	if !floatEq(sub.Cost, 0.0, 0.0001) {
+		t.Errorf("subscription cost = %f, want 0.0", sub.Cost)
+	}
+	if sub.Tokens != 4500 {
+		t.Errorf("subscription tokens = %d, want 4500", sub.Tokens)
+	}
+
+	// Totals
+	if !floatEq(summary.ChargedCost, 0.30, 0.0001) {
+		t.Errorf("ChargedCost = %f, want 0.30", summary.ChargedCost)
+	}
+	if !floatEq(summary.TokenValue, 0.38, 0.0001) {
+		t.Errorf("TokenValue = %f, want 0.38", summary.TokenValue)
+	}
+}
+
+func TestCostSummaryBillingType_EmptyStore(t *testing.T) {
+	cs := makeCostStore(t)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.ChargedCost != 0 {
+		t.Errorf("ChargedCost = %f, want 0", summary.ChargedCost)
+	}
+	if summary.TokenValue != 0 {
+		t.Errorf("TokenValue = %f, want 0", summary.TokenValue)
+	}
+	if len(summary.ByBillingType) != 0 {
+		t.Errorf("ByBillingType should be empty, got %v", summary.ByBillingType)
+	}
+}
+
+// --- SP-113 Phase 4: ByProviderBillingType tests ---
+
+func TestCostSummary_ByProviderBillingType_FromRecords(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:   now,
+			Provider:    "openai",
+			Model:       "gpt-4",
+			Cost:        0.10,
+			BillingType: "pay_per_token",
+		},
+		{
+			Timestamp:   now,
+			Provider:    "zai-coding",
+			Model:       "glm-4",
+			Cost:        0,
+			BillingType: "subscription",
+		},
+		{
+			Timestamp:   now,
+			Provider:    "local",
+			Model:       "llama-3",
+			Cost:        0,
+			BillingType: "free",
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if got := summary.ByProviderBillingType["openai"]; got != "pay_per_token" {
+		t.Errorf("ByProviderBillingType[openai] = %q, want %q", got, "pay_per_token")
+	}
+	if got := summary.ByProviderBillingType["zai-coding"]; got != "subscription" {
+		t.Errorf("ByProviderBillingType[zai-coding] = %q, want %q", got, "subscription")
+	}
+	if got := summary.ByProviderBillingType["local"]; got != "free" {
+		t.Errorf("ByProviderBillingType[local] = %q, want %q", got, "free")
+	}
+}
+
+func TestCostSummary_ByProviderBillingType_OldRecordsFallbackToConfig(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Old record with no BillingType field set (backward compat).
+	// "zai-coding" resolves to "subscription" via the static fallback in
+	// resolveBillingTypeForProvider.
+	cs.records = []CostRecord{
+		{
+			Timestamp:   now,
+			Provider:    "zai-coding",
+			Model:       "glm-4",
+			Cost:        0.05,
+			BillingType: "", // missing — should fall back to config resolution
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if got := summary.ByProviderBillingType["zai-coding"]; got != "subscription" {
+		t.Errorf("ByProviderBillingType[zai-coding] = %q, want %q (config fallback)", got, "subscription")
+	}
+}
+
+func TestCostSummary_ByProviderBillingType_EmptyStore(t *testing.T) {
+	cs := makeCostStore(t)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.ByProviderBillingType == nil {
+		t.Fatal("ByProviderBillingType should be initialized (non-nil), even for empty store")
+	}
+	if len(summary.ByProviderBillingType) != 0 {
+		t.Errorf("ByProviderBillingType should be empty, got %v", summary.ByProviderBillingType)
 	}
 }

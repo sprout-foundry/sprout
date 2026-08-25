@@ -1,11 +1,10 @@
 import type { ToolExecution, LogEntry, SubagentActivity, TodoItem, FileEdit } from '@sprout/ui';
 import React, { useEffect } from 'react';
 import { ApiService } from '../services/api';
-import type { QueryProgress } from '../types/app';
+import type { QueryProgress, ViewType } from '../types/app';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ErrorBoundary from './ErrorBoundary';
 
-const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
 const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 
 export interface ContextSidebarProps {
@@ -13,7 +12,7 @@ export interface ContextSidebarProps {
   isTablet: boolean;
   showContextSidebar: boolean;
   contextPanelRef: React.RefObject<ContextPanelHandle>;
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
+  currentView: ViewType;
   toolExecutions: ToolExecution[];
   fileEdits: FileEdit[];
   logs: LogEntry[];
@@ -98,7 +97,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
     return () => window.removeEventListener('toggle-context-panel', handleToggleEvent);
   }, [handleToggleContextPanel]);
 
-  if (!showContextSidebar || PLATFORM_VIEWS.has(currentView)) {
+  if (!showContextSidebar || currentView === 'costs') {
     return null;
   }
 

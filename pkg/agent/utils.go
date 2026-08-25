@@ -1,15 +1,17 @@
 package agent
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"strings"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // debugLog logs a message only if debug mode is enabled.
@@ -37,21 +39,183 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 	_, _ = os.Stderr.Write([]byte(msg))
 }
 
-// getModelContextLimit returns the maximum context window for a model from the API
-func (a *Agent) getModelContextLimit() int {
+// getNativeModelContextLimit returns the model's native context window
+// as reported by the underlying client, WITHOUT applying the user's
+// MaxContextTokens cap. Falls back to 32K when the client is nil or
+// the API call fails, matching getModelContextLimit()'s fallback
+// behavior.
+//
+// This is the raw value — the cap (if any) is applied separately by
+// callers that want the effective cap. New code that wants the
+// effective cap should prefer Agent.GetEffectiveContextCap() or
+// configuration.ResolveEffectiveContextCap for one-shot lookups;
+// this helper exists for callers that specifically need the native
+// value (e.g. when computing the effective cap in the first place).
+func (a *Agent) getNativeModelContextLimit() int {
 	c := a.getClient()
 	if c == nil {
+		a.Logger().Warn("No client available; using fallback context limit of 32K. Model context window could not be determined.")
 		return 32000
 	}
 	limit, err := c.GetModelContextLimit()
 	if err != nil {
-		// Fallback to conservative default if API method fails
-		if a.debug {
-			a.Logger().Debug("[WARN] Failed to get model context limit: %v, using default\n", err)
-		}
+		a.Logger().Warn("Failed to get model context limit: %v; using fallback of 32K. The model may support a larger context window.", err)
 		return 32000
 	}
 	return limit
+}
+
+// userCapFromConfig extracts the configured MaxContextTokens (if any) as a
+// has/value pair. A nil/zero cap means "no cap".
+func userCapFromConfig(cfg *configuration.Config) (hasCap bool, capVal int) {
+	if cfg == nil || cfg.MaxContextTokens == nil || *cfg.MaxContextTokens <= 0 {
+		return false, 0
+	}
+	return true, *cfg.MaxContextTokens
+}
+
+// effectiveCapSnapshot returns the current effective context cap under the
+// read lock. Prefer this over reading a.effectiveContextCap directly.
+func (a *Agent) effectiveCapSnapshot() int {
+	if a == nil {
+		return 0
+	}
+	a.contextCapMu.RLock()
+	defer a.contextCapMu.RUnlock()
+	return a.effectiveContextCap
+}
+
+// contextCapStateLocked records a resolved cap and the user-cap snapshot it
+// was resolved against. Callers hold contextCapMu (write).
+func (a *Agent) contextCapStateLocked(effectiveCap, nativeWindow int, cfg *configuration.Config) {
+	a.effectiveContextCap = effectiveCap
+	a.nativeContextWindow = nativeWindow
+	a.lastResolvedHasCap, a.lastResolvedUserCap = userCapFromConfig(cfg)
+}
+
+// setContextCapState stores a freshly resolved context cap state under the
+// write lock. Used at agent creation and by RefreshContextCapFromConfig paths.
+func (a *Agent) setContextCapState(effectiveCap, nativeWindow int, cfg *configuration.Config) {
+	a.contextCapMu.Lock()
+	defer a.contextCapMu.Unlock()
+	a.contextCapStateLocked(effectiveCap, nativeWindow, cfg)
+}
+
+// RefreshContextCapFromConfig re-resolves the effective context cap from the
+// current config and client. Called by /max-context and the settings API after
+// they persist a MaxContextTokens change, so the running session picks up the
+// new cap without waiting for a model switch.
+func (a *Agent) RefreshContextCapFromConfig() {
+	if a == nil || a.configManager == nil {
+		return
+	}
+	a.refreshEffectiveContextCap()
+}
+
+// refreshEffectiveContextCap recomputes the agent's effective context cap
+// from the current client and config. Call this after any provider/model switch
+// so that OnIteration clamping, compaction triggers, and the UI footer all
+// see the correct value.
+//
+// The native window and config snapshot are read before taking the write lock:
+// clientMu/configManager.mu must never be acquired while holding contextCapMu
+// (SetModel holds clientMu.RLock across the whole operation and calls into
+// this function, so the consistent order is clientMu → contextCapMu).
+func (a *Agent) refreshEffectiveContextCap() {
+	nativeWindow := a.getNativeModelContextLimit()
+	var cfg *configuration.Config
+	if a.configManager != nil {
+		cfg = a.configManager.GetConfig()
+	}
+	a.contextCapMu.Lock()
+	defer a.contextCapMu.Unlock()
+	cap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
+	if capErr != nil {
+		a.Logger().Debug("[context-cap] refresh failed (user cap below minimum): %v; falling back to native window", capErr)
+	}
+	a.contextCapStateLocked(cap, nativeWindow, cfg)
+}
+
+// reconcileContextCap clamps the live native window by the user's configured
+// cap, re-resolving when the live window diverges from the one the cached cap
+// was resolved against (e.g. the creation-time lookup failed to 32K and the
+// runtime lookup now succeeds with 200K) or when the user's configured cap
+// changed since the last resolution (e.g. /max-context or the settings API
+// mutated MaxContextTokens at runtime). Returns the effective context size.
+//
+// The config snapshot is read on every call (an in-memory clone under the
+// manager lock — no I/O) so a runtime cap change takes effect immediately
+// instead of staying stale until the next model switch.
+func (a *Agent) reconcileContextCap(liveNative int) int {
+	if liveNative <= 0 {
+		return liveNative
+	}
+	a.contextCapMu.Lock()
+	defer a.contextCapMu.Unlock()
+
+	var cfg *configuration.Config
+	if a.configManager != nil {
+		cfg = a.configManager.GetConfig()
+	}
+	hasCap, capVal := userCapFromConfig(cfg)
+
+	// Fast path: cached resolution is still current (same native window and
+	// same user cap). Keeps per-iteration cost to one config snapshot.
+	if a.effectiveContextCap > 0 && a.nativeContextWindow == liveNative &&
+		hasCap == a.lastResolvedHasCap && (!hasCap || capVal == a.lastResolvedUserCap) {
+		return min(a.effectiveContextCap, liveNative)
+	}
+
+	if resolved, err := configuration.ResolveEffectiveContextCap(cfg, liveNative); err == nil {
+		a.contextCapStateLocked(resolved, liveNative, cfg)
+	}
+	return min(a.effectiveContextCap, liveNative)
+}
+
+// getModelContextLimit returns the maximum context window for a model from the API,
+// capped by the user's MaxContextTokens setting when set.
+func (a *Agent) getModelContextLimit() int {
+	native := a.getNativeModelContextLimit()
+	if a.configManager != nil {
+		if cfg := a.configManager.GetConfig(); cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 && native > *cfg.MaxContextTokens {
+			return *cfg.MaxContextTokens
+		}
+	}
+	return native
+}
+
+// resolveAndApplyContextProfile re-resolves the context profile and cap state
+// from this agent's OWN client and config. Mirrors the primary-creation path
+// (agent_creation.go) so delegated agents (subagents, workflow loops) that
+// resolve to a smaller-context model than their parent get LCM auto-activated
+// instead of inheriting the parent's full-mode profile (SP-125 R4).
+//
+// Does not print the LCM activation / context-cap stderr notices — those are
+// primary-agent UX; the parent already printed them.
+func (a *Agent) resolveAndApplyContextProfile() error {
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
+	a.state.SetContextWarningIssued(false)
+
+	var cfg *configuration.Config
+	if a.configManager != nil {
+		cfg = a.configManager.GetConfig()
+	}
+
+	profile, err := configuration.ResolveContextProfile(cfg, a.state.GetMaxContextTokens())
+	if err != nil {
+		return agenterrors.NewConfig("resolving context profile", err)
+	}
+	a.contextProfile = profile
+
+	nativeWindow := a.getNativeModelContextLimit()
+	resolvedCap, capErr := configuration.ResolveEffectiveContextCap(cfg, nativeWindow)
+	if capErr != nil {
+		return agenterrors.NewConfig("resolving effective context cap", capErr)
+	}
+	a.setContextCapState(resolvedCap, nativeWindow, cfg)
+
+	return nil
 }
 
 // PrintLine prints a line of text to the console content area synchronously.
@@ -138,12 +302,9 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 	// Fallback for when router isn't initialized yet
 	a.PublishAgentMessage("info", message, nil)
 
-	// Terminal output: if streamingCallback is set, route through it
-	if a.output != nil && a.output.IsStreamingEnabled() && a.output.GetStreamingCallback() != nil {
-		a.output.GetStreamingCallback()(message)
-		return
-	}
-
+	// Terminal output: direct write. The streamingCallback is reserved
+	// for prose tokens (RouteStreamChunk); chrome must not route through
+	// it. No \r\033[K prefix — that would clear in-progress prose.
 	if manageLock && a.output != nil {
 		if mu := a.output.GetOutputMutex(); mu != nil {
 			mu.Lock()

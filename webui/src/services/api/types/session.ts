@@ -8,6 +8,10 @@ export interface WorkspaceResponse {
   is_project: boolean;
   project_markers: string[];
   needs_workspace_selection: boolean;
+  /** True when the resolved workspace root is the user's home directory (SP-130). */
+  workspace_is_home: boolean;
+  /** The user's actual home directory (SP-130), used to display and consent. */
+  home_dir: string;
   suggested_projects: Array<{ path: string; name: string; markers: string[] }>;
   recent_workspaces: Array<{
     path: string;
@@ -49,4 +53,22 @@ export interface SessionRestoreResponse {
   total_tokens: number;
   name?: string;
   working_directory?: string;
+}
+
+/** Result from cross-session content search */
+export interface SessionSearchResult {
+  session_id: string;
+  name: string;
+  working_directory: string;
+  last_updated: string;
+  total_cost: number;
+  excerpt: string;
+  match_score: number; // 1 (any term), 2 (all terms), 3 (exact phrase)
+}
+
+/** Response from GET /api/sessions/search */
+export interface SessionSearchResponse {
+  query: string;
+  total: number;
+  results: SessionSearchResult[];
 }

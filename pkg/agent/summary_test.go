@@ -1,13 +1,11 @@
 package agent
 
 import (
-	"bytes"
-	"io"
-	"os"
 	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // TestTokenTrackingAccuracy verifies that token tracking is accurate
@@ -38,7 +36,7 @@ func TestTokenTrackingAccuracy(t *testing.T) {
 	}
 
 	// TrackMetricsFromResponse should work correctly
-	agent.TrackMetricsFromResponse(1000, 200, 1200, 0.01, 500)
+	agent.TrackMetricsFromResponse(1000, 200, 1200, 0.01, 500, 0, 0)
 	if agent.state.GetTotalTokens() != 88400 { // 87200 + 1200
 		t.Errorf("Expected totalTokens to be 88400, got %d", agent.state.GetTotalTokens())
 	}
@@ -105,8 +103,8 @@ func TestTokenDiscrepancy(t *testing.T) {
 	agent.state.SetCachedTokens(7500)
 
 	// Simulate the calculation from summary.go
-	processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens()  // 500
-	processedTokens := processedPromptTokens + agent.state.GetCompletionTokens() // 700
+	processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens() // 500
+	processedTokens := processedPromptTokens + agent.state.GetCompletionTokens()           // 700
 
 	expectedProcessed := agent.state.GetTotalTokens() - agent.state.GetCachedTokens() // 1000
 
@@ -184,26 +182,6 @@ func TestClampingBehavior(t *testing.T) {
 	}
 }
 
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create pipe: %v", err)
-	}
-	os.Stdout = w
-	defer func() {
-		os.Stdout = oldStdout
-	}()
-
-	fn()
-
-	_ = w.Close()
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	return buf.String()
-}
-
 func TestComputeConversationSummaryMetrics(t *testing.T) {
 	messages := []api.Message{
 		{Role: "system", Content: "sys"},
@@ -245,7 +223,7 @@ func TestPrintConversationSummaryDoesNotPanicWithSingleMessage(t *testing.T) {
 	agent.state.SetMessages([]api.Message{{Role: "user", Content: "hello"}})
 	agent.state.SetMaxContextTokens(120000)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		agent.PrintConversationSummary(true)
 	})
 
@@ -268,7 +246,7 @@ func TestPrintConversationSummaryShowsEstimatedTokenNote(t *testing.T) {
 	agent.state.SetCompletionTokens(2433)
 	agent.state.SetCachedTokens(71400)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		agent.PrintConversationSummary(true)
 	})
 

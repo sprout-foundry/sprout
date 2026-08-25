@@ -13,8 +13,8 @@ import (
 
 // CommitExecutor provides methods for executing git commits with message generation.
 type CommitExecutor struct {
-	Client          api.ClientInterface
-	UserMessage     string
+	Client           api.ClientInterface
+	UserMessage      string
 	UserInstructions string
 	// Dir is the working directory for git commands. If empty, the current directory is used.
 	Dir         string
@@ -29,8 +29,8 @@ type SecretCheckHandler func(securityResult CommitSecurityResult) bool
 // NewCommitExecutor creates a new commit executor with the given configuration.
 func NewCommitExecutor(client api.ClientInterface, userMessage, userInstructions string) *CommitExecutor {
 	return &CommitExecutor{
-		Client:          client,
-		UserMessage:     userMessage,
+		Client:           client,
+		UserMessage:      userMessage,
 		UserInstructions: userInstructions,
 	}
 }
@@ -38,10 +38,10 @@ func NewCommitExecutor(client api.ClientInterface, userMessage, userInstructions
 // NewCommitExecutorInDir creates a new commit executor that runs git commands in the specified directory.
 func NewCommitExecutorInDir(client api.ClientInterface, userMessage, userInstructions, dir string) *CommitExecutor {
 	return &CommitExecutor{
-		Client:          client,
-		UserMessage:     userMessage,
+		Client:           client,
+		UserMessage:      userMessage,
 		UserInstructions: userInstructions,
-		Dir:             dir,
+		Dir:              dir,
 	}
 }
 

@@ -16,8 +16,8 @@ func TestParseAfterSeqQuery(t *testing.T) {
 		{"", 0},
 		{"0", 0},
 		{"42", 42},
-		{"-5", 0},        // negative → 0
-		{"abc", 0},       // unparseable → 0
+		{"-5", 0},  // negative → 0
+		{"abc", 0}, // unparseable → 0
 		{"9999999999", 9999999999},
 	}
 	for _, c := range cases {

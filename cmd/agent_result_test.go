@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -50,15 +52,16 @@ func TestAgentResultMetrics_Serialization_AllFields(t *testing.T) {
 
 	// Ensure exactly these keys and no extras
 	expectedKeys := map[string]bool{
-		"elapsed_seconds":              true,
-		"tokens_in":                    true,
-		"tokens_out":                   true,
-		"llm_calls":                    true,
-		"provider":                     true,
-		"model":                        true,
-		"security_cautions_issued":     true,
+		"elapsed_seconds":                true,
+		"tokens_in":                      true,
+		"tokens_out":                     true,
+		"llm_calls":                      true,
+		"cost":                           true,
+		"provider":                       true,
+		"model":                          true,
+		"security_cautions_issued":       true,
 		"security_retries_after_caution": true,
-		"security_loops_detected":      true,
+		"security_loops_detected":        true,
 	}
 	for k := range result {
 		if !expectedKeys[k] {
@@ -376,12 +379,12 @@ func TestEmitJSONResult_SuccessWithAgent(t *testing.T) {
 	defer a.Shutdown()
 
 	// Populate metrics via TrackMetricsFromResponse (the only public setter)
-	a.TrackMetricsFromResponse(1000, 500, 1500, 0.05, 0)
+	a.TrackMetricsFromResponse(1000, 500, 1500, 0.05, 0, 0, 0)
 
 	query := "write a hello world program"
 	startTime := time.Now().Add(-5 * time.Second)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult(query, startTime, nil, a)
 	})
 
@@ -425,11 +428,11 @@ func TestEmitJSONResult_SuccessWithAccumulatedMetrics(t *testing.T) {
 	defer a.Shutdown()
 
 	// Simulate multiple API calls accumulating metrics
-	a.TrackMetricsFromResponse(500, 200, 700, 0.02, 0)
-	a.TrackMetricsFromResponse(600, 300, 900, 0.03, 0)
-	a.TrackMetricsFromResponse(400, 100, 500, 0.01, 0)
+	a.TrackMetricsFromResponse(500, 200, 700, 0.02, 0, 0, 0)
+	a.TrackMetricsFromResponse(600, 300, 900, 0.03, 0, 0, 0)
+	a.TrackMetricsFromResponse(400, 100, 500, 0.01, 0, 0, 0)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("test query", time.Now(), nil, a)
 	})
 
@@ -456,7 +459,7 @@ func TestEmitJSONResult_ErrorCase(t *testing.T) {
 
 	testErr := errors.New("API rate limit exceeded")
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("refactor code", time.Now(), testErr, a)
 	})
 
@@ -481,7 +484,7 @@ func TestEmitJSONResult_ErrorCase(t *testing.T) {
 }
 
 func TestEmitJSONResult_NilAgent(t *testing.T) {
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("test with nil agent", time.Now(), nil, nil)
 	})
 
@@ -517,7 +520,7 @@ func TestEmitJSONResult_NilAgent(t *testing.T) {
 func TestEmitJSONResult_NilAgentWithError(t *testing.T) {
 	testErr := fmt.Errorf("agent initialization failed: no API key")
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("broken query", time.Now(), testErr, nil)
 	})
 
@@ -547,13 +550,13 @@ func TestEmitJSONResult_QueryPreserved(t *testing.T) {
 		"query with \"quotes\" and \\backslashes\\",
 		"query with\nnewlines\nand\ttabs",
 		"unicode: 日本語 中文 한국어 🚀",
-		"", // empty query
+		"",                         // empty query
 		strings.Repeat("a", 10000), // long query
 	}
 
 	for _, query := range testCases {
 		t.Run(fmt.Sprintf("query_len_%d", len(query)), func(t *testing.T) {
-			output := captureStdoutLarge(t, func() {
+			output := testutil.CaptureStdout(t, func() {
 				emitJSONResult(query, time.Now(), nil, nil)
 			})
 
@@ -576,7 +579,7 @@ func TestEmitJSONResult_ElapsedSeconds(t *testing.T) {
 	// Verify elapsed time is computed from the provided startTime
 	startTime := time.Now().Add(-10 * time.Second)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("timing test", startTime, nil, nil)
 	})
 
@@ -596,7 +599,7 @@ func TestEmitJSONResult_ElapsedSeconds(t *testing.T) {
 
 func TestEmitJSONResult_OutputIsValidJSON(t *testing.T) {
 	// Ensure the output is always valid JSON regardless of input
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("validate JSON", time.Now(), nil, nil)
 	})
 
@@ -609,7 +612,7 @@ func TestEmitJSONResult_OutputIsValidJSON(t *testing.T) {
 
 func TestEmitJSONResult_Indentation(t *testing.T) {
 	// Verify the output uses indented formatting (as set by enc.SetIndent)
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("indent test", time.Now(), nil, nil)
 	})
 
@@ -657,7 +660,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_StagedAndUnstaged(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	// Call emitJSONResult and capture output
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("fresh repo test", time.Now(), nil, nil)
 	})
 
@@ -711,7 +714,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_StagedOnly(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("staged only test", time.Now(), nil, nil)
 	})
 
@@ -771,7 +774,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_Deduplication(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("dedup test", time.Now(), nil, nil)
 	})
 
@@ -807,7 +810,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_EmptyWorktree(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("empty worktree test", time.Now(), nil, nil)
 	})
 
@@ -862,7 +865,7 @@ func TestEmitJSONResult_UntrackedFilesIncluded(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("untracked test", time.Now(), nil, nil)
 	})
 
@@ -904,7 +907,7 @@ func TestEmitJSONResult_UntrackedFilesDiff(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("untracked diff test", time.Now(), nil, nil)
 	})
 
@@ -949,7 +952,7 @@ func TestEmitJSONResult_UntrackedFilesNotDuplicate(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("dedup untracked test", time.Now(), nil, nil)
 	})
 
@@ -1006,7 +1009,7 @@ func TestEmitJSONResult_TrackedRepoUntrackedFiles(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("tracked repo untracked test", time.Now(), nil, nil)
 	})
 
@@ -1063,7 +1066,7 @@ func TestEmitJSONResult_GitignoredFilesExcluded(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("gitignore test", time.Now(), nil, nil)
 	})
 
@@ -1198,40 +1201,6 @@ func createTestAgent(t *testing.T) *agent.Agent {
 	return a
 }
 
-// captureStdoutLarge is like captureStdout but uses a goroutine to drain the
-// read end of the pipe concurrently with writing. This avoids deadlocks when
-// the captured output exceeds the OS pipe buffer size (typically 64KB on Linux).
-func captureStdoutLarge(t *testing.T, fn func()) string {
-	t.Helper()
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create pipe: %v", err)
-	}
-	os.Stdout = w
-
-	done := make(chan string, 1)
-	go func() {
-		var buf strings.Builder
-		tmp := make([]byte, 4096)
-		for {
-			n, readErr := r.Read(tmp)
-			if n > 0 {
-				buf.Write(tmp[:n])
-			}
-			if readErr != nil {
-				break
-			}
-		}
-		done <- buf.String()
-	}()
-
-	fn()
-	w.Close()
-	os.Stdout = oldStdout
-	return <-done
-}
-
 // assertJSONString checks that the map contains the given key with the expected string value.
 func assertJSONString(t *testing.T, m map[string]interface{}, key, expected string) {
 	t.Helper()
@@ -1284,5 +1253,300 @@ func assertJSONInt(t *testing.T, m map[string]interface{}, key string, expected 
 	}
 	if int(f) != expected {
 		t.Errorf("key %q: got %d, want %d", key, int(f), expected)
+	}
+}
+
+// =============================================================================
+// --output-path tests (writing JSON result to a file instead of stdout)
+// =============================================================================
+//
+// The --output-path flag pairs with --output-json: when set, emitJSONResult
+// writes the structured result to the named file rather than stdout so logs
+// can flow through the Fly machine log fallback path without being
+// interleaved with the JSON payload. These tests cover the file-write path,
+// stdout suppression, and the stdout fallback when the path is unwritable.
+//
+// NOTE: emitJSONResult reads the package-level outputPath var. Each test sets
+// and restores it via t.Cleanup to avoid cross-test contamination.
+
+// withOutputPath temporarily sets the package-level outputPath var for the
+// duration of the test, restoring the previous value via t.Cleanup.
+func withOutputPath(t *testing.T, path string) {
+	t.Helper()
+	prev := outputPath
+	outputPath = path
+	t.Cleanup(func() { outputPath = prev })
+}
+
+// captureStdoutAndStderr runs fn with both os.Stdout and os.Stderr redirected
+// to in-memory pipes and returns what each captured. It restores both
+// originals before returning. The fallback path in emitJSONResult logs a
+// warning to stderr, so tests that exercise it need to observe stderr too.
+func captureStdoutAndStderr(t *testing.T, fn func()) (stdout, stderr string) {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	rOut, wOut, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe stdout: %v", err)
+	}
+	rErr, wErr, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe stderr: %v", err)
+	}
+	os.Stdout = wOut
+	os.Stderr = wErr
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	})
+
+	outCh := make(chan string, 1)
+	errCh := make(chan string, 1)
+	drain := func(r *os.File) string {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		return buf.String()
+	}
+	go func() { outCh <- drain(rOut) }()
+	go func() { errCh <- drain(rErr) }()
+
+	defer func() {
+		_ = wOut.Close()
+		_ = wErr.Close()
+	}()
+	fn()
+	_ = wOut.Close()
+	_ = wErr.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+	return <-outCh, <-errCh
+}
+
+// TestEmitJSONResult_OutputPath_WritesFile verifies that when outputPath is
+// set, the JSON result is written to that file (not stdout) and contains the
+// expected fields.
+func TestEmitJSONResult_OutputPath_WritesFile(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "result.json")
+	withOutputPath(t, outFile)
+
+	query := "write the feature"
+	startTime := time.Now().Add(-3 * time.Second)
+
+	stdout, _ := captureStdoutAndStderr(t, func() {
+		emitJSONResult(query, startTime, nil, nil)
+	})
+
+	// stdout must be empty — the payload went to the file.
+	if stdout != "" {
+		t.Errorf("expected empty stdout when outputPath is set, got:\n%s", stdout)
+	}
+
+	// The file must exist and contain valid JSON with the expected fields.
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("output file is empty; expected JSON payload")
+	}
+
+	var result AgentResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("output file is not valid JSON: %v\ncontent:\n%s", err, data)
+	}
+
+	if result.Status != "success" {
+		t.Errorf("Status = %q, want %q", result.Status, "success")
+	}
+	if result.Query != query {
+		t.Errorf("Query = %q, want %q", result.Query, query)
+	}
+	// metrics key must always be present
+	if result.Metrics.ElapsedSeconds < 2.9 {
+		t.Errorf("ElapsedSeconds = %f, want at least ~3.0", result.Metrics.ElapsedSeconds)
+	}
+}
+
+// TestEmitJSONResult_OutputPath_WithAgent verifies metrics from a real agent
+// are persisted to the file when outputPath is set.
+func TestEmitJSONResult_OutputPath_WithAgent(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "result.json")
+	withOutputPath(t, outFile)
+
+	a := createTestAgent(t)
+	defer a.Shutdown()
+	a.TrackMetricsFromResponse(1000, 500, 1500, 0.05, 0, 0, 0)
+
+	stdout, _ := captureStdoutAndStderr(t, func() {
+		emitJSONResult("agent query", time.Now(), nil, a)
+	})
+
+	if stdout != "" {
+		t.Errorf("expected empty stdout when outputPath is set, got:\n%s", stdout)
+	}
+
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	var result AgentResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\ncontent:\n%s", err, data)
+	}
+
+	if result.Metrics.TokensIn != 1000 {
+		t.Errorf("TokensIn = %d, want 1000", result.Metrics.TokensIn)
+	}
+	if result.Metrics.TokensOut != 500 {
+		t.Errorf("TokensOut = %d, want 500", result.Metrics.TokensOut)
+	}
+	if result.Metrics.LLMCalls != 1 {
+		t.Errorf("LLMCalls = %d, want 1", result.Metrics.LLMCalls)
+	}
+}
+
+// TestEmitJSONResult_OutputPath_ErrorCase verifies the error status and
+// message are written to the file when runErr is set.
+func TestEmitJSONResult_OutputPath_ErrorCase(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "result.json")
+	withOutputPath(t, outFile)
+
+	testErr := errors.New("boom")
+
+	stdout, _ := captureStdoutAndStderr(t, func() {
+		emitJSONResult("failing query", time.Now(), testErr, nil)
+	})
+
+	if stdout != "" {
+		t.Errorf("expected empty stdout when outputPath is set, got:\n%s", stdout)
+	}
+
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	var result AgentResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\ncontent:\n%s", err, data)
+	}
+
+	if result.Status != "error" {
+		t.Errorf("Status = %q, want %q", result.Status, "error")
+	}
+	if result.Error != "boom" {
+		t.Errorf("Error = %q, want %q", result.Error, "boom")
+	}
+}
+
+// TestEmitJSONResult_OutputPath_Unwritable_FallsBackToStdout verifies that
+// when outputPath points to a location that cannot be created, emitJSONResult
+// logs a warning to stderr and falls back to writing the JSON to stdout so
+// the structured result is never silently lost.
+func TestEmitJSONResult_OutputPath_Unwritable_FallsBackToStdout(t *testing.T) {
+	// A path under a non-existent directory cannot be created by os.Create.
+	badPath := filepath.Join(t.TempDir(), "does_not_exist", "result.json")
+	withOutputPath(t, badPath)
+
+	query := "fallback test"
+
+	stdout, stderr := captureStdoutAndStderr(t, func() {
+		emitJSONResult(query, time.Now(), nil, nil)
+	})
+
+	// stdout should now contain the JSON (fallback).
+	if strings.TrimSpace(stdout) == "" {
+		t.Error("expected fallback JSON on stdout, got empty stdout")
+	}
+	var result AgentResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("fallback stdout is not valid JSON: %v\ncontent:\n%s", err, stdout)
+	}
+	if result.Query != query {
+		t.Errorf("Query = %q, want %q", result.Query, query)
+	}
+
+	// A warning should have been logged to stderr.
+	if stderr == "" {
+		t.Error("expected a warning on stderr when falling back to stdout, got empty stderr")
+	}
+}
+
+// TestEmitJSONResult_OutputPath_Unwritable_PreservesResult ensures the
+// fallback path emits exactly the same JSON the normal path would (the
+// structured result survives the fallback intact), including the metrics.
+func TestEmitJSONResult_OutputPath_Unwritable_PreservesResult(t *testing.T) {
+	badPath := filepath.Join(t.TempDir(), "nope_dir", "result.json")
+	withOutputPath(t, badPath)
+
+	a := createTestAgent(t)
+	defer a.Shutdown()
+	a.TrackMetricsFromResponse(42, 17, 59, 0.01, 0, 0, 0)
+
+	stdout, _ := captureStdoutAndStderr(t, func() {
+		emitJSONResult("survive fallback", time.Now(), nil, a)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("fallback stdout is not valid JSON: %v\ncontent:\n%s", err, stdout)
+	}
+	if result.Metrics.TokensIn != 42 {
+		t.Errorf("TokensIn = %d, want 42", result.Metrics.TokensIn)
+	}
+	if result.Metrics.LLMCalls != 1 {
+		t.Errorf("LLMCalls = %d, want 1", result.Metrics.LLMCalls)
+	}
+}
+
+// TestEmitJSONResult_OutputPath_Empty_StillStdout verifies the default
+// behavior is unchanged when outputPath is empty — JSON still goes to stdout.
+func TestEmitJSONResult_OutputPath_Empty_StillStdout(t *testing.T) {
+	withOutputPath(t, "")
+
+	output := testutil.CaptureStdout(t, func() {
+		emitJSONResult("default behavior", time.Now(), nil, nil)
+	})
+
+	if strings.TrimSpace(output) == "" {
+		t.Fatal("expected JSON on stdout when outputPath is empty, got empty stdout")
+	}
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\ncontent:\n%s", err, output)
+	}
+	if result.Query != "default behavior" {
+		t.Errorf("Query = %q, want %q", result.Query, "default behavior")
+	}
+}
+
+// TestEmitJSONResult_OutputPath_CreatesNewFile verifies that the file is
+// created even if it does not yet exist (os.Create semantics).
+func TestEmitJSONResult_OutputPath_CreatesNewFile(t *testing.T) {
+	dir := t.TempDir()
+	outFile := filepath.Join(dir, "brand_new.json")
+	if _, err := os.Stat(outFile); !os.IsNotExist(err) {
+		t.Fatalf("precondition failed: %q already exists", outFile)
+	}
+	withOutputPath(t, outFile)
+
+	captureStdoutAndStderr(t, func() {
+		emitJSONResult("create file", time.Now(), nil, nil)
+	})
+
+	if _, err := os.Stat(outFile); err != nil {
+		t.Fatalf("expected output file to be created, but stat failed: %v", err)
 	}
 }

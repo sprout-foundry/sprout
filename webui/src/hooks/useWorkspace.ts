@@ -32,29 +32,16 @@ export interface WorkspaceInfo {
   is_project: boolean;
   project_markers: string[];
   needs_workspace_selection: boolean;
+  /** True when the workspace root resolves to the user's home dir (SP-130). */
+  workspace_is_home: boolean;
+  /** The user's home directory, as resolved by the backend (SP-130). */
+  home_dir: string;
   suggested_projects: ProjectSuggestion[];
   recent_workspaces: RecentWorkspace[];
   ssh_context?: WorkspaceResponse['ssh_context'];
 }
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
-
-/** Derive the user's home directory from the daemon_root path.
- *  Typical layout: daemon_root = /home/user/.sprout → home = /home/user
- */
-function extractHomeDir(daemonRoot: string, workspaceRoot: string): string {
-  for (const root of [daemonRoot, workspaceRoot]) {
-    if (!root) continue;
-    // If the root contains ".sprout" (or other sprout dir), take the parent
-    const idx = root.includes('.sprout') ? root.lastIndexOf('/.sprout') : -1;
-    if (idx !== -1) return root.slice(0, idx);
-    // Fallback: if it looks like a home directory (e.g. /home/user)
-    if (/^\/home\/[^/]+\/?$/.test(root) || /^\/root\/?$/.test(root)) {
-      return root.replace(/\/+$/, '');
-    }
-  }
-  return '';
-}
 
 function mapWorkspaceResponse(data: WorkspaceResponse): WorkspaceInfo {
   return {
@@ -63,6 +50,8 @@ function mapWorkspaceResponse(data: WorkspaceResponse): WorkspaceInfo {
     is_project: data.is_project ?? false,
     project_markers: Array.isArray(data.project_markers) ? data.project_markers : [],
     needs_workspace_selection: data.needs_workspace_selection ?? false,
+    workspace_is_home: data.workspace_is_home ?? false,
+    home_dir: data.home_dir ?? '',
     suggested_projects: (Array.isArray(data.suggested_projects) ? data.suggested_projects : []).map((p) => ({
       path: p.path ?? '',
       name: p.name ?? '',
@@ -85,7 +74,7 @@ export interface UseWorkspaceResult {
   workspaceInfo: WorkspaceInfo;
   homeDir: string;
   isLoading: boolean;
-  setWorkspace: (path: string) => Promise<void>;
+  setWorkspace: (path: string, consentHome?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -96,6 +85,8 @@ export function useWorkspace(): UseWorkspaceResult {
     is_project: false,
     project_markers: [],
     needs_workspace_selection: false,
+    workspace_is_home: false,
+    home_dir: '',
     suggested_projects: [],
     recent_workspaces: [],
   });
@@ -109,7 +100,7 @@ export function useWorkspace(): UseWorkspaceResult {
       const data = await apiService.current.getWorkspace();
       const info = mapWorkspaceResponse(data);
       setWorkspaceInfo(info);
-      setHomeDir(extractHomeDir(info.daemon_root, info.workspace_root));
+      setHomeDir(info.home_dir);
     } catch {
       // swallow – the caller handles empty state
     } finally {
@@ -121,12 +112,12 @@ export function useWorkspace(): UseWorkspaceResult {
     fetchWorkspace();
   }, [fetchWorkspace]);
 
-  const setWorkspace = useCallback(async (path: string) => {
+  const setWorkspace = useCallback(async (path: string, consentHome?: boolean) => {
     try {
-      const data = await apiService.current.setWorkspace(path);
+      const data = await apiService.current.setWorkspace(path, consentHome);
       const info = mapWorkspaceResponse(data);
       setWorkspaceInfo(info);
-      setHomeDir(extractHomeDir(info.daemon_root, info.workspace_root));
+      setHomeDir(info.home_dir);
       // Reload the page so the whole app picks up the new workspace
       window.setTimeout(() => window.location.reload(), 300);
     } catch (err) {

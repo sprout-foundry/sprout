@@ -16,6 +16,14 @@ const NOTIFY_COOLDOWN_MS = 4000;
 export const JUST_SAVED_THRESHOLD_MS = 3500;
 export const justSavedRef = new Map<string, number>();
 
+// Debounce window for coalescing rapid file-change events for the same path.
+// During builds or agent edits, a file may be written multiple times in
+// quick succession. Without coalescing, each write triggers a full-document
+// replacement in CodeMirror, causing the editor to flash/flicker and the
+// cursor/scroll to reset. We collect the latest event per path and process
+// it once after the window elapses with no new events.
+const RELOAD_DEBOUNCE_MS = 500;
+
 // ---------------------------------------------------------------------------
 // useAutoReloadCleanBuffers
 // ---------------------------------------------------------------------------
@@ -43,6 +51,147 @@ export const useAutoReloadCleanBuffers = ({
   // file reappears (non-deleted event) or the buffer is removed.
   const deletedNotifiedRef = useRef<Set<string>>(new Set());
 
+  // Per-path debounce timers for coalescing rapid file-change events.
+  // Keyed by file path; value is the timer handle. When a new event arrives
+  // for a path that already has a pending timer, we clear and reset it —
+  // only the final event in a burst gets processed.
+  const reloadDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Helper: schedule a debounced reload for a given path. Cancels any
+  // previously-pending timer for the same path first.
+  const scheduleDebouncedReload = (
+    path: string,
+    mtime: number,
+    size: number,
+    deleted: boolean,
+    detail: { path: string; mtime: number; size: number; deleted: boolean },
+  ) => {
+    const existing = reloadDebounceRef.current.get(path);
+    if (existing) clearTimeout(existing);
+
+    reloadDebounceRef.current.set(
+      path,
+      setTimeout(() => {
+        reloadDebounceRef.current.delete(path);
+        void processExternalChange(path, mtime, size, deleted, detail);
+      }, RELOAD_DEBOUNCE_MS),
+    );
+  };
+
+  // Extracted processing logic — runs after the debounce window elapses.
+  const processExternalChange = async (
+    _path: string,
+    mtime: number,
+    _size: number,
+    deleted: boolean,
+    detail: { path: string; mtime: number; size: number; deleted: boolean },
+  ) => {
+    const path = detail.path;
+
+    // Suppress redundant reload for files the editor just saved.
+    const justSavedAt = justSavedRef.get(path) ?? 0;
+    if (Date.now() - justSavedAt < JUST_SAVED_THRESHOLD_MS) return;
+
+    // Find the buffer for this file
+    let targetBufferId: string | null = null;
+    buffersRef.current.forEach((b, id) => {
+      if (b.kind === 'file' && b.file.path === path) {
+        targetBufferId = id;
+      }
+    });
+
+    if (!targetBufferId) return;
+
+    const targetBuffer = buffersRef.current.get(targetBufferId);
+    if (!targetBuffer || targetBuffer.kind !== 'file') return;
+
+    // Only auto-reload clean (unmodified) buffers; let EditorPane handle modified ones
+    if (targetBuffer.isModified) return;
+
+    const bufferId: string = targetBufferId;
+
+    // Handle deleted files on clean buffers
+    if (deleted) {
+      if (deletedNotifiedRef.current.has(path)) return;
+      deletedNotifiedRef.current.add(path);
+      const now = Date.now();
+      const lastNotified = lastNotifiedRef.current.get(path) ?? 0;
+      if (now - lastNotified >= NOTIFY_COOLDOWN_MS) {
+        lastNotifiedRef.current.set(path, now);
+        notificationBus.notify(
+          'warning',
+          'File Deleted',
+          `${targetBuffer.file.name} has been deleted from disk.`,
+          6000,
+        );
+      }
+      if (setBufferExternallyModified) {
+        setBufferExternallyModified(bufferId, '');
+      }
+      return;
+    }
+
+    // Re-read the file from disk
+    try {
+      // If the file was previously notified as deleted, clear that tracking
+      // now that it has reappeared.
+      deletedNotifiedRef.current.delete(path);
+
+      const response = await readFileWithConsent(path);
+      if (!response.ok) return;
+      const content = await response.text();
+
+      // Re-read the buffer after the async gap — the user may have
+      // typed new characters while we were fetching from disk.
+      const freshBuffer = buffersRef.current.get(bufferId);
+      if (!freshBuffer || freshBuffer.kind !== 'file') return;
+      if (freshBuffer.isModified) return; // User made new edits since event fired
+
+      // Skip reload if content is identical — avoid unnecessary UI churn
+      // and undo history pollution.
+      if (content === freshBuffer.content) {
+        // Content hasn't changed — just update the watcher's mtime tracking.
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: { path, mtime: detail.mtime },
+          }),
+        );
+        return;
+      }
+
+      reloadBufferFromDisk(bufferId, content, detail.mtime);
+
+      document.dispatchEvent(
+        new CustomEvent('file:editor-saved', {
+          detail: { path, mtime: detail.mtime },
+        }),
+      );
+
+      // Dispatch an event so EditorPane can reload the CodeMirror view
+      document.dispatchEvent(
+        new CustomEvent('file:auto-reloaded', {
+          detail: { bufferId, content },
+        }),
+      );
+
+      // Show notification for successful auto-reload (debounced per-path)
+      const reloadNow = Date.now();
+      const lastReloadNotify = lastNotifiedRef.current.get(path) ?? 0;
+      if (reloadNow - lastReloadNotify >= NOTIFY_COOLDOWN_MS) {
+        lastNotifiedRef.current.set(path, reloadNow);
+        notificationBus.notify(
+          'info',
+          'File Reloaded',
+          `${freshBuffer.file.name} was modified externally and has been reloaded.`,
+          4000,
+        );
+      }
+    } catch (err) {
+      // Non-critical: read failures are expected for some file types
+      debugLog('[useAutoReloadCleanBuffers] failed to re-read externally modified file:', err);
+    }
+  };
+
   // Auto-reload clean (unmodified) buffers when they change on disk.
   // Modified files are left to EditorPane's conflict dialog.
   useEffect(() => {
@@ -60,9 +209,8 @@ export const useAutoReloadCleanBuffers = ({
       }
     };
     document.addEventListener('file:editor-saved', handleEditorSaved);
-    const cleanupSaveListener = () => document.removeEventListener('file:editor-saved', handleEditorSaved);
 
-    const handleExternalChange = async (e: Event) => {
+    const handleExternalChange = (e: Event) => {
       const detail = (e as CustomEvent).detail as {
         path: string;
         mtime: number;
@@ -75,110 +223,19 @@ export const useAutoReloadCleanBuffers = ({
       const justSavedAt = justSavedRef.get(detail.path) ?? 0;
       if (Date.now() - justSavedAt < JUST_SAVED_THRESHOLD_MS) return;
 
-      // Find the buffer for this file
-      let targetBufferId: string | null = null;
-      buffersRef.current.forEach((b, id) => {
-        if (b.kind === 'file' && b.file.path === detail.path) {
-          targetBufferId = id;
-        }
-      });
-
-      if (!targetBufferId) return;
-
-      const targetBuffer = buffersRef.current.get(targetBufferId);
-      if (!targetBuffer || targetBuffer.kind !== 'file') return;
-
-      // Only auto-reload clean (unmodified) buffers; let EditorPane handle modified ones
-      if (targetBuffer.isModified) return;
-
-      const bufferId: string = targetBufferId;
-
-      // Handle deleted files on clean buffers
-      if (detail.deleted) {
-        if (deletedNotifiedRef.current.has(detail.path)) return;
-        deletedNotifiedRef.current.add(detail.path);
-        const now = Date.now();
-        const lastNotified = lastNotifiedRef.current.get(detail.path) ?? 0;
-        if (now - lastNotified >= NOTIFY_COOLDOWN_MS) {
-          lastNotifiedRef.current.set(detail.path, now);
-          notificationBus.notify(
-            'warning',
-            'File Deleted',
-            `${targetBuffer.file.name} has been deleted from disk.`,
-            6000,
-          );
-        }
-        if (setBufferExternallyModified) {
-          setBufferExternallyModified(bufferId, '');
-        }
-        return;
-      }
-
-      // Re-read the file from disk
-      try {
-        // If the file was previously notified as deleted, clear that tracking
-        // now that it has reappeared.
-        deletedNotifiedRef.current.delete(detail.path);
-
-        const response = await readFileWithConsent(detail.path);
-        if (!response.ok) return;
-        const content = await response.text();
-
-        // Re-read the buffer after the async gap — the user may have
-        // typed new characters while we were fetching from disk.
-        const freshBuffer = buffersRef.current.get(bufferId);
-        if (!freshBuffer || freshBuffer.kind !== 'file') return;
-        if (freshBuffer.isModified) return; // User made new edits since event fired
-
-        // Skip reload if content is identical — avoid unnecessary UI churn
-        // and undo history pollution.
-        if (content === freshBuffer.content) {
-          // Content hasn't changed — just update the watcher's mtime tracking.
-          document.dispatchEvent(
-            new CustomEvent('file:editor-saved', {
-              detail: { path: detail.path, mtime: detail.mtime },
-            }),
-          );
-          return;
-        }
-
-        reloadBufferFromDisk(bufferId, content, detail.mtime);
-
-        document.dispatchEvent(
-          new CustomEvent('file:editor-saved', {
-            detail: { path: detail.path, mtime: detail.mtime },
-          }),
-        );
-
-        // Dispatch an event so EditorPane can reload the CodeMirror view
-        document.dispatchEvent(
-          new CustomEvent('file:auto-reloaded', {
-            detail: { bufferId, content },
-          }),
-        );
-
-        // Show notification for successful auto-reload (debounced per-path)
-        const reloadNow = Date.now();
-        const lastReloadNotify = lastNotifiedRef.current.get(detail.path) ?? 0;
-        if (reloadNow - lastReloadNotify >= NOTIFY_COOLDOWN_MS) {
-          lastNotifiedRef.current.set(detail.path, reloadNow);
-          notificationBus.notify(
-            'info',
-            'File Reloaded',
-            `${freshBuffer.file.name} was modified externally and has been reloaded.`,
-            4000,
-          );
-        }
-      } catch (err) {
-        // Non-critical: read failures are expected for some file types
-        debugLog('[useAutoReloadCleanBuffers] failed to re-read externally modified file:', err);
-      }
+      // Debounce: coalesce rapid events for the same path so only the
+      // final event in a burst triggers a disk read + view replacement.
+      scheduleDebouncedReload(detail.path, detail.mtime, detail.size, detail.deleted, detail);
     };
 
     document.addEventListener('file_externally_modified', handleExternalChange);
     return () => {
       document.removeEventListener('file_externally_modified', handleExternalChange);
-      cleanupSaveListener();
+      document.removeEventListener('file:editor-saved', handleEditorSaved);
+      // Clean up any pending debounce timers
+      reloadDebounceRef.current.forEach((timer) => clearTimeout(timer));
+      reloadDebounceRef.current.clear();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- processExternalChange reads refs, not props
   }, [buffersRef, reloadBufferFromDisk, setBufferExternallyModified]);
 };

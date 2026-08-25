@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -31,9 +32,9 @@ func TestParseDuration_Days(t *testing.T) {
 		{"0d", 0, false},
 		{" 7d ", 168, false}, // trimmed
 		{"100d", 2400, false},
-		{"-1d", 0, true},    // negative
-		{"ad", 0, true},     // non-numeric
-		{"", 0, true},       // empty
+		{"-1d", 0, true}, // negative
+		{"ad", 0, true},  // non-numeric
+		{"", 0, true},    // empty
 	}
 
 	for _, tc := range tests {
@@ -777,7 +778,7 @@ func TestClearDryRun_ClearAll(t *testing.T) {
 	clearWorkspace = workspace
 	clearDryRun = true
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		if err := runHistoryClear(); err != nil {
 			t.Fatalf("runHistoryClear() error = %v", err)
 		}
@@ -832,7 +833,7 @@ func TestClearDryRun_OlderThan(t *testing.T) {
 	clearWorkspace = workspace
 	clearDryRun = true
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		if err := runHistoryClear(); err != nil {
 			t.Fatalf("runHistoryClear() error = %v", err)
 		}
@@ -874,7 +875,7 @@ func TestClearDryRun_NoHistory(t *testing.T) {
 	clearWorkspace = workspace
 	clearDryRun = true
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		if err := runHistoryClear(); err != nil {
 			t.Fatalf("runHistoryClear() error = %v", err)
 		}
@@ -990,7 +991,7 @@ func TestRunHistoryClear_DryRun_NoConfirm(t *testing.T) {
 	clearDryRun = true
 	clearYes = false
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		if err := runHistoryClear(); err != nil {
 			t.Fatalf("runHistoryClear() error = %v", err)
 		}

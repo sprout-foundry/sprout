@@ -91,24 +91,24 @@ beforeEach(() => {
   // Track beforeunload listeners via spy
   beforeUnloadHandlers.length = 0;
 
-  vi
-    .spyOn(window, 'addEventListener')
-    .mockImplementation((type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
+  vi.spyOn(window, 'addEventListener').mockImplementation(
+    (type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
       if (type === 'beforeunload' && typeof handler === 'function') {
         beforeUnloadHandlers.push(handler as () => void);
       }
       realAddEventListener.call(window, type, handler, ...rest);
-    });
+    },
+  );
 
-  vi
-    .spyOn(window, 'removeEventListener')
-    .mockImplementation((type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
+  vi.spyOn(window, 'removeEventListener').mockImplementation(
+    (type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
       if (type === 'beforeunload' && typeof handler === 'function') {
         const idx = beforeUnloadHandlers.indexOf(handler as () => void);
         if (idx >= 0) beforeUnloadHandlers.splice(idx, 1);
       }
       realRemoveEventListener.call(window, type, handler, ...rest);
-    });
+    },
+  );
 });
 
 afterEach(() => {

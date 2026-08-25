@@ -2,7 +2,9 @@ import type { TodoItem, LogEntry } from '@sprout/ui';
 import { Menu, PanelRightClose } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
+import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import { useHotkeys } from '../contexts/HotkeyContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
 import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
@@ -14,12 +16,13 @@ import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
-import type { AppState, PerChatState } from '../types/app';
-import { useAppStoreSetState } from '../contexts/AppStore';
-import { useHotkeys } from '../contexts/HotkeyContext';
+import { forkChatSession } from '../services/chatSessions';
+import { notificationBus } from '../services/notificationBus';
+import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
@@ -35,11 +38,10 @@ import Sidebar from './Sidebar';
 import Status from './Status';
 import StatusBar from './StatusBar';
 import Terminal from './Terminal';
+import WorkspaceGateModal from './WorkspaceGateModal';
 
 interface AppContentProps {
   state: AppState;
-  inputValue: string;
-  onInputChange: React.Dispatch<React.SetStateAction<string>>;
   isMobile: boolean;
   isTablet: boolean;
   isSidebarOpen: boolean;
@@ -62,12 +64,13 @@ interface AppContentProps {
   onSidebarToggle: () => void;
   onToggleSidebar: () => void;
   onCloseSidebar: () => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
+  onViewChange: (view: ViewType) => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
   onStopProcessing: () => void;
+  onRetractSteer: () => boolean | Promise<boolean>;
   queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
@@ -90,8 +93,6 @@ interface AppContentProps {
 
 const AppContent: React.FC<AppContentProps> = ({
   state,
-  inputValue,
-  onInputChange,
   isMobile,
   isTablet,
   isSidebarOpen,
@@ -117,6 +118,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onSendMessage,
   onQueueMessage,
   onStopProcessing,
+  onRetractSteer,
   queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
@@ -150,6 +152,16 @@ const AppContent: React.FC<AppContentProps> = ({
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
   const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
+  // SP-130: home-directory gate. `useWorkspace` fetches workspace metadata
+  // (is_project, needs_workspace_selection, workspace_is_home, …). When the
+  // resolved workspace is the user's home directory without consent, a
+  // blocking overlay renders on top of the normal UI until the user either
+  // selects a project folder or explicitly consents to running in home.
+  const { workspaceInfo, setWorkspace: setWorkspaceViaHook } = useWorkspace();
+  const handleConsentHome = useCallback(async () => {
+    await setWorkspaceViaHook(workspaceInfo.workspace_root, true);
+    // setWorkspace triggers a reload, so the modal closes implicitly.
+  }, [setWorkspaceViaHook, workspaceInfo.workspace_root]);
   // Swipe-left/right gesture to toggle the sidebar on mobile viewports.
   useSwipeGesture({
     onSwipeLeft: onCloseSidebar,
@@ -158,8 +170,23 @@ const AppContent: React.FC<AppContentProps> = ({
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
+  const [isForking, setIsForking] = useState(false);
 
   const setAppState = useAppStoreSetState();
+
+  // Read inputValue from the store (not via props) so typing doesn't
+  // re-render AppInner and cascade prop-references to children.
+  const inputValue = useAppStateField('inputValue');
+  const setInputValue = useCallback(
+    (updater: React.SetStateAction<string>) => {
+      setAppState((prev) => {
+        const nextValue = typeof updater === 'function' ? updater(prev.inputValue) : updater;
+        return { inputValue: nextValue };
+      });
+    },
+    [setAppState],
+  );
+
   // Opens the ModelSelectionModal for the currently active provider when
   // the user clicks the model name in the status bar. The modal handles
   // the actual swap via the existing handleModelSelectionResponse path.
@@ -173,9 +200,7 @@ const AppContent: React.FC<AppContentProps> = ({
     (provider: string) => {
       const p = provider || state.provider || '';
       if (!p || p === 'editor') {
-        window.dispatchEvent(
-          new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
-        );
+        window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
         return;
       }
       // useAppStoreSetState takes an updater that returns a *partial*
@@ -187,6 +212,7 @@ const AppContent: React.FC<AppContentProps> = ({
     },
     [setAppState, state.provider],
   );
+
   const hotkeysConfigPath = useHotkeysConfig(apiService, isConnected);
   const {
     instances,
@@ -196,6 +222,28 @@ const AppContent: React.FC<AppContentProps> = ({
   } = useInstances({ apiService, isConnected });
   const buffersRef = useRef(buffers);
   buffersRef.current = buffers;
+
+  // Session search restore: call API then dispatch the custom event
+  const log = useLog();
+  const handleSessionSearchRestore = useCallback(
+    async (sessionId: string) => {
+      try {
+        const response = await apiService.restoreSession(sessionId);
+        if (response.messages?.length) {
+          window.dispatchEvent(
+            new CustomEvent('sprout:session-restored', {
+              detail: { messages: response.messages },
+            }),
+          );
+        }
+      } catch (err) {
+        log.error(`Failed to restore session: ${err instanceof Error ? err.message : String(err)}`, {
+          title: 'Session Restore Error',
+        });
+      }
+    },
+    [apiService, log],
+  );
 
   const initialViewSyncRef = useRef(false);
 
@@ -210,7 +258,7 @@ const AppContent: React.FC<AppContentProps> = ({
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
   const handlePrimaryViewChange = useCallback(
-    (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
+    (view: ViewType) => {
       if (view === 'chat') {
         openWorkspaceBuffer({
           kind: 'chat',
@@ -468,12 +516,7 @@ const AppContent: React.FC<AppContentProps> = ({
       // (useAppContentHotkeys already listens for sprout:hotkey events).
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
     },
-    [
-      onSidebarToggle,
-      onTerminalExpandedChange,
-      isTerminalExpanded,
-      handleOpenHotkeysConfig,
-    ],
+    [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, handleOpenHotkeysConfig],
   );
 
   const {
@@ -544,6 +587,33 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const handleToolPillClick = useCallback((toolId: string) => contextPanelRef.current?.highlightTool(toolId), []);
 
+  const handleForkAtBreakpoint = useCallback(
+    async (breakpointIndex: number) => {
+      if (!activeChatId || isForking) return;
+      setIsForking(true);
+      try {
+        const result = await forkChatSession(activeChatId, breakpointIndex);
+        // Reload the chat from the backend to pick up the truncated
+        // (forked) history. The fork API mutates the agent in-memory and
+        // syncs the state snapshot, so a switchChatSession call returns
+        // the correct messages.
+        window.dispatchEvent(new CustomEvent('sprout:chat-gap-reload', { detail: { chatId: activeChatId } }));
+        // Refresh the session list sidebar so the user sees the fork
+        // reflected (new session ID, updated message counts).
+        window.dispatchEvent(new CustomEvent('sprout:refresh-sessions'));
+        notificationBus.notify('success', 'Session forked', `New session: ${result.session_id.slice(0, 8)}…`);
+      } catch (e) {
+        console.error('[fork] Failed to fork:', e);
+        setAppState((prev) => ({
+          lastError: `Failed to fork session: ${e instanceof Error ? e.message : String(e)}`,
+        }));
+      } finally {
+        setIsForking(false);
+      }
+    },
+    [activeChatId, isForking, setAppState],
+  );
+
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
@@ -551,19 +621,23 @@ const AppContent: React.FC<AppContentProps> = ({
       onQueueMessage,
       queuedMessagesCount,
       inputValue,
-      onInputChange,
+      onInputChange: setInputValue,
       isProcessing: state.isProcessing,
       lastError: state.lastError,
       toolExecutions: state.toolExecutions,
       queryProgress: state.queryProgress,
       currentTodos,
       onStopProcessing,
+      onRetractSteer,
       onToolPillClick: handleToolPillClick,
       stats: state.stats,
       isConnected: state.isConnected,
       backendReachable,
       onRetryConnection,
       subagentActivities: state.subagentActivities,
+      outputVerbosity: state.outputVerbosity,
+      onForkAtBreakpoint: handleForkAtBreakpoint,
+      isForking,
     }),
     [
       state.messages,
@@ -571,19 +645,23 @@ const AppContent: React.FC<AppContentProps> = ({
       onQueueMessage,
       queuedMessagesCount,
       inputValue,
-      onInputChange,
+      setInputValue,
       state.isProcessing,
       state.lastError,
       state.toolExecutions,
       state.queryProgress,
       currentTodos,
       onStopProcessing,
+      onRetractSteer,
       handleToolPillClick,
       state.stats,
       state.isConnected,
       backendReachable,
       onRetryConnection,
       state.subagentActivities,
+      state.outputVerbosity,
+      handleForkAtBreakpoint,
+      isForking,
     ],
   );
   const reviewProps = useMemo(
@@ -622,6 +700,17 @@ const AppContent: React.FC<AppContentProps> = ({
 
   return (
     <div className="app">
+      {/* SP-130: blocking home-workspace gate. Renders as a full-screen
+       * overlay on top of the normal UI when the workspace resolves to the
+       * user's home directory without consent. The component itself also
+       * short-circuits in cloud mode (supportsWorkspaceSwitching = false). */}
+      {workspaceInfo.needs_workspace_selection && workspaceInfo.workspace_is_home && (
+        <WorkspaceGateModal
+          workspaceInfo={workspaceInfo}
+          onSelectWorkspace={(path) => setWorkspaceViaHook(path)}
+          onConsentHome={handleConsentHome}
+        />
+      )}
       {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}
       <ErrorBoundary panelName="Sidebar">
         <Sidebar
@@ -743,25 +832,29 @@ const AppContent: React.FC<AppContentProps> = ({
                 reviewProps={reviewProps}
                 diffState={diffState}
                 handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
+                onSessionRestore={handleSessionSearchRestore}
+                onViewChange={onViewChange}
               />
             </ErrorBoundary>
           </div>
-          <ContextSidebar
-            isMobile={isMobile}
-            isTablet={isTablet}
-            showContextSidebar={showContextSidebar}
-            contextPanelRef={contextPanelRef}
-            currentView={state.currentView}
-            toolExecutions={state.toolExecutions}
-            fileEdits={state.fileEdits}
-            logs={state.logs}
-            subagentActivities={state.subagentActivities}
-            currentTodos={currentTodos}
-            messages={state.messages}
-            isProcessing={state.isProcessing}
-            lastError={state.lastError}
-            queryProgress={state.queryProgress}
-          />
+          <div className="context-panel-container">
+            <ContextSidebar
+              isMobile={isMobile}
+              isTablet={isTablet}
+              showContextSidebar={showContextSidebar}
+              contextPanelRef={contextPanelRef}
+              currentView={state.currentView}
+              toolExecutions={state.toolExecutions}
+              fileEdits={state.fileEdits}
+              logs={state.logs}
+              subagentActivities={state.subagentActivities}
+              currentTodos={currentTodos}
+              messages={state.messages}
+              isProcessing={state.isProcessing}
+              lastError={state.lastError}
+              queryProgress={state.queryProgress}
+            />
+          </div>
         </div>
         <Status isConnected={state.isConnected} stats={state.stats} />
         <StatusBar
@@ -783,12 +876,17 @@ const AppContent: React.FC<AppContentProps> = ({
           isConnected={state.isConnected}
           onModelClick={handleStatusBarModelClick}
         />
+        {!supportsLocalTerminal && (
+          <ErrorBoundary panelName="Terminal">
+            <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+          </ErrorBoundary>
+        )}
       </main>
-      {supportsLocalTerminal && (
+      {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
-      )}
+      ) : null}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}

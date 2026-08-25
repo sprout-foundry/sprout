@@ -80,11 +80,12 @@ function MessageBubble({
       // role="log" already; individual messages don't need a role.
       data-message-type={type}
       data-message-index={dataMessageIndex}
+      data-testid={`chat-message-${type}`}
       aria-label={ariaLabel}
       style={hasStyle ? containerStyle : undefined}
       data-subagent-depth={depth > 0 ? depth : undefined}
     >
-      <div className="message-bubble" data-message-content={copyText || ''}>
+      <div className="message-bubble" data-message-content={copyText || ''} data-testid="chat-message">
         {persona ? (
           <span
             className="message-persona-badge"

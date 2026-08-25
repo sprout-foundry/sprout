@@ -191,7 +191,7 @@ func TestSelectInitialProviderNonInteractive(t *testing.T) {
 			// Create a minimal APIKeys object for the test
 			apiKeys := &APIKeys{}
 
-			_, err = selectInitialProvider(apiKeys)
+			_, err = selectInitialProvider(apiKeys, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("selectInitialProvider() error = %v, wantErr %v", err, tt.wantErr)
 				return

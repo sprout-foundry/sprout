@@ -1,4 +1,5 @@
 import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
+import { supportsWorkspaceSwitching } from '../config/mode';
 import { useWorkspace } from '../hooks/useWorkspace';
 import WorkspacePicker from './WorkspacePicker';
 import './WelcomeTab.css';
@@ -33,6 +34,17 @@ function WorkspacePickerView({
   const handleBrowse = () => {
     window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
   };
+
+  if (!supportsWorkspaceSwitching) {
+    return (
+      <div className="welcome-tab">
+        <div className="welcome-header">
+          <h1>Welcome to Sprout!</h1>
+          <p>Ask the AI to create files, or use the Files tab to get started.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <WorkspacePicker
@@ -95,22 +107,18 @@ function WelcomeContent({
       icon: <Settings size={18} />,
       title: 'Settings',
       description: 'Customize your editor',
-      action:
-        onOpenSettings ??
-        (() => window.dispatchEvent(new CustomEvent('sprout:open-settings-focus'))),
+      action: onOpenSettings ?? (() => window.dispatchEvent(new CustomEvent('sprout:open-settings-focus'))),
     },
     {
       icon: <Zap size={18} />,
       title: 'Keyboard Shortcuts',
       description: 'Edit your bindings',
-      action:
-        onOpenHotkeysConfig ??
-        (() => window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'))),
+      action: onOpenHotkeysConfig ?? (() => window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'))),
     },
   ];
 
   return (
-    <>
+    <div data-testid="editor-empty">
       <div className="welcome-header">
         <div className="welcome-header-content">
           <h1>Welcome to sprout</h1>
@@ -146,9 +154,9 @@ function WelcomeContent({
         </section>
 
         {/* The legacy "Get Started" section was decorative cards that
-          * duplicated Quick Actions (Command Palette, Run Commands, View Git,
-          * AI Chat) with no click handler. Removed in favor of Quick Actions
-          * + Resources, which actually do things. */}
+         * duplicated Quick Actions (Command Palette, Run Commands, View Git,
+         * AI Chat) with no click handler. Removed in favor of Quick Actions
+         * + Resources, which actually do things. */}
 
         <section className="welcome-section welcome-links">
           <h2>Resources</h2>
@@ -177,7 +185,7 @@ function WelcomeContent({
           Pro tip: Press <kbd>{PRIMARY_KEY}+P</kbd> to open the command palette and search for any command or file
         </p>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -189,7 +197,7 @@ function WelcomeTab(props: WelcomeTabProps): JSX.Element {
   // When workspace selection is needed (not a project), show the picker
   if (!isLoading && workspaceInfo.needs_workspace_selection) {
     return (
-      <div className="welcome-tab">
+      <div className="welcome-tab" data-testid="editor-welcome-tab">
         <WorkspacePickerView workspaceInfo={workspaceInfo} homeDir={homeDir} setWorkspace={setWorkspace} />
       </div>
     );
@@ -197,7 +205,7 @@ function WelcomeTab(props: WelcomeTabProps): JSX.Element {
 
   // Normal welcome content
   return (
-    <div className="welcome-tab">
+    <div className="welcome-tab" data-testid="editor-welcome-tab">
       <WelcomeContent {...props} />
     </div>
   );

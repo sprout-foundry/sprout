@@ -97,6 +97,13 @@ func TestNew_ToolAvailable_ReturnsPlatformNotifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDarwinNotifier_ConstructsCorrectCommand(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin notifier test only runs on darwin")
+	}
+	// macOS CI runners are headless — osascript is not available.
+	if os.Getenv("CI") != "" {
+		t.Skip("osascript not available on headless CI runners")
+	}
 	var captured *exec.Cmd
 	orig := runCommand
 	runCommand = func(cmd *exec.Cmd) ([]byte, error) {
@@ -108,7 +115,11 @@ func TestDarwinNotifier_ConstructsCorrectCommand(t *testing.T) {
 	err := (&darwinNotifier{}).Notify("My Title", "Hello World")
 	assert.NoError(t, err)
 	require.NotNil(t, captured)
-	assert.Equal(t, "osascript", captured.Path)
+	// exec.Command resolves a bare command name to its full path via LookPath,
+	// so compare against the same resolution rather than the unqualified name.
+	lp, lperr := exec.LookPath("osascript")
+	require.NoError(t, lperr)
+	assert.Equal(t, lp, captured.Path)
 	assert.Equal(t, []string{
 		"osascript", "-e",
 		`display notification "Hello World" with title "My Title"`,
@@ -258,6 +269,9 @@ func TestLinuxNotifier_PropagatesCommandError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestWindowsNotifier_ConstructsCorrectCommand(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows notifier test only runs on windows")
+	}
 	var captured *exec.Cmd
 	orig := runCommand
 	runCommand = func(cmd *exec.Cmd) ([]byte, error) {
@@ -269,7 +283,11 @@ func TestWindowsNotifier_ConstructsCorrectCommand(t *testing.T) {
 	err := (&windowsNotifier{}).Notify("My Title", "Hello World")
 	assert.NoError(t, err)
 	require.NotNil(t, captured)
-	assert.Equal(t, "powershell", captured.Path)
+	// exec.Command resolves a bare command name to its full path via LookPath,
+	// so compare against the same resolution rather than the unqualified name.
+	lp, lperr := exec.LookPath("powershell")
+	require.NoError(t, lperr)
+	assert.Equal(t, lp, captured.Path)
 	require.Len(t, captured.Args, 3)
 	assert.Equal(t, "powershell", captured.Args[0])
 	assert.Equal(t, "-Command", captured.Args[1])

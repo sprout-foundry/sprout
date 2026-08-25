@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	utils "github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -33,7 +34,7 @@ func (a *ProviderAdapter) SendChatRequest(ctx context.Context, req *ProviderChat
 	// when multiple agents share the same provider.
 	limiter := utils.GetProviderRateLimiter(string(a.clientType))
 	if err := limiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit wait canceled: %w", err)
+		return nil, agenterrors.NewTransientError("rate limit wait canceled", err)
 	}
 
 	// Convert ProviderChatRequest to old format
@@ -76,7 +77,7 @@ func (a *ProviderAdapter) GetAvailableModels(ctx context.Context) ([]ModelDetail
 	// Get models using the provider-specific model fetcher
 	modelInfos, err := GetModelsForProvider(a.clientType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get models for provider %s: %w", a.clientType, err)
+		return nil, agenterrors.NewProviderError(fmt.Sprintf("failed to get models for provider %s", a.clientType), err, string(a.clientType), "")
 	}
 
 	// Convert ModelInfo to ModelDetails
@@ -109,43 +110,27 @@ func (a *ProviderAdapter) GetType() ClientType {
 	return a.clientType
 }
 
-// GetEndpoint returns the API endpoint
+// GetEndpoint returns the API endpoint from the underlying client.
+// Falls back to an empty string if the client doesn't expose GetEndpoint.
 func (a *ProviderAdapter) GetEndpoint() string {
-	// Extract endpoint from the client implementation
-	switch a.clientType {
-	case OpenAIClientType:
-		return "https://api.openai.com/v1/chat/completions"
-	case DeepInfraClientType:
-		return "https://api.deepinfra.com/v1/openai/chat/completions"
-	case DeepSeekClientType:
-		return "https://api.deepseek.com/v1/chat/completions"
-	case OpenRouterClientType:
-		return "https://openrouter.ai/api/v1/chat/completions"
-	case ChutesClientType:
-		return "https://chutes.ai/v1/chat/completions"
-	case ZAIClientType:
-		return "https://z.ai/v1/chat/completions"
-	case OllamaClientType, OllamaLocalClientType:
-		// For local Ollama, use the default local endpoint
-		return "http://localhost:11434/v1/chat/completions"
-	case OllamaCloudClientType:
-		return "https://turbo.ollama.ai/v1/chat/completions"
-	case LMStudioClientType:
-		// For LM Studio, use the default local endpoint
-		return "http://localhost:1234/v1/chat/completions"
-	case TestClientType:
-		return "https://test.api.example.com/v1/chat/completions"
-	default:
-		// For unknown client types, try to extract from client if possible
-		if clientWithEndpoint, ok := a.client.(interface{ GetEndpoint() string }); ok {
-			return clientWithEndpoint.GetEndpoint()
-		}
-		return ""
+	if clientWithEndpoint, ok := a.client.(interface{ GetEndpoint() string }); ok {
+		return clientWithEndpoint.GetEndpoint()
 	}
+	return ""
 }
 
 // SupportsVision returns whether the provider supports vision
 func (a *ProviderAdapter) SupportsVision() bool {
+	return a.client.SupportsVision()
+}
+
+// SupportsConversationalVision returns whether the provider handles inline
+// multimodal chat messages. Delegates to the underlying client; falls back
+// to SupportsVision() if the client doesn't implement the new method.
+func (a *ProviderAdapter) SupportsConversationalVision() bool {
+	if typed, ok := a.client.(interface{ SupportsConversationalVision() bool }); ok {
+		return typed.SupportsConversationalVision()
+	}
 	return a.client.SupportsVision()
 }
 
@@ -168,6 +153,20 @@ func (a *ProviderAdapter) SupportsReasoning() bool {
 	return containsReasoningModel(model) || a.clientType == OpenAIClientType
 }
 
+// VisionCapabilities returns the per-provider vision limits by delegating
+// to the wrapped client. If the client does not implement
+// VisionCapabilities() (e.g. legacy / mock clients), returns the zero
+// value; callers should pass that through VisionCapabilitiesOrDefault()
+// to get a safe usable configuration. SP-103-D3 / AUDIT-GAP-2.
+func (a *ProviderAdapter) VisionCapabilities() VisionCapabilities {
+	if typed, ok := a.client.(interface {
+		VisionCapabilities() VisionCapabilities
+	}); ok {
+		return typed.VisionCapabilities()
+	}
+	return VisionCapabilities{}
+}
+
 // SetDebug enables or disables debug mode
 func (a *ProviderAdapter) SetDebug(debug bool) {
 	a.client.SetDebug(debug)
@@ -183,9 +182,11 @@ func (a *ProviderAdapter) IsDebug() bool {
 func (a *ProviderAdapter) getModelFeatures(modelID string) []string {
 	features := []string{"tools"}
 
-	// Check for vision support
-	// For now, assume vision models based on model ID patterns
-	if a.client.SupportsVision() && isVisionModel(modelID) {
+	// Vision support is determined by the client's SupportsVision() method,
+	// which resolves through the provider config's supports_vision flag and
+	// per-model tag overrides. This is the same path used at runtime by
+	// attachPastedImages and processImagesInQuery.
+	if a.client.SupportsVision() {
 		features = append(features, "vision")
 	}
 
@@ -195,24 +196,6 @@ func (a *ProviderAdapter) getModelFeatures(modelID string) []string {
 	}
 
 	return features
-}
-
-// isVisionModel checks if a model supports vision based on its ID
-func isVisionModel(modelID string) bool {
-	// Common vision model patterns
-	visionPatterns := []string{
-		"gpt-4o", "gpt-4-vision", "llava", "vision",
-		"Llama-3.2-11B-Vision", "Llama-4-Scout",
-		"gemma-3-27b-it", // OpenRouter vision models
-	}
-
-	modelLower := strings.ToLower(modelID)
-	for _, pattern := range visionPatterns {
-		if strings.Contains(modelLower, strings.ToLower(pattern)) {
-			return true
-		}
-	}
-	return false
 }
 
 // containsReasoningModel checks if a model supports reasoning

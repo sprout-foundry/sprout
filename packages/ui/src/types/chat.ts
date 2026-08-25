@@ -52,6 +52,18 @@ export interface Message {
    * Populated from query_completed or metrics_update event.
    */
   model?: string;
+  /**
+   * Inline subagent run marker — when true, this message represents
+   * a subagent activity rendered inline in the chat flow as a
+   * collapsible section (rather than the old footer feed). The
+   * subagent's streaming output lines accumulate in the `reasoning`
+   * field and render via a Collapsible in MessageItem.
+   */
+  isSubagentRun?: boolean;
+  /** Whether the inline subagent run has completed. */
+  subagentRunComplete?: boolean;
+  /** Persona name for the inline subagent run (e.g. "coder", "tester"). */
+  subagentPersona?: string;
 }
 
 export interface ToolExecution {
@@ -187,6 +199,7 @@ export interface ChatProps {
   subagentActivities?: SubagentActivity[];
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
+  onRetractSteer?: () => boolean | Promise<boolean>;
   // Worktree support
   chatId?: string;
   worktreePath?: string;
@@ -201,6 +214,12 @@ export interface ChatProps {
   // Backend reachability (cloud mode)
   backendReachable?: boolean;
   onRetryConnection?: () => void;
+  // SP-076: display verbosity for inter-tool narration filtering
+  outputVerbosity?: 'compact' | 'default' | 'verbose';
+  // Fork support: callback when user clicks fork icon on a user message
+  onForkAtBreakpoint?: (breakpointIndex: number) => void;
+  // Fork support: true while a fork operation is in-flight (disables button)
+  isForking?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────

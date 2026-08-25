@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
@@ -31,10 +32,10 @@ import (
 // Non-TTY runs construct a coordinator whose reader is a no-op, so
 // callers don't need to gate the calls.
 //
-// Future polish (SP-055 Phase 3) hooks here: mode-indicator glyphs,
-// steer history recall, "done queue" mode. Keeping the coordinator
-// behind a single small surface (StartTurn / EndTurn) means those
-// features can land without touching the REPL loop.
+// Future polish hooks here: mode-indicator glyphs and steer history
+// recall ("done queue" auto-run shipped as SP-055 Phase 3b). Keeping the
+// coordinator behind a single small surface (StartTurn / EndTurn) means
+// future features can land without touching the REPL loop.
 type SteerCoordinator struct {
 	agent  *agent.Agent
 	reader *console.SteerInputReader
@@ -59,6 +60,7 @@ func NewSteerCoordinator(chatAgent *agent.Agent, footer *console.StatusFooter) *
 		c.handleQueueSubmit,
 		c.handleSteerInterrupt,
 	)
+	c.reader.SetRetractFn(c.handleSteerRetract)
 	return c
 }
 
@@ -104,10 +106,9 @@ type PendingInput struct {
 	// steer text the user may want to edit before submitting).
 	InitialContent string
 
-	// QueuedPrefix is the formatted block of deferred messages to
-	// prepend to the user's next submitted query. Empty when no
-	// messages are queued.
-	QueuedPrefix string
+	// QueuedMessages are raw deferred messages in FIFO order, ready to
+	// auto-submit as their own turns when the REPL loop processes them.
+	QueuedMessages []string
 
 	// QueuedCount is how many deferred messages were drained (for
 	// footer badge clearing and logging).
@@ -120,11 +121,8 @@ type PendingInput struct {
 // DrainUnsentBuffer and DrainDeferredMessages.
 //
 // When both paths have content, the unsent text becomes the initial
-// content (pre-filled for editing) and the queued messages become the
-// prefix. This is the correct priority: the user was actively composing
-// the unsent text, so it goes into the editable buffer; the queued
-// messages are context they already decided on, so they prepend
-// silently as before.
+// content (pre-filled for editing) and the queued messages are returned
+// raw so the REPL can auto-submit each as its own turn.
 func (c *SteerCoordinator) DrainPendingInput() PendingInput {
 	var pi PendingInput
 
@@ -134,19 +132,12 @@ func (c *SteerCoordinator) DrainPendingInput() PendingInput {
 		c.reader.ResetBuffer()
 	}
 
-	// 2. Drain deferred queue messages → formatted prefix.
+	// 2. Drain deferred queue messages → raw slice for auto-submit.
 	if c != nil && c.agent != nil {
 		queued := c.agent.DrainDeferredMessages()
 		pi.QueuedCount = len(queued)
 		if len(queued) > 0 {
-			var b strings.Builder
-			b.WriteString("Queued from prior turn:\n")
-			for _, msg := range queued {
-				b.WriteString("  • ")
-				b.WriteString(msg)
-				b.WriteByte('\n')
-			}
-			pi.QueuedPrefix = strings.TrimSpace(b.String())
+			pi.QueuedMessages = queued
 		}
 	}
 
@@ -161,6 +152,32 @@ func (c *SteerCoordinator) SetGroundTruth(gt *console.GroundTruthTermios) {
 		return
 	}
 	c.reader.SetGroundTruth(gt)
+}
+
+// SetCompleter installs a slash-command completion provider on the
+// steer reader (SP-078 Phase 2). Bound to Ctrl-] — Tab is reserved
+// for the STEER ↔ QUEUE mode toggle. The same provider can be passed
+// to both inputReader.SetCompleter (Tab, REPL prompt) and
+// steerCoord.SetCompleter (Ctrl-], mid-turn) so completion works in
+// both surfaces.
+func (c *SteerCoordinator) SetCompleter(p console.CompletionProvider) {
+	if c == nil || c.reader == nil {
+		return
+	}
+	c.reader.SetCompleter(p)
+}
+
+// SetRichCompleter installs a structured slash-command provider on
+// the steer reader (SP-078 Phase 3). When set, the steer panel
+// renders a live dropdown above the input line while the user types
+// a "/"-prefixed command — same UX as the InputReader's dropdown.
+// Tab accepts the highlighted candidate; Esc dismisses the dropdown;
+// Up/Down navigate candidates while the dropdown is visible.
+func (c *SteerCoordinator) SetRichCompleter(rc console.RichCompletionProvider) {
+	if c == nil || c.reader == nil {
+		return
+	}
+	c.reader.SetRichCompleter(rc)
 }
 
 // handleSteerSubmit forwards the user's typed message to the agent's
@@ -183,8 +200,36 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 		return
 	}
 	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
+		switch intent {
+		case IntentBangShell:
+			if c.executeSteerShell(text) {
+				return
+			}
+		case IntentSlash:
+			// Try to execute safe commands mid-turn
+			if c.executeSteerCommand(text) {
+				return
+			}
+		}
 		rejectCommandIntent(intent, text, "steer", "wait for the prompt to finish (Ctrl+C / Esc to interrupt now)")
 		return
+	}
+	// If a subagent is currently running, route the steer via
+	// InjectInputIntoActive. SP-094-8: this now prefers the primary
+	// agent first (which reads steer messages and decides whether to
+	// abort subagents, redirect them, or fold the steer into its own
+	// plan). Only if the primary's channel is full does it fall back
+	// to the deepest running subagent.
+	if runner := c.agent.GetSubagentRunner(); runner != nil {
+		if target, ok := runner.InjectInputIntoActive(text); ok {
+			fmt.Fprintln(os.Stderr)
+			if target == "primary" {
+				console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
+			} else {
+				console.GlyphAction.Fprintf(os.Stderr, "steer → subagent (%s): %s", target, text)
+			}
+			return
+		}
 	}
 	if err := c.agent.InjectInputContext(text); err != nil {
 		fmt.Fprintln(os.Stderr)
@@ -193,6 +238,21 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 	}
 	fmt.Fprintln(os.Stderr)
 	console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
+}
+
+// handleSteerRetract pulls back the newest un-picked message for re-editing
+// (Up-arrow on an empty steer line). STEER-mode submissions live in the
+// agent's staging queue until seed's conversation loop picks them up;
+// QUEUE-mode submissions sit in the deferred queue until the next turn —
+// both windows are retractable, steer-staging first.
+func (c *SteerCoordinator) handleSteerRetract() (string, bool) {
+	if c == nil || c.agent == nil {
+		return "", false
+	}
+	if text, ok := c.agent.RetractLatestSteer(); ok {
+		return text, true
+	}
+	return c.agent.RetractLatestDeferredMessage()
 }
 
 // handleSteerInterrupt routes Ctrl+C-while-steering to the same
@@ -211,26 +271,35 @@ func (c *SteerCoordinator) handleSteerInterrupt(_ string) {
 }
 
 // handleQueueSubmit is the QUEUE-mode counterpart to handleSteerSubmit.
-// The message is enqueued on the agent's deferred queue and will be
-// joined with the user's next typed prompt when the REPL drains it
-// (SP-055 Phase 3b). Mid-turn streaming is unaffected — nothing is
-// injected into the active turn.
+// The message is enqueued on the agent's deferred queue and will auto-
+// submit as its own turn(s) when the current turn ends (SP-055 Phase 3b).
+// Mid-turn streaming is unaffected — nothing is injected into the active
+// turn.
 func (c *SteerCoordinator) handleQueueSubmit(text string) {
 	if c.agent == nil || text == "" {
 		return
 	}
-	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
-		// Queue mode wraps drained messages into a "Queued from prior
-		// turn:" blockquote at the next prompt, which strips the leading
-		// '/' or '!' and the prompt's IsSlashCommand / fast-path checks
-		// stop matching. Rather than silently demoting the command to
-		// LLM text, reject and tell the user where to send it.
+	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone && intent != IntentBangShell {
+		// Bang commands are allowed to queue because the auto-run path
+		// dispatches them through registry.Execute, which handles the
+		// ! → exec translation. Slash commands and detected shell
+		// commands are still rejected.
 		rejectCommandIntent(intent, text, "queue", "type it at the prompt after this turn ends")
+		return
+	}
+	// "exit"/"quit" are not slash commands so the intent check misses
+	// them, but a queued one would auto-run into the REPL's exit branch
+	// and terminate the session without the user at the prompt. Bang
+	// variants (!exit) run as exec subshells instead — harmless, but
+	// still not what the user meant, so reject them here too.
+	if lower := strings.ToLower(strings.TrimSpace(text)); lower == "exit" || lower == "quit" ||
+		lower == "!exit" || lower == "!quit" {
+		rejectCommandIntent("REPL exit", text, "queue", "type it at the prompt after this turn ends")
 		return
 	}
 	c.agent.EnqueueDeferredMessage(text)
 	fmt.Fprintln(os.Stderr)
-	console.GlyphPaused.Fprintf(os.Stderr, "queued: %s", text)
+	console.GlyphPaused.Fprintf(os.Stderr, "queued → runs when this turn ends: %s", text)
 	// Refresh the footer so the new "⏸ N queued" badge appears in the
 	// same frame the user submitted. Without this nudge the badge
 	// would lag until the next tool/cost event fires.
@@ -255,4 +324,77 @@ func rejectCommandIntent(intent PromptIntent, text, mode, remedy string) {
 		"%s mode can't run a %s — %s. Dropped: %s",
 		mode, string(intent), remedy, preview,
 	)
+}
+
+// executeSteerCommand tries to run a slash command mid-turn. Returns true
+// if the command was handled (safe and executed, or unsafe and rejected).
+func (c *SteerCoordinator) executeSteerCommand(text string) bool {
+	parts := strings.Fields(strings.TrimPrefix(strings.TrimSpace(text), "/"))
+	if len(parts) == 0 {
+		return false
+	}
+	cmdName := parts[0]
+
+	registryRaw := c.agent.SlashCommands()
+	if registryRaw == nil {
+		return false
+	}
+	registry, ok := registryRaw.(*agent_commands.CommandRegistry)
+	if !ok {
+		return false
+	}
+
+	cmd, ok := registry.GetCommand(cmdName)
+	if !ok {
+		return false
+	}
+
+	sc, ok := cmd.(agent_commands.SteerCapable)
+	if !ok || !sc.SafeDuringSteer() {
+		return false // will fall through to rejectCommandIntent
+	}
+	// Execute in a goroutine to avoid blocking the steer reader goroutine.
+	// The command writes to stdout/stderr which is fine — the terminal subscriber
+	// will pick it up. Use recover to prevent a command panic from killing the
+	// steer goroutine.
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				console.GlyphError.Fprintf(os.Stderr, "command /%s panicked: %v", cmdName, r)
+			}
+		}()
+		if err := cmd.Execute(parts[1:], c.agent); err != nil {
+			console.GlyphError.Fprintf(os.Stderr, "command /%s: %v", cmdName, err)
+		}
+	}()
+	return true
+}
+
+// executeSteerShell runs a bang-prefixed shell command mid-turn through the
+// command registry (which translates "!cmd" → exec cmd). Returns true when
+// the command was dispatched (or rejected by the exec guards) and the
+// caller should stop; false when the agent has no registry set, so the
+// caller can fall back to rejectCommandIntent.
+func (c *SteerCoordinator) executeSteerShell(text string) bool {
+	registryRaw := c.agent.SlashCommands()
+	if registryRaw == nil {
+		return false
+	}
+	registry, ok := registryRaw.(*agent_commands.CommandRegistry)
+	if !ok {
+		return false
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				console.GlyphError.Fprintf(os.Stderr, "command failed: %v", r)
+			}
+		}()
+		fmt.Fprintln(os.Stderr)
+		console.GlyphShell.Fprintf(os.Stderr, "exec (steer): %s", text)
+		if err := registry.Execute(text, c.agent); err != nil {
+			console.GlyphError.Fprintf(os.Stderr, "command failed: %v", err)
+		}
+	}()
+	return true
 }

@@ -1,0 +1,327 @@
+//go:build !js
+
+package codegraph
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	_ "modernc.org/sqlite"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/git"
+)
+
+// Symbol represents a code symbol (function, type, variable, etc.)
+type Symbol struct {
+	ID            int64  // database node ID (populated by queries)
+	QualifiedName string // e.g. "pkg/codegraph.Store.IndexFile"
+	DisplayName   string // e.g. "IndexFile"
+	FilePath      string // relative path from git root
+	Line          int    // line where symbol is declared
+	Kind          string // "func", "type", "var", "const", "iface", "method"
+	Language      string // "go", "typescript", "javascript", "python"
+	FileMTime     string // file modification time as RFC3339 string
+}
+
+// Edge represents a relationship between two symbols.
+// SourceQualifiedName and TargetQualifiedName are the qualified names
+// of the caller and callee respectively. They are resolved to node IDs
+// during IndexFile.
+// EdgeType values:
+//
+//	"calls"          - textual/unresolved call edge (same-package or unresolved cross-package)
+//	"resolved_calls" - resolved cross-package call edge (target qualified via import map)
+//	"defined_in"     - symbol defined in a file/package
+//	"imports"        - module-level import relationship
+type Edge struct {
+	SourceQualifiedName string // qualified name of the caller/owner
+	TargetQualifiedName string // qualified name of the callee/target
+	EdgeType            string // "calls", "defined_in", "imports"
+	Line                int    // line where the edge originates
+}
+
+// GraphStats provides summary statistics about the graph
+type GraphStats struct {
+	NodeCount int
+	EdgeCount int
+	FileCount int
+}
+
+// Store defines the persistent graph store interface
+type Store interface {
+	// IndexFile stores all symbols and edges for a given file.
+	// It replaces existing data for this file path (delete old nodes/edges, insert new).
+	IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error
+
+	// InsertAllEdges inserts all call edges in a single transaction.
+	// All nodes must already exist in the database (call IndexFile or
+	// indexSymbolsOnly first). Deletes ALL existing edges first, then
+	// inserts the new set — this is correct for a full rebuild via IndexAll.
+	InsertAllEdges(ctx context.Context, edges []Edge) error
+
+	// InsertEdgesForFiles deletes and re-inserts edges for a scoped set of files.
+	// stalePaths: files whose symbols were re-indexed (delete incoming + outgoing).
+	// referrerPaths: files whose symbols are unchanged (delete outgoing only).
+	// Used by the incremental update path.
+	InsertEdgesForFiles(ctx context.Context, stalePaths, referrerPaths []string, edges []Edge) error
+
+	// FindReferrerFiles returns file paths whose nodes have edges pointing
+	// to nodes in the given files. Used to compute the affected-file closure
+	// during incremental updates.
+	FindReferrerFiles(ctx context.Context, filePaths []string) ([]string, error)
+
+	// QueryCallers returns symbols that call the given qualified name.
+	QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error)
+
+	// QueryCallees returns symbols that are called by the given qualified name.
+	QueryCallees(ctx context.Context, qualifiedName string) ([]Symbol, error)
+
+	// FindDeadCode returns symbols with zero inbound call edges.
+	// Excludes known entry points: main(), init(), exported functions, and test functions.
+	// If directory is non-empty, restricts results to files under that directory prefix.
+	FindDeadCode(ctx context.Context, directory string) ([]Symbol, error)
+
+	// GetStaleFiles returns file paths whose mtime differs from the last indexed time.
+	GetStaleFiles(ctx context.Context) ([]string, error)
+
+	// Stats returns summary statistics about the graph.
+	Stats() GraphStats
+
+	// QueryAllNodes returns all nodes from the graph store.
+	QueryAllNodes(ctx context.Context) ([]Symbol, error)
+
+	// Close closes the underlying database.
+	Close() error
+
+	// BaseDir returns the git root directory for resolving relative file paths.
+	BaseDir() string
+}
+
+// SQLiteStore implements Store using a SQLite database.
+type SQLiteStore struct {
+	db      *sql.DB
+	dbPath  string
+	baseDir string // git root directory for resolving relative file paths
+	mu      sync.RWMutex
+}
+
+// DefaultDBPath returns the default database path resolved from git root.
+func DefaultDBPath() (string, error) {
+	gitRoot, err := git.GetGitRootDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve git root for default DB path: %w", err)
+	}
+	return filepath.Join(gitRoot, ".sprout", "codegraph.db"), nil
+}
+
+// NewStore opens a SQLite-backed code graph store at the given path.
+// If dbPath is empty, the database is placed at `.sprout/codegraph.db`
+// relative to the git root.
+func NewStore(dbPath string) (*SQLiteStore, error) {
+	if dbPath == "" {
+		var err error
+		dbPath, err = DefaultDBPath()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Ensure the parent directory exists.
+	dir := filepath.Dir(dbPath)
+	if err := filesystem.EnsureDir(dir); err != nil {
+		return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Limit connection pool to 1 for SQLite safety.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	// Enable WAL mode for better concurrent read performance.
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to set WAL mode: %w", err)
+	}
+
+	// Enable foreign keys.
+	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
+	// Run schema creation.
+	if _, err := db.Exec(schemaSQL); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	// Migration: add is_test column if upgrading from pre-confidence-tier schema.
+	// SQLite returns "duplicate column name" if the column already exists; we
+	// ignore that error since it means migration already ran.
+	if _, err := db.Exec(`ALTER TABLE files ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column name") {
+			db.Close()
+			return nil, fmt.Errorf("failed to migrate schema: %w", err)
+		}
+	}
+
+	// Resolve the git root (base directory) for resolving relative file paths.
+	baseDir, err := git.GetGitRootDir()
+	if err != nil {
+		baseDir = filepath.Dir(dbPath)
+	}
+
+	return &SQLiteStore{
+		db:      db,
+		dbPath:  dbPath,
+		baseDir: baseDir,
+	}, nil
+}
+
+// BaseDir returns the git root directory used for resolving relative file paths.
+func (s *SQLiteStore) BaseDir() string {
+	return s.baseDir
+}
+
+// IndexFile stores all symbols and edges for a given file.
+// It replaces existing data for this file path (delete old nodes/edges, insert new).
+func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Delete existing edges referencing nodes from this file.
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM edges WHERE source_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
+		   OR target_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
+	`, path, path)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing edges: %w", err)
+	}
+
+	// Delete existing nodes for this file.
+	_, err = tx.ExecContext(ctx, `DELETE FROM nodes WHERE file_path = ?`, path)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing nodes: %w", err)
+	}
+
+	// Insert new symbols and capture their IDs.
+	type insertResult struct {
+		symbol Symbol
+		id     int64
+	}
+	var results []insertResult
+
+	for _, sym := range symbols {
+		var res sql.Result
+		res, err = tx.ExecContext(ctx, `
+			INSERT OR IGNORE INTO nodes (qualified_name, display_name, file_path, line, kind, language, file_mtime)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, sym.QualifiedName, sym.DisplayName, path, sym.Line, sym.Kind, sym.Language, sym.FileMTime)
+		if err != nil {
+			return fmt.Errorf("failed to insert node %s: %w", sym.QualifiedName, err)
+		}
+		var id int64
+		id, err = res.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("failed to get last insert ID for %s: %w", sym.QualifiedName, err)
+		}
+		if id == 0 {
+			// Duplicate qualified_name — IGNORE skipped the insert.
+			// Look up the existing ID so edges can still reference this symbol.
+			lookupErr := tx.QueryRowContext(ctx,
+				`SELECT id FROM nodes WHERE qualified_name = ?`, sym.QualifiedName).Scan(&id)
+			if lookupErr != nil {
+				// Can't find the existing node either — skip this symbol.
+				continue
+			}
+		}
+		results = append(results, insertResult{symbol: sym, id: id})
+	}
+
+	// Build a map from qualified_name → node_id for the newly inserted nodes.
+	qnToID := make(map[string]int64, len(results))
+	for _, r := range results {
+		qnToID[r.symbol.QualifiedName] = r.id
+	}
+
+	// Insert edges using the captured node IDs.
+	for _, edge := range edges {
+		// Try batch-local map first, then resolve via database (with suffix fallback).
+		sourceID, srcFound := qnToID[edge.SourceQualifiedName]
+		if !srcFound {
+			sourceID, srcFound = resolveEdgeNode(ctx, tx, edge.SourceQualifiedName)
+		}
+		if !srcFound {
+			continue
+		}
+
+		targetID, tgtFound := qnToID[edge.TargetQualifiedName]
+		if !tgtFound {
+			targetID, tgtFound = resolveEdgeNode(ctx, tx, edge.TargetQualifiedName)
+		}
+		if !tgtFound {
+			continue
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO edges (source_node_id, target_node_id, edge_type, line)
+			VALUES (?, ?, ?, ?)
+		`, sourceID, targetID, edge.EdgeType, edge.Line)
+		if err != nil {
+			return fmt.Errorf("failed to insert edge: %w", err)
+		}
+	}
+
+	// Determine language from symbols.
+	lang := ""
+	if len(symbols) > 0 {
+		lang = symbols[0].Language
+	}
+
+	// Upsert into files table.
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err = tx.ExecContext(ctx, `
+		INSERT OR REPLACE INTO files (path, mtype, symbol_count, last_indexed)
+		VALUES (?, ?, ?, ?)
+	`, path, lang, len(symbols), now)
+	if err != nil {
+		return fmt.Errorf("failed to upsert file record: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// Close closes the underlying database.
+func (s *SQLiteStore) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
+}

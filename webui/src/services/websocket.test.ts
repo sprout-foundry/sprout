@@ -1,5 +1,18 @@
 import { WebSocketService } from './websocket';
 
+// ---------------------------------------------------------------------------
+// Mock config/mode so cloud mode can be toggled per test (INT-3)
+// ---------------------------------------------------------------------------
+const { cloudModeRef } = vi.hoisted(() => ({ cloudModeRef: { value: false } }));
+vi.mock('../config/mode', () => ({
+  get isCloud() {
+    return cloudModeRef.value;
+  },
+  get mode() {
+    return cloudModeRef.value ? 'cloud' : 'local';
+  },
+}));
+
 // Mock the modules that websocket.ts depends on
 vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
@@ -960,17 +973,11 @@ describe('WebSocketService - reattach on reconnect', () => {
     await triggerWebSocketOpen();
 
     // Verify clientFetch was called for status check
-    expect(clientFetch).toHaveBeenCalledWith(
-      '/api/query/status?chat_id=chat-abc',
-    );
+    expect(clientFetch).toHaveBeenCalledWith('/api/query/status?chat_id=chat-abc');
 
     // Verify the WebSocket URL includes reattach params
-    expect(appendClientIdToUrl).toHaveBeenCalledWith(
-      expect.stringContaining('reattach=chat-abc'),
-    );
-    expect(appendClientIdToUrl).toHaveBeenCalledWith(
-      expect.stringContaining('after_seq=42'),
-    );
+    expect(appendClientIdToUrl).toHaveBeenCalledWith(expect.stringContaining('reattach=chat-abc'));
+    expect(appendClientIdToUrl).toHaveBeenCalledWith(expect.stringContaining('after_seq=42'));
   });
 
   it('skips reattach when backend is NOT processing', async () => {
@@ -998,9 +1005,7 @@ describe('WebSocketService - reattach on reconnect', () => {
     expect(clientFetch).toHaveBeenCalled();
 
     // Verify reattach params are NOT in the URL
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('skips reattach when activeChatId is null', async () => {
@@ -1024,9 +1029,7 @@ describe('WebSocketService - reattach on reconnect', () => {
 
     // clientFetch should NOT have been called (no active chat)
     expect(clientFetch).not.toHaveBeenCalled();
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('skips reattach when no last seq is known for the chat', async () => {
@@ -1075,9 +1078,7 @@ describe('WebSocketService - reattach on reconnect', () => {
     await triggerWebSocketOpen();
 
     // Reattach params should NOT be in URL (fetch failed)
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('does not add reattach params on initial connection (wasConnectedBefore=false)', async () => {
@@ -1092,9 +1093,7 @@ describe('WebSocketService - reattach on reconnect', () => {
 
     // clientFetch should NOT have been called on initial connect
     expect(clientFetch).not.toHaveBeenCalled();
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 });
 
@@ -1120,6 +1119,44 @@ describe('WebSocketService - lifecycle signals (pause / session_close)', () => {
 
     window.dispatchEvent(new Event('pagehide'));
 
+    expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'session_close' }));
+  });
+});
+
+describe('WebSocketService - control frames in cloud mode (INT-3)', () => {
+  beforeEach(() => {
+    cloudModeRef.value = true;
+  });
+
+  afterEach(() => {
+    cloudModeRef.value = false;
+  });
+
+  it('does NOT send a pause frame on freeze() in cloud mode', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    ws.freeze();
+
+    // freeze() should NOT send pause in cloud mode
+    expect(mockSend).not.toHaveBeenCalledWith(JSON.stringify({ type: 'pause' }));
+    // but freeze() still closes the connection
+    expect(ws.isConnected()).toBe(false);
+  });
+
+  it('still sends session_close on pagehide in cloud mode (best-effort, unchanged)', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    // session_close is fire-and-forget; platform hub tolerates it (no error)
     expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'session_close' }));
   });
 });

@@ -17,10 +17,10 @@ export async function getProviderCredentials(fetchFn: typeof fetch): Promise<Pro
 }
 
 export async function setProviderCredential(fetchFn: typeof fetch, provider: string, value: string): Promise<void> {
-  const response = await fetchFn('/api/settings/credentials', {
-    method: 'POST',
+  const response = await fetchFn(`/api/settings/credentials/${encodeURIComponent(provider)}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, value }),
+    body: JSON.stringify({ value }),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Failed to set credential' }));
@@ -29,10 +29,9 @@ export async function setProviderCredential(fetchFn: typeof fetch, provider: str
 }
 
 export async function deleteProviderCredential(fetchFn: typeof fetch, provider: string): Promise<void> {
-  const response = await fetchFn('/api/settings/credentials', {
+  const response = await fetchFn(`/api/settings/credentials/${encodeURIComponent(provider)}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider }),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Failed to delete credential' }));
@@ -44,10 +43,9 @@ export async function testProviderConnection(
   fetchFn: typeof fetch,
   provider: string,
 ): Promise<TestProviderConnectionResponse> {
-  const response = await fetchFn('/api/settings/credentials/test', {
+  const response = await fetchFn(`/api/settings/credentials/${encodeURIComponent(provider)}/test`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider }),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Test failed' }));

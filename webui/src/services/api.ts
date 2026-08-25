@@ -39,7 +39,11 @@ export type {
   CustomProvidersResponse,
   SkillConfig,
   SkillsResponse,
+  SkillInstallResult,
+  SkillRegistryEntry,
   SubagentTypeInfo,
+  SessionSearchResult,
+  SessionSearchResponse,
 } from './api/types';
 
 // Re-export SSHWorkspaceOpenError as a value for backward compatibility

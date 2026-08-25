@@ -5,7 +5,7 @@ package webui
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,19 +16,20 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // SemanticSearchResult represents a single semantic search match.
 type SemanticSearchResult struct {
 	File       string    `json:"file"`
-	Name       string    `json:"name"`       // function/method name
-	Signature  string    `json:"signature"`  // full function signature
+	Name       string    `json:"name"`      // function/method name
+	Signature  string    `json:"signature"` // full function signature
 	StartLine  int       `json:"start_line"`
 	EndLine    int       `json:"end_line"`
 	Language   string    `json:"language"`
 	Similarity float32   `json:"similarity"`
-	Type       string    `json:"type"`       // "code_unit" or "file"
-	Embedding  []float32 `json:"-"`  // used only for server-side pairwise comparison; not sent to client
+	Type       string    `json:"type"`                 // "code_unit" or "file"
+	Embedding  []float32 `json:"-"`                    // used only for server-side pairwise comparison; not sent to client
 	ClusterId  int       `json:"cluster_id,omitempty"` // 0 = not in a cluster, 1+ = cluster group
 }
 
@@ -50,8 +51,7 @@ type SemanticSearchResponse struct {
 
 // handleAPISemanticSearch handles GET /api/search/semantic
 func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -68,7 +68,7 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 		}
 	}
 
-	threshold := float32(0.75)
+	threshold := float32(embedding.DefaultCodeModelSemanticSearchThreshold)
 	if t := r.URL.Query().Get("threshold"); t != "" {
 		if v, err := strconv.ParseFloat(t, 32); err == nil {
 			th := float32(v)
@@ -130,18 +130,17 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 
 // EmbeddingIndexStatus represents the current state of the embedding index.
 type EmbeddingIndexStatus struct {
-	Available    bool   `json:"available"`     // whether embedding manager exists
-	Initialized  bool   `json:"initialized"`   // whether embedding provider is initialized
-	Building     bool   `json:"building"`      // whether an index build is in progress
-	RecordCount  int    `json:"record_count"`  // number of indexed code units
-	Workspace    string `json:"workspace"`     // workspace root path
-	InitError    string `json:"init_error,omitempty"`  // error from failed initialization, if any
+	Available   bool   `json:"available"`            // whether embedding manager exists
+	Initialized bool   `json:"initialized"`          // whether embedding provider is initialized
+	Building    bool   `json:"building"`             // whether an index build is in progress
+	RecordCount int    `json:"record_count"`         // number of indexed code units
+	Workspace   string `json:"workspace"`            // workspace root path
+	InitError   string `json:"init_error,omitempty"` // error from failed initialization, if any
 }
 
 // handleAPISemanticStatus handles GET /api/search/semantic/status
 func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -156,13 +155,11 @@ func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http
 		if cm := ws.resolveConfigManagerQuietly(r); cm != nil {
 			cfg := cm.GetConfig()
 			if cfg != nil {
-				ei := cfg.EmbeddingIndex
-				if ei == nil {
-					// Nil means defaults apply: embedding is enabled by default
-					embeddingEnabled = true
-				} else {
-					embeddingEnabled = ei.Enabled
-				}
+				// Unset means off, matching the tool call sites
+				// (tool_duplicates, tool_handlers_file). This previously
+				// reported an absent config as enabled, so the panel claimed
+				// the index was available on installs that had never opted in.
+				embeddingEnabled = cfg.EmbeddingIndex.IsEnabled()
 			}
 		}
 		if embeddingEnabled {
@@ -186,12 +183,12 @@ func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http
 	}
 
 	writeJSON(w, http.StatusOK, EmbeddingIndexStatus{
-		Available:    true,
-		Initialized:  em.IsInitialized(),
-		Building:     em.IsBuilding(),
-		RecordCount:  em.IndexSize(),
-		Workspace:    ws.GetWorkspaceRoot(),
-		InitError:    initErrorMessage(em.InitError()),
+		Available:   true,
+		Initialized: em.IsInitialized(),
+		Building:    em.IsBuilding(),
+		RecordCount: em.IndexSize(),
+		Workspace:   ws.GetWorkspaceRoot(),
+		InitError:   initErrorMessage(em.InitError()),
 	})
 }
 
@@ -207,8 +204,7 @@ func initErrorMessage(err error) string {
 // handleAPISemanticBuild handles POST /api/search/semantic/build
 // Triggers a full index build. Returns immediately with status while building in background.
 func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -225,15 +221,15 @@ func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.
 	}
 
 	// Start build in background goroutine
-	go func() {
+	utils.SafeGo(ws.log(), "background embedding build", func() {
 		ctx := context.Background()
 		stats, err := em.BuildIndex(ctx)
 		if err != nil {
-			log.Printf("[embedding] background build failed: %v", err)
+			ws.log().Error("background embedding build failed", slog.Any("err", err))
 			return
 		}
-		log.Printf("[embedding] background build complete: %d units indexed", stats.UnitsExtracted)
-	}()
+		ws.log().Info("background embedding build completed", slog.Int("units_indexed", stats.UnitsExtracted))
+	})
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "build started"})
 }
@@ -262,18 +258,17 @@ type SnippetLine struct {
 
 // SemanticPreviewResponse is the JSON response for semantic preview.
 type SemanticPreviewResponse struct {
-	File        string       `json:"file"`
-	StartLine   int          `json:"start_line"`
-	Snippet     []SnippetLine `json:"snippet"`
-	TotalLines  int          `json:"total_lines"`
+	File       string        `json:"file"`
+	StartLine  int           `json:"start_line"`
+	Snippet    []SnippetLine `json:"snippet"`
+	TotalLines int           `json:"total_lines"`
 }
 
 // handleAPISemanticPreview handles GET /api/search/semantic/preview
 // Returns a code snippet for the given file and line range.
 // Query params: file (required), start_line (required), context (optional, default 8)
 func (ws *ReactWebServer) handleAPISemanticPreview(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -517,11 +512,11 @@ func detectDuplicateClusters(results []SemanticSearchResult) []DuplicateCluster 
 // SemanticPreviewContextResult is one entry the proactive-context retriever
 // would inject for the given query, surfaced for the Memory settings panel.
 type SemanticPreviewContextResult struct {
-	UserMessage  string  `json:"user_message"`   // first-line excerpt of the past turn
-	Summary      string  `json:"summary"`        // actionable summary if present
-	Workspace    string  `json:"workspace"`      // working directory the turn was recorded in
-	Score        float64 `json:"score"`          // time-decayed cosine similarity
-	RelativeTime string  `json:"relative_time"`  // e.g. "3 hours ago"
+	UserMessage  string  `json:"user_message"`  // first-line excerpt of the past turn
+	Summary      string  `json:"summary"`       // actionable summary if present
+	Workspace    string  `json:"workspace"`     // working directory the turn was recorded in
+	Score        float64 `json:"score"`         // time-decayed cosine similarity
+	RelativeTime string  `json:"relative_time"` // e.g. "3 hours ago"
 }
 
 // SemanticPreviewContextResponse mirrors the proactive-context pipeline so a
@@ -551,8 +546,7 @@ type SemanticPreviewContextConfig struct {
 // the current user's PersistentContext config, and returns the top results
 // for display in the Memory settings panel. Read-only: no state mutated.
 func (ws *ReactWebServer) handleAPISemanticPreviewContext(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 

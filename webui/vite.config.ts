@@ -14,6 +14,16 @@ const reactPlugin = useSwc
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production';
 
+  // Cloud-mode builds are served by the platform under /webui/ (Mode C
+  // browser IDE). The platform's root catch-all is the dashboard SPA, so
+  // root-absolute asset URLs (/assets/*) from this build would be answered
+  // with the dashboard's index.html (text/html) and the browser would
+  // reject the module scripts — blank page. Local E2E builds already pass
+  // --base=/webui/ explicitly (platform/scripts/run-e2e-tests.sh); this
+  // default makes plain `vite build --mode cloud` (platform CI's
+  // build:cloud) correct too. An explicit --base flag still wins.
+  const isCloud = mode === 'cloud';
+
   // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
   // These are overridden at build time by .env files or CI environment vars.
   //
@@ -44,8 +54,9 @@ export default defineConfig(({ mode }) => {
     define: defineEntries,
     plugins: [reactPlugin()],
     
-    // Base URL for production builds
-    base: '/',
+    // Base URL for production builds. Cloud builds are mounted at /webui/
+    // (see isCloud above); local/desktop builds are served from the root.
+    base: isCloud ? '/webui/' : '/',
     
     // Resolve aliases
     resolve: {
@@ -107,10 +118,10 @@ export default defineConfig(({ mode }) => {
       },
     },
 
-    // esbuild config — strip console + debugger from production bundles
-    // only. Dev keeps them so live debugging still works.
+    // esbuild config — strip debugger from production bundles.
+    // Console temporarily KEPT for cloud-mode WASM debugging.
     esbuild: isProd
-      ? { drop: ['console', 'debugger'] }
+      ? { drop: ['debugger'] }
       : undefined,
 
     // Development server
@@ -140,7 +151,28 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: 'jsdom',
       setupFiles: ['./src/vitest.setup.ts'],
-      include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+      include: [
+        'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+        // Only .test.* files under test/webui are vitest unit tests.
+        // test/webui/*.spec.ts are Playwright E2E specs (run by the
+        // webui-e2e workflow) — importing them into vitest OOMs the
+        // worker because they pull in @playwright/test + chromium
+        // fixtures while collecting zero vitest tests.
+        '../test/webui/**/*.test.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
+      ],
+      // SP-104: Cap the worker pool. The default forks all CPU cores;
+      // each jsdom worker is ~1–4 GB RSS. Vitest 4 uses top-level
+      // maxWorkers / execArgv (poolOptions.forks was removed).
+      pool: 'forks',
+      maxWorkers: process.env.VITEST_MAX_FORKS
+        ? parseInt(process.env.VITEST_MAX_FORKS, 10)
+        : 4,
+      // jsdom workers accumulate RSS across the ~50 files each fork
+      // runs (CodeMirror/xterm DOM state is not fully released between
+      // files). Node's default 4 GB heap cap OOMs a worker mid-suite;
+      // raise it so the full suite completes. NODE_OPTIONS does not
+      // propagate to fork workers — this execArgv does.
+      execArgv: ['--max-old-space-size=8192'],
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],
@@ -150,7 +182,16 @@ export default defineConfig(({ mode }) => {
     
     // Optimize dependencies
     optimizeDeps: {
-      include: ['react', 'react-dom', '@codemirror/language'],
+      include: [
+        'react',
+        'react-dom',
+        '@codemirror/language',
+        // buffer is a direct dependency (added for isomorphic-git browser polyfill).
+        // Include it here so Vite pre-bundles it even when node_modules/buffer is missing
+        // (stale workspace install); otherwise Rollup externalizes it as
+        // __vite-browser-external which has no Buffer export.
+        'buffer',
+      ],
       // Exclude React-consuming packages from esbuild pre-bundling.
       // esbuild's optimizer resolves their `import 'react'` from their
       // OWN node_modules location (the monorepo root / packages/ui,
@@ -158,11 +199,15 @@ export default defineConfig(({ mode }) => {
       // bypassing resolve.alias. Excluding them sends these packages
       // through vite's normal transform pipeline where the React-18
       // alias applies, so the whole tree shares one React.
+      //
+      // NOTE: react-markdown is intentionally NOT excluded. Its transitive
+      // CJS deps (style-to-js, debug, extend) fail Vite's on-demand
+      // optimizer with "does not provide an export named 'default'".
+      // The dedupe config above ensures a single React version.
       exclude: [
         '@codemirror/legacy-modes',
         'lucide-react',
         '@sprout/ui',
-        'react-markdown',
         'react-virtuoso',
       ],
     },

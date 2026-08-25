@@ -27,11 +27,38 @@ type PersonaCommand struct{}
 func (p *PersonaCommand) Name() string        { return "persona" }
 func (p *PersonaCommand) Description() string { return "List, activate, and enable/disable personas" }
 
+// SafeDuringSteer returns true - /persona is config for next turn only
+func (p *PersonaCommand) SafeDuringSteer() bool {
+	return true
+}
+
+// Usage returns the detailed help text shown by `/help persona`.
+func (p *PersonaCommand) Usage() string {
+	return strings.Join([]string{
+		"/persona [list]              List all personas with active/disabled status.",
+		"/persona <name>              Activate <name> for the current session.",
+		"/persona <name> show         Show persona details (provider, model, tools).",
+		"/persona <name> enable       Re-enable a disabled persona.",
+		"/persona <name> disable      Disable a persona (it can't be spawned).",
+		"/persona clear               Clear the active persona.",
+		"",
+		"Personas are catalog-fixed; only enable/disable is mutable at runtime.",
+		"Aliases: /subagent-persona",
+	}, "\n")
+}
+
 // SubagentPersonaCommand is a backwards-compatible alias for /persona.
 type SubagentPersonaCommand struct{}
 
 func (s *SubagentPersonaCommand) Name() string        { return "subagent-persona" }
 func (s *SubagentPersonaCommand) Description() string { return "Alias for /persona" }
+
+// Usage returns the detailed help text shown by `/help subagent-persona`.
+func (s *SubagentPersonaCommand) Usage() string { return (&PersonaCommand{}).Usage() }
+
+// SafeDuringSteer returns true - delegates to /persona which is safe.
+func (s *SubagentPersonaCommand) SafeDuringSteer() bool { return true }
+
 func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return (&PersonaCommand{}).Execute(args, chatAgent)
 }
@@ -41,6 +68,13 @@ type SubagentPersonasCommand struct{}
 
 func (s *SubagentPersonasCommand) Name() string        { return "subagent-personas" }
 func (s *SubagentPersonasCommand) Description() string { return "Alias for /persona list" }
+
+// Usage returns the detailed help text shown by `/help subagent-personas`.
+func (s *SubagentPersonasCommand) Usage() string { return (&PersonaCommand{}).Usage() }
+
+// SafeDuringSteer returns true - delegates to /persona which is safe.
+func (s *SubagentPersonasCommand) SafeDuringSteer() bool { return true }
+
 func (s *SubagentPersonasCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return (&PersonaCommand{}).Execute(nil, chatAgent)
 }
@@ -196,4 +230,56 @@ func normalizePersonaKey(raw string) string {
 	value := strings.TrimSpace(strings.ToLower(raw))
 	value = strings.ReplaceAll(value, "-", "_")
 	return value
+}
+
+// Complete returns completions for the /persona command.
+func (p *PersonaCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	baseCommands := []string{"clear", "list"}
+
+	if len(args) == 0 {
+		// Combine base commands with available persona names from config.
+		if chatAgent == nil {
+			return baseCommands
+		}
+		mgr := chatAgent.GetConfigManager()
+		if mgr == nil {
+			return baseCommands
+		}
+		cfg := mgr.GetConfig()
+		if cfg == nil || cfg.SubagentTypes == nil || len(cfg.SubagentTypes) == 0 {
+			return baseCommands
+		}
+		all := make([]string, 0, len(baseCommands)+len(cfg.SubagentTypes))
+		all = append(all, baseCommands...)
+		for id := range cfg.SubagentTypes {
+			all = append(all, id)
+		}
+		sort.Strings(all)
+		return all
+	}
+
+	// Build candidate list: base commands + persona names.
+	candidates := make([]string, 0, len(baseCommands))
+	candidates = append(candidates, baseCommands...)
+	if chatAgent != nil {
+		mgr := chatAgent.GetConfigManager()
+		if mgr != nil {
+			cfg := mgr.GetConfig()
+			if cfg != nil && cfg.SubagentTypes != nil {
+				for id := range cfg.SubagentTypes {
+					candidates = append(candidates, id)
+				}
+			}
+		}
+	}
+
+	prefix := args[len(args)-1]
+	var matches []string
+	for _, candidate := range candidates {
+		if strings.HasPrefix(strings.ToLower(candidate), strings.ToLower(prefix)) {
+			matches = append(matches, candidate)
+		}
+	}
+	sort.Strings(matches)
+	return matches
 }

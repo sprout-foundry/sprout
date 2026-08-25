@@ -1,7 +1,9 @@
 package automate
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -605,6 +607,282 @@ func TestSummary_IsApprovalRequired_NilSafe(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// SP-128 Phase 2b: Summary JSON shape
+//
+// The WebUI `/api/automate/run` approval gate embeds the full Summary
+// under the `summary` key so the frontend can render the same overview
+// as the CLI. These tests pin the JSON contract: snake_case tags,
+// omitempty on optional fields, requires_approval + subagent_timeout_seconds
+// always present (no omitempty on the pointer fields so the frontend can
+// distinguish unset from absent), allowed_paths serializes the full
+// entry including reason when present.
+// ---------------------------------------------------------------------------
+
+func TestSummary_JSON_RequiresApprovalAlwaysPresent(t *testing.T) {
+	// Both states — unset (nil) and explicit false — must serialize the
+	// field so the WebUI can render the gate consistently. The spec calls
+	// this out: "no `omitempty` mishaps that hide `requires_approval`".
+	trues := []bool{true, false}
+	for _, val := range trues {
+		val := val
+		t.Run(fmt.Sprintf("explicit_%v", val), func(t *testing.T) {
+			s := &Summary{RequiresApproval: &val}
+			data, err := json.Marshal(s)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			var decoded map[string]interface{}
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			got, ok := decoded["requires_approval"].(bool)
+			if !ok {
+				t.Fatalf("requires_approval missing or not a bool in %s", data)
+			}
+			if got != val {
+				t.Errorf("requires_approval: got %v, want %v", got, val)
+			}
+		})
+	}
+
+	t.Run("nil serializes as null not absent", func(t *testing.T) {
+		s := &Summary{}
+		data, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		// Field must appear in the JSON output, even as null. The frontend
+		// uses `summary.requires_approval ?? true` to default.
+		if !strings.Contains(string(data), `"requires_approval":null`) {
+			t.Errorf("expected `requires_approval: null` in output, got: %s", data)
+		}
+	})
+}
+
+func TestSummary_JSON_SubagentTimeoutAlwaysPresent(t *testing.T) {
+	// Same nil-safe contract as RequiresApproval.
+	t.Run("nil serializes as null", func(t *testing.T) {
+		s := &Summary{}
+		data, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		if !strings.Contains(string(data), `"subagent_timeout_seconds":null`) {
+			t.Errorf("expected `subagent_timeout_seconds: null` in output, got: %s", data)
+		}
+	})
+
+	t.Run("explicit value serializes correctly", func(t *testing.T) {
+		secs := 2700
+		s := &Summary{SubagentTimeoutSeconds: &secs}
+		data, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		var decoded map[string]interface{}
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		got, ok := decoded["subagent_timeout_seconds"].(float64)
+		if !ok {
+			t.Fatalf("subagent_timeout_seconds missing or not a number in %s", data)
+		}
+		if got != 2700 {
+			t.Errorf("subagent_timeout_seconds: got %v, want 2700", got)
+		}
+	})
+}
+
+func TestSummary_JSON_OptionalFieldsOmitWhenEmpty(t *testing.T) {
+	// A bare Summary with zero values must NOT carry description, steps,
+	// initial, budget, allowed_paths, or warnings keys — those are
+	// omitempty so workflows that don't set them produce clean JSON.
+	s := &Summary{}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, key := range []string{
+		"description", "initial", "steps", "budget",
+		"allowed_paths", "warnings", "continue_on_error", "no_web_ui",
+	} {
+		if strings.Contains(string(data), `"`+key+`":`) {
+			t.Errorf("optional field %q should be omitted when empty; got: %s", key, data)
+		}
+	}
+}
+
+func TestSummary_JSON_AllowedPathsAndWarningsSerialize(t *testing.T) {
+	// Phase 1 already populates AllowedPaths + Warnings; Phase 2 must
+	// serialize them on the wire so the WebUI dialog can render them.
+	s := &Summary{
+		Description: "Run nightly tests",
+		AllowedPaths: []AllowedPathSummary{
+			{Path: "/srv/datasets", Mode: "read_write", Reason: "Read training data"},
+			{Path: "/var/log/sprout", Mode: "read_only"},
+		},
+		Warnings: []string{"allowed_paths[0] \"/srv/datasets\" falls under a system prefix"},
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var decoded struct {
+		Description  string `json:"description"`
+		AllowedPaths []struct {
+			Path   string `json:"path"`
+			Mode   string `json:"mode"`
+			Reason string `json:"reason"`
+		} `json:"allowed_paths"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.Description != "Run nightly tests" {
+		t.Errorf("description: got %q", decoded.Description)
+	}
+	if len(decoded.AllowedPaths) != 2 {
+		t.Fatalf("allowed_paths: got %d, want 2", len(decoded.AllowedPaths))
+	}
+	if decoded.AllowedPaths[0].Path != "/srv/datasets" ||
+		decoded.AllowedPaths[0].Mode != "read_write" ||
+		decoded.AllowedPaths[0].Reason != "Read training data" {
+		t.Errorf("allowed_paths[0] wrong: %+v", decoded.AllowedPaths[0])
+	}
+	if decoded.AllowedPaths[1].Reason != "" {
+		t.Errorf("allowed_paths[1] reason should be omitted when empty: %+v", decoded.AllowedPaths[1])
+	}
+	if len(decoded.Warnings) != 1 {
+		t.Fatalf("warnings: got %d, want 1", len(decoded.Warnings))
+	}
+}
+
+func TestSummary_JSON_StepAndInitialShape(t *testing.T) {
+	// Steps and Initial nest other types — confirm their JSON tags too.
+	s := &Summary{
+		Initial: &InitialSummary{
+			Persona:       "main",
+			Provider:      "anthropic",
+			Model:         "claude-opus-4",
+			MaxIterations: 5,
+			HasPrompt:     true,
+		},
+		Steps: []StepSummary{
+			{Name: "build", Kind: "shell", CommandPreview: "$ go build"},
+			{Name: "test", Kind: "agent", Persona: "reviewer"},
+		},
+		Budget: &BudgetSummary{USD: 10.0, WarnAt: []float64{0.5, 0.8}},
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	for _, want := range []string{
+		`"persona":"main"`,
+		`"provider":"anthropic"`,
+		`"model":"claude-opus-4"`,
+		`"max_iterations":5`,
+		`"has_prompt":true`,
+		`"name":"build"`,
+		`"kind":"shell"`,
+		`"command_preview":"$ go build"`,
+		`"warn_at":[0.5,0.8]`,
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("expected %q in JSON output, got: %s", want, data)
+		}
+	}
+}
+
+func TestSummarize_RoundTripsThroughJSONShape(t *testing.T) {
+	// End-to-end: write a workflow file, run Summarize, marshal to JSON,
+	// and confirm the WebUI-relevant fields survive the round-trip with
+	// snake_case keys the frontend expects.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rt.json")
+	mustWriteFile(t, path, `{
+		"description": "Round-trip test",
+		"requires_approval": false,
+		"subagent_timeout_seconds": 1200,
+		"allowed_paths": [
+			{"path": "/srv/datasets", "mode": "read_write", "reason": "Test data"}
+		],
+		"initial": {"persona": "main", "provider": "anthropic", "model": "claude-opus-4", "max_iterations": 3}
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded["description"] != "Round-trip test" {
+		t.Errorf("description: got %v", decoded["description"])
+	}
+	if decoded["requires_approval"] != false {
+		t.Errorf("requires_approval: got %v (want false)", decoded["requires_approval"])
+	}
+	if decoded["subagent_timeout_seconds"].(float64) != 1200 {
+		t.Errorf("subagent_timeout_seconds: got %v (want 1200)", decoded["subagent_timeout_seconds"])
+	}
+	ap, ok := decoded["allowed_paths"].([]interface{})
+	if !ok || len(ap) != 1 {
+		t.Fatalf("allowed_paths: got %v (want 1 entry)", decoded["allowed_paths"])
+	}
+	first := ap[0].(map[string]interface{})
+	if first["path"] != "/srv/datasets" || first["mode"] != "read_write" || first["reason"] != "Test data" {
+		t.Errorf("allowed_paths[0]: got %+v", first)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DirIn (SP-119)
+// ---------------------------------------------------------------------------
+
+func TestDirIn(t *testing.T) {
+	t.Run("empty workspace falls back to cwd-based Dir", func(t *testing.T) {
+		got := DirIn("")
+		want := Dir()
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want Dir() = %q", "", got, want)
+		}
+	})
+
+	t.Run("whitespace-only workspace falls back to cwd-based Dir", func(t *testing.T) {
+		got := DirIn("   ")
+		want := Dir()
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want Dir() = %q", "   ", got, want)
+		}
+	})
+
+	t.Run("explicit workspace joins automate dir", func(t *testing.T) {
+		got := DirIn("/tmp/foo")
+		want := filepath.Join("/tmp/foo", "automate")
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want %q", "/tmp/foo", got, want)
+		}
+	})
+
+	t.Run("relative path joins automate dir", func(t *testing.T) {
+		got := DirIn("subdir")
+		want := filepath.Join("subdir", "automate")
+		if got != want {
+			t.Errorf("DirIn(%q) = %q, want %q", "subdir", got, want)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -612,5 +890,272 @@ func mustWriteFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write %s: %v", path, err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SP-127 Phase 2: Step-level and initial-level allowed_paths in Summarize
+// ---------------------------------------------------------------------------
+
+// TestSummarize_StepAllowedPaths_SurfacesPaths verifies that Summarize
+// correctly surfaces step-level allowed_paths in the StepSummary output.
+func TestSummarize_StepAllowedPaths_SurfacesPaths(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"description": "Test workflow with step-level allowed_paths",
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"name": "process",
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "/srv/datasets", "mode": "read_only", "reason": "Training data"},
+					{"path": "/tmp/output", "mode": "read_write"}
+				]
+			}
+		]
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(s.Steps))
+	}
+	step := s.Steps[0]
+	if step.Name != "process" {
+		t.Errorf("step name: got %q, want %q", step.Name, "process")
+	}
+	if len(step.AllowedPaths) != 2 {
+		t.Fatalf("expected 2 allowed_paths on step, got %d", len(step.AllowedPaths))
+	}
+	// Entries should be sorted by path.
+	if step.AllowedPaths[0].Path != "/srv/datasets" {
+		t.Errorf("step allowed_paths[0]: got %q, want /srv/datasets", step.AllowedPaths[0].Path)
+	}
+	if step.AllowedPaths[0].Mode != "read_only" {
+		t.Errorf("step allowed_paths[0].Mode: got %q, want read_only", step.AllowedPaths[0].Mode)
+	}
+	if step.AllowedPaths[0].Reason != "Training data" {
+		t.Errorf("step allowed_paths[0].Reason: got %q, want 'Training data'", step.AllowedPaths[0].Reason)
+	}
+	if step.AllowedPaths[1].Path != "/tmp/output" {
+		t.Errorf("step allowed_paths[1]: got %q, want /tmp/output", step.AllowedPaths[1].Path)
+	}
+}
+
+// TestSummarize_InitialAllowedPaths_SurfacesPaths verifies that Summarize
+// correctly surfaces initial-level allowed_paths in the InitialSummary output.
+func TestSummarize_InitialAllowedPaths_SurfacesPaths(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"description": "Test workflow with initial-level allowed_paths",
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "/tmp/work", "mode": "read_write", "reason": "Temp workspace"}
+			]
+		}
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if s.Initial == nil {
+		t.Fatal("expected Initial to be non-nil")
+	}
+	if len(s.Initial.AllowedPaths) != 1 {
+		t.Fatalf("expected 1 allowed_path on initial, got %d", len(s.Initial.AllowedPaths))
+	}
+	if s.Initial.AllowedPaths[0].Path != "/tmp/work" {
+		t.Errorf("initial allowed_paths[0].Path: got %q, want /tmp/work", s.Initial.AllowedPaths[0].Path)
+	}
+	if s.Initial.AllowedPaths[0].Mode != "read_write" {
+		t.Errorf("initial allowed_paths[0].Mode: got %q, want read_write", s.Initial.AllowedPaths[0].Mode)
+	}
+	if s.Initial.AllowedPaths[0].Reason != "Temp workspace" {
+		t.Errorf("initial allowed_paths[0].Reason: got %q, want 'Temp workspace'", s.Initial.AllowedPaths[0].Reason)
+	}
+}
+
+// TestSummarize_StepAllowedPaths_MalformedEntryError verifies that a malformed
+// step-level allowed_path entry returns a parse error (mirrors workflow-level behavior).
+func TestSummarize_StepAllowedPaths_MalformedEntryError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "relative/path", "mode": "read_write"}
+				]
+			}
+		]
+	}`)
+
+	_, err := Summarize(path)
+	if err == nil {
+		t.Fatal("expected parse error for malformed step-level allowed_path; got nil")
+	}
+	// Error should identify the scope and index.
+	if !strings.Contains(err.Error(), "step") {
+		t.Fatalf("error should mention 'step' scope, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "allowed_paths[0]") {
+		t.Fatalf("error should identify allowed_paths[0] index, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("error should mention 'absolute', got: %v", err)
+	}
+}
+
+// TestSummarize_InitialAllowedPaths_MalformedEntryError verifies that a malformed
+// initial-level allowed_path entry returns a parse error.
+func TestSummarize_InitialAllowedPaths_MalformedEntryError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "relative/path", "mode": "read_write"}
+			]
+		}
+	}`)
+
+	_, err := Summarize(path)
+	if err == nil {
+		t.Fatal("expected parse error for malformed initial-level allowed_path; got nil")
+	}
+	// Error should identify the scope and index.
+	if !strings.Contains(err.Error(), "initial") {
+		t.Fatalf("error should mention 'initial' scope, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "allowed_paths[0]") {
+		t.Fatalf("error should identify allowed_paths[0] index, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("error should mention 'absolute', got: %v", err)
+	}
+}
+
+// TestSummarize_StepAllowedPaths_SystemPrefixWarning verifies that a step-level
+// allowed_path under a system prefix generates a warning in the summary.
+func TestSummarize_StepAllowedPaths_SystemPrefixWarning(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"prompt": "process data",
+				"allowed_paths": [
+					{"path": "/etc/sprout-stuff", "mode": "read_only"}
+				]
+			}
+		]
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Warnings) == 0 {
+		t.Fatal("expected at least one warning for system prefix path")
+	}
+	found := false
+	for _, w := range s.Warnings {
+		if strings.Contains(w, "step") && strings.Contains(w, "/etc/sprout-stuff") && strings.Contains(w, "system prefix") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected warning about step-level system prefix path, got: %v", s.Warnings)
+	}
+}
+
+// TestSummarize_InitialAllowedPaths_SystemPrefixWarning verifies that an initial-level
+// allowed_path under a system prefix generates a warning in the summary.
+func TestSummarize_InitialAllowedPaths_SystemPrefixWarning(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {
+			"prompt": "do the thing",
+			"allowed_paths": [
+				{"path": "/etc/sprout-stuff", "mode": "read_only"}
+			]
+		}
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Warnings) == 0 {
+		t.Fatal("expected at least one warning for system prefix path")
+	}
+	found := false
+	for _, w := range s.Warnings {
+		if strings.Contains(w, "initial") && strings.Contains(w, "/etc/sprout-stuff") && strings.Contains(w, "system prefix") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected warning about initial-level system prefix path, got: %v", s.Warnings)
+	}
+}
+
+// TestSummarize_StepAllowedPaths_MultipleSteps verifies that Summarize correctly
+// handles multiple steps with their own allowed_paths.
+func TestSummarize_StepAllowedPaths_MultipleSteps(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wf.json")
+	mustWriteFile(t, path, `{
+		"initial": {"prompt": "do the thing"},
+		"steps": [
+			{
+				"name": "step1",
+				"prompt": "first step",
+				"allowed_paths": [
+					{"path": "/tmp/step1", "mode": "read_write"}
+				]
+			},
+			{
+				"name": "step2",
+				"prompt": "second step",
+				"allowed_paths": [
+					{"path": "/tmp/step2", "mode": "read_only"}
+				]
+			}
+		]
+	}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if len(s.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(s.Steps))
+	}
+	if len(s.Steps[0].AllowedPaths) != 1 {
+		t.Errorf("step 0 expected 1 allowed_path, got %d", len(s.Steps[0].AllowedPaths))
+	}
+	if s.Steps[0].AllowedPaths[0].Path != "/tmp/step1" {
+		t.Errorf("step 0 allowed_path: got %q, want /tmp/step1", s.Steps[0].AllowedPaths[0].Path)
+	}
+	if len(s.Steps[1].AllowedPaths) != 1 {
+		t.Errorf("step 1 expected 1 allowed_path, got %d", len(s.Steps[1].AllowedPaths))
+	}
+	if s.Steps[1].AllowedPaths[0].Path != "/tmp/step2" {
+		t.Errorf("step 1 allowed_path: got %q, want /tmp/step2", s.Steps[1].AllowedPaths[0].Path)
 	}
 }

@@ -23,11 +23,22 @@ const (
 	ToolCallIDOverheadTokens = 8
 	// ImageMessageOverheadTokens conservatively accounts for multimodal image parts
 	ImageMessageOverheadTokens = 256
+	// EstimationErrorPercent is how much EstimateTokens can underestimate the
+	// true token count on tool-heavy prompts (observed 25-34% in practice).
+	// CalculateOutputBudget inflates the input estimate by this percent to
+	// get a worst-case figure to budget output against.
+	EstimationErrorPercent = 30
+	// BaseCushionPercent is a small fixed cushion (percent of context limit)
+	// for output-side rounding/formatting slop, on top of the estimation
+	// error margin above.
+	BaseCushionPercent = 5
+	// BaseCushionFloor ensures small contexts still get a meaningful cushion.
+	BaseCushionFloor = 2000
 )
 
 var (
-	tokenCache   = make(map[string]int)
-	tokenCacheMu sync.RWMutex
+	tokenCache = make(map[string]int)
+	cacheMu    sync.RWMutex
 )
 
 // EstimateTokens provides a token estimation based on OpenAI's tiktoken approach.
@@ -38,9 +49,9 @@ func EstimateTokens(text string) int {
 	}
 
 	// Fast path: cached
-	tokenCacheMu.RLock()
+	cacheMu.RLock()
 	cached, ok := tokenCache[text]
-	tokenCacheMu.RUnlock()
+	cacheMu.RUnlock()
 	if ok {
 		return cached
 	}
@@ -88,16 +99,14 @@ func EstimateTokens(text string) int {
 	totalTokens := int(baseTokens + specialTokenCost)
 
 	// Ensure minimum token count
-	if totalTokens < 1 {
-		totalTokens = 1
-	}
+	totalTokens = max(totalTokens, 1)
 
 	// Store in cache (limit cache size to prevent memory issues)
-	tokenCacheMu.Lock()
+	cacheMu.Lock()
 	if len(tokenCache) < 10000 {
 		tokenCache[text] = totalTokens
 	}
-	tokenCacheMu.Unlock()
+	cacheMu.Unlock()
 
 	return totalTokens
 }
@@ -122,30 +131,41 @@ func detectCode(text string) bool {
 		strings.Contains(text, "=> {")
 }
 
+// EstimateMessagesTokens estimates tokens for a slice of messages only —
+// no tool catalog or system-instruction buffer. Factored out of
+// EstimateInputTokens so callers that already know the tool/system-prompt
+// contribution from a real measurement (see sproutProvider's token anchor
+// in pkg/agent/seed_provider_token_anchor.go) can estimate just a delta of
+// newly appended messages without double-counting the fixed overhead.
+func EstimateMessagesTokens(messages []Message) int {
+	tokens := 0
+	for _, msg := range messages {
+		tokens += EstimateTokens(msg.Content)
+		tokens += EstimateTokens(msg.ReasoningContent)
+		for _, img := range msg.Images {
+			tokens += estimateImageTokens(img)
+		}
+		for _, toolCall := range msg.ToolCalls {
+			tokens += EstimateTokens(toolCall.ID)
+			tokens += EstimateTokens(toolCall.Type)
+			tokens += EstimateTokens(toolCall.Function.Name)
+			tokens += EstimateTokens(toolCall.Function.Arguments)
+			tokens += ToolCallOverheadTokens
+		}
+		if msg.ToolCallID != "" {
+			tokens += EstimateTokens(msg.ToolCallID)
+			tokens += ToolCallIDOverheadTokens
+		}
+		// Account for message role and formatting overhead
+		tokens += MessageOverheadTokens
+	}
+	return tokens
+}
+
 // EstimateInputTokens estimates total input tokens for messages and tools.
 // This includes a buffer for system instructions and message formatting overhead.
 func EstimateInputTokens(messages []Message, tools []Tool) int {
-	inputTokens := 0
-	for _, msg := range messages {
-		inputTokens += EstimateTokens(msg.Content)
-		inputTokens += EstimateTokens(msg.ReasoningContent)
-		for _, img := range msg.Images {
-			inputTokens += estimateImageTokens(img)
-		}
-		for _, toolCall := range msg.ToolCalls {
-			inputTokens += EstimateTokens(toolCall.ID)
-			inputTokens += EstimateTokens(toolCall.Type)
-			inputTokens += EstimateTokens(toolCall.Function.Name)
-			inputTokens += EstimateTokens(toolCall.Function.Arguments)
-			inputTokens += ToolCallOverheadTokens
-		}
-		if msg.ToolCallID != "" {
-			inputTokens += EstimateTokens(msg.ToolCallID)
-			inputTokens += ToolCallIDOverheadTokens
-		}
-		// Account for message role and formatting overhead
-		inputTokens += MessageOverheadTokens
-	}
+	inputTokens := EstimateMessagesTokens(messages)
 	// Add tool tokens
 	inputTokens += len(tools) * ToolTokenEstimate
 	// Add buffer for system instructions and formatting
@@ -169,33 +189,78 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	// Calculate remaining space
 	remaining := contextLimit - inputTokens
 
-	// Reserve a safety buffer to absorb token estimation errors.
-	// Use 10% of the total context limit (not remaining) so the buffer
-	// scales with the window size. Large contexts (200K+) can have
-	// estimation errors of thousands of tokens, so the buffer must grow
-	// with them. A floor of 2000 ensures small contexts still get a
-	// meaningful cushion.
-	buffer := (contextLimit * 10) / 100
-	if buffer < 2000 {
-		buffer = 2000
-	}
+	// EstimateTokens is a heuristic (not a real BPE tokenizer): on tool-heavy
+	// prompts it has been observed to underestimate the true token count by
+	// 25-34%. Rather than reserving a buffer *on top of* the already-remaining
+	// space (which double-counts the same risk and, being additive, collapses
+	// to nothing once input crosses ~64% of a 200K window — see the
+	// "no premature collapse" regression test), inflate the input estimate
+	// itself to a worst-case figure and budget output against that.
+	worstCaseInput := inputTokens + (inputTokens*EstimationErrorPercent)/100
 
-	// Ensure we don't subtract more than available
-	if buffer >= remaining {
+	// Small fixed cushion for output-side rounding/formatting slop, separate
+	// from the estimation-error margin above. Scales gently with window size
+	// but stays modest — the worst-case input inflation already carries most
+	// of the safety margin.
+	cushion := max((contextLimit*BaseCushionPercent)/100, BaseCushionFloor)
+
+	maxOutput := contextLimit - worstCaseInput - cushion
+
+	// Hard cap: max_tokens must never cause input + output to exceed
+	// the context limit. This is the last line of defense against
+	// estimation errors that slip past the margins above.
+	maxOutput = min(maxOutput, remaining)
+
+	// Below the minimum viable output, fall back to a small fixed floor —
+	// but only once the real (non-worst-case) remaining space also can't
+	// comfortably cover it. This should only bite in the final stretch
+	// before the actual ceiling, not at moderate context usage.
+	if maxOutput < MinOutputTokens {
 		if remaining < MinOutputTokens {
 			return remaining, true
 		}
 		return MinOutputTokens, true // Minimum viable output
 	}
 
-	maxOutput := remaining - buffer
+	return maxOutput, true
+}
 
-	// Ensure minimum output tokens
-	if maxOutput < MinOutputTokens && remaining >= MinOutputTokens {
-		maxOutput = MinOutputTokens
+// CalculateOutputBudgetAnchored computes the output budget when part of the
+// input estimate came from a real measurement (Usage.PromptTokens) and only
+// the heuristic portion is subject to estimation error. This prevents
+// double-counting the estimation margin on the anchored portion.
+//
+// anchoredInput is the portion measured from a real API response (no error).
+// heuristicInput is the portion estimated by the heuristic (subject to
+// EstimationErrorPercent underestimation).
+// The total input is anchoredInput + heuristicInput.
+func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput int) (int, bool) {
+	if contextLimit <= 0 {
+		contextLimit = 32000
 	}
-	if maxOutput > remaining {
-		maxOutput = remaining
+
+	totalInput := anchoredInput + heuristicInput
+	if totalInput >= contextLimit {
+		return 0, false
+	}
+
+	remaining := contextLimit - totalInput
+
+	// Only inflate the heuristic portion — the anchored portion is already
+	// a real measurement with no estimation error.
+	worstCaseHeuristic := heuristicInput + (heuristicInput*EstimationErrorPercent)/100
+	worstCaseInput := anchoredInput + worstCaseHeuristic
+
+	cushion := max((contextLimit*BaseCushionPercent)/100, BaseCushionFloor)
+
+	maxOutput := contextLimit - worstCaseInput - cushion
+	maxOutput = min(maxOutput, remaining)
+
+	if maxOutput < MinOutputTokens {
+		if remaining < MinOutputTokens {
+			return remaining, true
+		}
+		return MinOutputTokens, true
 	}
 
 	return maxOutput, true

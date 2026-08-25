@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -16,13 +17,33 @@ func (c *SessionsCommand) Name() string {
 	return "sessions"
 }
 
+// SafeDuringSteer returns false - /sessions is session lifecycle, too risky
+func (c *SessionsCommand) SafeDuringSteer() bool {
+	return false
+}
+
 func (c *SessionsCommand) Description() string {
 	return "Show and load previous conversation sessions"
 }
 
+// Usage returns the detailed help text shown by `/help sessions`.
+func (c *SessionsCommand) Usage() string {
+	return strings.Join([]string{
+		"/sessions              Interactive picker: list and load a session.",
+		"/sessions <number>     Load session by list number directly.",
+		"",
+		"Sessions are shown newest-first. Loading replaces the current",
+		"conversation with the selected session's state.",
+	}, "\n")
+}
+
 func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// List sessions immediately in reverse order (newest first)
-	sessions, err := agent.ListSessionsWithTimestamps()
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}

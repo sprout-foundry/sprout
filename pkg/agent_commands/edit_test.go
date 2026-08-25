@@ -232,7 +232,6 @@ func TestWriteEditTempFile_MultilineContent(t *testing.T) {
 
 func TestEditCommand_Execute_EmptyBuffer_NoInjection(t *testing.T) {
 
-
 	// Script: does NOT modify the file, so it remains empty (no prefill args)
 	editorScript := makeTempScript(t, "#!/bin/sh\nexit 0")
 	defer os.Remove(editorScript)
@@ -272,7 +271,6 @@ func TestEditCommand_Execute_EmptyBuffer_NoInjection(t *testing.T) {
 
 func TestEditCommand_Execute_EditorWritesContent(t *testing.T) {
 
-
 	// Script: writes content to the first argument (the temp file)
 	editorScript := makeTempScript(t, "#!/bin/sh\necho \"hello from editor\" > \"$1\"\nexit 0")
 	defer os.Remove(editorScript)
@@ -305,7 +303,6 @@ func TestEditCommand_Execute_EditorWritesContent(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_EditorWritesMultiline(t *testing.T) {
-
 
 	// Script: writes multiple lines to the temp file (each echo adds a newline)
 	editorScript := makeTempScript(t, "#!/bin/sh\nprintf 'line one\\nline two\\nline three\\n' > \"$1\"\nexit 0")
@@ -341,7 +338,6 @@ func TestEditCommand_Execute_EditorWritesMultiline(t *testing.T) {
 
 func TestEditCommand_Execute_PrefillFromArgs_NoEdit(t *testing.T) {
 
-
 	// Script: does NOT modify the file at all
 	editorScript := makeTempScript(t, "#!/bin/sh\nexit 0")
 	defer os.Remove(editorScript)
@@ -376,7 +372,6 @@ func TestEditCommand_Execute_PrefillFromArgs_NoEdit(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_PrefillFromArgs_EditorReplaces(t *testing.T) {
-
 
 	// Script: overwrites the file with different content
 	editorScript := makeTempScript(t, "#!/bin/sh\necho \"edited content\" > \"$1\"\nexit 0")
@@ -435,7 +430,6 @@ func TestEditCommand_Execute_NoEditor(t *testing.T) {
 
 func TestEditCommand_Execute_EditorExitError(t *testing.T) {
 
-
 	// Script: exits with status 1
 	editorScript := makeTempScript(t, "#!/bin/sh\nexit 1")
 	defer os.Remove(editorScript)
@@ -468,7 +462,6 @@ func TestEditCommand_Execute_EditorExitError(t *testing.T) {
 
 func TestEditCommand_Execute_SingleArg_NoEdit(t *testing.T) {
 
-
 	editorScript := makeTempScript(t, "#!/bin/sh\nexit 0")
 	defer os.Remove(editorScript)
 
@@ -499,7 +492,6 @@ func TestEditCommand_Execute_SingleArg_NoEdit(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_VisualOverridesEditor(t *testing.T) {
-
 
 	editorScript := makeTempScript(t, "#!/bin/sh\necho \"editor-was-called\" > \"$1\"\nexit 0")
 	visualScript := makeTempScript(t, "#!/bin/sh\necho \"visual-was-called\" > \"$1\"\nexit 0")
@@ -534,7 +526,6 @@ func TestEditCommand_Execute_VisualOverridesEditor(t *testing.T) {
 
 func TestEditCommand_Execute_TempFileCleanup(t *testing.T) {
 
-
 	// First, create the temp file manually to get its path, then have the
 	// editor exit with an error and verify the file is cleaned up.
 	editorScript := makeTempScript(t, "#!/bin/sh\necho \"some content\" > \"$1\"\nexit 2")
@@ -563,7 +554,6 @@ func TestEditCommand_Execute_TempFileCleanup(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_EditorWritesOnlyNewlines(t *testing.T) {
-
 
 	// Script: writes only newlines to the file
 	editorScript := makeTempScript(t, "#!/bin/sh\nprintf '\\n\\n\\n' > \"$1\"\nexit 0")
@@ -595,7 +585,6 @@ func TestEditCommand_Execute_EditorWritesOnlyNewlines(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_PrefillThenEdit(t *testing.T) {
-
 
 	// Script: appends to existing content rather than replacing
 	editorScript := makeTempScript(t, "#!/bin/sh\necho \" edited\" >> \"$1\"\nexit 0")
@@ -631,7 +620,6 @@ func TestEditCommand_Execute_PrefillThenEdit(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_ErrorWrapping(t *testing.T) {
-
 
 	tests := []struct {
 		name      string
@@ -791,7 +779,6 @@ func TestEditCommand_Execute_NilAgent(t *testing.T) {
 
 func TestEditCommand_Execute_EditorNoTrailingNewline(t *testing.T) {
 
-
 	// printf without \n at the end
 	editorScript := makeTempScript(t, "#!/bin/sh\nprintf 'no-newline-at-end' > \"$1\"\nexit 0")
 	defer os.Remove(editorScript)
@@ -845,7 +832,6 @@ func TestEditCommand_Description(t *testing.T) {
 
 func TestEditCommand_Execute_EditorWritesCRLF(t *testing.T) {
 
-
 	// Write CRLF content
 	editorScript := makeTempScript(t, "#!/bin/sh\nprintf 'line1\\r\\nline2\\r\\n' > \"$1\"\nexit 0")
 	defer os.Remove(editorScript)
@@ -879,7 +865,6 @@ func TestEditCommand_Execute_EditorWritesCRLF(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_MultipleCallsSameAgent(t *testing.T) {
-
 
 	editorScript := makeTempScript(t, "#!/bin/sh\necho \"first\" > \"$1\"\nexit 0")
 	defer os.Remove(editorScript)
@@ -924,7 +909,6 @@ func TestEditCommand_Execute_MultipleCallsSameAgent(t *testing.T) {
 // ====================================================================
 
 func TestEditCommand_Execute_LongContent(t *testing.T) {
-
 
 	// Build a long string for the mock editor to write
 	longLine := strings.Repeat("x", 50000)

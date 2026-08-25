@@ -18,8 +18,9 @@ const SchemaVersion = 2
 
 // Role names a model can be eligible/recommended for.
 const (
-	RolePrimary  = "primary"
-	RoleSubagent = "subagent"
+	RolePrimary    = "primary"
+	RoleSubagent   = "subagent"
+	RoleLowContext = "low_context" // SP-125: 8K–64K band, lite prompt + 8 tools
 )
 
 // CanonicalModel is the normalized, provider-agnostic representation of a model.
@@ -96,6 +97,7 @@ type Capabilities struct {
 type ProbeResult struct {
 	Passed       bool    `json:"passed"`
 	Complex      bool    `json:"complex,omitempty"`
+	Vision       bool    `json:"vision"`
 	Score        float64 `json:"score,omitempty"`
 	LastProbedAt string  `json:"last_probed_at,omitempty"`
 	ProbeVersion string  `json:"probe_version,omitempty"`
@@ -155,6 +157,19 @@ func CapabilitiesFromTags(tags []string) Capabilities {
 		Reasoning:        has("reasoning"),
 		StructuredOutput: has("structured_output"),
 	}
+}
+
+// RoleHas reports whether roles contains role (exact match). It treats the
+// modelcontract role names as opaque strings, so adding a new role never
+// requires touching this helper — only the call sites that interpret the
+// string need to know what to do with it.
+func RoleHas(roles []string, role string) bool {
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 // Bool returns a pointer to b, for setting tri-state capabilities.

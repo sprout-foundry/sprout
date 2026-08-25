@@ -12,6 +12,9 @@ import (
 
 func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	// SECURITY: Validate parent directory is safe to access (handles new files)
+	// PrecheckFileAccess should have already set up the bypass context for
+	// "allow" paths. For "prompt" paths, this will fail with a filesystem error
+	// since the interactive gate is gone (SP-127 M4).
 	cleanPath, err := filesystem.SafeResolvePathForWriteWithBypass(ctx, filePath)
 	if err != nil {
 		return "", fmt.Errorf("resolve file path for write: %w", err)

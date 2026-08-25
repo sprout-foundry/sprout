@@ -15,10 +15,18 @@ import (
 // in pkg/console).  Registered at pkg/console init() time.  Leaving the hook
 // nil keeps the legacy "[y/n/a/e]" path so this package stays leaf-level —
 // no upward dependency on pkg/console.
-var SecurityPromptHook func(prompt, command string) ApprovalChoice
+//
+// SP-124 Phase 3: the hook now receives an optional LLM-derived analysis
+// (nil when the analyzer timed out, errored, or wasn't produced). The
+// arrow-key picker renders this above the option list so the user sees the
+// LLM's plain-language summary before deciding. The legacy line-based
+// prompt ignores the analysis when it falls back (no styling available).
+var SecurityPromptHook func(prompt, command string, analysis *SecurityAnalysisView) ApprovalChoice
 
 // FilesystemSecurityPromptHook is the matching hook for AskForFilesystemApproval.
-// Same registration pattern as SecurityPromptHook.
+// Same registration pattern as SecurityPromptHook. Filesystem approvals do
+// not currently produce LLM analyses (only shell_command does), so the
+// hook signature stays unchanged.
 var FilesystemSecurityPromptHook func(prompt, path, folder string, tier FilesystemPromptTier) ApprovalChoice
 
 // ApprovalChoice is the typed result of AskForApprovalWithOptions — the
@@ -45,6 +53,10 @@ const (
 	// auto-approving future accesses under that folder. Only offered
 	// for the External filesystem tier.
 	ApprovalChoiceAllowFolderSession
+	// ApprovalChoiceAlwaysAsk approves this invocation and persists
+	// the command as an "ask" rule in Config.CommandPolicies so future
+	// matching commands always force an interactive prompt. SP-123-2b.
+	ApprovalChoiceAlwaysAsk
 )
 
 // FilesystemPromptTier picks the option set for the filesystem
@@ -71,7 +83,14 @@ const (
 // they're approving, then lists the four options with single-letter keys.
 // The Elevate option carries an inline disclaimer so users understand
 // they're loosening the gate for the rest of the session, not forever.
-func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoice {
+//
+// SP-124 Phase 3: when an LLM-derived analysis is supplied (analyzer
+// succeeded within its timeout), the hook renders the summary, modifies,
+// and color-coded recommendation above the picker. The legacy line-based
+// fallback (no arrow-key picker registered) ignores the analysis — its
+// styling surface is too limited to do it justice and a brief "[y/n/a/s/e]"
+// prompt already conveys the risk.
+func (w *Logger) AskForApprovalWithOptions(prompt, command string, analysis *SecurityAnalysisView) ApprovalChoice {
 	loggerMu.RLock()
 	interactive := w.userInteractionEnabled
 	loggerMu.RUnlock()
@@ -86,7 +105,7 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 	// and its own non-TTY fallback, so we bypass the legacy code path
 	// entirely when it's available.
 	if SecurityPromptHook != nil {
-		return SecurityPromptHook(prompt, command)
+		return SecurityPromptHook(prompt, command, analysis)
 	}
 
 	clihooks.SuspendIndicator()
@@ -101,18 +120,29 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 		"  [y] Approve once         — allow this invocation only",
 		"  [n] Deny                 — reject and surface a security error",
 		"  [a] Always approve       — persist this exact command to your allowlist",
+		"  [s] Always ask           — force a prompt for this command every time",
 		"  [e] Elevate (session)    — bump to 'permissive' for the rest of this session",
 		"                            (Critical ops still block. Run /risk-profile permissive",
 		"                             to make this persistent across restarts.)",
 	}, "\n")
 
+	// SP-124 Phase 3: legacy fallback doesn't have an analysis panel above
+	// the menu, but if the analyzer produced one we surface the one-line
+	// summary inline so the user still sees the LLM's take before answering.
+	// The arrow-key picker path (registered by pkg/console) renders a richer
+	// panel; this fallback is only hit when pkg/console isn't linked.
+	analysisLine := ""
+	if analysis != nil {
+		analysisLine = "\n" + renderSecurityAnalysisFallbackLine(analysis) + "\n"
+	}
+
 	// Print the full prompt + menu once, then loop only the short
 	// "Choose ..." line on invalid input. Re-printing the entire block
 	// per typo would flood the terminal.
-	w.LogUserInteraction(fmt.Sprintf("%s\nCommand:\n  %s\n\n%s\n", prompt, command, menu))
+	w.LogUserInteraction(fmt.Sprintf("%s\nCommand:\n  %s\n%s\n%s\n", prompt, command, analysisLine, menu))
 
 	for {
-		w.LogUserInteraction("Choose [y/n/a/e]: ")
+		w.LogUserInteraction("Choose [y/n/a/s/e]: ")
 		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
 		if errors.Is(err, ErrPromptTimeout) {
 			w.LogUserInteraction(fmt.Sprintf(" timed out after %s waiting for input - denying for safety.", ApprovalPromptTimeout))
@@ -136,10 +166,12 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 			return ApprovalChoiceDeny
 		case "a", "always":
 			return ApprovalChoiceApproveAlways
+		case "s", "ask":
+			return ApprovalChoiceAlwaysAsk
 		case "e", "elevate":
 			return ApprovalChoiceElevate
 		default:
-			w.LogUserInteraction("Invalid input. Type one of: y / n / a / e.")
+			w.LogUserInteraction("Invalid input. Type one of: y / n / a / s / e.")
 		}
 	}
 }

@@ -18,6 +18,7 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	result := cloneConfig(base)
+	result.mergeExplicitKeys(override)
 
 	// Override simple string fields if non-empty
 	if override.LastUsedProvider != "" {
@@ -40,7 +41,7 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Merge MCP config
-	if override.MCP.Enabled {
+	if override.overrides("mcp.enabled", override.MCP.Enabled) {
 		result.MCP.Enabled = override.MCP.Enabled
 	}
 	if override.MCP.Timeout > 0 {
@@ -72,21 +73,17 @@ func MergeConfig(base, override *Config) *Config {
 	if override.ReasoningEffort != "" {
 		result.ReasoningEffort = override.ReasoningEffort
 	}
-	if override.DisableThinking {
+	if override.overrides("disable_thinking", override.DisableThinking) {
 		result.DisableThinking = override.DisableThinking
 	}
 	if override.SystemPromptText != "" {
 		result.SystemPromptText = override.SystemPromptText
 	}
-	if override.SkipPrompt {
+	if override.overrides("skip_prompt", override.SkipPrompt) {
 		result.SkipPrompt = override.SkipPrompt
 	}
 
-	// SP-058: RiskProfile is a single-value selector; non-empty
-	// override wins. RiskProfiles is a map of named overrides; we
-	// merge per-key so a workspace can override just one profile
-	// without wiping out user-defined profiles from the global
-	// config.
+	// SP-058: RiskProfile is a single-value selector; non-empty override wins.
 	if override.RiskProfile != "" {
 		result.RiskProfile = override.RiskProfile
 	}
@@ -98,9 +95,11 @@ func MergeConfig(base, override *Config) *Config {
 			result.RiskProfiles[k] = v
 		}
 	}
-	// ApprovedShellCommands: union the two lists (override entries are
-	// additive to base). De-dupe so a workspace config that re-lists a
-	// command already in the global config doesn't grow the file.
+	// ContextMode is a single-value selector — non-empty override wins.
+	if override.ContextMode != "" {
+		result.ContextMode = override.ContextMode
+	}
+	// Union-merge ApprovedShellCommands so workspace entries stack on global.
 	if len(override.ApprovedShellCommands) > 0 {
 		seen := make(map[string]struct{}, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
 		merged := make([]string, 0, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
@@ -120,9 +119,7 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		result.ApprovedShellCommands = merged
 	}
-	// ApprovedShellCommandPatterns: same union-merge as ApprovedShellCommands
-	// so patterns defined at the workspace layer stack on top of the global
-	// layer rather than silently overwriting it.
+	// Same union-merge for ApprovedShellCommandPatterns.
 	if len(override.ApprovedShellCommandPatterns) > 0 {
 		seen := make(map[string]struct{}, len(result.ApprovedShellCommandPatterns)+len(override.ApprovedShellCommandPatterns))
 		merged := make([]string, 0, len(result.ApprovedShellCommandPatterns)+len(override.ApprovedShellCommandPatterns))
@@ -180,19 +177,16 @@ func MergeConfig(base, override *Config) *Config {
 		if result.EmbeddingIndex == nil {
 			result.EmbeddingIndex = &EmbeddingIndexConfig{}
 		}
-		if override.EmbeddingIndex.Enabled {
+		if override.EmbeddingIndex.Enabled != nil {
 			result.EmbeddingIndex.Enabled = override.EmbeddingIndex.Enabled
 		}
 		if override.EmbeddingIndex.IndexDir != "" {
 			result.EmbeddingIndex.IndexDir = override.EmbeddingIndex.IndexDir
 		}
-		if override.EmbeddingIndex.SimilarityThreshold > 0 {
-			result.EmbeddingIndex.SimilarityThreshold = override.EmbeddingIndex.SimilarityThreshold
-		}
 		if override.EmbeddingIndex.MaxResults > 0 {
 			result.EmbeddingIndex.MaxResults = override.EmbeddingIndex.MaxResults
 		}
-		if override.EmbeddingIndex.AutoIndex {
+		if override.EmbeddingIndex.AutoIndex != nil {
 			result.EmbeddingIndex.AutoIndex = override.EmbeddingIndex.AutoIndex
 		}
 		if len(override.EmbeddingIndex.ExcludePaths) > 0 {
@@ -221,11 +215,6 @@ func MergeConfig(base, override *Config) *Config {
 	// Override HistoryScope
 	if override.HistoryScope != "" {
 		result.HistoryScope = override.HistoryScope
-	}
-
-	// Override SelfReviewGateMode
-	if override.SelfReviewGateMode != "" {
-		result.SelfReviewGateMode = override.SelfReviewGateMode
 	}
 
 	// Override subagent settings
@@ -272,7 +261,7 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Override PDF OCR settings
-	if override.PDFOCREnabled {
+	if override.overrides("pdf_ocr_enabled", override.PDFOCREnabled) {
 		result.PDFOCREnabled = override.PDFOCREnabled
 	}
 	if override.PDFOCRProvider != "" {
@@ -280,6 +269,9 @@ func MergeConfig(base, override *Config) *Config {
 	}
 	if override.PDFOCRModel != "" {
 		result.PDFOCRModel = override.PDFOCRModel
+	}
+	if override.overrides("vision_fallback_to_ocr", override.VisionFallbackToOCR) {
+		result.VisionFallbackToOCR = override.VisionFallbackToOCR
 	}
 
 	// Merge Skills
@@ -299,10 +291,10 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Override zsh settings
-	if override.EnableZshCommandDetection {
+	if override.overrides("enable_zsh_command_detection", override.EnableZshCommandDetection) {
 		result.EnableZshCommandDetection = override.EnableZshCommandDetection
 	}
-	if override.AutoExecuteDetectedCommands {
+	if override.overrides("auto_execute_detected_commands", override.AutoExecuteDetectedCommands) {
 		result.AutoExecuteDetectedCommands = override.AutoExecuteDetectedCommands
 	}
 
@@ -315,6 +307,17 @@ func MergeConfig(base, override *Config) *Config {
 	}
 	if override.Shell.WorkspaceOverlay.Mode != "" {
 		result.Shell.WorkspaceOverlay = override.Shell.WorkspaceOverlay
+	}
+
+	// Merge Training configuration.
+	if override.overrides("training.enabled", override.Training.Enabled) {
+		result.Training.Enabled = true
+	}
+	if override.Training.Endpoint != "" {
+		result.Training.Endpoint = override.Training.Endpoint
+	}
+	if len(override.Training.ExcludePaths) > 0 {
+		result.Training.ExcludePaths = mergeStringSlices(result.Training.ExcludePaths, override.Training.ExcludePaths)
 	}
 
 	return result
@@ -333,12 +336,9 @@ func cloneConfig(cfg *Config) *Config {
 	if err := json.Unmarshal(data, &out); err != nil {
 		return nil
 	}
-	// SubagentTypes is intentionally tagged json:"-" (personas are catalog-fixed
-	// and not persisted to disk). The JSON roundtrip strips it, so we copy it
-	// directly from the source — preserving any in-memory mutations (e.g. test
-	// fixtures that inject custom personas, workflow-automation overrides).
-	// If the source map is empty, fall back to the catalog defaults so callers
-	// never see a nil/empty SubagentTypes from a freshly loaded config.
+	// Unexported — the roundtrip above drops it, same as SubagentTypes below.
+	out.explicitKeys = cfg.copyExplicitKeys()
+	// SubagentTypes is tagged json:"-" so the roundtrip strips it; copy directly.
 	if len(cfg.SubagentTypes) > 0 {
 		out.SubagentTypes = make(map[string]SubagentType, len(cfg.SubagentTypes))
 		for id, st := range cfg.SubagentTypes {
@@ -360,4 +360,23 @@ func cloneConfig(cfg *Config) *Config {
 		out.SubagentTypes = defaultSubagentTypes()
 	}
 	return &out
+}
+
+// mergeStringSlices combines two string slices, removing duplicates.
+func mergeStringSlices(base, extra []string) []string {
+	seen := make(map[string]bool, len(base)+len(extra))
+	result := make([]string, 0, len(base)+len(extra))
+	for _, s := range base {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range extra {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }

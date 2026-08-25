@@ -17,9 +17,26 @@ type SetupCommand struct{}
 // Name returns the command name.
 func (s *SetupCommand) Name() string { return "setup" }
 
+// SafeDuringSteer returns false - /setup is interactive wizard, uses stdin
+func (s *SetupCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description.
 func (s *SetupCommand) Description() string {
-	return "Show current configuration summary with status and warnings"
+	return "Show persisted configuration (provider defaults, subagent config, skills, MCP, warnings)"
+}
+
+// Usage returns the detailed help text shown by `/help setup`.
+func (s *SetupCommand) Usage() string {
+	return strings.Join([]string{
+		"/setup   Show persisted configuration summary.",
+		"",
+		"Displays provider/model, subagent config, commit/review settings,",
+		"security risk profile, skills, MCP servers, embedding index, and",
+		"credential warnings.",
+		"Use /info for live agent state or /status for runtime status.",
+	}, "\n")
 }
 
 // Execute runs the /setup command.
@@ -61,7 +78,6 @@ func (s *SetupCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		{"Commit Model", s.nonEmpty(cfg.CommitModel, "(inherits provider default)")},
 		{"Review Provider", s.nonEmpty(cfg.ReviewProvider, "(inherits provider)")},
 		{"Review Model", s.nonEmpty(cfg.ReviewModel, "(inherits provider default)")},
-		{"Self-Review Gate", s.nonEmpty(cfg.SelfReviewGateMode, "off")},
 	})
 
 	// Security
@@ -81,7 +97,7 @@ func (s *SetupCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Embedding
 	if cfg.EmbeddingIndex != nil {
 		s.printSection("Embedding Index", []keyValue{
-			{"Enabled", fmt.Sprintf("%v", cfg.EmbeddingIndex.Enabled)},
+			{"Enabled", fmt.Sprintf("%v", cfg.EmbeddingIndex.IsEnabled())},
 		})
 	}
 

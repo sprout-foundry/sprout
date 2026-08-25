@@ -6,12 +6,22 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+)
+
+const (
+	BillingPayPerToken  = "pay_per_token" // default — real USD per token
+	BillingSubscription = "subscription"  // flat-rate, quota/rate-limited
+	BillingFree         = "free"          // self-hosted, zero marginal cost
 )
 
 // ProviderConfig defines the configuration for a generic provider
 type ProviderConfig struct {
-	Name string `json:"name"`
+	Name        string `json:"name"`
+	BillingType string `json:"billing_type,omitempty"`
 	// DisplayName is the user-facing label (e.g. "GLM Coding Plan").
 	// Carried in the JSON config so onboarding menus, the env-var
 	// credential sweep, and the model picker can label remote-only
@@ -25,16 +35,20 @@ type ProviderConfig struct {
 	Defaults    RequestDefaults   `json:"defaults"`
 	Conversion  MessageConversion `json:"message_conversion"`
 	Streaming   StreamingConfig   `json:"streaming"`
-	Models      ModelConfig       `json:"models"`
-	Retry       RetryConfig       `json:"retry"`
-	Cost        CostConfig        `json:"cost"`
+	// Backend identifies the serving backend type. When set to "auto"
+	// (default), the provider probes the endpoint to detect the backend.
+	// Explicit values ("openai", "vllm", "llamacpp") skip detection.
+	Backend string      `json:"backend,omitempty"`
+	Models  ModelConfig `json:"models"`
+	Retry   RetryConfig `json:"retry"`
+	Cost    CostConfig  `json:"cost"`
 }
 
 // AuthConfig defines authentication configuration
 type AuthConfig struct {
 	Type   string `json:"type"`    // "bearer", "api_key", "basic", "oauth"
 	EnvVar string `json:"env_var"` // Environment variable containing the auth token
-	Key    string `json:"-"` // Runtime-only API key; injected at startup, never persisted
+	Key    string `json:"-"`       // Runtime-only API key; injected at startup, never persisted
 }
 
 // RequestDefaults defines default request parameters
@@ -54,6 +68,14 @@ type MessageConversion struct {
 	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
 	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
 	ForceToolCallType        string `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
+	// NeutralizeSpecialTokens replaces special-token literals (<|im_end|> etc.)
+	// in message content with inert look-alikes before sending. Opt-in: enable
+	// only for providers whose tokenizer treats those byte sequences as control
+	// tokens (Qwen-family via vLLM, Llama). Trade-off: the model reads a
+	// visually-near-identical but byte-different string, so sessions that must
+	// round-trip the exact literal (e.g. writing tokenizer code) should not
+	// enable it. Tool-call arguments are never touched (work product).
+	NeutralizeSpecialTokens bool `json:"neutralize_special_tokens,omitempty"`
 	// CacheControl enables provider prompt-prefix caching (Anthropic-style
 	// cache_control: {type: "ephemeral"} markers). When true, cache breakpoints
 	// are injected at three locations:
@@ -84,12 +106,21 @@ type ModelInfo struct {
 	Description   string   `json:"description,omitempty"`
 	ContextLength int      `json:"context_length"`
 	Tags          []string `json:"tags,omitempty"`
+	// Pricing (USD per million tokens) — optional, used by enrich_registry
+	// to estimate probe cost for models sourced from embedded configs.
+	InputCost  float64 `json:"input_cost,omitempty"`
+	OutputCost float64 `json:"output_cost,omitempty"`
+	CachedCost float64 `json:"cached_input_cost,omitempty"`
 }
 
 // ModelConfig defines model-related configuration
 type ModelConfig struct {
-	DefaultContextLimit        int               `json:"default_context_limit"`
-	DefaultMaxCompletionTokens int               `json:"default_max_completion_tokens,omitempty"`
+	DefaultContextLimit        int `json:"default_context_limit"`
+	DefaultMaxCompletionTokens int `json:"default_max_completion_tokens,omitempty"`
+	// DefaultModelPatterns defines preference patterns for auto-selecting a default model.
+	// Patterns are tried in order; the first model whose ID contains all substrings in a pattern wins.
+	// Example: []string{"deepseek.*instruct", "deepseek", "llama"}
+	DefaultModelPatterns       []string          `json:"default_model_patterns,omitempty"`
 	ModelOverrides             map[string]int    `json:"model_overrides"`
 	MaxCompletionOverrides     map[string]int    `json:"max_completion_overrides,omitempty"`
 	PatternOverrides           []PatternOverride `json:"pattern_overrides"`
@@ -131,12 +162,12 @@ type ProviderRegistry struct {
 func LoadProviderConfig(configPath string) (*ProviderConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read provider config file %s: %w", configPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to read provider config file %s", configPath), err)
 	}
 
 	var config ProviderConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse provider config file %s: %w", configPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to parse provider config file %s", configPath), err)
 	}
 
 	return &config, nil
@@ -146,12 +177,12 @@ func LoadProviderConfig(configPath string) (*ProviderConfig, error) {
 func LoadProviderRegistry(registryPath string) (*ProviderRegistry, error) {
 	data, err := os.ReadFile(registryPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read provider registry file %s: %w", registryPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to read provider registry file %s", registryPath), err)
 	}
 
 	var registry ProviderRegistry
 	if err := json.Unmarshal(data, &registry); err != nil {
-		return nil, fmt.Errorf("failed to parse provider registry file %s: %w", registryPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to parse provider registry file %s", registryPath), err)
 	}
 
 	return &registry, nil
@@ -181,7 +212,7 @@ func (c *ProviderConfig) GetAuthToken() (string, error) {
 		if c.Auth.EnvVar != "" {
 			token := os.Getenv(c.Auth.EnvVar)
 			if token == "" {
-				return "", fmt.Errorf("environment variable %s is not set", c.Auth.EnvVar)
+				return "", agenterrors.NewValidation(fmt.Sprintf("environment variable %s is not set", c.Auth.EnvVar), nil)
 			}
 			return token, nil
 		}
@@ -193,8 +224,35 @@ func (c *ProviderConfig) GetAuthToken() (string, error) {
 		// OAuth would need flow implementation - not implemented yet
 		return "", errors.New("OAuth authentication not yet implemented")
 	default:
-		return "", fmt.Errorf("unsupported authentication type: %s", c.Auth.Type)
+		return "", agenterrors.NewValidation(fmt.Sprintf("unsupported authentication type: %s", c.Auth.Type), nil)
 	}
+}
+
+// BillingTypeResolved returns the effective billing model for this provider.
+// Explicit config value takes priority; otherwise heuristics apply:
+//   - localhost / 127.0.0.1 endpoints → free
+//   - zai-coding → subscription
+//   - everything else → pay_per_token (default)
+func (c *ProviderConfig) BillingTypeResolved() string {
+	if c.BillingType != "" {
+		return c.BillingType
+	}
+	endpoint := strings.ToLower(c.Endpoint)
+	if strings.Contains(endpoint, "127.0.0.1") || strings.Contains(endpoint, "localhost") {
+		return BillingFree
+	}
+	if c.Name == "zai-coding" {
+		return BillingSubscription
+	}
+	return BillingPayPerToken
+}
+
+// BackendResolved returns the effective backend type, defaulting to "auto".
+func (c *ProviderConfig) BackendResolved() BackendType {
+	if c.Backend == "" {
+		return BackendAuto
+	}
+	return BackendType(c.Backend)
 }
 
 // Validate validates the provider configuration
@@ -218,62 +276,66 @@ func (c *ProviderConfig) Validate() error {
 
 // validateModelConfig validates the model configuration
 func (c *ProviderConfig) validateModelConfig() error {
-	// At least one of default_context_limit or context_limit should be set
-	if c.Models.DefaultContextLimit == 0 && c.Models.ContextLimit == 0 {
-		return errors.New("either default_context_limit or context_limit must be set")
+	// When a backend is explicitly configured (including "auto"), the context
+	// limit can be inferred from the endpoint at runtime — skip the requirement.
+	// Only enforce for legacy configs that don't set a backend at all.
+	if c.Backend == "" {
+		if c.Models.DefaultContextLimit == 0 && c.Models.ContextLimit == 0 {
+			return errors.New("either default_context_limit or context_limit must be set (or set backend to \"auto\" for endpoint inference)")
+		}
 	}
 
 	// Validate model overrides are positive
 	for modelName, contextLimit := range c.Models.ModelOverrides {
 		if contextLimit <= 0 {
-			return fmt.Errorf("model override for '%s' must have positive context limit", modelName)
+			return agenterrors.NewValidation(fmt.Sprintf("model override for '%s' must have positive context limit", modelName), nil)
 		}
 		if contextLimit > 2097152 { // 2M tokens is a practical upper bound
-			return fmt.Errorf("model override for '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", modelName, contextLimit)
+			return agenterrors.NewValidation(fmt.Sprintf("model override for '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", modelName, contextLimit), nil)
 		}
 	}
 
 	// Validate pattern overrides
 	for i, patternOverride := range c.Models.PatternOverrides {
 		if patternOverride.Pattern == "" {
-			return fmt.Errorf("pattern override at index %d has empty pattern", i)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override at index %d has empty pattern", i), nil)
 		}
 		if patternOverride.ContextLimit <= 0 {
-			return fmt.Errorf("pattern override '%s' must have positive context limit", patternOverride.Pattern)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override '%s' must have positive context limit", patternOverride.Pattern), nil)
 		}
 		if patternOverride.ContextLimit > 2097152 { // 2M tokens is a practical upper bound
-			return fmt.Errorf("pattern override '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit), nil)
 		}
 
 		// Test if pattern is valid regex
 		if _, err := regexp.Compile(patternOverride.Pattern); err != nil {
-			return fmt.Errorf("pattern override '%s' has invalid regex pattern: %w", patternOverride.Pattern, err)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override '%s' has invalid regex pattern: %v", patternOverride.Pattern, err), nil)
 		}
 	}
 
 	// Validate max completion overrides are positive
 	for modelName, maxCompletion := range c.Models.MaxCompletionOverrides {
 		if maxCompletion <= 0 {
-			return fmt.Errorf("max completion override for '%s' must have positive value", modelName)
+			return agenterrors.NewValidation(fmt.Sprintf("max completion override for '%s' must have positive value", modelName), nil)
 		}
 		if maxCompletion > 2097152 {
-			return fmt.Errorf("max completion override for '%s' has value %d which exceeds reasonable maximum (2M tokens)", modelName, maxCompletion)
+			return agenterrors.NewValidation(fmt.Sprintf("max completion override for '%s' has value %d which exceeds reasonable maximum (2M tokens)", modelName, maxCompletion), nil)
 		}
 	}
 
 	// Validate completion pattern overrides
 	for i, patternOverride := range c.Models.CompletionPatternOverrides {
 		if patternOverride.Pattern == "" {
-			return fmt.Errorf("completion pattern override at index %d has empty pattern", i)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override at index %d has empty pattern", i), nil)
 		}
 		if patternOverride.ContextLimit <= 0 {
-			return fmt.Errorf("completion pattern override '%s' must have positive limit", patternOverride.Pattern)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override '%s' must have positive limit", patternOverride.Pattern), nil)
 		}
 		if patternOverride.ContextLimit > 2097152 {
-			return fmt.Errorf("completion pattern override '%s' has limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override '%s' has limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit), nil)
 		}
 		if _, err := regexp.Compile(patternOverride.Pattern); err != nil {
-			return fmt.Errorf("completion pattern override '%s' has invalid regex pattern: %w", patternOverride.Pattern, err)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override '%s' has invalid regex pattern: %v", patternOverride.Pattern, err), nil)
 		}
 	}
 
@@ -300,9 +362,10 @@ func (c *ProviderConfig) GetStreamingTimeout() time.Duration {
 // Uses the following priority:
 // 1. Exact model match in model_overrides
 // 2. Pattern match in pattern_overrides
-// 3. Provider default_context_limit
-// 4. Legacy context_limit field (for backward compatibility)
-// 5. Conservative fallback (32000)
+// 3. Lookup in model_info (catalog — source of truth for known models)
+// 4. Provider default_context_limit (conservative fallback when catalog is absent)
+// 5. Legacy context_limit field (for backward compatibility)
+// 6. Conservative fallback (32000)
 func (c *ProviderConfig) GetContextLimit(model string) int {
 	// 1. Check for exact model match in overrides
 	if contextLimit, exists := c.Models.ModelOverrides[model]; exists {
@@ -316,17 +379,28 @@ func (c *ProviderConfig) GetContextLimit(model string) int {
 		}
 	}
 
-	// 3. Use provider default context limit (if configured)
+	// 3. Check model_info catalog for a matching ID — handles full provider/model
+	// names like "MiniMaxAI/MiniMax-M2.7" matching ID "MiniMax-M2.7". This is the
+	// primary lookup for models published in the remote registry catalog.
+	if len(c.Models.ModelInfo) > 0 {
+		for _, mi := range c.Models.ModelInfo {
+			if mi.ContextLength > 0 && (model == mi.ID || strings.HasSuffix(model, "/"+mi.ID)) {
+				return mi.ContextLength
+			}
+		}
+	}
+
+	// 4. Use provider default context limit (fallback when catalog lacks this model)
 	if c.Models.DefaultContextLimit > 0 {
 		return c.Models.DefaultContextLimit
 	}
 
-	// 4. Fall back to legacy context_limit field (for backward compatibility)
+	// 5. Fall back to legacy context_limit field (for backward compatibility)
 	if c.Models.ContextLimit > 0 {
 		return c.Models.ContextLimit
 	}
 
-	// 5. Conservative fallback
+	// 6. Conservative fallback
 	return 32000
 }
 

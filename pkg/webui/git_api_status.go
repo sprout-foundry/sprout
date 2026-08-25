@@ -3,26 +3,23 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 )
 
 // handleAPIGitStatus handles git status requests
 func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
 	status, err := ws.getGitStatusForWorkspace(ws.getWorkspaceRootForRequest(r))
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get git status: %v", err), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_git_status", fmt.Sprintf("Failed to get git status: %v", err))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":     "success",
 		"status":      status,
 		"files":       getAllGitFiles(status), // Backward compatibility

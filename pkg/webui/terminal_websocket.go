@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -40,7 +40,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("Terminal WebSocket upgrade error: %v", err)
+		ws.log().Error("terminal WebSocket upgrade failed", slog.Any("err", err))
 		return
 	}
 
@@ -54,9 +54,9 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	// Panic recovery - now safeConn is available
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Terminal WebSocket handler panic: %v", r)
+			ws.log().Error("terminal WebSocket handler panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
 			safeConn.WritePanicError(sessionID, "terminal handler", r)
-			ws.cleanupAfterPanic(clientID, sessionID)
+			ws.cleanupAfterPanicAgent(clientID, sessionID)
 		}
 	}()
 
@@ -70,23 +70,34 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		// Reattach: snapshot ring buffer for scrollback replay
 		scrollback, err := terminalManager.ReattachSession(reattachID)
 		if err != nil {
-			log.Printf("Failed to reattach to session %s: %v, creating new session", reattachID, err)
+			ws.log().Warn("terminal session reattach failed; creating new session", slog.String("session_id", reattachID), slog.Any("err", err))
 			// Fall through to create new session
 		} else {
 			sessionID = reattachID
-			session, _ = terminalManager.GetSession(sessionID)
-
-			// Send session_restored message with scrollback
-			if err := safeConn.WriteJSON(map[string]interface{}{
-				"type": "session_restored",
-				"data": map[string]interface{}{
-					"session_id": sessionID,
-					"scrollback": scrollback,
-				},
-			}); err != nil {
-				log.Printf("Terminal %s FAILED to send session_restored: %v", sessionID, err)
+			// GetSession's bool return is load-bearing: between a successful
+			// ReattachSession and this call, the session can be torn down by
+			// its background timeout goroutine. Discarding the bool would leave
+			// `session` nil and crash on the subscribe() call below.
+			var exists bool
+			session, exists = terminalManager.GetSession(sessionID)
+			if !exists || session == nil {
+				ws.log().Warn("terminal session disappeared during reattach; creating new session", slog.String("session_id", sessionID))
+				session = nil
+				sessionID = ""
+				// Fall through to create new session
 			} else {
-				log.Printf("Terminal %s reattached successfully (scrollback: %d bytes)", sessionID, len(scrollback))
+				// Send session_restored message with scrollback
+				if err := safeConn.WriteJSON(map[string]interface{}{
+					"type": "session_restored",
+					"data": map[string]interface{}{
+						"session_id": sessionID,
+						"scrollback": scrollback,
+					},
+				}); err != nil {
+					ws.log().Error("terminal session restoration message send failed", slog.String("session_id", sessionID), slog.Any("err", err))
+				} else {
+					ws.log().Info("terminal session reattached", slog.String("session_id", sessionID), slog.Int("scrollback_bytes", len(scrollback)))
+				}
 			}
 		}
 	}
@@ -94,7 +105,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	// Create new session if not reattaching
 	if session == nil {
 		sessionID = generateTerminalSessionID()
-		log.Printf("Terminal WebSocket connection starting: %s", sessionID)
+		ws.log().Info("terminal WebSocket connection starting", slog.String("session_id", sessionID))
 
 		shellOverride := strings.TrimSpace(r.URL.Query().Get("shell"))
 		if len(shellOverride) > 64 {
@@ -113,13 +124,13 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				}
 			}
 			if !valid {
-				log.Printf("Terminal %s: shell override %q not in available shells list, ignoring", sessionID, shellOverride)
+				ws.log().Warn("terminal shell override unavailable; ignoring", slog.String("session_id", sessionID), slog.String("shell", shellOverride))
 				shellOverride = ""
 			}
 		}
 		session, err = terminalManager.CreateSession(sessionID, shellOverride)
 		if err != nil {
-			log.Printf("Failed to create terminal session: %v", err)
+			ws.log().Error("terminal session creation failed", slog.Any("err", err))
 			safeConn.WriteJSON(map[string]interface{}{
 				"type": "error",
 				"data": map[string]string{"message": "Failed to create terminal session"},
@@ -143,9 +154,9 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			// and every successful send logged the same line as a
 			// silently-dropped one, both misleading.
 			if errors.Is(err, ErrOutboundDropped) {
-				log.Printf("Terminal %s session_created dropped — check allowedOutboundMessageTypes registry", sessionID)
+				ws.log().Error("terminal session creation message dropped", slog.String("session_id", sessionID), slog.String("remediation", "check allowedOutboundMessageTypes registry"))
 			} else {
-				log.Printf("Terminal %s failed to send session_created: %v", sessionID, err)
+				ws.log().Error("terminal session creation message send failed", slog.String("session_id", sessionID), slog.Any("err", err))
 			}
 		}
 	}
@@ -182,7 +193,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		defer session.unsubscribe(sub)
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Terminal output writer panic: %v", r)
+				ws.log().Error("terminal output writer panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
 				safeConn.WritePanicError(sessionID, "terminal output writer", r)
 				cancel()
 			}
@@ -191,7 +202,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		for {
 			select {
 			case <-ctx.Done():
-				log.Printf("Terminal %s output writer stopped (context cancelled)", sessionID)
+				ws.log().Debug("terminal output writer stopped", slog.String("session_id", sessionID), slog.String("reason", "context cancelled"))
 				return
 
 			case output, ok := <-sub.ch:
@@ -202,7 +213,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 					active := session.Active
 					session.mutex.RUnlock()
 					if !active {
-						log.Printf("Terminal %s output channel closed (PTY exited)", sessionID)
+						ws.log().Info("terminal output channel closed", slog.String("session_id", sessionID), slog.String("reason", "PTY exited"))
 						safeConn.WriteJSON(map[string]interface{}{
 							"type": "pty_exit",
 							"data": map[string]string{
@@ -211,7 +222,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 							},
 						})
 					} else {
-						log.Printf("Terminal %s subscriber buffer overflowed, disconnecting for ring-buffer replay", sessionID)
+						ws.log().Warn("terminal subscriber buffer overflowed; disconnecting for ring-buffer replay", slog.String("session_id", sessionID))
 					}
 					return
 				}
@@ -223,7 +234,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 						"output":     string(output),
 					},
 				}); err != nil {
-					log.Printf("Terminal %s WebSocket write error: %v", sessionID, err)
+					ws.log().Error("terminal WebSocket write failed", slog.String("session_id", sessionID), slog.Any("err", err))
 					cancel() // Signal other goroutines to stop
 					return
 				}
@@ -244,12 +255,12 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Terminal %s read loop stopped (context cancelled)", sessionID)
+			ws.log().Debug("terminal read loop stopped", slog.String("session_id", sessionID), slog.String("reason", "context cancelled"))
 			return
 
 		case <-writeDone:
 			// Output writer stopped
-			log.Printf("Terminal %s read loop stopped (writer finished)", sessionID)
+			ws.log().Debug("terminal read loop stopped", slog.String("session_id", sessionID), slog.String("reason", "writer finished"))
 			return
 
 		default:
@@ -264,20 +275,20 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			if err := conn.ReadJSON(&msg); err != nil {
 				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
 					websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("Terminal %s WebSocket closed: %v", sessionID, err)
+					ws.log().Info("terminal WebSocket closed", slog.String("session_id", sessionID), slog.Any("err", err))
 				} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					// Individual read timed out. Check whether the connection has
 					// been dead (no messages at all) for the absolute cap — if
 					// so, it's a half-open zombie that will never recover, so
 					// close it instead of spinning.
 					if time.Since(lastMessage) > deadConnectionTimeout {
-						log.Printf("Terminal %s no activity for %s, closing dead connection", sessionID, deadConnectionTimeout)
+						ws.log().Warn("terminal WebSocket inactive; closing dead connection", slog.String("session_id", sessionID), slog.Duration("inactivity", deadConnectionTimeout))
 						cancel()
 						return
 					}
 					continue
 				} else {
-					log.Printf("Terminal %s read error: %v", sessionID, err)
+					ws.log().Error("terminal WebSocket read failed", slog.String("session_id", sessionID), slog.Any("err", err))
 				}
 				// Shell keeps running. Unsubscription is handled by the output
 				// writer goroutine's defer when it sees ctx.Done().
@@ -296,6 +307,18 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			}
 
 			switch msgType {
+			case "ping":
+				// The frontend TerminalWebSocketService pings every 30s and runs a
+				// pong watchdog (90s). Before this case existed, an idle-but-healthy
+				// terminal was force-disconnected by that watchdog, and the
+				// reconnect's term.reset() destroyed any running full-screen TUI
+				// (vim et al.) mid-session. Output traffic alone doesn't satisfy
+				// the watchdog — it only counts pongs.
+				safeConn.WriteJSON(map[string]interface{}{
+					"type": "pong",
+					"data": map[string]interface{}{"timestamp": time.Now().Unix()},
+				})
+
 			case "input":
 				data, ok := msg["data"].(map[string]interface{})
 				if !ok {
@@ -344,9 +367,9 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 						if cols, ok := data["cols"].(float64); ok {
 							err := terminalManager.ResizeTerminal(sessionID, uint16(rows), uint16(cols))
 							if err != nil {
-								log.Printf("Failed to resize terminal %s: %v", sessionID, err)
+								ws.log().Error("terminal resize failed", slog.String("session_id", sessionID), slog.Any("err", err))
 							} else {
-								log.Printf("Terminal %s resized to %dx%d", sessionID, int(rows), int(cols))
+								ws.log().Debug("terminal resized", slog.String("session_id", sessionID), slog.Int("rows", int(rows)), slog.Int("cols", int(cols)))
 							}
 						}
 					}
@@ -381,7 +404,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				})
 
 			case "close":
-				log.Printf("Terminal %s close requested", sessionID)
+				ws.log().Info("terminal close requested", slog.String("session_id", sessionID))
 				cancel() // Ensure goroutines stop
 				terminalManager.CloseSession(sessionID)
 				return

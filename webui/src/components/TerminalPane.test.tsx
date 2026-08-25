@@ -4,9 +4,9 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { useTheme } from '../contexts/ThemeContext';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { copyToClipboard } from '../utils/clipboard';
-import { useTheme } from '../contexts/ThemeContext';
 import TerminalPane from './TerminalPane';
 
 // ---------------------------------------------------------------------------
@@ -48,23 +48,38 @@ const mockTerm = {
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn(() => mockTerm),
-}));
+vi.mock('@xterm/xterm', () => {
+  // Constructible: useTerminalXTerm.ts does `new XTerm(...)`, and Vitest 4's
+  // spy invokes the mock implementation with `new` — arrow impls are not
+  // constructible.
+  return {
+    Terminal: vi.fn(function (this: any) {
+      Object.assign(this, mockTerm);
+    }),
+  };
+});
 
-vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: vi.fn(() => mockFitAddon),
-}));
+vi.mock('@xterm/addon-fit', () => {
+  // Constructible: useTerminalXTerm.ts does `new FitAddon()`
+  return {
+    FitAddon: vi.fn(function (this: any) {
+      Object.assign(this, mockFitAddon);
+    }),
+  };
+});
 
-vi.mock('@xterm/addon-search', () => ({
-  SearchAddon: vi.fn(() => ({
-    findNext: vi.fn(),
-    findPrevious: vi.fn(),
-    clearDecorations: vi.fn(),
-    onDidChangeResults: vi.fn(() => ({ dispose: vi.fn() })),
-    dispose: vi.fn(),
-  })),
-}));
+vi.mock('@xterm/addon-search', () => {
+  // Constructible: useTerminalXTerm.ts does `new SearchAddon()`
+  return {
+    SearchAddon: vi.fn(function (this: any) {
+      this.findNext = vi.fn();
+      this.findPrevious = vi.fn();
+      this.clearDecorations = vi.fn();
+      this.onDidChangeResults = vi.fn(() => ({ dispose: vi.fn() }));
+      this.dispose = vi.fn();
+    }),
+  };
+});
 
 const mockService = {
   sendRawInput: vi.fn(),
@@ -84,6 +99,20 @@ vi.mock('../services/terminalWebSocket', () => ({
   TerminalWebSocketService: {
     createInstance: vi.fn(() => mockService),
   },
+  reprInput: (input: string) => {
+    // Test-mode repr passthrough: escape control chars only so debugLog
+    // calls in TerminalPane don't blow up under the mocked module.
+    let out = '';
+    for (const ch of input) {
+      const code = ch.codePointAt(0) ?? 0;
+      if (code < 0x20) {
+        out += '^' + String.fromCharCode(0x40 + code);
+      } else {
+        out += ch;
+      }
+    }
+    return out;
+  },
 }));
 
 // ── lucide-react mock ────────────────────────────────────────────────
@@ -99,9 +128,21 @@ vi.mock('lucide-react', async () => {
     return Comp;
   };
   const icons = [
-    'X', 'TriangleAlert', 'Terminal',
-    'Copy', 'ClipboardPaste', 'Search', 'Trash2', 'Rows2', 'Columns2', 'TextSelect', 'Link2',
-    'ChevronUp', 'ChevronDown', 'Type', 'Hash',
+    'X',
+    'TriangleAlert',
+    'Terminal',
+    'Copy',
+    'ClipboardPaste',
+    'Search',
+    'Trash2',
+    'Rows2',
+    'Columns2',
+    'TextSelect',
+    'Link2',
+    'ChevronUp',
+    'ChevronDown',
+    'Type',
+    'Hash',
   ];
   const mod = {};
   for (const name of icons) {
@@ -601,10 +642,14 @@ describe('TerminalPane wordSeparator', () => {
     root = createRoot(container);
 
     // Re-assert Terminal constructor mock (imported at module level via vi.mock)
-    (Terminal as any).mockImplementation(() => mockTerm);
+    (Terminal as any).mockImplementation(function (this: any) {
+      Object.assign(this, mockTerm);
+    });
 
     // Re-assert FitAddon constructor mock (imported at module level via vi.mock)
-    (FitAddon as any).mockImplementation(() => mockFitAddon);
+    (FitAddon as any).mockImplementation(function (this: any) {
+      Object.assign(this, mockFitAddon);
+    });
 
     // Re-assert WebSocket mock service factory
     // TerminalWebSocketService is already imported at module top and mocked via vi.mock
@@ -653,8 +698,12 @@ describe('TerminalPane pty_exit exited state', () => {
     root = createRoot(container);
 
     // Re-assert constructor mocks after vi.clearAllMocks
-    (Terminal as any).mockImplementation(() => mockTerm);
-    (FitAddon as any).mockImplementation(() => mockFitAddon);
+    (Terminal as any).mockImplementation(function (this: any) {
+      Object.assign(this, mockTerm);
+    });
+    (FitAddon as any).mockImplementation(function (this: any) {
+      Object.assign(this, mockFitAddon);
+    });
     (TerminalWebSocketService as any).createInstance.mockImplementation(() => mockService);
 
     // Theme context
@@ -711,12 +760,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('does NOT have terminal-pane-exited class initially', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -728,12 +772,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('adds terminal-pane-exited class after pty_exit event', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -754,13 +793,7 @@ describe('TerminalPane pty_exit exited state', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-                   onProcessExit={onProcessExit}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} onProcessExit={onProcessExit} />);
     });
     await flushPromises();
 
@@ -777,12 +810,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('blocks onData input when in exited state', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -808,12 +836,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('blocks onPaste input when in exited state', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -844,13 +867,7 @@ describe('TerminalPane pty_exit exited state', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-                   onProcessExit={onProcessExit}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} onProcessExit={onProcessExit} />);
     });
     await flushPromises();
 

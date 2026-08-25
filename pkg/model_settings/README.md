@@ -26,10 +26,21 @@ Current creator-priority profiles focus on:
 
 - DeepSeek (`deepseek-*`, plus `deepseek-r1*` overrides)
 - MiniMax (`minimax-m2*`)
-- Qwen (`qwen3*`, `qwen2.5*`, `qwen2.5-coder*`)
+- Qwen (`qwen3*`, `qwen3.5*`, `qwen3.6*`, `qwen3.8*`, `qwen2.5*`, `qwen2.5-coder*`)
 - ZAI GLM (exact creator-backed rules currently for `glm-4.6` and `glm-4-9b-chat`)
 
 Gemma currently has no accessible creator-published sampling defaults in this environment; values remain unset unless explicit overrides are provided.
+
+## Mode-aware parameters
+
+Some models (Qwen3.6, Qwen3.8) publish different creator-recommended sampling for
+thinking vs. non-thinking (instruct) mode. A profile can declare an optional
+`instruct_parameters` block. `ResolveModelSettingsForMode(model, instruct)`
+returns `instruct_parameters` when `instruct` is true and the profile defines
+the block, otherwise the default `parameters`. The request builder passes
+`disableThinking` as `instruct`, so non-thinking requests get the instruct
+recommendation. `ResolveModelSettings(model)` is unchanged and resolves the
+default (thinking) mode.
 
 ## Normalization
 

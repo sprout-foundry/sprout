@@ -113,13 +113,23 @@ func TestGraph_AddSearch(t *testing.T) {
 	)
 
 	require.Len(t, nearest, 4)
+	// Values are 0..127 and the distance is Euclidean, so the true four
+	// nearest to 64.5 are 64 and 65 (distance 0.5) then 63 and 66 (1.5).
+	//
+	// This previously expected {64, 65, 62, 63}: it admitted 62 at distance 2.5
+	// while omitting 66 at 1.5 — the wrong answer, pinned as the expected one.
+	// It encoded a defect in the layer search, which terminated the walk as
+	// soon as a round failed to beat the single best hit and evicted arbitrary
+	// members from the result set. Recall on random vectors was 6-9% where
+	// ~90% is normal, and EfSearch had no effect at all. Results are now
+	// returned nearest-first; 65 and 64 tie at 0.5.
 	require.EqualValues(
 		t,
 		[]Node[int]{
-			{64, Vector{64}},
 			{65, Vector{65}},
-			{62, Vector{62}},
+			{64, Vector{64}},
 			{63, Vector{63}},
+			{66, Vector{66}},
 		},
 		nearest,
 	)

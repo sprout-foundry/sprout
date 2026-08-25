@@ -110,6 +110,9 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 			efficiency = float64(a.state.GetCachedTokens()) / float64(a.state.GetTotalTokens()) * 100
 		}
 		console.GlyphInfo.Fprintf(os.Stdout, "Cached reused:     %s", a.formatTokenCount(a.state.GetCachedTokens()))
+		if a.state.GetCacheWriteTokens() > 0 {
+			console.GlyphInfo.Fprintf(os.Stdout, "Cache written:     %s", a.formatTokenCount(a.state.GetCacheWriteTokens()))
+		}
 		console.GlyphInfo.Fprintf(os.Stdout, "Cost savings:       $%.6f", a.state.GetCachedCostSavings())
 		console.GlyphInfo.Fprintf(os.Stdout, "Efficiency:        %.1f%% tokens cached", efficiency)
 
@@ -146,38 +149,6 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	fmt.Println()
 }
 
-// PrintConciseSummary displays a single line with essential token and cost information
-func (a *Agent) PrintConciseSummary() {
-	processedPromptTokens := a.state.GetPromptTokens() - a.state.GetCachedTokens()
-	if processedPromptTokens < 0 {
-		processedPromptTokens = 0
-	}
-	processedTokens := processedPromptTokens + a.state.GetCompletionTokens()
-
-	// Verify consistency: total - cached should approximately equal prompt-processed + completion
-	expectedProcessed := a.state.GetTotalTokens() - a.state.GetCachedTokens()
-	if expectedProcessed != processedTokens {
-		a.Logger().Debug("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
-	}
-
-	costStr := fmt.Sprintf("$%.6f", a.state.GetTotalCost())
-	fmt.Printf("\n$ Session: %s total (%s processed + %s cached) | %s\n",
-		a.formatTokenCount(a.state.GetTotalTokens()),
-		a.formatTokenCount(processedTokens),
-		a.formatTokenCount(a.state.GetCachedTokens()),
-		costStr)
-
-	// Output machine-parseable metrics for parent agent extraction
-	fmt.Printf("SUBAGENT_METRICS: total_tokens=%d prompt_tokens=%d completion_tokens=%d total_cost=%.6f cached_tokens=%d processed_prompt_tokens=%d processed_tokens=%d\n",
-		a.state.GetTotalTokens(),
-		a.state.GetPromptTokens(),
-		a.state.GetCompletionTokens(),
-		a.state.GetTotalCost(),
-		a.state.GetCachedTokens(),
-		processedPromptTokens,
-		processedTokens)
-}
-
 // PrintCompactProgress prints a minimal progress indicator for non-interactive mode
 // Format: [iteration:(current-context-tokens/context-limit) | total-tokens | cost]
 func (a *Agent) PrintCompactProgress() {
@@ -207,74 +178,6 @@ func (a *Agent) PrintCompactProgress() {
 		formatTokensCompact(a.state.GetMaxContextTokens()),
 		formatTokensCompact(a.state.GetTotalTokens()),
 		formatCostCompact(a.state.GetTotalCost()))
-}
-
-// calculateCachedCost calculates the cost savings from cached tokens
-func (a *Agent) calculateCachedCost(cachedTokens int) float64 {
-	if cachedTokens == 0 {
-		return 0.0
-	}
-
-	// Calculate cost savings based on model pricing (input token rate)
-	costPerToken := 0.0
-	model := a.GetModel()
-
-	// Get input token pricing based on model and provider
-	provider := a.GetProvider()
-
-	// OpenRouter-specific pricing (updated January 2025)
-	if provider == "openrouter" {
-		if strings.Contains(model, "deepseek-chat") || strings.Contains(model, "deepseek-r1") {
-			// DeepSeek models on OpenRouter: ~$0.55 per million input tokens
-			costPerToken = 0.55 / 1000000
-		} else if strings.Contains(model, "gpt-4o") {
-			// GPT-4o on OpenRouter: $2.50 per million input tokens
-			costPerToken = 2.50 / 1000000
-		} else if strings.Contains(model, "gpt-4") {
-			// GPT-4 on OpenRouter: $30 per million input tokens
-			costPerToken = 30.0 / 1000000
-		} else if strings.Contains(model, "claude-3.5-sonnet") {
-			// Claude 3.5 Sonnet: $3.00 per million input tokens
-			costPerToken = 3.00 / 1000000
-		} else if strings.Contains(model, "claude-3-opus") {
-			// Claude 3 Opus: $15.00 per million input tokens
-			costPerToken = 15.0 / 1000000
-		} else if strings.Contains(model, "claude-3-sonnet") {
-			// Claude 3 Sonnet: $3.00 per million input tokens
-			costPerToken = 3.00 / 1000000
-		} else if strings.Contains(model, "claude-3-haiku") {
-			// Claude 3 Haiku: $0.25 per million input tokens
-			costPerToken = 0.25 / 1000000
-		} else if strings.Contains(model, "llama-3.1-405b") {
-			// Llama 3.1 405B: ~$5.00 per million input tokens
-			costPerToken = 5.0 / 1000000
-		} else if strings.Contains(model, "llama-3.1-70b") {
-			// Llama 3.1 70B: ~$0.88 per million input tokens
-			costPerToken = 0.88 / 1000000
-		} else if strings.Contains(model, "llama-3.1-8b") {
-			// Llama 3.1 8B: ~$0.18 per million input tokens
-			costPerToken = 0.18 / 1000000
-		} else {
-			// Default OpenRouter pricing (use DeepSeek rate as conservative estimate)
-			costPerToken = 0.55 / 1000000
-		}
-	} else if strings.Contains(model, "gpt-oss") {
-		// GPT-OSS pricing: $0.30 per million input tokens
-		costPerToken = 0.30 / 1000000
-	} else if strings.Contains(model, "qwen3-coder") {
-		// Qwen3-Coder-480B-A35B-Instruct-Turbo pricing: $0.30 per million input tokens
-		costPerToken = 0.30 / 1000000
-	} else if strings.Contains(model, "llama") {
-		// Llama pricing: $0.36 per million tokens
-		costPerToken = 0.36 / 1000000
-	} else {
-		// Default pricing (conservative estimate)
-		costPerToken = 1.0 / 1000000
-	}
-
-	costSavings := float64(cachedTokens) * costPerToken
-
-	return costSavings
 }
 
 // GenerateConversationSummary creates a comprehensive summary of the conversation including todos

@@ -11,8 +11,7 @@ import (
 
 // handleAPIGitPullRequest creates a pull request via the gh CLI or GitHub API.
 func (ws *ReactWebServer) handleAPIGitPullRequest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -25,12 +24,12 @@ func (ws *ReactWebServer) handleAPIGitPullRequest(w http.ResponseWriter, r *http
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if req.Title == "" {
-		http.Error(w, "PR title is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "pr_title_required", "PR title is required")
 		return
 	}
 
@@ -45,17 +44,14 @@ func (ws *ReactWebServer) handleAPIGitPullRequest(w http.ResponseWriter, r *http
 	})
 
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"url":     result.URL,
 		"number":  result.Number,

@@ -737,9 +737,7 @@ describe('Configurable maxPanes via settings', () => {
     localStorage.setItem('editor.max-panes', '4');
 
     act(() => {
-      root.render(
-        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
-      );
+      root.render(createElement(EditorManagerProvider, null, createElement(TestConsumer)));
     });
 
     const paneId1 = ctx().panes[0].id;
@@ -788,9 +786,7 @@ describe('Configurable maxPanes via settings', () => {
     localStorage.setItem('editor.max-panes', '2');
 
     act(() => {
-      root.render(
-        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
-      );
+      root.render(createElement(EditorManagerProvider, null, createElement(TestConsumer)));
     });
 
     const paneId1 = ctx().panes[0].id;
@@ -825,9 +821,7 @@ describe('Configurable maxPanes via settings', () => {
     localStorage.setItem('editor.max-panes', '3');
 
     act(() => {
-      root.render(
-        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
-      );
+      root.render(createElement(EditorManagerProvider, null, createElement(TestConsumer)));
     });
 
     const paneId1 = ctx().panes[0].id;
@@ -864,9 +858,7 @@ describe('Configurable maxPanes via settings', () => {
 
     // Start with default maxPanes
     act(() => {
-      root.render(
-        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
-      );
+      root.render(createElement(EditorManagerProvider, null, createElement(TestConsumer)));
     });
 
     // Default should be MAX_PANES (6)
@@ -895,9 +887,7 @@ describe('Configurable maxPanes via settings', () => {
     root = createRoot(container);
 
     act(() => {
-      root.render(
-        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
-      );
+      root.render(createElement(EditorManagerProvider, null, createElement(TestConsumer)));
     });
 
     // Clamp below minimum

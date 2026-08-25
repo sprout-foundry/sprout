@@ -6,15 +6,18 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/notify"
 	"github.com/sprout-foundry/sprout/pkg/zsh"
 )
 
@@ -108,96 +111,14 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	return true, nil
 }
 
-// directCommands maps a user-typed shorthand to the actual shell command
-// the REPL runs without involving the LLM. Entries with an empty value
-// (e.g. "which", "whereis") accept a single-arg form matched as a
-// prefix at the call site. Pulled out of TryDirectExecution so the
-// steer/queue submit handlers can mirror the same membership test.
-var directCommands = map[string]string{
-	"pwd":        "pwd",
-	"ls":         "ls -la",
-	"ll":         "ls -la",
-	"la":         "ls -la",
-	"date":       "date",
-	"whoami":     "whoami",
-	"id":         "id",
-	"uname":      "uname -a",
-	"hostname":   "hostname",
-	"uptime":     "uptime",
-	"git status": "git status",
-	"git st":     "git status",
-	"git log":    "git log --oneline -20",
-	"git branch": "git branch",
-	"git diff":   "git diff",
-	"git remote": "git remote -v",
-	"git stash":  "git stash list",
-	"git tag":    "git tag",
-	"free":       "free -h",
-	"df":         "df -h",
-	"du":         "du -sh .",
-	"ps":         "ps aux",
-	"env":        "env",
-	"which":      "", // Requires additional argument matching below
-	"whereis":    "", // Requires additional argument matching below
-}
+// processQueryFn is a package-level variable for testability. Tests can override
+// it to simulate ProcessQuery behavior without spinning up an LLM.
+var processQueryFn = ProcessQuery
 
-// isDirectFastPathCommand reports whether query would be intercepted by
-// TryDirectExecution at the main prompt — either an exact match against
-// the directCommands table or one of the single-arg forms (which/whereis).
-// Used by the steer/queue submit handlers to reject command-class text
-// instead of silently injecting it into the active turn.
-func isDirectFastPathCommand(query string) bool {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return false
-	}
-	if cmd, ok := directCommands[query]; ok && cmd != "" {
-		return true
-	}
-	for prefix, cmd := range directCommands {
-		if cmd == "" && strings.HasPrefix(query, prefix+" ") {
-			return true
-		}
-	}
-	return false
-}
-
-// TryDirectExecution attempts to execute simple commands directly using static pattern matching.
-// Returns true if command was executed directly, false if normal agent flow should proceed.
-func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query string) (bool, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return false, nil
-	}
-
-	if cmd, ok := directCommands[query]; ok && cmd != "" {
-		return executeDirectCommand(cmd)
-	}
-
-	for prefix, cmd := range directCommands {
-		if cmd == "" && strings.HasPrefix(query, prefix+" ") {
-			return executeDirectCommand(query)
-		}
-	}
-
-	return false, nil
-}
-
-// executeDirectCommand executes a command directly and prints output
-func executeDirectCommand(command string) (bool, error) {
-	console.GlyphAction.Fprintf(os.Stdout, "Fast path: %s", command)
-
-	// Execute the command directly (output streams in real-time)
-	_, err := ExecuteCommand(command)
-
-	if err != nil {
-		console.GlyphError.Fprintf(os.Stdout, "Error: %v", err)
-	}
-	return true, nil
-}
-
-// ProcessQuery processes a single query
-func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
+// ProcessQuery processes a single query. The eventBus parameter is retained
+// for the workflow.QueryExecutor signature contract; events now publish via
+// chatAgent.PublishEvent which auto-decorates with client_id/chat_id metadata.
+func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBus, query string) error {
 	setQueryInProgress(true)
 	defer setQueryInProgress(false)
 
@@ -218,19 +139,11 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	}
 
 	// Publish query started event
-	startedEvent := events.QueryStartedEvent(
+	chatAgent.PublishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(
 		query,
 		chatAgent.GetProvider(),
 		chatAgent.GetModel(),
-	)
-	// Decorate with agent metadata for event routing
-	if clientID := chatAgent.GetEventClientID(); clientID != "" {
-		startedEvent["client_id"] = clientID
-	}
-	if chatID := chatAgent.GetEventChatID(); chatID != "" {
-		startedEvent["chat_id"] = chatID
-	}
-	eventBus.Publish(events.EventTypeQueryStarted, startedEvent)
+	))
 
 	startTime := time.Now()
 
@@ -239,22 +152,13 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	// The OutputRouter's RouteStreamChunk handles both event publishing and terminal output.
 	// StatsUpdateCallback is set once; subsequent calls overwrite which is fine.
 	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
-		// Publish metrics to event bus for WebUI
-		metricsEvent := events.MetricsUpdateEvent(
+		chatAgent.PublishEvent(events.EventTypeMetricsUpdate, events.MetricsUpdateEvent(
 			totalTokens,
 			chatAgent.GetCurrentContextTokens(),
 			chatAgent.GetMaxContextTokens(),
 			chatAgent.GetCurrentIteration(),
 			totalCost,
-		)
-		// Decorate with agent metadata for event routing
-		if clientID := chatAgent.GetEventClientID(); clientID != "" {
-			metricsEvent["client_id"] = clientID
-		}
-		if chatID := chatAgent.GetEventChatID(); chatID != "" {
-			metricsEvent["chat_id"] = chatID
-		}
-		eventBus.Publish(events.EventTypeMetricsUpdate, metricsEvent)
+		))
 	})
 
 	// Run agent processing in a goroutine to support cancellation
@@ -280,6 +184,12 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		duration := time.Since(startTime)
 
 		if res.err != nil {
+			// If the WebUI is using the shared agent, show a friendly message
+			// instead of the raw error. The query was not processed.
+			if errors.Is(res.err, agent.ErrQueryInProgress) {
+				console.GlyphWarning.Fprintf(os.Stderr, "The Web UI is currently processing a query. Try again in a moment.\n")
+				return markReported(res.err)
+			}
 			// Print the response (user-friendly error message) if available.
 			// When we show it here, mark the returned error as already-reported
 			// so Execute() doesn't print the raw wrapped chain a second time.
@@ -288,42 +198,25 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				console.GlyphError.Fprintln(os.Stderr, res.response)
 				reported = true
 			}
-			errorEvent := events.ErrorEvent(
+			chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
 				fmt.Sprintf("Failed to process query: %s", query), res.err,
-			)
-			// Decorate with agent metadata for event routing
-			if clientID := chatAgent.GetEventClientID(); clientID != "" {
-				errorEvent["client_id"] = clientID
-			}
-			if chatID := chatAgent.GetEventChatID(); chatID != "" {
-				errorEvent["chat_id"] = chatID
-			}
-			eventBus.Publish(events.EventTypeError, errorEvent)
+			))
 			if reported {
 				return markReported(res.err)
 			}
 			return fmt.Errorf("agent processing failed: %w", res.err)
 		}
 
-		// Publish query completed event
-		completedEvent := events.QueryCompletedEvent(
-			query,
-			res.response,
-			chatAgent.GetCurrentContextTokens(),
-			chatAgent.GetTotalCost(),
-			duration,
-		)
-		if reason := chatAgent.GetLastRunTerminationReason(); reason != "" {
-			completedEvent["status"] = reason
+		// Note: EventTypeQueryCompleted is published by the agent itself in
+		// finalizeConversationPostHooks (seed_query.go), which fires on all
+		// paths (success, error, budget-exceeded) with routing metadata.
+		// Re-publishing here caused duplicate "turn complete" lines in the CLI.
+
+		// In shared-agent mode, sync the agent state back to the WebUI so
+		// the browser tab's conversation history stays current after CLI queries.
+		if ws := getSharedWebServer(); ws != nil {
+			_ = ws.SyncSharedAgentState(chatAgent)
 		}
-		// Decorate with agent metadata for event routing
-		if clientID := chatAgent.GetEventClientID(); clientID != "" {
-			completedEvent["client_id"] = clientID
-		}
-		if chatID := chatAgent.GetEventChatID(); chatID != "" {
-			completedEvent["chat_id"] = chatID
-		}
-		eventBus.Publish(events.EventTypeQueryCompleted, completedEvent)
 
 		switch chatAgent.GetLastRunTerminationReason() {
 		case agent.RunTerminationMaxIterations:
@@ -333,10 +226,31 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			fmt.Println()
 			console.GlyphStopped.Printf("Stopped in %s", FormatDuration(duration))
 		default:
-			// Print completion message without automatic summary (use /stats to see summary)
+			// The terminal subscriber (interactive + queue modes) prints its
+			// own "✓ turn complete" line from the QueryCompleted event. When
+			// it's active, skip the direct print here to avoid a duplicate
+			// completion line. Direct mode (sprout agent "query" with no
+			// subscriber) keeps this as its only completion path.
+			if router := chatAgent.OutputRouter(); router != nil && router.TerminalSubscriberActive() {
+				break
+			}
+			// Print completion message with a compact inline summary so
+			// terminal users get the same transparency the WebUI footer
+			// already shows (CI output handler has PrintSummary; the
+			// interactive path didn't). Skip the inline summary when the
+			// agent didn't actually run (no tokens accumulated) so the
+			// slash-command / direct-execution paths stay quiet.
 			fmt.Println()
-			console.GlyphSuccess.Printf("Completed in %s", FormatDuration(duration))
+			if summary := formatCompletionSummary(chatAgent); summary != "" {
+				console.GlyphSuccess.Printf("Completed in %s · %s", FormatDuration(duration), summary)
+			} else {
+				console.GlyphSuccess.Printf("Completed in %s", FormatDuration(duration))
+			}
 		}
+
+		// SP-070: Fire completion notification (bell + OS notify) when the
+		// turn ran long enough, gated by NotificationsConfig.
+		maybeNotifyCompletion(chatAgent, duration)
 
 		return nil
 
@@ -352,17 +266,59 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		case <-time.After(3 * time.Second):
 		}
 
-		errorEvent := events.ErrorEvent(
+		chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
 			fmt.Sprintf("Query interrupted: %s", query), ctx.Err(),
-		)
-		// Decorate with agent metadata for event routing
-		if clientID := chatAgent.GetEventClientID(); clientID != "" {
-			errorEvent["client_id"] = clientID
-		}
-		if chatID := chatAgent.GetEventChatID(); chatID != "" {
-			errorEvent["chat_id"] = chatID
-		}
-		eventBus.Publish(events.EventTypeError, errorEvent)
+		))
 		return fmt.Errorf("query interrupted: %w", ctx.Err())
+	}
+}
+
+// notifyOnce ensures the OS notifier is created only once per process.
+var (
+	notifyOnce     sync.Once
+	notifyInstance notify.Notifier
+)
+
+// maybeNotifyCompletion fires a terminal bell and/or OS desktop notification
+// after a query completes, gated by NotificationsConfig. Only fires when the
+// turn duration exceeds config.MinSeconds (default 10s) so quick turns don't
+// spam the user. Suppressed entirely in non-interactive (piped) mode.
+//
+// SP-070 Phase 1: CLI terminal bell + OS notification on turn completion.
+func maybeNotifyCompletion(chatAgent *agent.Agent, duration time.Duration) {
+	// Don't notify if output is being piped (no terminal to ring).
+	if !StdinIsTerminal() {
+		return
+	}
+
+	cfg := chatAgent.GetConfig()
+	if cfg == nil || cfg.Notifications == nil {
+		// Default behavior: ring bell on TTY for turns > 10s, no OS notify.
+		// This matches the spec's "default on for interactive TTY" guidance.
+		if duration >= 10*time.Second {
+			fmt.Fprint(os.Stderr, "\a")
+		}
+		return
+	}
+
+	nc := cfg.Notifications.Resolve()
+
+	// Duration gate — skip notification for short turns.
+	if duration < time.Duration(nc.MinSeconds*float64(time.Second)) {
+		return
+	}
+
+	if nc.CLIBell {
+		fmt.Fprint(os.Stderr, "\a")
+	}
+
+	if nc.OSNotify {
+		notifyOnce.Do(func() {
+			notifyInstance = notify.New()
+		})
+		// Fire-and-forget — notification failure should never block the REPL.
+		go func() {
+			_ = notifyInstance.Notify("Sprout", "Task complete")
+		}()
 	}
 }

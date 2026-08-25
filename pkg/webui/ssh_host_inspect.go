@@ -9,13 +9,20 @@ import (
 )
 
 func inspectRemoteSSHHost(ctx context.Context, hostAlias string, logger *sshLaunchLogger) (*remoteSSHInfo, error) {
-	cmd := newSSHCommandContext(ctx, hostAlias, "uname -s; uname -m")
+	// Use sentinel markers so login-profile stdout (MOTD, fortune) doesn't
+	// corrupt the uname output parsing. The remote command runs via
+	// bash -lc which sources login profiles that may print to stdout.
+	cmd := newSSHCommandContext(ctx, hostAlias, `printf "SPROUT_HOST_INFO_START\n"; uname -s; uname -m`)
 	out, err := runSSHLoggedCommand(logger, "inspect-remote", fmt.Sprintf("ssh %s uname -s; uname -m", hostAlias), cmd)
 	if err != nil {
 		return nil, fmt.Errorf("inspect remote host: %w", err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	result, err := extractSentinelResult(string(out), "SPROUT_HOST_INFO_START")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse remote host info for %s: %w", hostAlias, err)
+	}
+	lines := strings.Split(strings.TrimSpace(result), "\n")
 	if len(lines) < 2 {
 		return nil, fmt.Errorf("failed to inspect remote host %s", hostAlias)
 	}

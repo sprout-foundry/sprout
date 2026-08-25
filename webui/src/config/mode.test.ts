@@ -49,6 +49,22 @@ describe('mode config (default / local mode)', () => {
     expect(modeModule.supportsSettings).toBe(true);
   });
 
+  it('exports supportsGit as true in local mode', () => {
+    expect(modeModule.supportsGit).toBe(true);
+  });
+
+  it('exports supportsChat as true in local mode', () => {
+    expect(modeModule.supportsChat).toBe(true);
+  });
+
+  it('exports supportsWorkspaceSwitching as true in local mode', () => {
+    expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+  });
+
+  it('exports supportsExport as true in local mode', () => {
+    expect(modeModule.supportsExport).toBe(true);
+  });
+
   it('mode is a valid SproutMode value', () => {
     expect(['local', 'cloud']).toContain(modeModule.mode);
   });
@@ -88,10 +104,11 @@ describe('mode config (cloud mode)', () => {
     expect(modeModule.isCloud).toBe(true);
   });
 
-  // In cloud build mode without an adapter installed, supportsSSH uses
-  // the local default (true) because there's no adapter to say otherwise.
-  it('exports supportsSSH as true in cloud build without adapter (local default applies)', () => {
-    expect(modeModule.supportsSSH).toBe(true);
+  // In cloud build mode without an adapter installed, capabilities use
+  // cloud-mode defaults. supportsSSH is false because cloud mode doesn't
+  // have host SSH access — the WASM shell doesn't support it.
+  it('exports supportsSSH as false in cloud build without adapter (cloud default)', () => {
+    expect(modeModule.supportsSSH).toBe(false);
   });
 
   it('exports supportsInstances as true in cloud mode', () => {
@@ -102,8 +119,28 @@ describe('mode config (cloud mode)', () => {
     expect(modeModule.supportsLocalTerminal).toBe(false);
   });
 
-  it('exports supportsSettings as false in cloud mode', () => {
-    expect(modeModule.supportsSettings).toBe(false);
+  // supportsSettings is true in cloud mode — BYOK settings are available.
+  it('exports supportsSettings as true in cloud mode (BYOK settings)', () => {
+    expect(modeModule.supportsSettings).toBe(true);
+  });
+
+  // supportsGit is true in cloud mode — browser-native git (isomorphic-git +
+  // lightning-fs) powers the core git flow (status, add, commit, push, clone,
+  // diff) in-browser. Unimplemented ops return honest errors; see browserGit.ts.
+  it('exports supportsGit as true in cloud mode (browser-native git)', () => {
+    expect(modeModule.supportsGit).toBe(true);
+  });
+
+  it('exports supportsChat as true in cloud mode (BYOK proxy)', () => {
+    expect(modeModule.supportsChat).toBe(true);
+  });
+
+  it('exports supportsWorkspaceSwitching as false in cloud mode (single virtual FS)', () => {
+    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
+  });
+
+  it('exports supportsExport as false in cloud mode (no local filesystem)', () => {
+    expect(modeModule.supportsExport).toBe(false);
   });
 
   it('mode is a valid SproutMode value', () => {
@@ -146,6 +183,10 @@ describe('mode config (invalid env var value)', () => {
 
   it('all local-mode flags are correct for unrecognized values', () => {
     expect(modeModule.supportsSSH).toBe(true);
+    expect(modeModule.supportsGit).toBe(true);
+    expect(modeModule.supportsChat).toBe(true);
+    expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+    expect(modeModule.supportsExport).toBe(true);
     expect(modeModule.supportsInstances).toBe(false);
     expect(modeModule.supportsLocalTerminal).toBe(true);
     expect(modeModule.supportsSettings).toBe(true);
@@ -209,8 +250,24 @@ describe('mode config flag invariants', () => {
       expect(modeModule.supportsLocalTerminal).toBe(!modeModule.isCloud);
     });
 
-    it('supportsSettings is the negation of isCloud', () => {
-      expect(modeModule.supportsSettings).toBe(!modeModule.isCloud);
+    it('supportsSettings is true in local mode', () => {
+      expect(modeModule.supportsSettings).toBe(true);
+    });
+
+    it('supportsGit is true without an adapter (local default)', () => {
+      expect(modeModule.supportsGit).toBe(true);
+    });
+
+    it('supportsChat is true without an adapter (local default)', () => {
+      expect(modeModule.supportsChat).toBe(true);
+    });
+
+    it('supportsWorkspaceSwitching is true without an adapter (local default)', () => {
+      expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+    });
+
+    it('supportsExport is true without an adapter (local default)', () => {
+      expect(modeModule.supportsExport).toBe(true);
     });
   });
 
@@ -230,11 +287,9 @@ describe('mode config flag invariants', () => {
       vi.resetModules();
     });
 
-    // Without an adapter installed, the local default (true) applies even
-    // in cloud build mode. The "with CloudAdapter installed" test suite
-    // covers the case where supportsSSH is explicitly false.
-    it('supportsSSH is true without an adapter (local default applies)', () => {
-      expect(modeModule.supportsSSH).toBe(true);
+    // In cloud mode without adapter, cloud defaults apply (supportsSSH = false).
+    it('supportsSSH is false in cloud mode without adapter (cloud default)', () => {
+      expect(modeModule.supportsSSH).toBe(false);
     });
 
     it('supportsInstances equals isCloud', () => {
@@ -245,8 +300,9 @@ describe('mode config flag invariants', () => {
       expect(modeModule.supportsLocalTerminal).toBe(!modeModule.isCloud);
     });
 
-    it('supportsSettings is the negation of isCloud', () => {
-      expect(modeModule.supportsSettings).toBe(!modeModule.isCloud);
+    // supportsSettings is true in both modes (BYOK settings in cloud).
+    it('supportsSettings is true in cloud mode (BYOK settings)', () => {
+      expect(modeModule.supportsSettings).toBe(true);
     });
   });
 });
@@ -283,9 +339,13 @@ describe('with CloudAdapter installed', () => {
 
     // Build-time says local, but CloudAdapter flags win
     expect(modeModule.supportsSSH).toBe(false);
+    expect(modeModule.supportsGit).toBe(true);
+    expect(modeModule.supportsChat).toBe(true);
+    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
+    expect(modeModule.supportsExport).toBe(false);
     expect(modeModule.supportsInstances).toBe(true);
     expect(modeModule.supportsLocalTerminal).toBe(false);
-    expect(modeModule.supportsSettings).toBe(false);
+    expect(modeModule.supportsSettings).toBe(true);
   });
   it('mode and isCloud remain based on env var, not adapter', async () => {
     const { installAdapter } = await import('../services/apiAdapter');
@@ -336,6 +396,10 @@ describe('with custom adapter installed', () => {
       fileOpsViaAPI: true,
       showOnboarding: true,
       supportsSSH: false,
+      supportsGit: false,
+      supportsChat: true,
+      supportsWorkspaceSwitching: false,
+      supportsExport: false,
       supportsInstances: true,
       supportsLocalTerminal: true,
       supportsSettings: false,
@@ -347,6 +411,10 @@ describe('with custom adapter installed', () => {
     expect(modeModule.mode).toBe('local');
     expect(modeModule.isCloud).toBe(false);
     expect(modeModule.supportsSSH).toBe(false);
+    expect(modeModule.supportsGit).toBe(false);
+    expect(modeModule.supportsChat).toBe(true);
+    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
+    expect(modeModule.supportsExport).toBe(false);
     expect(modeModule.supportsInstances).toBe(true);
     expect(modeModule.supportsLocalTerminal).toBe(true);
     expect(modeModule.supportsSettings).toBe(false);

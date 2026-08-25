@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/errors"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ParseJSONOrdered parses a JSON string into an *OrderedMap, preserving the
@@ -20,7 +23,7 @@ func ParseJSONOrdered(content string) (*OrderedMap, error) {
 	}
 	om, ok := result.(*OrderedMap)
 	if !ok {
-		return nil, fmt.Errorf("JSON content must be a top-level object, got %T", result)
+		return nil, errors.NewTool("ordered", fmt.Sprintf("JSON content must be a top-level object, got %T", result), nil)
 	}
 	return om, nil
 }
@@ -33,7 +36,9 @@ func ParseJSONOrderedAny(content string) (interface{}, error) {
 	// Consume leading whitespace and peek at the first token.
 	tok, err := dec.Token()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read JSON token: %w", err)
+		// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
+		// via errors.As for callers that need line/col diagnostics.
+		return nil, agenterrors.NewInvalidInputError("failed to read JSON token", err)
 	}
 
 	result, err := parseJSONValueFromToken(dec, tok)
@@ -43,7 +48,7 @@ func ParseJSONOrderedAny(content string) (interface{}, error) {
 
 	// Verify there is no trailing content (except whitespace).
 	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("unexpected trailing content after JSON document")
+		return nil, errors.NewTool("ordered", "unexpected trailing content after JSON document", nil)
 	}
 
 	return result, nil
@@ -59,7 +64,9 @@ func parseJSONObject(dec *json.Decoder) (*OrderedMap, error) {
 		// Read key or closing brace.
 		tok, err := dec.Token()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read JSON object key: %w", err)
+			// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
+			// via errors.As for callers that need line/col diagnostics.
+			return nil, agenterrors.NewInvalidInputError("failed to read JSON object key", err)
 		}
 
 		if delim, ok := tok.(json.Delim); ok && delim == '}' {
@@ -68,13 +75,13 @@ func parseJSONObject(dec *json.Decoder) (*OrderedMap, error) {
 
 		key, ok := tok.(string)
 		if !ok {
-			return nil, fmt.Errorf("expected string key in JSON object, got %s", tokenDescription(tok))
+			return nil, errors.NewTool("ordered", fmt.Sprintf("expected string key in JSON object, got %s", tokenDescription(tok)), nil)
 		}
 
 		// Read value.
 		value, err := parseJSONValue(dec)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse value for key %q: %w", key, err)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("failed to parse value for key %q", key), err)
 		}
 
 		om.Set(key, value)
@@ -90,7 +97,9 @@ func parseJSONArray(dec *json.Decoder) ([]interface{}, error) {
 		// Peek at the next token to check for closing bracket.
 		tok, err := dec.Token()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read JSON array element: %w", err)
+			// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
+			// via errors.As for callers that need line/col diagnostics.
+			return nil, agenterrors.NewInvalidInputError("failed to read JSON array element", err)
 		}
 
 		if delim, ok := tok.(json.Delim); ok && delim == ']' {
@@ -110,7 +119,9 @@ func parseJSONArray(dec *json.Decoder) ([]interface{}, error) {
 func parseJSONValue(dec *json.Decoder) (interface{}, error) {
 	tok, err := dec.Token()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read JSON value: %w", err)
+		// Use fmt.Errorf so the underlying *json.SyntaxError stays extractable
+		// via errors.As for callers that need line/col diagnostics.
+		return nil, agenterrors.NewInvalidInputError("failed to read JSON value", err)
 	}
 	return parseJSONValueFromToken(dec, tok)
 }
@@ -133,9 +144,9 @@ func parseJSONValueFromToken(dec *json.Decoder, tok json.Token) (interface{}, er
 			return parseJSONArray(dec)
 		case '}', ']':
 			// These should be consumed by the parent object/array parser.
-			return nil, fmt.Errorf("unexpected delimiter '%c' while parsing value", v)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("unexpected delimiter '%c' while parsing value", v), nil)
 		default:
-			return nil, fmt.Errorf("unexpected JSON delimiter '%c'", v)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("unexpected JSON delimiter '%c'", v), nil)
 		}
 	case string:
 		return v, nil
@@ -146,7 +157,7 @@ func parseJSONValueFromToken(dec *json.Decoder, tok json.Token) (interface{}, er
 	case nil:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("unexpected JSON token type: %T", tok)
+		return nil, errors.NewTool("ordered", fmt.Sprintf("unexpected JSON token type: %T", tok), nil)
 	}
 }
 

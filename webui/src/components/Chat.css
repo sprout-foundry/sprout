@@ -1,5 +1,58 @@
 /* webui-specific chat overrides. Shared base styles live in packages/ui/src/components/ChatPanel.css and load via the @sprout/ui MessageBubble import chain. */
 
+/* "Thinking" indicator shown in the input area when a query is in flight
+   but no tools have started yet — the dead-air gap between sending and
+   the first response from the model. */
+
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 4px;
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.thinking-indicator-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.thinking-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-primary, var(--brand-active-cyan, #61afef));
+  animation: thinking-pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes thinking-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.thinking-indicator-text {
+  letter-spacing: 0.04em;
+}
+
 /* Compact "model ▸" hint shown above the chat input, mirroring the CLI's
    prompt prefix at `cmd/agent_modes.go:1005`. Tiny + muted so it sits
    quietly above the input without competing with content. The persona
@@ -12,7 +65,7 @@
   gap: 6px;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  color: var(--text-tertiary, #6e7681);
+  color: var(--text-muted);
   margin-bottom: 6px;
   line-height: 1.4;
   user-select: none;
@@ -38,7 +91,7 @@
 }
 
 .input-model-hint-arrow {
-  color: var(--text-tertiary, #6e7681);
+  color: var(--text-muted);
   font-weight: 400;
 }
 
@@ -46,7 +99,11 @@
 
 .tool-execution.tool-subagent {
   border-left: 3px solid var(--accent-primary);
-  background: linear-gradient(135deg, rgba(var(--accent-primary-rgb, 88, 166, 255), 0.06) 0%, var(--bg-tertiary) 100%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent-primary) 6%, transparent) 0%,
+    var(--bg-tertiary) 100%
+  );
 }
 
 /* ── Subagent resource summary row ─────────────────────────────── */
@@ -88,6 +145,88 @@
   color: color-mix(in srgb, var(--accent-warning) 80%, var(--accent-error));
 }
 
+/* ── Fork button on user messages ─────────────────────────── */
+
+.message-fork-btn {
+  position: absolute;
+  top: 6px;
+  right: 28px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s var(--ease-out),
+    color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm, 6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.message-bubble:hover .message-fork-btn {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+
+.message-bubble:hover .message-fork-btn:hover {
+  opacity: 1;
+  color: var(--accent-primary);
+  background: var(--bg-hover);
+  border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+.message-fork-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.message-fork-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* ── Chat toolbar (export button) ─────────────────────────── */
+
+.chat-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2, 8px);
+  flex-shrink: 0;
+}
+
+.chat-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color, var(--border-subtle));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.chat-export-btn:hover {
+  background: var(--bg-tertiary, var(--bg-secondary));
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border-color));
+}
+
 /* ── Mobile context panel toggle ────────────────────────────── */
 
 @media (max-width: 1024px) {
@@ -125,4 +264,10 @@
     outline: none;
     box-shadow: 0 0 0 3px var(--accent-primary);
   }
+}
+
+.empty-assistant-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: var(--text-xs);
 }

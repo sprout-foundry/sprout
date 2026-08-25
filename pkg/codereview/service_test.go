@@ -84,7 +84,10 @@ func TestReviewPromptByteBudgetUsesModelContextLimit(t *testing.T) {
 	}
 
 	budget := service.reviewPromptByteBudget(ctx)
-	expected := (4096 / 2) * estimatedCharsPerToken
+	// TestClient reports a 128K context window. reviewPromptByteBudget
+	// computes usableTokens = 60% of 128000 = 76800, then
+	// modelBudget = 76800 * 4 (estimatedCharsPerToken) = 307200.
+	expected := 307200
 	if budget != expected {
 		t.Fatalf("expected model-aware budget %d, got %d", expected, budget)
 	}

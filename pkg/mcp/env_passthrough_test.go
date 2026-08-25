@@ -48,10 +48,10 @@ func TestResolveEnvVars_ResolveSecretPlaceholders(t *testing.T) {
 
 	// Arrange: Create env map with secret placeholders
 	env := map[string]string{
-		"OPENAI_API_KEY":          SecretRef("myserver", "OPENAI_API_KEY"),
-		"GITHUB_TOKEN":            SecretRef("myserver", "GITHUB_TOKEN"),
-		"ANTHROPIC_API_KEY":       SecretRef("myserver", "ANTHROPIC_API_KEY"),
-		"PATH":                    "/usr/bin", // Non-secret should pass through
+		"OPENAI_API_KEY":    SecretRef("myserver", "OPENAI_API_KEY"),
+		"GITHUB_TOKEN":      SecretRef("myserver", "GITHUB_TOKEN"),
+		"ANTHROPIC_API_KEY": SecretRef("myserver", "ANTHROPIC_API_KEY"),
+		"PATH":              "/usr/bin", // Non-secret should pass through
 	}
 
 	// Act: Resolve env vars
@@ -75,10 +75,10 @@ func TestResolveEnvVars_FallbackToOSEnvironment(t *testing.T) {
 
 	// Arrange: Create env map with placeholders (not stored in credential backend)
 	env := map[string]string{
-		"MY_API_KEY":       SecretRef("fallback-server", "MY_API_KEY"),
-		"SERVICE_TOKEN":    SecretRef("fallback-server", "SERVICE_TOKEN"),
-		"SECRET_PASSWORD":  SecretRef("fallback-server", "SECRET_PASSWORD"),
-		"PATH":             "/usr/bin", // Non-secret
+		"MY_API_KEY":      SecretRef("fallback-server", "MY_API_KEY"),
+		"SERVICE_TOKEN":   SecretRef("fallback-server", "SERVICE_TOKEN"),
+		"SECRET_PASSWORD": SecretRef("fallback-server", "SECRET_PASSWORD"),
+		"PATH":            "/usr/bin", // Non-secret
 	}
 
 	// Act: Resolve env vars
@@ -97,12 +97,12 @@ func TestResolveEnvVars_SkipInvalidCredentialPlaceholders(t *testing.T) {
 
 	// Arrange: Create env map with various invalid placeholders
 	env := map[string]string{
-		"VAR1": "{{credential:not-valid-format}}", // Not mcp/server/key format
-		"VAR2": "{{credential:api/bad/key}}",      // Wrong first part (not "mcp")
-		"VAR3": "{{credential:missing-parts}}",    // Only 2 parts
+		"VAR1": "{{credential:not-valid-format}}",     // Not mcp/server/key format
+		"VAR2": "{{credential:api/bad/key}}",          // Wrong first part (not "mcp")
+		"VAR3": "{{credential:missing-parts}}",        // Only 2 parts
 		"VAR4": "{{credential:mcp/extra/parts/here}}", // Too many parts
-		"VAR5": "malformed-placeholder",           // Not a placeholder at all
-		"VAR6": "{{credential:mcp/server/KEY}}",   // Valid reference
+		"VAR5": "malformed-placeholder",               // Not a placeholder at all
+		"VAR6": "{{credential:mcp/server/KEY}}",       // Valid reference
 	}
 
 	// Arrange: Store valid credential
@@ -183,13 +183,13 @@ func TestResolveEnvVars_MixedSecretsAndNonSecrets(t *testing.T) {
 
 	// Arrange: Mix of secrets and non-secrets
 	env := map[string]string{
-		"API_KEY":        SecretRef("mixed-server", "API_KEY"),
-		"TOKEN":          SecretRef("mixed-server", "TOKEN"),
-		"MISSING_KEY":    SecretRef("mixed-server", "MISSING_KEY"), // Will fall back to OS
-		"PATH":           "/usr/bin:/usr/local/bin",
-		"HOME":           "/home/user",
-		"MAX_TOKENS":     "8192",
-		"TEMP_DIR":       "/tmp",
+		"API_KEY":     SecretRef("mixed-server", "API_KEY"),
+		"TOKEN":       SecretRef("mixed-server", "TOKEN"),
+		"MISSING_KEY": SecretRef("mixed-server", "MISSING_KEY"), // Will fall back to OS
+		"PATH":        "/usr/bin:/usr/local/bin",
+		"HOME":        "/home/user",
+		"MAX_TOKENS":  "8192",
+		"TEMP_DIR":    "/tmp",
 	}
 
 	// Act: Resolve env vars
@@ -313,8 +313,8 @@ func TestBuildFullEnvForServer_NilServerEnv(t *testing.T) {
 
 	// Arrange: Server config with Credentials but nil Env
 	config := &MCPServerConfig{
-		Name:         "nil-env-server",
-		Env:          nil, // Not initialized
+		Name: "nil-env-server",
+		Env:  nil, // Not initialized
 		Credentials: map[string]string{
 			"SECRET_KEY": SecretRef("nil-env-server", "SECRET_KEY"),
 		},
@@ -336,9 +336,9 @@ func TestBuildFullEnvForServer_EmptyCredentials(t *testing.T) {
 	config := &MCPServerConfig{
 		Name: "no-creds-server",
 		Env: map[string]string{
-			"PATH":   "/usr/bin",
-			"HOME":   "/home/user",
-			"MODEL":  "gpt-4",
+			"PATH":  "/usr/bin",
+			"HOME":  "/home/user",
+			"MODEL": "gpt-4",
 		},
 		Credentials: map[string]string{}, // Empty but initialized
 	}
@@ -359,7 +359,7 @@ func TestBuildFullEnvForServer_NilCredentials(t *testing.T) {
 
 	// Arrange: Server config with only Env, nil Credentials
 	config := &MCPServerConfig{
-		Name:         "nil-creds-server",
+		Name: "nil-creds-server",
 		Env: map[string]string{
 			"PATH":  "/usr/bin",
 			"MODEL": "gpt-4",
@@ -388,8 +388,8 @@ func TestBuildFullEnvForServer_EnvWithPlaceholders(t *testing.T) {
 	config := &MCPServerConfig{
 		Name: "placeholder-server",
 		Env: map[string]string{
-			"PATH":     "/usr/bin",
-			"API_KEY":  SecretRef("placeholder-server", "API_KEY"), // Placeholder in Env
+			"PATH":    "/usr/bin",
+			"API_KEY": SecretRef("placeholder-server", "API_KEY"), // Placeholder in Env
 		},
 		Credentials: nil, // Credentials not populated yet
 	}
@@ -417,8 +417,8 @@ func TestBuildFullEnvForServer_BothEnvAndCredentialsHavePlaceholders(t *testing.
 	config := &MCPServerConfig{
 		Name: "both-server",
 		Env: map[string]string{
-			"PATH":     "/usr/bin",
-			"ENV_KEY":  SecretRef("both-server", "ENV_KEY"), // Placeholder in Env
+			"PATH":    "/usr/bin",
+			"ENV_KEY": SecretRef("both-server", "ENV_KEY"), // Placeholder in Env
 		},
 		Credentials: map[string]string{
 			"CRED_KEY": SecretRef("both-server", "CRED_KEY"), // Placeholder in Credentials
@@ -468,8 +468,8 @@ func TestBuildFullEnvForServer_AllEmptyMaps(t *testing.T) {
 
 	// Arrange: Server config with empty maps
 	config := &MCPServerConfig{
-		Name:         "empty-all-server",
-		Env:          map[string]string{},
+		Name:        "empty-all-server",
+		Env:         map[string]string{},
 		Credentials: map[string]string{},
 	}
 
@@ -486,8 +486,8 @@ func TestBuildFullEnvForServer_AllNilMaps(t *testing.T) {
 
 	// Arrange: Server config with nil maps
 	config := &MCPServerConfig{
-		Name:         "nil-all-server",
-		Env:          nil,
+		Name:        "nil-all-server",
+		Env:         nil,
 		Credentials: nil,
 	}
 
@@ -520,10 +520,10 @@ func TestBuildFullEnvForServer_MultipleCredentials(t *testing.T) {
 			"HOME": "/home/user",
 		},
 		Credentials: map[string]string{
-			"OPENAI_API_KEY":      SecretRef("multi-server", "OPENAI_API_KEY"),
-			"ANTHROPIC_API_KEY":   SecretRef("multi-server", "ANTHROPIC_API_KEY"),
-			"GITHUB_TOKEN":        SecretRef("multi-server", "GITHUB_TOKEN"),
-			"COHERE_API_KEY":      SecretRef("multi-server", "COHERE_API_KEY"),
+			"OPENAI_API_KEY":    SecretRef("multi-server", "OPENAI_API_KEY"),
+			"ANTHROPIC_API_KEY": SecretRef("multi-server", "ANTHROPIC_API_KEY"),
+			"GITHUB_TOKEN":      SecretRef("multi-server", "GITHUB_TOKEN"),
+			"COHERE_API_KEY":    SecretRef("multi-server", "COHERE_API_KEY"),
 		},
 	}
 
@@ -551,7 +551,7 @@ func TestBuildFullEnvForServer_NonPlaceholderCredentialValues(t *testing.T) {
 			"PATH": "/usr/bin",
 		},
 		Credentials: map[string]string{
-			"STATIC_VALUE": "static-config-value", // Not a placeholder, should pass through
+			"STATIC_VALUE": "static-config-value",                            // Not a placeholder, should pass through
 			"SECRET_KEY":   SecretRef("non-placeholder-creds", "SECRET_KEY"), // Placeholder
 		},
 	}

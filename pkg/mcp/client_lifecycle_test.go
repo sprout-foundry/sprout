@@ -683,7 +683,7 @@ func TestMCPClient_MarshallMessage(t *testing.T) {
 		Params: map[string]interface{}{
 			"protocolVersion": "2024-11-05",
 			"clientInfo": map[string]interface{}{
-				"name":    "ledit",
+				"name":    "sprout",
 				"version": "1.0.0",
 			},
 		},

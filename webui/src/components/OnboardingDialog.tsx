@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Check, Download, Star, X } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
 import type { OnboardingProviderOption } from '../services/api';
@@ -41,6 +41,54 @@ function OnboardingDialog({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const comboboxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Local LLM state: track model download status for sprout-local provider
+  const [localLLMModelPresent, setLocalLLMModelPresent] = useState<boolean | null>(null);
+  const [downloadingModel, setDownloadingModel] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState('');
+
+  // Fetch local LLM status when sprout-local is selected
+  useEffect(() => {
+    if (onboarding.provider !== 'sprout-local') {
+      setLocalLLMModelPresent(null);
+      return;
+    }
+    let cancelled = false;
+    const checkStatus = async () => {
+      try {
+        const { ApiService } = await import('../services/api');
+        const status = await ApiService.getInstance().getLocalLLMStatus();
+        if (!cancelled) {
+          setLocalLLMModelPresent(status.model_present);
+        }
+      } catch {
+        if (!cancelled) setLocalLLMModelPresent(false);
+      }
+    };
+    checkStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [onboarding.provider]);
+
+  // Poll for download completion
+  useEffect(() => {
+    if (!downloadingModel || onboarding.provider !== 'sprout-local') return;
+    const interval = setInterval(async () => {
+      try {
+        const { ApiService } = await import('../services/api');
+        const status = await ApiService.getInstance().getLocalLLMStatus();
+        if (status.model_present) {
+          setLocalLLMModelPresent(true);
+          setDownloadingModel(false);
+          setDownloadMessage('');
+        }
+      } catch {
+        /* ignore poll errors */
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [downloadingModel, onboarding.provider]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -145,8 +193,9 @@ function OnboardingDialog({
       role="dialog"
       aria-modal="true"
       aria-label={onboarding.isReonboarding ? 'Change provider' : 'Set up sprout'}
+      data-testid="onboarding-overlay"
     >
-      <div className="onboarding-card">
+      <div className="onboarding-card" data-testid="onboarding-card">
         {onboarding.isReonboarding && (
           <button
             type="button"
@@ -154,6 +203,7 @@ function OnboardingDialog({
             onClick={() => updateOnboarding((prev) => ({ ...prev, open: false }))}
             disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
             aria-label="Close"
+            data-testid="onboarding-close"
           >
             <X size={18} />
           </button>
@@ -224,8 +274,10 @@ function OnboardingDialog({
           </div>
         )}
 
-        <div className="onboarding-step-title">1. Choose an inference provider</div>
-        <div className="onboarding-provider-grid">
+        <div className="onboarding-step-title" data-testid="onboarding-step">
+          1. Choose an inference provider
+        </div>
+        <div className="onboarding-provider-grid" data-testid="onboarding-provider-grid">
           {recommendedProviders.map((providerOption) => (
             <button
               key={providerOption.id}
@@ -233,15 +285,25 @@ function OnboardingDialog({
               className={`onboarding-provider-card ${onboarding.provider === providerOption.id ? 'selected' : ''} ${providerOption.has_credential ? 'configured' : ''}`}
               onClick={() => onProviderChange(providerOption.id)}
               disabled={onboarding.submitting || onboarding.checking}
+              data-testid="onboarding-provider-card"
             >
               <span className="onboarding-provider-name">{providerOption.name}</span>
+              {providerOption.id === 'sprout-local' && (
+                <span
+                  className="onboarding-offline-badge"
+                  title="Runs fully on-device — no API key, no network required"
+                  aria-label="Offline mode"
+                >
+                  Offline
+                </span>
+              )}
               {providerOption.has_credential && (
                 <span
                   className="onboarding-configured-badge"
                   title="Credentials already configured"
                   aria-label="Credentials already configured"
                 >
-                  ✓ Configured
+                  <Check size={12} /> Configured
                 </span>
               )}
             </button>
@@ -255,6 +317,7 @@ function OnboardingDialog({
               className="onboarding-toggle-btn"
               onClick={() => updateOnboarding((prev) => ({ ...prev, showAllProviders: !prev.showAllProviders }))}
               disabled={onboarding.submitting || onboarding.checking}
+              data-testid="onboarding-toggle-providers"
             >
               {onboarding.showAllProviders ? 'Hide other providers' : 'Show other providers'}
             </button>
@@ -287,6 +350,43 @@ function OnboardingDialog({
             <div className="onboarding-provider-summary-body">
               {selectedProvider.setup_hint || selectedProvider.description}
             </div>
+            {selectedProvider.id === 'sprout-local' && (
+              <div className="onboarding-provider-caveats">
+                {localLLMModelPresent === false && (
+                  <div className="onboarding-download-section">
+                    <div className="onboarding-caveat-item">⚠ No model downloaded yet.</div>
+                    <button
+                      type="button"
+                      className="onboarding-download-btn"
+                      disabled={downloadingModel || onboarding.submitting}
+                      onClick={async () => {
+                        setDownloadingModel(true);
+                        setDownloadMessage('Starting download...');
+                        try {
+                          const { ApiService } = await import('../services/api');
+                          const result = await ApiService.getInstance().downloadLocalLLMModel();
+                          setDownloadMessage(result.message || 'Download in progress...');
+                        } catch (e) {
+                          setDownloadMessage(`Download failed: ${e instanceof Error ? e.message : String(e)}`);
+                          setDownloadingModel(false);
+                        }
+                      }}
+                    >
+                      <Download size={14} />
+                      {downloadingModel ? 'Downloading...' : 'Download recommended model (~2.5 GB)'}
+                    </button>
+                    {downloadMessage && <div className="onboarding-caveat-item">{downloadMessage}</div>}
+                  </div>
+                )}
+                {localLLMModelPresent === true && (
+                  <div className="onboarding-caveat-item">✓ Model downloaded and ready</div>
+                )}
+                <div className="onboarding-caveat-item">⚠ Slower than cloud (10–20 tok/s vs 50–100+)</div>
+                <div className="onboarding-caveat-item">⚠ Limited context (32K)</div>
+                <div className="onboarding-caveat-item">⚠ Best for simple tasks, edits, and offline work</div>
+                <div className="onboarding-caveat-item">✓ No API key, no network, zero cost</div>
+              </div>
+            )}
             <div className="onboarding-provider-links">
               {selectedProvider.docs_url && (
                 <a href={selectedProvider.docs_url} target="_blank" rel="noreferrer">
@@ -325,7 +425,9 @@ function OnboardingDialog({
             </div>
           )}
 
-        <div className="onboarding-step-title">2. Choose a model</div>
+        <div className="onboarding-step-title" data-testid="onboarding-step">
+          2. Choose a model
+        </div>
         <label htmlFor="onboarding-model">Model</label>
         <div className="onboarding-model-combobox" ref={comboboxRef}>
           <input
@@ -341,6 +443,7 @@ function OnboardingDialog({
             placeholder="Enter model name"
             disabled={onboarding.submitting || onboarding.checking}
             autoComplete="off"
+            data-testid="onboarding-model-input"
           />
           {modelListOpen && displayModels && (
             <ul className="onboarding-model-list">
@@ -355,7 +458,11 @@ function OnboardingDialog({
                     onClick={() => selectModel(modelName)}
                   >
                     <span className="model-name">{modelName}</span>
-                    {isRecommended && <span className="recommended-badge">★ Recommended</span>}
+                    {isRecommended && (
+                      <span className="recommended-badge">
+                        <Star size={10} fill="currentColor" /> Recommended
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -380,6 +487,7 @@ function OnboardingDialog({
               }
               placeholder="Paste API key"
               disabled={onboarding.submitting || onboarding.checking}
+              data-testid="onboarding-api-key"
             />
             {selectedProvider.api_key_help && <div className="onboarding-help">{selectedProvider.api_key_help}</div>}
           </>
@@ -393,7 +501,7 @@ function OnboardingDialog({
 
         {onboarding.validationSuccess && (
           <div className="onboarding-success">
-            ✓ API key validated —{' '}
+            <Check size={14} /> API key validated —{' '}
             {onboarding.validationModelCount > 0
               ? `${onboarding.validationModelCount} models available`
               : 'connection successful'}
@@ -415,11 +523,17 @@ function OnboardingDialog({
               className="onboarding-skip-btn"
               onClick={onSkip}
               disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
+              data-testid="onboarding-skip"
             >
               Skip — use as editor
             </button>
           )}
-          <button type="button" onClick={onRefresh} disabled={onboarding.submitting || onboarding.validationSuccess}>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={onboarding.submitting || onboarding.validationSuccess}
+            data-testid="onboarding-refresh"
+          >
             Refresh
           </button>
           <button
@@ -427,14 +541,19 @@ function OnboardingDialog({
             className={onboarding.validationSuccess ? 'primary success' : 'primary'}
             onClick={onComplete}
             disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
+            data-testid="onboarding-done"
           >
-            {onboarding.validationSuccess
-              ? 'Done ✓'
-              : onboarding.submitting
-                ? 'Validating…'
-                : onboarding.isReonboarding
-                  ? 'Save Changes'
-                  : 'Complete Setup'}
+            {onboarding.validationSuccess ? (
+              <>
+                <Check size={14} /> Done
+              </>
+            ) : onboarding.submitting ? (
+              'Validating…'
+            ) : onboarding.isReonboarding ? (
+              'Save Changes'
+            ) : (
+              'Complete Setup'
+            )}
           </button>
         </div>
       </div>

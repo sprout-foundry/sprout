@@ -1,0 +1,173 @@
+/**
+ * Collapsible (SP-101-Phase 3) — token-driven expand/collapse primitive.
+ *
+ * Tokens resolved by the CONSUMER's stylesheet (per AGENTS.md §"Shared-
+ * package CSS"); Atom-One-blue fallbacks are applied so this component
+ * still reads correctly under Storybook isolation.
+ */
+
+.collapsible {
+  /* Default variant: bordered card that sits as a self-contained region
+   * in the page (e.g. settings card). */
+  --collapsible-padding-y: 10px;
+  --collapsible-padding-x: 12px;
+  --collapsible-body-padding-y: 12px;
+
+  display: block;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 6px);
+  background: var(--bg-secondary, #21252b);
+  color: var(--text-primary, #abb2bf);
+  overflow: hidden;
+  /* Slight elevation feels right for a card — but `subtle`, not `elevated`,
+   * so it doesn't punch out from the surrounding settings panels. */
+  box-shadow: var(--shadow-subtle, 0 2px 6px rgba(2, 6, 23, 0.32));
+}
+
+/* Hide the default disclosure marker — we render our own ChevronRight. */
+.collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible > summary {
+  list-style: none;
+}
+
+.collapsible--variant-flush {
+  /* Flush settings-panel sections: no card chrome, just a hairline rule. */
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  border-top: 1px solid var(--border-subtle, rgba(171, 178, 191, 0.14));
+  box-shadow: none;
+}
+
+.collapsible:first-child.collapsible--variant-flush {
+  border-top: none;
+}
+
+.collapsible__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--collapsible-padding-y) var(--collapsible-padding-x);
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #abb2bf);
+  background: transparent;
+  border: 0;
+  outline: none;
+  list-style: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.collapsible__summary:hover {
+  background: var(--bg-hover, #303742);
+}
+
+.collapsible__summary:focus-visible {
+  /* Per AGENTS.md hard rule #5: every interactive element gets a focus
+   * ring keyed off --accent-primary (with the canonical Atom-One-blue
+   * fallback so shared-package CSS isn't blank in isolation). */
+  box-shadow: inset 0 0 0 2px var(--accent-primary, #61afef);
+  outline: none;
+}
+
+.collapsible__chevron {
+  /* The chevron is the canonical disclosure affordance — rotating it
+   * 90° on `[open]` mirrors the visual language used by Jira-style
+   * expanders and matches the existing subagent-feed toggle pattern
+   * in the chat panel. */
+  flex-shrink: 0;
+  color: var(--text-tertiary, #7f8794);
+  transition: transform 0.18s var(--ease-out, ease-out);
+  transform-origin: center;
+}
+
+.collapsible[open] > .collapsible__summary > .collapsible__chevron {
+  transform: rotate(90deg);
+  color: var(--text-primary, #abb2bf);
+}
+
+.collapsible__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-tertiary, #7f8794);
+}
+
+.collapsible__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+
+.collapsible__summary-extra {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-tertiary, #7f8794);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.collapsible__body {
+  /* Body sits inside the card with reduced padding so content aligns
+   * to the summary text. The body container is ALWAYS rendered so
+   * React children mount/unmount predictably; we just hide the body
+   * via [open]/not-[open] CSS (display: none) when closed. */
+  padding: 0 var(--collapsible-padding-x) var(--collapsible-body-padding-y);
+  color: var(--text-primary, #abb2bf);
+  border-top: 1px solid var(--border-subtle, rgba(171, 178, 191, 0.14));
+}
+
+.collapsible--variant-flush > .collapsible__body {
+  border-top: none;
+  padding-left: calc(var(--collapsible-padding-x) + 14px);
+}
+
+.collapsible__body > *:first-child {
+  margin-top: 0;
+}
+
+.collapsible__body > *:last-child {
+  margin-bottom: 0;
+}
+
+/* When the details is closed, hide the body to keep the DOM inactive
+ * visually while keeping React children mounted (state preservation).
+ * Using `display: none` is the safest cross-engine choice — some
+ * browsers (older WebKit) don't honor `visibility` on summary's child
+ * slot consistently. */
+.collapsible:not([open]) > .collapsible__body {
+  display: none;
+}
+
+/* Disabled — grey the row and drop the cursor cue. The collapsed body
+ * is already display:none so doesn't need an opacity. */
+.collapsible--disabled {
+  opacity: 0.5;
+}
+
+.collapsible--disabled > .collapsible__summary {
+  cursor: not-allowed;
+  /* Override any inherited hover background so the disabled card doesn't
+   * flicker on hover. */
+  background: transparent !important;
+}
+
+/* Respect prefers-reduced-motion — collapse the chevron rotation to
+ * an instant flip (per AGENTS.md §"Hard rules" implicit: animations
+ * shouldn't punish users with motion sensitivity). */
+@media (prefers-reduced-motion: reduce) {
+  .collapsible__chevron,
+  .collapsible__summary {
+    transition: none;
+  }
+}

@@ -110,6 +110,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     filteredResults,
     semanticResults,
     semanticDuration,
+    semanticNote,
     duplicateClusters,
     truncated,
     displayMatches,
@@ -229,8 +230,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
           </label>
           <input
             type="range"
-            min="0.5"
-            max="0.95"
+            min="0.10"
+            max="0.80"
             step="0.05"
             value={semanticThreshold}
             onChange={(e) => setSemanticThreshold(parseFloat(e.target.value))}
@@ -389,7 +390,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         {semanticResults && semanticResults.length === 0 && !isSearching && !error && (
           <div className="search-no-results">
             <Search size={24} />
-            <span>No semantic results found</span>
+            <span>{semanticNote || 'No semantic results found'}</span>
           </div>
         )}
 

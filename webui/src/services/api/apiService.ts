@@ -43,6 +43,8 @@ import type {
   SkillsResponse,
   SubagentTypeInfo,
   ProviderModelsResponse,
+  SessionSearchResponse,
+  SessionSearchResult,
 } from './types';
 import * as workspaceApi from './workspaceApi';
 
@@ -74,8 +76,12 @@ class ApiService {
     return workspaceApi.getWorkspace(clientFetch);
   }
 
-  async setWorkspace(path: string): Promise<WorkspaceResponse & { message: string }> {
-    return workspaceApi.setWorkspace(clientFetch, path);
+  async setWorkspace(path: string, consentHome?: boolean): Promise<WorkspaceResponse & { message: string }> {
+    return workspaceApi.setWorkspace(clientFetch, path, consentHome);
+  }
+
+  async browseDirectory(path?: string): Promise<workspaceApi.BrowseResult> {
+    return workspaceApi.browseDirectory(clientFetch, path);
   }
 
   // ── Terminal ───────────────────────────────────────────────────────
@@ -100,6 +106,30 @@ class ApiService {
 
   async getProviderModels(provider: string): Promise<ProviderModelsResponse> {
     return miscApi.getProviderModels(clientFetch, provider);
+  }
+
+  // ── Local LLM ─────────────────────────────────────────────────────
+
+  async getLocalLLMStatus(): Promise<import('./types').LocalLLMStatus> {
+    return miscApi.getLocalLLMStatus(clientFetch);
+  }
+
+  async startLocalLLM(): Promise<{ status: string; endpoint?: string; pid?: number }> {
+    return miscApi.startLocalLLM(clientFetch);
+  }
+
+  async getLocalLLMModels(): Promise<{
+    models: import('./types').LocalLLMModel[];
+    recommended: string;
+    model_dir: string;
+  }> {
+    return miscApi.getLocalLLMModels(clientFetch);
+  }
+
+  async downloadLocalLLMModel(
+    model?: string,
+  ): Promise<{ status: string; model: string; pid: number; message: string }> {
+    return miscApi.downloadLocalLLMModel(clientFetch, model);
   }
 
   async getProviderCredentials(): Promise<{
@@ -259,6 +289,10 @@ class ApiService {
 
   async steerQuery(query: string, chatId?: string): Promise<void> {
     return chatApi.steerQuery(clientFetch, query, chatId);
+  }
+
+  async retractSteer(chatId?: string): Promise<chatApi.RetractSteerResponse> {
+    return chatApi.retractSteer(clientFetch, chatId);
   }
 
   async stopQuery(): Promise<void> {
@@ -740,6 +774,18 @@ class ApiService {
     return sessionApi.restoreSession(clientFetch, sessionId);
   }
 
+  async searchSessions(
+    query: string,
+    options?: {
+      cwd?: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+    },
+  ): Promise<SessionSearchResponse> {
+    return sessionApi.searchSessions(clientFetch, query, options);
+  }
+
   // ── Settings ───────────────────────────────────────────────────
 
   async getSettings(): Promise<SproutSettings> {
@@ -803,6 +849,38 @@ class ApiService {
 
   async updateSkills(skills: SkillsResponse): Promise<{ message: string }> {
     return settingsApi.updateSkills(clientFetch, skills);
+  }
+
+  // ── SP-086-4: Skill install / manage ────────────────────────
+
+  async listInstalledSkills(): Promise<
+    Array<{
+      id: string;
+      origin: { type: string; installed_at?: string };
+      installed_at?: string;
+      updated_at?: string;
+    }>
+  > {
+    return settingsApi.listInstalledSkills(clientFetch);
+  }
+
+  async listSkillRegistry(): Promise<import('./types/settings').SkillRegistryEntry[]> {
+    return settingsApi.listSkillRegistry(clientFetch);
+  }
+
+  async installSkill(
+    source: string,
+    opts?: { ref?: string; force?: boolean },
+  ): Promise<import('./types/settings').SkillInstallResult[]> {
+    return settingsApi.installSkill(clientFetch, source, opts);
+  }
+
+  async updateSkill(id: string): Promise<import('./types/settings').SkillInstallResult[]> {
+    return settingsApi.updateSkill(clientFetch, id);
+  }
+
+  async removeSkill(id: string): Promise<{ status: string; id: string }> {
+    return settingsApi.removeSkill(clientFetch, id);
   }
 
   async getSubagentTypes(): Promise<{
@@ -890,6 +968,7 @@ class ApiService {
     query: string;
     total: number;
     duration: string;
+    note?: string;
   }> {
     return searchApi.searchSemantic(clientFetch, query, options);
   }

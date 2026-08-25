@@ -66,7 +66,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .wt-chat-dialog-close:hover {
@@ -103,7 +108,12 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 14px;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .wt-chat-dialog-form-group input:focus {
@@ -186,7 +196,12 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;

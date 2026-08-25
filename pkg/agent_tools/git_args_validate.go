@@ -122,9 +122,15 @@ func flagPrefix(prefix, category, reason string) blockedGitArg {
 
 // configKeyPrefix returns a blockedGitArg that checks if args contain the
 // given flag followed (with or without a space) by the key prefix.
-// It catches both forms:
-//   - "-c core.hooksPath=..." (space between flag and key)
-//   - "-ccore.hooksPath=..."  (no space, compact form)
+// It catches these forms:
+//   - "-c core.hooksPath=..." (single space between flag and key)
+//   - "-ccore.hooksPath=..."  (compact, no separator)
+//   - "-c\tcore.hooksPath=..." (tab separator — git accepts tabs/newlines/multi-space)
+//
+// Rather than enumerate every whitespace separator git accepts, we normalize
+// the args by collapsing all runs of whitespace to a single space before the
+// substring checks. This also defeats tab/newline injection attempts that
+// would bypass a literal " " (space) substring match.
 func configKeyPrefix(flag, keyPrefix, category, reason string) blockedGitArg {
 	// Space-separated form: "-c core."
 	spacePattern := strings.ToLower(flag + " " + keyPrefix)
@@ -133,8 +139,13 @@ func configKeyPrefix(flag, keyPrefix, category, reason string) blockedGitArg {
 
 	return blockedGitArg{
 		check: func(argsLower string) bool {
-			return strings.Contains(argsLower, spacePattern) ||
-				strings.Contains(argsLower, compactPattern)
+			// Collapse all whitespace (tabs, newlines, multi-space) to single
+			// spaces so "-c\tcore." and "-c  core." are caught like "-c core.".
+			// strings.Fields splits on any Unicode whitespace and drops empty
+			// tokens, so re-joining yields single-space-separated args.
+			normalized := strings.Join(strings.Fields(argsLower), " ")
+			return strings.Contains(normalized, spacePattern) ||
+				strings.Contains(normalized, compactPattern)
 		},
 		pattern:  flag + " " + keyPrefix,
 		category: category,

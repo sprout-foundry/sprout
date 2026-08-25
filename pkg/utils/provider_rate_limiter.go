@@ -123,9 +123,9 @@ func GetAllProviderLimiters() map[string]TokenBucketInfo {
 		limiter := value.(*TokenBucket)
 
 		result[provider] = TokenBucketInfo{
-			Rate:             limiter.GetRate(),
-			Burst:            limiter.GetBurst(),
-			AvailableTokens:  limiter.GetAvailableTokens(),
+			Rate:            limiter.GetRate(),
+			Burst:           limiter.GetBurst(),
+			AvailableTokens: limiter.GetAvailableTokens(),
 		}
 		return true
 	})
@@ -135,9 +135,9 @@ func GetAllProviderLimiters() map[string]TokenBucketInfo {
 
 // TokenBucketInfo contains information about a token bucket's state.
 type TokenBucketInfo struct {
-	Rate             float64 // tokens per second
-	Burst            int     // maximum tokens
-	AvailableTokens  float64 // approximate tokens currently available
+	Rate            float64 // tokens per second
+	Burst           int     // maximum tokens
+	AvailableTokens float64 // approximate tokens currently available
 }
 
 // RemoveProviderRateLimiter removes the rate limiter for a specific provider.

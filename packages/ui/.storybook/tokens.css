@@ -42,6 +42,8 @@
   --accent-primary-alpha: rgba(97, 175, 239, 0.20);
   /* RGB triplet for rgba() callsites — must stay in sync with --accent-primary. */
   --accent-primary-rgb: 97, 175, 239;
+  /* Hover state for primary buttons/accents — theme-following via color-mix. */
+  --accent-primary-hover: color-mix(in srgb, var(--accent-primary) 85%, white);
 
   --accent-fg: #ffffff;
   --accent-warning-fg: #1a1a2e;

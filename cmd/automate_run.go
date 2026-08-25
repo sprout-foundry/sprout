@@ -235,9 +235,26 @@ func runWorkflowByPath(path string) error {
 	fmt.Println()
 
 	if automateDetach {
-		// No waiter, no signal forwarding, no finalizer. The child owns
-		// its log file; session end-state falls back to PID-liveness per
-		// the AutomateSessionInfo schema (pkg/automate/pid_file.go).
+		// cmd.Start() makes this process the parent, and POSIX parents
+		// must Wait: until then an exited child lingers as a zombie and
+		// kill(pid,0) — the Unix liveness probe behind `sprout automate
+		// status` (pkg/utils/pidalive) — succeeds against zombies, so a
+		// fast-exiting workflow keeps showing "running". For the CLI
+		// launcher the window is milliseconds (it exits right after
+		// spawn; init reaps the orphan instantly), but a long-lived
+		// in-process caller would hold the zombie indefinitely. A
+		// background Wait closes both; the PID then disappears and
+		// status falls back to "exited". Windows has no zombie state
+		// (its probe reads GetExitCodeProcess), so this is a no-op fix
+		// there. The exit status is deliberately discarded — recording
+		// EndedAt/ExitCode is AUTOM-4 (child-side self-finalization),
+		// not this reaper.
+		go func() {
+			_ = cmd.Wait()
+		}()
+		// No signal forwarding, no finalizer. The child owns its log
+		// file; session end-state falls back to PID-liveness per the
+		// AutomateSessionInfo schema (pkg/automate/pid_file.go).
 		return nil
 	}
 
@@ -463,26 +480,6 @@ func confirmStartAutomation(name string) bool {
 	}
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "y" || response == "yes"
-}
-
-// openDetachLogFile creates the session log directory under sproutDir and
-// opens the per-session log file the detached workflow child will write to.
-// Returned path is recorded in the session PID file (OutputFilePath) so
-// `sprout automate logs` can find it.
-func openDetachLogFile(sproutDir, sessionID string) (*os.File, string, error) {
-	// 0o700 dir / 0o600 file match the session-dir convention
-	// (WriteSessionFile/GetAutomateSessionDir): workflow output can
-	// contain source and secrets, so no group/world access.
-	logDir := filepath.Join(sproutDir, "automate", "logs")
-	if err := os.MkdirAll(logDir, 0o700); err != nil {
-		return nil, "", fmt.Errorf("create automate log directory: %w", err)
-	}
-	logPath := filepath.Join(logDir, sessionID+".log")
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return nil, "", fmt.Errorf("open detach log file: %w", err)
-	}
-	return f, logPath, nil
 }
 
 // buildAgentCommandFn is a test seam over child-process construction.

@@ -163,8 +163,26 @@ func shouldPreloadLocalModel() bool {
 // the command errors out before ever reaching tryDaemonOneShot anyway, so
 // treating "flag set" as "won't route" never skips a preload that had
 // something to fall back on.
+//
+// These flags can't travel the wire protocol today; routing would silently
+// drop them, so run in-process where they're honored.
 func agentSkipDaemonRouting() bool {
-	return agentWorkflowConfig != ""
+	return agentWorkflowConfig != "" ||
+		agentSessionID != "" ||
+		agentLastSession ||
+		agentSystemPrompt != "" ||
+		agentSystemPromptFile != "" ||
+		agentDryRun ||
+		agentUnsafe ||
+		agentUnsafeShell ||
+		agentNoSubagents ||
+		agentSubagentModel != "" ||
+		agentSubagentProvider != "" ||
+		agentResourceDirectory != "" ||
+		agentBudgetUSD != 0 ||
+		agentTraceDatasetDir != "" ||
+		agentMockLLM ||
+		noProjectSkills
 }
 
 func createChatAgent() (*agent.Agent, error) {

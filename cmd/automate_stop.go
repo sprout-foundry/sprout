@@ -5,7 +5,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
@@ -15,11 +14,10 @@ import (
 var automateStopAll bool
 
 func runAutomateStop(sessionID string) error {
-	cwd, err := os.Getwd()
+	sproutDir, err := automateSessionRoot()
 	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
+		return err
 	}
-	sproutDir := filepath.Join(cwd, ".sprout")
 
 	info, err := automate.ReadSessionFile(sproutDir, sessionID)
 	if err != nil {
@@ -82,11 +80,10 @@ func runAutomateStop(sessionID string) error {
 }
 
 func runAutomateStopAll() error {
-	cwd, err := os.Getwd()
+	sproutDir, err := automateSessionRoot()
 	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
+		return err
 	}
-	sproutDir := filepath.Join(cwd, ".sprout")
 
 	sessions, err := readAllSessions(sproutDir)
 	if err != nil {

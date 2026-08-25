@@ -564,7 +564,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// queries route through the daemon's agent socket when it is
 		// available; the daemon owns the agent. Falls back to in-process
 		// when the socket is unreachable.
-		if query != "" && workflowConfig == nil && !daemonMode {
+		//
+		// --output-json one-shots run in-process even when a daemon is up:
+		// the socket protocol carries only the final response string, so a
+		// daemon-routed run can't populate the envelope's metrics
+		// (llm_calls/tokens/provider/model) or the response field. In-process
+		// execution is safe with a live daemon — the CLI's fresh agent and
+		// the daemon's per-query agent each own distinct session IDs, so no
+		// session file or turn journal is shared between them.
+		if query != "" && workflowConfig == nil && !daemonMode && !outputFormatJSON {
 			if handled, derr := tryDaemonOneShot(ctx, query, outputFormatJSON); handled {
 				return derr
 			}

@@ -37,6 +37,7 @@ func (h *readFileHandler) Definition() ToolDefinition {
 				Type:        "array",
 				Required:    false,
 				Description: "Optional line range as [start, end] array (1-based). Use this to read specific sections of large files.",
+				Items:       map[string]any{"type": "integer"},
 			},
 		},
 		Required: []string{"path"},

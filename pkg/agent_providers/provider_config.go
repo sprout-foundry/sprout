@@ -84,6 +84,20 @@ type MessageConversion struct {
 	//   3. The last conversation message (growing conversation prefix — highest impact)
 	// Anthropic allows up to 4 breakpoints; we use 3, leaving headroom for future use.
 	CacheControl bool `json:"cache_control,omitempty"`
+	// FillMissingArrayItems walks every tool schema in the outgoing request
+	// and fills any array-typed property that lacks an "items" key with a
+	// permissive fallback ({"type": ArrayItemsFallback}). Opt-in per provider.
+	// Required for Google Gemini 3.x strict function-calling validation, which
+	// rejects the entire request (HTTP 400, e.g. via OpenRouter) when any
+	// array property has no "items" — Gemini 2.5 tolerated them. Defense in
+	// depth: native tool definitions already declare items, but the seed
+	// registry's wire schema (and any third-party/MCP tool) may not, so the
+	// shim guarantees a valid items on the wire for strict validators.
+	FillMissingArrayItems bool `json:"fill_missing_array_items,omitempty"`
+	// ArrayItemsFallback is the JSON-schema type used for the permissive items
+	// fallback when filling missing array items. "object" (default, most
+	// permissive) or "string". Only read when FillMissingArrayItems is true.
+	ArrayItemsFallback string `json:"array_items_fallback,omitempty"`
 }
 
 // StreamingConfig defines streaming behavior

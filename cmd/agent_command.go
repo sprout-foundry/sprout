@@ -157,22 +157,39 @@ func shouldPreloadLocalModel() bool {
 // tryDaemonOneShot at all, independent of daemon health — i.e. shouldn't be
 // used as a basis for skipping the local-model preload.
 //
-// tryDaemonOneShot's actual gates (agent_modes.go + agent_socket.go) are
-// `workflowConfig == nil` and `!outputFormatJSON`, where workflowConfig is
-// loaded from the --workflow-config file at RunAgent time — after
-// createChatAgent has already returned, so the loaded value itself isn't
-// available yet here. agentWorkflowConfig (the raw flag) is populated by
-// cobra before RunE runs, same timing createChatAgent already relies on for
-// agentProvider/agentModel/etc, so "is the flag set" is used as a
-// conservative stand-in: if it's set but loading later fails, the command
-// errors out before ever reaching tryDaemonOneShot anyway, so treating
-// "flag set" as "won't route" never skips a preload that had something to
-// fall back on. outputFormatJSON (--output-json) is already final at this
-// point: such one-shots always run in-process (the daemon socket can't
-// carry the envelope's metrics or response text), so the model must load
-// here, not in a daemon that will never serve the query.
+// tryDaemonOneShot's actual gate (agent_modes.go) is `workflowConfig ==
+// nil`, where workflowConfig is loaded from the --workflow-config file at
+// RunAgent time — after createChatAgent has already returned, so the loaded
+// value itself isn't available yet here. agentWorkflowConfig (the raw flag)
+// is populated by cobra before RunE runs, same timing createChatAgent
+// already relies on for agentProvider/agentModel/etc, so "is the flag set"
+// is used as a conservative stand-in: if it's set but loading later fails,
+// the command errors out before ever reaching tryDaemonOneShot anyway, so
+// treating "flag set" as "won't route" never skips a preload that had
+// something to fall back on.
+//
+// These flags can't travel the wire protocol today; routing would silently
+// drop them, so run in-process where they're honored. agentAutomateSessionFile
+// is in the same class: the detached automate child owns finalizing its own
+// session record, which a daemon-routed query would never do.
 func agentSkipDaemonRouting() bool {
-	return agentWorkflowConfig != "" || outputFormatJSON
+	return agentWorkflowConfig != "" ||
+		agentAutomateSessionFile != "" ||
+		agentSessionID != "" ||
+		agentLastSession ||
+		agentSystemPrompt != "" ||
+		agentSystemPromptFile != "" ||
+		agentDryRun ||
+		agentUnsafe ||
+		agentUnsafeShell ||
+		agentNoSubagents ||
+		agentSubagentModel != "" ||
+		agentSubagentProvider != "" ||
+		agentResourceDirectory != "" ||
+		agentBudgetUSD != 0 ||
+		agentTraceDatasetDir != "" ||
+		agentMockLLM ||
+		noProjectSkills
 }
 
 func createChatAgent() (*agent.Agent, error) {

@@ -79,6 +79,14 @@ class TerminalWebSocketService {
     debugLog('Terminal pong received');
   }
 
+  /** Mark the connection alive. Called for pongs AND any other server message:
+   *  output traffic proves the connection is live just as well as a pong does.
+   *  Before this, a busy-but-idle-on-pong connection (server never sent pongs)
+   *  tripped the watchdog and force-cycled a healthy session. */
+  private markAlive() {
+    this.lastPongTime = Date.now();
+  }
+
   private startPongWatchdog() {
     this.stopPongWatchdog();
     // Check every 30s whether we've received a pong within maxPongAge.
@@ -224,6 +232,9 @@ class TerminalWebSocketService {
       try {
         const data = JSON.parse(event.data);
         debugLog('Terminal WebSocket message:', data);
+
+        // Any inbound frame proves liveness for the pong watchdog.
+        this.markAlive();
 
         // Handle pong response
         if (data.type === 'pong') {

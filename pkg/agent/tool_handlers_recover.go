@@ -1,42 +1,6 @@
 // recover_file tool: restores a file's tracked content from the
-// ChangeTracker's session buffer. Closes the loop between "we captured
-// original bytes" and "user/agent can put them back".
-//
-// The SP-061-2 consolidation rolled three behaviours into one tool via
-// the `scope` argument:
-//
-//   - scope="latest"        (default) Restore the file to the state
-//                           immediately before its most-recent tracked
-//                           change. The historical recover_file shape.
-//
-//   - scope="session_start" Restore to the EARLIEST captured original —
-//                           the file as it was before the agent touched
-//                           it at all this session. Replaces the
-//                           revert_my_changes(file=…) scope.
-//
-//   - scope="bulk"          Treat `path` as a bulk entry's FilePath (a
-//                           command label like "git checkout ." or a
-//                           dir like "webui/src/"). Walks the entry's
-//                           BulkItems and restores every packed file.
-//                           Replaces the standalone recover_bulk tool.
-//
-// Selection rules:
-//   - Most-recent matching change for `path` wins for scope="latest"
-//     (the tracker records changes in append order).
-//   - Earliest matching change wins for scope="session_start".
-//   - The change must have a recoverable OriginalCode (non-empty,
-//     not the redacted sentinel, not the path-only sentinel).
-//   - For "create" entries (no original existed), recovery is a
-//     delete: removing a created file restores the workspace to
-//     pre-creation state.
-//
-// Safety:
-//   - Refuses paths outside the workspace root (no cross-workspace
-//     restores).
-//   - Refuses when the file would resolve to a directory or symlink
-//     target.
-//   - Returns a structured JSON result so the LLM can reason about
-//     success vs. why-it-couldn't.
+// ChangeTracker's session buffer. Supports scope="latest" (default),
+// scope="session_start", and scope="bulk".
 package agent
 
 import (
@@ -46,12 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	rawPath, ok := args["path"].(string)
 	if !ok || rawPath == "" {
-		return "", fmt.Errorf("recover_file: 'path' parameter is required")
+		return "", agenterrors.NewTool("recover_file", "recover_file: 'path' parameter is required", nil)
 	}
 	scope := strings.TrimSpace(asString(args["scope"]))
 	if scope == "" {
@@ -69,7 +36,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 
 	abs, err := filepath.Abs(rawPath)
 	if err != nil {
-		return "", fmt.Errorf("recover_file: resolve %q: %w", rawPath, err)
+		return "", agenterrors.Wrapf(err, "recover_file: resolve %q", rawPath)
 	}
 
 	changes := tracker.GetChanges()
@@ -86,7 +53,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		// always beats a later bulk for the same path).
 		match = resolveEarliestRecoveryTarget(changes, abs)
 	default:
-		return "", fmt.Errorf("recover_file: unknown scope %q (want 'latest', 'session_start', or 'bulk')", scope)
+		return "", agenterrors.NewValidation(fmt.Sprintf("recover_file: unknown scope %q (want 'latest', 'session_start', or 'bulk')", scope), nil)
 	}
 	if match == nil {
 		return jsonRecoverResult(false, abs, "", "no tracked change recorded for this path"), nil
@@ -99,6 +66,29 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	// has always claimed this guarantee; this enforces it.
 	if a.IsPathOutsideWorkspace(abs) {
 		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
+	}
+
+	// Staleness guard: if the file on disk no longer matches what the
+	// agent wrote (NewCode), it was modified intentionally after the
+	// snapshot. Recovering would silently clobber that newer work.
+	//
+	// For scope="session_start", `match` is the EARLIEST change, but
+	// staleness must compare disk against the LATEST NewCode (the
+	// agent's most recent write to this path). Otherwise a file edited
+	// twice in the same session looks "stale" (disk=v2, earliest
+	// NewCode=v1) even though nobody external touched it.
+	stalenessNewCode := match.NewCode
+	if scope == "session_start" {
+		for _, ch := range changes {
+			chAbs, chErr := filepath.Abs(ch.FilePath)
+			if chErr == nil && chAbs == abs && ch.NewCode != "" {
+				stalenessNewCode = ch.NewCode
+			}
+		}
+	}
+	if isStaleForRevertWithOriginal(abs, stalenessNewCode, match.OriginalCode) {
+		history.AuditRevertSkip("handleRecoverFile", abs, "stale or committed")
+		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the snapshot — refusing to overwrite (content may have been committed or edited intentionally)"), nil
 	}
 
 	// "create" with no original → recovery is delete.
@@ -134,6 +124,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return jsonRecoverResult(false, abs, "", "refusing to write redacted marker to disk"), nil
 	}
 
+	history.AuditRevertWrite("handleRecoverFile", abs, "OriginalCode")
 	if writeErr := os.WriteFile(abs, []byte(match.OriginalCode), 0o644); writeErr != nil {
 		return jsonRecoverResult(false, abs, "", fmt.Sprintf("write failed: %v", writeErr)), nil
 	}

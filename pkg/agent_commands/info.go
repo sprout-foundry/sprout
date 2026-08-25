@@ -1,28 +1,204 @@
 package commands
 
 import (
+	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
-// StatsCommand implements the /stats slash command
-type StatsCommand struct{}
+// InfoCommand implements the /info slash command — a one-shot overview
+// of the agent's current state: model, provider, context, cost, persona,
+// embedding index, and subagent config.
+type InfoCommand struct {
+	stdout io.Writer
+}
+
+func (c *InfoCommand) SetOutput(w io.Writer) { c.stdout = w }
+
+func (c *InfoCommand) out() io.Writer {
+	if c.stdout != nil {
+		return c.stdout
+	}
+	return os.Stdout
+}
 
 // Name returns the command name
-func (s *StatsCommand) Name() string {
-	return "stats"
+func (c *InfoCommand) Name() string {
+	return "info"
+}
+
+// SafeDuringSteer returns true - /info is read-only
+func (c *InfoCommand) SafeDuringSteer() bool {
+	return true
 }
 
 // Description returns the command description
-func (s *StatsCommand) Description() string {
-	return "Show detailed conversation summary and token usage"
+func (c *InfoCommand) Description() string {
+	return "Quick overview of live agent state (model, context, cost, persona)"
 }
 
-// Execute runs the stats command
-func (s *StatsCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	console.GlyphInfo.Fprintln(os.Stdout, "Detailed Conversation Summary:")
-	chatAgent.PrintConversationSummary(true)
+// Usage returns the detailed help text shown by `/help info`.
+func (c *InfoCommand) Usage() string {
+	return strings.Join([]string{
+		"/info   Quick one-shot overview of live agent state.",
+		"",
+		"Shows model, provider, context tokens (used/limit/%), cost, workspace,",
+		"persona, embedding index status, and subagent provider/model.",
+		"Use /status for detailed runtime status or /setup for persisted config.",
+		"",
+		"Flags:",
+		"  --json   Output the same data as a JSON object",
+	}, "\n")
+}
+
+// Execute renders the agent state overview
+func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	if chatAgent == nil {
+		fmt.Fprintln(c.out(), console.GlyphInfo.Prefix()+"No agent state available.")
+		return nil
+	}
+
+	// Model & provider
+	model := chatAgent.GetModel()
+	provider := chatAgent.GetProvider()
+	if model == "" {
+		model = "(unknown)"
+	}
+	if provider == "" {
+		provider = "(unknown)"
+	}
+
+	// Context tokens
+	used, limit := chatAgent.GetContextTokens()
+	pct := 0.0
+	if limit > 0 {
+		pct = float64(used) / float64(limit) * 100
+	}
+
+	// Cost
+	totalCost := chatAgent.GetTotalCost()
+
+	// Workspace
+	workspace := chatAgent.GetWorkspaceRoot()
+	if workspace == "" {
+		workspace = "(none)"
+	}
+
+	// Persona
+	persona := chatAgent.GetActivePersona()
+	if persona == "" {
+		persona = "none"
+	}
+
+	// Embeddings
+	embeddingEnabled := chatAgent.IsEmbeddingIndexEnabled()
+	embedCount := 0
+	if mgr := chatAgent.GetEmbeddingManager(); mgr != nil {
+		embedCount = mgr.IndexSize()
+	}
+	embedStatus := "disabled"
+	if embeddingEnabled {
+		embedStatus = "enabled"
+	}
+
+	// Subagent config
+	cfg := chatAgent.GetConfig()
+	subagentProvider := "(unknown)"
+	subagentModel := "(unknown)"
+	if cfg != nil {
+		subagentProvider = cfg.GetSubagentProvider()
+		subagentModel = cfg.GetSubagentModel()
+	}
+
+	fmt.Fprintln(c.out())
+	fmt.Fprintf(c.out(), "Agent: %s (%s)\n", model, provider)
+	fmt.Fprintf(c.out(), "Context: %d/%d tokens (%.1f%%)\n", used, limit, pct)
+	fmt.Fprintf(c.out(), "Cost: $%.6f\n", totalCost)
+	fmt.Fprintf(c.out(), "Workspace: %s\n", workspace)
+	fmt.Fprintf(c.out(), "Persona: %s\n", persona)
+	fmt.Fprintf(c.out(), "Embeddings: %s (%d records)\n", embedStatus, embedCount)
+	fmt.Fprintf(c.out(), "Subagent provider: %s model: %s\n", subagentProvider, subagentModel)
+	fmt.Fprintln(c.out())
+
 	return nil
+}
+
+// infoJSONPayload is the JSON representation produced by /info --json.
+type infoJSONPayload struct {
+	Model            string  `json:"model"`
+	Provider         string  `json:"provider"`
+	ContextUsed      int     `json:"context_used"`
+	ContextLimit     int     `json:"context_limit"`
+	ContextPct       float64 `json:"context_pct"`
+	Cost             float64 `json:"cost"`
+	Workspace        string  `json:"workspace"`
+	Persona          string  `json:"persona"`
+	EmbeddingEnabled bool    `json:"embedding_enabled"`
+	EmbeddingRecords int     `json:"embedding_records"`
+	SubagentProvider string  `json:"subagent_provider"`
+	SubagentModel    string  `json:"subagent_model"`
+}
+
+// ExecuteWithJSONOutput emits the agent state overview as JSON.
+func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	if chatAgent == nil {
+		return WriteJSON(c.out(), infoJSONPayload{})
+	}
+
+	model := chatAgent.GetModel()
+	provider := chatAgent.GetProvider()
+	if model == "" {
+		model = "(unknown)"
+	}
+	if provider == "" {
+		provider = "(unknown)"
+	}
+
+	used, limit := chatAgent.GetContextTokens()
+	pct := 0.0
+	if limit > 0 {
+		pct = float64(used) / float64(limit) * 100
+	}
+
+	workspace := chatAgent.GetWorkspaceRoot()
+	if workspace == "" {
+		workspace = "(none)"
+	}
+
+	persona := chatAgent.GetActivePersona()
+	if persona == "" {
+		persona = "none"
+	}
+
+	embeddingEnabled := chatAgent.IsEmbeddingIndexEnabled()
+	embedCount := 0
+	if mgr := chatAgent.GetEmbeddingManager(); mgr != nil {
+		embedCount = mgr.IndexSize()
+	}
+
+	subagentProvider := "(unknown)"
+	subagentModel := "(unknown)"
+	if cfg := chatAgent.GetConfig(); cfg != nil {
+		subagentProvider = cfg.GetSubagentProvider()
+		subagentModel = cfg.GetSubagentModel()
+	}
+
+	return WriteJSON(c.out(), infoJSONPayload{
+		Model:            model,
+		Provider:         provider,
+		ContextUsed:      used,
+		ContextLimit:     limit,
+		ContextPct:       pct,
+		Cost:             chatAgent.GetTotalCost(),
+		Workspace:        workspace,
+		Persona:          persona,
+		EmbeddingEnabled: embeddingEnabled,
+		EmbeddingRecords: embedCount,
+		SubagentProvider: subagentProvider,
+		SubagentModel:    subagentModel,
+	})
 }

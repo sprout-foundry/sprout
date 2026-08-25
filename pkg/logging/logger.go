@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // Logger provides structured logging functionality
@@ -25,14 +27,17 @@ func NewLogger() (*Logger, error) {
 
 // init initializes the logging system
 func (l *Logger) init() error {
-	// Create .sprout directory if it doesn't exist
-	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
-	if err := os.MkdirAll(sproutDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .sprout directory: %w", err)
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve state directory: %w", err)
+	}
+	logDir := filepath.Join(stateDir, "logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
 	}
 
 	// Open log file for writing
-	logPath := filepath.Join(sproutDir, "sprout.log")
+	logPath := filepath.Join(logDir, "sprout.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
@@ -91,18 +96,37 @@ func (l *Logger) Close() error {
 	return nil
 }
 
-// WriteLocalCopy writes a copy of content to a local log file for debugging
+// WriteLocalCopy writes a copy of content to a local diagnostic file for debugging
 func WriteLocalCopy(filename string, content []byte) {
-	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
-	logPath := filepath.Join(sproutDir, filename)
+	cacheDir, err := envutil.CacheDir()
+	if err != nil {
+		return
+	}
+	diagDir := filepath.Join(cacheDir, "diagnostics")
+	_ = os.MkdirAll(diagDir, 0o755)
+	logPath := filepath.Join(diagDir, filename)
 
 	if err := os.WriteFile(logPath, content, 0600); err != nil {
 		fmt.Printf("Failed to write local copy: %v\n", err)
 	}
 }
 
-// GetLogPath returns the path to the log file
+// GetLogPath returns the path to the log file in the state directory.
+// Does not create directories — pure path computation.
 func GetLogPath() string {
-	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
-	return filepath.Join(sproutDir, "sprout.log")
+	if v := os.Getenv("SPROUT_STATE_DIR"); v != "" {
+		return filepath.Join(v, "logs", "sprout.log")
+	}
+	if v := os.Getenv("XDG_STATE_HOME"); v != "" {
+		return filepath.Join(v, "sprout", "logs", "sprout.log")
+	}
+	home := os.Getenv("HOME")
+	if home == "" {
+		hd, err := os.UserHomeDir()
+		if err != nil {
+			return filepath.Join(os.TempDir(), "sprout.log")
+		}
+		home = hd
+	}
+	return filepath.Join(home, ".local", "state", "sprout", "logs", "sprout.log")
 }

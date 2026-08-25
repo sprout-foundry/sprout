@@ -36,4 +36,5 @@ type CustomProviderConfig struct {
 	VisionModel            string                      `json:"vision_model,omitempty"`             // Vision-capable model for this provider
 	VisionFallbackProvider string                      `json:"vision_fallback_provider,omitempty"` // Optional fallback provider for vision
 	VisionFallbackModel    string                      `json:"vision_fallback_model,omitempty"`    // Optional fallback model for vision provider
+	BillingType            string                      `json:"billing_type,omitempty"`             // Billing model: pay_per_token (default), subscription, free
 }

@@ -10,6 +10,8 @@ import type {
   DeepReviewFixResponse,
   DeepReviewFixStartResponse,
   DeepReviewFixStatusResponse,
+  LocalLLMStatus,
+  LocalLLMModel,
 } from './types';
 
 // ── Stats ──────────────────────────────────────────────────────────
@@ -33,12 +35,24 @@ export async function checkHealth(fetchFn: typeof fetch): Promise<boolean> {
 
 // ── Providers ──────────────────────────────────────────────────────
 
+/**
+ * `test` is the in-process mock sentinel (`api.TestClientType` on the Go side).
+ * Defense-in-depth: the daemon filters it out of GetAvailableProviders(), but
+ * we also strip it here in case an older daemon or a stale CustomProviders
+ * entry re-introduces it — selecting it from the UI and persisting it to
+ * LastUsedProvider silently breaks the next session.
+ */
+export function stripTestProvider<T extends { id: string }>(providers: readonly T[]): T[] {
+  return providers.filter((p) => p.id !== 'test');
+}
+
 export async function getProviders(
   fetchFn: typeof fetch,
 ): Promise<{ providers: ProviderOption[]; current_provider?: string; current_model?: string }> {
   const response = await fetchFn('/api/providers');
   if (!response.ok) throw new Error('Failed to fetch providers');
-  return response.json();
+  const data = await response.json();
+  return { ...data, providers: stripTestProvider(data.providers ?? []) };
 }
 
 export async function getProviderModels(fetchFn: typeof fetch, provider: string): Promise<ProviderModelsResponse> {
@@ -121,4 +135,44 @@ export async function exportSupportBundle(fetchFn: typeof fetch): Promise<void> 
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+// ── Local LLM ──────────────────────────────────────────────────────
+
+export async function getLocalLLMStatus(fetchFn: typeof fetch): Promise<LocalLLMStatus> {
+  const response = await fetchFn('/api/local-llm/status');
+  if (!response.ok) throw new Error('Failed to get local LLM status');
+  return response.json();
+}
+
+export async function startLocalLLM(
+  fetchFn: typeof fetch,
+): Promise<{ status: string; endpoint?: string; pid?: number }> {
+  const response = await fetchFn('/api/local-llm/start', { method: 'POST' });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(String(data.message || data.error || `HTTP ${response.status}`));
+  }
+  return response.json();
+}
+
+export async function getLocalLLMModels(
+  fetchFn: typeof fetch,
+): Promise<{ models: LocalLLMModel[]; recommended: string; model_dir: string }> {
+  const response = await fetchFn('/api/local-llm/models');
+  if (!response.ok) throw new Error('Failed to get local LLM models');
+  return response.json();
+}
+
+export async function downloadLocalLLMModel(
+  fetchFn: typeof fetch,
+  model?: string,
+): Promise<{ status: string; model: string; pid: number; message: string }> {
+  const params = model ? `?model=${encodeURIComponent(model)}` : '';
+  const response = await fetchFn(`/api/local-llm/download${params}`, { method: 'POST' });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(String(data.message || data.error || `HTTP ${response.status}`));
+  }
+  return response.json();
 }

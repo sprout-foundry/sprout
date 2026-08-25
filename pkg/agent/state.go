@@ -1,12 +1,16 @@
 package agent
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
@@ -19,6 +23,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 
 	state := AgentState{
 		Messages:                a.state.GetMessages(),
+		MessageTimestamps:       a.state.GetMessageTimestamps(),
 		TurnCheckpoints:         a.copyTurnCheckpoints(),
 		PreviousSummary:         a.state.GetPreviousSummary(),
 		CompactSummary:          compactSummary, // Store 5K-limited summary for continuity
@@ -30,7 +35,12 @@ func (a *Agent) ExportState() ([]byte, error) {
 		CompletionTokens:        a.state.GetCompletionTokens(),
 		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
 		CachedTokens:            a.state.GetCachedTokens(),
+		CacheWriteTokens:        a.state.GetCacheWriteTokens(),
 		CachedCostSavings:       a.state.GetCachedCostSavings(),
+		ChargedCostTotal:        a.state.GetChargedCostTotal(),
+		TokenCostTotal:          a.state.GetTokenCostTotal(),
+		SubscriptionTokens:      a.state.GetSubscriptionTokens(),
+		FreeTokens:              a.state.GetFreeTokens(),
 	}
 	return json.Marshal(state)
 }
@@ -39,9 +49,10 @@ func (a *Agent) ExportState() ([]byte, error) {
 func (a *Agent) ImportState(data []byte) error {
 	var state AgentState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("failed to import state: %w", err)
+		return agenterrors.NewAgent("state", "failed to import state", err)
 	}
 	a.state.SetMessages(state.Messages)
+	a.state.SetMessageTimestamps(state.MessageTimestamps)
 	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
 	// Prefer compact summary for continuity, fallback to legacy summary
 	if state.CompactSummary != "" {
@@ -58,7 +69,13 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetCompletionTokens(state.CompletionTokens)
 	a.state.SetEstimatedTokenResponses(state.EstimatedTokenResponses)
 	a.state.SetCachedTokens(state.CachedTokens)
+	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
+	a.state.SetImageTokens(state.ImageTokens)
+	a.state.SetChargedCostTotal(state.ChargedCostTotal)
+	a.state.SetTokenCostTotal(state.TokenCostTotal)
+	a.state.SetSubscriptionTokens(state.SubscriptionTokens)
+	a.state.SetFreeTokens(state.FreeTokens)
 	return nil
 }
 
@@ -74,21 +91,21 @@ func (a *Agent) replaceTaskActions(actions []TaskAction) {
 
 // validateStateFilePath validates that a filename is safe for state file operations.
 // It prevents:
-//   1. Absolute path writes (e.g., /etc/passwd)
-//   2. Path traversal via ".." components (e.g., ../../etc/passwd)
-//   3. Null bytes in filenames (cross-platform consistency)
-//   4. Symlinks that could redirect writes to arbitrary files
+//  1. Absolute path writes (e.g., /etc/passwd)
+//  2. Path traversal via ".." components (e.g., ../../etc/passwd)
+//  3. Null bytes in filenames (cross-platform consistency)
+//  4. Symlinks that could redirect writes to arbitrary files
 //
 // Only simple filenames or safe relative paths within the current directory are allowed.
 func validateStateFilePath(filename string) (string, error) {
 	trimmed := strings.TrimSpace(filename)
 	if trimmed == "" {
-		return "", fmt.Errorf("state file path cannot be empty")
+		return "", agenterrors.NewValidation("state file path cannot be empty", nil)
 	}
 
 	// Reject null bytes (valid on some filesystems but confusing and dangerous)
 	if strings.Contains(trimmed, "\x00") {
-		return "", fmt.Errorf("state file path %q contains invalid null byte", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q contains invalid null byte", filename), nil)
 	}
 
 	// Clean the path to resolve any "." or ".." segments
@@ -96,22 +113,22 @@ func validateStateFilePath(filename string) (string, error) {
 
 	// Reject absolute paths
 	if filepath.IsAbs(cleaned) {
-		return "", fmt.Errorf("state file path %q cannot be an absolute path", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q cannot be an absolute path", filename), nil)
 	}
 
 	// Reject paths that still contain ".." after cleaning (path traversal)
 	if strings.Contains(cleaned, "..") {
-		return "", fmt.Errorf("state file path %q contains invalid path traversal components", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q contains invalid path traversal components", filename), nil)
 	}
 
 	// Ensure path doesn't start with path separator (extra check for Windows compatibility)
 	if strings.HasPrefix(cleaned, string(os.PathSeparator)) || strings.HasPrefix(cleaned, "/") {
-		return "", fmt.Errorf("state file path %q cannot start with path separator", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q cannot start with path separator", filename), nil)
 	}
 
 	// Reject symlinks to prevent writes to arbitrary files outside the working directory
 	if info, err := os.Lstat(cleaned); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("state file path %q is a symlink; symlinks are not allowed for security", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q is a symlink; symlinks are not allowed for security", filename), nil)
 	}
 
 	return cleaned, nil
@@ -126,7 +143,7 @@ func (a *Agent) SaveStateToFile(filename string) error {
 
 	stateData, err := a.ExportState()
 	if err != nil {
-		return fmt.Errorf("failed to export state: %w", err)
+		return agenterrors.NewAgent("state", "failed to export state", err)
 	}
 	return os.WriteFile(validatedPath, stateData, 0644)
 }
@@ -140,7 +157,7 @@ func (a *Agent) LoadStateFromFile(filename string) error {
 
 	data, err := os.ReadFile(validatedPath)
 	if err != nil {
-		return fmt.Errorf("failed to read state file: %w", err)
+		return agenterrors.NewAgent("state", "failed to read state file", err)
 	}
 	return a.ImportState(data)
 }
@@ -154,12 +171,12 @@ func (a *Agent) LoadSummaryFromFile(filename string) error {
 
 	data, err := os.ReadFile(validatedPath)
 	if err != nil {
-		return fmt.Errorf("failed to read summary file: %w", err)
+		return agenterrors.NewAgent("state", "failed to read summary file", err)
 	}
 
 	var state AgentState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("failed to unmarshal summary: %w", err)
+		return agenterrors.NewAgent("state", "failed to unmarshal summary", err)
 	}
 
 	// Only load the compact summary, not the full conversation state
@@ -189,7 +206,7 @@ func (a *Agent) SaveConversationSummary() error {
 	// Save state to file
 	stateFile := ".coder_state.json"
 	if err := a.SaveStateToFile(stateFile); err != nil {
-		return fmt.Errorf("failed to save conversation state: %w", err)
+		return agenterrors.NewAgent("state", "failed to save conversation state", err)
 	}
 
 	if a.debug {
@@ -266,7 +283,6 @@ func (a *Agent) SetSessionName(name string) {
 			return
 		}
 	}
-	a.shiftTurnCheckpoints(1)
 	a.state.AddMessage(api.Message{Role: "system", Content: pattern + name})
 }
 
@@ -292,9 +308,132 @@ func (a *Agent) autoSaveState() {
 		return
 	}
 
+	a.finalizeTurnJournal()
+
 	if a.debug {
 		a.Logger().Debug("[save] Auto-saved scoped conversation state for session %s\n", a.state.GetSessionID())
 	}
+}
+
+// newSessionID returns a session identifier for a freshly rotated session.
+// Format: session_<unix-nano>_<6 random hex bytes> — collision-resistant
+// across rapid rotations within the same nanosecond, distinct from
+// autoSaveState's session_<unix-seconds> shape so rotated sessions are
+// trivially distinguishable from auto-assigned ones.
+func newSessionID() string {
+	token := make([]byte, 6)
+	if _, err := rand.Read(token); err != nil {
+		// crypto/rand should not fail on a healthy system; fall back to a
+		// timestamp-only ID so we never block rotation on entropy errors.
+		return fmt.Sprintf("session_%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("session_%d_%s", time.Now().UnixNano(), hex.EncodeToString(token))
+}
+
+// RotateSession closes the current session as a complete, restorable unit
+// (writing its final state to disk under the current SessionID), then assigns
+// a new SessionID and clears in-memory conversation state. The previous
+// session file remains loadable via LoadStateScoped. Returns the new session ID.
+//
+// If the prior session's SaveStateScoped fails (e.g. invalid session ID or
+// unwritable working directory), RotateSession returns that error WITHOUT
+// rotating — the prior session must remain intact so the caller can retry.
+func (a *Agent) RotateSession() (string, error) {
+	if a.state == nil {
+		a.state = NewAgentStateManager(false)
+	}
+
+	currentID := a.state.GetSessionID()
+	if currentID != "" {
+		if err := a.SaveStateScoped(currentID, a.currentWorkspaceRoot()); err != nil {
+			return "", agenterrors.Wrap(err, "rotate: failed to snapshot prior session")
+		}
+	}
+
+	a.ClearConversationHistory()
+
+	newID := newSessionID()
+	a.SetSessionID(newID)
+	return newID, nil
+}
+
+// Breakpoint represents a user message that can be forked from.
+type Breakpoint struct {
+	Index   int    // 1-based user-facing index
+	Content string // First ~80 chars for display
+}
+
+// Breakpoints returns all user messages as forkable breakpoints.
+func (a *Agent) Breakpoints() []Breakpoint {
+	messages := a.state.GetMessages()
+	var bps []Breakpoint
+	userIdx := 1
+	for _, msg := range messages {
+		if msg.Role == "user" {
+			content := StripUserMessageTimestamp(msg.Content)
+			if len(content) > 80 {
+				content = content[:80] + "..."
+			}
+			bps = append(bps, Breakpoint{Index: userIdx, Content: content})
+			userIdx++
+		}
+	}
+	return bps
+}
+
+// ForkAtBreakpoint saves the current session, then truncates the
+// conversation to messages [0..breakpointIndex] (where breakpointIndex
+// is 1-based, matching the Breakpoints list). Returns the new session ID.
+// The original session is preserved on disk.
+func (a *Agent) ForkAtBreakpoint(breakpointIndex int) (string, error) {
+	if a.state == nil {
+		a.state = NewAgentStateManager(false)
+	}
+
+	messages := a.state.GetMessages()
+	timestamps := a.state.GetMessageTimestamps()
+
+	// Find the Nth user message (1-based).
+	userCount := 0
+	cutoffIdx := -1
+	for i, msg := range messages {
+		if msg.Role == "user" {
+			userCount++
+			if userCount == breakpointIndex {
+				cutoffIdx = i
+				break
+			}
+		}
+	}
+	if cutoffIdx == -1 {
+		if userCount == 0 {
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("no user messages in conversation (requested breakpoint %d)", breakpointIndex), nil)
+		}
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("breakpoint %d out of range (%d user message(s) available)", breakpointIndex, userCount), nil)
+	}
+
+	// Save current session to disk before truncating.
+	currentID := a.state.GetSessionID()
+	if currentID != "" {
+		if err := a.SaveStateScoped(currentID, a.currentWorkspaceRoot()); err != nil {
+			return "", agenterrors.Wrap(err, "fork: failed to save current session")
+		}
+	}
+
+	truncated := messages[:cutoffIdx+1]
+	truncatedTimestamps := timestamps[:cutoffIdx+1]
+
+	a.ClearConversationHistory()
+
+	for _, msg := range truncated {
+		a.state.AddMessage(msg)
+	}
+	// Restore original timestamps for the truncated messages.
+	a.state.SetMessageTimestamps(truncatedTimestamps)
+
+	newID := newSessionID()
+	a.SetSessionID(newID)
+	return newID, nil
 }
 
 // generateSessionName generates a readable session name from first user message
@@ -311,8 +450,12 @@ func (a *Agent) generateSessionName() string {
 	}
 	// Otherwise derive from first user message
 	for _, msg := range messages {
-		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
-			name := strings.TrimSpace(msg.Content)
+		if msg.Role == "user" {
+			content := StripUserMessageTimestamp(msg.Content)
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
+			name := strings.TrimSpace(content)
 			name = strings.Join(strings.Fields(name), " ")
 			if len(name) > 60 {
 				name = name[:60] + "..."
@@ -321,4 +464,10 @@ func (a *Agent) generateSessionName() string {
 		}
 	}
 	return "Unnamed session"
+}
+
+// GetSessionName returns a readable name for the current session.
+// It is the exported form of generateSessionName.
+func (a *Agent) GetSessionName() string {
+	return a.generateSessionName()
 }

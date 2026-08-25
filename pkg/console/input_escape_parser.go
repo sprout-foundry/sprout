@@ -16,8 +16,8 @@ type EscapeParser struct {
 	// bytes. Without this, continuation bytes (0x80-0xBF) are silently
 	// dropped by the default case, corrupting pasted text containing
 	// non-ASCII characters (curly quotes, emoji, international text).
-	utf8Buf   []byte
-	utf8Need  int // remaining continuation bytes expected
+	utf8Buf  []byte
+	utf8Need int // remaining continuation bytes expected
 }
 
 // NewEscapeParser creates a new escape sequence parser
@@ -140,6 +140,17 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 		if b == 127 {
 			ep.Reset()
 			return &InputEvent{Type: EventDeleteWordBackward}
+		}
+		// CLI-D: Alt+<letter> for any other letter. We surface the
+		// letter in .Data so a keymap registry can route it. The
+		// legacy pending-char + EventEscape path would also fire for
+		// these, but combining them into a single AltLetter event is
+		// cleaner: callers don't have to combine a synthetic Escape +
+		// pending-char to recover the key. Suppress the pending char
+		// path entirely.
+		if b >= 32 && b <= 126 {
+			ep.Reset()
+			return &InputEvent{Type: EventAltLetter, Data: string([]byte{b})}
 		}
 		// Not a CSI sequence, treat ESC as escape event
 		// This character could be printable, save it for next call

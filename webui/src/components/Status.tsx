@@ -112,11 +112,7 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
           // support engineer can grab it on request, without leaking
           // raw infra IDs into the user-facing chrome. The visible
           // chrome stays "Link: connected".
-          title={
-            transportSessionId
-              ? `Connection state · session ${transportSessionId}`
-              : 'Connection state'
-          }
+          title={transportSessionId ? `Connection state · session ${transportSessionId}` : 'Connection state'}
         >
           Link: {connectionPhase}
         </span>

@@ -13,8 +13,8 @@ import (
 )
 
 func TestRodRenderer_RenderPage_Example(t *testing.T) {
-	if os.Getenv("LEDIT_TEST_BROWSER") == "" {
-		t.Skip("skipping: set LEDIT_TEST_BROWSER=1 to run browser tests")
+	if os.Getenv("SPROUT_TEST_BROWSER") == "" {
+		t.Skip("skipping: set SPROUT_TEST_BROWSER=1 to run browser tests")
 	}
 
 	r := NewBrowserRenderer()
@@ -32,8 +32,8 @@ func TestRodRenderer_RenderPage_Example(t *testing.T) {
 }
 
 func TestRodRenderer_RenderPage_SPA(t *testing.T) {
-	if os.Getenv("LEDIT_TEST_BROWSER") == "" {
-		t.Skip("skipping: set LEDIT_TEST_BROWSER=1 to run browser tests")
+	if os.Getenv("SPROUT_TEST_BROWSER") == "" {
+		t.Skip("skipping: set SPROUT_TEST_BROWSER=1 to run browser tests")
 	}
 
 	r := NewBrowserRenderer()
@@ -54,8 +54,8 @@ func TestRodRenderer_RenderPage_SPA(t *testing.T) {
 }
 
 func TestRodRenderer_CloseBeforeRender(t *testing.T) {
-	if os.Getenv("LEDIT_TEST_BROWSER") == "" {
-		t.Skip("skipping: set LEDIT_TEST_BROWSER=1 to run browser tests")
+	if os.Getenv("SPROUT_TEST_BROWSER") == "" {
+		t.Skip("skipping: set SPROUT_TEST_BROWSER=1 to run browser tests")
 	}
 
 	r := NewBrowserRenderer()

@@ -6,10 +6,10 @@
  * Target: ~80 lines
  */
 
-import React from 'react';
-import { Copy, Navigation, Eye, FolderOpen, ClipboardCopy } from 'lucide-react';
-import type { FC } from 'react';
 import { ContextMenu } from '@sprout/ui';
+import { Copy, Navigation, Eye, FolderOpen, ClipboardCopy } from 'lucide-react';
+import React from 'react';
+import type { FC } from 'react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,10 +35,7 @@ export interface EditorContextMenuProps {
  * The `contextMenu` prop is a bag-of-functions object recreated by the parent on
  * every render, so we must compare each property individually.
  */
-export function areContextMenuEqual(
-  prev: EditorContextMenuProps,
-  next: EditorContextMenuProps,
-): boolean {
+export function areContextMenuEqual(prev: EditorContextMenuProps, next: EditorContextMenuProps): boolean {
   const pc = prev.contextMenu;
   const nc = next.contextMenu;
 

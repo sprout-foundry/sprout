@@ -352,8 +352,8 @@ func TestHandleAPIAgentSessions_MultipleBackgroundSessions(t *testing.T) {
 	// Create 3 background sessions with different properties.
 	for i, chat := range []string{"chat-1", "chat-2", "chat-3"} {
 		session, err := tm.CreateHiddenSession("bg-multi-"+chat, "agent", chat)
-	if err != nil {
-		t.Fatalf("CreateHiddenSession failed: %v", err)
+		if err != nil {
+			t.Fatalf("CreateHiddenSession failed: %v", err)
 		}
 		session.mutex.Lock()
 		session.IsBackground = true

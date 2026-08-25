@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -231,17 +232,22 @@ func TestRouteAgentMessage_PublishesToEventBus(t *testing.T) {
 	}
 }
 
-// TestRouteAgentMessage_CallsStreamingCallback verifies callback invocation
-func TestRouteAgentMessage_CallsStreamingCallback(t *testing.T) {
+// TestRouteAgentMessage_DoesNotCallStreamingCallback verifies that when
+// the OutputRouter is initialized (the common CLI case), agent messages
+// (tool logs, system info, warnings) do NOT route through the streaming
+// callback. The streaming callback is the renderer's WriteChunk path,
+// reserved for prose tokens via RouteStreamChunk. Chrome must clear the
+// current row (\r\033[K) before printing so partial prose lines (no
+// trailing \n) don't get appended to.
+//
+// See pkg/agent/output_router.go writeTerminalMessage for the rationale.
+func TestRouteAgentMessage_DoesNotCallStreamingCallback(t *testing.T) {
 	var callbackCalled bool
-	var receivedMessage string
 	var callbackMu sync.Mutex
-
 	callback := func(message string) {
 		callbackMu.Lock()
 		defer callbackMu.Unlock()
 		callbackCalled = true
-		receivedMessage = message
 	}
 
 	agent := &Agent{
@@ -252,14 +258,86 @@ func TestRouteAgentMessage_CallsStreamingCallback(t *testing.T) {
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, nil)
 
-	message := "system message"
-	router.RouteAgentMessage("info", message, nil)
+	router.RouteAgentMessage("info", "system message", nil)
 
 	callbackMu.Lock()
 	defer callbackMu.Unlock()
-	assert.True(t, callbackCalled, "streamingCallback should be called")
-	assert.Contains(t, receivedMessage, message)
-	assert.Contains(t, receivedMessage, "\n", "message should have newline")
+	assert.False(t, callbackCalled, "streamingCallback must NOT be called when OutputRouter is set — chrome goes through \\r\\033[K clear path")
+}
+
+// TestRouteAgentMessage_GoesToStdoutDirectly verifies chrome lands on
+// stdout with a row clear so it doesn't collide with partial stream lines.
+func TestRouteAgentMessage_GoesToStdoutDirectly(t *testing.T) {
+	agent := &Agent{
+		output: NewAgentOutputManager(),
+	}
+	agent.output.SetStreamingEnabled(true)
+	// Set a callback that would fail the test if invoked — defense in depth.
+	agent.output.SetStreamingCallback(func(string) {
+		t.Fatal("streamingCallback must not be invoked for agent messages")
+	})
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	router := NewOutputRouter(agent, nil)
+
+	// Capture stdout for the duration of the call.
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	router.RouteAgentMessage("info", "hello chrome", nil)
+	w.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+	assert.Contains(t, out, "hello chrome")
+	assert.Contains(t, out, "\n", "trailing newline")
+}
+
+// TestRouteAgentMessage_SkipsRawWriteWhenSubscriberActive verifies that when
+// a terminal subscriber owns rendering (interactive/queue mode), the raw
+// writeTerminalMessage fallback is skipped — the subscriber renders the
+// glyph-prefixed line itself. Without this guard, every agent_message would
+// double-print (raw stdout + subscriber's PrintExternal).
+func TestRouteAgentMessage_SkipsRawWriteWhenSubscriberActive(t *testing.T) {
+	agent := &Agent{
+		output: NewAgentOutputManager(),
+	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	router := NewOutputRouter(agent, nil)
+	router.SetTerminalSubscriberActive(true)
+
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	router.RouteAgentMessage("info", "subscriber owns rendering", nil)
+	w.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+	assert.Empty(t, out, "raw stdout write must be skipped when subscriber is active")
+}
+
+// TestTerminalSubscriberActive_Getter verifies the getter reflects the setter
+// state. This is the contract that cmd/agent_query.go relies on to suppress
+// its duplicate "Completed in" print when the subscriber owns rendering.
+func TestTerminalSubscriberActive_Getter(t *testing.T) {
+	agent := &Agent{output: NewAgentOutputManager()}
+	router := NewOutputRouter(agent, nil)
+
+	assert.False(t, router.TerminalSubscriberActive(), "default must be false (direct mode)")
+
+	router.SetTerminalSubscriberActive(true)
+	assert.True(t, router.TerminalSubscriberActive(), "after SetTerminalSubscriberActive(true)")
+
+	router.SetTerminalSubscriberActive(false)
+	assert.False(t, router.TerminalSubscriberActive(), "after SetTerminalSubscriberActive(false)")
 }
 
 // TestRouteToolLog_PublishesCorrectEvent verifies tool log event structure
@@ -314,34 +392,26 @@ func TestRouteToolLog_HandlesNilAgent(t *testing.T) {
 	}
 }
 
-// TestRouteToolLog_FormatsTerminalOutput verifies ANSI formatting
-func TestRouteToolLog_FormatsTerminalOutput(t *testing.T) {
-	// Capture stdout using pipe
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// Create router without callback to test terminal fallback path
-	router := NewOutputRouter(nil, nil)
+// TestRouteToolLog_PublishesEvent verifies event publishing (terminal
+// output is now handled by the terminal subscriber, not RouteToolLog).
+func TestRouteToolLog_PublishesEvent(t *testing.T) {
+	bus := events.NewEventBus()
+	ch := bus.Subscribe("test")
+	router := NewOutputRouter(nil, bus)
 
 	router.RouteToolLog("read_file", "/path/to/file.go")
 
-	// Restore stdout
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
-
-	// Should contain ANSI codes: RouteToolLog renders the line dim
-	// (\033[2m … \033[0m), not the dark/lighter-gray scheme this test
-	// originally asserted.
-	assert.Contains(t, output, "\033[2m", "should contain dim ANSI code")
-	assert.Contains(t, output, "\033[0m", "should contain reset ANSI code")
-	// Terminal output now only shows target, not action
-	assert.NotContains(t, output, "read_file", "should not contain tool name in terminal output")
-	assert.Contains(t, output, "/path/to/file.go", "should contain target")
+	select {
+	case ev := <-ch:
+		assert.Equal(t, events.EventTypeAgentMessage, ev.Type)
+		data, ok := ev.Data.(map[string]interface{})
+		assert.True(t, ok)
+		assert.Equal(t, "tool_log", data["category"])
+		assert.Contains(t, data["message"], "read_file")
+		assert.Contains(t, data["message"], "/path/to/file.go")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected event to be published")
+	}
 }
 
 // TestRouteToolLog_MultipleSubscribers verifies multiple subscribers receive events
@@ -622,38 +692,55 @@ func TestRouteStreamChunk_ContentTypeVariations(t *testing.T) {
 }
 
 // TestRouteTerminalOnly_DoesNotPublishEvent verifies that RouteTerminalOnly
-// writes to the terminal callback but does NOT publish to the event bus.
+// writes to the terminal (stdout with row clear) but does NOT publish to the
+// event bus and does NOT route through the streaming callback (which is
+// reserved for prose via RouteStreamChunk).
 func TestRouteTerminalOnly_DoesNotPublishEvent(t *testing.T) {
 	bus := events.NewEventBus()
 	ch := bus.Subscribe("test")
 	defer bus.Unsubscribe("test")
 
-	var callbackCalled bool
-	var receivedMessage string
-	var callbackMu sync.Mutex
-
-	callback := func(message string) {
-		callbackMu.Lock()
-		defer callbackMu.Unlock()
-		callbackCalled = true
-		receivedMessage = message
+	// The streaming callback must NOT fire for chrome.
+	var streamingCalled bool
+	var streamingMu sync.Mutex
+	streamingCb := func(message string) {
+		streamingMu.Lock()
+		defer streamingMu.Unlock()
+		streamingCalled = true
 	}
 
 	agent := &Agent{
 		output: NewAgentOutputManager(),
 	}
 	agent.output.SetStreamingEnabled(true)
-	agent.output.SetStreamingCallback(callback)
+	agent.output.SetStreamingCallback(streamingCb)
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, bus)
 
-	router.RouteTerminalOnly("hello terminal")
+	// Capture stdout.
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
 
-	// Verify terminal callback was invoked
-	callbackMu.Lock()
-	assert.True(t, callbackCalled, "streamingCallback should be called for terminal output")
-	assert.Contains(t, receivedMessage, "hello terminal")
-	callbackMu.Unlock()
+	router.RouteTerminalOnly("hello terminal")
+	w.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+
+	if !strings.Contains(out, "hello terminal\n") {
+		t.Errorf("expected stdout to contain %q, got %q", "hello terminal\n", out)
+	}
+
+	// Streaming callback must NOT have fired.
+	streamingMu.Lock()
+	defer streamingMu.Unlock()
+	if streamingCalled {
+		t.Error("streamingCallback must not fire for terminal-only output")
+	}
 
 	// Verify no event was published
 	select {
@@ -721,4 +808,75 @@ func TestRouteAgentMessage_HandsOffToolLogToWebUI(t *testing.T) {
 	mu.Lock()
 	assert.NotEmpty(t, termWrites, "error messages must never be suppressed")
 	mu.Unlock()
+}
+
+func TestOutputRouter_SetReasoningCallback_RoutesOnlyToCallback(t *testing.T) {
+	// Create an output router with no event bus (terminal-only mode)
+	router := NewOutputRouter(nil, nil)
+
+	// Track what the callback receives
+	var received []string
+	router.SetReasoningCallback(func(chunk string) {
+		received = append(received, chunk)
+	})
+
+	// Route a reasoning chunk
+	router.RouteStreamChunk("thinking step 1", "reasoning")
+
+	// The callback should receive it
+	if len(received) != 1 || received[0] != "thinking step 1" {
+		t.Errorf("reasoning callback should receive chunk, got %v", received)
+	}
+
+	// Route a non-reasoning chunk — it should NOT go to the reasoning callback
+	// (it goes to the streaming path instead)
+	router.RouteStreamChunk("hello", "text")
+	if len(received) != 1 {
+		t.Errorf("non-reasoning chunk should NOT go to reasoning callback, got %v", received)
+	}
+
+	// Clear the callback — reasoning should fall through
+	router.SetReasoningCallback(nil)
+	received = nil
+	router.SetReasoningTerminalEnabled(true)
+	router.RouteStreamChunk("thinking step 2", "reasoning")
+	// With no callback and reasoningTerminalEnabled, reasoning falls through
+	// to the streaming path (no-op here since no streaming callback is set)
+	// The reasoning callback should NOT receive anything since it was cleared
+	if len(received) != 0 {
+		t.Errorf("cleared callback should not receive anything, got %v", received)
+	}
+}
+
+func TestOutputRouter_SetReasoningCallback_NilEventBus(t *testing.T) {
+	// Ensure the router works with a nil event bus
+	router := NewOutputRouter(nil, nil)
+	if router.Mode() != OutputModeTerminal {
+		t.Errorf("expected OutputModeTerminal, got %v", router.Mode())
+	}
+
+	var received []string
+	router.SetReasoningCallback(func(chunk string) {
+		received = append(received, chunk)
+	})
+
+	router.RouteStreamChunk("test reasoning", "reasoning")
+	if len(received) != 1 {
+		t.Errorf("expected 1 chunk, got %d", len(received))
+	}
+}
+
+func TestOutputRouter_SetReasoningCallback_WithEventBus(t *testing.T) {
+	bus := events.NewEventBus()
+	router := NewOutputRouter(nil, bus)
+
+	var received []string
+	router.SetReasoningCallback(func(chunk string) {
+		received = append(received, chunk)
+	})
+
+	router.RouteStreamChunk("test reasoning", "reasoning")
+	if len(received) != 1 {
+		t.Errorf("expected 1 chunk, got %d", len(received))
+	}
 }

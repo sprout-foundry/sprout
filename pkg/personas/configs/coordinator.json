@@ -15,7 +15,7 @@
         "edit_file",
         "write_structured_file",
         "patch_structured_file",
-        "search_files",
+        "search",
         "analyze_ui_screenshot",
         "analyze_image_content",
         "browse_url",
@@ -26,15 +26,18 @@
         "mcp_tools",
         "view_history",
         "rollback_changes",
-        "self_review",
         "list_skills",
         "activate_skill",
-        "TodoWrite",
-        "TodoRead",
+        "todo_write",
+        "todo_read",
         "manage_memory",
-        "task_queue_read",
-        "task_queue_publish",
-        "task_queue_add"
+        "repo_map",
+        "list_directory",
+        "respond_clarification",
+        "create_pull_request",
+        "run_automate",
+        "list_automate_workflows",
+        "ask_user"
       ],
       "capabilities": [
         "git_write"
@@ -43,7 +46,7 @@
         "orchestrator"
       ],
       "delegatable": false,
-      "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority.",
+      "description": "Coordinates work across projects by delegating to orchestrator subagents. Operates on the user's behalf with elevated approval authority. Progress is tracked via TODO.md (persistent) plus the in-session TodoWrite tool (UI visibility) — the task_queue and EA queue mode were removed 2026-07-18.",
       "enabled": true,
       "id": "coordinator",
       "_rules_source": "declared:coordinator",
@@ -78,9 +81,6 @@
           "git_clean",
           "docker_prune",
           "git_push_force",
-          "git_checkout",
-          "git_switch",
-          "git_restore",
           "git_branch_delete"
         ]
       }

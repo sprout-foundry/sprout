@@ -4,18 +4,21 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -30,11 +33,11 @@ var (
 	agentSessionID             string
 	agentLastSession           bool
 	agentPersona               string
-	agentEAMode                string
 	agentDryRun                bool
 	maxIterations              int
 	agentNoStreaming           bool
 	agentShowReasoningTerminal bool
+	agentReasoningMode         string // "hidden" (default), "fold", "full"
 	agentSystemPromptFile      string
 	agentSystemPrompt          string
 	agentUnsafe                bool
@@ -55,6 +58,7 @@ var (
 	agentBudgetUSD        float64
 	agentBudgetWarn       string
 	agentHeartbeatSeconds int
+	agentMockLLM          bool
 )
 
 // runStartupPermissionCheck performs a security check on config file permissions
@@ -68,9 +72,12 @@ func runStartupPermissionCheck() error {
 	// Check for symlinks pointing outside the config directory
 	symlinkWarnings := security.CheckAllSymlinks(configDir)
 	if len(symlinkWarnings) > 0 {
-		log.Printf("[security] Symlink warnings:")
+		// CLI-G-2: route pre-decision security warnings through the
+		// console.GlyphWarning path so they hit the terminal stderr
+		// instead of ~/.sprout/workspace.log.
+		console.GlyphWarning.Fprintln(os.Stderr, "Symlink warnings:")
 		for _, warn := range symlinkWarnings {
-			log.Printf("  %s", warn)
+			fmt.Fprintf(os.Stderr, "  %s\n", warn)
 		}
 	}
 
@@ -80,19 +87,158 @@ func runStartupPermissionCheck() error {
 	return nil
 }
 
+// resolveGlobalConfigDir returns the global config directory regardless of
+// SPROUT_CONFIG override. This is used when layering workspace config
+// on top of the global config so API keys are always resolved from the
+// user's home directory.
+func resolveGlobalConfigDir() string {
+	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		if h := os.Getenv("HOME"); h != "" {
+			homeDir = h
+		}
+	}
+	if homeDir == "" {
+		return ""
+	}
+	return filepath.Join(homeDir, ".config", "sprout")
+}
+
+// shouldPreloadLocalModel reports whether createChatAgent should eagerly
+// load the local model before the agent is ready to serve. Three cases skip
+// the (expensive, GPU-loading) preload:
+//
+//  1. Not using the local provider at all — nothing to preload.
+//  2. A silently auto-started background daemon (SPROUT_DAEMON_AUTOSTARTED=1,
+//     set by daemon_autostart.go on the child's env): nothing routes real
+//     agent traffic through that daemon yet, so eagerly loading here only
+//     duplicates the foreground process's GPU/model work and contends with
+//     it for the same GPU — which made the daemon's own health check
+//     reliably miss its 10s StartTimeout, leaving it running unsupervised.
+//  3. A daemon is already up, healthy, and about to actually serve this
+//     query: tryDaemonOneShot (called later in the same invocation, once
+//     flags/workflow are resolved) will route there, so preloading our own
+//     copy first would be paid for nothing. Guarded to only skip when we're
+//     confident tryDaemonOneShot will actually run and would route
+//     successfully — see the inline checks below, which mirror
+//     tryDaemonOneShot's own gating exactly so this can't skip a preload
+//     that then has nothing to fall back on.
+//
+// In every skip case the model still loads normally on first actual local
+// use (lazy init in LocalProvider.ensureLoaded) if daemon routing doesn't
+// end up happening after all. An explicit `sprout agent -d` /
+// `sprout service start` (daemonMode true, no SPROUT_DAEMON_AUTOSTARTED
+// marker) always preloads — it doesn't route to another daemon at all
+// (case 3 doesn't apply to it), and it's intentionally going to be used.
+func shouldPreloadLocalModel() bool {
+	if !isLocalProvider() {
+		return false
+	}
+	if os.Getenv("SPROUT_DAEMON_AUTOSTARTED") == "1" {
+		return false
+	}
+	if daemonMode {
+		return true // we ARE the daemon; nothing else to defer to
+	}
+	// Mirror tryDaemonOneShot's own preconditions (cmd/agent_socket.go)
+	// exactly: if any of these say it won't run or won't route, don't skip
+	// the preload — we'd be relying on a fallback that isn't coming.
+	if agentSkipDaemonRouting() {
+		return true
+	}
+	return !isDaemonReachableForAgentRouting()
+}
+
+// agentSkipDaemonRouting reports whether this invocation will never attempt
+// tryDaemonOneShot at all, independent of daemon health — i.e. shouldn't be
+// used as a basis for skipping the local-model preload.
+//
+// tryDaemonOneShot's actual gate (agent_modes.go) is `workflowConfig ==
+// nil`, where workflowConfig is loaded from the --workflow-config file at
+// RunAgent time — after createChatAgent has already returned, so the loaded
+// value itself isn't available yet here. agentWorkflowConfig (the raw flag)
+// is populated by cobra before RunE runs, same timing createChatAgent
+// already relies on for agentProvider/agentModel/etc, so "is the flag set"
+// is used as a conservative stand-in: if it's set but loading later fails,
+// the command errors out before ever reaching tryDaemonOneShot anyway, so
+// treating "flag set" as "won't route" never skips a preload that had
+// something to fall back on.
+func agentSkipDaemonRouting() bool {
+	return agentWorkflowConfig != ""
+}
+
 func createChatAgent() (*agent.Agent, error) {
+	// Proactive CLI onboarding: if no provider is configured and we're in
+	// an interactive terminal, guide the user through setup before trying
+	// to create an agent. Onboarding persists the provider+model to config
+	// so the subsequent NewAgent() call picks up the fresh configuration.
+	maybeRunOnboarding()
+
+	// If using the local provider, pre-load the model in-process — with
+	// the user's actual persisted/flag-selected model, not the RAM-tier
+	// default. This preload runs before the real agent (and its own
+	// config-driven model resolution below) exists, so without resolving
+	// the intended model here too, it would always auto-select — loading
+	// the wrong model whenever that differs from the persisted choice,
+	// and paying for a second full reload moments later when the real
+	// agent corrects it. A throwaway config read here is a few
+	// milliseconds; the reload it avoids is 8+ seconds of GPU work.
+	if shouldPreloadLocalModel() {
+		preloadModel := ""
+		if cfgManager, cfgErr := configuration.NewManagerSilent(); cfgErr == nil {
+			if _, resolvedModel, resolveErr := cfgManager.ResolveProviderModel(agentProvider, agentModel); resolveErr == nil {
+				preloadModel = resolvedModel
+			}
+		}
+		// This is the one place local-model loading is otherwise
+		// completely silent: it runs before the REPL/spinner
+		// infrastructure exists, so without an explicit message the
+		// terminal just sits frozen for the load's 8+ seconds with no
+		// indication anything is happening. Every other load path (a
+		// mid-session /model switch) at least runs under the "Thinking"
+		// spinner already.
+		if preloadModel != "" {
+			console.GlyphInfo.Printf("Loading local model (%s)...", preloadModel)
+		} else {
+			console.GlyphInfo.Print("Loading local model...")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		if err := localmodel.EnsureServerForProviderWithCheckAndModel(ctx, "sprout-local", preloadModel); err != nil {
+			console.GlyphWarning.Printf("Local AI: %v", err)
+		}
+		cancel()
+	}
+
 	var chatAgent *agent.Agent
 	var err error
 
-	if agentProvider != "" && agentModel != "" {
-		modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
-		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
-	} else if agentProvider != "" {
-		chatAgent, err = agent.NewAgentWithModel(agentProvider)
-	} else if agentModel != "" {
-		chatAgent, err = agent.NewAgentWithModel(agentModel)
-	} else {
-		chatAgent, err = agent.NewAgent()
+	// Use layered config when workspace config was auto-detected, so the agent
+	// inherits API keys from global config while using workspace overrides.
+	if autoDetectedWorkspaceDir != "" {
+		globalDir := resolveGlobalConfigDir()
+		if globalDir != "" {
+			if agentProvider != "" && agentModel != "" {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, fmt.Sprintf("%s:%s", agentProvider, agentModel))
+			} else if agentProvider != "" {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, agentProvider)
+			} else if agentModel != "" {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, agentModel)
+			} else {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, "")
+			}
+		}
+	}
+	if chatAgent == nil {
+		if agentProvider != "" && agentModel != "" {
+			modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
+			chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
+		} else if agentProvider != "" {
+			chatAgent, err = agent.NewAgentWithModel(agentProvider)
+		} else if agentModel != "" {
+			chatAgent, err = agent.NewAgentWithModel(agentModel)
+		} else {
+			chatAgent, err = agent.NewAgent()
+		}
 	}
 
 	if err != nil {
@@ -114,7 +260,9 @@ func createChatAgent() (*agent.Agent, error) {
 
 	// Run startup permission check
 	if err := runStartupPermissionCheck(); err != nil {
-		log.Printf("[security] %v", err)
+		// CLI-G-2: same channel as the symlink warning above — these
+		// are pre-decision signals and should hit the terminal.
+		console.GlyphWarning.Fprintf(os.Stderr, "%v", err)
 	}
 
 	if agentSystemPrompt != "" {
@@ -132,24 +280,12 @@ func createChatAgent() (*agent.Agent, error) {
 		}
 	}
 
-	if agentEAMode != "" {
-		if agentEAMode != "interactive" && agentEAMode != "queue" {
-			return nil, fmt.Errorf("invalid --ea-mode value %q: must be 'interactive' or 'queue'", agentEAMode)
-		}
-		cm := chatAgent.GetConfigManager()
-		if cm != nil {
-			if err := cm.UpdateConfig(func(c *configuration.Config) error {
-				c.EAMode = agentEAMode
-				return nil
-			}); err != nil {
-				return nil, fmt.Errorf("failed to save EA mode config: %w", err)
-			}
-		}
-	}
-
 	if maxIterations > 0 {
 		chatAgent.SetMaxIterations(maxIterations)
 	}
+
+	// Wire training data collection hooks (opt-in session recording).
+	wireTrainingHooks(chatAgent, chatAgent.GetConfigManager())
 
 	return chatAgent, nil
 }
@@ -163,11 +299,11 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentLastSession, "last-session", false, "Resume the most recent session from the current working directory scope")
 	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper)")
 	agentCmd.Flags().StringVar(&agentRiskProfile, "risk-profile", "", "Shell-command risk cascade profile: readonly | cautious | default | permissive | unrestricted. Overrides config.risk_profile for this session. Persona-defined rules still win.")
-	agentCmd.Flags().StringVar(&agentEAMode, "ea-mode", "", "Executive Assistant startup mode: 'interactive' (default) or 'queue' (autonomous task processing)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 0, "Maximum iterations per prompt before stopping (default: 0 = unlimited)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set SPROUT_NO_STREAM=1)")
 	agentCmd.Flags().BoolVar(&agentShowReasoningTerminal, "show-reasoning-terminal", false, "Render reasoning stream chunks in terminal output (default: hidden; WebUI still receives reasoning)")
+	agentCmd.Flags().StringVar(&agentReasoningMode, "reasoning", "", "Reasoning display mode: 'hidden' (default), 'fold' (collapsed token count), 'full' (stream raw text)")
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
@@ -182,26 +318,28 @@ func init() {
 	agentCmd.Flags().IntVar(&agentHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides progress.heartbeat_seconds)")
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
 	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
+	agentCmd.Flags().BoolVar(&agentMockLLM, "mock-llm", false, "Use a stub LLM provider that returns canned responses (for testing)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {
-			// Check for SPROUT_NO_STREAM environment variable
-	if configuration.GetEnvSimple("NO_STREAM") == "1" || configuration.GetEnvSimple("NO_STREAM") == "true" {
-		agentNoStreaming = true
-	}
-	// Check for SPROUT_SHOW_REASONING_TERMINAL environment variable
-	if configuration.GetEnvSimple("SHOW_REASONING_TERMINAL") == "1" || strings.EqualFold(configuration.GetEnvSimple("SHOW_REASONING_TERMINAL"), "true") {
-		agentShowReasoningTerminal = true
-	}
-	// Check for SPROUT_NO_SUBAGENTS environment variable
-	if configuration.GetEnvSimple("NO_SUBAGENTS") == "1" || configuration.GetEnvSimple("NO_SUBAGENTS") == "true" {
-		agentNoSubagents = true
-	}
-	// Check for SPROUT_NO_CONNECTION_CHECK environment variable
-	if configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "1" || configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "true" {
-		agentNoConnectionCheck = true
-	}})
+		// Check for SPROUT_NO_STREAM environment variable
+		if configuration.GetEnvSimple("NO_STREAM") == "1" || configuration.GetEnvSimple("NO_STREAM") == "true" {
+			agentNoStreaming = true
+		}
+		// Check for SPROUT_SHOW_REASONING_TERMINAL environment variable
+		if configuration.GetEnvSimple("SHOW_REASONING_TERMINAL") == "1" || strings.EqualFold(configuration.GetEnvSimple("SHOW_REASONING_TERMINAL"), "true") {
+			agentShowReasoningTerminal = true
+		}
+		// Check for SPROUT_NO_SUBAGENTS environment variable
+		if configuration.GetEnvSimple("NO_SUBAGENTS") == "1" || configuration.GetEnvSimple("NO_SUBAGENTS") == "true" {
+			agentNoSubagents = true
+		}
+		// Check for SPROUT_NO_CONNECTION_CHECK environment variable
+		if configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "1" || configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "true" {
+			agentNoConnectionCheck = true
+		}
+	})
 }
 
 func completePersonaFlag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -308,6 +446,16 @@ Examples:
 			return nil
 		}
 
+		// SP-056-3: validate --reasoning flag value.
+		// Empty string means default (hidden); allowed explicit values:
+		// "hidden", "fold", "full".
+		switch agentReasoningMode {
+		case "", "hidden", "fold", "full":
+			// valid
+		default:
+			return fmt.Errorf("invalid --reasoning value %q: must be 'hidden', 'fold', or 'full'", agentReasoningMode)
+		}
+
 		// Propagate --no-project-skills to env so config loading skips discovery
 		if noProjectSkills {
 			os.Setenv("SPROUT_NO_PROJECT_SKILLS", "1")
@@ -319,7 +467,29 @@ Examples:
 		// before RunAgent has a chance to set the env var.
 		if daemonMode {
 			os.Setenv("SPROUT_DAEMON", "1")
+			// SP-137 Phase 3: an auto-started daemon raises its oom_score_adj
+			// so the kernel sacrifices the background helper before any
+			// user-facing process. Explicit starts keep the default.
+			maybePreferOOMVictim(daemonMode)
+			// Defensive unset on command exit. RunAgent also defers its own
+			// unset, but this handler may return early (provider errors,
+			// session-load failures) before RunAgent runs.
+			defer os.Unsetenv("SPROUT_DAEMON")
 		}
+
+		// SP-136 P2: lazily ensure a background daemon is running (async,
+		// best-effort). Skipped when SPROUT_DAEMON=0/1 or in daemon mode.
+		// The CLI proceeds in-process either way; later phases route work
+		// through the daemon.
+		stopDaemonKeepAlive := maybeAutoStartDaemon(cmd.Context(), daemonMode)
+		defer stopDaemonKeepAlive()
+
+		// SP-136 P3: route embedding operations through the daemon socket
+		// when available (falls back to in-process ONNX otherwise).
+		maybeEnableRemoteEmbedding(daemonMode)
+
+		// Propagate --mock-llm flag to the agent package before agent creation.
+		agent.UseMockLLM = agentMockLLM
 
 		chatAgent, err := createChatAgent()
 		if err != nil {
@@ -331,7 +501,7 @@ Examples:
 		if chatAgent == nil && daemonMode {
 			isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 			stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
-			isInteractive := len(args) == 0 && !isCI && stdinIsTerminal
+			isInteractive := !daemonMode && len(args) == 0 && !isCI && stdinIsTerminal
 			return RunAgent(nil, isInteractive, args)
 		}
 
@@ -414,13 +584,17 @@ Examples:
 			return errors.New("flag --session-id and --last-session are mutually exclusive")
 		}
 		if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
-			workingDir, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to resolve current working directory for session restore: %w", err)
+			workingDir := chatAgent.GetWorkspaceRoot()
+			if workingDir == "" {
+				wd, err := os.Getwd()
+				if err != nil {
+					return fmt.Errorf("failed to resolve current working directory for session restore: %w", err)
+				}
+				workingDir = wd
 			}
 			targetSessionID := strings.TrimSpace(agentSessionID)
 			if agentLastSession {
-				sessions, err := agent.ListSessionsWithTimestamps()
+				sessions, err := agent.ListSessionsWithTimestampsScoped(workingDir)
 				if err != nil {
 					return fmt.Errorf("failed to list sessions: %w", err)
 				}
@@ -463,8 +637,9 @@ Examples:
 			stdinIsTerminal = false
 		}
 
-		// We're interactive only if we have a terminal, no args, and not in CI
-		isInteractive := len(args) == 0 && !isCI && stdinIsTerminal
+		// We're interactive only if we have a terminal, no args, not in CI,
+		// and not running as a daemon (daemon serves the web UI only).
+		isInteractive := !daemonMode && len(args) == 0 && !isCI && stdinIsTerminal
 
 		// Use the new simplified enhanced mode
 		return RunAgent(chatAgent, isInteractive, args)

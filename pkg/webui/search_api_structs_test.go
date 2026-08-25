@@ -226,9 +226,9 @@ func TestCompileSearchPattern_AllFlagCombinations(t *testing.T) {
 	queries := []string{"test", "[a-z]+"}
 	for _, q := range queries {
 		for i := 0; i < 8; i++ {
-			cs := (i&1) == 1
-			ww := (i&2) == 2
-			rx := (i&4) == 4
+			cs := (i & 1) == 1
+			ww := (i & 2) == 2
+			rx := (i & 4) == 4
 			label := fmt.Sprintf("%s/cs=%v/ww=%v/rx=%v", q, cs, ww, rx)
 			t.Run(label, func(t *testing.T) {
 				t.Parallel()

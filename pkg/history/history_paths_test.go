@@ -1,8 +1,6 @@
 package history
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -52,37 +50,24 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 	originalChanges, originalRevisions := getPathsForTesting()
 	defer setPathsForTesting(originalChanges, originalRevisions)
 
-	// Create a test config with global scope
+	// SP-133: "global" history scope is no longer supported.
+	// changes/ and revisions/ are always workspace-local.
+	// Verify that even with HistoryScope="global", the paths remain
+	// project-scoped.
 	config := &configuration.Config{
 		HistoryScope: "global",
 	}
 
-	// Get the expected global config directory
-	configDir, err := configuration.GetConfigDir()
-	if err != nil {
-		t.Fatalf("Failed to get config dir: %v", err)
-	}
-	expectedChanges := filepath.Join(configDir, "changes")
-	expectedRevisions := filepath.Join(configDir, "revisions")
-
 	// Initialize paths
 	InitializeHistoryPaths(config)
 
-	// Verify paths are set to global-scoped locations
+	// Verify paths remain project-scoped regardless of HistoryScope
 	currentChanges, currentRevisions := getPathsForTesting()
-	if currentChanges != expectedChanges {
-		t.Errorf("Expected changesDir to be %s, got %s", expectedChanges, currentChanges)
+	if currentChanges != projectChangesDir {
+		t.Errorf("Expected changesDir to be %s (always workspace-local), got %s", projectChangesDir, currentChanges)
 	}
-	if currentRevisions != expectedRevisions {
-		t.Errorf("Expected revisionsDir to be %s, got %s", expectedRevisions, currentRevisions)
-	}
-
-	// Verify the getters return expected values
-	if GetChangesDir() != expectedChanges {
-		t.Errorf("GetChangesDir() returned unexpected value: %s", GetChangesDir())
-	}
-	if GetRevisionsDir() != expectedRevisions {
-		t.Errorf("GetRevisionsDir() returned unexpected value: %s", GetRevisionsDir())
+	if currentRevisions != projectRevisionsDir {
+		t.Errorf("Expected revisionsDir to be %s (always workspace-local), got %s", projectRevisionsDir, currentRevisions)
 	}
 }
 
@@ -91,30 +76,16 @@ func TestInitializeHistoryPaths_NilConfig(t *testing.T) {
 	originalChanges, originalRevisions := getPathsForTesting()
 	defer setPathsForTesting(originalChanges, originalRevisions)
 
-	// Store current directory
-	oldDir, _ := os.Getwd()
-	t.Cleanup(func() {
-		// Restore working directory
-		os.Chdir(oldDir)
-	})
-
-	// Change to temp directory to test default behavior
-	os.Chdir(t.TempDir())
-
-	// Reset to project paths
-	setPathsForTesting(projectChangesDir, projectRevisionsDir)
-
-	// Initialize with nil config (should load from file or use default)
+	// SP-133: InitializeHistoryPaths no longer loads config — nil is fine.
+	// The paths should always be project-scoped.
 	InitializeHistoryPaths(nil)
 
-	// Initialize should succeed without error - just check it didn't crash
-	// The paths should be set to something (either project or global based on what config returns)
 	currentChanges, currentRevisions := getPathsForTesting()
-	if currentChanges == "" {
-		t.Error("changesDir should not be empty")
+	if currentChanges != projectChangesDir {
+		t.Errorf("Expected changesDir to be %s, got %s", projectChangesDir, currentChanges)
 	}
-	if currentRevisions == "" {
-		t.Error("revisionsDir should not be empty")
+	if currentRevisions != projectRevisionsDir {
+		t.Errorf("Expected revisionsDir to be %s, got %s", projectRevisionsDir, currentRevisions)
 	}
 }
 

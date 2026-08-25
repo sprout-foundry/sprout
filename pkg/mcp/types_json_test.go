@@ -314,8 +314,8 @@ func TestMCPServerConfig_GetCredentialNames(t *testing.T) {
 	config := MCPServerConfig{
 		Name: "test",
 		Credentials: map[string]string{
-			"API_KEY":     "{{credential:mcp/test/API_KEY}}",
-			"AUTH_TOKEN":  "{{credential:mcp/test/AUTH_TOKEN}}",
+			"API_KEY":    "{{credential:mcp/test/API_KEY}}",
+			"AUTH_TOKEN": "{{credential:mcp/test/AUTH_TOKEN}}",
 		},
 	}
 

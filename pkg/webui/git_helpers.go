@@ -6,7 +6,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -31,17 +32,17 @@ type gitFixReviewJob struct {
 
 // GitStatus represents the git status response
 type GitStatus struct {
-	Branch      string   `json:"branch"`
-	Ahead       int      `json:"ahead"`
-	Behind      int      `json:"behind"`
-	Staged      []GitFile `json:"staged"`
-	Modified    []GitFile `json:"modified"`
-	Untracked   []GitFile `json:"untracked"`
-	Deleted     []GitFile `json:"deleted"`
-	Renamed     []GitFile `json:"renamed"`
+	Branch    string    `json:"branch"`
+	Ahead     int       `json:"ahead"`
+	Behind    int       `json:"behind"`
+	Staged    []GitFile `json:"staged"`
+	Modified  []GitFile `json:"modified"`
+	Untracked []GitFile `json:"untracked"`
+	Deleted   []GitFile `json:"deleted"`
+	Renamed   []GitFile `json:"renamed"`
 	// Truncated indicates whether any file lists were truncated due to limits
-	Truncated   bool     `json:"truncated"`
-	InGitRepo   bool     `json:"in_git_repo"`
+	Truncated bool `json:"truncated"`
+	InGitRepo bool `json:"in_git_repo"`
 }
 
 // GitFile represents a file with its git status
@@ -51,14 +52,35 @@ type GitFile struct {
 	Staged bool   `json:"staged,omitempty"`
 }
 
-// getGitStatus parses git status output for the default workspace
-func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
-	return ws.getGitStatusForWorkspace(ws.workspaceRoot)
+// findGitRoot walks up from dir to find the nearest directory containing a .git
+// folder. Returns the resolved path, or the original dir if no git repo is found.
+func findGitRoot(dir string) string {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return dir
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break // reached filesystem root
+		}
+		dir = parent
+	}
+	return dir
 }
 
 func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitStatus, error) {
+	// Walk up the directory tree to find the nearest git repo, matching git's
+	// own behavior. The workspace root may be the user's home dir or a parent
+	// of the actual project, so we need to locate the repo first.
+	gitRoot := findGitRoot(workspaceRoot)
+
 	// Check if we're in a git repository
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	cmd := ws.gitCommandForWorkspace(gitRoot, "rev-parse", "--git-dir")
 	if err := cmd.Run(); err != nil {
 		// Not in a git repository
 		return &GitStatus{
@@ -75,14 +97,14 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 	status := &GitStatus{InGitRepo: true}
 
 	// Get current branch
-	cmd = ws.gitCommandForWorkspace(workspaceRoot, "branch", "--show-current")
+	cmd = ws.gitCommandForWorkspace(gitRoot, "branch", "--show-current")
 	output, err := cmd.Output()
 	if err == nil {
 		status.Branch = strings.TrimSpace(string(output))
 	}
 
 	// Get ahead/behind info
-	cmd = ws.gitCommandForWorkspace(workspaceRoot, "rev-list", "--count", "--left-right", "@{u}...HEAD")
+	cmd = ws.gitCommandForWorkspace(gitRoot, "rev-list", "--count", "--left-right", "@{u}...HEAD")
 	output, err = cmd.Output()
 	if err == nil {
 		parts := strings.Fields(string(output))
@@ -94,7 +116,7 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 
 	// Get staged changes.
 	// Use tab-separated parsing so file names with spaces are preserved.
-	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status", "--cached")
+	cmd = ws.gitCommandForWorkspace(gitRoot, "diff", "--name-status", "--cached")
 	output, err = cmd.Output()
 	if err == nil {
 		allStaged := []GitFile{}
@@ -117,7 +139,7 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 
 	// Get unstaged changes.
 	// Use tab-separated parsing so file names with spaces are preserved.
-	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status")
+	cmd = ws.gitCommandForWorkspace(gitRoot, "diff", "--name-status")
 	output, err = cmd.Output()
 	if err == nil {
 		allModified := []GitFile{}
@@ -173,7 +195,7 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 	}
 
 	// Get untracked files
-	cmd = ws.gitCommandForWorkspace(workspaceRoot, "ls-files", "--others", "--exclude-standard")
+	cmd = ws.gitCommandForWorkspace(gitRoot, "ls-files", "--others", "--exclude-standard")
 	output, err = cmd.Output()
 	if err == nil {
 		allUntracked := []GitFile{}
@@ -326,7 +348,7 @@ func generateCryptoID(prefix string) string {
 	if _, err := rand.Read(b); err != nil {
 		// crypto/rand failure is extremely rare but if it happens,
 		// fall back to a time-based ID rather than returning all zeros.
-		log.Printf("[WARN] crypto/rand.Read failed: %v, falling back to time-based ID", err)
+		slog.Default().Warn("failed to generate cryptographic ID; using time-based fallback", slog.Any("err", err))
 		return fmt.Sprintf("%s-%024x", prefix, time.Now().UnixNano())
 	}
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))

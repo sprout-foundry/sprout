@@ -51,7 +51,7 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
         const summary = todos
           .map((t: Record<string, unknown>) => {
             const status = String(t.status);
-            const icon = status === 'completed' ? '✓' : status === 'in_progress' ? '→' : '○';
+            const icon = status === 'completed' ? '[done]' : status === 'in_progress' ? '[->]' : '[ ]';
             return `${icon} ${String(t.content)}`;
           })
           .join('\n  ');
@@ -65,6 +65,15 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
       }
       case 'metrics_update':
         return `Model: ${String(d?.model || '?')} | Provider: ${String(d?.provider || '?')}`;
+      case 'context_management_diagnostic': {
+        const iter = d?.iteration;
+        const hitRate = typeof d?.cache_hit_rate === 'number' ? (d.cache_hit_rate as number) : 0;
+        const cached = typeof d?.cached_tokens === 'number' ? (d.cached_tokens as number) : 0;
+        const prompt = typeof d?.prompt_tokens === 'number' ? (d.prompt_tokens as number) : 0;
+        const pct = (hitRate * 100).toFixed(1);
+        const iterLabel = typeof iter === 'number' ? ` iter=${iter}` : '';
+        return `cache: ${pct}% (${cached}/${prompt})${iterLabel}`;
+      }
       default:
         return `${logEntry.type}: ${JSON.stringify(d || {}).substring(0, 80)}`;
     }
@@ -141,7 +150,7 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
       <div className="logs-toolbar">
         <div className="logs-toolbar-summary">
           <span>{formattedLines.length} rows</span>
-          <span>buffered up to {MAX_LOG_ROWS}</span>
+          <span>showing last {MAX_LOG_ROWS}</span>
         </div>
         <div className="logs-toolbar-actions">
           <button
@@ -173,7 +182,6 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
           return (
             <div key={logEntry.id} className={`term-log-line term-log-${logEntry.level}`}>
               <span className="term-log-time">{timestamp}</span>
-              <span className="term-log-type">[{logEntry.type}]</span>
               <span className="term-log-msg">{message}</span>
             </div>
           );

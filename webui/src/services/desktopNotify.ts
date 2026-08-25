@@ -13,8 +13,8 @@ let isEnabled = true; // controlled by settings UI toggle
  * Get the current notification permission status.
  */
 export function getPermission(): NotificationPermission {
-	if (typeof Notification === 'undefined') return 'denied';
-	return Notification.permission;
+  if (typeof Notification === 'undefined') return 'denied';
+  return Notification.permission;
 }
 
 /**
@@ -22,19 +22,19 @@ export function getPermission(): NotificationPermission {
  * Returns a promise that resolves with the resulting permission.
  */
 export async function requestPermission(): Promise<NotificationPermission> {
-	if (typeof Notification === 'undefined') return 'denied';
-	if (Notification.permission === 'granted') return 'granted';
-	if (Notification.permission === 'denied') return 'denied';
+  if (typeof Notification === 'undefined') return 'denied';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied') return 'denied';
 
-	const perm = await Notification.requestPermission();
-	return perm;
+  const perm = await Notification.requestPermission();
+  return perm;
 }
 
 /**
  * Enable or disable notifications (controlled by settings toggle).
  */
 export function setEnabled(value: boolean): void {
-	isEnabled = value;
+  isEnabled = value;
 }
 
 /**
@@ -42,7 +42,7 @@ export function setEnabled(value: boolean): void {
  * Named isEnabled_ to avoid collision with the parameter name pattern.
  */
 export function isEnabled_(): boolean {
-	return isEnabled;
+  return isEnabled;
 }
 
 /**
@@ -51,19 +51,19 @@ export function isEnabled_(): boolean {
  * Clicking the notification focuses the window.
  */
 export function notify(title: string, body?: string): void {
-	if (!isEnabled) return;
-	if (typeof Notification === 'undefined') return;
-	if (Notification.permission !== 'granted') return;
+  if (!isEnabled) return;
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission !== 'granted') return;
 
-	const notification = new Notification(title, {
-		body: body || undefined,
-		icon: '/favicon.ico',
-		tag: 'sprout-notification',
-	});
+  const notification = new Notification(title, {
+    body: body || undefined,
+    icon: '/favicon.ico',
+    tag: 'sprout-notification',
+  });
 
-	notification.onclick = () => {
-		window.focus();
-	};
+  notification.onclick = () => {
+    window.focus();
+  };
 }
 
 /**
@@ -72,7 +72,7 @@ export function notify(title: string, body?: string): void {
  * the user when they're already looking at the app.
  */
 export function notifyIfHidden(title: string, body?: string): void {
-	if (!isEnabled) return;
-	if (!document.hidden) return;
-	notify(title, body);
+  if (!isEnabled) return;
+  if (!document.hidden) return;
+  notify(title, body);
 }

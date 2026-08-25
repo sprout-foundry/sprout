@@ -14,13 +14,13 @@ import (
 )
 
 var (
-	disableWebUI       bool
-	noProjectSkills    bool
-	webPort            int
-	webBindAddr        string
-	daemonMode         bool
-	bindSocket         string
-	secretToken        string
+	disableWebUI    bool
+	noProjectSkills bool
+	webPort         int
+	webBindAddr     string
+	daemonMode      bool
+	bindSocket      string
+	secretToken     string
 )
 
 func init() {
@@ -37,7 +37,7 @@ func init() {
 
 // Ensure imports are used
 var (
-	_ = commands.NewCommandRegistry
+	_ = commands.DefaultRegistry
 	_ = console.NewCIOutputHandler
 	_ = events.NewEventBus
 	_ = utils.GetLogger

@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -20,8 +21,6 @@ import (
 // SUBAGENT_FAILED sentinel string prefixes — those literals are retained
 // in the human-readable Output so any LLM behavior keyed on the legacy
 // shape still works, but in-process callers should switch to Status.
-//
-// See SP-059 Phase 2d.
 type SubagentStatus string
 
 const (
@@ -34,8 +33,6 @@ const (
 )
 
 // FileChange is a single tracked write/edit/delete from a subagent run.
-// Sourced from ChangeTracker.GetChanges() (SP-059 Phase 2c) when change
-// tracking is enabled; nil when it isn't.
 type FileChange struct {
 	Path string `json:"path"`
 	Op   string `json:"op"` // "created" | "modified" | "deleted"
@@ -58,8 +55,6 @@ type SubagentRunMetrics struct {
 // for the old map[string]string shape so existing LLM behavior keeps
 // working, plus new typed fields (status, files_modified, metrics) for
 // callers that want them.
-//
-// See SP-059 Phase 2a.
 type SubagentReturn struct {
 	// Output is the subagent's final assistant message (was: "stdout").
 	Output string `json:"stdout"`
@@ -93,7 +88,7 @@ type SubagentReturn struct {
 	// WorkingDir is the directory the subagent executed under.
 	WorkingDir string `json:"working_dir,omitempty"`
 
-	// ── New typed fields (SP-059) ──
+	// ── New typed fields ──
 
 	// Status is the terminal state. Always populated, even on success.
 	Status SubagentStatus `json:"status"`
@@ -109,7 +104,7 @@ type SubagentReturn struct {
 	// ProgressLog is a capped timeline of subagent activity events
 	// (spawn / output / complete) so the primary's LLM can reason about
 	// what the subagent actually did, not just its final assistant
-	// message. nil when no events were captured. SP-059 Phase 3a.
+	// message. nil when no events were captured.
 	ProgressLog []ProgressEntry `json:"progress_log,omitempty"`
 }
 
@@ -155,15 +150,15 @@ func (e *SubagentError) Error() string {
 
 // SubagentOptions configures an in-process subagent
 type SubagentOptions struct {
-	Persona      string          // "coder", "tester", "debugger", etc.
-	Model        string          // optional model override
-	Provider     string          // optional provider override
-	SystemPrompt string          // optional system prompt override
-	MaxTokens    int             // token budget (0 = unlimited)
-	Timeout      time.Duration   // execution timeout (0 = unlimited)
-	WorkingDir             string          // optional: override workspace root (must be within $HOME)
-	MaxConcurrentSubagents int             // max parallel subagents (0 = unlimited, default unlimited)
-	FleetTokenBudget       int             // shared token budget across all parallel subagents (0 = unlimited)
+	Persona                string        // "coder", "tester", "debugger", etc.
+	Model                  string        // optional model override
+	Provider               string        // optional provider override
+	SystemPrompt           string        // optional system prompt override
+	MaxTokens              int           // token budget (0 = unlimited)
+	Timeout                time.Duration // execution timeout; <=0 defaults to 30 minutes, 1 hour for the orchestrator persona (see runTask)
+	WorkingDir             string        // optional: override workspace root (must be within $HOME)
+	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
+	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)
 }
 
 // SharedState holds resources shared between parent and subagents
@@ -177,31 +172,67 @@ type SharedState struct {
 
 // SubagentResult is the structured output from a subagent
 type SubagentResult struct {
-	ID              string
-	Output          string
-	Error           error
-	TokensUsed      int
-	Cost            float64
-	ToolCalls       int
+	ID         string
+	Output     string
+	Error      error
+	TokensUsed int
+	Cost       float64
+	ToolCalls  int
 	// Iterations is the assistant-turn count consumed by this subagent
 	// run. Surfaced to the primary via SubagentRunMetrics.Iterations so
 	// the model has visibility into how many LLM rounds a delegated task
-	// burned. SP-059 Phase 5.
-	Iterations      int
-	Elapsed         time.Duration
-	Cancelled       bool
-	BudgetExceeded  bool  // true if task was skipped because fleet budget was already exceeded before starting
-	Truncated       bool  // true if subagent was cut short due to fleet budget exceeded mid-run
+	// burned.
+	Iterations     int
+	Elapsed        time.Duration
+	Cancelled      bool
+	BudgetExceeded bool // true if task was skipped because fleet budget was already exceeded before starting
+	Truncated      bool // true if subagent was cut short due to fleet budget exceeded mid-run
+	// OutputComplete signals whether the subagent produced a substantive
+	// final response. false when the output is empty or suspiciously brief
+	// (under 50 trimmed chars) despite a clean exit — the orchestrator can
+	// use this to decide whether to retry, escalate, or accept. This is
+	// distinct from Error/Cancelled/BudgetExceeded (all of which also set
+	// it false): OutputComplete focuses specifically on "did the subagent
+	// actually say something useful?"
+	OutputComplete bool
 	// FileChanges is the manifest of writes/edits this subagent performed,
 	// captured via its own ChangeTracker. nil when tracking wasn't
-	// initialized for this run. SP-059 Phase 2c.
-	FileChanges     []TrackedFileChange
+	// initialized for this run.
+	FileChanges []TrackedFileChange
 	// ProgressLog is a per-run timeline of notable subagent events
 	// (spawn, output, complete). Surfaced to the primary's LLM via the
 	// SubagentReturn envelope so the model can reason about *what* the
 	// subagent did, not just the final assistant message. Capped to
-	// subagentProgressLogCap entries. SP-059 Phase 3a.
-	ProgressLog     []SubagentProgressEntry
+	// subagentProgressLogCap entries.
+	ProgressLog []SubagentProgressEntry
+}
+
+// outputCompleteThreshold is the minimum trimmed output length (in bytes)
+// for a subagent result to be considered "complete". Outputs shorter than
+// this are flagged output_complete=false so the orchestrator can decide to
+// retry or escalate. The threshold is intentionally aggressive — even valid
+// short confirmations ("Done.") are flagged as incomplete, which is the
+// correct signal for research/delegation tasks where the orchestrator needs
+// substantive findings, not just an acknowledgement.
+const outputCompleteThreshold = 50
+
+// isOutputComplete returns true when a subagent's result represents
+// substantive, actionable output rather than an empty or suspiciously brief
+// response. A result is complete only when ALL of these hold:
+//   - No error
+//   - Not cancelled, budget-exceeded, or truncated
+//   - Trimmed output is at least outputCompleteThreshold bytes
+//
+// The zero-value SubagentResult (Error=nil, Output="") returns false because
+// the length check fails — this is the safe default for early-return paths
+// that never explicitly set OutputComplete.
+func isOutputComplete(r *SubagentResult) bool {
+	if r == nil {
+		return false
+	}
+	return r.Error == nil &&
+		!r.Cancelled && !r.BudgetExceeded && !r.Truncated &&
+		len(strings.TrimSpace(r.Output)) >= outputCompleteThreshold
 }
 
 // SubagentProgressEntry is one timeline entry from a subagent run. Kept

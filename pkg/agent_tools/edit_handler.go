@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // editFileHandler implements ToolHandler for the edit_file tool.
@@ -50,7 +52,7 @@ func (h *editFileHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("parameter 'path' must not be empty")
+		return agenterrors.NewValidation("parameter 'path' must not be empty", nil)
 	}
 
 	oldStr, err := extractString(args, "old_str")
@@ -58,7 +60,7 @@ func (h *editFileHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(oldStr) == "" {
-		return fmt.Errorf("parameter 'old_str' must not be empty")
+		return agenterrors.NewValidation("parameter 'old_str' must not be empty", nil)
 	}
 
 	newStr, err := extractString(args, "new_str")
@@ -71,6 +73,11 @@ func (h *editFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass the gate entirely. Prompt paths fall through and will
+	// fail with the raw filesystem error.
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
@@ -86,12 +93,28 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "edit_file",
-			"path": path,
-		})
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass the gate entirely.
+	resolvedEdit, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "edit_file", path)
+	if decision == "deny" {
+		return ToolResult{Output: fmt.Sprintf("edit blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
+			agenterrors.NewPermission(fmt.Sprintf("edit blocked: %s is declared read_only", path), nil)
+	}
+	if decision == "allow" {
+		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.
+		ctx = filesystem.WithSecurityBypass(ctx)
+	}
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "edit_file", path, resolvedEdit, "write"); approved {
+			ctx = ctx2
+		}
+	}
+
+	// SP-046-2: Check staleness before editing
+	if err := CheckStaleness(path); err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
 	result, err := EditFile(ctx, path, oldStr, newStr)
@@ -99,16 +122,7 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{
 			Output:  "",
 			IsError: true,
-		}, fmt.Errorf("edit file %q: %w", path, err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "edit_file",
-			"path":   path,
-			"tokens": estimateTokenUsage(result),
-		})
+		}, agenterrors.NewTool("edit_file", fmt.Sprintf("edit file %q: %v", path, err), err)
 	}
 
 	// Write to output writer if available
@@ -121,3 +135,9 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
+
+func (h *editFileHandler) Aliases() []string      { return nil }
+func (h *editFileHandler) Timeout() time.Duration { return 0 }
+func (h *editFileHandler) MaxResultSize() int     { return 0 }
+func (h *editFileHandler) SafeForParallel() bool  { return false }
+func (h *editFileHandler) Interactive() bool      { return false }

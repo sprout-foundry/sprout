@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useProviderCatalog } from '../../contexts/ProviderCatalogContext';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 import type { SubagentTypeInfo } from '../../services/api/types';
 import { debugLog } from '../../utils/log';
@@ -29,8 +30,9 @@ interface UseSettingsStateReturn {
   provenanceSources: Record<string, string>;
   setProvenanceSources: (v: Record<string, string>) => void;
   displaySettingsRef: React.MutableRefObject<SproutSettings | null>;
+  /** Provider catalog — proxied from ProviderCatalogContext so every tab
+   *  reads from the same source as the Sidebar dropdown and status bar. */
   subagentProviders: ProviderOption[];
-  setSubagentProviders: (v: ProviderOption[] | ((prev: ProviderOption[]) => ProviderOption[])) => void;
   subagentTypes: Record<string, SubagentTypeInfo>;
   setSubagentTypes: (
     v:
@@ -41,8 +43,10 @@ interface UseSettingsStateReturn {
   setCurrentProviderInfo: (v: { provider: string; model: string; hasCredential: boolean } | null) => void;
   loadingProviderInfo: boolean;
   setLoadingProviderInfo: (v: boolean) => void;
+  /** Same provider catalog, exposed under the legacy name the Commit & Review
+   *  tab destructures. Kept as a separate field to avoid touching the tab's
+   *  prop interface. */
   commitReviewProviders: ProviderOption[];
-  setCommitReviewProviders: (v: ProviderOption[]) => void;
   // MCP server state
   editingServer: { mode: 'add' | 'edit'; originalName?: string } | null;
   setEditingServer: (v: { mode: 'add' | 'edit'; originalName?: string } | null) => void;
@@ -88,10 +92,14 @@ interface UseSettingsStateReturn {
   setProviderContextSize: (v: number) => void;
   providerEnvVar: string;
   setProviderEnvVar: (v: string) => void;
+  providerApiKey: string;
+  setProviderApiKey: (v: string) => void;
   providerSupportsVision: boolean;
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
   setProviderVisionModel: (v: string) => void;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   providerModelContextSizes: string;
   setProviderModelContextSizes: (v: string) => void;
   // Drafts
@@ -150,12 +158,23 @@ export function useSettingsState(
   const [providerModelName, setProviderModelName] = useState('');
   const [providerContextSize, setProviderContextSize] = useState(32768);
   const [providerEnvVar, setProviderEnvVar] = useState('');
+  const [providerApiKey, setProviderApiKey] = useState('');
   const [providerSupportsVision, setProviderSupportsVision] = useState(false);
   const [providerVisionModel, setProviderVisionModel] = useState('');
+  const [providerBillingType, setProviderBillingType] = useState<'pay_per_token' | 'subscription' | 'free'>(
+    'pay_per_token',
+  );
   const [providerModelContextSizes, setProviderModelContextSizes] = useState<string>('');
 
-  // Subagent providers/models for dropdowns
-  const [subagentProviders, setSubagentProviders] = useState<ProviderOption[]>([]);
+  // Provider catalog is shared across the whole app — the Subagents,
+  // Providers (primary chat), and Commit & Review tabs all read from the
+  // same context as the Sidebar dropdown and bottom status bar. This used
+  // to be a separate per-tab fetch of /api/settings/subagent-types, which
+  // returned the same list but in a different order — guaranteeing visual
+  // drift between Settings panes and the status bar.
+  const catalog = useProviderCatalog();
+  const subagentProviders = catalog.providers;
+  const commitReviewProviders = catalog.providers;
   const [subagentTypes, setSubagentTypes] = useState<Record<string, SubagentTypeInfo>>({});
 
   // Current provider info for the Providers tab
@@ -165,9 +184,6 @@ export function useSettingsState(
     hasCredential: boolean;
   } | null>(null);
   const [loadingProviderInfo, setLoadingProviderInfo] = useState(false);
-
-  // Commit & Review providers state
-  const [commitReviewProviders, setCommitReviewProviders] = useState<ProviderOption[]>([]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- singleton accessor is stable
   const api = useMemo(() => ApiService.getInstance(), []);
@@ -243,19 +259,11 @@ export function useSettingsState(
     }
   }, [activeSubTab, configViewLayer]);
 
-  // Fetch subagent types + providers when the subagents OR providers
-  // tab is active. Both tabs surface provider/model dropdowns now (the
-  // providers tab uses them for the primary chat agent), so loading the
-  // provider list on either entry keeps the dropdowns populated without
-  // forcing the user to visit the subagents tab first.
-  // refreshSubagentProviders() lets callers (e.g. the ProviderSettingsTab
-  // after adding a custom provider) force a re-fetch — otherwise the new
-  // provider doesn't appear in the dropdown until the user closes and
-  // reopens the tab.
-  const [subagentProvidersRefreshTick, setSubagentProvidersRefreshTick] = useState(0);
-  const refreshSubagentProviders = useCallback(() => {
-    setSubagentProvidersRefreshTick((n) => n + 1);
-  }, []);
+  // Fetch subagent type / persona definitions when the subagents tab is
+  // active. (The provider catalog is supplied by ProviderCatalogContext;
+  // this fetch only needs the persona-specific fields.) Callers that just
+  // need fresh providers should call refreshSubagentProviders below, which
+  // refreshes the catalog rather than re-hitting this endpoint.
   useEffect(() => {
     if (activeSubTab !== 'subagents' && activeSubTab !== 'providers') return;
     let cancelled = false;
@@ -263,7 +271,6 @@ export function useSettingsState(
       try {
         const data = await api.getSubagentTypes();
         if (cancelled) return;
-        setSubagentProviders((data.available_providers || []) as ProviderOption[]);
         setSubagentTypes((data.subagent_types || {}) as Record<string, SubagentTypeInfo>);
       } catch (err) {
         debugLog('[SettingsPanel] failed to load subagent types:', err);
@@ -272,35 +279,57 @@ export function useSettingsState(
     return () => {
       cancelled = true;
     };
-  }, [activeSubTab, api, subagentProvidersRefreshTick]);
-
-  // Fetch providers for commit & review when tab is activated
-  useEffect(() => {
-    if (activeSubTab !== 'commit-review') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await api.getSubagentTypes();
-        if (cancelled) return;
-        setCommitReviewProviders((data.available_providers || []) as ProviderOption[]);
-      } catch (err) {
-        debugLog('[SettingsPanel] failed to load commit-review providers:', err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [activeSubTab, api]);
+
+  // Bug B fix: when the Providers tab is opened while the catalog is empty
+  // (e.g. user opened Settings during a brief disconnect), nudge the catalog
+  // to load so the UI doesn't appear broken. This is a no-op when data is
+  // already present, a fetch is in-flight, or the connection is down.
+  useEffect(() => {
+    if (activeSubTab !== 'providers') return;
+    if (catalog.providers.length === 0 && !catalog.isLoading) {
+      catalog.ensureLoaded();
+    }
+  }, [activeSubTab, catalog]);
+
+  // ProviderSettingsTab calls this after adding a custom provider so the
+  // new entry appears in dropdowns immediately. Routing through the shared
+  // catalog refreshes every consumer (status bar, Sidebar, all Settings
+  // tabs) in one shot.
+  const refreshSubagentProviders = catalog.refresh;
 
   // Fetch current provider info when providers tab is activated or
   // when refreshCurrentProviderInfo() is called externally (e.g. after
   // the inline primary-provider dropdown writes to global config).
   const [currentProviderRefreshTick, setCurrentProviderRefreshTick] = useState(0);
+  // Cache for the onboarding status response. Stores the last successful
+  // fetch so repeated tab activations within 5s skip the network round-trip.
+  // Cleared on tick > 0 (explicit invalidation from a settings write).
+  const lastStatusAtRef = useRef<number>(0);
+  const lastStatusValueRef = useRef<{
+    provider: string;
+    model: string;
+    hasCredential: boolean;
+  } | null>(null);
   const refreshCurrentProviderInfo = useCallback(() => {
     setCurrentProviderRefreshTick((n) => n + 1);
   }, []);
   useEffect(() => {
     if (activeSubTab !== 'providers') return;
+
+    // Fast path: use cached data if available and still fresh (within 5s)
+    // and no explicit invalidation (tick === 0). This eliminates the
+    // per-tab-switch network round-trip for repeated Settings → Providers.
+    if (
+      currentProviderRefreshTick === 0 &&
+      lastStatusValueRef.current !== null &&
+      Date.now() - lastStatusAtRef.current < 5000
+    ) {
+      setCurrentProviderInfo(lastStatusValueRef.current);
+      setLoadingProviderInfo(false);
+      return;
+    }
+
     let cancelled = false;
     setLoadingProviderInfo(true);
     (async () => {
@@ -308,11 +337,15 @@ export function useSettingsState(
         const status = await api.getOnboardingStatus();
         if (cancelled) return;
         const providerEntry = (status.providers || []).find((p) => p.id === status.current_provider);
-        setCurrentProviderInfo({
+        const info = {
           provider: status.current_provider,
           model: status.current_model,
           hasCredential: providerEntry?.has_credential || false,
-        });
+        };
+        // Populate cache for future tab activations
+        lastStatusAtRef.current = Date.now();
+        lastStatusValueRef.current = info;
+        setCurrentProviderInfo(info);
       } catch (err) {
         debugLog('[SettingsPanel] failed to load provider info:', err);
       } finally {
@@ -343,7 +376,6 @@ export function useSettingsState(
     setProvenanceSources,
     displaySettingsRef,
     subagentProviders,
-    setSubagentProviders,
     subagentTypes,
     setSubagentTypes,
     currentProviderInfo,
@@ -351,7 +383,6 @@ export function useSettingsState(
     loadingProviderInfo,
     setLoadingProviderInfo,
     commitReviewProviders,
-    setCommitReviewProviders,
     // MCP
     editingServer,
     setEditingServer,
@@ -391,10 +422,14 @@ export function useSettingsState(
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
     // Drafts

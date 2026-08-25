@@ -9,48 +9,38 @@ import (
 
 	"github.com/sprout-foundry/seed/core"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// SP-066 Phase 2: hierarchical rollup of TurnCheckpoints.
+// Hierarchical rollup of TurnCheckpoints. As a conversation grows, the per-turn
+// checkpoint list grows linearly. The rollup worker folds N items at each level
+// into one coarser summary at level+1, keeping the list bounded.
 //
-// As a conversation grows, the per-turn checkpoint list grows linearly. Even
-// though each checkpoint is small, the list itself becomes unwieldy and the
-// substitute-every-prompt-build pass starts producing a long, fragmented
-// context. The rollup worker folds N items at each level into one coarser
-// summary at level+1, keeping the list bounded regardless of conversation
-// length.
-//
-// The substitution logic in seed treats a rolled-up checkpoint exactly like
-// a per-turn one — it's just a TurnCheckpoint whose StartIndex/EndIndex span
-// a wider historical range and whose Summary covers many turns. See SP-066
-// for the architecture.
-
-// Rollup tuning constants. Conservative defaults intended to keep the active
-// checkpoint list bounded under ~40 entries for a 500-turn session; tunable
-// from telemetry once we have real session data.
+// Rollup tuning constants.
 const (
-	// recentTurnsToPreserve is the number of most-recent Level=0 checkpoints
-	// kept at full fidelity. The rollup worker never folds entries in this
-	// window even if the level-0 count exceeds the threshold.
-	recentTurnsToPreserve = 10
+	// recentTurnsToPreserveDefault is the number of most-recent Level=0 checkpoints kept at full fidelity.
+	// Low-Context Mode overrides this to 2 (via ContextProfile.RecentTurnsToPreserve).
+	recentTurnsToPreserveDefault = 5
 
 	// rollupSourceCount is the number of source checkpoints folded into a
-	// single rollup at any level. Same N at every level for simplicity.
-	rollupSourceCount = 20
+	// single rollup at any level. Lowered from 15 so rollups fire more
+	// often, keeping the checkpoint list shorter. A high value lets the
+	// per-level list grow long before folding, which increases the
+	// substitution target during those intermediate stretches and forces
+	// the pruner to drop more summaries — creating a compaction churn loop.
+	rollupSourceCount = 10
 
 	// rollupTriggerCount is the per-level checkpoint count that triggers a
-	// rollup. Anything ≥ this number at level L (excluding the recency
-	// window at level 0) gets folded into a level-(L+1) entry.
+	// rollup. Must equal rollupSourceCount so the trigger fires exactly
+	// when there are enough entries to fold — never before.
 	rollupTriggerCount = rollupSourceCount
 
-	// rollupMaxLevel caps how deeply rollups stack. Beyond this depth we
-	// stop folding to avoid runaway summary-of-summary degradation.
+	// rollupMaxLevel caps how deeply rollups stack.
 	rollupMaxLevel = 5
 
-	// rollupTargetWords is the soft word budget passed to the LLM for the
-	// rolled-up summary body. Should match the limit in the rollup prompt
-	// template (prompts/rollup_prompt.md).
+	// rollupTargetWords is the soft word budget passed to the LLM for the rolled-up summary body.
 	rollupTargetWords = 400
 )
 
@@ -108,36 +98,37 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 		return nil
 	}
 
-	startIdx, endIdx, level, ok := pickRollupTarget(checkpoints)
+	startIdx, endIdx, level, ok := pickRollupTarget(checkpoints, a.recentTurnsToPreserveFor())
 	if !ok {
 		return nil
 	}
 
-	// SP-066 Phase 3d: if embeddings are available, look for a topic-shift
-	// boundary inside the candidate range and shrink the rollup to stop
-	// at it. Falls back to the default range when embeddings aren't
-	// available or no significant drop is detected. Best-effort: the
-	// worker never blocks on this.
+	// If embeddings are available, look for a topic-shift boundary inside the candidate range.
 	endIdx = a.refineRollupEnd(ctx, checkpoints, startIdx, endIdx)
 
 	sources := checkpoints[startIdx : endIdx+1]
 	rollup, err := a.buildRollupCheckpoint(ctx, sources, level+1)
 	if err != nil {
-		return fmt.Errorf("build rollup: %w", err)
+		return agenterrors.NewTool("rollup", "build rollup", err)
 	}
 
 	a.replaceWithRollup(startIdx, endIdx, rollup)
 
-	// SP-066 Phase 3a: embed the rollup so semantic recall can surface it
-	// after its source per-turn entries are absorbed (and beyond, after any
-	// future /compact wipe). The conversation store is the permanent memory
-	// layer; the checkpoint list is just the active substitution window.
+	// Embed the rollup so semantic recall can surface it after its source entries are absorbed.
 	sessionID := ""
 	if a.state != nil {
 		sessionID = a.state.GetSessionID()
 	}
 	a.embedRollupCheckpoint(ctx, sessionID, rollup)
 	return nil
+}
+
+// recentTurnsToPreserveFor returns the profile-aware recency window size.
+func (a *Agent) recentTurnsToPreserveFor() int {
+	if n := a.contextProfile.RecentTurnsToPreserve; n > 0 {
+		return n
+	}
+	return recentTurnsToPreserveDefault
 }
 
 // pickRollupTarget walks the checkpoint list and returns the index range
@@ -147,7 +138,7 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 //
 // Level 0 (per-turn) has the recency window applied: the most-recent
 // `recentTurnsToPreserve` per-turn checkpoints are never folded.
-func pickRollupTarget(checkpoints []TurnCheckpoint) (start, end, level int, ok bool) {
+func pickRollupTarget(checkpoints []TurnCheckpoint, recentTurnsToPreserve int) (start, end, level int, ok bool) {
 	// Count per level, then pick the lowest level that's over budget. Lower
 	// levels overflow first; folding them up reduces pressure on higher
 	// levels naturally.
@@ -220,7 +211,7 @@ func countLevel0After(checkpoints []TurnCheckpoint, i int) int {
 // rather than evaporating at each rollup level.
 func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpoint, newLevel int) (TurnCheckpoint, error) {
 	if len(sources) == 0 {
-		return TurnCheckpoint{}, fmt.Errorf("no source checkpoints")
+		return TurnCheckpoint{}, agenterrors.NewTool("rollup", "no source checkpoints", nil)
 	}
 
 	body, err := a.rollupSummarizeViaLLM(ctx, sources)
@@ -229,7 +220,7 @@ func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpo
 	}
 	body = strings.TrimSpace(body)
 	if body == "" {
-		return TurnCheckpoint{}, fmt.Errorf("empty rollup body")
+		return TurnCheckpoint{}, agenterrors.NewTool("rollup", "empty rollup body", nil)
 	}
 
 	coveredTurns := 0
@@ -238,7 +229,7 @@ func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpo
 		if cp.CoveredTurns > 0 {
 			coveredTurns += cp.CoveredTurns
 		} else {
-			// Level-0 entries before SP-066 may have CoveredTurns=0.
+			// Legacy Level-0 entries may have CoveredTurns=0.
 			coveredTurns++
 		}
 		if cp.ID != "" {
@@ -265,20 +256,20 @@ func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpo
 // (no header wrapping).
 func (a *Agent) rollupSummarizeViaLLM(ctx context.Context, sources []TurnCheckpoint) (string, error) {
 	if a == nil {
-		return "", fmt.Errorf("agent unavailable")
+		return "", agenterrors.NewTool("rollup", "agent unavailable", nil)
 	}
 	if a.client == nil {
-		return "", fmt.Errorf("no LLM client bound; cannot roll up")
+		return "", agenterrors.NewTool("rollup", "no LLM client bound; cannot roll up", nil)
 	}
 
 	systemPrompt := GetEmbeddedRollupPrompt()
 	if strings.TrimSpace(systemPrompt) == "" {
-		return "", fmt.Errorf("rollup prompt template is empty")
+		return "", agenterrors.NewTool("rollup", "rollup prompt template is empty", nil)
 	}
 
 	userContent := buildRollupInputBlocks(sources)
 	if strings.TrimSpace(userContent) == "" {
-		return "", fmt.Errorf("rollup input is empty")
+		return "", agenterrors.NewTool("rollup", "rollup input is empty", nil)
 	}
 
 	// Bound the rollup LLM call so a stuck provider doesn't pin the worker
@@ -293,10 +284,10 @@ func (a *Agent) rollupSummarizeViaLLM(ctx context.Context, sources []TurnCheckpo
 	}
 	resp, err := a.getClient().SendChatRequest(ctx, req, nil, "", false)
 	if err != nil {
-		return "", fmt.Errorf("rollup llm call failed: %w", err)
+		return "", agenterrors.NewTool("rollup", "rollup llm call failed", err)
 	}
 	if resp == nil || len(resp.Choices) == 0 {
-		return "", fmt.Errorf("rollup llm returned no choices")
+		return "", agenterrors.NewTool("rollup", "rollup llm returned no choices", nil)
 	}
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }

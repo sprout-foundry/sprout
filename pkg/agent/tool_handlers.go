@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Shared utility functions for tool handlers
@@ -53,7 +55,7 @@ func stripQuotedContent(s string) string {
 // Tier B history-loss ops (`rebase`, `reset --hard <commit-ish>`,
 // `branch -D`, `tag -d`) are routed through isGitHistoryRewriteCommand
 // instead — that gate has its own opt-in flag (AllowGitHistoryRewrite)
-// and produces a clearer error for the caller.
+// and prompts the user (auto-approved when AllowGitHistoryRewrite=true).
 func isGitWriteCommand(command string) bool {
 	// Strip quoted content to avoid false positives from JSON payloads etc.
 	command = stripQuotedContent(command)
@@ -176,6 +178,64 @@ func isGitWriteCommand(command string) bool {
 	}
 }
 
+// isGitStashCommand checks whether `command` contains a `git stash`
+// invocation that is not purely read-only. `git stash` (bare or with
+// `push`) saves the working tree and reverts it to HEAD — the save
+// itself isn't destructive, but the typical pattern is stash + build +
+// pop, and the pop is where merge conflicts silently revert files.
+// `stash pop`, `stash apply`, `stash drop`, and `stash clear` are all
+// destructive. `stash list` and `stash show` are read-only and handled
+// by shellLooksReadOnly, but we include them here for completeness —
+// the gate blocks all stash subcommands except list/show.
+//
+// The gate is intentionally broad: any `git stash` that isn't `list`
+// or `show` is blocked, because even `git stash push` sets up the
+// pop-that-can-corrupt that we want to prevent.
+func isGitStashCommand(command string) bool {
+	command = stripQuotedContent(command)
+	remaining := command
+	for {
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		gitCmd := remaining[idx:]
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
+			continue
+		}
+		// Find the subcommand, skipping leading git global flags.
+		subcommand := ""
+		for i := 1; i < len(parts); i++ {
+			part := parts[i]
+			if strings.HasPrefix(part, "-") {
+				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+					i++
+				}
+				continue
+			}
+			subcommand = strings.TrimRight(part, ");\"'")
+			break
+		}
+		if subcommand == "stash" {
+			// `git stash list` and `git stash show` are read-only.
+			// Everything else (bare stash, push, pop, apply, drop, clear)
+			// is gated.
+			if len(parts) > 2 {
+				rest := parts[2]
+				rest = strings.TrimRight(rest, ");\"'")
+				if rest == "list" || rest == "show" {
+					remaining = remaining[idx+1:]
+					continue
+				}
+			}
+			// Bare `git stash` or any non-list/show subcommand.
+			return true
+		}
+		remaining = remaining[idx+1:]
+	}
+}
 
 // isGitHistoryRewriteCommand checks whether `command` contains a git
 // invocation that can lose commit history (a ref moves backward, a
@@ -231,6 +291,13 @@ func isGitHistoryRewriteCommand(command string) bool {
 
 		switch subcommand {
 		case "rebase":
+			// `git rebase --abort` is a recovery op (reverts the in-progress
+			// rebase state), not a history rewrite. Any other rebase form
+			// (including `--abort` with other flags or arguments) is a rewrite.
+			// The only permitted rebase invocation is pure `--abort`.
+			if len(rest) == 1 && rest[0] == "--abort" {
+				return false
+			}
 			return true
 		case "reset":
 			// `reset --hard` followed by an explicit commit-ish other than
@@ -339,13 +406,13 @@ func convertToString(param interface{}, paramName string) (string, error) {
 		// If it's a map, try to convert to JSON string
 		jsonBytes, err := json.Marshal(v)
 		if err != nil {
-			return "", fmt.Errorf("parameter '%s' is an object that cannot be converted to string: %w", paramName, err)
+			return "", agenterrors.Wrapf(err, "parameter '%s' is an object that cannot be converted to string", paramName)
 		}
 		return string(jsonBytes), nil
 	case nil:
-		return "", fmt.Errorf("parameter '%s' is missing or null", paramName)
+		return "", agenterrors.NewValidation("parameter '"+paramName+"' is missing or null", nil)
 	default:
-		return "", fmt.Errorf("parameter '%s' has invalid type %T, expected string", paramName, param)
+		return "", agenterrors.NewValidation(fmt.Sprintf("parameter '%s' has invalid type %T, expected string", paramName, param), nil)
 	}
 }
 

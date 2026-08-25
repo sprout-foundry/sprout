@@ -2,17 +2,28 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
-// createSubagent creates a new in-process agent for subagent execution
-func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
+// defaultSubagentMaxIterations caps the number of LLM iterations a subagent
+// may run. 0 (unlimited) let a stuck subagent loop 164+ times burning tokens
+// before the user noticed. 200 is generous for real coding tasks but still
+// stops runaway loops within a reasonable window. Can be overridden per-call
+// via SubagentOptions.MaxIterations once that field exists.
+const defaultSubagentMaxIterations = 200
+
+// createSubagent creates a new in-process agent for subagent execution.
+// parentCtx is used as the base for the subagent's interrupt context so
+// that cancellation of the parent's run context (Ctrl+C, timeout, etc.)
+// propagates into the subagent's in-flight LLM calls — without this the
+// subagent's HTTP requests ignore cancellation and the goroutine leaks.
+func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.Context) (*Agent, error) {
 	if r.shared == nil || r.shared.ConfigManager == nil {
-		return nil, fmt.Errorf("shared state and config manager are required")
+		return nil, agenterrors.NewConfig("shared state and config manager are required", nil)
 	}
 
 	// Resolve provider/model: use opts overrides, then parent agent, then config defaults
@@ -35,7 +46,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 	// Resolve client type from config
 	clientType, finalModel, err := r.shared.ConfigManager.ResolveProviderModel(provider, model)
 	if err != nil {
-		return nil, fmt.Errorf("resolve provider/model: %w", err)
+		return nil, agenterrors.Wrap(err, "resolve provider/model")
 	}
 
 	// Create client via factory (or test hook for testing)
@@ -46,7 +57,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		client, err = factory.CreateProviderClient(clientType, finalModel)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("create client: %w", err)
+		return nil, agenterrors.Wrap(err, "create client")
 	}
 
 	// Build system prompt
@@ -62,8 +73,12 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		effectiveWorkspaceRoot = opts.WorkingDir
 	}
 
-	// Create interrupt context for this subagent
-	interruptCtx, interruptCancel := context.WithCancel(context.Background())
+	// Create interrupt context derived from the parent's context so
+	// cancellation (Ctrl+C, timeout, runCtx cancel) propagates into the
+	// subagent's LLM calls. Previously this used context.Background(),
+	// making the subagent un-cancellable — the in-flight HTTP request
+	// ignored the parent's interrupt and the goroutine leaked.
+	interruptCtx, interruptCancel := context.WithCancel(parentCtx)
 
 	// Create sub-managers
 	stateMgr := NewAgentStateManager(false)
@@ -76,7 +91,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		client:              client,
 		systemPrompt:        systemPrompt,
 		baseSystemPrompt:    systemPrompt,
-		maxIterations:       0, // unlimited
+		maxIterations:       defaultSubagentMaxIterations, // bounded to prevent runaway loops
 		clientType:          clientType,
 		debug:               r.parentAgent != nil && r.parentAgent.debug,
 		configManager:       r.shared.ConfigManager,
@@ -84,15 +99,16 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
 		interruptCtx:        interruptCtx,
 		interruptCancel:     interruptCancel,
+		parentInterruptCtx:  parentCtx, // preserve parent link across resetInterruptForNewQuery/ClearInterrupt
 		workspaceRoot:       effectiveWorkspaceRoot,
 		state:               stateMgr,
 		output:              outputMgr,
 		security:            securityMgr,
 		mcpSub:              mcpMgr,
 		// Shared resources
-		todoMgr:        r.shared.TodoManager,
-		eventBus:       r.shared.EventBus,
-		embeddingMgr:   r.shared.EmbeddingMgr,
+		todoMgr:      r.shared.TodoManager,
+		eventBus:     r.shared.EventBus,
+		embeddingMgr: r.shared.EmbeddingMgr,
 	}
 
 	// Share the parent's clarificationManager so subagents can call
@@ -101,24 +117,35 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		agent.clarificationManager = r.parentAgent.clarificationManager
 	}
 
-	// SP-059 Phase 2c: enable a lightweight change tracker on the subagent
-	// so the returned envelope can include a structured FilesModified
-	// manifest. Tracking just records writes in memory; it does not
-	// participate in the parent's revision/commit flow unless the parent
-	// also has tracking enabled (handled elsewhere). Cheap to keep always
-	// on — the cost is one entry per write.
+	// Re-resolve the context profile from the subagent's OWN client and config
+	// instead of blindly copying the parent's profile. A 200K parent delegating
+	// to a 32K subagent model would otherwise run the subagent in full mode
+	// — 41+ tool definitions overflowing its 32K window. (SP-125 R4)
+	// Runs before EnableChangeTracking so a below-floor model never spawns the
+	// revision-compaction goroutine on an agent that is about to be discarded.
+	if err := agent.resolveAndApplyContextProfile(); err != nil {
+		interruptCancel()
+		return nil, err
+	}
+
+	// Enable a lightweight change tracker on the subagent so the returned
+	// envelope can include a structured FilesModified manifest. Tracking
+	// just records writes in memory; it does not participate in the
+	// parent's revision/commit flow unless the parent also has tracking
+	// enabled (handled elsewhere). Cheap to keep always on — the cost
+	// is one entry per write.
 	agent.EnableChangeTracking("subagent run")
 
 	// Inherit the parent's TerminalManager. Without this, subagents (and
 	// recursively their own subagents) try to call shell_command with
-	// background=true / check_background / stop_background and fail with
-	// "background mode requires WebUI terminal manager" even though the
-	// root agent has a TerminalManager attached. The TerminalManager is
-	// process-scoped (one per WebUI server); chat IDs route work to the
-	// right session pool, so direct inheritance by reference is correct.
+	// background=true / check_background / stop_background and fail because
+	// no TerminalManager or BackgroundProcessManager is attached, even though
+	// the root agent has one. The TerminalManager is process-scoped (one per
+	// WebUI server); chat IDs route work to the right session pool, so direct
+	// inheritance by reference is correct.
 	if r.parentAgent != nil {
 		if tm := r.parentAgent.GetTerminalManager(); tm != nil {
-			agent.terminalManager = tm
+			agent.SetTerminalManager(tm)
 		}
 	}
 
@@ -131,7 +158,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		agent.rootPersonaID = r.parentAgent.rootPersonaID
 	}
 
-	// SP-058: propagate the active risk-profile override so the user's
+	// Propagate the active risk-profile override so the user's
 	// session-level --risk-profile (or per-step workflow override)
 	// continues to apply inside subagents. Without this the subagent
 	// would fall back to the config-level setting and a user who set
@@ -152,8 +179,17 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 	for _, f := range r.parentAgent.SnapshotSessionAllowedFolders() {
 		agent.AddSessionAllowedFolder(f)
 	}
+	// Propagate the declared folder modes so a subagent running inside
+	// a workflow honors the workflow's read_only constraints.
+	// AddSessionAllowedFolder is called above in the same order, so by
+	// the time SetSessionAllowedFolderMode runs the folder is already
+	// on the subagent's allowlist (the mode setter no-ops for
+	// unallowlisted folders).
+	for folder, mode := range r.parentAgent.SnapshotSessionAllowedFolderModes() {
+		agent.SetSessionAllowedFolderMode(folder, mode)
+	}
 
-	// SP-051: tag every event this subagent publishes with depth + persona
+	// Tag every event this subagent publishes with depth + persona
 	// so the CLI tool-timeline can indent and color-badge by who's running.
 	// Merge (not replace) so parent-set chat/client/user routing keys still
 	// flow through subagent events to the right WebUI client.

@@ -7,7 +7,7 @@ package webui
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -121,13 +121,18 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Start server in goroutine
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				ws.log().Error("web server goroutine panicked", slog.Any("panic", r))
+			}
+		}()
 		if ws.socketPath != "" {
-			log.Printf("[web] Web UI starting on unix socket %s", ws.socketPath)
+			ws.log().Info("web UI starting on Unix socket", slog.String("socket_path", ws.socketPath))
 		} else {
-			log.Printf("[web] Web UI starting at http://%s:%d", DisplayAddr(ws.bindAddr), ws.port)
+			ws.log().Info("web UI starting", slog.String("address", DisplayAddr(ws.bindAddr)), slog.Int("port", ws.port))
 		}
 		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
-			log.Printf("Web server error: %v", err)
+			ws.log().Error("web server failed", slog.Any("err", err))
 		}
 	}()
 
@@ -145,6 +150,13 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 		// Start heartbeat monitor to detect and cancel stale connections with active queries
 		go ws.startHeartbeatMonitor(ctx)
+
+		// Start run-buffer subscriber so agent-published events (which bypass
+		// publishClientEventWithChat) are captured for WebSocket reattach replay.
+		ws.startRunBufferSubscriber()
+
+		// SP-108: Start wakeup poller for auto-resume on background completions.
+		go ws.startWakeupPoller(ctx, 2*time.Second)
 	})
 
 	// Evict idle language server sessions (gopls, TypeScript worker) every 5 minutes.
@@ -155,6 +167,11 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Wait for context cancellation
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				ws.log().Error("shutdown watcher goroutine panicked", slog.Any("panic", r))
+			}
+		}()
 		<-ctx.Done()
 		ws.Shutdown()
 	}()
@@ -195,11 +212,20 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	ws.shutdownSSHSessions()
 
+	// Let any agent released during this session finish flushing history and
+	// its embedding store before the process goes away.
+	ws.waitForAgentTeardown()
+
 	// Close all terminal sessions to clean up PTY processes.
 	if err := ws.terminalManager.CloseAllSessions(); err != nil {
-		log.Printf("[web] Warning: error closing terminal sessions: %v", err)
+		ws.log().Warn("terminal session shutdown failed", slog.Any("err", err))
 	}
-	log.Printf("[web] Closed all terminal sessions")
+	ws.log().Info("all terminal sessions closed")
+
+	// Stop the local LLM server if it was running. The server is a detached
+	// process that survives CLI sessions, but when the daemon shuts down
+	// explicitly we release its GPU memory.
+	stopLocalLLMServer(ws.log())
 
 	if listener != nil {
 		_ = listener.Close()

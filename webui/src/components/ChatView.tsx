@@ -1,18 +1,25 @@
-import { ChatMessageContextMenu } from '@sprout/ui';
-import { ChevronDown } from 'lucide-react';
+import { ChatMessageContextMenu, createHttpCommandCompletionApi } from '@sprout/ui';
+import { ChevronDown, Download } from 'lucide-react';
 import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { supportsSSH } from '../config/mode';
+import { isCloud } from '../config/mode';
+import { getBootstrapConfig } from '../bootstrapAdapter';
+import { supportsExport, supportsSSH } from '../config/mode';
+import { rewindQuery, executeCommand, uploadImage } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
-import { rewindQuery } from '../services/api/chatApi';
 import { clientFetch } from '../services/clientSession';
-import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
+import { notificationBus } from '../services/notificationBus';
 import type { QueryProgress } from '../types/app';
+import { useCommandOutput } from '../hooks/useCommandOutput';
+import CommandOutputPanel from './CommandOutputPanel';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
-import type { ChatProps, ToolExecution } from './chat/types';
+import type { ChatProps, Message, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
+import ExportDialog from './ExportDialog';
 import InlineTodoSummary from './InlineTodoSummary';
+import { ToolTimelineBar } from './chat/ToolTimelineBar';
+import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import './Chat.css';
 
 function Chat(props: ChatProps): JSX.Element {
@@ -33,9 +40,10 @@ function Chat(props: ChatProps): JSX.Element {
     toolExecutions = [],
     queryProgress = null,
     currentTodos = [],
-    subagentActivities = [],
+    subagentActivities: _subagentActivities = [],
     onToolPillClick,
     onStopProcessing,
+    onRetractSteer,
     chatId,
     worktreePath,
     workspaceRoot: _workspaceRoot,
@@ -46,6 +54,9 @@ function Chat(props: ChatProps): JSX.Element {
     isConnected,
     backendReachable,
     onRetryConnection,
+    outputVerbosity = 'default',
+    onForkAtBreakpoint,
+    isForking = false,
   } = props;
 
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -55,22 +66,40 @@ function Chat(props: ChatProps): JSX.Element {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
+  const [indexingError, setIndexingError] = useState<string | null>(null);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [commandOutputPanelVisible, setCommandOutputPanelVisible] = useState(false);
+  const [commandOutputError, setCommandOutputError] = useState<Error | null>(null);
+
+  const handleUploadImage = useCallback(async (file: File) => {
+    const result = await uploadImage(clientFetch, file);
+    return { path: result.path };
+  }, []);
+
+  // SP-114 Phase 2d: subscribe to streaming command_output events so the
+  // CommandOutputPanel can render chunks as they arrive. The hook filters
+  // by chat_id internally, so a multi-tab user only sees their own chat's
+  // command output here. See useCommandOutput for the wire shape and the
+  // v1 (latest-command-only) simplification.
+  const commandOutputState = useCommandOutput(chatId);
+
+  const sessionId = chatId ?? '';
+
+  // Slash-command ARGUMENT completion for the command bar. Built once and
+  // routed through clientFetch so the client-ID header and SSH-proxy base
+  // rewriting apply exactly like every other WebUI API call.
+  const completionApi = useMemo(() => createHttpCommandCompletionApi(clientFetch), []);
 
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
 
-  const hasSubagentActivity = subagentActivities.length > 0;
   const needsHealthCheck = requiresBackendHealthCheck();
 
   const currentQueryCount = typeof stats?.queryCount === 'number' ? stats.queryCount : undefined;
-  const filteredToolExecutions = useMemo(() => {
-    if (!currentQueryCount) {
-      return toolExecutions;
-    }
-    return toolExecutions.filter(
-      (tool: ToolExecution) => tool.queryId === undefined || tool.queryId === currentQueryCount,
-    );
-  }, [toolExecutions, currentQueryCount]);
+  // Show all tool executions — don't filter by queryId. The queryId filter
+  // caused tools from the previous query to vanish when a new query started,
+  // making the badges show and hide at random intervals.
+  const filteredToolExecutions = toolExecutions;
 
   // Map of toolId → status across ALL queries (not filtered).
   // MessageSegments uses this to decide pill-vs-footnote rendering. Filtering
@@ -86,10 +115,7 @@ function Chat(props: ChatProps): JSX.Element {
     }
     return map;
   }, [toolExecutions]);
-  const getToolStatusForMessage = useCallback(
-    (toolId: string) => toolStatusById.get(toolId),
-    [toolStatusById],
-  );
+  const getToolStatusForMessage = useCallback((toolId: string) => toolStatusById.get(toolId), [toolStatusById]);
 
   useLayoutEffect(() => {
     const node = inputContainerRef.current;
@@ -118,9 +144,72 @@ function Chat(props: ChatProps): JSX.Element {
     [filteredToolExecutions],
   );
 
-  const formatTime = (date: Date) => {
+  // Stable reference — passed to memoized MessageItem. An inline arrow
+  // here would create a new function every render (e.g. on every chat
+  // input keystroke), breaking MessageItem's memo so every message
+  // would re-execute its markdown + MessageSegments pipeline. That was
+  // the visible "footnote flicker on every keypress" bug.
+  const formatTime = useCallback((date: Date) => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  }, []);
+
+  // SP-076: messages ref so renderMessageItem can read the next message
+  // without putting `messages` in its useCallback deps (which would
+  // recreate the callback on every streaming chunk and defeat
+  // MessageItem's memo, re-running markdown + MessageSegments for
+  // every visible row).
+  const messagesRef = useRef<Message[]>(messages);
+  messagesRef.current = messages;
+
+  // Stable ref for onForkAtBreakpoint so renderMessageItem doesn't need to
+  // add it to the useCallback deps (which would recreate the callback and
+  // break MessageItem memo).
+  const onForkAtBreakpointRef = useRef(onForkAtBreakpoint);
+  onForkAtBreakpointRef.current = onForkAtBreakpoint;
+
+  // Stable Virtuoso itemContent — see the `formatTime` comment above.
+  // An inline arrow recreates the function on every parent render,
+  // and Virtuoso then treats every row as new and re-runs all the
+  // MessageItem renders even though props are identical.
+  const renderMessageItem = useCallback(
+    (index: number, message: Message) => {
+      // SP-076: the next message in the visible list. If it's another
+      // assistant message, this one is inter-tool narration (not the
+      // terminal answer) — compact mode hides it. Computed here so
+      // MessageItem stays a pure presentational component.
+      const nextMessage = index + 1 < messagesRef.current.length ? messagesRef.current[index + 1] : null;
+      const hasNextAssistantMessage = nextMessage?.type === 'assistant';
+
+      // Compute 1-based breakpoint index for user messages: count how many
+      // user messages appear up to and including this one. The backend's
+      // ForkAtBreakpoint expects the Nth user message (1-based).
+      let breakpointIndex: number | undefined;
+      if (message.type === 'user' && onForkAtBreakpointRef.current) {
+        let userCount = 0;
+        for (let i = 0; i <= index; i++) {
+          if (messagesRef.current[i]?.type === 'user') userCount++;
+        }
+        breakpointIndex = userCount;
+      }
+
+      return (
+        <MessageItem
+          message={message}
+          onToolPillClick={onToolPillClick}
+          findMatchingToolExecution={findMatchingToolExecution}
+          getToolStatus={getToolStatusForMessage}
+          formatTime={formatTime}
+          messageIndex={index}
+          outputVerbosity={outputVerbosity}
+          hasNextAssistantMessage={hasNextAssistantMessage}
+          breakpointIndex={breakpointIndex}
+          onForkAtBreakpoint={onForkAtBreakpointRef.current}
+          isForking={isForking}
+        />
+      );
+    },
+    [onToolPillClick, findMatchingToolExecution, getToolStatusForMessage, formatTime, outputVerbosity],
+  );
 
   const handleReloadWithoutSSHPath = useCallback(() => {
     const { origin, pathname } = window.location;
@@ -134,6 +223,36 @@ function Chat(props: ChatProps): JSX.Element {
   const showExpiredSessionRecovery =
     supportsSSH && !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
 
+  // Stable Footer/Header component references — prevents Virtuoso from
+  // unmounting/remounting Footer (ChatFooter → ToolTimelineBar) on every
+  // keystroke. Without useCallback, the inline arrow functions change
+  // reference on every render (e.g. during typing), causing ToolTimelineBar
+  // to lose internal state (shouldRender, completedAtRef) and its badges
+  // to flash in/out.
+  const VirtuosoHeader = useCallback(() => <ChatHeader worktreePath={worktreePath} />, [worktreePath]);
+  const VirtuosoFooter = useCallback(
+    () => (
+      <ChatFooter
+        queryProgress={queryProgress as QueryProgress | null}
+        isProcessing={isProcessing}
+        filteredToolExecutions={filteredToolExecutions}
+        lastError={lastError}
+        showExpiredSessionRecovery={showExpiredSessionRecovery}
+        handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
+        currentTodos={currentTodos}
+      />
+    ),
+    [
+      queryProgress,
+      isProcessing,
+      filteredToolExecutions,
+      lastError,
+      showExpiredSessionRecovery,
+      handleReloadWithoutSSHPath,
+      currentTodos,
+    ],
+  );
+
   const handleInsertAtCursor = useCallback(
     (text: string) => {
       const separator = inputValueRef.current ? '\n' : '';
@@ -142,39 +261,39 @@ function Chat(props: ChatProps): JSX.Element {
     [onInputChange],
   );
 
-  const handleRewindAndResend = useCallback(async (messageContent: string, messageIndex: number) => {
-    if (isRewinding) return;
-    // The toTurn is a checkpoint index: user messages are at even indices (0, 2, 4, ...)
-    // and correspond to checkpoints 0, 1, 2, ....  To rewind BEFORE this checkpoint
-    // pass k - 1 (where k = Math.floor(messageIndex / 2)).  For the very first message
-    // the result is 0 which is a harmless no-op.
-    const toTurn = Math.max(0, Math.floor(messageIndex / 2) - 1);
+  const handleRewindAndResend = useCallback(
+    async (messageContent: string, messageIndex: number) => {
+      if (isRewinding) return;
+      // The toTurn is a checkpoint index: user messages are at even indices (0, 2, 4, ...)
+      // and correspond to checkpoints 0, 1, 2, ....  To rewind BEFORE this checkpoint
+      // pass k - 1 (where k = Math.floor(messageIndex / 2)).  For the very first message
+      // the result is 0 which is a harmless no-op.
+      const toTurn = Math.max(0, Math.floor(messageIndex / 2) - 1);
 
-    const confirmed = await showThemedConfirm(
-      `Discard all turns after this message and revert file changes?`,
-      {
+      const confirmed = await showThemedConfirm(`Discard all turns after this message and revert file changes?`, {
         title: 'Edit & Resend',
         confirmLabel: 'Resend',
         cancelLabel: 'Cancel',
         type: 'danger',
-      },
-    );
-    if (!confirmed) return;
+      });
+      if (!confirmed) return;
 
-    setIsRewinding(true);
-    try {
-      await rewindQuery(clientFetch, toTurn, true, chatId);
-      onInputChange(messageContent);
-    } catch (e) {
-      console.error('Rewind failed:', e);
-      await showThemedAlert(
-        `Rewind failed: ${e instanceof Error ? e.message : 'Unknown error'}`,
-        { title: 'Rewind Failed', type: 'error' },
-      );
-    } finally {
-      setIsRewinding(false);
-    }
-  }, [isRewinding, onInputChange, chatId]);
+      setIsRewinding(true);
+      try {
+        await rewindQuery(clientFetch, toTurn, true, chatId);
+        onInputChange(messageContent);
+      } catch (e) {
+        console.error('Rewind failed:', e);
+        await showThemedAlert(`Rewind failed: ${e instanceof Error ? e.message : 'Unknown error'}`, {
+          title: 'Rewind Failed',
+          type: 'error',
+        });
+      } finally {
+        setIsRewinding(false);
+      }
+    },
+    [isRewinding, onInputChange, chatId],
+  );
 
   const handleToggleIndex = useCallback(async (enabled: boolean) => {
     try {
@@ -186,11 +305,66 @@ function Chat(props: ChatProps): JSX.Element {
       if (!response.ok) {
         const text = await response.text();
         console.error('Failed to toggle indexing:', response.status, text);
+        // Surface failure to the user instead of silent console-only log
+        setIndexingError(response.ok ? null : `Indexing toggle failed (${response.status})`);
+      } else {
+        setIndexingError(null);
       }
     } catch (e) {
       console.error('Failed to toggle indexing:', e);
+      setIndexingError('Failed to toggle indexing — see console for details');
     }
   }, []);
+
+  // SP-114 Phase 2: dedicated command-surface handler. Called when the user
+  // submits a slash command via the chat input's onSendCommand prop (Enter on
+  // a `/`-prefixed line while not actively chatting). Routes through
+  // /api/command/execute, which only accepts SteerCapable commands. The
+  // `/`-prefix requirement is enforced server-side; we just delegate errors
+  // verbatim so the UX is consistent with other command-surface failures.
+  //
+  // SP-114 Phase 2d: also opens the streaming CommandOutputPanel. On HTTP
+  // success with non-empty output (HTTP returns the aggregated transcript
+  // even when WS chunks also arrive), show the panel so users can follow
+  // the live stream. On HTTP failure, surface the error inline on the
+  // panel rather than swallowing it. The notification toast path stays
+  // intact — both run side-by-side.
+  const handleSendCommand = useCallback(
+    async (command: string) => {
+      setCommandOutputError(null);
+      setCommandOutputPanelVisible(true);
+      try {
+        const result = await executeCommand(clientFetch, command, chatId);
+        const output = result.output || '(no output)';
+        const preview = output.length > 500 ? `${output.slice(0, 500)}\n…` : output;
+        if (result.error) {
+          setCommandOutputError(new Error(result.error));
+          notificationBus.notify('error', `/${result.command}`, result.error, undefined, {
+            // Errors that come back on the command surface (e.g.
+            // command_not_safe) deserve a follow-up: the streaming
+            // CommandOutputPanel is already open and shows the full
+            // transcript, so this button focuses it for the user.
+            label: 'Show details',
+            onClick: () => {
+              setCommandOutputPanelVisible(true);
+            },
+          });
+        } else {
+          notificationBus.notify('success', `/${result.command}`, preview);
+        }
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        setCommandOutputError(err);
+        notificationBus.notify('error', 'Command', err.message, undefined, {
+          label: 'Show details',
+          onClick: () => {
+            setCommandOutputPanelVisible(true);
+          },
+        });
+      }
+    },
+    [chatId],
+  );
 
   const showOffline = needsHealthCheck && backendReachable === false && !isProcessing && messages.length === 0;
 
@@ -199,8 +373,41 @@ function Chat(props: ChatProps): JSX.Element {
       className="chat-shell"
       ref={chatShellRef}
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
+      data-testid="chat-shell"
     >
-      <div className="chat-main">
+      <div className="chat-main" data-testid="chat-main">
+        {isCloud && !['pro', 'team', 'runner'].includes(getBootstrapConfig().user?.tier ?? '') && (
+          <div
+            style={{
+              padding: '6px 12px',
+              background: 'var(--bg-tertiary)',
+              borderBottom: '1px solid var(--border-color)',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              textAlign: 'center',
+            }}
+          >
+            Auto mode — powered by shared compute. Quality may vary. Upgrade or add an API key for guaranteed
+            performance.
+          </div>
+        )}
+        {/* Export button — shown when a session is active AND export is
+            supported (export requires a local filesystem; in cloud mode it
+            404s, so gate it on supportsExport). */}
+        {sessionId && supportsExport && (
+          <div className="chat-toolbar">
+            <button
+              type="button"
+              className="chat-export-btn"
+              onClick={() => setIsExportDialogOpen(true)}
+              data-testid="chat-export-button"
+            >
+              <Download size={14} />
+              Export
+            </button>
+          </div>
+        )}
+
         <InlineTodoSummary todos={currentTodos} isLoading={isProcessing && currentTodos.length === 0} />
         {showOffline ? (
           <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
@@ -211,42 +418,22 @@ function Chat(props: ChatProps): JSX.Element {
             onRequestProviderSetup={onRequestProviderSetup}
           />
         ) : (
-          <div ref={chatContainerRef} role="log" aria-label="Chat messages" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div
+            ref={chatContainerRef}
+            role="log"
+            aria-label="Chat messages"
+            data-testid="chat-message-list"
+            style={{ flex: 1, minHeight: 0, position: 'relative' }}
+          >
             <Virtuoso
               ref={virtuosoRef}
               data={messages}
               followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
               initialTopMostItemIndex={messages.length - 1}
               increaseViewportBy={{ top: 400, bottom: 400 }}
-              atBottomStateChange={(atBottom) => setIsAtBottom(atBottom)}
-              itemContent={(_index, message) => (
-                <MessageItem
-                  message={message}
-                  onToolPillClick={onToolPillClick}
-                  findMatchingToolExecution={findMatchingToolExecution}
-                  getToolStatus={getToolStatusForMessage}
-                  formatTime={formatTime}
-                  messageIndex={_index}
-                />
-              )}
-              components={{
-                Header: () => <ChatHeader worktreePath={worktreePath} />,
-                Footer: () => (
-                  <ChatFooter
-                    hasSubagentActivity={hasSubagentActivity}
-                    subagentActivities={subagentActivities}
-                    queryProgress={
-                      queryProgress as QueryProgress | null /* ChatProps.queryProgress is `unknown` in shared pkg */
-                    }
-                    isProcessing={isProcessing}
-                    filteredToolExecutions={filteredToolExecutions}
-                    lastError={lastError}
-                    showExpiredSessionRecovery={showExpiredSessionRecovery}
-                    handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
-                    currentTodos={currentTodos}
-                  />
-                ),
-              }}
+              atBottomStateChange={setIsAtBottom}
+              itemContent={renderMessageItem}
+              components={{ Header: VirtuosoHeader, Footer: VirtuosoFooter }}
               className="chat-virtuoso"
               style={{ height: '100%' }}
             />
@@ -256,6 +443,7 @@ function Chat(props: ChatProps): JSX.Element {
                 onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth', align: 'end' })}
                 type="button"
                 aria-label="Scroll to bottom"
+                data-testid="chat-scroll-bottom"
               >
                 <ChevronDown size={18} />
               </button>
@@ -264,31 +452,45 @@ function Chat(props: ChatProps): JSX.Element {
         )}
       </div>
 
+      {/* SP-114 Phase 2d: streaming command output panel. Sits between
+          the chat body and the input so it stays visible without
+          blocking either. The Panel handles its own visibility and
+          auto-hide; we feed it `commandOutputPanelVisible` to gate
+          visibility from Chat-side state (e.g. user-initiated toggle)
+          and let the hook's state drive content.
+          Local commandOutputError is merged in: HTTP-level errors
+          (network, 4xx/5xx, command_not_safe) flow through the
+          useCallback error path above, not through the WS stream. */}
+      {commandOutputPanelVisible ? (
+        <CommandOutputPanel
+          state={{
+            ...commandOutputState,
+            error: commandOutputError ?? commandOutputState.error,
+          }}
+          onDismiss={() => setCommandOutputPanelVisible(false)}
+        />
+      ) : null}
+
       <div className="input-container" ref={inputContainerRef}>
-        {(() => {
-          // SP-053 follow-up: small hint near the input mirroring the CLI's
-          // `model ▸ ` prompt prefix (`cmd/agent_modes.go:1005`). Reads at
-          // the point of action so users don't have to glance at the status
-          // bar to check which model receives this turn.
-          const hintModel = typeof stats?.model === 'string' ? stats.model : '';
-          const hintPersona = typeof stats?.persona === 'string' ? stats.persona : '';
-          if (!hintModel) return null;
-          return (
-            <div className="input-model-hint" aria-hidden="true">
-              {hintPersona && hintPersona !== 'orchestrator' ? (
-                <span className="input-model-hint-persona">{hintPersona}</span>
-              ) : null}
-              <span className="input-model-hint-name">{hintModel}</span>
-              <span className="input-model-hint-arrow">▸</span>
-            </div>
-          );
-        })()}
+        <ToolTimelineBar toolExecutions={filteredToolExecutions} />
+        {isProcessing && filteredToolExecutions.filter((t) => t.queryId === currentQueryCount).length === 0 && (
+          <div className="thinking-indicator" role="status" aria-live="polite">
+            <span className="thinking-indicator-dots">
+              <span className="thinking-dot" />
+              <span className="thinking-dot" />
+              <span className="thinking-dot" />
+            </span>
+            <span className="thinking-indicator-text">{isProcessing ? 'Thinking' : 'Sending…'}</span>
+          </div>
+        )}
         <CommandInput
           value={inputValue}
           onChange={onInputChange}
           onSend={onSendMessage}
+          onSendCommand={handleSendCommand}
           onQueue={onQueueMessage}
           onStop={onStopProcessing}
+          onRetractSteer={onRetractSteer}
           placeholder={
             providerAvailable === false
               ? 'Configure a provider to start chatting...'
@@ -307,10 +509,21 @@ function Chat(props: ChatProps): JSX.Element {
           onQueueMessageEdit={onQueueMessageEdit}
           onQueueReorder={onQueueReorder}
           onClearQueuedMessages={onClearQueuedMessages}
+          completionApi={completionApi}
           isIndexEnabled={!!stats?.embedding_index_enabled}
           isIndexBuilding={!!stats?.embedding_index_building}
           onToggleIndex={handleToggleIndex}
+          onUploadImage={handleUploadImage}
         />
+        {indexingError && (
+          <div
+            className="indexing-error-banner"
+            role="alert"
+            style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}
+          >
+            {indexingError}
+          </div>
+        )}
       </div>
 
       <ChatMessageContextMenu
@@ -318,6 +531,8 @@ function Chat(props: ChatProps): JSX.Element {
         onInsertAtCursor={handleInsertAtCursor}
         onRewindAndResend={isRewinding ? undefined : handleRewindAndResend}
       />
+
+      <ExportDialog isOpen={isExportDialogOpen} onClose={() => setIsExportDialogOpen(false)} sessionId={sessionId} />
     </div>
   );
 }

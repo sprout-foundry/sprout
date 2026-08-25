@@ -7,9 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 )
 
 var lspCmd = &cobra.Command{
@@ -105,9 +106,9 @@ func runLSPInstall(language string) error {
 	// Check if already installed
 	path, err := proxy.ResolveBinaryPath(server.Binary)
 	if err == nil {
-		fmt.Printf("✓ %s is already installed at: %s\n", server.Binary, path)
+		console.GlyphSuccess.Fprintf(os.Stdout, "%s is already installed at: %s", server.Binary, path)
 	} else {
-		fmt.Printf("✗ %s is not installed.\n", server.Binary)
+		console.GlyphError.Fprintf(os.Stdout, "%s is not installed.", server.Binary)
 	}
 
 	return nil

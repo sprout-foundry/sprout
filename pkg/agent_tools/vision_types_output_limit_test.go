@@ -49,7 +49,7 @@ func TestPersistVisionFullText_WritesReadableRelativePath(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(originalWD) })
 
-	t.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
+	t.Setenv("SPROUT_RESOURCE_DIRECTORY", "captures")
 	outPath, err := persistVisionFullText("https://example.com/menu.pdf", "full text body")
 	if err != nil {
 		t.Fatalf("persistVisionFullText failed: %v", err)

@@ -7,9 +7,10 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { supportsGit } from '../config/mode';
 import { debugLog } from '../utils/log';
 
-export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'changes' | 'automations';
+export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'automations' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
 
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 600;
@@ -65,7 +66,14 @@ function loadPersistedString<T extends string>(key: string, fallback: T, validVa
   return fallback;
 }
 
-const VALID_SECTION_TABS: readonly SectionTab[] = ['git', 'logs', 'files', 'settings', 'search', 'changes', 'automations'] as const;
+const VALID_SECTION_TABS: readonly SectionTab[] = [
+  'git',
+  'logs',
+  'files',
+  'settings',
+  'search',
+  'automations',
+] as const;
 
 export function useSidebarState(): UseSidebarStateReturn {
   const [isMobile, setIsMobile] = useState(false);
@@ -80,9 +88,12 @@ export function useSidebarState(): UseSidebarStateReturn {
     loadPersistedBoolean('sprout-terminal-expanded', false),
   );
 
-  const [selectedSection, setSelectedSectionRaw] = useState<SectionTab>(() =>
-    loadPersistedString('sprout-sidebar-active-tab', 'git' as SectionTab, VALID_SECTION_TABS),
-  );
+  const [selectedSection, setSelectedSectionRaw] = useState<SectionTab>(() => {
+    const persisted = loadPersistedString('sprout-sidebar-active-tab', 'git' as SectionTab, VALID_SECTION_TABS);
+    // In cloud mode where git isn't supported, default to files instead.
+    if (persisted === 'git' && !supportsGit) return 'files';
+    return persisted;
+  });
 
   const [sidebarWidth, setSidebarWidthRaw] = useState(() => {
     try {

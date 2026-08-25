@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
@@ -30,9 +32,30 @@ func (p *ProvidersCommand) Name() string {
 	return "provider"
 }
 
+// SafeDuringSteer returns true - /provider is config for next turn only
+func (p *ProvidersCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (p *ProvidersCommand) Description() string {
 	return "Show current provider status and switch providers"
+}
+
+// Usage returns the detailed help text shown by `/help provider`.
+func (p *ProvidersCommand) Usage() string {
+	return strings.Join([]string{
+		"/provider                Show current provider status and supported providers.",
+		"/provider list           List available providers only.",
+		"/provider select         Interactive provider picker.",
+		"/provider <name>         Switch to <name> directly.",
+		"/provider <name>:<model> Switch to <name> with an explicit model.",
+		"",
+		"Alias: /p",
+		"",
+		"Flags:",
+		"  --json   Output the provider list as a JSON array",
+	}, "\n")
 }
 
 // Execute runs the providers command
@@ -56,6 +79,109 @@ func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error 
 		// Try to set provider directly by name
 		return p.setProvider(args[0], configManager, chatAgent)
 	}
+}
+
+// Complete provides argument completions for /provider. Suggests
+// subcommands and provider names from the configuration manager.
+func (p *ProvidersCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) == 0 {
+		// First argument: suggest subcommands plus available provider names.
+		basic := []string{"list", "select", "status"}
+		if chatAgent == nil {
+			return basic
+		}
+		mgr := chatAgent.GetConfigManager()
+		if mgr == nil {
+			return basic
+		}
+		providers := mgr.GetAvailableProviders()
+		all := make([]string, 0, len(basic)+len(providers))
+		all = append(all, basic...)
+		for _, p := range providers {
+			all = append(all, string(p))
+		}
+		sort.Strings(all)
+		return all
+	}
+
+	// Filter against both subcommands and provider names.
+	prefix := strings.ToLower(args[len(args)-1])
+	var matches []string
+
+	// Check subcommands
+	subcommands := []string{"list", "select", "status"}
+	for _, sub := range subcommands {
+		if strings.HasPrefix(strings.ToLower(sub), prefix) {
+			matches = append(matches, sub)
+		}
+	}
+
+	// Check provider names (if agent available)
+	if chatAgent != nil {
+		mgr := chatAgent.GetConfigManager()
+		if mgr != nil {
+			providers := mgr.GetAvailableProviders()
+			for _, p := range providers {
+				id := string(p)
+				if strings.HasPrefix(strings.ToLower(id), prefix) {
+					matches = append(matches, id)
+				}
+			}
+		}
+	}
+
+	sort.Strings(matches)
+	return matches
+}
+
+// providerInfoJSON is a single provider entry in the JSON output.
+type providerInfoJSON struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Model  string `json:"model"`
+	Ready  bool   `json:"ready"`
+	Active bool   `json:"active"`
+}
+
+// providersJSONPayload wraps the provider list with current selection context.
+type providersJSONPayload struct {
+	CurrentProvider string             `json:"current_provider"`
+	CurrentModel    string             `json:"current_model"`
+	Providers       []providerInfoJSON `json:"providers"`
+}
+
+// ExecuteWithJSONOutput emits the provider list as a JSON array. This
+// mirrors the /provider list path (the status, select, and setProvider
+// subcommands are interactive/stateful and fall through to text Execute).
+func (p *ProvidersCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	if chatAgent == nil {
+		return WriteJSONToOutput(providersJSONPayload{})
+	}
+
+	configManager := chatAgent.GetConfigManager()
+	if configManager == nil {
+		return WriteJSONToOutput(providersJSONPayload{})
+	}
+
+	currentProvider := chatAgent.GetProviderType()
+	available := configManager.GetAvailableProviders()
+
+	providers := make([]providerInfoJSON, 0, len(available))
+	for _, provider := range available {
+		providers = append(providers, providerInfoJSON{
+			ID:     string(provider),
+			Name:   getProviderDisplayName(provider),
+			Model:  configManager.GetModelForProvider(provider),
+			Ready:  p.isProviderReady(configManager, provider),
+			Active: provider == currentProvider,
+		})
+	}
+
+	return WriteJSONToOutput(providersJSONPayload{
+		CurrentProvider: getProviderDisplayName(currentProvider),
+		CurrentModel:    chatAgent.GetModel(),
+		Providers:       providers,
+	})
 }
 
 // showProviderStatus displays current provider information
@@ -138,6 +264,11 @@ func (p *ProvidersCommand) isProviderReady(configManager *configuration.Manager,
 		return true
 	}
 
+	// Local providers that don't need API keys or cloud credentials.
+	if provider == api.SproutLocalClientType {
+		return true
+	}
+
 	// Built-in providers that are available without API keys
 	if api.IsProviderAvailable(provider) {
 		return true
@@ -216,8 +347,17 @@ func (p *providerDropdownItem) Display() string    { return p.displayName }
 func (p *providerDropdownItem) SearchText() string { return p.displayName }
 func (p *providerDropdownItem) Value() interface{} { return p.provider }
 
-// setProvider sets a specific provider by name
-func (p *ProvidersCommand) setProvider(providerName string, configManager *configuration.Manager, chatAgent *agent.Agent) error {
+// setProvider sets a specific provider by name, optionally with a model
+// specified via the "provider:model" syntax.
+func (p *ProvidersCommand) setProvider(providerArg string, configManager *configuration.Manager, chatAgent *agent.Agent) error {
+	// Support "provider:model" syntax to explicitly specify a model
+	providerName := providerArg
+	var explicitModel string
+	if idx := strings.Index(providerArg, ":"); idx > 0 {
+		providerName = providerArg[:idx]
+		explicitModel = providerArg[idx+1:]
+	}
+
 	// Convert name to provider type using the config manager to handle custom providers
 	provider, err := configManager.MapStringToClientType(strings.ToLower(providerName))
 	if err != nil {
@@ -228,6 +368,14 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 			names = append(names, string(p))
 		}
 		return fmt.Errorf("unknown provider '%s'. Available: %s", providerName, strings.Join(names, ", "))
+	}
+
+	// If an explicit model was provided, persist it before switching so
+	// SetProviderPersisted picks it up from the config.
+	if explicitModel != "" {
+		if err := configManager.SetModelForProvider(provider, explicitModel); err != nil {
+			return fmt.Errorf("failed to set model for %s: %w", providerName, err)
+		}
 	}
 
 	// Check if provider needs API key but doesn't have one
@@ -267,6 +415,19 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 
 	console.GlyphSuccess.Printf("Provider switched to: %s", getProviderDisplayName(provider))
 	console.GlyphInfo.Printf("Using model: %s", model)
+
+	// For local providers, proactively start the LLM server so the first
+	// chat request doesn't hit a connection-refused error.
+	if provider == api.SproutLocalClientType {
+		console.GlyphDim.Print("Starting local model server...")
+		if err := chatAgent.EnsureLocalServer(); err != nil {
+			console.GlyphWarning.Printf("Could not start local model server: %v", err)
+			console.GlyphInfo.Print("The server will start automatically on your first request.")
+		} else {
+			console.GlyphSuccess.Print("Local model server ready.")
+		}
+	}
+
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
 		fmt.Println()
 		console.GlyphInfo.Print(note)
@@ -350,6 +511,19 @@ func getProviderDisplayName(provider api.ClientType) string {
 	case api.TestClientType:
 		return "Test (CI/Mock)"
 	default:
+		// Known generated providers get their display name from the provider
+		// registry, which has "Local (Offline)" for sprout-local and others.
+		if displayName, ok := providerDisplayNameFromRegistry(provider); ok {
+			return displayName
+		}
 		return string(provider)
 	}
+}
+
+// providerDisplayNameFromRegistry looks up a provider's display name from
+// the agent_providers package's generated display-name map.
+func providerDisplayNameFromRegistry(provider api.ClientType) (string, bool) {
+	names := providers.ProviderDisplayNames()
+	name, ok := names[string(provider)]
+	return name, ok
 }

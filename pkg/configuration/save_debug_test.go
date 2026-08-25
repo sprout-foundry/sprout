@@ -11,26 +11,26 @@ func TestSaveConfigDebug(t *testing.T) {
 		"resource_directory": "resources-a",
 		"provider_priority":  []string{"openrouter", "deepinfra"},
 	}
-	
+
 	current := map[string]interface{}{
 		"resource_directory": "resources-b",
 		"provider_priority":  nil,
 	}
-	
+
 	latest := map[string]interface{}{
 		"resource_directory": "resources-a",
 		"provider_priority":  []string{"openrouter", "deepinfra"},
 	}
-	
+
 	// Simulate mergeConfigChanges
 	baseMap := lastSaved
 	currentMap := current
 	targetMap := latest
-	
+
 	applyMapDiff(baseMap, currentMap, targetMap)
-	
+
 	t.Logf("target after merge: %+v", targetMap)
-	
+
 	// Check if provider_priority is nil or a slice
 	if targetMap["provider_priority"] == nil {
 		t.Log("provider_priority is nil - this is correct")
@@ -40,7 +40,7 @@ func TestSaveConfigDebug(t *testing.T) {
 	} else {
 		t.Logf("provider_priority type: %T, value: %v", targetMap["provider_priority"], targetMap["provider_priority"])
 	}
-	
+
 	// Try to marshal to see what happens
 	data, err := json.MarshalIndent(targetMap, "", "  ")
 	if err != nil {

@@ -26,6 +26,18 @@ function restoreWindowLocation() {
   });
 }
 
+/**
+ * Import bootstrapAdapter and drive the async adapter install to completion.
+ *
+ * bootstrapAdapter.ts auto-runs fetchRuntimeConfig() on import, but adapter
+ * installation is now async (dynamic import of CloudAdapter). This helper
+ * ensures the fire-and-forget bootstrap settles before assertions run.
+ */
+async function importWithBootstrap() {
+  const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+  await fetchRuntimeConfig();
+}
+
 describe('bootstrapAdapter', () => {
   describe('cloud mode (VITE_SPROUT_MODE=cloud)', () => {
     beforeEach(() => {
@@ -46,15 +58,14 @@ describe('bootstrapAdapter', () => {
     });
 
     it('installs CloudAdapter at startup', async () => {
-      // Import bootstrapAdapter — this triggers the adapter installation
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { hasAdapter } = await import('./services/apiAdapter');
       expect(hasAdapter()).toBe(true);
     });
 
     it('installs an adapter named "foundry-cloud"', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -63,7 +74,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('installs a CloudAdapter instance', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const { CloudAdapter: CloudAdapterClass } = await import('./services/cloudAdapter');
@@ -72,7 +83,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('configures adapter with correct WebSocket URL from env var', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -80,12 +91,12 @@ describe('bootstrapAdapter', () => {
     });
 
     it('configures adapter with cloud platform nav items', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter() as CloudAdapter | null;
       expect(adapter!.platformNavItems).toBeDefined();
-      expect(adapter!.platformNavItems!.length).toBe(3);
+      expect(adapter!.platformNavItems!.length).toBeGreaterThanOrEqual(6);
 
       const navIds = adapter!.platformNavItems!.map((item) => item.id);
       expect(navIds).toContain('tasks');
@@ -94,7 +105,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('adapter has correct capability flags for cloud mode', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -104,7 +115,7 @@ describe('bootstrapAdapter', () => {
       expect(adapter!.supportsSSH).toBe(false);
       expect(adapter!.supportsInstances).toBe(true);
       expect(adapter!.supportsLocalTerminal).toBe(false);
-      expect(adapter!.supportsSettings).toBe(false);
+      expect(adapter!.supportsSettings).toBe(true); // SP-CLOUD-3: BYOK settings enabled
     });
   });
 
@@ -181,7 +192,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('installs CloudAdapter with same-origin defaults', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -190,7 +201,7 @@ describe('bootstrapAdapter', () => {
     });
 
     it('derives WebSocket URL from window.location when VITE_FOUNDRY_WS_URL is not set', async () => {
-      await import('./bootstrapAdapter');
+      await importWithBootstrap();
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
@@ -226,6 +237,7 @@ describe('bootstrapAdapter', () => {
           authMode: 'bearer',
           appMode: 'cloud',
           buildVersion: '1.0.0',
+          sharedMode: false,
         };
         fetchSpy.mockResolvedValue({
           json: () => Promise.resolve(serverConfig),
@@ -235,9 +247,6 @@ describe('bootstrapAdapter', () => {
         const config = await fetchRuntimeConfig();
 
         expect(config).toEqual(serverConfig);
-        expect(consoleLogSpy).toHaveBeenCalledWith(
-          'bootstrap: fetched config from /api/bootstrap'
-        );
       });
 
       it('caches the fetched config in getBootstrapConfig', async () => {
@@ -247,14 +256,13 @@ describe('bootstrapAdapter', () => {
           authMode: 'none',
           appMode: 'local',
           buildVersion: '1.0.0',
+          sharedMode: false,
         };
         fetchSpy.mockResolvedValue({
           json: () => Promise.resolve(serverConfig),
         } as any);
 
-        const { fetchRuntimeConfig, getBootstrapConfig } = await import(
-          './bootstrapAdapter'
-        );
+        const { fetchRuntimeConfig, getBootstrapConfig } = await import('./bootstrapAdapter');
         await fetchRuntimeConfig();
 
         const cached = getBootstrapConfig();
@@ -277,10 +285,7 @@ describe('bootstrapAdapter', () => {
         expect(config.wsURL).toBe('ws://env:9090/ws');
         expect(config.appMode).toBe('cloud');
         expect(config.buildVersion).toBe('2.0.0');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('using VITE env vars'),
-          expect.anything()
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('using VITE env vars'), expect.anything());
       });
 
       it('falls back to env vars when server returns 500', async () => {
@@ -297,10 +302,7 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://env:9090');
         expect(config.wsURL).toBe('ws://env:9090/ws');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('using VITE env vars'),
-          expect.anything()
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('using VITE env vars'), expect.anything());
       });
 
       it('uses partial env vars with defaults for missing fields in local mode', async () => {
@@ -333,9 +335,6 @@ describe('bootstrapAdapter', () => {
         expect(config.authMode).toBe('none');
         expect(config.appMode).toBe('local');
         expect(config.buildVersion).toBe('dev');
-        expect(consoleLogSpy).toHaveBeenCalledWith(
-          'bootstrap: using localhost defaults'
-        );
       });
 
       it('uses localhost defaults when server returns non-JSON and no env vars', async () => {
@@ -352,9 +351,6 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://localhost:56000');
         expect(config.wsURL).toBe('ws://localhost:56000/ws');
-        expect(consoleLogSpy).toHaveBeenCalledWith(
-          'bootstrap: using localhost defaults'
-        );
       });
     });
 
@@ -369,10 +365,7 @@ describe('bootstrapAdapter', () => {
         const config = await fetchRuntimeConfig();
 
         expect(config.apiBaseURL).toBe('http://fallback:3000');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('using VITE env vars'),
-          expect.anything()
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('using VITE env vars'), expect.anything());
       });
 
       it('falls back when server returns JSON without apiBaseURL', async () => {
@@ -386,10 +379,7 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://fallback:3000');
         // fetchError is null here because JSON parsed OK but validation failed
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          'bootstrap: using VITE env vars (fetch failed: %s)',
-          null
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith('bootstrap: using VITE env vars (fetch failed: %s)', null);
       });
 
       it('uses server config even when partially missing optional fields', async () => {
@@ -452,14 +442,13 @@ describe('bootstrapAdapter', () => {
         authMode: 'bearer',
         appMode: 'cloud',
         buildVersion: '3.0.0',
+        sharedMode: false,
       };
       fetchSpy.mockResolvedValue({
         json: () => Promise.resolve(serverConfig),
       } as any);
 
-      const { fetchRuntimeConfig, getBootstrapConfig } = await import(
-        './bootstrapAdapter'
-      );
+      const { fetchRuntimeConfig, getBootstrapConfig } = await import('./bootstrapAdapter');
       await fetchRuntimeConfig();
 
       expect(getBootstrapConfig()).toEqual(serverConfig);
@@ -467,9 +456,7 @@ describe('bootstrapAdapter', () => {
 
     it('returns localhost defaults before fetchRuntimeConfig resolves', async () => {
       // Mock fetch to hang so the auto-run never completes
-      fetchSpy.mockImplementation(
-        () => new Promise(() => {})
-      );
+      fetchSpy.mockImplementation(() => new Promise(() => {}));
 
       const { getBootstrapConfig } = await import('./bootstrapAdapter');
 

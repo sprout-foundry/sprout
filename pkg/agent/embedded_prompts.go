@@ -4,29 +4,36 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
+
+// agentsMdLargeTokenThreshold is the token count above which AGENTS.md (and
+// sibling context files) triggers a size warning in Low-Context Mode. The file
+// is still injected regardless — this is advisory only.
+const agentsMdLargeTokenThreshold = 4000
 
 //go:embed prompts/system_prompt.md
 var systemPromptContent string
 
+// Lite prompt for Low-Context Mode (8K–64K context windows). ~1K tokens vs the full prompt's ~6.6K.
+//
+//go:embed prompts/system_prompt.lite.md
+var systemPromptLiteContent string
+
 //go:embed prompts/planning_prompt.md
 var planningPromptContent string
 
-// SP-066 Phase 2 — dedicated rollup prompt template used by the background
-// rollup worker. Separate from the per-turn summarizer because its inputs
-// are already-summarized data, not raw conversation messages.
+// Rollup prompt template for the background rollup worker. Separate from the per-turn summarizer.
 //
 //go:embed prompts/rollup_prompt.md
 var rollupPromptContent string
 
-// GetEmbeddedRollupPrompt returns the rollup summarizer prompt embedded
-// from prompts/rollup_prompt.md. The body is used verbatim as the system
-// prompt for the rollup worker's LLM call.
+// GetEmbeddedRollupPrompt returns the rollup summarizer prompt.
 func GetEmbeddedRollupPrompt() string {
 	return rollupPromptContent
 }
@@ -42,39 +49,27 @@ var orchestratorGitPolicyAppend string
 
 // GetEmbeddedSystemPrompt returns the embedded system prompt
 func GetEmbeddedSystemPrompt() (string, error) {
-	// Extract the prompt content from the markdown
 	promptContent, err := extractSystemPrompt()
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
 
-	// Add discovered context files (AGENTS.md, Claude.md, etc.)
-	// Semi-static content — placed before the volatile timestamp so it does not
-	// invalidate the prompt-prefix cache for subsequent static content.
+	// Context files (AGENTS.md, etc.) - placed before volatile content to preserve prompt-prefix cache.
 	contextFiles, err := LoadContextFiles()
 	if err == nil && contextFiles != "" {
 		promptContent = promptContent + contextFiles
 	}
 
-	// Add memories (user preferences and learned patterns)
-	// Semi-static content — also placed before the volatile timestamp.
+	// Memories - also placed before the volatile tail.
 	memories := LoadMemoriesForPrompt()
 	if memories != "" {
 		promptContent = promptContent + memories
 	}
 
-	// Add current date and time for temporal context LAST. This is the only
-	// volatile (per-call) content; keeping it at the end preserves cache
-	// eligibility for the large static prefix (system prompt + context files
-	// + memories). Providers like Anthropic cache prompt prefixes, so a
-	// second-resolution timestamp anywhere but the tail would force a full
-	// re-process of everything after it on every request.
-	currentTime := time.Now()
-	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
-		currentTime.Format("2006-01-02"),
-		currentTime.Format("15:04:05"),
-		currentTime.Location().String())
-	promptContent = promptContent + dateTimeString
+	// Cwd at the tail to preserve prompt-prefix cache eligibility. Timestamp lives in the user message.
+	cwdString := buildCurrentWorkingDirectorySection("")
+
+	promptContent = promptContent + cwdString
 
 	return promptContent, nil
 }
@@ -84,53 +79,111 @@ func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
 	return GetEmbeddedSystemPrompt()
 }
 
-// extractSystemPrompt extracts the prompt content from the system_prompt markdown
-func extractSystemPrompt() (string, error) {
-	// The system_prompt.md has the prompt content in a code block
-	// We need to extract from the first ``` marker to the last ``` marker
-	// to include all content including examples with nested code blocks
-
-	const promptStart = "```"
-
-	// Find the first ``` marker
-	startIdx := strings.Index(systemPromptContent, promptStart)
-	if startIdx == -1 {
-		return "", agenterrors.NewPermanentError("critical error: system prompt start marker not found in embedded content", nil)
+// GetEmbeddedSystemPromptForProfile selects the full or lite system prompt based on the ContextProfile.
+func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int, workspaceRoot string) (string, error) {
+	promptContent, err := extractSystemPromptForProfile(profile)
+	if err != nil {
+		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
 
-	// Skip the opening ``` marker and any following newlines
+	contextFiles, err := LoadContextFiles()
+	if err == nil && contextFiles != "" {
+		// AGENTS.md is always injected. In LCM, warn if the file is large.
+		if profile.Mode == configuration.ContextModeLowContext {
+			tokens := EstimateTokens(contextFiles)
+			if tokens > agentsMdLargeTokenThreshold {
+				windowLabel := "the context window"
+				windowK := contextWindow / 1000
+				pct := 0
+				if contextWindow > 0 {
+					pct = tokens * 100 / contextWindow
+					windowLabel = fmt.Sprintf("a %dK window", windowK)
+				}
+				fmt.Fprintf(os.Stderr,
+					"⚠ AGENTS.md is large (~%d tokens, ~%d%% of %s).\n"+
+						"  It will still be injected — project conventions are mandatory.\n"+
+						"  To shrink it: move reference material to linked docs, split into\n"+
+						"  per-package AGENTS.md files, or trim historical notes.\n",
+					tokens, pct, windowLabel)
+			}
+		}
+		promptContent = promptContent + contextFiles
+	}
+
+	memories := LoadMemoriesForPrompt()
+	if memories != "" {
+		promptContent = promptContent + memories
+	}
+
+	// Cwd at the tail to preserve prompt-prefix cache. Timestamp lives in the user message.
+	cwdString := buildCurrentWorkingDirectorySection(workspaceRoot)
+
+	promptContent = promptContent + cwdString
+
+	return promptContent, nil
+}
+
+// buildCurrentWorkingDirectorySection formats the "Current Working Directory" block. Uses workspaceRoot if set, otherwise os.Getwd().
+func buildCurrentWorkingDirectorySection(workspaceRoot string) string {
+	cwd := workspaceRoot
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil || cwd == "" {
+			cwd = "."
+		}
+	}
+	return fmt.Sprintf("\n\n## Current Working Directory\n\n`%s`\n\n---\n", cwd)
+}
+
+// extractSystemPromptForProfile selects the full or lite prompt based on SystemPromptPath. Falls back to full prompt.
+func extractSystemPromptForProfile(profile configuration.ContextProfile) (string, error) {
+	if strings.HasSuffix(profile.SystemPromptPath, "lite.md") {
+		if content, err := extractFromContent(systemPromptLiteContent); err == nil {
+			return content, nil
+		}
+	}
+	return extractSystemPrompt()
+}
+
+// extractSystemPrompt extracts the prompt content from the system_prompt markdown
+func extractSystemPrompt() (string, error) {
+	return extractFromContent(systemPromptContent)
+}
+
+// extractFromContent extracts prompt text from a markdown source that wraps
+// the prompt body in triple-backtick fences. Finds the first ``` and the last
+// ``` (handles nested code blocks inside the prompt). Shared by the full and
+// lite prompt extractors.
+func extractFromContent(source string) (string, error) {
+	const promptStart = "```"
+
+	startIdx := strings.Index(source, promptStart)
+	if startIdx == -1 {
+		return "", agenterrors.NewPermanentError("system prompt start marker not found in embedded content", nil)
+	}
+
 	contentStart := startIdx + len(promptStart)
-	for contentStart < len(systemPromptContent) && (systemPromptContent[contentStart] == '\n' || systemPromptContent[contentStart] == '\r') {
+	for contentStart < len(source) && (source[contentStart] == '\n' || source[contentStart] == '\r') {
 		contentStart++
 	}
 
-	// Find the LAST ``` marker (this handles nested code blocks)
-	endIdx := strings.LastIndex(systemPromptContent, "```")
+	endIdx := strings.LastIndex(source, "```")
 	if endIdx == -1 || endIdx <= startIdx {
-		// If no closing marker, use everything after the start marker
-		return strings.TrimSpace(systemPromptContent[contentStart:]), nil
+		return strings.TrimSpace(source[contentStart:]), nil
 	}
 
-	// Extract everything between the first ``` and the last ```
-	promptText := strings.TrimSpace(systemPromptContent[contentStart:endIdx])
-
-	return promptText, nil
+	return strings.TrimSpace(source[contentStart:endIdx]), nil
 }
 
 // GetEmbeddedPlanningPrompt returns the embedded planning prompt
 func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
-	// Extract the prompt content from the markdown
 	promptContent, err := extractPlanningPrompt()
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract planning prompt", err)
 	}
 
-	// Add current date and time for temporal context
-	currentTime := time.Now()
-	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
-		currentTime.Format("2006-01-02"),
-		currentTime.Format("15:04:05"),
-		currentTime.Location().String())
+	// Timestamp removed from here to preserve prefix cache; it arrives in the user message instead.
 
 	// Add todo integration or not based on flag
 	todoIntegration := `
@@ -148,13 +201,11 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 `
 	}
 
-	return promptContent + todoIntegration + dateTimeString, nil
+	return promptContent + todoIntegration, nil
 }
 
 // extractPlanningPrompt extracts the prompt content from the planning_prompt markdown
 func extractPlanningPrompt() (string, error) {
-	// The planning_prompt.md has the prompt content in a code block
-	// We'll extract everything between the ``` markers
 	const promptStart = "You are an autonomous planning and execution assistant."
 
 	startIdx := strings.Index(planningPromptContent, promptStart)

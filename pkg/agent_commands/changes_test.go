@@ -1,10 +1,13 @@
 package commands
 
 import (
+	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 func TestGetChangeTrackingStatus(t *testing.T) {
@@ -51,11 +54,21 @@ func TestLogCommand_Description(t *testing.T) {
 	}
 }
 
+func useEmptyHistory(t *testing.T) {
+	t.Helper()
+	oldChanges, oldRevisions := history.GetPathsForTesting()
+	tmp := t.TempDir()
+	history.SetPathsForTesting(filepath.Join(tmp, "changes"), filepath.Join(tmp, "revisions"))
+	t.Cleanup(func() { history.SetPathsForTesting(oldChanges, oldRevisions) })
+}
+
 func TestLogCommand_ExecuteWithNoHistory(t *testing.T) {
+	useEmptyHistory(t)
 	// Create a test agent (can be nil for this test since we're just testing the command structure)
 	var testAgent *agent.Agent
 
 	cmd := &LogCommand{}
+	cmd.SetOutput(io.Discard)
 
 	// Test execution - should not panic even with no history
 	err := cmd.Execute([]string{}, testAgent)
@@ -71,8 +84,10 @@ func TestLogCommand_ExecuteWithNoHistory(t *testing.T) {
 }
 
 func TestLogCommand_ExecuteWithArgs(t *testing.T) {
+	useEmptyHistory(t)
 	var testAgent *agent.Agent
 	cmd := &LogCommand{}
+	cmd.SetOutput(io.Discard)
 
 	// Test with various argument combinations
 	testCases := []struct {

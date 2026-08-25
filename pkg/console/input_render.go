@@ -12,6 +12,58 @@ import (
 func (ir *InputReader) Refresh() {
 	LockOutput()
 	defer UnlockOutput()
+	ir.refreshLocked()
+}
+
+// refreshLocked redraws the current input line WITHOUT acquiring the output
+// lock. Callers must already hold LockOutput(). This separation allows
+// PrintExternal to clear the line, print an external message, and redraw
+// the input in a single atomic lock-held sequence.
+//
+// Rendering is split into two modes:
+//
+//   - Pinned (dropdown visible + footer attached): the prompt line and
+//     the autocomplete candidate rows are drawn as a multi-line block in
+//     the footer's reserved rows (steer-panel style). The footer shrinks
+//     the scroll region so the block is pinned; the prompt is NOT drawn
+//     inline.
+//   - Inline (default): the prompt is drawn at the bottom of the scroll
+//     region exactly as before. If a pinned block was active it is torn
+//     down first so no stale rows remain.
+func (ir *InputReader) refreshLocked() {
+	// Update the dropdown state from the current buffer BEFORE choosing
+	// the render path so visibility reflects the latest edit.
+	// suppressAutocompleteNextRefresh (set by the Enter handler) skips
+	// this step for one invocation so the dropdown stays hidden for the
+	// accepted line instead of re-appearing via the completer.
+	if ir.autocomplete != nil && ir.hasEditedLine && !ir.suppressAutocompleteNextRefresh {
+		ir.autocomplete.update(ir.line, ir.cursorPos, ir.completer, ir.richCompleter)
+	}
+
+	pinned := ir.autocomplete != nil &&
+		ir.autocomplete.visible &&
+		ir.footer != nil &&
+		ir.footer.canPinInput()
+	if pinned {
+		ir.pinnedDropdownActive = true
+		ir.renderPinnedDropdownLocked()
+	} else {
+		if ir.pinnedDropdownActive {
+			ir.prepareInlineRenderLocked()
+		}
+		ir.refreshInputLine()
+	}
+
+	if ir.suppressAutocompleteNextRefresh {
+		ir.suppressAutocompleteNextRefresh = false
+	}
+}
+
+// refreshInputLine is the inline render path — draws the prompt +
+// input buffer and positions the cursor at the bottom of the scroll
+// region. Called by refreshLocked whenever the dropdown is hidden or
+// no footer is attached.
+func (ir *InputReader) refreshInputLine() {
 	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()
 	promptWidth := len(promptRunes)

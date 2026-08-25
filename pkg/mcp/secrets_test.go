@@ -40,7 +40,7 @@ func TestIsSecretEnvVar(t *testing.T) {
 		{"NODE_PATH prefix", "NODE_PATH", false},
 		{"PYTHON_PATH prefix", "PYTHON_PATH", false},
 		{"NPM_CONFIG_DIR prefix", "NPM_CONFIG_DIR", false},
-		{"LEDIT_ prefix", "LEDIT_SOMETHING", false},
+		{"SPROUT_ prefix", "SPROUT_SOMETHING", false},
 		{"MCP_ prefix", "MCP_ENABLED", false},
 		{"GO prefix", "GOPATH", false},
 		{"JAVA prefix", "JAVA_HOME", false},
@@ -301,10 +301,10 @@ func TestMaskEnvVars(t *testing.T) {
 
 	t.Run("mixed map", func(t *testing.T) {
 		env := map[string]string{
-			"OPENAI_API_KEY":          "sk-abcdefghijklmnop",
+			"OPENAI_API_KEY":               "sk-abcdefghijklmnop",
 			"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_1234567890",
-			"PATH":                        "/usr/bin",
-			"MODEL":                       "gpt-4",
+			"PATH":                         "/usr/bin",
+			"MODEL":                        "gpt-4",
 		}
 		got := MaskEnvVars(env)
 		assert.Equal(t, "sk-a****", got["OPENAI_API_KEY"])
@@ -318,15 +318,14 @@ func TestMaskEnvVars(t *testing.T) {
 // MigrateEnvSecretsFromServer  (needs credential backend)
 // ---------------------------------------------------------------------------
 
-// setupCredentialBackend creates a temp config dir, sets LEDIT_CONFIG,
+// setupCredentialBackend creates a temp config dir, sets SPROUT_CONFIG,
 // and forces the file-based credential backend so tests do not depend
 // on an OS keyring being present.
 func setupCredentialBackend(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 }
 
@@ -454,10 +453,10 @@ func TestMigrateEnvSecretsFromServer(t *testing.T) {
 
 		config := &MCPServerConfig{
 			Env: map[string]string{
-				"OPENAI_API_KEY":          "sk-openai",
-				"AUTH_TOKEN":              "bearer-xyz",
-				"MY_SECRET":               "super-secret",
-				"PATH":                    "/usr/bin",
+				"OPENAI_API_KEY": "sk-openai",
+				"AUTH_TOKEN":     "bearer-xyz",
+				"MY_SECRET":      "super-secret",
+				"PATH":           "/usr/bin",
 			},
 		}
 
@@ -534,9 +533,9 @@ func TestResolveEnvVars(t *testing.T) {
 		require.NoError(t, err)
 
 		env := map[string]string{
-			"AUTH_TOKEN":     SecretRef("mixserver", "AUTH_TOKEN"),
-			"PATH":           "/usr/local/bin",
-			"MAX_TOKENS":     "4096",
+			"AUTH_TOKEN": SecretRef("mixserver", "AUTH_TOKEN"),
+			"PATH":       "/usr/local/bin",
+			"MAX_TOKENS": "4096",
 		}
 
 		result, err := ResolveEnvVars("mixserver", env)
@@ -656,5 +655,3 @@ func TestMigrateEnvSecrets(t *testing.T) {
 		assert.Equal(t, "sk-roundtrip", resolved["OPENAI_API_KEY"])
 	})
 }
-
-

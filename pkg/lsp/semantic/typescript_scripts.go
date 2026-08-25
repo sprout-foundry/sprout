@@ -26,12 +26,23 @@ function lineColToOffset(text, line, column) {
   return lineStart + (col - 1);
 }
 
-function analyze(input) {
-  const workspaceRoot = input.workspaceRoot || process.cwd();
-  const filePath = path.resolve(input.filePath || '');
-  const fileContent = typeof input.content === 'string' ? input.content : '';
-  const method = (input.method || '').toLowerCase();
+// The worker process is long-lived and analyze runs per keystroke, so cache one
+// LanguageService per workspace and only update the file that changed; a full
+// program rebuild per request is what made editing TypeScript files laggy.
+const workspaceCache = new Map();
 
+function sessionConfigChanged(s) {
+  try {
+    if (s.configPath) {
+      return fs.statSync(s.configPath).mtimeMs !== s.configMtimeMs;
+    }
+    return !!s.ts.findConfigFile(s.workspaceRoot, s.ts.sys.fileExists, 'tsconfig.json');
+  } catch (_) {
+    return true;
+  }
+}
+
+function createSession(workspaceRoot) {
   let ts;
   try {
     const candidates = [
@@ -51,9 +62,7 @@ function analyze(input) {
       ts = require('typescript');
     }
   } catch (_) {
-          return {
-      capabilities: { diagnostics: false, definition: false, hover: false, rename: false, references: false },
-      error: 'typescript_not_available'};
+    return null;
   }
 
   let compilerOptions = {
@@ -70,10 +79,14 @@ function analyze(input) {
     types: []
   };
 
-  let fileNames = [filePath];
+  let fileNames = [];
+  let configPath = null;
+  let configMtimeMs = null;
   try {
     const cfgPath = ts.findConfigFile(workspaceRoot, ts.sys.fileExists, 'tsconfig.json');
     if (cfgPath) {
+      configPath = cfgPath;
+      configMtimeMs = fs.statSync(cfgPath).mtimeMs;
       const configText = ts.sys.readFile(cfgPath);
       if (configText) {
         const parsedCfg = ts.parseConfigFileTextToJson(cfgPath, configText);
@@ -88,20 +101,32 @@ function analyze(input) {
     // Best effort: keep defaults.
   }
 
-  if (!fileNames.includes(filePath)) fileNames.push(filePath);
-
   const versions = new Map();
   for (const f of fileNames) versions.set(f, '1');
 
+  // Keyed by resolved path so snapshot/version lookups match the path form TS
+  // passes back to the host for files added after session creation.
+  const pendingContents = new Map();
+
   const host = {
     getScriptFileNames: () => fileNames,
-    getScriptVersion: (f) => versions.get(f) || '1',
+    getScriptVersion: (f) => {
+      const resolved = path.resolve(f);
+      // Files with unsaved buffer content are versioned by the per-session
+      // counter. Everything else derives its version from disk mtime so the
+      // LanguageService re-reads a file the moment it changes on disk —
+      // otherwise imported files freeze at version '1' and cross-file
+      // diagnostics go stale until the session is rebuilt.
+      if (pendingContents.has(resolved)) return versions.get(resolved) || '1';
+      try { return String(fs.statSync(resolved).mtimeMs); } catch (_) { return '0'; }
+    },
     getScriptSnapshot: (f) => {
-      if (path.resolve(f) === filePath) {
-        return ts.ScriptSnapshot.fromString(fileContent);
+      const resolved = path.resolve(f);
+      if (pendingContents.has(resolved)) {
+        return ts.ScriptSnapshot.fromString(pendingContents.get(resolved));
       }
-      if (!fs.existsSync(f)) return undefined;
-      return ts.ScriptSnapshot.fromString(fs.readFileSync(f, 'utf8'));
+      if (!fs.existsSync(resolved)) return undefined;
+      return ts.ScriptSnapshot.fromString(fs.readFileSync(resolved, 'utf8'));
     },
     getCurrentDirectory: () => workspaceRoot,
     getCompilationSettings: () => compilerOptions,
@@ -116,6 +141,66 @@ function analyze(input) {
   };
 
   const ls = ts.createLanguageService(host, ts.createDocumentRegistry());
+
+  return {
+    workspaceRoot,
+    ts,
+    ls,
+    fileNames,
+    compilerOptions,
+    configPath,
+    configMtimeMs,
+    pendingContents,
+    versions,
+  };
+}
+
+function getSession(workspaceRoot) {
+  const cached = workspaceCache.get(workspaceRoot);
+  if (cached && !sessionConfigChanged(cached)) {
+    return cached;
+  }
+  const session = createSession(workspaceRoot);
+  if (session) {
+    workspaceCache.set(workspaceRoot, session);
+  }
+  return session;
+}
+
+function analyze(input) {
+  const workspaceRoot = input.workspaceRoot || process.cwd();
+  const filePath = path.resolve(input.filePath || '');
+  const fileContent = typeof input.content === 'string' ? input.content : '';
+  const method = (input.method || '').toLowerCase();
+
+  const session = getSession(workspaceRoot);
+  if (!session) {
+    return {
+      capabilities: { diagnostics: false, definition: false, hover: false, rename: false, references: false },
+      error: 'typescript_not_available'};
+  }
+  const ts = session.ts;
+  const ls = session.ls;
+
+  // Register the current buffer so the persistent LanguageService sees unsaved
+  // edits; the next keystroke reuses the same program instead of a fresh parse.
+  // Delete-then-set moves the key to the map tail so eviction below drops the
+  // least-recently-edited file (Map.set on an existing key does NOT reorder).
+  session.pendingContents.delete(filePath);
+  session.pendingContents.set(filePath, fileContent);
+  // Bound the buffer cache: Map preserves insertion order, so evicting the
+  // first key drops the least-recently-edited file. Without a cap, every
+  // distinct file edited over the worker's lifetime would accumulate here.
+  if (session.pendingContents.size > 64) {
+    const oldest = session.pendingContents.keys().next().value;
+    session.pendingContents.delete(oldest);
+  }
+  const resolvedFile = path.resolve(filePath);
+  const nextVersion = (parseInt(session.versions.get(resolvedFile) || '0', 10) || 0) + 1;
+  session.versions.set(resolvedFile, String(nextVersion));
+  if (!session.fileNames.includes(resolvedFile)) {
+    session.fileNames.push(resolvedFile);
+  }
 
   if (method === 'definition') {
     const pos = input.position || { line: 1, column: 1 };
@@ -375,7 +460,7 @@ function analyze(input) {
   if (method === 'inlay_hints') {
     const hints = [];
     try {
-      const sourceText = ts.sys.readFile(filePath) || '';
+      const sourceText = session.pendingContents.get(filePath) || ts.sys.readFile(filePath) || '';
       const inlayHints = ls.provideInlayHints(filePath, { start: 0, length: sourceText.length }, {
         includeInlayHints: true,
         includeInlayParameterNameHints: 'all',
@@ -548,13 +633,13 @@ rl.on('line', (line) => {
 
   try {
     const out = analyze(input);
-    process.stdout.write(JSON.stringify(out) + '\\n');
+    process.stdout.write(JSON.stringify(out) + '\n');
   } catch (err) {
     const out = {
       capabilities: { diagnostics: false, definition: false, hover: false, rename: false, signature_help: false },
       error: String(err && err.message ? err.message : err),
     };
-    process.stdout.write(JSON.stringify(out) + '\\n');
+    process.stdout.write(JSON.stringify(out) + '\n');
   }
 });
 `

@@ -15,6 +15,7 @@ import (
 	core "github.com/sprout-foundry/seed/core"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -22,27 +23,159 @@ import (
 // Integration entry point
 // ---------------------------------------------------------------------------
 
-// injectInputMsg carries a user-steer message from the forwarder goroutine
-// into the injector goroutine in processQueryWithSeed.
-type injectInputMsg struct {
-	content string
+// registerPastedImagesWithProvider hands extracted image data to the provider
+// so it can attach the images to the first user message in each Chat request.
+// If the provider is not a *sproutProvider (e.g. a mock in tests), the images
+// are logged and skipped rather than silently dropped.
+func registerPastedImagesWithProvider(a *Agent, prov core.Provider, images map[string][]api.ImageData) {
+	if len(images) == 0 {
+		return
+	}
+	sp, ok := prov.(*sproutProvider)
+	if !ok {
+		a.Logger().Debug("[WARN] Cannot register pasted images: provider is not *sproutProvider (got %T)\n", prov)
+		return
+	}
+	sp.RegisterPastedImages(images)
+}
+
+// InjectUserMessageTimestamp prepends a <current-time>...</current-time> tag
+// to the user message so the model sees the exact moment of each turn without
+// invalidating the prompt-prefix cache. The system prompt stays static across
+// requests (date/time injection there would defeat provider caching and cost
+// users real money on every turn); the timestamp is added only at the provider
+// boundary, where Anthropic and OpenAI do not cache the user-message suffix.
+// ISO 8601 with timezone offset is machine-parseable; the Local parenthetical
+// matches what the user sees in their OS clock so the model can reason about
+// time-of-day naturally.
+//
+// Empty or whitespace-only input is returned unchanged so wakeup-only turns
+// (background-task notifications with no user message) don't produce a bare
+// timestamp that the model would have to interpret.
+func InjectUserMessageTimestamp(userMessage string) string {
+	return InjectUserMessageTimestampAt(userMessage, time.Now())
+}
+
+// InjectUserMessageTimestampAt prepends a timestamp fixed at at. Providers use
+// it to keep one turn's prompt byte-identical across iterations and retries.
+func InjectUserMessageTimestampAt(userMessage string, at time.Time) string {
+	if strings.TrimSpace(userMessage) == "" {
+		return userMessage
+	}
+	// ISO 8601 with offset. Location().String() gives "Local" inside Go's
+	// test runner, so we also include the resolved zone name for human
+	// readability — the model uses both the absolute timestamp and the
+	// local clock to reason about "wait 5 minutes" or "is the user up late".
+	return fmt.Sprintf(
+		"<current-time>%s (Local: %s, %s)</current-time>\n\n%s",
+		at.Format(time.RFC3339),
+		at.Format("2006-01-02 15:04:05"),
+		at.Location().String(),
+		userMessage,
+	)
+}
+
+// StripUserMessageTimestamp removes a leading provider timestamp envelope
+// from a user message. It accepts legacy LF and CRLF separators and leaves
+// malformed tags or tags that do not start at offset zero unchanged.
+//
+// The matching uses the first <current-time>...</current-time> envelope in
+// the input. Because the envelope is a small fixed shape and our injector
+// (InjectUserMessageTimestamp) only emits well-formed envelopes whose body
+// (the RFC3339 / formatted time / zone name) never contains "</current-time>"
+// or "\n\n" between the tags, a substring scan is sufficient. A leading
+// tag whose body is empty returns "". Tag detection is anchored at offset 0,
+// so anything with leading whitespace before the tag is left intact.
+func StripUserMessageTimestamp(userMessage string) string {
+	const (
+		openTag  = "<current-time>"
+		closeTag = "</current-time>"
+	)
+	if !strings.HasPrefix(userMessage, openTag) {
+		return userMessage
+	}
+	closeIndex := strings.Index(userMessage[len(openTag):], closeTag)
+	if closeIndex < 0 {
+		return userMessage
+	}
+	body := userMessage[len(openTag)+closeIndex+len(closeTag):]
+	body = strings.TrimPrefix(body, "\r\n\r\n")
+	body = strings.TrimPrefix(body, "\n\n")
+	return body
+}
+
+// queryRunContext holds all shared state between the preparation and execution
+// phases of processQueryWithSeed. It keeps the thin orchestrator clean and
+// avoids a long list of return values from prepareQueryRun.
+type queryRunContext struct {
+	seedAgent       *core.Agent
+	preSeedMsgCount int
+	processedQuery  string
+	runCtx          context.Context
+	runCancel       context.CancelFunc
 }
 
 // processQueryWithSeed runs the conversation loop through seed's core.Agent
 // instead of sprout's native ConversationHandler.
 func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
+	// Admit the query before publishing any per-turn state. This makes the
+	// query guard the ownership boundary for turnTimestamp: a rejected caller
+	// cannot overwrite or clear the timestamp belonging to the active turn.
+	if err := a.TryBeginQuery(); err != nil {
+		return "", err
+	}
+	defer func() {
+		a.turnTimestampMu.Lock()
+		a.turnTimestamp = time.Time{}
+		a.turnTimestampMu.Unlock()
+		a.EndQuery()
+	}()
+
+	a.turnTimestampMu.Lock()
+	a.turnTimestamp = time.Now()
+	a.turnTimestampMu.Unlock()
+
+	a.beginTurnJournal(userQuery)
+
+	qc, err := a.prepareQueryRun(userQuery)
+	if err != nil {
+		a.endTurnJournal()
+		return "", err
+	}
+	defer func() {
+		a.endTurnJournal()
+		qc.runCancel()
+	}()
+
+	result, err := qc.seedAgent.Run(qc.runCtx, qc.processedQuery)
+	return a.handleQueryResult(qc, result, err)
+}
+
+// ---------------------------------------------------------------------------
+// Preparation phase
+// ---------------------------------------------------------------------------
+
+// prepareQueryRun sets up the seed agent, wires steering goroutines, and
+// returns everything needed for the execution phase. It handles:
+//
+// - State reset (termination reason, interrupt, streaming buffers, etc.)
+// - Image processing and proactive context injection
+// - Seed provider and tool registry construction
+// - core.Options assembly (compaction, callbacks, checkpoints)
+// - Seed agent creation
+// - Steer forwarder and injector goroutines
+func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	a.initSubManagers()
+
+	// Query admission and release are owned by processQueryWithSeed so the
+	// guard and per-turn timestamp have exactly the same lifecycle.
 
 	// ---- Pre-loop hooks (moved from old ConversationHandler.ProcessQuery) ----
 
 	// Reset termination reason for fresh query
 	a.state.SetLastRunTerminationReason("")
 
-	// Reset interrupt context so a Stop from the previous query doesn't
-	// instantly cancel this one. Per SP-034-1e we now plumb interruptCtx
-	// all the way into http.NewRequestWithContext, so leaving a cancelled
-	// ctx around would make the next ProcessQuery fail before the first
-	// LLM call lands.
+	// Reset interrupt context so a Stop from the previous query doesn't instantly cancel this one.
 	a.resetInterruptForNewQuery()
 
 	// Publish query started event
@@ -71,7 +204,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	images, processedQuery, err := a.processImagesInQuery(userQuery)
 	if err != nil {
 		a.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
-		return "", fmt.Errorf("failed to process images in query: %w", err)
+		return nil, agenterrors.NewAgent("seed-query", "failed to process images in query", err)
 	}
 
 	// Set conversation start time for duration calculation
@@ -88,6 +221,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// on every cold restore).
 	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
 	shouldInjectProactiveContext := !alreadyInjected &&
+		!a.contextProfile.SkipProactiveContext &&
 		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")
 	if shouldInjectProactiveContext {
 		injectCtx, injectCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -97,34 +231,19 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		injectCancel()
 	}
 
-	// SP-066 Phase 3: semantic recall over the conversation store. Runs
-	// on every user turn — including mid-session — so that summaries
-	// rolled past the substitution window (or wiped by a prior /compact)
-	// can still surface when the current message references them.
-	// Bounded by a tight timeout because this is on the user's critical
-	// path; recall is a nice-to-have and failure must degrade gracefully.
-	recallCtx, recallCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	a.InjectSemanticRecall(recallCtx, processedQuery)
-	recallCancel()
+	// Semantic recall is disabled per-turn. Cross-session memory is handled by InjectProactiveContext above.
+	// The Recall method and instrumentation remain available for the future /recall CLI and webui endpoints.
+	_ = processedQuery // referenced by the commented recall block above
 
-	// Build the user message with processed (cleaned) query and images
-	userMessage := api.Message{
-		Role:    "user",
-		Content: processedQuery,
-		Images:  images,
-	}
-
-	// Register pasted images with the provider for attachment during Chat requests
-	// The map key is the file path so the provider can match them up.
+	// Group extracted images for provider registration. All images from this
+	// query are attached to the first user message by attachPastedImages.
 	pastedImageMap := make(map[string][]api.ImageData)
 	if len(images) > 0 {
-		// All images are from the same query — group them under a single key
 		pastedImageMap["_current"] = images
 	}
 
-	// Save pre-seed message count and user message for later merge
+	// Save pre-seed message count for later merge
 	preSeedMsgCount := len(a.state.GetMessages())
-	preSeedUserMsg := userMessage
 
 	// Create seed provider adapter wrapping sprout's ClientInterface.
 	// Capture a stable client reference under the read lock — the query
@@ -133,10 +252,14 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	clientSnap := a.getClient()
 	prov, err := NewSproutProvider(a, clientSnap)
 	if err != nil {
-		return "", fmt.Errorf("failed to create seed provider adapter: %w", err)
+		return nil, agenterrors.NewAgent("seed-query", "failed to create seed provider adapter", err)
 	}
 
-	_ = prov // provider ready for seed agent construction
+	// Register pasted images with the provider so attachPastedImages can
+	// attach them to the first user message in each Chat request. Without
+	// this call the provider's pastedImages map stays empty and images
+	// extracted by processImagesInQuery never reach the model.
+	registerPastedImagesWithProvider(a, prov, pastedImageMap)
 
 	// Use seed's ToolRegistry — registers all 30 sprout tools with
 	// PreExecuteHook (security classification + subagent nesting prevention)
@@ -156,10 +279,20 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 	seedRegistry := newSeedToolRegistryWithPublisher(a, seedPublisher)
 
+	// Steer delivery: staged messages (steer_staging.go) are handed to seed
+	// one per conversation-loop boundary by hooks that run inside seed's
+	// loop goroutine — provider return (Chat/ChatStream) and tool-batch
+	// return (executor wrapper). Both fire immediately before seed's own
+	// injection pickup checks, preserving the eager pipeline's timing while
+	// keeping every message retractable until pickup. Messages still staged
+	// when the run ends simply wait for the next run's boundaries.
+	steerDeliverer := &steerBoundaryDeliverer{agent: a}
+	setProviderSteerHook(prov, func() { steerDeliverer.deliverOne() })
+
 	// Build seed Agent options
 	opts := core.Options{
 		Provider:       prov,
-		Executor:       seedRegistry,
+		Executor:       &steerFlushExecutor{inner: seedRegistry, deliverer: steerDeliverer},
 		MaxIterations:  a.maxIterations,
 		Debug:          a.debug,
 		EventPublisher: seedPublisher,
@@ -178,13 +311,12 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider()), a)
 
-	// SP-066 Phase 1: model-aware compaction trigger fraction. seed's default
-	// (0.85) leaves only 15% of the context window for response + thinking +
-	// tool I/O, which thinking-budget models exhaust before emitting any
-	// user-visible text. computeCompactionTriggerFraction subtracts the
-	// reservation fractions defined in context_budget.go so substitution
-	// fires earlier — by default at 0.70 instead of 0.85.
+	// Model-aware compaction trigger fraction. seed's default (0.85) leaves only 15% of the
+	// context window for response + thinking + tool I/O, which thinking-budget models exhaust
+	// before emitting any user-visible text. computeCompactionTriggerFraction subtracts the
+	// reservation fractions so substitution fires earlier — by default at 0.70 instead of 0.85.
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
+	opts.SubstitutionTargetFraction = 0.50
 
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
@@ -197,14 +329,39 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement
 	}
 
-	// OnIteration callback: sync per-iteration context token estimates
-	// back to sprout's state so the UI can show real-time token usage,
-	// and emit the SP-066 context-management diagnostic so subscribers
-	// can verify the model-aware trigger fraction is sized correctly.
+	var seedAgentRef *core.Agent
+
+	// OnIteration callback: sync per-iteration context token estimates back to sprout's state
+	// so the UI can show real-time token usage, and emit the context-management diagnostic.
 	opts.OnIteration = func(iteration, messages, tokenEstimate, contextSize int) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
+
+		// SP-138: journal seed's live conversation at each iteration start.
+		// This is the mid-turn WAL — a hard kill between iterations loses at
+		// most one iteration. State read under the closure-captured ref,
+		// which is assigned before Run() begins iterating.
+		if seedAgentRef != nil {
+			if st := seedAgentRef.State(); st != nil {
+				a.journalSeedState(st)
+			}
+		}
+
+		// SP-126: clamp to the effective cap (user MaxContextTokens or native window).
+		// After a model switch, effectiveContextCap is refreshed by
+		// refreshEffectiveContextCap() so this uses the current model's cap.
+		// One snapshot so both reads see the same value.
+		cap := a.effectiveCapSnapshot()
+		if cap > 0 && contextSize > cap {
+			contextSize = cap
+		}
+		// When the provider reports no context info (contextSize == 0),
+		// fall back to the effective cap if we have one.
+		if contextSize == 0 {
+			contextSize = cap
+		}
 		a.state.SetMaxContextTokens(contextSize)
+
 		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages, a.GetCachedTokens(), a.GetPromptTokens(), 0)
 	}
 
@@ -219,27 +376,22 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// restored sessions send the entire raw history (potentially hundreds of
 	// messages with tool calls) instead of the compacted summary, causing
 	// provider 400 errors due to mismatched tool calls/responses.
-	if cps := a.state.GetTurnCheckpoints(); len(cps) > 0 {
+	// Acquire the checkpoint read-lock to avoid racing with concurrent
+	// checkpointing and rollup operations that modify the slice.
+	cps := func() []TurnCheckpoint {
+		mu := a.state.GetCheckpointMutex()
+		mu.RLock()
+		defer mu.RUnlock()
+		return a.state.GetTurnCheckpoints()
+	}()
+	if len(cps) > 0 {
 		seedCPs := make([]core.TurnCheckpoint, len(cps))
 		for i, cp := range cps {
-			// Convert sprout's CheckpointFileChange manifest to seed's
-			// FileChange slice so the model sees the git-style turn
-			// manifest and can resolve revision_id via the view_history
-			// tool when it needs the full diff.
-			var seedChanges []core.FileChange
-			if len(cp.FileChanges) > 0 {
-				seedChanges = make([]core.FileChange, len(cp.FileChanges))
-				for j, fc := range cp.FileChanges {
-					seedChanges[j] = core.FileChange{Path: fc.Path, Op: fc.Op}
-				}
-			}
 			seedCPs[i] = core.TurnCheckpoint{
 				StartIndex:        cp.StartIndex,
 				EndIndex:          cp.EndIndex,
 				Summary:           cp.Summary,
 				ActionableSummary: cp.ActionableSummary,
-				FileChanges:       seedChanges,
-				RevisionID:        cp.RevisionID,
 			}
 		}
 		opts.InitialCheckpoints = seedCPs
@@ -248,82 +400,46 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Create seed Agent
 	seedAgent, err := core.NewAgent(opts)
 	if err != nil {
-		return "", fmt.Errorf("failed to create seed agent: %w", err)
+		return nil, agenterrors.NewAgent("seed-query", "failed to create seed agent", err)
 	}
+	seedAgentRef = seedAgent
 
 	// Run the query through seed's conversation loop.
 	// Use the processed (cleaned) query so image placeholders are replaced.
-	// ctx is the agent's interrupt context so TriggerInterrupt() — wired to
-	// the webui Stop button at pkg/webui/api_query.go::handleAPIQueryStop —
-	// actually aborts the in-flight HTTP request, not just the agent loop
-	// after the next iteration boundary. See SP-034-1e.
+	// ctx is the agent's interrupt context so TriggerInterrupt() aborts the in-flight HTTP request.
 	ctx, _ := a.snapshotInterrupt()
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
-	// Bridge sprout's user-facing inputInjectionChan to seed's InjectInput.
-	// Callers (CLI prompt goroutine, webui /api/query/steer) push into the
-	// sprout channel via InjectInputContext; this forwarder drains it and
-	// hands the message to seed, which consumes it at the next natural
-	// break point in its loop (between iterations, before deciding to
-	// terminate the turn). Without this bridge the sprout channel buffers
-	// forever and "steering" silently no-ops.
-	//
-	// runCtx is scoped to this query (separate from a.interruptCtx, which
-	// outlives a single Run) so the forwarder exits cleanly when the
-	// model returns. seed.InjectInput is buffered size 1; if full we
-	// briefly sleep before retrying so we don't lose the user's steer to
-	// a transient collision with seed's own consumer.
 	runCtx, runCancel := context.WithCancel(ctx)
-	injectChan := make(chan injectInputMsg, 8)
-	steerDone := make(chan struct{})
 
-	// Forwarder: reads from sprout's input channel and sends to injectChan
-	go func() {
-		defer close(injectChan)
-		ch := a.GetInputInjectionContext()
-		for {
-			select {
-			case <-runCtx.Done():
-				return
-			case msg, ok := <-ch:
-				if !ok {
-					return
-				}
-				select {
-				case injectChan <- injectInputMsg{content: msg}:
-				case <-runCtx.Done():
-					return
-				}
-			}
-		}
-	}()
+	// Steer delivery wiring, phase 2: the deliverer needs the constructed
+	// seed agent. Everything else (provider hook, executor wrapper) was
+	// wired above before core.NewAgent consumed the options.
+	steerDeliverer.setSeedAgent(seedAgent)
 
-	// Injector: reads from injectChan and applies to seed agent
-	go func() {
-		defer close(steerDone)
-		for msg := range injectChan {
-			for !seedAgent.InjectInput(msg.content) {
-				select {
-				case <-runCtx.Done():
-					return
-				case <-time.After(25 * time.Millisecond):
-				}
-			}
-		}
-	}()
-	defer func() {
-		runCancel()
-		<-steerDone
-	}()
+	return &queryRunContext{
+		seedAgent:       seedAgent,
+		preSeedMsgCount: preSeedMsgCount,
+		processedQuery:  processedQuery,
+		runCtx:          runCtx,
+		runCancel:       runCancel,
+	}, nil
+}
 
-	result, err := seedAgent.Run(ctx, processedQuery)
+// ---------------------------------------------------------------------------
+// Execution result handling
+// ---------------------------------------------------------------------------
+
+// handleQueryResult processes the result from seedAgent.Run(), handling fleet
+// budget exceeded, general errors, and the success path. It syncs state back
+// to sprout, commits tracked changes, and runs post-loop hooks.
+func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error) (string, error) {
 	if err != nil {
 		// Check if the fleet budget was exceeded mid-run
 		if errors.Is(err, FleetBudgetExceededError) {
 			// Extract the last assistant response as the truncated result
-			a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
+			a.syncSeedStateToSprout(qc.seedAgent)
 
 			var truncatedResult string
 			messages := a.state.GetMessages()
@@ -338,7 +454,8 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 			}
 
 			a.state.SetLastRunTerminationReason(RunTerminationFleetBudgetExceeded)
-			a.finalizeConversationPostHooks(truncatedResult, processedQuery, preSeedMsgCount)
+			a.journalSeedState(qc.seedAgent.State())
+			a.finalizeConversationPostHooks(truncatedResult, qc.processedQuery, qc.preSeedMsgCount)
 
 			return truncatedResult, nil
 		}
@@ -353,10 +470,9 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		a.state.SetLastRunTerminationReason(RunTerminationCompleted)
 
 		// Sync whatever state we can before returning
-		a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
-
-		// Finalize — publish the user-friendly message as the response
-		a.finalizeConversationPostHooks(wrapped, processedQuery, preSeedMsgCount)
+		a.syncSeedStateToSprout(qc.seedAgent)
+		a.journalSeedState(qc.seedAgent.State())
+		a.finalizeConversationPostHooks(wrapped, qc.processedQuery, qc.preSeedMsgCount)
 
 		// Return the classified error so CLI/webui display it properly.
 		// The wrapped message is published via events above for display.
@@ -364,7 +480,8 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 
 	// Sync state back to sprout's agent manager
-	a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
+	a.syncSeedStateToSprout(qc.seedAgent)
+	a.journalSeedState(qc.seedAgent.State())
 
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 
@@ -382,17 +499,8 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		}
 	}
 
-	// Run self-review gate if changes were tracked (primary only; a
-	// subagent's work is reviewed by its parent orchestrator).
-	if !a.IsSubagent() && a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
-		if err := a.runSelfReviewGate(); err != nil {
-			a.publishEvent(events.EventTypeError, events.ErrorEvent("Self-review gate failed", err))
-			return "", fmt.Errorf("failed self-review gate: %w", err)
-		}
-	}
-
 	// Finalize post-loop tasks
-	a.finalizeConversationPostHooks(result, processedQuery, preSeedMsgCount)
+	a.finalizeConversationPostHooks(result, qc.processedQuery, qc.preSeedMsgCount)
 
 	// If streaming was enabled and content was streamed, return empty string
 	// to avoid duplicate display in the top-level CLI console.
@@ -406,6 +514,10 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 
 	return result, nil
 }
+
+// ---------------------------------------------------------------------------
+// Post-hooks and state sync
+// ---------------------------------------------------------------------------
 
 // finalizeConversationPostHooks runs post-loop hooks shared by success and error paths.
 func (a *Agent) finalizeConversationPostHooks(result string, processedQuery string, preSeedMsgCount int) {
@@ -468,7 +580,7 @@ func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIn
 		return
 	}
 
-	a.RecordTurnCheckpointAsync(queryStartIndex, endIndex)
+	a.RecordTurnCheckpoint(queryStartIndex, endIndex)
 }
 
 // syncSeedStateToSprout merges seed's state back into sprout's state manager.
@@ -476,7 +588,7 @@ func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIn
 // conversation history), seed's final state contains the complete message
 // sequence: [historical msgs, new user msg, assistant msg, tool msgs, ...].
 // We simply replace sprout's messages with seed's messages and sync counters.
-func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message, preSeedMsgCount int) {
+func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
 	if a.state == nil {
 		return
 	}

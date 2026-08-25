@@ -236,7 +236,7 @@ func TestUnregisterTool(t *testing.T) {
 			errorMsg:    "is not registered",
 		},
 		{
-			name: "successful removal",
+			name:     "successful removal",
 			toolName: "test_tool",
 			setupFunc: func(r *DefaultRegistry) {
 				r.RegisterTool(NewSimpleStubTool("test_tool", CategoryFile))
@@ -303,11 +303,11 @@ func TestUnregisterTool(t *testing.T) {
 // TestListTools tests the ListTools method
 func TestListTools(t *testing.T) {
 	tests := []struct {
-		name          string
-		setupFunc     func(*DefaultRegistry)
-		expectCount   int
-		expectNames   []string
-		expectEmpty   bool
+		name        string
+		setupFunc   func(*DefaultRegistry)
+		expectCount int
+		expectNames []string
+		expectEmpty bool
 	}{
 		{
 			name:        "empty",
@@ -373,12 +373,12 @@ func TestListTools(t *testing.T) {
 // TestListToolsByCategory tests the ListToolsByCategory method
 func TestListToolsByCategory(t *testing.T) {
 	tests := []struct {
-		name          string
-		setupFunc     func(*DefaultRegistry)
-		category      string
-		expectCount   int
-		expectNames   []string
-		expectEmpty   bool
+		name        string
+		setupFunc   func(*DefaultRegistry)
+		category    string
+		expectCount int
+		expectNames []string
+		expectEmpty bool
 	}{
 		{
 			name: "filter by category",
@@ -392,7 +392,7 @@ func TestListToolsByCategory(t *testing.T) {
 			expectNames: []string{"file_tool", "another_file"},
 		},
 		{
-			name:        "empty category",
+			name: "empty category",
 			setupFunc: func(r *DefaultRegistry) {
 				r.RegisterTool(NewSimpleStubTool("tool_1", CategoryFile))
 				r.RegisterTool(NewSimpleStubTool("tool_2", CategorySearch))
@@ -402,7 +402,7 @@ func TestListToolsByCategory(t *testing.T) {
 			expectEmpty: true,
 		},
 		{
-			name:        "nonexistent category",
+			name: "nonexistent category",
 			setupFunc: func(r *DefaultRegistry) {
 				r.RegisterTool(NewSimpleStubTool("tool_1", CategoryFile))
 			},
@@ -463,11 +463,11 @@ func TestListToolsByCategory(t *testing.T) {
 // TestGetToolNames tests the GetToolNames method
 func TestGetToolNames(t *testing.T) {
 	tests := []struct {
-		name          string
-		setupFunc     func(*DefaultRegistry)
-		expectCount   int
-		expectNames   []string
-		expectEmpty   bool
+		name        string
+		setupFunc   func(*DefaultRegistry)
+		expectCount int
+		expectNames []string
+		expectEmpty bool
 	}{
 		{
 			name:        "empty registry",

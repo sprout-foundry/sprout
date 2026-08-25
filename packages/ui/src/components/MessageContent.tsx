@@ -1,9 +1,9 @@
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
 import { stripAnsiCodes } from '../utils/ansi';
 import { flattenMarkdownText, isMarkdownCodeBlock, isLocalFilePath } from '../utils/markdownCode';
+import CodeBlock from './CodeBlock';
 
 interface MessageContentProps {
   content: string;
@@ -12,7 +12,7 @@ interface MessageContentProps {
 function MessageContent({ content }: MessageContentProps): JSX.Element {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
+      remarkPlugins={[remarkGfm]}
       components={{
         code({ className, children, ...props }: HTMLAttributes<HTMLElement> & { children?: ReactNode }) {
           const languageMatch = /language-(\w+)/.exec(className || '');
@@ -29,12 +29,13 @@ function MessageContent({ content }: MessageContentProps): JSX.Element {
           }
 
           return (
-            <pre className="code-block">
-              <span className="code-language">{language || 'text'}</span>
-              <code className={className} {...props}>
-                {children}
-              </code>
-            </pre>
+            <CodeBlock
+              language={language || 'text'}
+              codeText={codeText}
+              className={className}
+            >
+              {children}
+            </CodeBlock>
           );
         },
         a({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) {

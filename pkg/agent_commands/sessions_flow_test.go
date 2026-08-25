@@ -105,7 +105,7 @@ Normal text: The quick brown fox jumps over the lazy dog. File at /tmp/test.txt 
 	h := newSessionExportTestHelper(t, "export-redact-test", state)
 
 	flow := &SessionsFlow{}
-	result, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	result, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestExecuteSessionExport_RedactsBearerTokens(t *testing.T) {
 	h := newSessionExportTestHelper(t, "bearer-test", state)
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestExecuteSessionExport_FilePermissionsAre0600(t *testing.T) {
 	h := newSessionExportTestHelper(t, "perms-test", state)
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestExecuteSessionExport_PreservesNonSensitiveContent(t *testing.T) {
 	h := newSessionExportTestHelper(t, "safe-content-test", state)
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestExecuteSessionExport_RedactsMixedSensitiveAndNormalMessages(t *testing.
 OPENAI_API_KEY=sk-test1234567890abcdefghijklmnop
 GITHUB_TOKEN=ghpat_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij
 PATH=/usr/local/bin:/usr/bin
-LEDIT_DEBUG=true
+SPROUT_DEBUG=true
 Normal stuff: refactored the auth module, all tests passing.`
 
 	state := &agent.ConversationState{
@@ -269,7 +269,7 @@ Normal stuff: refactored the auth module, all tests passing.`
 	h := newSessionExportTestHelper(t, "mixed-content-test", state)
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}
@@ -286,8 +286,8 @@ Normal stuff: refactored the auth module, all tests passing.`
 	// Non-sensitive env vars should be preserved.
 	assertContains(t, exportedStr, "/usr/local/bin",
 		"PATH values should be preserved")
-	assertContains(t, exportedStr, "LEDIT_DEBUG=true",
-		"LEDIT_ prefixed values should be preserved")
+	assertContains(t, exportedStr, "SPROUT_DEBUG=true",
+		"SPROUT_ prefixed values should be preserved")
 
 	// Normal content preserved.
 	assertContains(t, exportedStr, "refactored the auth module",
@@ -314,7 +314,7 @@ func TestExecuteSessionExport_ValidJSONOutput(t *testing.T) {
 	h := newSessionExportTestHelper(t, "json-valid-test", state)
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestExecuteSessionExport_RedactsAcrossMultipleMessages(t *testing.T) {
 	h := newSessionExportTestHelper(t, "multi-msg-test", state)
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestExecuteSessionExport_UsageErrors(t *testing.T) {
 	flow := &SessionsFlow{}
 
 	t.Run("no args returns usage", func(t *testing.T) {
-		result, err := flow.ExecuteSessionExport([]string{})
+		result, err := flow.ExecuteSessionExport(nil, []string{})
 		if err != nil {
 			t.Fatalf("expected nil error for missing args, got: %v", err)
 		}
@@ -390,7 +390,7 @@ func TestExecuteSessionExport_UsageErrors(t *testing.T) {
 	})
 
 	t.Run("one arg returns usage", func(t *testing.T) {
-		result, err := flow.ExecuteSessionExport([]string{"1"})
+		result, err := flow.ExecuteSessionExport(nil, []string{"1"})
 		if err != nil {
 			t.Fatalf("expected nil error for one arg, got: %v", err)
 		}
@@ -418,7 +418,7 @@ func TestExecuteSessionExport_SessionNotFound(t *testing.T) {
 	})
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", "/tmp/should-not-exist.json"})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", "/tmp/should-not-exist.json"})
 	if err == nil {
 		t.Fatal("expected error for non-existent session, got nil")
 	}
@@ -445,7 +445,7 @@ func TestExecuteSessionExport_RedactsSlackTokens(t *testing.T) {
 	h := newSessionExportTestHelper(t, "slack-test", state)
 
 	flow := &SessionsFlow{}
-	_, err := flow.ExecuteSessionExport([]string{"1", h.exportPath})
+	_, err := flow.ExecuteSessionExport(nil, []string{"1", h.exportPath})
 	if err != nil {
 		t.Fatalf("ExecuteSessionExport failed: %v", err)
 	}

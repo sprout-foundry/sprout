@@ -5,7 +5,8 @@
 #        ./scripts/build-wasm.sh --help
 #
 # Default behavior (no --dist flag):
-#   1. Copies wasm_exec.js from GOROOT to the webui public directory
+#   1. Uses the checked-in browser-compatible wasm_exec.js from webui/public/wasm
+#      (copies it only when building to a different output directory)
 #   2. Compiles the Go WASM module from cmd/wasm/
 #
 # With --dist flag:
@@ -29,8 +30,10 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "       $0 --dist <dist-dir>"
     echo ""
     echo "Default behavior (no --dist flag):"
-    echo "  Builds only the WASM module (sprout.wasm + wasm_exec.js)"
-    echo "  to the specified directory (default: webui/public/wasm/)"
+    echo "  Builds the WASM modules (sprout.wasm + embedding.wasm)"
+    echo "  to the specified directory (default: webui/public/wasm/)."
+    echo "  Uses the checked-in browser-compatible wasm_exec.js runtime;"
+    echo "  copies it only when the output directory differs from webui/public/wasm/."
     echo ""
     echo "With --dist flag:"
     echo "  Creates a self-contained distribution package:"
@@ -98,24 +101,27 @@ build_webui() {
     )
 }
 
-# Build the WASM binary (original logic)
+# Build the WASM binaries and pair them with the checked-in browser runtime.
 build_wasm() {
     local target_dir="$1"
-    echo "→ Building WASM binary..."
+    echo "→ Building WASM binaries..."
 
-    GOROOT="$(go env GOROOT)"
-    WASM_EXEC_SRC="$GOROOT/lib/wasm/wasm_exec.js"
-    WASM_EXEC_DST="$target_dir/wasm_exec.js"
+    local wasm_exec_src="$PROJECT_ROOT/webui/public/wasm/wasm_exec.js"
+    local wasm_exec_dst="$target_dir/wasm_exec.js"
 
-    if [ ! -f "$WASM_EXEC_SRC" ]; then
-        echo "Error: wasm_exec.js not found at $WASM_EXEC_SRC" >&2
-        echo "Make sure your Go installation includes WASM support." >&2
+    if [ ! -f "$wasm_exec_src" ]; then
+        echo "Error: checked-in browser-compatible wasm_exec.js not found at $wasm_exec_src" >&2
+        echo "Restore webui/public/wasm/wasm_exec.js before building WASM assets." >&2
         exit 1
     fi
 
-    echo "  Copying wasm_exec.js..."
-    cp "$WASM_EXEC_SRC" "$WASM_EXEC_DST"
-    echo "    ✓ wasm_exec.js"
+    if [ -e "$wasm_exec_dst" ] && [ "$wasm_exec_src" -ef "$wasm_exec_dst" ]; then
+        echo "  Keeping checked-in browser-compatible wasm_exec.js (output directory is source directory)"
+    else
+        echo "  Copying checked-in browser-compatible wasm_exec.js..."
+        cp "$wasm_exec_src" "$wasm_exec_dst"
+        echo "    ✓ wasm_exec.js"
+    fi
 
     # End of static asset copies — semantic search now requires the
     # __sproutONNX bridge (see Tier 2a in WASM_API.md).

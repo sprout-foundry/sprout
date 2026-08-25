@@ -1,3 +1,5 @@
+//go:build !windows
+
 package agent
 
 import (
@@ -34,10 +36,9 @@ func TestSearchFiles_SubstringCaseInsensitive(t *testing.T) {
 		"max_results":    10,
 	}
 
-	reg := GetToolRegistry()
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
-	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
+	_, out, err := ExecuteTool(ctx, "search_files", args, agent, "")
 	if err != nil {
 		t.Fatalf("search_files returned error: %v", err)
 	}
@@ -63,10 +64,9 @@ func TestSearchFiles_RegexCaseSensitive(t *testing.T) {
 		"case_sensitive": true,
 		"max_results":    10,
 	}
-	reg := GetToolRegistry()
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
-	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
+	_, out, err := ExecuteTool(ctx, "search_files", args, agent, "")
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
@@ -89,10 +89,9 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
 		"directory":      root,
 		"file_glob":      "*.go",
 	}
-	reg := GetToolRegistry()
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
-	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
+	_, out, err := ExecuteTool(ctx, "search_files", args, agent, "")
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
@@ -101,7 +100,7 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
 	}
 }
 
-func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
+func TestSearchFiles_ExcludeDotSprout(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, ".sprout/hidden.txt", "secret needle\n")
 	writeTestFile(t, root, "visible.txt", "needle\n")
@@ -110,10 +109,9 @@ func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
 		"search_pattern": "needle",
 		"directory":      root,
 	}
-	reg := GetToolRegistry()
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
-	_, out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
+	_, out, err := ExecuteTool(ctx, "search_files", args, agent, "")
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
@@ -131,14 +129,13 @@ func TestSearchFiles_DefaultMaxResultsAndLineTruncation(t *testing.T) {
 		writeTestFile(t, root, filepath.Join("dir", fmt.Sprintf("file-%d.txt", i)), strings.Repeat("A", 600)+" needle match")
 	}
 
-	reg := GetToolRegistry()
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
 	// The default max_results=50 means only 50 results will be returned for 60 files.
-	_, out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
+	_, out, err := ExecuteTool(ctx, "search_files", map[string]interface{}{
 		"search_pattern": "needle",
 		"directory":      root,
-	}, agent)
+	}, agent, "")
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
@@ -156,14 +153,13 @@ func TestSearchFiles_MaxBytesLimit(t *testing.T) {
 	writeTestFile(t, root, "two.txt", "needle two\n")
 	writeTestFile(t, root, "three.txt", "needle three\n")
 
-	reg := GetToolRegistry()
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
-	_, out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
+	_, out, err := ExecuteTool(ctx, "search_files", map[string]interface{}{
 		"search_pattern": "needle",
 		"directory":      root,
 		"max_bytes":      60,
-	}, agent)
+	}, agent, "")
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}

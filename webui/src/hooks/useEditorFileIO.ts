@@ -26,7 +26,6 @@ import { history } from '@codemirror/commands';
 import { indentUnit } from '@codemirror/language';
 import { EditorState, Transaction } from '@codemirror/state';
 import type { Compartment } from '@codemirror/state';
-import type { EditorView } from '@codemirror/view';
 import { useEffect, useRef, useCallback } from 'react';
 import { showFileChangeDialog } from '../components/FileChangeDialog';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -44,6 +43,7 @@ import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/me
 import { generateUnifiedDiff } from '../utils/simpleDiff';
 import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from './useAutoReloadCleanBuffers';
 import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
+import type { CMViewAPI } from './useCMView';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -89,8 +89,11 @@ export interface UseEditorFileIOReturn {
   handleSave: () => Promise<void>;
   /** Ref mirror for handleSave. */
   saveRef: React.MutableRefObject<() => Promise<void>>;
-  /** Ref that tracks whether an external (non-user) content update is in flight. */
-  isExternalUpdateRef: React.MutableRefObject<boolean>;
+  /** Buffers already synced from disk in this pane; switch-backs restore
+   *  from memory instead of re-reading (see the load effect). */
+  loadedBufferIdsRef: React.MutableRefObject<Set<string>>;
+  /** True while a disk read is in flight (gates keystroke attribution). */
+  isLoadingRef: React.MutableRefObject<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,7 +103,11 @@ export interface UseEditorFileIOReturn {
 /**
  * Hook that manages all file I/O for an editor pane.
  *
- * @param viewRef     - Ref to the CodeMirror EditorView
+ * @param cmViewApiRef - Ref to the CodeMirror view API. Populated by EditorPane
+ *                       after `useCMView` returns. The hook reads
+ *                       `cmViewApiRef.current?.view` and `?.withExternalUpdate`
+ *                       at call time — safe to call before the API is mounted
+ *                       (operations are no-ops when the view is null).
  * @param buffer      - Current buffer (may be undefined/null for empty panes)
  * @param bufferRef   - Ref mirror of buffer (avoids stale closures)
  * @param compartments - Compartment handles from useEditorExtensions
@@ -108,10 +115,9 @@ export interface UseEditorFileIOReturn {
  * @param fetchDiagnosticsRef  - Ref to the diagnostics fetcher from useEditorDiagnostics
  * @param paneId      - The pane identifier
  * @param setters     - State setters from the host component
- * @param isExternalUpdateRef - Ref to track external updates (required, created in EditorPane)
  */
 export function useEditorFileIO(
-  viewRef: React.MutableRefObject<EditorView | null>,
+  cmViewApiRef: React.MutableRefObject<CMViewAPI | null>,
   buffer: EditorBuffer | null | undefined,
   bufferRef: React.MutableRefObject<EditorBuffer | null | undefined>,
   compartments: FileIOCompartments,
@@ -119,7 +125,6 @@ export function useEditorFileIO(
   fetchDiagnosticsRef: React.MutableRefObject<(filePath: string, content: string, trigger?: 'edit' | 'save') => void>,
   paneId: string,
   setters: FileIOStateSetters,
-  isExternalUpdateRef: React.MutableRefObject<boolean>,
 ): UseEditorFileIOReturn {
   const {
     setLoading,
@@ -167,6 +172,20 @@ export function useEditorFileIO(
   // stale in-flight loads from rapid file-switching are discarded.
   const loadSeqRef = useRef(0);
 
+  // File buffers this pane has already read from disk. Once a buffer's
+  // on-disk content is in the view, the in-memory `buffer.content` is
+  // authoritative — switching back to a previously-opened tab must restore
+  // from memory, NOT re-read the file (a re-read silently destroys unsaved
+  // edits, which was the "edits go to the wrong place" bug).
+  const loadedBufferIdsRef = useRef<Set<string>>(new Set());
+
+  // True while a disk read for this pane is in flight. useEditorUpdate
+  // checks this to ignore keystrokes that land between a tab switch and
+  // the new buffer's content dispatch — at that point the view still shows
+  // the previous buffer, so the keystrokes would be attributed to the
+  // wrong buffer (and clobbered by the dispatch anyway).
+  const isLoadingRef = useRef(false);
+
   // ── Indentation detection helper ───────────────────────────────
   // Shared between loadFile and the auto-reload handler to avoid
   // duplicating ~35 lines of indent-detection + compartment dispatch.
@@ -179,23 +198,27 @@ export function useEditorFileIO(
         const detectedSize = detected.useTabs ? TAB_SIZE_DEFAULT : detected.indentWidth;
         setEditorTabSize(detected.useTabs ? TAB_SIZE_TABS_MODE : detectedSize);
         setEditorUsesTabs(detected.useTabs);
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            effects: compartments.tabSize.reconfigure([
-              EditorState.tabSize.of(detectedSize),
-              indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
-            ]),
+        if (cmViewApiRef.current?.view) {
+          cmViewApiRef.current?.withExternalUpdate(() => {
+            cmViewApiRef.current?.dispatch({
+              effects: compartments.tabSize.reconfigure([
+                EditorState.tabSize.of(detectedSize),
+                indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
+              ]),
+            });
           });
         }
       } else {
         setEditorUsesTabs(false);
         setEditorTabSize(TAB_SIZE_DEFAULT);
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            effects: compartments.tabSize.reconfigure([
-              EditorState.tabSize.of(TAB_SIZE_DEFAULT),
-              indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
-            ]),
+        if (cmViewApiRef.current?.view) {
+          cmViewApiRef.current?.withExternalUpdate(() => {
+            cmViewApiRef.current?.dispatch({
+              effects: compartments.tabSize.reconfigure([
+                EditorState.tabSize.of(TAB_SIZE_DEFAULT),
+                indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
+              ]),
+            });
           });
         }
       }
@@ -211,9 +234,9 @@ export function useEditorFileIO(
     async (filePath: string) => {
       // Bump sequence counter to cancel any in-flight loads.
       const seq = ++loadSeqRef.current;
+      isLoadingRef.current = true;
 
       setError(null);
-      isExternalUpdateRef.current = true;
 
       try {
         // Virtual workspace buffers have no on-disk file — handle in-memory only.
@@ -229,14 +252,16 @@ export function useEditorFileIO(
               setBufferOriginalContent(currentBuffer.id, content);
             }
           }
-          if (viewRef.current) {
-            viewRef.current.dispatch({
-              changes: { from: 0, to: viewRef.current.state.doc.length, insert: content },
-              annotations: suppressHistoryAnnotations,
-              effects: setOriginalContent.of(content),
+          if (cmViewApiRef.current?.view) {
+            cmViewApiRef.current?.withExternalUpdate(() => {
+              cmViewApiRef.current?.dispatch({
+                changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: content },
+                annotations: suppressHistoryAnnotations,
+                effects: setOriginalContent.of(content),
+              });
             });
-            clearDiffGutter(viewRef.current);
-            clearDiagnostics(viewRef.current);
+            clearDiffGutter(cmViewApiRef.current?.view);
+            clearDiagnostics(cmViewApiRef.current?.view);
           }
           return;
         }
@@ -261,61 +286,79 @@ export function useEditorFileIO(
         if (buf) {
           updateBufferContent(buf.id, content);
           setBufferOriginalContent(buf.id, content);
+          // Mark this buffer as loaded from disk by this pane. A later tab
+          // switch-back restores content from memory (buffer.content)
+          // instead of re-reading the file — a re-read would destroy any
+          // unsaved edits made since the last save.
+          loadedBufferIdsRef.current.add(buf.id);
         }
 
         // Update editor view
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            changes: { from: 0, to: viewRef.current.state.doc.length, insert: content },
-            annotations: suppressHistoryAnnotations,
-            effects: setOriginalContent.of(content),
+        if (cmViewApiRef.current?.view) {
+          cmViewApiRef.current?.withExternalUpdate(() => {
+            cmViewApiRef.current?.dispatch({
+              changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: content },
+              annotations: suppressHistoryAnnotations,
+              effects: setOriginalContent.of(content),
+            });
           });
         }
 
         // Restore cursor position from buffer state (layout persistence).
-        if (buf && viewRef.current && (buf.cursorPosition.line > 0 || buf.cursorPosition.column > 0)) {
+        if (buf && cmViewApiRef.current?.view && (buf.cursorPosition.line > 0 || buf.cursorPosition.column > 0)) {
           const { line, column } = buf.cursorPosition;
-          const doc = viewRef.current.state.doc;
+          const doc = cmViewApiRef.current?.view.state.doc;
           if (doc.lines > 0) {
             const targetLine = Math.max(1, Math.min(line, doc.lines));
             const lineInfo = doc.line(targetLine);
             const pos = lineInfo.from + Math.max(0, Math.min(column, lineInfo.length));
-            viewRef.current.dispatch({
-              selection: { anchor: pos },
-              annotations: suppressHistoryAnnotations,
+            cmViewApiRef.current?.withExternalUpdate(() => {
+              cmViewApiRef.current?.dispatch({
+                selection: { anchor: pos },
+                annotations: suppressHistoryAnnotations,
+              });
             });
           }
         }
 
         // Restore scroll position from buffer state.
-        if (buf && viewRef.current && (buf.scrollPosition.top > 0 || buf.scrollPosition.left > 0)) {
+        if (buf && cmViewApiRef.current?.view && (buf.scrollPosition.top > 0 || buf.scrollPosition.left > 0)) {
           const { top, left } = buf.scrollPosition;
+          const viewAtLoadTime = cmViewApiRef.current.view;
           // Use setTimeout with 0 to ensure this runs after the current render cycle
-          // and after CodeMirror has finished layout
+          // and after CodeMirror has finished layout. Verify the view hasn't been
+          // swapped out from under us during the timeout — a buffer switch or
+          // remount could install a new view before this callback fires.
           setTimeout(() => {
-            if (viewRef.current && viewRef.current.scrollDOM) {
-              viewRef.current.scrollDOM.scrollTop = top;
-              viewRef.current.scrollDOM.scrollLeft = left;
+            if (viewAtLoadTime && viewAtLoadTime.scrollDOM && cmViewApiRef.current?.view === viewAtLoadTime) {
+              viewAtLoadTime.scrollDOM.scrollTop = top;
+              viewAtLoadTime.scrollDOM.scrollLeft = left;
             }
           }, 0);
         }
 
-        // Fetch git diff after loading file
-        if (filePath && viewRef.current) {
-          try {
-            const diffResponse = await apiService.getGitDiff(filePath);
-            // Discard if a newer load has been initiated while we awaited.
-            if (loadSeqRef.current !== seq) return;
-            if (diffResponse.diff && diffResponse.diff.trim()) {
-              updateDiffGutter(viewRef.current, diffResponse.diff);
-            } else {
-              clearDiffGutter(viewRef.current);
+        // Fetch git diff after loading file — fire-and-forget so the loading
+        // indicator clears as soon as the content is visible. Awaiting it here
+        // kept the spinner up (and keystroke attribution gated) for the whole
+        // git round-trip on every file open, which made loads feel blocking.
+        const viewForDiff = cmViewApiRef.current?.view ?? null;
+        if (filePath && viewForDiff) {
+          void (async () => {
+            try {
+              const diffResponse = await apiService.getGitDiff(filePath);
+              // Discard if a newer load has been initiated while we awaited.
+              if (loadSeqRef.current !== seq) return;
+              if (diffResponse.diff && diffResponse.diff.trim()) {
+                updateDiffGutter(viewForDiff, diffResponse.diff);
+              } else {
+                clearDiffGutter(viewForDiff);
+              }
+            } catch (err) {
+              debugLog('[useEditorFileIO] Failed to fetch git diff:', err);
+              notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff');
+              clearDiffGutter(viewForDiff);
             }
-          } catch (err) {
-            debugLog('[useEditorFileIO] Failed to fetch git diff:', err);
-            notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff');
-            if (viewRef.current) clearDiffGutter(viewRef.current);
-          }
+          })();
         }
 
         // Auto-detect indentation
@@ -326,7 +369,7 @@ export function useEditorFileIO(
         setLineEnding(lineEndingResult.lineEnding);
 
         // Fetch diagnostics for the loaded file
-        if (viewRef.current) {
+        if (cmViewApiRef.current?.view) {
           fetchDiagnosticsRef.current(filePath, content);
         }
       } catch (err) {
@@ -336,7 +379,7 @@ export function useEditorFileIO(
       } finally {
         // Only clear loading state if this is still the active load.
         if (loadSeqRef.current === seq) {
-          isExternalUpdateRef.current = false;
+          isLoadingRef.current = false;
           setLoading(false);
         }
       }
@@ -350,101 +393,114 @@ export function useEditorFileIO(
 
   // ── Save buffer ──────────────────────────────────────────────────
 
-  const handleSave = useCallback(async () => {
-    const buf = bufferRef.current;
-    if (!buf || !viewRef.current) return;
+  const handleSave = useCallback(
+    async () => {
+      const buf = bufferRef.current;
+      if (!buf || !cmViewApiRef.current?.view) return;
 
-    // Only save real file buffers with on-disk paths.
-    if (buf.kind !== 'file' || buf.file.path.startsWith('__workspace/')) return;
+      // Only save real file buffers with on-disk paths.
+      if (buf.kind !== 'file' || buf.file.path.startsWith('__workspace/')) return;
 
-    setSaving(true);
-    setError(null);
+      setSaving(true);
+      setError(null);
 
-    // Track this save as in-flight to suppress redundant external change events
-    saveInFlightRef.current.add(buf.file.path);
+      // Track this save as in-flight to suppress redundant external change events
+      saveInFlightRef.current.add(buf.file.path);
 
-    // Notify the external file watcher and auto-reload cooldown *before*
-    // the HTTP roundtrip. The server-side fsnotify fires as soon as it
-    // writes the file, and the WebSocket "file_content_changed" event can
-    // reach the browser *before* the HTTP save response.
-    document.dispatchEvent(
-      new CustomEvent('file:editor-saved', {
-        detail: { path: buf.file.path, mtime: Math.floor(Date.now() / 1000) },
-      }),
-    );
-
-    try {
-      const saveResult = await saveBuffer(buf.id);
-      const serverMtime = saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
-
-      // If format-on-save was applied, update the CodeMirror view with the formatted content.
-      // Guard against overwriting user edits made while the save was in flight.
-      if (saveResult?.formattedContent && viewRef.current) {
-        const docNow = viewRef.current.state.doc.toString();
-        // Only apply formatted content if the editor still matches what we saved
-        if (docNow === buf.content) {
-          isExternalUpdateRef.current = true;
-          try {
-            viewRef.current.dispatch({
-              changes: { from: 0, to: viewRef.current.state.doc.length, insert: saveResult.formattedContent },
-              annotations: suppressHistoryAnnotations,
-              effects: setOriginalContent.of(saveResult.formattedContent),
-            });
-            setLocalContent(saveResult.formattedContent);
-            updateBufferContent(buf.id, saveResult.formattedContent);
-          } finally {
-            isExternalUpdateRef.current = false;
-          }
-        }
-      }
-
-      // Note: originalContent is updated by saveBuffer in EditorManagerContext
-      // (no need to call setBufferOriginalContent here).
-
-      // Re-dispatch with the authoritative server mtime
+      // Notify the external file watcher and auto-reload cooldown *before*
+      // the HTTP roundtrip. The server-side fsnotify fires as soon as it
+      // writes the file, and the WebSocket "file_content_changed" event can
+      // reach the browser *before* the HTTP save response.
       document.dispatchEvent(
         new CustomEvent('file:editor-saved', {
-          detail: {
-            path: buf.file.path,
-            mtime: serverMtime ?? Math.floor(Date.now() / 1000),
-          },
+          detail: { path: buf.file.path, mtime: Math.floor(Date.now() / 1000) },
         }),
       );
 
-      // Re-run diagnostics on save (e.g., go vet save-only checks)
-      if (buf.file.path && viewRef.current) {
-        await fetchDiagnosticsRef.current(buf.file.path, viewRef.current.state.doc.toString(), 'save');
+      // Cross-tab sync: notify the platform dashboard (if open in another
+      // tab) that a file was saved. The dashboard can refresh its file list
+      // or show a "files changed" indicator.
+      try {
+        const { getEditorSync } = await import('../services/crossTabSync');
+        getEditorSync().publish('file_change', { path: buf.file.path });
+      } catch {
+        // crossTabSync is optional — fail silently
       }
 
-      // Re-fetch diff after save
-      if (buf.file.path && viewRef.current) {
-        try {
-          const diffResponse = await apiService.getGitDiff(buf.file.path);
-          if (diffResponse.diff && diffResponse.diff.trim()) {
-            updateDiffGutter(viewRef.current, diffResponse.diff);
-          } else {
-            clearDiffGutter(viewRef.current);
+      try {
+        const saveResult = await saveBuffer(buf.id);
+        const serverMtime = saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
+
+        // If format-on-save was applied, update the CodeMirror view with the formatted content.
+        // Guard against overwriting user edits made while the save was in flight.
+        if (saveResult?.formattedContent && cmViewApiRef.current?.view) {
+          const formattedContent = saveResult.formattedContent;
+          const docNow = cmViewApiRef.current?.view.state.doc.toString();
+          // Only apply formatted content if the editor still matches what we saved
+          if (docNow === buf.content) {
+            cmViewApiRef.current?.withExternalUpdate(() => {
+              cmViewApiRef.current?.dispatch({
+                changes: {
+                  from: 0,
+                  to: cmViewApiRef.current?.view?.state.doc.length ?? 0,
+                  insert: formattedContent,
+                },
+                annotations: suppressHistoryAnnotations,
+                effects: setOriginalContent.of(formattedContent),
+              });
+              setLocalContent(formattedContent);
+              updateBufferContent(buf.id, formattedContent);
+            });
           }
-        } catch (err) {
-          debugLog('[useEditorFileIO] Failed to re-fetch git diff after save:', err);
-          notificationBus.notify('warning', 'Git Diff', 'Failed to re-fetch git diff after save');
         }
+
+        // Note: originalContent is updated by saveBuffer in EditorManagerContext
+        // (no need to call setBufferOriginalContent here).
+
+        // Re-dispatch with the authoritative server mtime
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: {
+              path: buf.file.path,
+              mtime: serverMtime ?? Math.floor(Date.now() / 1000),
+            },
+          }),
+        );
+
+        // Re-run diagnostics on save (e.g., go vet save-only checks)
+        if (buf.file.path && cmViewApiRef.current?.view) {
+          await fetchDiagnosticsRef.current(buf.file.path, cmViewApiRef.current?.view.state.doc.toString(), 'save');
+        }
+
+        // Re-fetch diff after save
+        if (buf.file.path && cmViewApiRef.current?.view) {
+          try {
+            const diffResponse = await apiService.getGitDiff(buf.file.path);
+            if (diffResponse.diff && diffResponse.diff.trim()) {
+              updateDiffGutter(cmViewApiRef.current?.view, diffResponse.diff);
+            } else {
+              clearDiffGutter(cmViewApiRef.current?.view);
+            }
+          } catch (err) {
+            debugLog('[useEditorFileIO] Failed to re-fetch git diff after save:', err);
+            notificationBus.notify('warning', 'Git Diff', 'Failed to re-fetch git diff after save');
+          }
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save file';
+        setError(errorMessage);
+        log.error(`Save error: ${errorMessage}`, { title: 'Save Error' });
+      } finally {
+        saveInFlightRef.current.delete(buf.file.path);
+        setSaving(false);
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save file';
-      setError(errorMessage);
-      log.error(`Save error: ${errorMessage}`, { title: 'Save Error' });
-    } finally {
-      saveInFlightRef.current.delete(buf.file.path);
-      setSaving(false);
-    }
-  },
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // Safe: the only intentional dep is `saveBuffer` (stable context callback).
-    // All other non-stable values are accessed via refs (`bufferRef`, `viewRef`,
-    // `saveInFlightRef`, `fetchDiagnosticsRef`, `isExternalUpdateRef`, `apiService`)
-    // or are React state setters (which are stable by React contract).
-    [saveBuffer]
+    // All other non-stable values are accessed via refs (`bufferRef`,
+    // `saveInFlightRef`, `fetchDiagnosticsRef`, `apiService`) or through
+    // the stable `cmViewApi`, while React state setters are stable by contract.
+    [saveBuffer],
   );
 
   // Keep saveRef in sync
@@ -456,9 +512,9 @@ export function useEditorFileIO(
   useEffect(() => {
     if (!buffer || !buffer.file || buffer.file.isDir) {
       setLocalContent('');
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: { from: 0, to: viewRef.current.state.doc.length, insert: '' },
+      if (cmViewApiRef.current?.view) {
+        cmViewApiRef.current?.dispatch({
+          changes: { from: 0, to: cmViewApiRef.current?.view.state.doc.length, insert: '' },
           annotations: suppressHistoryAnnotations,
           effects: setOriginalContent.of(''),
         });
@@ -467,9 +523,9 @@ export function useEditorFileIO(
       setError(null);
       lastLoadedRef.current = null;
       currentBufferIdRef.current = null;
-      if (viewRef.current) {
-        clearDiffGutter(viewRef.current);
-        clearDiagnostics(viewRef.current);
+      if (cmViewApiRef.current?.view) {
+        clearDiffGutter(cmViewApiRef.current?.view);
+        clearDiagnostics(cmViewApiRef.current?.view);
       }
       return;
     }
@@ -491,8 +547,8 @@ export function useEditorFileIO(
     // buffer switch would revert the *previous* file's edits into the new
     // buffer's view.  Reconfiguring the history compartment installs a
     // fresh history() extension with an empty stack.
-    if (viewRef.current) {
-      viewRef.current.dispatch({
+    if (cmViewApiRef.current?.view) {
+      cmViewApiRef.current?.dispatch({
         effects: compartments.history.reconfigure(history()),
       });
     }
@@ -514,14 +570,14 @@ export function useEditorFileIO(
       setLocalContent(nextContent);
       setSelectionInfo(null);
       setError(null);
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: { from: 0, to: viewRef.current.state.doc.length, insert: nextContent },
+      if (cmViewApiRef.current?.view) {
+        cmViewApiRef.current?.dispatch({
+          changes: { from: 0, to: cmViewApiRef.current?.view.state.doc.length, insert: nextContent },
           annotations: suppressHistoryAnnotations,
           effects: setOriginalContent.of(nextContent),
         });
-        clearDiffGutter(viewRef.current);
-        clearDiagnostics(viewRef.current);
+        clearDiffGutter(cmViewApiRef.current?.view);
+        clearDiagnostics(cmViewApiRef.current?.view);
       }
       return;
     }
@@ -532,14 +588,14 @@ export function useEditorFileIO(
       setLocalContent(nextContent);
       setSelectionInfo(null);
       setError(null);
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: { from: 0, to: viewRef.current.state.doc.length, insert: nextContent },
+      if (cmViewApiRef.current?.view) {
+        cmViewApiRef.current?.dispatch({
+          changes: { from: 0, to: cmViewApiRef.current?.view.state.doc.length, insert: nextContent },
           annotations: suppressHistoryAnnotations,
           effects: setOriginalContent.of(nextContent),
         });
-        clearDiffGutter(viewRef.current);
-        clearDiagnostics(viewRef.current);
+        clearDiffGutter(cmViewApiRef.current?.view);
+        clearDiagnostics(cmViewApiRef.current?.view);
       }
       return;
     }
@@ -548,6 +604,73 @@ export function useEditorFileIO(
     // dedicated viewers that fetch the file themselves as blobs.
     const fileExt = buffer.file.ext?.toLowerCase();
     if (fileExt && (isImageFile(fileExt) || isAudioFile(fileExt) || isVideoFile(fileExt) || isBinaryFile(fileExt))) {
+      return;
+    }
+
+    // ── Restore previously-loaded buffer from memory ───────────────
+    // If this pane already loaded this buffer from disk, its in-memory
+    // `buffer.content` is authoritative — the user may have unsaved edits.
+    // Re-reading the file would silently destroy them (the original
+    // "edits go to the wrong place" bug: every tab switch-back re-read from
+    // disk and clobbered the buffer). `buffer.contentLoaded` is the global
+    // counterpart to the per-pane `loadedBufferIdsRef`: it is set by
+    // setBufferOriginalContent whenever ANY pane read the on-disk content
+    // into memory, so a buffer moved to a different pane (drag/drop via
+    // moveBufferToPane) restores from memory instead of re-reading disk.
+    // Bump the load sequence so any in-flight load for the previous buffer
+    // is discarded, then push the in-memory content into the view exactly
+    // as loadFile does for a fresh read.
+    if (loadedBufferIdsRef.current.has(buffer.id) || buffer.contentLoaded) {
+      loadSeqRef.current++; // cancel in-flight load for the previous buffer
+      isLoadingRef.current = false;
+      setLoading(false);
+      const nextContent = buffer.content || '';
+      setLocalContent(nextContent);
+      setSelectionInfo(null);
+      setError(null);
+      if (cmViewApiRef.current?.view) {
+        cmViewApiRef.current?.withExternalUpdate(() => {
+          cmViewApiRef.current?.dispatch({
+            changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: nextContent },
+            annotations: suppressHistoryAnnotations,
+            effects: setOriginalContent.of(nextContent),
+          });
+        });
+        clearDiffGutter(cmViewApiRef.current?.view);
+        clearDiagnostics(cmViewApiRef.current?.view);
+
+        // Restore cursor position from buffer state (layout persistence).
+        if (buffer.cursorPosition.line > 0 || buffer.cursorPosition.column > 0) {
+          const { line, column } = buffer.cursorPosition;
+          const doc = cmViewApiRef.current?.view.state.doc;
+          if (doc.lines > 0) {
+            const targetLine = Math.max(1, Math.min(line, doc.lines));
+            const lineInfo = doc.line(targetLine);
+            const pos = lineInfo.from + Math.max(0, Math.min(column, lineInfo.length));
+            cmViewApiRef.current?.withExternalUpdate(() => {
+              cmViewApiRef.current?.dispatch({
+                selection: { anchor: pos },
+                annotations: suppressHistoryAnnotations,
+              });
+            });
+          }
+        }
+
+        // Restore scroll position from buffer state.
+        if (buffer.scrollPosition.top > 0 || buffer.scrollPosition.left > 0) {
+          const { top, left } = buffer.scrollPosition;
+          const viewAtRestoreTime = cmViewApiRef.current?.view;
+          // Use setTimeout with 0 to ensure this runs after the current
+          // render cycle and after CodeMirror has finished layout. Verify
+          // the view hasn't been swapped before applying the scroll.
+          setTimeout(() => {
+            if (viewAtRestoreTime && viewAtRestoreTime.scrollDOM && cmViewApiRef.current?.view === viewAtRestoreTime) {
+              viewAtRestoreTime.scrollDOM.scrollTop = top;
+              viewAtRestoreTime.scrollDOM.scrollLeft = left;
+            }
+          }, 0);
+        }
+      }
       return;
     }
 
@@ -702,49 +825,49 @@ export function useEditorFileIO(
 
       // Skip if content hasn't actually changed to avoid resetting cursor/selection
       // when the file content is the same as what's already in the editor.
-      const currentContent = viewRef.current?.state.doc.toString();
+      const currentContent = cmViewApiRef.current?.view?.state.doc.toString();
       if (currentContent === detail.content) return;
 
-      isExternalUpdateRef.current = true;
-      try {
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            changes: { from: 0, to: viewRef.current.state.doc.length, insert: detail.content },
+      if (cmViewApiRef.current?.view) {
+        cmViewApiRef.current?.withExternalUpdate(() => {
+          cmViewApiRef.current?.dispatch({
+            changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: detail.content },
             annotations: suppressHistoryAnnotations,
           });
-        }
+          setLocalContent(detail.content);
+          setSelectionInfo(null);
+        });
+      } else {
         setLocalContent(detail.content);
         setSelectionInfo(null);
+      }
 
-        // Refresh diff gutter after auto-reload
-        if (bufferRef.current && bufferRef.current.file?.path && viewRef.current) {
-          try {
-            const diffResponse = await apiService.getGitDiff(bufferRef.current.file.path);
-            if (diffResponse.diff && diffResponse.diff.trim()) {
-              updateDiffGutter(viewRef.current, diffResponse.diff);
-            } else {
-              clearDiffGutter(viewRef.current);
-            }
-          } catch (err) {
-            debugLog('[useEditorFileIO] Failed to re-fetch git diff after auto-reload:', err);
-            clearDiffGutter(viewRef.current);
+      // Refresh diff gutter after auto-reload
+      if (bufferRef.current && bufferRef.current.file?.path && cmViewApiRef.current?.view) {
+        try {
+          const diffResponse = await apiService.getGitDiff(bufferRef.current.file.path);
+          if (diffResponse.diff && diffResponse.diff.trim()) {
+            updateDiffGutter(cmViewApiRef.current?.view, diffResponse.diff);
+          } else {
+            clearDiffGutter(cmViewApiRef.current?.view);
           }
+        } catch (err) {
+          debugLog('[useEditorFileIO] Failed to re-fetch git diff after auto-reload:', err);
+          if (cmViewApiRef.current?.view) clearDiffGutter(cmViewApiRef.current?.view);
         }
+      }
 
-        // Re-detect indentation on auto-reload
-        applyIndentDetection(detail.content);
+      // Re-detect indentation on auto-reload
+      applyIndentDetection(detail.content);
 
-        // Re-detect line ending on auto-reload
-        const lineEndingResult = detectLineEnding(detail.content);
-        setLineEnding(lineEndingResult.lineEnding);
+      // Re-detect line ending on auto-reload
+      const lineEndingResult = detectLineEnding(detail.content);
+      setLineEnding(lineEndingResult.lineEnding);
 
-        // Refresh diagnostics after auto-reload
-        const buf = bufferRef.current;
-        if (buf && buf.file?.path && viewRef.current) {
-          fetchDiagnosticsRef.current(buf.file.path, detail.content);
-        }
-      } finally {
-        isExternalUpdateRef.current = false;
+      // Refresh diagnostics after auto-reload
+      const buf = bufferRef.current;
+      if (buf && buf.file?.path && cmViewApiRef.current?.view) {
+        fetchDiagnosticsRef.current(buf.file.path, detail.content);
       }
     };
 
@@ -754,8 +877,8 @@ export function useEditorFileIO(
 
   // ── Sync original content to unsaved-line highlight extension ──
   useEffect(() => {
-    if (viewRef.current && buffer?.originalContent !== undefined) {
-      viewRef.current.dispatch({
+    if (cmViewApiRef.current?.view && buffer?.originalContent !== undefined) {
+      cmViewApiRef.current?.dispatch({
         effects: setOriginalContent.of(buffer.originalContent),
       });
     }
@@ -766,6 +889,9 @@ export function useEditorFileIO(
     loadFileRef,
     handleSave,
     saveRef,
-    isExternalUpdateRef,
+    // Exposed for tests: loadedBufferIdsRef drives the restore-from-memory
+    // branch, isLoadingRef gates keystroke attribution during loads.
+    loadedBufferIdsRef,
+    isLoadingRef,
   };
 }

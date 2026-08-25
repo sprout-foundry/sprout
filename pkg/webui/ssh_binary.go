@@ -305,12 +305,19 @@ func ensureRemoteSSHBinary(ctx context.Context, hostAlias, localBinary string, r
 		return "", false, fmt.Errorf("failed to fingerprint local executable: %w", err)
 	}
 
-	homeCmd := newSSHCommandContext(ctx, hostAlias, `printf "%s" "$HOME"`)
+	// Resolve $HOME via sentinel marker so login-profile stdout (MOTD,
+	// fortune) doesn't corrupt the path. The remote command runs via
+	// bash -lc which sources login profiles that may print to stdout.
+	homeCmd := newSSHCommandContext(ctx, hostAlias, `printf "SPROUT_HOME_START%s" "$HOME"`)
 	homeOut, err := runSSHLoggedCommand(logger, "resolve-remote-home", fmt.Sprintf("ssh %s print $HOME", hostAlias), homeCmd)
 	if err != nil {
 		return "", false, fmt.Errorf("resolve remote home: %w", err)
 	}
-	remoteHome := strings.TrimSpace(string(homeOut))
+	remoteHome, err := extractSentinelResult(string(homeOut), "SPROUT_HOME_START")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to parse remote $HOME: %w", err)
+	}
+	remoteHome = strings.TrimSpace(remoteHome)
 	if remoteHome == "" {
 		return "", false, newSSHLaunchFailure("resolve-remote-home", "failed to resolve remote home directory", "remote $HOME was empty", logger)
 	}

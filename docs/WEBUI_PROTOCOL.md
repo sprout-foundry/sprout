@@ -113,12 +113,14 @@ All REST endpoints are prefixed with `/api/`. Every endpoint accepts the `?clien
 |--------|------|-------------|--------------|-----------------|
 | `POST` | `/api/query` | Submit a query to the agent for processing | `{ "query": string, "image_path?: string, "image_data?: string, "conversation_id?: string, "context?: string, "persona?: string, "mode?: string, "model?: string }` | `{ "success": bool, "query_id?: string, "message?: string }` |
 | `POST` | `/api/query/steer` | Send a steering message to influence a running query | `{ "steer": string, "conversation_id?: string }` | `{ "success": bool, "message": string }` |
+| `POST` | `/api/query/steer/retract` | Pull back the newest submitted-but-unpicked steer message for editing (Up-arrow on empty input) | — (body optional) | `{ "success": bool, "message": string }` (`message` is the retracted text; empty when nothing pending) |
 | `POST` | `/api/query/stop` | Stop an active query | `{ "conversation_id?: string }` (body optional) | `{ "success": bool, "message": string }` |
 | `GET` | `/api/query/status` | Check the status of a running query | Query: `?conversation_id=<id>` (optional) | `{ "is_processing": bool, "query": string, "conversation_id": string }` |
 
 **Details:**
 - `POST /api/query` (handler: `handleQuery` in `api_query.go`): Initiates an agent query. Accepts JSON body with query text. Optionally includes `image_path` (file path to a pasted image), `image_data` (base64-encoded image), `persona` (persona alias), `model` (specific model), and `context` (additional context). If `conversation_id` is omitted, a new conversation is created. Returns a `query_id` on success.
 - `POST /api/query/steer` (handler: `handleQuerySteer` in `api_query.go`): Sends a steering/influence message to a running query. The agent incorporates it into its current reasoning.
+- `POST /api/query/steer/retract` (handler: `handleAPIQuerySteerRetract` in `api_query.go`): Pulls back the newest staged-but-unpicked steer message so the user can edit it. Returns the retracted text in `message` when `success` is true; returns `success: false` with an empty `message` when nothing is pending (not an error).
 - `POST /api/query/stop` (handler: `handleQueryStop` in `api_query.go`): Stops the current query. Can target a specific `conversation_id` or defaults to the active query for this client.
 - `GET /api/query/status` (handler: `handleQueryStatus` in `api_query.go`): Returns whether the agent is currently processing a query and the active query text.
 
@@ -142,7 +144,7 @@ All REST endpoints are prefixed with `/api/`. Every endpoint accepts the `?clien
 | `GET` | `/api/stats` | Server statistics and agent status | — | `{ "provider": string, "version": string, "uptime": string, "model": string, "active_chat_id": string, "chat_session_count": number, ... }` |
 | `GET` | `/api/embedding-index` | Embedding index status | — | `{ "enabled": bool, "index_size": number, "initialized": bool, "building": bool }` |
 | `POST` | `/api/embedding-index` | Toggle embedding index | `{ "enabled": bool }` | Same as GET response |
-| `GET` | `/api/costs/summary` | Cost summary | — | Cost summary object |
+| `GET` | `/api/costs/summary` | Cost summary | — | Cost summary object (incl. `total_cost`, `by_provider`, `by_model`, `last_30_days`, `by_billing_type`, `first_activity`, `last_activity`) |
 | `GET` | `/api/costs/history` | Daily cost history | Query: `?days=N` (default 30) | `{ "daily_costs": [...], "days": number }` |
 | `GET` | `/api/costs/detail` | Detailed cost breakdown | Query: `?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD` | `{ "total_cost": number, "by_provider": {...}, "by_model": {...}, "start_date": string, "end_date": string }` |
 | `GET` | `/api/providers` | Available LLM providers | — | `{ "providers": [...] }` |
@@ -154,7 +156,7 @@ All REST endpoints are prefixed with `/api/`. Every endpoint accepts the `?clien
 **Details:**
 - `GET /api/stats` (handler: `handleAPIStats` in `api_workspace.go`): Returns comprehensive server stats including provider info, version, uptime, model, active chat session, and agent statistics.
 - `GET/POST /api/embedding-index` (handler: `handleAPIEmbeddingIndex` in `api_embedding_index.go`): GET returns index status. POST toggles indexing with `{ "enabled": bool }`.
-- Cost tracking endpoints (`cost_tracking_api.go`): `/api/costs/history` defaults to last 30 days but accepts `?days=N`. `/api/costs/detail` accepts `?start_date` and `?end_date` in `YYYY-MM-DD` format.
+- Cost tracking endpoints (`cost_tracking_api.go`): `/api/costs/history` defaults to last 30 days but accepts `?days=N`. `/api/costs/detail` accepts `?start_date` and `?end_date` in `YYYY-MM-DD` format. `/api/costs/summary` response includes `first_activity` and `last_activity` (RFC 3339 UTC strings, omitted when the store is empty) covering all recorded records independent of any date-range filter; the WebUI uses these to surface a "no activity in the last 30 days" banner when `total_cost > 0` but `last_30_days == 0`.
 - `GET /api/support-bundle`: Returns a ZIP file with logs, config, and diagnostics via `Content-Disposition: attachment`.
 
 ### Files
@@ -425,11 +427,11 @@ interface WsEvent {
 
 ### Sequence Numbers (`__seq`)
 
-Every event associated with a chat session includes a `__seq` field — a monotonically increasing counter per chat. Stored in `OutboundEventRegistry.seqCounters`.
+Every event associated with a chat session includes a `__seq` field — a monotonically increasing counter per chat. Stored per-chat in `chatRunRingBuffer.nextSeq` (see `pkg/webui/chat_run_buffer.go`).
 
 ### Reattach-Buffered Event Types
 
-The following **8 event types** are buffered (up to 500 per chat) for reattach replay (defined in `reattachBufferedEventTypes` in `api_query.go`):
+The following **8 event types** are buffered (up to 5000 events per chat) for reattach replay (defined in `reattachBufferedEventTypes` in `api_query.go`):
 
 `query_started`, `query_progress`, `query_completed`, `stream_chunk`, `tool_start`, `tool_end`, `agent_message`, `error`
 
@@ -500,7 +502,7 @@ private reconnectWithReattach() {
 **5. Normal live events resume** after replay is complete.
 
 ### Key Constraints
-- **Buffer size**: Maximum 500 events per chat (`MaxBufferSize`)
+- **Buffer size**: Maximum 5000 events per chat (`defaultRunBufferMaxEvents`)
 - **Single chat**: Reattach works per chat session
 - **Seq is per-chat**: Independent sequence numbering per chat
 

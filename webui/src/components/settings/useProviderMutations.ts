@@ -19,10 +19,14 @@ interface ProviderMutationParams {
   setProviderContextSize: (v: number) => void;
   providerEnvVar: string;
   setProviderEnvVar: (v: string) => void;
+  providerApiKey: string;
+  setProviderApiKey: (v: string) => void;
   providerSupportsVision: boolean;
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
   setProviderVisionModel: (v: string) => void;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   providerModelContextSizes: string;
   setProviderModelContextSizes: (v: string) => void;
 }
@@ -58,10 +62,14 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
   } = params;
@@ -73,8 +81,10 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderModelName('');
     setProviderContextSize(0);
     setProviderEnvVar('');
+    setProviderApiKey('');
     setProviderSupportsVision(false);
     setProviderVisionModel('');
+    setProviderBillingType('pay_per_token');
     setProviderModelContextSizes('');
   }, [
     setEditingProvider,
@@ -83,8 +93,10 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderModelName,
     setProviderContextSize,
     setProviderEnvVar,
+    setProviderApiKey,
     setProviderSupportsVision,
     setProviderVisionModel,
+    setProviderBillingType,
     setProviderModelContextSizes,
   ]);
 
@@ -105,10 +117,31 @@ export function useProviderMutations(params: ProviderMutationParams) {
         env_var: providerEnvVar.trim() || undefined,
         supports_vision: providerSupportsVision || undefined,
         vision_model: providerVisionModel.trim() || undefined,
+        ...(providerBillingType !== 'pay_per_token' ? { billing_type: providerBillingType } : {}),
         ...(modelContextSizes ? { model_context_sizes: modelContextSizes } : {}),
       };
       await ctx.api.addCustomProvider(provider);
       ctx.addNotification('success', 'Providers', `Provider "${providerName}" added`, 3000);
+
+      // If the user pasted a literal API key, persist it after the
+      // provider record exists. A credential save failure should not
+      // undo the provider creation — the provider is already saved, so
+      // we surface a warning but leave it in place.
+      const trimmedKey = providerApiKey.trim();
+      if (trimmedKey) {
+        try {
+          await ctx.api.setProviderCredential(providerName.trim(), trimmedKey);
+        } catch (credErr) {
+          debugLog('[SettingsPanel] failed to save provider credential:', credErr);
+          ctx.addNotification(
+            'info',
+            'Providers',
+            `Provider "${providerName}" added, but the API key could not be saved. Set it via env var instead.`,
+            6000,
+          );
+        }
+      }
+
       resetProviderForm();
       ctx.refreshProviderCatalog?.();
     } catch (err) {
@@ -124,8 +157,10 @@ export function useProviderMutations(params: ProviderMutationParams) {
     providerModelName,
     providerContextSize,
     providerEnvVar,
+    providerApiKey,
     providerSupportsVision,
     providerVisionModel,
+    providerBillingType,
     providerModelContextSizes,
     resetProviderForm,
   ]);
@@ -144,10 +179,31 @@ export function useProviderMutations(params: ProviderMutationParams) {
         env_var: providerEnvVar.trim() || undefined,
         supports_vision: providerSupportsVision || undefined,
         vision_model: providerVisionModel.trim() || undefined,
+        ...(providerBillingType !== 'pay_per_token' ? { billing_type: providerBillingType } : {}),
         ...(modelContextSizes ? { model_context_sizes: modelContextSizes } : {}),
       };
       await ctx.api.updateCustomProvider(editingProvider.originalName, provider);
       ctx.addNotification('success', 'Providers', `Provider "${editingProvider.originalName}" updated`, 3000);
+
+      // Persist a pasted API key after the provider update succeeds.
+      // We write the key against the (possibly renamed) current name so
+      // it lands on the right record. A credential failure must not
+      // roll back the provider update — warn and leave it alone.
+      const trimmedKey = providerApiKey.trim();
+      if (trimmedKey) {
+        try {
+          await ctx.api.setProviderCredential(providerName.trim(), trimmedKey);
+        } catch (credErr) {
+          debugLog('[SettingsPanel] failed to save provider credential:', credErr);
+          ctx.addNotification(
+            'info',
+            'Providers',
+            `Provider "${editingProvider.originalName}" updated, but the API key could not be saved.`,
+            6000,
+          );
+        }
+      }
+
       resetProviderForm();
       ctx.refreshProviderCatalog?.();
     } catch (err) {
@@ -164,8 +220,10 @@ export function useProviderMutations(params: ProviderMutationParams) {
     providerModelName,
     providerContextSize,
     providerEnvVar,
+    providerApiKey,
     providerSupportsVision,
     providerVisionModel,
+    providerBillingType,
     providerModelContextSizes,
     resetProviderForm,
   ]);

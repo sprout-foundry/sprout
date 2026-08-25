@@ -1,16 +1,3 @@
-import { stripAnsiCodes } from '../../utils/ansi';
-import { formatToolDetail } from '../../utils/resultSummary';
-import { subagentDepthLabel } from '../chat/SubagentActivityFeed';
-import type { ToolExecution } from './types';
-import {
-  isSubagentTool,
-  getSubagentPrompt,
-  getToolIcon,
-  getPersonaColor,
-  getStatusIcon,
-  formatDuration,
-} from './helpers';
-import { FilePathPre } from './FilePathPre';
 import {
   Bot,
   ChevronDown,
@@ -21,6 +8,19 @@ import {
   FileText,
   AlertTriangle,
 } from 'lucide-react';
+import { stripAnsiCodes } from '../../utils/ansi';
+import { formatToolDetail } from '../../utils/resultSummary';
+import { subagentDepthLabel } from '../chat/SubagentActivityFeed';
+import { FilePathPre } from './FilePathPre';
+import {
+  isSubagentTool,
+  getSubagentPrompt,
+  getToolIcon,
+  getPersonaColor,
+  getStatusIcon,
+  formatDuration,
+} from './helpers';
+import type { ToolExecution } from './types';
 
 /** Shape of tool execution details when result truncation info is present. */
 interface TruncationDetails {
@@ -34,8 +34,7 @@ const hasTruncation = (d: unknown): d is TruncationDetails =>
 /** Depth badge tier — drives CSS-side coloring via [data-depth-tier].
  *  Avoids inline hex (CLAUDE.md design-system rule) and keeps the
  *  palette themable. */
-const getDepthBadgeTier = (depth: number): 'orchestrator' | 'deep' =>
-  depth >= 2 ? 'deep' : 'orchestrator';
+const getDepthBadgeTier = (depth: number): 'orchestrator' | 'deep' => (depth >= 2 ? 'deep' : 'orchestrator');
 
 interface ToolCardProps {
   tool: ToolExecution;
@@ -52,6 +51,7 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
   return (
     <div
       key={tool.id}
+      data-depth={tool.depth || 0}
       ref={(el) => {
         toolRef.current[tool.id] = el;
       }}
@@ -59,7 +59,7 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
       onClick={() => onToggleExpansion(tool.id)}
     >
       <>
-        <div className="tool-summary" style={{ paddingLeft: tool.depth ? `${(tool.depth - 1) * 16}px` : undefined }}>
+        <div className="tool-summary">
           <span className="tool-icon">
             {isSub ? (
               <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
@@ -78,17 +78,17 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
                   : 'subagent'
               : tool.tool}
             {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
+            {tool.depth && tool.depth > 0 && (
+              <span
+                className="tool-depth-badge"
+                data-depth-tier={getDepthBadgeTier(tool.depth)}
+                title={subagentDepthLabel(tool.depth)}
+                aria-label={subagentDepthLabel(tool.depth)}
+              >
+                D{tool.depth}
+              </span>
+            )}
           </span>
-          {tool.depth && tool.depth > 0 && (
-            <span
-              className="tool-depth-badge"
-              data-depth-tier={getDepthBadgeTier(tool.depth)}
-              title={subagentDepthLabel(tool.depth)}
-              aria-label={subagentDepthLabel(tool.depth)}
-            >
-              D{tool.depth}
-            </span>
-          )}
           <span className="tool-status">{getStatusIcon(tool.status)}</span>
           <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
           <span className="tool-expand">

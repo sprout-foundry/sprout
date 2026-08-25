@@ -64,10 +64,11 @@ func Load() (*Config, error) {
 		}
 	}
 
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
+	config := NewConfig()
+	if err := json.Unmarshal(data, config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
+	config.recordExplicitKeys(rawConfig)
 
 	// Defensive nil-checks for map fields (migration ensures these exist in raw JSON,
 	// but these checks provide Go-level safety for edge cases).
@@ -96,10 +97,10 @@ func Load() (*Config, error) {
 
 	// Merge missing default skills so that skills added to embedded defaults
 	// after the user's config was already at v2.0 are still available.
-	mergeMissingDefaultSkills(&config)
+	mergeMissingDefaultSkills(config)
 
 	// Post-unmarshal operations that truly need struct-level access
-	fileCustomProviders, err := MigrateLegacyCustomProviders(&config)
+	fileCustomProviders, err := MigrateLegacyCustomProviders(config)
 	if err != nil {
 		return nil, fmt.Errorf("get config path: %w", err)
 	}
@@ -115,20 +116,10 @@ func Load() (*Config, error) {
 	config.loadedModTime = loadedMod
 	config.loadedSize = loadedSize
 
-	// Discover user-level skills from ~/.config/sprout/skills/
-	if os.Getenv("SPROUT_NO_USER_SKILLS") != "1" {
-		if discovered := discoverUserSkills(&config); len(discovered) > 0 {
-			log.Printf("[skills] Discovered %d user skill(s): %s",
-				len(discovered), strings.Join(discovered, ", "))
-		}
-	}
-
-	// Discover project-specific skills from .sprout/skills/
-	if os.Getenv("SPROUT_NO_PROJECT_SKILLS") != "1" {
-		if discovered := discoverProjectSkills(&config); len(discovered) > 0 {
-			log.Printf("[skills] Discovered %d project-local skill(s): %s",
-				len(discovered), strings.Join(discovered, ", "))
-		}
+	// Discover user-level and project-specific skills.
+	if discovered := config.discoverSkills(); len(discovered) > 0 {
+		log.Printf("[skills] Discovered %d skill(s): %s",
+			len(discovered), strings.Join(discovered, ", "))
 	}
 
 	// Self-heal a config that was poisoned by a leaky test run (e.g. a
@@ -136,9 +127,12 @@ func Load() (*Config, error) {
 	// the Save-time guard existed). On the next CLI start the value
 	// gets cleared and the user is prompted normally instead of
 	// /commit silently routing to a no-op mock.
-	sanitizeTestProvider(&config)
+	sanitizeTestProvider(config)
 
-	return &config, nil
+	// Migrate legacy approved_shell_commands to unified command_policies
+	MigrateCommandPolicies(config)
+
+	return config, nil
 }
 
 // Save saves the configuration to file
@@ -216,10 +210,18 @@ func (c *Config) Save() error {
 }
 
 // SaveToDir saves the configuration to a specific directory, bypassing
-// GetConfigPath() (which reads the SPROUT_CONFIG/LEDIT_CONFIG env vars).
+// GetConfigPath() (which reads the SPROUT_CONFIG/SPROUT_CONFIG env vars).
 // Use this when a Manager has an explicit configDir so that saves go to
 // the correct location even after the env var has been restored.
+// SaveToDir writes the config as ConfigFileName inside dir.
 func (c *Config) SaveToDir(dir string) error {
+	return c.SaveToDirAs(dir, ConfigFileName)
+}
+
+// SaveToDirAs writes the config to dir under an explicit filename. Workspace
+// layers use WorkspaceConfigFileName so they can never collide with the
+// user-level config.json when the workspace root is $HOME.
+func (c *Config) SaveToDirAs(dir, fileName string) error {
 	// Same defense as Save() — refuse to persist the test sentinel even
 	// when callers bypass GetConfigPath() and target an explicit dir.
 	// See sanitizeTestProvider for context.
@@ -241,7 +243,10 @@ func (c *Config) SaveToDir(dir string) error {
 		return fmt.Errorf("create config directory %q: %w", dir, err)
 	}
 
-	configPath := filepath.Join(dir, ConfigFileName)
+	if fileName == "" {
+		fileName = ConfigFileName
+	}
+	configPath := filepath.Join(dir, fileName)
 	c.Version = ConfigVersion
 	persisted := *c
 	persisted.Version = ConfigVersion

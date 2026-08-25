@@ -4,8 +4,8 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
+	"runtime/pprof"
 	"time"
 
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
@@ -21,6 +21,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerCoreRoutes(mux)
 	ws.registerTerminalRoutes(mux, ctx)
 	ws.registerQueryRoutes(mux)
+	ws.registerCommandRoutes(mux)
 	ws.registerDiagnosticsRoutes(mux)
 	ws.registerFileRoutes(mux)
 	ws.registerSettingsRoutes(mux)
@@ -31,6 +32,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerSearchRoutes(mux)
 	ws.registerChangesRoutes(mux)
 	ws.registerAutomateRoutes(mux)
+	ws.registerCompletionRoutes(mux)
 
 	return mux
 }
@@ -49,26 +51,53 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/logo-mark.svg", ws.handleLogoMark)
 	mux.HandleFunc("/favicon.ico", ws.handleFavicon)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		resp := map[string]interface{}{
 			"status": "ok",
 			"port":   ws.port,
 			"uptime": time.Since(ws.startTime).String(),
-		})
+		}
+		// Report whether an agent backend is available. In daemon mode
+		// (ws.agent == nil) agents are created per-client, so "available"
+		// means the config manager can produce one — approximated here by
+		// checking whether any client context has an agent.
+		if ws.agent != nil {
+			resp["agent_available"] = true
+		} else {
+			resp["agent_available"] = ws.serviceMode
+		}
+		ws.mutex.RLock()
+		resp["active_queries"] = ws.activeQueries
+		ws.mutex.RUnlock()
+		writeJSON(w, http.StatusOK, resp)
 	})
 	mux.HandleFunc("/api/bootstrap", ws.handleAPIBootstrap)
+
+	// Always-on goroutine dump endpoint. Unlike --debug-pprof (which requires
+	// a separate port and is opt-in), this is available on the main webui port
+	// so a stuck session can be diagnosed by curling
+	//   curl http://localhost:<port>/debug/goroutines
+	// without restarting the process. Returns the same stack dump as SIGQUIT
+	// but does NOT kill the process.
+	mux.HandleFunc("/debug/goroutines", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_ = pprof.Lookup("goroutine").WriteTo(w, 1)
+	})
 }
 
 func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
+	mux.HandleFunc("/api/query/steer/retract", ws.handleAPIQuerySteerRetract)
 	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
 	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
 	// SP-071-3: rewind the conversation to a prior turn.
 	mux.HandleFunc("/api/query/rewind", ws.handleAPIQueryRewind)
 	// SP-072-4: per-hunk edit approval endpoints.
 	mux.HandleFunc("/api/edits/", ws.handleAPIEdits)
+	// SP-093-3: per-part shell approval decision endpoint.
+	mux.HandleFunc("/api/shell-approvals/", ws.handleAPIShellApprovals)
+	// SP-089-3: password prompt endpoints.
+	mux.HandleFunc("/api/password/", ws.handleAPIPasswordRoutes)
 	// SP-059: per-subagent cancel; path is /api/subagent/{id}/cancel.
 	mux.HandleFunc("/api/subagent/", ws.handleAPISubagentCancel)
 	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter
@@ -76,6 +105,17 @@ func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
 	mux.HandleFunc("/api/proxy/chat/status", ws.handleAPIProxyChatStatus)
 	mux.HandleFunc("/api/proxy/stats", ws.handleAPIProxyStats)
+}
+
+// registerCommandRoutes mounts SP-114 Phase 2 endpoints. /api/command/execute
+// is the dedicated command surface (separate from /api/query/steer which is
+// for mid-turn steering of an active LLM query). Commands here must be
+// SteerCapable — destructive commands stay CLI-only. /api/command/complete
+// is the command-bar argument/name completion endpoint (mirrors the
+// terminal's cmd/slash_completer.go over HTTP).
+func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/command/execute", ws.handleAPICommandExecute)
+	mux.HandleFunc("/api/command/complete", ws.handleAPICommandComplete)
 }
 
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
@@ -88,7 +128,9 @@ func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
 	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
 	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
+	mux.HandleFunc("/api/recall", ws.handleAPIRecall)
 	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
+	mux.HandleFunc("/api/ws-metrics", ws.handleAPIWSMetrics)
 }
 
 func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {
@@ -117,11 +159,18 @@ func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/settings/credentials", ws.handleAPISettingsCredentials)
 	mux.HandleFunc("/api/settings/credentials/", ws.handleAPISettingsCredentials)
 	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
+	mux.HandleFunc("/api/skills", ws.handleAPIListSkills)
+	mux.HandleFunc("/api/skills/", ws.handleAPISkillsRoutes)
 	mux.HandleFunc("/api/settings/subagent-types", ws.handleAPISettingsSubagentTypes)
 	mux.HandleFunc("/api/settings/subagent-types/", ws.handleAPISettingsSubagentTypes)
 	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
 	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
 	mux.HandleFunc("/api/hotkeys/preset", ws.handleAPIHotkeysPreset)
+	mux.HandleFunc("/api/computer-use/test", ws.handleAPIComputerUseTest)
+	mux.HandleFunc("/api/local-llm/status", ws.handleLocalLLMStatus)
+	mux.HandleFunc("/api/local-llm/start", ws.handleLocalLLMStart)
+	mux.HandleFunc("/api/local-llm/models", ws.handleLocalLLMModels)
+	mux.HandleFunc("/api/local-llm/download", ws.handleLocalLLMDownload)
 }
 
 func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
@@ -129,6 +178,9 @@ func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
 	mux.HandleFunc("/api/workspace/symbols", ws.handleAPIWorkspaceSymbols)
 	mux.HandleFunc("/api/workspace/projects", ws.handleAPIWorkspaceProjects)
+	// SP-046: workspace sync handlers
+	mux.HandleFunc("/api/workspace/sync", ws.handleAPIWorkspaceSync)
+	mux.HandleFunc("/api/workspace/takeover", ws.handleAPIWorkspaceTakeover)
 	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
@@ -190,6 +242,8 @@ func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context
 func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
 	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
+	mux.HandleFunc("/api/sessions/search", ws.handleAPISessionsSearch)
+	mux.HandleFunc("/api/sessions/{id}/export", ws.handleAPISessionExport)
 	// Revision history + rollback now flow through /api/changes/* (the
 	// ChangeTracker session buffer) and the LLM rollback_changes tool.
 	// The old /api/history/* endpoints were removed with RevisionListPanel.
@@ -204,6 +258,8 @@ func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
 	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
 	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
+	mux.HandleFunc("/api/chat-sessions/fork", ws.handleAPIChatSessionFork)
+	mux.HandleFunc("/api/chat-sessions/breakpoints", ws.handleAPIChatSessionBreakpoints)
 	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
 }
@@ -217,4 +273,8 @@ func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/search/semantic", ws.handleAPISemanticSearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
+}
+
+func (ws *ReactWebServer) registerCompletionRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/completion", ws.handleAPICompletion)
 }

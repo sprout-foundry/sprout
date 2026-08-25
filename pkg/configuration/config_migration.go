@@ -137,11 +137,11 @@ func buildMigrationChain(fromVersion, toVersion string) []migrationStep {
 // It preserves any existing non-zero values and applies defaults to missing or zero fields.
 func applyAPITimeoutDefaults(raw map[string]interface{}) {
 	const (
-		defaultConnectionTimeout      = 300.0
-		defaultFirstChunkTimeout      = 600.0
-		defaultChunkTimeout           = 600.0
-		defaultOverallTimeout         = 1800.0
-		defaultCommitMessageTimeout   = 300.0
+		defaultConnectionTimeout    = 300.0
+		defaultFirstChunkTimeout    = 600.0
+		defaultChunkTimeout         = 600.0
+		defaultOverallTimeout       = 1800.0
+		defaultCommitMessageTimeout = 300.0
 	)
 
 	var apiTimeouts map[string]interface{}
@@ -213,6 +213,23 @@ func applyZshCommandDetectionDefaults(raw map[string]interface{}) {
 func applyUnifiedRiskResolverDefault(raw map[string]interface{}) {
 	if _, exists := raw["unified_risk_resolver"]; !exists {
 		raw["unified_risk_resolver"] = true
+	}
+}
+
+// applyDaemonMultiSessionDefault enables N parallel browser windows
+// per user on the daemon (SP-118 Phase 4) by default. The default
+// flips the rollout so newly-spawned daemons accept multiple windows
+// per user with no extra configuration. Operators who need the
+// pre-SP-118 single-active-session behavior on the daemon can set
+// "daemon_multi_session": false to opt out (e.g. for a temporary
+// rollback during the rollout window).
+//
+// The agent path is unaffected — sprout agent always uses Mode 1
+// regardless of this setting. The flag only gates Mode 2 in the
+// daemon path; see pkg/webui/websocket_handler.go shouldUseMode1.
+func applyDaemonMultiSessionDefault(raw map[string]interface{}) {
+	if _, exists := raw["daemon_multi_session"]; !exists {
+		raw["daemon_multi_session"] = true
 	}
 }
 
@@ -525,6 +542,7 @@ func applyV2Defaults(raw map[string]interface{}) error {
 	applyPDFOCRDefaults(raw)
 	applyZshCommandDetectionDefaults(raw)
 	applyUnifiedRiskResolverDefault(raw)
+	applyDaemonMultiSessionDefault(raw)
 	applyDefaultSubagentTypes(raw)
 	applyDefaultSkills(raw)
 	applyLegacyToolAllowlistMigration(raw)

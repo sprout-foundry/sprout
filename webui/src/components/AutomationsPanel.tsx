@@ -1,11 +1,12 @@
+import type { WsEvent } from '@sprout/events';
 import { Play, Square, Zap, X, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { subscribeAutomate } from '../services/automateEvents';
 import { clientFetch } from '../services/clientSession';
+import { WebSocketService } from '../services/websocket';
 import { debugLog } from '../utils/log';
 import AutomationsSessionDetail from './AutomationsSessionDetail';
 import './AutomationsPanel.css';
-
-const POLL_INTERVAL_MS = 3000;
 
 /* ── Type Interfaces ───────────────────────────────────────── */
 
@@ -103,10 +104,7 @@ function BudgetBar({ spent, cap }: BudgetBarProps): JSX.Element {
 
   return (
     <div className="automations-budget-bar">
-      <div
-        className="automations-budget-fill"
-        style={{ width: `${pct}%`, background: color }}
-      />
+      <div className="automations-budget-fill" style={{ width: `${pct}%`, background: color }} />
       <span className="automations-budget-text">
         ${spent.toFixed(2)} / ${cap.toFixed(2)}
       </span>
@@ -143,6 +141,12 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   // Stop loading tracking
   const [stoppingIds, setStoppingIds] = useState<Set<string>>(new Set());
 
+  // Pagination for running/recent session lists
+  const AUTOMATIONS_SESSIONS_INITIAL = 10;
+  const AUTOMATIONS_SESSIONS_INCREMENT = 10;
+  const [visibleRunning, setVisibleRunning] = useState(AUTOMATIONS_SESSIONS_INITIAL);
+  const [visibleRecent, setVisibleRecent] = useState(AUTOMATIONS_SESSIONS_INITIAL);
+
   // Tick for live elapsed time display
   const [tick, setTick] = useState(0);
 
@@ -152,6 +156,12 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   // Fetch guard refs
   const isFetchingWorkflowsRef = useRef(false);
   const isFetchingSessionsRef = useRef(false);
+  // Tracks whether we've already attempted a workflows fetch for the
+  // current Available-tab visit. Without this, the "available" effect
+  // re-fires forever when the workflow list is empty (workflows.length
+  // stays 0; workflowsLoading flips back to false; effect deps change
+  // → another fetch). Reset to false when activeTab leaves Available.
+  const hasFetchedWorkflowsRef = useRef(false);
 
   /* ── Data Fetching ─────────────────────────────────────── */
 
@@ -189,6 +199,8 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
       }
       const data: SessionsResponse = await response.json();
       setSessions(data?.sessions || []);
+      setVisibleRunning(AUTOMATIONS_SESSIONS_INITIAL);
+      setVisibleRecent(AUTOMATIONS_SESSIONS_INITIAL);
     } catch (err) {
       debugLog('[AutomationsPanel] Failed to fetch sessions:', err);
       setSessionsError(err instanceof Error ? err.message : String(err));
@@ -218,9 +230,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   const handleRunWorkflow = useCallback(async () => {
     if (!runModal.workflow) return;
 
-    const confirmed = window.confirm(
-      `Run workflow "${runModal.workflow.name}"?`
-    );
+    const confirmed = window.confirm(`Run workflow "${runModal.workflow.name}"?`);
     if (!confirmed) return;
 
     setIsRunningWorkflow(true);
@@ -270,10 +280,9 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
       setStoppingIds((prev) => new Set(prev).add(sessionId));
 
       try {
-        const response = await clientFetch(
-          `/api/automate/sessions/${encodeURIComponent(sessionId)}/stop`,
-          { method: 'POST' }
-        );
+        const response = await clientFetch(`/api/automate/sessions/${encodeURIComponent(sessionId)}/stop`, {
+          method: 'POST',
+        });
         if (!response.ok) {
           throw new Error(`Failed to stop session: ${friendlyStatus(response.status)}`);
         }
@@ -289,25 +298,78 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
         });
       }
     },
-    [fetchSessions]
+    [fetchSessions],
   );
 
-  /* ── Polling ───────────────────────────────────────────── */
+  /* ── Event-driven session refetch (replaces polling) ──────── */
 
-  // Fetch workflows when switching to available tab
+  // Fetch workflows once per visit to the Available tab. The empty-list
+  // case must not trigger a refetch on every render — see the
+  // `hasFetchedWorkflowsRef` comment above.
   useEffect(() => {
-    if (activeTab === 'available' && workflows.length === 0 && !workflowsLoading) {
-      fetchWorkflows();
+    if (activeTab !== 'available') {
+      hasFetchedWorkflowsRef.current = false;
+      return;
     }
-  }, [activeTab, workflows.length, workflowsLoading, fetchWorkflows]);
+    if (hasFetchedWorkflowsRef.current) return;
+    hasFetchedWorkflowsRef.current = true;
+    fetchWorkflows();
+  }, [activeTab, fetchWorkflows]);
 
-  // Poll sessions when on running or recent tab
+  // Subscribe to the automate WebSocket channel. Send once on mount AND
+  // every time the WS reconnects — if the user opens this panel before
+  // the initial WebSocket handshake completes, the cold-start subscribe
+  // would otherwise sit in the message queue (which only flushes on
+  // reconnect) and be silently dropped. We listen for connection_status
+  // with `connected: true` to handle initial connect and reconnect
+  // uniformly.
   useEffect(() => {
-    if (activeTab !== 'running' && activeTab !== 'recent') return;
+    const sendSubscribe = () => {
+      WebSocketService.getInstance().sendEvent({
+        type: 'subscribe',
+        data: { channel: 'automate' },
+      });
+    };
 
-    fetchSessions();
-    const intervalId = setInterval(fetchSessions, POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
+    sendSubscribe();
+
+    // The WebSocketService already emits a synthetic connection_status
+    // event with connected: true both for initial connect and reconnect,
+    // so listening here covers both cases uniformly. Treat any event that
+    // carries `connected === true` as "send subscribe now".
+    const handleEvent = (event: WsEvent) => {
+      if (event.type !== 'connection_status') return;
+      const data = event.data as { connected?: boolean } | undefined;
+      if (data?.connected === true) {
+        sendSubscribe();
+      }
+    };
+    WebSocketService.getInstance().onEvent(handleEvent);
+    return () => {
+      WebSocketService.getInstance().removeEvent(handleEvent);
+    };
+  }, []);
+
+  // Refetch sessions when automate lifecycle events arrive.
+  useEffect(() => {
+    return subscribeAutomate((eventType, payload) => {
+      if (eventType === 'automate.session_started' || eventType === 'automate.session_ended') {
+        // Only refetch when the panel is viewing a sessions tab.
+        // The event fires globally so we let the panel decide whether to act.
+        if (activeTab === 'running' || activeTab === 'recent') {
+          fetchSessions();
+        }
+      }
+      // budget_update and output_chunk are handled by AutomationsSessionDetail
+    });
+  }, [activeTab, fetchSessions]);
+
+  // Initial fetch when switching to running or recent tab (no polling —
+  // events drive subsequent updates).
+  useEffect(() => {
+    if (activeTab === 'running' || activeTab === 'recent') {
+      fetchSessions();
+    }
   }, [activeTab, fetchSessions]);
 
   // Tick for live elapsed time display on running tab
@@ -331,14 +393,19 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
         fetchSessions();
       }
     };
-    window.addEventListener('sprout-navigate-automation' as any, handler as any);
-    return () => window.removeEventListener('sprout-navigate-automation' as any, handler as any);
+    window.addEventListener('sprout-navigate-automation', handler as EventListener);
+    return () => window.removeEventListener('sprout-navigate-automation', handler as EventListener);
   }, [fetchSessions]);
 
   /* ── Derived data ──────────────────────────────────────── */
 
   const runningSessions = sessions.filter((s) => s.status === 'running');
   const recentSessions = sessions.filter((s) => s.status !== 'running');
+
+  const visibleRunningSessions = runningSessions.slice(0, visibleRunning);
+  const visibleRecentSessions = recentSessions.slice(0, visibleRecent);
+  const runningOverflow = Math.max(0, runningSessions.length - visibleRunning);
+  const recentOverflow = Math.max(0, recentSessions.length - visibleRecent);
 
   /* ── Tab labels ────────────────────────────────────────── */
 
@@ -396,9 +463,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <div key={wf.filename} className="automations-workflow-card">
                     <div className="automations-workflow-info">
                       <div className="automations-workflow-name">{wf.name}</div>
-                      {wf.description && (
-                        <div className="automations-workflow-desc">{wf.description}</div>
-                      )}
+                      {wf.description && <div className="automations-workflow-desc">{wf.description}</div>}
                     </div>
                     <button
                       className="automations-run-btn"
@@ -444,7 +509,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <span className="automations-col-budget">Budget</span>
                   <span className="automations-col-actions" />
                 </div>
-                {runningSessions.map((session) => (
+                {visibleRunningSessions.map((session) => (
                   <div
                     key={session.session_id}
                     className="automations-session-row clickable"
@@ -461,9 +526,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                       <span className="automations-status-dot" />
                       <span>Running</span>
                     </span>
-                    <span className="automations-session-elapsed">
-                      {formatDuration(session.started_at)}
-                    </span>
+                    <span className="automations-session-elapsed">{formatDuration(session.started_at)}</span>
                     <span className="automations-session-budget">
                       {session.budget_usd > 0 ? (
                         <BudgetBar spent={0} cap={session.budget_usd} />
@@ -494,8 +557,20 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     </span>
                   </div>
                 ))}
+                {/* Pagination: show more if there are running sessions past the visible window */}
+                {runningOverflow > 0 && (
+                  <button
+                    type="button"
+                    className="automations-load-more"
+                    onClick={() => setVisibleRunning((n) => n + AUTOMATIONS_SESSIONS_INCREMENT)}
+                  >
+                    Show more ({runningOverflow} more)
+                  </button>
+                )}
                 {/* Force re-render for tick-based elapsed updates */}
-                <span className="sr-only" aria-live="polite">{tick}</span>
+                <span className="sr-only" aria-live="polite">
+                  {tick}
+                </span>
               </div>
             )}
           </div>
@@ -527,7 +602,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <span className="automations-col-status">Status</span>
                   <span className="automations-col-elapsed">Duration</span>
                 </div>
-                {recentSessions.map((session) => (
+                {visibleRecentSessions.map((session) => (
                   <div
                     key={session.session_id}
                     className={`automations-session-row ${onNavigateToSession ? 'clickable' : ''}`}
@@ -545,11 +620,19 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                       <span className="automations-status-dot" />
                       <span>{session.status === 'exited' ? 'Exited' : 'Stopped'}</span>
                     </span>
-                    <span className="automations-session-elapsed">
-                      {formatDuration(session.started_at)}
-                    </span>
+                    <span className="automations-session-elapsed">{formatDuration(session.started_at)}</span>
                   </div>
                 ))}
+                {/* Pagination: show more if there are recent sessions past the visible window */}
+                {recentOverflow > 0 && (
+                  <button
+                    type="button"
+                    className="automations-load-more"
+                    onClick={() => setVisibleRecent((n) => n + AUTOMATIONS_SESSIONS_INCREMENT)}
+                  >
+                    Show more ({recentOverflow} more)
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -559,10 +642,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
       {/* ── Session Detail Panel ──────────────────────────── */}
       {selectedSessionId && (
         <div className="automations-detail-overlay">
-          <AutomationsSessionDetail
-            sessionId={selectedSessionId}
-            onClose={closeDetail}
-          />
+          <AutomationsSessionDetail sessionId={selectedSessionId} onClose={closeDetail} />
         </div>
       )}
 
@@ -573,12 +653,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
           <div className="automations-modal-content">
             <div className="automations-modal-header">
               <h3 id="run-modal-title">Run Workflow</h3>
-              <button
-                className="automations-modal-close"
-                onClick={closeRunModal}
-                title="Close"
-                aria-label="Close"
-              >
+              <button className="automations-modal-close" onClick={closeRunModal} title="Close" aria-label="Close">
                 <X size={16} />
               </button>
             </div>
@@ -602,13 +677,9 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     placeholder="No limit"
                     className="automations-input"
                     value={runModal.budgetUsd}
-                    onChange={(e) =>
-                      setRunModal((prev) => ({ ...prev, budgetUsd: e.target.value }))
-                    }
+                    onChange={(e) => setRunModal((prev) => ({ ...prev, budgetUsd: e.target.value }))}
                   />
-                  <span className="automations-field-hint">
-                    Optional — max spend cap in USD
-                  </span>
+                  <span className="automations-field-hint">Optional — max spend cap in USD</span>
                 </label>
 
                 <label className="automations-field" htmlFor="automation-heartbeat">
@@ -621,31 +692,21 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     placeholder="30"
                     className="automations-input"
                     value={runModal.heartbeat}
-                    onChange={(e) =>
-                      setRunModal((prev) => ({ ...prev, heartbeat: e.target.value }))
-                    }
+                    onChange={(e) => setRunModal((prev) => ({ ...prev, heartbeat: e.target.value }))}
                   />
-                  <span className="automations-field-hint">
-                    Optional — heartbeat interval in seconds
-                  </span>
+                  <span className="automations-field-hint">Optional — heartbeat interval in seconds</span>
                 </label>
               </div>
             </div>
 
             <div className="automations-modal-footer">
-              <button
-                className="automations-modal-cancel-btn"
-                onClick={closeRunModal}
-                disabled={isRunningWorkflow}
-              >
+              <button className="automations-modal-cancel-btn" onClick={closeRunModal} disabled={isRunningWorkflow}>
                 Cancel
               </button>
-              <button
-                className="automations-modal-run-btn"
-                onClick={handleRunWorkflow}
-                disabled={isRunningWorkflow}
-              >
-                {isRunningWorkflow ? 'Starting...' : (
+              <button className="automations-modal-run-btn" onClick={handleRunWorkflow} disabled={isRunningWorkflow}>
+                {isRunningWorkflow ? (
+                  'Starting...'
+                ) : (
                   <>
                     <Zap size={14} />
                     <span>Run</span>

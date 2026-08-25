@@ -29,7 +29,7 @@ We use a layered testing approach that balances speed, coverage, and cost:
 
 **Command**: `make test-unit`
 
-### Integration Tests (`integration_tests/`)
+### Integration Tests (`pkg/` / `cmd/` unit suites)
 
 **Purpose**: Test component interaction with mocked dependencies
 **Dependencies**: File system, mock AI model (`test:test`)
@@ -43,9 +43,9 @@ We use a layered testing approach that balances speed, coverage, and cost:
 - Configuration loading
 - Agent initialization
 
-**Command**: `make test-integration`
+**Command**: `make test-unit` (integration-style tests are covered by the unit test suite)
 
-### E2E Tests (`e2e_tests/`)
+### E2E Tests
 
 **Purpose**: Test complete user workflows with real AI models
 **Dependencies**: Real AI providers, API keys, internet
@@ -59,7 +59,7 @@ We use a layered testing approach that balances speed, coverage, and cost:
 - Real provider integrations
 - Full user journeys
 
-**Command**: `make test-e2e MODEL=openai:gpt-4`
+**Command**: Manual testing with `sprout agent "..." --model <your-model>` against real providers
 
 ### Smoke Tests (`smoke_tests/`)
 
@@ -84,23 +84,22 @@ We use a layered testing approach that balances speed, coverage, and cost:
 make test-unit
 
 # Before committing changes
-make test-unit test-integration
+make test-unit
 ```
 
 ### Before Releasing
 ```bash
-# Full validation (expensive)
+# Full validation
 make test-all
-make test-e2e MODEL=your-preferred-model
 ```
 
 ### CI Pipeline
 ```bash
 # Pull Request validation
-make test-ci  # unit + integration
+make test-ci  # unit tests
 
 # Main branch validation  
-make test-all # unit + integration + smoke
+make test-all # unit + smoke
 ```
 
 ## 📁 File Organization
@@ -111,11 +110,8 @@ sprout/
 ├── TESTING.md                   # This file
 ├── pkg/                         # Unit tests (*_test.go)
 ├── cmd/                         # Command tests (*_test.go)
-├── integration_tests/           # Integration tests
-├── e2e_tests/                   # E2E tests
 ├── smoke_tests/                 # Smoke tests
-├── integration_test_runner.py   # Integration test runner
-└── e2e_test_runner.py          # E2E test runner
+└── test/                        # Playwright/desktop smoke tests (*.spec.js)
 ```
 
 ## 🛠 Writing Tests
@@ -136,27 +132,14 @@ func TestWithRealAPI(t *testing.T) {
 }
 ```
 
-### Integration Test Guidelines
+### E2E / Integration Testing
+
+Integration and E2E test runners were removed (the test directories they
+referenced no longer existed). For ad-hoc integration testing against a mock
+model:
 
 ```bash
-#!/bin/bash
-# Good: Uses mock model, tests real CLI behavior
 sprout agent "test command" --model test:test
-
-# Bad: Uses real API in integration test
-sprout agent "test command" --model openai:gpt-4  # EXPENSIVE
-```
-
-### E2E Test Guidelines
-
-```bash
-#!/bin/bash
-# Good: Complete workflow with real model
-sprout agent "Add error handling to main.go" --model $MODEL
-# Verify the actual changes were made correctly
-
-# Good: Validates real provider integration
-sprout agent "Analyze this codebase" --provider openai --model gpt-4
 ```
 
 ## 🔧 Test Commands Reference
@@ -164,11 +147,9 @@ sprout agent "Analyze this codebase" --provider openai --model gpt-4
 | Command | Purpose | Speed | Cost | Dependencies |
 |---------|---------|-------|------|--------------|
 | `make test-unit` | Unit tests | Very Fast | Free | None |
-| `make test-integration` | Integration tests | Fast | Free | Mock AI |
-| `make test-e2e MODEL=X` | E2E tests | Slow | $$$ | Real AI |
 | `make test-smoke` | Smoke tests | Fast | Free | Optional |
-| `make test-all` | Unit + Integration + Smoke | Fast | Free | Mock AI |
-| `make test-ci` | CI-friendly tests | Fast | Free | Mock AI |
+| `make test-all` | Unit + Smoke | Fast | Free | None |
+| `make test-ci` | CI-friendly tests | Fast | Free | None |
 
 ## 🚨 Troubleshooting
 
@@ -183,7 +164,7 @@ sprout agent "Analyze this codebase" --provider openai --model gpt-4
 - Verify test scripts have execute permissions
 
 **E2E tests expensive**:
-- Use cheaper models when possible: `deepinfra:deepseek-ai/DeepSeek-V3.1`
+- Use cheaper models when possible: `deepinfra:deepseek-ai/DeepSeek-V3.1-Terminus`
 - Run selectively, not all tests every time
 
 **Smoke tests failing**:

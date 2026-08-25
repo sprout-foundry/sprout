@@ -277,4 +277,3 @@ func TestTodoWrite_LongContentTruncation(t *testing.T) {
 	// Should not contain the full original string in the output (it's > 80 chars)
 	assert.NotContains(t, msg, longContent)
 }
-

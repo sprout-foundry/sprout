@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supportsSettings } from '../config/mode';
+import { useProviderCatalog } from '../contexts/ProviderCatalogContext';
 import { ApiService, type ProviderOption, type SproutSettings } from '../services/api';
 import { useLog, debugLog } from '../utils/log';
 
@@ -54,6 +55,7 @@ export function useSidebarModel({
   const log = useLog();
   const apiService = ApiService.getInstance();
 
+  const catalog = useProviderCatalog();
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [selectedPersonaState, setSelectedPersonaState] = useState<string>(
@@ -61,8 +63,9 @@ export function useSidebarModel({
   );
   const [personas, setPersonas] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
   const [isLoadingPersonas, setIsLoadingPersonas] = useState(false);
-  const [providers, setProviders] = useState<ProviderOption[]>([]);
-  const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  // Providers now live in ProviderCatalogContext (single source of truth).
+  const providers = catalog.providers;
+  const isLoadingProviders = catalog.isLoading;
   const hasHydratedProviderStateRef = useRef(false);
   const [settings, setSettings] = useState<SproutSettings | null>(null);
   const [settingsFocusTarget, setSettingsFocusTarget] = useState<'persona' | 'provider' | null>(null);
@@ -101,46 +104,33 @@ export function useSidebarModel({
 
   const finalAvailableModels = availableModelsState;
 
+  // Hydrate the local selection from the shared catalog once it has loaded.
+  // The catalog's `currentProvider`/`currentModel` come from /api/providers
+  // (the same endpoint the old per-hook fetch used) so this preserves the
+  // existing "prefer prop, then daemon-reported current, then first entry"
+  // precedence. The fetch itself now lives in ProviderCatalogContext.
   useEffect(() => {
-    if (!isConnected || !supportsSettings) return;
+    if (providers.length === 0) return;
+    if (hasHydratedProviderStateRef.current) return;
 
-    const fetchProviders = async () => {
-      setIsLoadingProviders(true);
-      try {
-        const data = await apiService.getProviders();
-        if (data.providers && data.providers.length > 0) {
-          setProviders(data.providers);
-          if (!hasHydratedProviderStateRef.current) {
-            const initialProvider =
-              provider && provider !== 'unknown' ? provider : data.current_provider || data.providers[0]?.id || '';
-            if (initialProvider) {
-              setSelectedProvider(initialProvider);
-            }
+    const initialProvider =
+      provider && provider !== 'unknown' ? provider : catalog.currentProvider || providers[0]?.id || '';
+    if (initialProvider) {
+      setSelectedProvider(initialProvider);
+    }
 
-            const initialModel =
-              model && model !== 'unknown'
-                ? model
-                : selectedModel && selectedModel !== 'unknown'
-                  ? selectedModel
-                  : data.current_model || '';
-            if (initialModel) {
-              setSelectedModelState(initialModel);
-            }
+    const initialModel =
+      model && model !== 'unknown'
+        ? model
+        : selectedModel && selectedModel !== 'unknown'
+          ? selectedModel
+          : catalog.currentModel || '';
+    if (initialModel) {
+      setSelectedModelState(initialModel);
+    }
 
-            hasHydratedProviderStateRef.current = true;
-          }
-        }
-      } catch (error) {
-        log.error(`Failed to fetch providers: ${error instanceof Error ? error.message : String(error)}`, {
-          title: 'Provider Load Error',
-        });
-      } finally {
-        setIsLoadingProviders(false);
-      }
-    };
-
-    fetchProviders();
-  }, [apiService, isConnected]); // eslint-disable-line react-hooks/exhaustive-deps
+    hasHydratedProviderStateRef.current = true;
+  }, [providers, catalog.currentProvider, catalog.currentModel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Always sync with the provider prop from App, even if it's empty or 'unknown'

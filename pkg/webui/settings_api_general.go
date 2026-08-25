@@ -3,7 +3,7 @@
 package webui
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -25,7 +25,7 @@ func (ws *ReactWebServer) handleAPISettings(w http.ResponseWriter, r *http.Reque
 	case http.MethodPut:
 		ws.handleAPISettingsPut(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
@@ -47,13 +47,13 @@ func enrichCustomProviders(cfg *configuration.Config) {
 	// Always load from the global providers directory.
 	configDir, err := configuration.GetConfigDir()
 	if err != nil {
-		log.Printf("[settings] warning: failed to resolve config dir: %v", err)
+		slog.Default().Warn("failed to resolve config directory", slog.Any("err", err))
 		return
 	}
 	providersDir := filepath.Join(configDir, configuration.ProvidersDirName)
 	fileProviders, err := configuration.LoadCustomProvidersFromDir(providersDir)
 	if err != nil {
-		log.Printf("[settings] warning: failed to load custom provider files: %v", err)
+		slog.Default().Warn("failed to load custom provider files", slog.Any("err", err))
 		return
 	}
 	for name, provider := range fileProviders {
@@ -89,6 +89,45 @@ func (ws *ReactWebServer) applySystemPromptToLiveAgents(systemPrompt string) {
 		if activePersona == "" || activePersona == personas.IDOrchestrator {
 			agentInst.SetSystemPrompt(systemPrompt)
 		}
+	}
+}
+
+// refreshContextCapOnLiveAgents re-resolves the effective context cap from
+// config on every live agent after a runtime MaxContextTokens change, so the
+// running session honors the new cap without waiting for a model switch.
+func (ws *ReactWebServer) refreshContextCapOnLiveAgents() {
+	ws.mutex.RLock()
+	agents := make([]*agentpkg.Agent, 0, len(ws.clientContexts))
+	seen := make(map[*agentpkg.Agent]struct{})
+	for _, ctx := range ws.clientContexts {
+		if ctx == nil {
+			continue
+		}
+		if ctx.Agent != nil {
+			if _, exists := seen[ctx.Agent]; !exists {
+				agents = append(agents, ctx.Agent)
+				seen[ctx.Agent] = struct{}{}
+			}
+		}
+		for _, cs := range ctx.ChatSessions {
+			if cs == nil {
+				continue
+			}
+			cs.mu.RLock()
+			agentInst := cs.Agent
+			cs.mu.RUnlock()
+			if agentInst != nil {
+				if _, exists := seen[agentInst]; !exists {
+					agents = append(agents, agentInst)
+					seen[agentInst] = struct{}{}
+				}
+			}
+		}
+	}
+	ws.mutex.RUnlock()
+
+	for _, agentInst := range agents {
+		agentInst.RefreshContextCapFromConfig()
 	}
 }
 

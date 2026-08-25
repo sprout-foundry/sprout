@@ -119,12 +119,36 @@ var outputPriceCandidates = []priceCandidate{
 	{"pricing.completion_per_million", 1},
 }
 
+// cachedPriceCandidates probe for a provider's distinct cached-input rate —
+// the per-token (or per-million) price charged for prompt tokens served from
+// a prompt cache rather than re-processed. OpenRouter exposes this as
+// pricing.input_cache_read; OpenAI-compatible listings may use other names.
+// A "0" value is a valid (free) price, so toFloat's >0 guard in
+// priceFromCandidates correctly treats only missing/zero as absent.
+var cachedPriceCandidates = []priceCandidate{
+	{"pricing.input_cache_read", 1e6},
+	{"pricing.cached_input", 1e6},
+	{"pricing.cached_input_cost_per_token", 1e6},
+	{"pricing.cents_per_cached_input_token", 1e4},
+	{"cached_input_token_cost", 1e6},
+	{"pricing.cached_input_per_million_tokens", 1},
+	{"pricing.input_cache_write", 1e6},
+}
+
 // ModelPricingPerMillion extracts a model's input/output price (USD per
 // million tokens) from a raw /models listing entry, probing candidate field
 // names/units so listings that name pricing differently still surface a
 // price. Returns (0,0) when no candidate matches.
 func ModelPricingPerMillion(entry map[string]any) (inputPerMillion, outputPerMillion float64) {
 	return priceFromCandidates(entry, inputPriceCandidates), priceFromCandidates(entry, outputPriceCandidates)
+}
+
+// ModelCachedPricingPerMillion extracts a model's cached-input price (USD per
+// million tokens) from a raw /models listing entry. Returns 0 when the listing
+// does not expose a distinct cached rate (the provider either does not support
+// prompt caching or folds cached tokens into the standard input price).
+func ModelCachedPricingPerMillion(entry map[string]any) float64 {
+	return priceFromCandidates(entry, cachedPriceCandidates)
 }
 
 func priceFromCandidates(entry map[string]any, cands []priceCandidate) float64 {

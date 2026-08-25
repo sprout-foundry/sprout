@@ -95,3 +95,73 @@ func TestFormatHunkSummary(t *testing.T) {
 		t.Error("expected -1 remove in summary")
 	}
 }
+
+func TestRenderColoredDiff_FilePath(t *testing.T) {
+	// When FilePath is set, the header includes the path in dim color and
+	// the hunk ID still appears so per-hunk grep remains possible.
+	hunk := ReviewHunk{
+		ID:       "hunk-0",
+		FilePath: "pkg/console/edit_review.go",
+		OldStart: 1,
+		OldLines: 3,
+		Lines: []ReviewDiffLine{
+			{Type: "add", Content: "new"},
+		},
+	}
+
+	var sb strings.Builder
+	RenderColoredDiff(&sb, hunk)
+	output := sb.String()
+
+	if !strings.Contains(output, "pkg/console/edit_review.go") {
+		t.Error("expected file path in header")
+	}
+	if !strings.Contains(output, "hunk-0") {
+		t.Error("expected hunk ID in header alongside path")
+	}
+	// Header should be dim (path color) then bold (hunk ID)
+	if !strings.Contains(output, "\033[2mpkg/console/edit_review.go\033[0m") {
+		t.Error("expected dim path prefix before reset")
+	}
+}
+
+func TestRenderColoredDiff_NoFilePath(t *testing.T) {
+	// Empty FilePath → falls back to legacy header format (no dim prefix).
+	hunk := ReviewHunk{
+		ID:       "hunk-0",
+		OldStart: 1,
+		OldLines: 3,
+		Lines: []ReviewDiffLine{
+			{Type: "add", Content: "new"},
+		},
+	}
+
+	var sb strings.Builder
+	RenderColoredDiff(&sb, hunk)
+	output := sb.String()
+
+	if strings.Contains(output, "\033[2m") && strings.Contains(output, "hunk-0") {
+		// If dim appears, it must be from context lines, not the header.
+		headerLine := strings.SplitN(output, "\n", 2)[0]
+		if strings.HasPrefix(headerLine, "\033[2m") {
+			t.Error("legacy header should not start with dim color code")
+		}
+	}
+}
+
+func TestFormatHunkSummary_FilePath(t *testing.T) {
+	hunk := ReviewHunk{
+		ID:       "hunk-0",
+		FilePath: "foo/bar.go",
+		OldStart: 5,
+		OldLines: 4,
+		Lines: []ReviewDiffLine{
+			{Type: "add", Content: "a1"},
+		},
+	}
+
+	summary := FormatHunkSummary(hunk)
+	if !strings.HasPrefix(summary, "foo/bar.go · ") {
+		t.Errorf("expected path-first summary, got %q", summary)
+	}
+}

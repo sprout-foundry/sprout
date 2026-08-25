@@ -3,9 +3,9 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Tool handler implementation for ask_user operation
@@ -18,7 +18,7 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 
 	if a == nil {
 		// Fallback to CLI-only mode if agent is nil
-		response, err := tools.AskUser(req)
+		response, err := tools.AskUser(ctx, req)
 		if err != nil {
 			return "", mapAskUserError(err)
 		}
@@ -48,10 +48,17 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	var response string
 	if hasActiveWebUI {
 		response, err = tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
+	} else if a.isNonInteractive() {
+		// No active browser tab AND no interactive terminal (daemon mode,
+		// --skip-prompt, piped stdin). Short-circuit before calling AskUser
+		// so we return the structured ErrAskUserNoChannel immediately rather
+		// than relying on a separate TTY check deep in the tool layer.
+		err = tools.ErrAskUserNoChannel
 	} else {
-		// No active browser tab → CLI fallback. Returns ErrAskUserNoChannel
-		// when stdin is not a TTY (daemon mode, closed stdin, piped).
-		response, err = tools.AskUser(req)
+		// CLI fallback: terminal is interactive. AskUser does its own
+		// stdinIsTTY check (now consistent with isNonInteractive) and
+		// returns ErrAskUserNoChannel if stdin is somehow unavailable.
+		response, err = tools.AskUser(ctx, req)
 	}
 	if err != nil {
 		if a.debug {
@@ -70,11 +77,11 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 func parseAskUserToolArgs(args map[string]interface{}) (tools.AskUserRequest, error) {
 	questionRaw, ok := args["question"]
 	if !ok {
-		return tools.AskUserRequest{}, fmt.Errorf("missing 'question' parameter")
+		return tools.AskUserRequest{}, agenterrors.NewValidation("missing 'question' parameter", nil)
 	}
 	question, ok := questionRaw.(string)
 	if !ok {
-		return tools.AskUserRequest{}, fmt.Errorf("'question' parameter must be a string")
+		return tools.AskUserRequest{}, agenterrors.NewValidation("'question' parameter must be a string", nil)
 	}
 	req := tools.AskUserRequest{Question: question}
 	if h, ok := args["header"].(string); ok {
@@ -136,7 +143,7 @@ func coerceAskUserOptions(raw interface{}) []tools.AskUserOption {
 
 func mapAskUserError(err error) error {
 	if errors.Is(err, tools.ErrAskUserNoChannel) {
-		return fmt.Errorf("ask_user: no interactive input channel is available (no WebUI client connected and stdin is not a TTY). Make a best-effort decision based on the existing context, or report that you cannot proceed without user input")
+		return agenterrors.NewTool("ask_user", "ask_user: no interactive input channel is available (no WebUI client connected and stdin is not a TTY). Make a best-effort decision based on the existing context, or report that you cannot proceed without user input", nil)
 	}
-	return fmt.Errorf("ask_user failed: %w", err)
+	return agenterrors.Wrap(err, "ask_user failed")
 }

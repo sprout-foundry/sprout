@@ -8,7 +8,6 @@ import (
 
 func TestResolveProviderAPIKey_EnvVarSet(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "sk-test-12345")
 
@@ -19,9 +18,8 @@ func TestResolveProviderAPIKey_EnvVarSet(t *testing.T) {
 
 func TestResolveProviderAPIKey_StoredCredential(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("OPENAI_API_KEY", "")
 	ResetStorageBackend()
 
@@ -35,7 +33,6 @@ func TestResolveProviderAPIKey_StoredCredential(t *testing.T) {
 
 func TestResolveProviderAPIKey_EmptyValue_WithEnvVar(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "")
 
@@ -47,9 +44,8 @@ func TestResolveProviderAPIKey_EmptyValue_WithEnvVar(t *testing.T) {
 
 func TestResolveProviderAPIKey_EmptyValue_NoEnvVar(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 
 	_, err := ResolveProviderAPIKey("unknown-provider", "Unknown")
@@ -59,7 +55,6 @@ func TestResolveProviderAPIKey_EmptyValue_NoEnvVar(t *testing.T) {
 
 func TestResolveProviderAPIKey_DisplayNameInError(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "")
 
@@ -70,7 +65,6 @@ func TestResolveProviderAPIKey_DisplayNameInError(t *testing.T) {
 
 func TestResolveProviderAPIKey_TrimsWhitespace(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "  sk-test-key  ")
 

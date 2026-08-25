@@ -4,7 +4,7 @@ package webui
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -13,8 +13,7 @@ import (
 // handleAPIConfirm handles user responses to security prompts (both approval requests and file security prompts)
 // Expected JSON body: {"request_id": "string", "response": boolean}
 func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -28,14 +27,14 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Printf("handleAPIConfirm: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		ws.log().Warn("invalid security confirmation JSON", slog.Any("err", err))
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if payload.RequestID == "" {
-		log.Printf("handleAPIConfirm: request_id is required")
-		http.Error(w, "request_id is required", http.StatusBadRequest)
+		ws.log().Warn("security confirmation request ID is required")
+		writeJSONErr(w, http.StatusBadRequest, "request_id_required", "request_id is required")
 		return
 	}
 
@@ -53,13 +52,12 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 				"response":   decision.Approved(),
 				"action":     decision.String(),
 			})
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"success": true,
 				"message": "Security approval response recorded",
 			})
-					return
-	}
+			return
+		}
 	}
 
 	// Try security prompt response (legacy boolean path for file content
@@ -71,14 +69,13 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 			"request_id": payload.RequestID,
 			"response":   payload.Response,
 		})
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"message": "Security prompt response recorded",
 		})
 		return
 	}
 
-	log.Printf("handleAPIConfirm: unknown or already handled request_id: %s", payload.RequestID)
-	http.Error(w, "Request ID not found", http.StatusNotFound)
+	ws.log().Warn("security confirmation request not found or already handled", slog.String("request_id", payload.RequestID))
+	writeJSONErr(w, http.StatusNotFound, "request_id_not_found", "Request ID not found")
 }

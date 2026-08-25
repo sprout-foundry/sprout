@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"filippo.io/age"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"golang.org/x/term"
 )
 

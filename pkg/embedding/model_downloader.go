@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -83,7 +85,7 @@ type ModelDownloader struct {
 func NewModelDownloader() *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: DefaultModelDir(),
-		client:   &http.Client{Timeout: defaultDownloadTimeout},
+		client:   newModelDownloadClient(),
 	}
 }
 
@@ -91,7 +93,34 @@ func NewModelDownloader() *ModelDownloader {
 func NewModelDownloaderWithDir(modelDir string) *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: modelDir,
-		client:   &http.Client{Timeout: defaultDownloadTimeout},
+		client:   newModelDownloadClient(),
+	}
+}
+
+// newModelDownloadClient creates an HTTP client tuned for large model downloads
+// from HuggingFace's CDN. Go's default HTTP/2 implementation stalls on certain
+// CDN redirect chains (HF resolves to xet-bridge → us.aws.cdn.hf.co), where a
+// curl download completes in 14s but the Go client hangs until the 5-minute
+// total timeout. The fix layers explicit per-phase timeouts onto an HTTP/1.1
+// transport: ResponseHeaderTimeout catches a stalled server response, and
+// disabling HTTP/2 avoids the multiplexed-stream stall entirely.
+func newModelDownloadClient() *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+	}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   defaultDownloadTimeout,
 	}
 }
 
@@ -343,17 +372,73 @@ func EmbeddingGemma300MConfig() ModelConfig {
 	return ModelConfig{
 		Name: "embeddinggemma-300m",
 
-		ModelURL:          base + "/onnx/model_q4f16.onnx",
-		ModelHash:         "4df4a2a44253865800b8882a497badf67c2707a487267460813f78da339c753f",
-		ModelFilename:     "model_q4f16.onnx",
-		ModelDataURL:      base + "/onnx/model_q4f16.onnx_data",
-		ModelDataHash:     "c9cc456a345e6aa9bc5fb75b54c10b3e0edbb4f80708f749dc4c45dbed5b6edf",
-		ModelDataFilename: "model_q4f16.onnx_data",
+		// q4 (fp32 activations), not q4f16. The ORT CPU backend has no native
+		// fp16 kernels, so the f16 variant is ~25% slower for identical output
+		// dimensions — measured 6.5 vs 4.4-5.3 units/s indexing this repository.
+		// See the variant table above createONNXProvider in embedding_models.go.
+		//
+		// Note for future updates: HuggingFace's ETag on these URLs is NOT the
+		// content sha256 (verified — it disagrees with the bytes it serves).
+		// Download the file and hash it, as the doc comment above says.
+		ModelURL:          base + "/onnx/model_q4.onnx",
+		ModelHash:         "ad1dfee81a70f7944b9b9d1cc6e48075b832881cf33fab2f2b248be78f3f0043",
+		ModelFilename:     "model_q4.onnx",
+		ModelDataURL:      base + "/onnx/model_q4.onnx_data",
+		ModelDataHash:     "599962c3143b040de2dd05e5975be3e9091dd067cacc6a8f7186e3203bab9e02",
+		ModelDataFilename: "model_q4.onnx_data",
 
 		TokenizerURL:  base + "/tokenizer.json",
 		TokenizerHash: "4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47",
 		FullDims:      768, // EmbeddingGemma-300M native output dimension
 		Dims:          768, // Full dimension (no MRL truncation)
+	}
+}
+
+// JinaCodeV2Config returns the config for Jina AI's jina-embeddings-v2-base-code
+// — a 137M parameter BERT encoder purpose-built for code retrieval (trained on
+// The Stack v2 code corpus, Apache-2.0). Used as the code-specific provider in
+// the dual-model architecture (SP-135): code retrieval + duplicate detection
+// routes here; Gemma handles conversation/NL semantics.
+//
+// Ships the quantized (int8) ONNX export (~162 MB). Jina's ONNX graph uses
+// standard ops (MatMulInteger, LayerNormalization, GELU — no com.microsoft
+// custom ops), making it CoreML-EP-friendly (unlike Gemma's export — see SP-134).
+// The model outputs last_hidden_state [batch, seq, 768]; mean pooling is done
+// in Go (JinaProvider.runInference), not by the graph.
+//
+// Source: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
+func JinaCodeV2Config() ModelConfig {
+	const base = "https://huggingface.co/jinaai/jina-embeddings-v2-base-code/resolve/main"
+	return ModelConfig{
+		Name:              "jina-code-v2",
+		ModelURL:          base + "/onnx/model_quantized.onnx",
+		ModelHash:         "",
+		ModelFilename:     "model_quantized.onnx",
+		ModelDataURL:      "", // quantized model is self-contained (no external data)
+		ModelDataHash:     "",
+		ModelDataFilename: "",
+		TokenizerURL:      base + "/tokenizer.json",
+		TokenizerHash:     "",
+		FullDims:          768,
+		Dims:              768,
+	}
+}
+
+// JinaCodeV2SafetensorsConfig returns the config for the fp16 safetensors
+// weights of Jina Code v2, used by the MLX Metal provider (SP-134). The
+// safetensors format is loaded directly by the Go code (no ONNX), keeping
+// the model in fp16 for GPU inference.
+func JinaCodeV2SafetensorsConfig() ModelConfig {
+	const base = "https://huggingface.co/jinaai/jina-embeddings-v2-base-code/resolve/main"
+	return ModelConfig{
+		Name:          "jina-code-v2-mlx",
+		ModelURL:      base + "/model.safetensors",
+		ModelHash:     "8b53bfd4ae2cd586004a6ca4a16551b630a2a1b1d655ff1ee9be1286a1781c5b",
+		ModelFilename: "model.safetensors",
+		TokenizerURL:  base + "/tokenizer.json",
+		TokenizerHash: "b01c78a902aa4facb2f47f95449f48e2f7bbfea5d2472ee2f6ce92323c6f86e5",
+		FullDims:      768,
+		Dims:          768,
 	}
 }
 
@@ -363,4 +448,47 @@ func EmbeddingGemma300MConfig() ModelConfig {
 func DownloadModel(ctx context.Context, modelDir string, cfg ModelConfig) error {
 	d := NewModelDownloaderWithDir(modelDir)
 	return d.Download(ctx, cfg, nil)
+}
+
+// ModelInfo describes the embedding model this build actually loads. It is
+// derived from the same ModelConfig the provider is constructed from, so a UI
+// rendering it can never drift from what is running.
+//
+// The webui settings panel previously hardcoded these strings and reported a
+// model that had not been in use for some time (wrong name, wrong
+// quantization, and 256 dims against an actual 768) — which made the panel
+// actively misleading when reasoning about index size and memory.
+type ModelInfo struct {
+	Name         string `json:"name"`
+	Quantization string `json:"quantization"`
+	Dims         int    `json:"dims"`      // emitted vector width (after MRL truncation)
+	FullDims     int    `json:"full_dims"` // model's native output width
+	Truncated    bool   `json:"truncated"` // Dims < FullDims (Matryoshka truncation active)
+}
+
+// ActiveModelInfo returns the ModelInfo for the model this build uses.
+func ActiveModelInfo() ModelInfo {
+	return modelInfoFor(EmbeddingGemma300MConfig())
+}
+
+func modelInfoFor(cfg ModelConfig) ModelInfo {
+	return ModelInfo{
+		Name:         cfg.Name,
+		Quantization: quantizationFromFilename(cfg.ModelFilename),
+		Dims:         cfg.Dims,
+		FullDims:     cfg.FullDims,
+		Truncated:    cfg.Dims > 0 && cfg.FullDims > 0 && cfg.Dims < cfg.FullDims,
+	}
+}
+
+// quantizationFromFilename extracts the quantization variant from an ONNX
+// filename such as "model_q4f16.onnx" → "Q4F16". Returns "unknown" when the
+// name carries no variant suffix.
+func quantizationFromFilename(name string) string {
+	base := strings.TrimSuffix(name, ".onnx")
+	_, variant, found := strings.Cut(base, "_")
+	if !found || variant == "" {
+		return "unknown"
+	}
+	return strings.ToUpper(variant)
 }

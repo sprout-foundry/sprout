@@ -3,10 +3,10 @@
 package webui
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -261,5 +261,5 @@ func resolveConfigDir() (string, error) {
 		return filepath.Join(abs, "sprout"), nil
 	}
 
-	return filepath.Join(homeDir, ".sprout"), nil
+	return filepath.Join(homeDir, ".config", "sprout"), nil
 }

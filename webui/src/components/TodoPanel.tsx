@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
 import type { TodoItem } from '@sprout/ui';
-import { Check, Circle, Loader2, Minus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, Circle, ClipboardList, Loader2, Minus, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState, useCallback } from 'react';
 import './TodoPanel.css';
 
 interface TodoPanelProps {
@@ -57,9 +57,11 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
 
   if (showLoadingState) {
     return (
-      <div className="todo-panel">
+      <div className="todo-panel" data-testid="context-panel-tasks">
         <div className="todo-header">
-          <span className="todo-title">📋 Tasks</span>
+          <span className="todo-title">
+            <ClipboardList size={14} /> Tasks
+          </span>
           <span className="todo-count-summary">Loading...</span>
         </div>
         <div className="todo-progress-bar">
@@ -79,9 +81,11 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
 
   if (todos.length === 0) {
     return (
-      <div className="todo-panel">
+      <div className="todo-panel" data-testid="context-panel-tasks">
         <div className="todo-header">
-          <span className="todo-title">📋 Tasks</span>
+          <span className="todo-title">
+            <ClipboardList size={14} /> Tasks
+          </span>
           <span className="todo-count-summary">Idle</span>
         </div>
         <div className="todo-progress-bar">
@@ -97,9 +101,12 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
   }
 
   return (
-    <div className="todo-panel">
+    <div className="todo-panel" data-testid="context-panel-tasks">
       <div className="todo-header">
-        <span className="todo-title">📋 Tasks</span>
+        <span className="todo-title">
+          <ClipboardList size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+          Tasks
+        </span>
         <span className="todo-count-summary">
           {total} tasks · {active} active · {completed} done
           {isLoading ? ' · updating…' : ''}
@@ -117,7 +124,8 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
           // Long content gets a chevron so the user can expand to see the full text wrapped.
           const isLong = displayText.length > 60 || showsSecondary;
           const priorityClass = todo.priority ? `todo-priority-${todo.priority}` : '';
-          const itemClass = `todo-item todo-${todo.status} ${priorityClass} ${isExpanded ? 'todo-expanded' : ''}`.trim();
+          const itemClass =
+            `todo-item todo-${todo.status} ${priorityClass} ${isExpanded ? 'todo-expanded' : ''}`.trim();
           return (
             <button
               key={todo.id}
@@ -138,9 +146,7 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
               <span className="todo-status-icon">{getStatusIcon(todo.status)}</span>
               <span className={`todo-content ${isExpanded ? 'todo-content--expanded' : ''}`}>
                 {displayText}
-                {showsSecondary && isExpanded && (
-                  <span className="todo-secondary">{todo.content}</span>
-                )}
+                {showsSecondary && isExpanded && <span className="todo-secondary">{todo.content}</span>}
               </span>
               {isLong && (
                 <span className="todo-chevron" aria-hidden="true">

@@ -75,51 +75,29 @@ type ChangeLog struct {
 }
 
 // InitializeHistoryPaths configures the history storage paths based on configuration
-// This should be called at application startup to ensure correct path resolution
+// This should be called at application startup to ensure correct path resolution.
+//
+// SP-133: changes/ and revisions/ are now workspace-local only (under
+// <workspace>/.sprout/). The global "HistoryScope" branch is removed —
+// it created a dual-role directory when the workspace was $HOME, causing
+// the user-level state dir to accumulate per-repo snapshots.
 func InitializeHistoryPaths(config *configuration.Config) {
-	var cDir, rDir string
-
-	if config == nil {
-		// Try to load config if not provided
-		cfg, err := configuration.Load()
-		if err != nil {
-			cDir = projectChangesDir
-			rDir = projectRevisionsDir
-			pathMu.Lock()
-			changesDir = cDir
-			revisionsDir = rDir
-			pathMu.Unlock()
-			return
-		}
-		config = cfg
+	// History is always project-scoped: .sprout/changes and .sprout/revisions
+	// under the workspace root. No global branch.
+	if config != nil && config.HistoryScope == "global" {
+		log.Printf("[history] warning: history_scope=\"global\" is no longer supported (SP-133); using project-scoped history")
 	}
-
-	// Determine history path based on configuration scope
-	if config.HistoryScope == "global" {
-		// Use global history in ~/.config/sprout/
-		configDir, err := configuration.GetConfigDir()
-		if err != nil {
-			// Fallback to project-scoped if global config dir fails
-			cDir = projectChangesDir
-			rDir = projectRevisionsDir
-		} else {
-			cDir = filepath.Join(configDir, "changes")
-			rDir = filepath.Join(configDir, "revisions")
-		}
-	} else {
-		// Default to project-scoped history (historyScope == "project" or empty)
-		cDir = projectChangesDir
-		rDir = projectRevisionsDir
-	}
-
 	pathMu.Lock()
-	changesDir = cDir
-	revisionsDir = rDir
+	changesDir = projectChangesDir
+	revisionsDir = projectRevisionsDir
 	pathMu.Unlock()
 }
 
 // setPathsForTesting sets changesDir and revisionsDir while holding the mutex.
-// This is intended for use only in tests to avoid data races detected by -race.
+// This is intended for use only in tests in this package to avoid data races
+// detected by -race. Tests in OTHER packages that need to isolate the history
+// storage location must call SetPathsForTesting (the exported wrapper below)
+// — using this unexported function would result in a compile error there.
 func setPathsForTesting(cDir, rDir string) {
 	pathMu.Lock()
 	changesDir = cDir
@@ -127,8 +105,48 @@ func setPathsForTesting(cDir, rDir string) {
 	pathMu.Unlock()
 }
 
+// SetPathsForTesting is the cross-package test hook for redirecting
+// the history storage to a temporary directory. Callers (typically
+// tests in pkg/agent and other consumers) should set both SPROUT_CONFIG
+// (via configuration.NewTestManager) AND call this function with a
+// fresh t.TempDir()-derived path — NewTestManager alone is insufficient
+// because HistoryScope="project" (the default) resolves changesDir and
+// revisionsDir to relative paths under the process CWD, not the test's
+// temp config dir. Without this hook, every test asserting exact change
+// counts (e.g. TestChangeTrackingE2E's "len(allChanges) == 1") reads
+// from the shared .sprout/changes/ in the repo root and fails on runs
+// where prior tests or sessions have left residue.
+//
+// Designed for t.Cleanup use:
+//
+//	tmp := t.TempDir()
+//	history.SetPathsForTesting(filepath.Join(tmp, "changes"), filepath.Join(tmp, "revisions"))
+//	t.Cleanup(func() { history.SetPathsForTesting(originalChanges, originalRevisions) })
+//
+// Reads current values via GetPathsForTesting when restoring.
+//
+// Safe to call from multiple goroutines; takes the same package-level
+// pathMu that the production path resolvers use.
+func SetPathsForTesting(cDir, rDir string) {
+	setPathsForTesting(cDir, rDir)
+}
+
+// GetPathsForTesting is the cross-package test hook for reading the
+// current history storage paths. Tests typically pair this with
+// SetPathsForTesting to capture the pre-test values and restore them
+// in t.Cleanup, so a test that redirects storage to a temp dir does
+// not leak that redirect into sibling tests or later runs of the
+// same test in -count=N invocations.
+//
+// Returns (changesDir, revisionsDir). Safe to call from multiple
+// goroutines.
+func GetPathsForTesting() (string, string) {
+	return getPathsForTesting()
+}
+
 // getPathsForTesting reads changesDir and revisionsDir while holding the mutex.
-// This is intended for use only in tests to avoid data races detected by -race.
+// This is intended for use only in tests in this package to avoid data races
+// detected by -race. Tests in OTHER packages must call GetPathsForTesting.
 func getPathsForTesting() (string, string) {
 	pathMu.RLock()
 	defer pathMu.RUnlock()
@@ -199,8 +217,9 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 		return fmt.Errorf("ensure changes dirs: %w", err)
 	}
 
+	cDir := GetChangesDir()
 	fileRevisionHash := utils.GenerateFileRevisionHash(filename, newCode)
-	changeDir := filepath.Join(GetChangesDir(), fileRevisionHash)
+	changeDir := filepath.Join(cDir, fileRevisionHash)
 	if err := filesystem.EnsureDir(changeDir); err != nil {
 		return fmt.Errorf("failed to create change directory: %w", err)
 	}
@@ -278,6 +297,15 @@ func updateChangeStatus(fileRevisionHash, status string) error {
 	}
 
 	return nil
+}
+
+// MarkChangeSuperseded marks a change record as "superseded" — the
+// change has been committed to version control and is no longer a
+// recoverable agent edit. This is used by the SP-077 sweep in
+// ChangeTracker.Commit() to prevent old snapshots from being reverted
+// after their content has been committed to git HEAD.
+func MarkChangeSuperseded(fileRevisionHash string) error {
+	return updateChangeStatus(fileRevisionHash, "superseded")
 }
 
 // fetchAllChanges retrieves all change logs from the filesystem.

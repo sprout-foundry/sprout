@@ -7,8 +7,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -42,14 +42,14 @@ func (h *listDirHandler) Definition() ToolDefinition {
 
 func (h *listDirHandler) Validate(args map[string]any) error {
 	// If path is provided, validate it's a string
-	if path, exists := args["path"]; exists && path != nil {
+	if path, exists := lookupKey(args, "path"); exists && path != nil {
 		if _, ok := path.(string); !ok {
 			return fmt.Errorf("parameter 'path' must be a string, got %T", path)
 		}
 	}
 
 	// If show_hidden is provided, validate it's a boolean
-	if sh, exists := args["show_hidden"]; exists && sh != nil {
+	if sh, exists := lookupKey(args, "show_hidden"); exists && sh != nil {
 		if _, ok := sh.(bool); !ok {
 			return fmt.Errorf("parameter 'show_hidden' must be a boolean, got %T", sh)
 		}
@@ -61,20 +61,39 @@ func (h *listDirHandler) Validate(args map[string]any) error {
 func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	// Extract parameters
 	targetPath := "."
-	if p, exists := args["path"]; exists && p != nil {
+	if p, exists := lookupKey(args, "path"); exists && p != nil {
 		if s, ok := p.(string); ok && strings.TrimSpace(s) != "" {
 			targetPath = s
 		}
 	}
 
 	showHidden := false
-	if sh, exists := args["show_hidden"]; exists && sh != nil {
+	if sh, exists := lookupKey(args, "show_hidden"); exists && sh != nil {
 		if b, ok := sh.(bool); ok {
 			showHidden = b
 		}
 	}
 
-	// Resolve path securely
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Allow paths skip the gate entirely and Deny paths
+	// return a typed error immediately.
+	preRes, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "list_directory", targetPath)
+	if decision == "deny" {
+		return ToolResult{Output: fmt.Sprintf("list_directory blocked: %s is declared read_only in the active workflow's allowed_paths", targetPath), IsError: true},
+			fmt.Errorf("list_directory blocked: %s is declared read_only", targetPath)
+	}
+	if decision == "allow" {
+		// Path is workspace/tmp/allowlisted — preRes is already the
+		// resolved path from SafeResolvePath; use it directly.
+		return h.listDirectoryContents(ctx, env, preRes, showHidden)
+	}
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if ctx2, approved := promptForOffWorkspacePath(ctx, env, "list_directory", targetPath, preRes, "read"); approved {
+		ctx = ctx2
+	}
+
+	// Resolve path securely. Off-workspace directories will fail with
+	// the raw filesystem error since the interactive gate is gone.
 	resolvedPath, err := filesystem.SafeResolvePathWithBypass(ctx, targetPath)
 	if err != nil {
 		return ToolResult{
@@ -82,6 +101,12 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 			IsError: true,
 		}, fmt.Errorf("resolve directory path: %w", err)
 	}
+
+	return h.listDirectoryContents(ctx, env, resolvedPath, showHidden)
+}
+
+// listDirectoryContents does the actual directory listing given an already-resolved path.
+func (h *listDirHandler) listDirectoryContents(ctx context.Context, env ToolEnv, resolvedPath string, showHidden bool) (ToolResult, error) {
 
 	// Check that it's a directory
 	info, err := os.Stat(resolvedPath)
@@ -98,16 +123,8 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		}, fmt.Errorf("path is not a directory: %s", resolvedPath)
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "list_directory",
-			"path": resolvedPath,
-		})
-	}
-
-	// Read directory contents
-	entries, err := os.ReadDir(resolvedPath)
+	// Read directory contents (readDirCompat works on js/wasm too).
+	entries, err := readDirCompat(resolvedPath)
 	if err != nil {
 		return ToolResult{
 			Output:  "",
@@ -156,26 +173,16 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		sb.WriteString(fmt.Sprintf("%-45s %12s  %s\n", name, sizeStr, entryType))
 
 		structuredResults = append(structuredResults, map[string]any{
-			"name":    name,
-			"isDir":   isDir,
-			"size":    size,
-			"type":    entryType,
+			"name":  name,
+			"isDir": isDir,
+			"size":  size,
+			"type":  entryType,
 		})
 	}
 
 	totalEntries := len(structuredResults)
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("%d entries found\n", totalEntries))
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":       "list_directory",
-			"path":       resolvedPath,
-			"total":      totalEntries,
-			"showHidden": showHidden,
-		})
-	}
 
 	// Write to output writer if available
 	if env.OutputWriter != nil {
@@ -188,7 +195,11 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	}, nil
 }
 
-// formatSize formats a file size in bytes to a human-readable string.
+func (h *listDirHandler) Aliases() []string      { return nil }
+func (h *listDirHandler) Timeout() time.Duration { return 30 * time.Second }
+func (h *listDirHandler) MaxResultSize() int     { return 0 }
+func (h *listDirHandler) SafeForParallel() bool  { return false }
+func (h *listDirHandler) Interactive() bool      { return false }
 func formatSize(bytes int64) string {
 	switch {
 	case bytes >= 1024*1024*1024:

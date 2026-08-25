@@ -8,8 +8,8 @@ import (
 // TestGeneratePromptForMode tests the GeneratePromptForMode function with various modes.
 func TestGeneratePromptForMode(t *testing.T) {
 	tests := []struct {
-		name        string
-		mode        string
+		name         string
+		mode         string
 		wantContains []string // Substrings that should be present in the result
 	}{
 		{
@@ -226,35 +226,13 @@ func TestGetOCRPrompt(t *testing.T) {
 	}
 }
 
-// TestGetPDFOCRPrompt tests the GetPDFOCRPrompt function.
-func TestGetPDFOCRPrompt(t *testing.T) {
-	got := GetPDFOCRPrompt()
-
-	if got == "" {
-		t.Error("GetPDFOCRPrompt() returned empty string")
-	}
-
-	expectedKeywords := []string{
-		"Extract all text",
-		"PDF document",
-		"preserving",
-		"structure",
-	}
-
-	for _, keyword := range expectedKeywords {
-		if !strings.Contains(got, keyword) {
-			t.Errorf("GetPDFOCRPrompt() does not contain expected keyword %q\nGot: %s", keyword, got)
-		}
-	}
-}
-
 // TestCreateVisionPrompt tests the CreateVisionPrompt method of VisionProcessor.
 func TestCreateVisionPrompt(t *testing.T) {
 	vp := &VisionProcessor{}
 
 	tests := []struct {
-		name        string
-		imagePath   string
+		name         string
+		imagePath    string
 		wantContains []string
 	}{
 		{

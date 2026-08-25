@@ -3,7 +3,7 @@
 package webui
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -22,19 +22,19 @@ import (
 // for an unrecognized payload.
 //
 // Three categories of outbound message land here:
-//   1. Connection control: connection_status, ping, pong, chat_run_restored
-//   2. UI events from the EventBus (events.EventType*)
-//   3. Per-feature responses: stats_update, error
+//  1. Connection control: connection_status, ping, pong, chat_run_restored
+//  2. UI events from the EventBus (events.EventType*)
+//  3. Per-feature responses: stats_update, error
 //
 // Sync with pkg/events constants — the bus events all flow through the
 // outbound path, so any new EventType must appear in this list too.
 var allowedOutboundMessageTypes = map[string]struct{}{
 	// Connection control
-	"connection_status":          {},
-	"ping":                       {},
-	"pong":                       {},
-	"heartbeat_ack":              {},
-	"stats_update":               {},
+	"connection_status": {},
+	"ping":              {},
+	"pong":              {},
+	"heartbeat_ack":     {},
+	"stats_update":      {},
 	// Terminal WebSocket protocol (pkg/webui/terminal_websocket.go).
 	// All emitted by the terminal handler and consumed by the React
 	// TerminalPane. Forgetting any of these here strands the terminal
@@ -50,43 +50,46 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	"resize_ack":                 {},
 	"focus_ack":                  {},
 	"blur_ack":                   {},
-	wsMessageTypeChatRunRestored: {},      // SP-034-2d
+	wsMessageTypeChatRunRestored: {}, // SP-034-2d
 	"connection_state":           {},
-	"session_conflict":           {},      // SP-046: sent to new device on conflict
-	"session_displaced":          {},      // SP-046: sent to old device being evicted
+	"session_conflict":           {}, // SP-046: sent to new device on conflict
+	"session_displaced":          {}, // SP-046: sent to old device being evicted
 
 	// UI events (events.EventType*) — note: events.EventTypeError ==
 	// "error", so it's the canonical entry for the error envelope used
 	// throughout the codebase. Listed once below.
-	events.EventTypeQueryStarted:            {},
-	events.EventTypeQueryProgress:           {},
-	events.EventTypeQueryCompleted:          {},
-	events.EventTypeError:                   {},
-	events.EventTypeToolExecution:           {},
-	events.EventTypeToolStart:               {},
-	events.EventTypeToolEnd:                 {},
-	events.EventTypeSubagentActivity:        {},
+	events.EventTypeQueryStarted:                   {},
+	events.EventTypeQueryProgress:                  {},
+	events.EventTypeQueryCompleted:                 {},
+	events.EventTypeError:                          {},
+	events.EventTypeToolExecution:                  {},
+	events.EventTypeToolStart:                      {},
+	events.EventTypeToolEnd:                        {},
+	events.EventTypeSubagentActivity:               {},
 	events.EventTypeDelegateClarificationRequested: {},
 	events.EventTypeDelegateClarificationResponded: {},
-	events.EventTypeTodoUpdate:              {},
-	events.EventTypeFileChanged:             {},
-	events.EventTypeWorkspacePatch:          {},
-	events.EventTypeFileContentChanged:      {},
-	events.EventTypeStreamChunk:             {},
-	events.EventTypeMetricsUpdate:           {},
-	events.EventTypeValidation:              {},
-	events.EventTypeSecurityApprovalRequest: {},
-	events.EventTypeSecurityPromptRequest:   {},
-	events.EventTypeAskUserRequest:          {},
-	events.EventTypeInputRequired:           {},
-	events.EventTypeAgentMessage:            {},
-	events.EventTypeProviderNoCredential:    {},
-	events.EventTypeWorkspaceChanged:        {},
-	events.EventTypeSessionTerminated:       {},
-	events.EventTypeDriftDetected:           {},
-	events.EventTypeSessionChanged:          {}, // SP-034-3e
-	events.EventTypeCompactStarted:          {},
-	events.EventTypeCompactCompleted:        {},
+	events.EventTypeTodoUpdate:                     {},
+	events.EventTypeFileChanged:                    {},
+	events.EventTypeWorkspacePatch:                 {},
+	events.EventTypeFileContentChanged:             {},
+	events.EventTypeStreamChunk:                    {},
+	events.EventTypeMetricsUpdate:                  {},
+	events.EventTypeValidation:                     {},
+	events.EventTypeSecurityApprovalRequest:        {},
+	events.EventTypeSecurityPromptRequest:          {},
+	events.EventTypeAskUserRequest:                 {},
+	events.EventTypeEditApprovalRequest:            {},
+	events.EventTypeShellApprovalRequest:           {},
+	events.EventTypePasswordRequest:                {},
+	events.EventTypeInputRequired:                  {},
+	events.EventTypeAgentMessage:                   {},
+	events.EventTypeProviderNoCredential:           {},
+	events.EventTypeWorkspaceChanged:               {},
+	events.EventTypeSessionTerminated:              {},
+	events.EventTypeDriftDetected:                  {},
+	events.EventTypeSessionChanged:                 {}, // SP-034-3e
+	events.EventTypeCompactStarted:                 {},
+	events.EventTypeCompactCompleted:               {},
 
 	// Cold hydration (SP-046) — server streams workspace files on first-load
 	AllowedMessageTypeHydrateManifest: {},
@@ -94,10 +97,16 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	AllowedMessageTypeHydrateComplete: {},
 
 	// Sync recovery (SP-046) — server-side failure recovery paths
-	"sync_reconcile":      {},
-	"sync_replay_start":   {},
-	"sync_replay_file":    {},
+	"sync_reconcile":       {},
+	"sync_replay_start":    {},
+	"sync_replay_file":     {},
 	"sync_replay_complete": {},
+
+	// SP-114 Phase 2c: live streaming of /api/command/execute stdout
+	// over the chat session's WebSocket. Chunks arrive in order with
+	// monotonic seq; the final chunk has is_final=true.
+	events.EventTypeCommandOutput:        {},
+	events.EventTypeCommandOutputDropped: {},
 }
 
 // devModeCached caches the SPROUT_DEV env check so we don't re-parse it
@@ -131,7 +140,7 @@ func isDevBuild() bool {
 func validateOutboundMessageType(msgType string) bool {
 	if msgType == "" {
 		// Empty type is always invalid — should never happen in practice.
-		log.Printf("webui: outbound message with empty type (dropping)")
+		webuiLogger.Warn("dropping outbound message with empty type")
 		return false
 	}
 	if _, ok := allowedOutboundMessageTypes[msgType]; ok {
@@ -141,7 +150,7 @@ func validateOutboundMessageType(msgType string) bool {
 		panic("webui: unknown outbound WebSocket message type: " + msgType +
 			" — add it to allowedOutboundMessageTypes in websocket_outbound_registry.go")
 	}
-	log.Printf("webui: dropping outbound message with unrecognized type %q (add to allowedOutboundMessageTypes if intentional)", msgType)
+	webuiLogger.Warn("dropping outbound message with unrecognized type", slog.String("message_type", msgType), slog.String("remediation", "add to allowedOutboundMessageTypes if intentional"))
 	return false
 }
 

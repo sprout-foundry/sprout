@@ -2,12 +2,15 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -40,16 +43,53 @@ const (
 )
 
 // UsageProvider is implemented by commands that want to surface a longer
-// per-command help string via `/help <name>`. Commands that don't implement
-// it fall back to their Description().
+// per-command help string via `/help <name>`.
 type UsageProvider interface {
 	Usage() string
+}
+
+// CompletableCommand is implemented by commands that support argument completion.
+// Complete is only called when the cursor is at end-of-line.
+type CompletableCommand interface {
+	Command
+	Complete(args []string, chatAgent *agent.Agent) []string
+}
+
+// SteerCapable is implemented by commands that can safely run mid-turn.
+type SteerCapable interface {
+	SafeDuringSteer() bool
+}
+
+// OutputCommand is implemented by commands that accept an output writer.
+type OutputCommand interface {
+	SetOutput(io.Writer)
+}
+
+var (
+	defaultRegistry     *CommandRegistry
+	defaultRegistryOnce sync.Once
+)
+
+// DefaultRegistry returns the process-wide default command registry.
+func DefaultRegistry() *CommandRegistry {
+	defaultRegistryOnce.Do(func() {
+		defaultRegistry = NewCommandRegistry()
+	})
+	return defaultRegistry
 }
 
 // CommandRegistry manages all available slash commands
 type CommandRegistry struct {
 	commands map[string]Command
 	aliases  map[string]string // short → canonical command name
+
+	outputWriter io.Writer // when non-nil, passed to OutputCommand implementations
+
+	candidatesOnce  sync.Once
+	candidatesCache []string
+
+	steerCandidatesOnce  sync.Once
+	steerCandidatesCache []string
 }
 
 // NewCommandRegistry creates a new command registry
@@ -65,12 +105,12 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&ProvidersCommand{})
 	registry.Register(&SessionsCommand{})
 	registry.Register(&ClearCommand{})
+	registry.Register(&ForkCommand{})
 	registry.Register(&InitCommand{})
 	registry.Register(&ExitCommand{})
 	registry.Register(&CommitCommand{})
 	registry.Register(&ExecCommand{})
 	registry.Register(&ShellCommand{})
-	registry.Register(&StatsCommand{})
 
 	// Register subagent configuration commands
 	registry.Register(&SubagentConfigCommand{configType: "provider"})
@@ -94,8 +134,6 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register code review command
 	registry.Register(&ReviewCommand{})
 	registry.Register(&ReviewDeepCommand{})
-	registry.Register(&SelfReviewCommand{})
-	registry.Register(&SelfReviewGateCommand{})
 
 	// Register compaction command
 	registry.Register(&CompactCommand{})
@@ -106,24 +144,78 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register indexing command
 	registry.Register(&IndexCommand{})
 
+	// Register search command
+	registry.Register(&SearchCommand{})
+
+	// Register recall command
+	registry.Register(&RecallCommand{})
+
+	// Register skill command
+	registry.Register(&SkillCommand{})
+
 	// Register edit command
 	registry.Register(&EditCommand{})
 
 	// Register extend command
 
-	// SP-058: risk profile management
+	// risk profile management
 	registry.Register(&RiskProfileCommand{})
+
+	// Cost control
+	registry.Register(&MaxContextCommand{})
+
+	// Low-Context Mode inspection and override
+	registry.Register(&ContextCommand{})
 
 	registry.Register(&SetupCommand{})
 
-	// SP-048-2d: short aliases for the most-used commands. Aliases resolve
-	// to canonical names during dispatch and appear in tab completion.
+	// interactive settings browser
+	registry.Register(&SettingsCommand{})
+
+	// visual usage dashboard
+	registry.Register(&UsageCommand{})
+
+	// output verbosity and tool invocation display
+	registry.Register(&VerboseCommand{})
+	registry.Register(&ToolsCommand{})
+
+	// Credential management
+	registry.Register(&KeysCommand{})
+	registry.RegisterAlias("key", "keys")
+
+	// Custom provider management (in-chat wrapper for `sprout custom`)
+	registry.Register(&CustomCommand{})
+
+	// Agent state overview
+	registry.Register(&InfoCommand{})
+
+	// Code intelligence graph management
+	registry.Register(&CodegraphCommand{})
+
+	// Short aliases for the most-used commands.
 	registry.RegisterAlias("m", "model")
 	registry.RegisterAlias("p", "provider")
 	registry.RegisterAlias("x", "exit")
 	registry.RegisterAlias("q", "exit")
 	registry.RegisterAlias("?", "help")
 	registry.RegisterAlias("h", "help")
+	registry.RegisterAlias("stats", "usage")
+	registry.RegisterAlias("c", "commit")
+	registry.RegisterAlias("s", "search")
+	registry.RegisterAlias("i", "index")
+	registry.RegisterAlias("e", "edit")
+	registry.RegisterAlias("r", "review")
+	// SC-7: aliases for remaining high-frequency commands.
+	registry.RegisterAlias("cl", "clear")
+	registry.RegisterAlias("cp", "compact")
+	registry.RegisterAlias("st", "status")
+	registry.RegisterAlias("rb", "rollback")
+	registry.RegisterAlias("rw", "rewind")
+	registry.RegisterAlias("ch", "changes")
+	registry.RegisterAlias("cg", "codegraph")
+	// common alternative names for commands
+	registry.RegisterAlias("new", "clear")
+	registry.RegisterAlias("resume", "sessions")
 
 	return registry
 }
@@ -152,23 +244,69 @@ func (r *CommandRegistry) AliasesOf(canonical string) []string {
 
 // CompletionCandidates returns all valid slash-command names (canonical
 // plus aliases) sorted alphabetically. Used by the tab-completion
-// CompletionProvider in the input reader.
+// CompletionProvider in the input reader. The result is cached since
+// the registry is immutable after construction.
 func (r *CommandRegistry) CompletionCandidates() []string {
-	out := make([]string, 0, len(r.commands)+len(r.aliases))
-	for name := range r.commands {
-		out = append(out, name)
-	}
-	for alias := range r.aliases {
-		out = append(out, alias)
-	}
-	// Stable sort so cycle order is deterministic for the user.
-	sort.Strings(out)
-	return out
+	r.candidatesOnce.Do(func() {
+		out := make([]string, 0, len(r.commands)+len(r.aliases))
+		for name := range r.commands {
+			out = append(out, name)
+		}
+		for alias := range r.aliases {
+			out = append(out, alias)
+		}
+		sort.Strings(out)
+		r.candidatesCache = out
+	})
+	return r.candidatesCache
+}
+
+// SteerCompletionCandidates returns the slash-command names (canonical
+// plus aliases) that are safe to run mid-turn, sorted alphabetically.
+// A command qualifies when it implements SteerCapable and reports
+// SafeDuringSteer() == true — the same gate the steer panel's execution
+// path uses. Aliases resolve through their canonical command. The result
+// is cached since the registry is immutable after construction.
+func (r *CommandRegistry) SteerCompletionCandidates() []string {
+	r.steerCandidatesOnce.Do(func() {
+		out := make([]string, 0, len(r.commands)+len(r.aliases))
+		for name, cmd := range r.commands {
+			if sc, ok := cmd.(SteerCapable); ok && sc.SafeDuringSteer() {
+				out = append(out, name)
+			}
+		}
+		for alias, canonical := range r.aliases {
+			if cmd, ok := r.commands[canonical]; ok {
+				if sc, ok := cmd.(SteerCapable); ok && sc.SafeDuringSteer() {
+					out = append(out, alias)
+				}
+			}
+		}
+		sort.Strings(out)
+		r.steerCandidatesCache = out
+	})
+	return r.steerCandidatesCache
 }
 
 // Register adds a command to the registry
 func (r *CommandRegistry) Register(cmd Command) {
 	r.commands[cmd.Name()] = cmd
+}
+
+// SetOutput sets the output writer for subsequent command executions.
+// Only commands implementing OutputCommand will use it. When nil,
+// commands default to os.Stdout (their normal behavior).
+func (r *CommandRegistry) SetOutput(w io.Writer) {
+	r.outputWriter = w
+	if w == nil {
+		// Clear any writer retained by a previously executed command so a
+		// reused registry falls back to normal CLI output.
+		for _, cmd := range r.commands {
+			if oc, ok := cmd.(OutputCommand); ok {
+				oc.SetOutput(nil)
+			}
+		}
+	}
 }
 
 // Execute processes a slash command input
@@ -203,7 +341,7 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		commandName = "exec"
 	}
 
-	// Resolve aliases (SP-048-2d) before dispatching.
+	// Resolve aliases before dispatching.
 	if canonical, ok := r.aliases[commandName]; ok {
 		commandName = canonical
 	}
@@ -211,12 +349,25 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 	// Find and execute command
 	cmd, exists := r.commands[commandName]
 	if !exists {
-		// SP-048-2b: did-you-mean suggestions in the error message.
+		// did-you-mean suggestions in the error message.
 		suggestions := r.SuggestCommands(commandName, 2)
 		if len(suggestions) > 0 {
 			return fmt.Errorf("unknown command: %s — did you mean /%s?", commandName, strings.Join(suggestions, " or /"))
 		}
 		return fmt.Errorf("unknown command: %s", commandName)
+	}
+
+	// Wire the agent's interrupt context into commands that support
+	// SetContext, so Stop/Ctrl+C can abort long-running LLM calls.
+	if contextSetter, ok := cmd.(interface{ SetContext(context.Context) }); ok && chatAgent != nil {
+		contextSetter.SetContext(chatAgent.InterruptCtx())
+	}
+
+	// Wire the output writer if the command supports it.
+	if r.outputWriter != nil {
+		if oc, ok := cmd.(OutputCommand); ok {
+			oc.SetOutput(r.outputWriter)
+		}
 	}
 
 	// Check if command supports JSON output (--json flag is in args)
@@ -268,7 +419,7 @@ func isLikelySlashCommandName(name string) bool {
 }
 
 // GetCommand returns a command by name. If name matches an alias, the
-// canonical command is returned (SP-048-2d).
+// canonical command is returned.
 func (r *CommandRegistry) GetCommand(name string) (Command, bool) {
 	if canonical, ok := r.aliases[name]; ok {
 		name = canonical
@@ -329,9 +480,14 @@ func WriteToOutput(output string) {
 	os.Stdout.WriteString(output)
 }
 
-// WriteJSONToOutput writes a JSON representation of value to stdout
-func WriteJSONToOutput(value interface{}) error {
-	encoder := json.NewEncoder(os.Stdout)
+// WriteJSON writes an indented JSON representation of value to w.
+func WriteJSON(w io.Writer, value interface{}) error {
+	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(value)
+}
+
+// WriteJSONToOutput writes a JSON representation of value to stdout
+func WriteJSONToOutput(value interface{}) error {
+	return WriteJSON(os.Stdout, value)
 }

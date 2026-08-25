@@ -12,18 +12,17 @@ interface WorkspaceBarProps {
 }
 
 interface BarState {
-  workspacePath: string;
   hostAlias: string | null; // null = local
   isRemote: boolean;
 }
 
 const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
-  const [bar, setBar] = useState<BarState>({ workspacePath: '', hostAlias: null, isRemote: false });
+  const [bar, setBar] = useState<BarState>({ hostAlias: null, isRemote: false });
   const apiService = useRef(ApiService.getInstance());
 
   useEffect(() => {
     if (!isConnected) {
-      setBar({ workspacePath: '', hostAlias: null, isRemote: false });
+      setBar({ hostAlias: null, isRemote: false });
       return;
     }
     let cancelled = false;
@@ -31,16 +30,18 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
       .getWorkspace()
       .then((ws) => {
         if (cancelled) return;
-        const path = ws.workspace_root || '';
         const homePath = ws.ssh_context?.home_path || '';
-        const collapsed = homePath && path.startsWith(homePath) ? `~${path.slice(homePath.length)}` : path;
+        const collapsed =
+          ws.workspace_root && homePath && ws.workspace_root.startsWith(homePath)
+            ? `~${ws.workspace_root.slice(homePath.length)}`
+            : ws.workspace_root || '';
         // Prefer ssh_context from the API; fall back to the proxy base set by the
         // local server when serving the SSH proxy page (SPROUT_PROXY_BASE).
         const proxyCtx = getSSHProxyContext();
         const isRemote = Boolean(ws.ssh_context?.is_remote) || Boolean(proxyCtx);
         const hostAlias =
           (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
-        setBar({ workspacePath: collapsed, hostAlias, isRemote });
+        setBar({ hostAlias, isRemote });
       })
       .catch((err) => {
         debugLog('[WorkspaceBar] Failed to fetch workspace:', err);
@@ -57,14 +58,16 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
       apiService.current
         .getWorkspace()
         .then((ws) => {
-          const path = ws.workspace_root || '';
           const homePath = ws.ssh_context?.home_path || '';
-          const collapsed = homePath && path.startsWith(homePath) ? `~${path.slice(homePath.length)}` : path;
+          const collapsed =
+            ws.workspace_root && homePath && ws.workspace_root.startsWith(homePath)
+              ? `~${ws.workspace_root.slice(homePath.length)}`
+              : ws.workspace_root || '';
           const proxyCtx = getSSHProxyContext();
           const isRemote = Boolean(ws.ssh_context?.is_remote) || Boolean(proxyCtx);
           const hostAlias =
             (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
-          setBar({ workspacePath: collapsed, hostAlias, isRemote });
+          setBar({ hostAlias, isRemote });
         })
         .catch((err) => {
           debugLog('[WorkspaceBar] Failed to refresh workspace:', err);
@@ -79,19 +82,13 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
 
   return (
     <div className={`workspace-bar${bar.isRemote ? ' workspace-bar--remote' : ''}`}>
-      <span className="workspace-bar-host">
+      <span className="workspace-bar-host" aria-hidden="true">
         {bar.isRemote ? (
           <Server size={11} className="workspace-bar-icon workspace-bar-icon--remote" />
         ) : (
           <Monitor size={11} className="workspace-bar-icon" />
         )}
         <span className="workspace-bar-host-name">{bar.hostAlias ?? 'Local'}</span>
-      </span>
-      <span className="workspace-bar-sep" aria-hidden="true">
-        /
-      </span>
-      <span className="workspace-bar-path" title={bar.workspacePath}>
-        {bar.workspacePath || '—'}
       </span>
     </div>
   );

@@ -2,6 +2,7 @@ import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { CodeBlock } from '@sprout/ui';
 import { stripAnsiCodes } from '../utils/ansi';
 import { flattenMarkdownText, isMarkdownCodeBlock, isLocalFilePath } from '../utils/markdownCode';
 import './MarkdownPreview.css';
@@ -13,7 +14,7 @@ interface MarkdownPreviewProps {
 
 function MarkdownPreview({ content, scrollRef }: MarkdownPreviewProps): JSX.Element {
   return (
-    <div className="markdown-preview">
+    <div className="markdown-preview" data-testid="markdown-preview">
       <div className="markdown-preview-body" ref={scrollRef}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -33,12 +34,9 @@ function MarkdownPreview({ content, scrollRef }: MarkdownPreviewProps): JSX.Elem
               }
 
               return (
-                <pre className="code-block">
-                  <span className="code-language">{language || 'text'}</span>
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                </pre>
+                <CodeBlock language={language || 'text'} codeText={codeText} className={className}>
+                  {children}
+                </CodeBlock>
               );
             },
             a({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) {

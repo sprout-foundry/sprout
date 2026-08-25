@@ -8,11 +8,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 const maxCommandLength = 65536 // 64 KB — well below PTY and shell limits
@@ -21,6 +23,19 @@ const maxCommandLength = 65536 // 64 KB — well below PTY and shell limits
 var (
 	newlineRegex = regexp.MustCompile(`\r?\n`)
 )
+
+// closeSessionAfterGracePeriod runs tm.CloseSession in a goroutine after a
+// 100ms grace window. Without a recover here, a panic inside CloseSession
+// would crash the daemon and leave the PTY reader goroutine and shell process
+// alive (the cleanup that CloseSession performs is what stops both).
+func closeSessionAfterGracePeriod(tm *TerminalManager, sid, reason string) {
+	utils.SafeGo(webuiLogger, "PTY session deferred close", func() {
+		time.Sleep(100 * time.Millisecond)
+		if err := tm.CloseSession(sid); err != nil {
+			webuiLogger.Error("PTY session deferred close failed", slog.String("session_id", sid), slog.String("reason", reason), slog.Any("err", err))
+		}
+	}, slog.String("session_id", sid), slog.String("reason", reason))
+}
 
 // ExecuteCommandAndWait executes a command synchronously on a hidden PTY session,
 // waiting for command completion and returning the output and exit code.
@@ -189,14 +204,9 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 						_, _ = session.Pty.Write([]byte{3})
 					}
 					session.mutex.RUnlock()
-					log.Printf("PTY session %s: tool deadline exceeded but background cap reached for chat %q, killing", session.ID, chatID)
+					webuiLogger.Warn("PTY tool deadline exceeded and background cap reached; killing session", slog.String("session_id", session.ID), slog.String("chat_id", chatID))
 					sid := session.ID
-					go func() {
-						time.Sleep(100 * time.Millisecond)
-						if err := tm.CloseSession(sid); err != nil {
-							log.Printf("PTY session %s: failed to close after cap hit: %v", sid, err)
-						}
-					}()
+					closeSessionAfterGracePeriod(tm, sid, "cap hit")
 					return stripANSI(buf.String()), -1, tm.errBackgroundCapReached(chatID)
 				}
 
@@ -211,7 +221,7 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				session.mutex.Unlock()
 
 				accumulatedOutput := stripANSI(buf.String())
-				log.Printf("PTY session %s: tool deadline exceeded, promoting to background", session.ID)
+				webuiLogger.Info("PTY tool deadline exceeded; promoting session to background", slog.String("session_id", session.ID))
 				return accumulatedOutput, -1, fmt.Errorf("COMMAND_PROMOTED_TO_BACKGROUND:%s", session.ID)
 			}
 			// User interrupt — Ctrl+C and close the session for recreation.
@@ -220,14 +230,9 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				_, _ = session.Pty.Write([]byte{3})
 			}
 			session.mutex.RUnlock()
-			log.Printf("PTY session %s: user cancelled, closing session for recreation", session.ID)
+			webuiLogger.Info("PTY session cancelled by user; closing for recreation", slog.String("session_id", session.ID))
 			sid := session.ID
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				if err := tm.CloseSession(sid); err != nil {
-					log.Printf("PTY session %s: failed to close after user cancel: %v", sid, err)
-				}
-			}()
+			closeSessionAfterGracePeriod(tm, sid, "user cancel")
 			return stripANSI(buf.String()), -1, callerErr
 
 		case <-inactivityTimer.C:
@@ -241,14 +246,9 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				_, _ = session.Pty.Write([]byte{3})
 			}
 			session.mutex.RUnlock()
-			log.Printf("PTY session %s: no output for %s, closing as stuck", session.ID, inactivityTimeout)
+			webuiLogger.Warn("PTY session inactive; closing as stuck", slog.String("session_id", session.ID), slog.Duration("inactivity", inactivityTimeout))
 			sid := session.ID
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				if err := tm.CloseSession(sid); err != nil {
-					log.Printf("PTY session %s: failed to close after stuck timeout: %v", sid, err)
-				}
-			}()
+			closeSessionAfterGracePeriod(tm, sid, "stuck timeout")
 			return stripANSI(buf.String()), -1, fmt.Errorf("PTY session %s stuck (no output for %s)", session.ID, inactivityTimeout)
 
 		case chunk, ok := <-sub.ch:

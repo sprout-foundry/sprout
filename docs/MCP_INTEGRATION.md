@@ -4,7 +4,7 @@ This guide explains how MCP servers are integrated with the Sprout agent and how
 
 ## Overview
 
-MCP servers extend Sprout's capabilities by providing external tools and services to the agent. The GitHub MCP server is the prototype implementation.
+MCP servers extend Sprout's capabilities by providing external tools and services to the agent. Servers are configured via `sprout mcp add`; see `pkg/mcp/registry.go` for built-in templates.
 
 ## How MCP Integration Works
 
@@ -14,8 +14,8 @@ MCP servers extend Sprout's capabilities by providing external tools and service
 Sprout Agent
     ├── Base Tools (file operations, shell, etc.)
     └── MCP Manager
-        └── MCP Servers (GitHub, etc.)
-            └── MCP Tools (list_issues, create_pr, etc.)
+        └── MCP Servers (user-configured)
+            └── MCP Tools (provided by each server)
 ```
 
 ### 2. Key Components
@@ -30,7 +30,7 @@ Sprout Agent
 ### 3. Tool Discovery Flow
 
 1. Agent starts → Creates MCP manager
-2. Reads MCP config from `~/.config/sprout/config.json`
+2. Reads MCP config from `~/.config/sprout/mcp_config.json` (legacy, added via `sprout mcp add`) and `~/.config/sprout/config.json` (MCP stanza). Servers from both sources are merged.
 3. If enabled and auto-start is true → Starts configured servers
 4. When processing messages → Calls `getMCPTools()` to get available tools
 5. Tools are prefixed with `mcp_<server>_<tool>` (e.g., `mcp_github_list_issues`)
@@ -95,19 +95,22 @@ Example configuration:
   "mcp": {
     "enabled": true,
     "auto_start": true,
-    "servers": [
-      {
+    "servers": {
+      "github": {
         "name": "github",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-github"],
-        "env": {
-          "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token"
+        "env": {},
+        "credentials": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_TOKEN"
         }
       }
-    ]
+    }
   }
 }
 ```
+
+> **Note:** `servers` is a map of server-name → server-config (not an array). Place secrets in the `credentials` field rather than `env` — `credentials` entries are stored in the credential store and never written to disk in plaintext. See `pkg/mcp/types.go` for the full `MCPServerConfig` schema.
 
 ### 2. Server Requirements
 

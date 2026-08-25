@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// handleSearchMemories searches memory files by semantic similarity.
-// It embeds the query and searches the ConversationStore for records
-// with Type "memory", returning ranked results.
 func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	query, ok := args["query"].(string)
 	if !ok || query == "" {
-		return "", fmt.Errorf("query is required: provide a natural language description of what you're looking for")
+		return "", agenterrors.NewValidation("query is required: provide a natural language description of what you're looking for", nil)
 	}
 
 	topK := 5
@@ -26,7 +27,7 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		}
 	}
 
-	threshold := float32(0.75)
+	threshold := float32(embedding.DefaultConversationSearchThreshold)
 	if t, ok := args["threshold"]; ok {
 		switch v := t.(type) {
 		case float64:
@@ -38,7 +39,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		}
 	}
 
-	// Clamp threshold to [0.0, 1.0]
 	if threshold < 0 {
 		threshold = 0
 	} else if threshold > 1 {
@@ -47,17 +47,21 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		return "Memory search requires the embedding index to be enabled. Use the /index command to enable workspace indexing.", nil
+		results, err := tools.SearchMemoriesByText(query, topK, float64(threshold))
+		if err != nil {
+			return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold), nil
+		}
+		return tools.FormatMemorySearchResults(query, results, float64(threshold)), nil
 	}
 
 	store, err := em.GetConversationStore(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get conversation store: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get conversation store")
 	}
 
 	results, err := store.QueryMemories(ctx, query, topK, threshold)
 	if err != nil {
-		return "", fmt.Errorf("memory search failed: %w", err)
+		return "", agenterrors.Wrap(err, "memory search failed")
 	}
 
 	if len(results) == 0 {
@@ -80,7 +84,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 
 		sb.WriteString(fmt.Sprintf("#%d — **%s** (relevance: %.2f)\n", i+1, name, similarity))
 		if preview != "" {
-			// Truncate preview for display
 			displayPreview := preview
 			if len(displayPreview) > 150 {
 				displayPreview = displayPreview[:147] + "..."
@@ -95,12 +98,35 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 	return sb.String(), nil
 }
 
-// handleSearchMemoriesJSON returns structured JSON results from memory search.
-// Used internally for programmatic access.
 func handleSearchMemoriesJSON(ctx context.Context, a *Agent, query string, topK int, threshold float32) (string, error) {
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		return "[]", nil
+		results, err := tools.SearchMemoriesByText(query, topK, float64(threshold))
+		if err != nil {
+			return "[]", nil
+		}
+		type memoryResult struct {
+			Name      string  `json:"name"`
+			Relevance float32 `json:"relevance"`
+			Title     string  `json:"title,omitempty"`
+		}
+		var output []memoryResult
+		for _, r := range results {
+			preview := r.Preview
+			if len(preview) > 120 {
+				preview = preview[:117] + "..."
+			}
+			output = append(output, memoryResult{
+				Name:      r.Name,
+				Relevance: float32(r.Score),
+				Title:     preview,
+			})
+		}
+		data, err := json.Marshal(output)
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
 	}
 
 	store, err := em.GetConversationStore(ctx)
@@ -114,9 +140,9 @@ func handleSearchMemoriesJSON(ctx context.Context, a *Agent, query string, topK 
 	}
 
 	type memoryResult struct {
-		Name       string  `json:"name"`
-		Relevance  float32 `json:"relevance"`
-		Title      string  `json:"title,omitempty"`
+		Name      string  `json:"name"`
+		Relevance float32 `json:"relevance"`
+		Title     string  `json:"title,omitempty"`
 	}
 
 	var output []memoryResult

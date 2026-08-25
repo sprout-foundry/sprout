@@ -44,6 +44,7 @@ export function useSearchState(
   const [truncated, setTruncated] = useState(false);
   const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[] | null>(null);
   const [semanticDuration, setSemanticDuration] = useState<string | null>(null);
+  const [semanticNote, setSemanticNote] = useState<string | null>(null);
   const [duplicateClusters, setDuplicateClusters] = useState<DuplicateCluster[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function useSearchState(
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [replaceStatus, setReplaceStatus] = useState<string | null>(null);
   const [excludePatterns, setExcludePatterns] = useState('');
-  const [semanticThreshold, setSemanticThreshold] = useState(0.75);
+  const [semanticThreshold, setSemanticThreshold] = useState(0.3);
   const [indexStatus, setIndexStatus] = useState<{
     available: boolean;
     initialized: boolean;
@@ -73,6 +74,7 @@ export function useSearchState(
         setTruncated(false);
         setSemanticResults(null);
         setSemanticDuration(null);
+        setSemanticNote(null);
         setDuplicateClusters(null);
         setError(null);
         return;
@@ -90,6 +92,7 @@ export function useSearchState(
           });
           setSemanticResults(response.results || []);
           setSemanticDuration(response.duration || null);
+          setSemanticNote(response.note || null);
           setDuplicateClusters(response.duplicate_clusters || null);
           setResults(null);
         } else {
@@ -143,6 +146,7 @@ export function useSearchState(
       setResults(null);
       setSemanticResults(null);
       setSemanticDuration(null);
+      setSemanticNote(null);
       setTotalMatches(0);
       setTotalFiles(0);
       setTruncated(false);
@@ -162,6 +166,7 @@ export function useSearchState(
     setResults(null);
     setSemanticResults(null);
     setSemanticDuration(null);
+    setSemanticNote(null);
     setDuplicateClusters(null);
     setTotalMatches(0);
     setTotalFiles(0);
@@ -273,6 +278,7 @@ export function useSearchState(
         setResults(null);
         setSemanticResults(null);
         setSemanticDuration(null);
+        setSemanticNote(null);
         setDuplicateClusters(null);
         setTotalMatches(0);
         setTotalFiles(0);
@@ -339,6 +345,7 @@ export function useSearchState(
     setResults(null);
     setSemanticResults(null);
     setSemanticDuration(null);
+    setSemanticNote(null);
     setDuplicateClusters(null);
     setTotalMatches(0);
     setTotalFiles(0);
@@ -375,6 +382,7 @@ export function useSearchState(
     filteredResults,
     semanticResults,
     semanticDuration,
+    semanticNote,
     duplicateClusters,
     totalMatches,
     totalFiles,

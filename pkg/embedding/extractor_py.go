@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/ast"
 	gotreesitter "github.com/odvcencio/gotreesitter"
+	"github.com/sprout-foundry/sprout/pkg/ast"
 )
 
 // pyTestFilePattern matches common test file naming conventions.

@@ -1,3 +1,5 @@
+//go:build !js
+
 package webui
 
 import (
@@ -35,11 +37,11 @@ func TestCoalesceStreamChunks_PreservesBoundaries(t *testing.T) {
 	other := events.UIEvent{Type: events.EventTypeAgentMessage, Data: map[string]interface{}{"message": "tool"}}
 	in := []events.UIEvent{
 		chunk("a", "assistant_text", "c1", "ch1"),
-		chunk("b", "reasoning", "c1", "ch1"),         // different content_type → separate
-		chunk("c", "assistant_text", "c2", "ch1"),    // different client → separate
-		other,                                         // non-stream → separate, in order
+		chunk("b", "reasoning", "c1", "ch1"),      // different content_type → separate
+		chunk("c", "assistant_text", "c2", "ch1"), // different client → separate
+		other, // non-stream → separate, in order
 		chunk("d", "assistant_text", "c1", "ch1"),
-		chunk("e", "assistant_text", "c1", "ch1"),     // merges with d
+		chunk("e", "assistant_text", "c1", "ch1"), // merges with d
 	}
 	out := coalesceStreamChunks(in)
 	if len(out) != 5 {

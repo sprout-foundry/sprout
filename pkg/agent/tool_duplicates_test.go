@@ -18,7 +18,7 @@ func TestRunDuplicateCheck_PathTraversalOutsideWorkspace(t *testing.T) {
 	defer agent.Shutdown()
 
 	workspace := t.TempDir()
-	agent.workspaceRoot = workspace
+	agent.SetWorkspaceRoot(workspace)
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
@@ -39,7 +39,7 @@ func TestRunDuplicateCheck_RelativePathInsideWorkspace(t *testing.T) {
 	defer agent.Shutdown()
 
 	workspace := t.TempDir()
-	agent.workspaceRoot = workspace
+	agent.SetWorkspaceRoot(workspace)
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
@@ -72,7 +72,7 @@ func TestRunDuplicateCheck_RelativePathTraversalDotDot(t *testing.T) {
 	defer agent.Shutdown()
 
 	workspace := t.TempDir()
-	agent.workspaceRoot = workspace
+	agent.SetWorkspaceRoot(workspace)
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
@@ -97,7 +97,7 @@ func TestRunDuplicateCheck_DuplicatesWithRealManager(t *testing.T) {
 	defer agent.Shutdown()
 
 	workspace := t.TempDir()
-	agent.workspaceRoot = workspace
+	agent.SetWorkspaceRoot(workspace)
 
 	// Create embedding manager with real static provider (no ORT needed).
 	em := embedding.NewEmbeddingManager(nil, workspace)
@@ -133,7 +133,7 @@ func TestRunDuplicateCheck_EmptyWorkspaceRootFallback(t *testing.T) {
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
 	agent.embeddingMgr = em
-	agent.workspaceRoot = ""
+	agent.SetWorkspaceRoot("")
 
 	// Try to check a file — it should not panic even with empty workspaceRoot.
 	result := runDuplicateCheck(context.Background(), agent, "somefile.txt")
@@ -149,7 +149,7 @@ func TestRunDuplicateCheck_AbsolutePathInWorkspace(t *testing.T) {
 	defer agent.Shutdown()
 
 	workspace := t.TempDir()
-	agent.workspaceRoot = workspace
+	agent.SetWorkspaceRoot(workspace)
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)

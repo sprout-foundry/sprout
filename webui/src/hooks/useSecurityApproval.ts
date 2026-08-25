@@ -16,6 +16,7 @@ import type { AppState } from '../types/app';
 export type SecurityApprovalAction =
   | 'approve_once'
   | 'approve_always'
+  | 'always_ask'
   | 'elevate'
   | 'allow_folder_session'
   | 'deny';

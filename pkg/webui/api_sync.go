@@ -12,7 +12,7 @@ import (
 // handleAPISyncOp handles POST /api/sync/op — apply a single SyncOp to the workspace.
 func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -20,17 +20,17 @@ func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request
 
 	var op agent.SyncOp
 	if err := json.NewDecoder(r.Body).Decode(&op); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if op.Path == "" {
-		http.Error(w, "path must not be empty", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "path_required", "path must not be empty")
 		return
 	}
 
 	if op.OpType == "rename" && op.NewPath == "" {
-		http.Error(w, "new_path must not be empty for rename operation", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "new_path_required", "new_path must not be empty for rename operation")
 		return
 	}
 
@@ -44,28 +44,28 @@ func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request
 		ag = ws.getActiveAgentForRequest(r)
 	}
 	if ag == nil {
-		http.Error(w, "agent not initialized", http.StatusServiceUnavailable)
+		writeJSONErr(w, http.StatusServiceUnavailable, "agent_not_initialized", "agent not initialized")
 		return
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	result := ag.ApplySyncOp(op, workspaceRoot)
 
-	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
 	if !result.Accepted {
 		if result.ConflictPath != "" {
-			w.WriteHeader(http.StatusConflict)
+			status = http.StatusConflict
 		} else {
-			w.WriteHeader(http.StatusBadRequest)
+			status = http.StatusBadRequest
 		}
 	}
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, status, result)
 }
 
 // handleAPISyncBatch handles POST /api/sync/batch — apply a batch of SyncOps.
 func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -75,12 +75,12 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 		Ops []agent.SyncOp `json:"ops"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if len(req.Ops) < 1 {
-		http.Error(w, "at least one operation is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "operations_required", "at least one operation is required")
 		return
 	}
 
@@ -94,15 +94,14 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 		ag = ws.getActiveAgentForRequest(r)
 	}
 	if ag == nil {
-		http.Error(w, "agent not initialized", http.StatusServiceUnavailable)
+		writeJSONErr(w, http.StatusServiceUnavailable, "agent_not_initialized", "agent not initialized")
 		return
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	results := ag.ApplySyncOpBatch(req.Ops, workspaceRoot)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"results": results,
 	})
 }
@@ -110,7 +109,7 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 // handleAPISyncStatus handles GET /api/sync/status — return current sync state.
 func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -122,8 +121,7 @@ func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Req
 		ag = ws.getActiveAgentForRequest(r)
 	}
 	if ag == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"files": interface{}(nil),
 		})
 		return
@@ -131,8 +129,7 @@ func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Req
 
 	files := ag.GetSyncStatus()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"files": files,
 	})
 }

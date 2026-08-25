@@ -229,18 +229,19 @@ func TestMCPConcurrency_StateConsistency(t *testing.T) {
 
 			_ = agent.getMCPTools()
 
-					// Lock to capture consistent state
-		agent.mcpSub.LockInit()
-		obsMu.Lock()
+			// Lock to capture consistent state
+			agent.mcpSub.LockInit()
+			obsMu.Lock()
 
-		observations[idx] = stateObservation{
-			initialized: agent.mcpSub.IsInitialized(),
-			err:         agent.mcpSub.GetInitError(),
-			hasCache:    agent.mcpSub.GetToolsCache() != nil,
-		}
+			observations[idx] = stateObservation{
+				initialized: agent.mcpSub.IsInitialized(),
+				err:         agent.mcpSub.GetInitError(),
+				hasCache:    agent.mcpSub.GetToolsCache() != nil,
+			}
 
-		obsMu.Unlock()
-		agent.mcpSub.UnlockInit()}(i)
+			obsMu.Unlock()
+			agent.mcpSub.UnlockInit()
+		}(i)
 	}
 
 	wg.Wait()

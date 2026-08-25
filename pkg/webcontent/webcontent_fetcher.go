@@ -183,7 +183,7 @@ func (w *WebContentFetcher) shouldBypassJina(urlStr string) bool {
 		// Static assets that don't need markdown conversion
 		".css",
 		".js",
-		".map",       // source maps
+		".map", // source maps
 		".ico",
 		".png",
 		".jpg",

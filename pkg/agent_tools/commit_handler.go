@@ -3,8 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 type commitHandler struct{}
@@ -13,55 +15,49 @@ func (h *commitHandler) Name() string { return "commit" }
 
 func (h *commitHandler) Definition() ToolDefinition {
 	return ToolDefinition{
-		Name:        "commit",
-		Description: "Commit staged changes with an auto-generated commit message. Use this tool instead of running 'git commit' directly. This tool uses the commit message generation and validation system. For read-only operations like status, log, diff, use shell_command instead.",
+		Name: "commit",
+		Description: "Commit staged changes with an auto-generated or custom message. Use this instead of 'git commit' directly. " +
+			"The message body is shell-safe (backticks, $(), and special chars in the message are not expanded). " +
+			"For read-only git operations (status, log, diff), use shell_command.",
 		Required: []string{},
 		Parameters: []ParameterDef{
-			{Name: "message", Type: "string", Description: "Commit message (optional). If not provided, a message will be auto-generated based on the staged changes."},
-			{Name: "notes", Type: "string", Description: "Optional notes/context to integrate into the auto-generated commit message. Use this to provide context about why the changes were made, what task they relate to, or any other information that should be captured in the commit. These notes are combined with the diff analysis to produce a better commit message. Ignored if 'message' parameter is provided."},
+			{Name: "message", Type: "string", Description: "Commit message (auto-generated if omitted). Shell-safe: backticks, $(), and other special characters are not expanded."},
+			{Name: "notes", Type: "string", Description: "Context for auto-generated message (ignored if message is provided)"},
+			{Name: "repo_dir", Type: "string", Description: "Subdirectory within the workspace to commit in (e.g., for submodules or monorepo workspaces). Must be within the workspace root. Defaults to workspace root if omitted."},
 		},
 	}
 }
 
 func (h *commitHandler) Validate(args map[string]any) error {
 	if args == nil || len(args) == 0 {
-		return fmt.Errorf("arguments must not be nil or empty")
+		return agenterrors.NewValidation("arguments must not be nil or empty", nil)
 	}
 	return nil
 }
 
 func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
-
 	message, _ := extractString(args, "message")
 	notes, _ := extractString(args, "notes")
+	repoDir, _ := extractString(args, "repo_dir")
+
+	// Determine the effective working directory.
+	effectiveDir := env.WorkspaceRoot
+	if repoDir != "" {
+		resolvedDir, err := validateRepoDir(repoDir, env.WorkspaceRoot)
+		if err != nil {
+			return ToolResult{Output: fmt.Sprintf("Invalid repo_dir: %v", err), IsError: true}, nil
+		}
+		effectiveDir = resolvedDir
+	}
 
 	if message != "" {
-		// Use the provided message
-		cmd := fmt.Sprintf("git commit -m %q", message)
-		result, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
-		if err != nil {
-			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
-		}
-		return ToolResult{Output: result}, nil
+		return commitMessage(ctx, message, effectiveDir)
 	}
 
 	// Auto-generate from diff + notes
-	result, err := execShellCmd(ctx, "git diff --cached --stat", env.WorkspaceRoot)
+	stagedResult, err := execShellCmd(ctx, "git diff --cached --stat", effectiveDir)
 	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Failed to read staged changes: %v", err), IsError: true}, nil
+		stagedResult = "(could not read staged changes)"
 	}
 
 	// Build a simple auto-generated message
@@ -70,10 +66,42 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		msg = notes
 	}
 
-	cmd := fmt.Sprintf("git commit -m %q", msg)
-	output, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
+	result, err := commitMessage(ctx, msg, effectiveDir)
 	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, result), IsError: true}, nil
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, stagedResult), IsError: true}, nil
+	}
+	return result, nil
+}
+
+func (h *commitHandler) Aliases() []string      { return nil }
+func (h *commitHandler) Timeout() time.Duration { return 0 }
+func (h *commitHandler) MaxResultSize() int     { return 0 }
+func (h *commitHandler) SafeForParallel() bool  { return false }
+func (h *commitHandler) Interactive() bool      { return false }
+
+// commitMessage writes a message to a temp file and runs git commit -F.
+// Using a temp file avoids shell expansion of backticks, $(), and other
+// special characters that would be interpreted passing -m through the shell.
+//
+// This is shared by both the commit tool and the git tool's commit operation.
+func commitMessage(ctx context.Context, message, workingDir string) (ToolResult, error) {
+	msgFile, err := os.CreateTemp("", "sprout-commit-msg-*")
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+	}
+	// Clean up temp file after the shell command completes.
+	// On success git deletes its reference; on failure the file is harmless.
+	defer os.Remove(msgFile.Name())
+	if _, err := msgFile.WriteString(message); err != nil {
+		msgFile.Close()
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+	}
+	msgFile.Close()
+
+	cmd := fmt.Sprintf("git commit -F %s", msgFile.Name())
+	output, err := execShellCmd(ctx, cmd, workingDir)
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
 	}
 	return ToolResult{Output: output}, nil
 }

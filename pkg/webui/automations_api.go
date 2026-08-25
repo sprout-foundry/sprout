@@ -42,6 +42,8 @@ type sessionResponse struct {
 	Kind           string     `json:"kind"`
 	OutputFilePath string     `json:"output_file_path,omitempty"`
 	BudgetUSD      *float64   `json:"budget_usd,omitempty"`
+	EndedAt        *time.Time `json:"ended_at,omitempty"`
+	ExitCode       *int       `json:"exit_code,omitempty"`
 }
 
 // registerAutomateRoutes adds the automate panel endpoints to the mux.
@@ -56,18 +58,7 @@ func (ws *ReactWebServer) registerAutomateRoutes(mux *http.ServeMux) {
 // directory. Returns an empty array (not an error) if the directory doesn't
 // exist yet.
 func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	workflows, err := automate.Discover(automate.Dir())
-	if err != nil {
-		if automate.IsNotExists(err) {
-			writeJSON(w, http.StatusOK, []struct{}{})
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to scan automate directory: %v", err))
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -76,6 +67,16 @@ func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *h
 		Description string `json:"description,omitempty"`
 		Filename    string `json:"filename"`
 		FilePath    string `json:"file_path"`
+	}
+
+	workflows, err := automate.Discover(ws.getAutomateDir(r))
+	if err != nil {
+		if automate.IsNotExists(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"workflows": []workflowItem{}})
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to scan automate directory: %v", err))
+		return
 	}
 
 	items := make([]workflowItem, 0, len(workflows))
@@ -88,14 +89,13 @@ func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *h
 		})
 	}
 
-	writeJSON(w, http.StatusOK, items)
+	writeJSON(w, http.StatusOK, map[string]any{"workflows": items})
 }
 
 // handleAPIAutomateSessionsList returns every automate session from
 // .sprout/automate/, enriched with live process status.
 func (ws *ReactWebServer) handleAPIAutomateSessionsList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -111,7 +111,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionsList(w http.ResponseWriter, r
 		enriched = append(enriched, makeSessionResponse(s))
 	}
 
-	writeJSON(w, http.StatusOK, enriched)
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": enriched})
 }
 
 // handleAPIAutomateSessionsAll is the catch-all handler for the
@@ -148,8 +148,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionsAll(w http.ResponseWriter, r 
 
 // handleAPIAutomateSessionSingle returns one session by ID.
 func (ws *ReactWebServer) handleAPIAutomateSessionSingle(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -179,8 +178,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionSingle(w http.ResponseWriter, 
 // handleAPIAutomateSessionStop sends escalating signals to stop the
 // tracked process, then removes the session file.
 func (ws *ReactWebServer) handleAPIAutomateSessionStop(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -202,6 +200,36 @@ func (ws *ReactWebServer) handleAPIAutomateSessionStop(w http.ResponseWriter, r 
 		return
 	}
 
+	if info.EndedAt != nil {
+		// Finalized record — retained for post-mortem observability.
+		// Status maps to the frontend's union ('running' | 'exited' |
+		// 'stopped'); the raw outcome travels in exit_code.
+		exit := 0
+		if info.ExitCode != nil {
+			exit = *info.ExitCode
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"session_id": sessionID,
+			"status":     "exited",
+			"exit_code":  exit,
+			"stopped":    false,
+		})
+		return
+	}
+
+	if !automate.IsProcessAlive(info.PID) {
+		// Dead but never finalized (parent killed before its defer ran) —
+		// finalize with -1 rather than deleting, preserving the post-mortem.
+		_ = automate.FinalizeSessionFile(sproutDir, sessionID, -1)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"session_id": sessionID,
+			"status":     "exited",
+			"exit_code":  -1,
+			"stopped":    false,
+		})
+		return
+	}
+
 	// Stop the process if it's still alive.
 	if automate.IsProcessAlive(info.PID) {
 		// Process stop is best-effort; session file cleanup proceeds regardless.
@@ -211,17 +239,17 @@ func (ws *ReactWebServer) handleAPIAutomateSessionStop(w http.ResponseWriter, r 
 	// Clean up the session file.
 	_ = automate.RemoveSessionFile(sproutDir, sessionID)
 
-	writeJSON(w, http.StatusOK, map[string]string{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"session_id": sessionID,
 		"status":     "stopped",
+		"stopped":    true,
 	})
 }
 
 // handleAPIAutomateSessionOutput reads the output file for a session.
 // Supports a "since" query param for byte-offset resumption.
 func (ws *ReactWebServer) handleAPIAutomateSessionOutput(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -348,16 +376,15 @@ func (ws *ReactWebServer) handleAPIAutomateSessionOutput(w http.ResponseWriter, 
 // so the frontend can show a confirmation dialog. On success, returns the
 // session info from the tool layer.
 func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
 	var req struct {
-		Workflow     string   `json:"workflow"`
-		BudgetUSD    *float64 `json:"budget_usd,omitempty"`
-		BudgetWarn   *string  `json:"budget_warn,omitempty"`
-		Heartbeat    *int     `json:"heartbeat,omitempty"`
+		Workflow   string   `json:"workflow"`
+		BudgetUSD  *float64 `json:"budget_usd,omitempty"`
+		BudgetWarn *string  `json:"budget_warn,omitempty"`
+		Heartbeat  *int     `json:"heartbeat,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
@@ -370,19 +397,34 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 	}
 
 	// Validate the workflow file exists (path traversal protection is in ResolvePath).
-	dir := automate.Dir()
+	dir := ws.getAutomateDir(r)
 	if _, err := automate.ResolvePath(dir, req.Workflow); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid workflow: %v", err))
 		return
 	}
 
-	// Check approval requirement. If approval is required, return a JSON
-	// response (not an error) so the frontend can show a confirmation prompt.
-	if agent.WorkflowRequiresApproval(req.Workflow) {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+	// Check approval requirement using the workspace-aware directory.
+	// If approval is required, return a JSON response (not an error) so the
+	// frontend can show a confirmation prompt.
+	//
+	// SP-128 Phase 2b: include the full workflow Summary under the `summary`
+	// key so the WebUI confirmation dialog renders the same overview as the
+	// CLI (description, steps, subagent overrides, budget, allowed_paths,
+	// warnings). When Summarize fails — e.g. a malformed allowed_paths
+	// entry — we fall back to the bare response so the existing
+	// contract is preserved; the loader-side Validate will reject the
+	// workflow on the next attempt anyway.
+	if agent.WorkflowRequiresApprovalIn(dir, req.Workflow) {
+		response := map[string]interface{}{
 			"requires_approval": true,
 			"workflow":          req.Workflow,
-		})
+		}
+		if wfPath, pathErr := automate.ResolvePath(dir, req.Workflow); pathErr == nil {
+			if summary, sumErr := automate.Summarize(wfPath); sumErr == nil {
+				response["summary"] = summary
+			}
+		}
+		writeJSON(w, http.StatusOK, response)
 		return
 	}
 
@@ -394,10 +436,25 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	result, err := agentInst.RunAutomateWorkflow(r.Context(), req.Workflow)
+	// Wrap context with the workspace-aware sprout dir so that
+	// writeAutomatePIDFile writes session files to the correct location.
+	ctx := agent.ContextWithSproutDir(r.Context(), ws.getSproutDir(r))
+	result, err := agentInst.RunAutomateWorkflow(ctx, req.Workflow)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// SP-128 Phase 3 (A1 fix): seed the in-session approval cache after
+	// a successful WebUI launch so the next attempt within the same chat
+	// session auto-approves. The agent-tool path already does this via
+	// the security gate; the WebUI path is the gap. Without this call,
+	// the WebUI re-prompts on every run even after a confirmed launch,
+	// which is jarring in an autonomous flow that wants to fire several
+	// workflows back-to-back. No-op when the agent is nil (defensive —
+	// the same nil-check ran two lines up).
+	if agentInst != nil {
+		agentInst.MarkWorkflowApprovedInSession(req.Workflow)
 	}
 
 	// Parse the JSON result from the tool layer and return it.
@@ -432,7 +489,12 @@ func (ws *ReactWebServer) getSproutDir(r *http.Request) string {
 // makeSessionResponse enriches a raw session info with live process status.
 func makeSessionResponse(s automate.AutomateSessionInfo) sessionResponse {
 	status := "exited"
-	if automate.IsProcessAlive(s.PID) {
+	if s.EndedAt != nil {
+		status = s.Status
+		if status == "" {
+			status = "exited"
+		}
+	} else if automate.IsProcessAlive(s.PID) {
 		status = "running"
 	}
 	return sessionResponse{
@@ -443,5 +505,7 @@ func makeSessionResponse(s automate.AutomateSessionInfo) sessionResponse {
 		Kind:           s.Kind,
 		OutputFilePath: s.OutputFilePath,
 		BudgetUSD:      s.BudgetUSD,
+		EndedAt:        s.EndedAt,
+		ExitCode:       s.ExitCode,
 	}
 }

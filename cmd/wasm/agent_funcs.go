@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -28,14 +31,101 @@ import (
 // to route shell-like tools through SproutWasm.executeCommand so the
 // agent can edit files and run a curated set of commands inside MEMFS.
 
+// persistentAgent caches a single Agent instance across runAgent calls so
+// that conversation history accumulates between turns (multi-turn chat).
+// Without this, every call to runAgentFunc creates a fresh Agent and the
+// model has no memory of previous messages in the conversation.
+//
+// The cache key is the provider name — if the caller switches providers,
+// a new agent is created and the old one is replaced.
+//
+// Access is guarded by persistentAgentMu to prevent races when multiple
+// runAgent calls arrive concurrently (rapid user messages, steer, etc.).
+var (
+	persistentAgentMu sync.Mutex
+	persistentAgent   *agent.Agent
+	persistentAgentPv string // provider name the cached agent was built for
+	persistentErrCnt  int    // consecutive ProcessQuery errors; reset on success
+)
+
+// maxConsecutiveErrors is the threshold at which the cached agent is
+// invalidated. Transient errors (network, rate-limit) are fine to retry
+// on the same agent, but repeated failures suggest state corruption.
+const maxConsecutiveErrors = 3
+
+// agentTimeout is the maximum duration for a single runAgent call.
+// The default is 20 minutes for complex multi-tool-call workflows.
+// Can be overridden via SPROUT_WASM_AGENT_TIMEOUT env var (in minutes).
+var agentTimeout = func() time.Duration {
+	if m := os.Getenv("SPROUT_WASM_AGENT_TIMEOUT"); m != "" {
+		if n, err := strconv.Atoi(m); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return 20 * time.Minute
+}()
+
+// resetPersistentAgent clears the cached agent. Called when the JS side
+// wants to start a fresh conversation (new chat session).
+func resetPersistentAgent() {
+	persistentAgentMu.Lock()
+	defer persistentAgentMu.Unlock()
+	persistentAgent = nil
+	persistentAgentPv = ""
+}
+
 func agentJSFuncs() map[string]interface{} {
 	return map[string]interface{}{
-		"runAgent": js.FuncOf(runAgentFunc),
-		"runPlan":  js.FuncOf(runPlanFunc),
+		"runAgent":          js.FuncOf(runAgentFunc),
+		"runPlan":           js.FuncOf(runPlanFunc),
+		"clearConversation": js.FuncOf(clearConversationFunc),
+		"stopAgent":         js.FuncOf(stopAgentFunc),
+		"steerAgent":        js.FuncOf(steerAgentFunc),
 	}
 }
 
-// runAgentFunc invokes one ProcessQuery turn through a freshly-built
+// clearConversationFunc resets the persistent agent so the next runAgent
+// call starts a fresh conversation with no history. Called from JS when
+// the user starts a new chat session or clears the conversation.
+func clearConversationFunc(_ js.Value, _ []js.Value) interface{} {
+	resetPersistentAgent()
+	return nil
+}
+
+// stopAgentFunc interrupts the currently running agent loop (if any).
+// This is the cloud-mode equivalent of the stop button — it cancels the
+// agent's interrupt context so any in-flight HTTP requests and tool
+// executions abort promptly.
+func stopAgentFunc(_ js.Value, _ []js.Value) interface{} {
+	persistentAgentMu.Lock()
+	ag := persistentAgent
+	persistentAgentMu.Unlock()
+	if ag != nil {
+		ag.TriggerInterrupt()
+	}
+	return nil
+}
+
+// steerAgentFunc injects a steering message into the persistent agent's
+// steering channel. If the agent is mid-turn, the message is queued and
+// delivered as a follow-up prompt after the current turn completes.
+// This is the cloud-mode equivalent of the steer input field.
+func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
+	message := argString(args, 0, "")
+	if message == "" {
+		return map[string]interface{}{"steered": false, "error": "message is required"}
+	}
+	persistentAgentMu.Lock()
+	ag := persistentAgent
+	persistentAgentMu.Unlock()
+	if ag == nil {
+		return map[string]interface{}{"steered": false, "error": "no active agent"}
+	}
+	ag.InjectInputContext(message)
+	return map[string]interface{}{"steered": true}
+}
+
+// runAgentFunc invokes one ProcessQuery turn through a persistent
 // Agent. Inputs:
 //
 //	args[0] (string)  — provider name (matches runChat's argument 0)
@@ -59,6 +149,9 @@ func agentJSFuncs() map[string]interface{} {
 // no extra plumbing is needed, but heavy work should be deferred to a
 // microtask on the JS side.
 //
+// The agent is cached across calls (keyed by provider) so conversation
+// history accumulates between turns. Call clearConversation() to reset.
+//
 // Timeout: 10 minutes per call. Long agent loops with many tool calls
 // will hit this — open an issue if it bites and we'll make it
 // configurable.
@@ -72,7 +165,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		onEvent = args[3]
 	}
 
-	return asPromiseWithTimeout(10*time.Minute, func(ctx context.Context) (interface{}, error) {
+	return asPromiseWithTimeout(agentTimeout, func(ctx context.Context) (interface{}, error) {
 		if provider == "" {
 			return nil, fmt.Errorf("provider is required (first arg)")
 		}
@@ -80,20 +173,59 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			return nil, fmt.Errorf("query is required (third arg)")
 		}
 
-		client, err := factory.CreateProviderClient(api.ClientType(provider), model)
-		if err != nil {
-			return nil, fmt.Errorf("create client: %w", err)
-		}
-		injectWasmStreamingClient(client)
+		// Reuse the cached agent when the provider matches, so the
+		// conversation history carries over turn-to-turn. A provider
+		// change (or nil cache) forces a rebuild.
+		persistentAgentMu.Lock()
+		ag := persistentAgent
+		needsRebuild := ag == nil || persistentAgentPv != provider
+		persistentAgentMu.Unlock()
 
-		configMgr, err := configuration.NewManagerSilent()
-		if err != nil {
-			return nil, fmt.Errorf("init configuration: %w", err)
-		}
+		if needsRebuild {
+			var err error
+			client, err := factory.CreateProviderClient(api.ClientType(provider), model)
+			if err != nil {
+				return nil, fmt.Errorf("create client: %w", err)
+			}
+			injectWasmStreamingClient(client)
 
-		ag, err := agent.NewAgentWithClient(client, api.ClientType(provider), configMgr)
-		if err != nil {
-			return nil, fmt.Errorf("init agent: %w", err)
+			configMgr, err := configuration.NewManagerSilent()
+			if err != nil {
+				return nil, fmt.Errorf("init configuration: %w", err)
+			}
+
+			ag, err = agent.NewAgentWithClient(client, api.ClientType(provider), configMgr)
+			if err != nil {
+				return nil, fmt.Errorf("init agent: %w", err)
+			}
+
+			// Enable streaming so doChatOnce takes the streaming path
+			// (doChatStream), which publishes stream_chunk events through
+			// the EventBus. Without this, the agent uses doChatNonStream
+			// which buffers the entire response and only publishes it at
+			// query_completed — the browser sees nothing until the full
+			// response is ready.
+			ag.SetStreamingEnabled(true)
+
+			// Inject the WASM-owned AskUserManager so ask_user routes through
+			// the event bus instead of falling back to stdin (which doesn't
+			// exist in a browser). The approval manager is left nil — WASM
+			// security paths nil-check before use and fall through to the
+			// non-interactive auto-approve path.
+			ag.InjectWebUIManagers(nil, wasmAskUserMgr)
+			// In WASM the browser IS always the interactive surface.
+			// Call sites guard with the specific manager they need:
+			// askUserMgr for ask_user, GetSecurityApprovalMgr() for
+			// approval paths, and the package-level edit broker needs
+			// no manager. Returning true is safe because the approval
+			// manager is nil in WASM and the edit-approval path has its
+			// own package broker with the cloud response route.
+			ag.SetHasActiveWebUIClients(func() bool { return true })
+
+			persistentAgentMu.Lock()
+			persistentAgent = ag
+			persistentAgentPv = provider
+			persistentAgentMu.Unlock()
 		}
 
 		// Wire the event bus only when JS provided a sink — saves the
@@ -107,8 +239,24 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 
 		response, err := ag.ProcessQuery(query)
 		if err != nil {
+			// Track consecutive errors. After maxConsecutiveErrors,
+			// invalidate the cached agent so the next call starts fresh
+			// instead of looping on a potentially corrupted state.
+			persistentAgentMu.Lock()
+			persistentErrCnt++
+			if persistentErrCnt >= maxConsecutiveErrors {
+				persistentAgent = nil
+				persistentAgentPv = ""
+				persistentErrCnt = 0
+			}
+			persistentAgentMu.Unlock()
 			return nil, fmt.Errorf("process query: %w", err)
 		}
+
+		// Success — reset error counter.
+		persistentAgentMu.Lock()
+		persistentErrCnt = 0
+		persistentAgentMu.Unlock()
 
 		return map[string]interface{}{
 			"response": response,
@@ -145,7 +293,7 @@ func runPlanFunc(_ js.Value, args []js.Value) interface{} {
 		onEvent = args[3]
 	}
 
-	return asPromiseWithTimeout(10*time.Minute, func(ctx context.Context) (interface{}, error) {
+	return asPromiseWithTimeout(agentTimeout, func(ctx context.Context) (interface{}, error) {
 		if provider == "" {
 			return nil, fmt.Errorf("provider is required (first arg)")
 		}
@@ -168,6 +316,13 @@ func runPlanFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("init agent: %w", err)
 		}
+
+		// Enable streaming so tokens appear in real-time (same as runAgentFunc).
+		ag.SetStreamingEnabled(true)
+
+		// Same ask_user wiring as runAgentFunc (see that function's comment).
+		ag.InjectWebUIManagers(nil, wasmAskUserMgr)
+		ag.SetHasActiveWebUIClients(func() bool { return true })
 
 		planningPrompt, err := agent.GetEmbeddedPlanningPrompt(true)
 		if err != nil {

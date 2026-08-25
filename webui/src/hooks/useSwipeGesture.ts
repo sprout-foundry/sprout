@@ -146,11 +146,7 @@ export function useSwipeGesture(options: UseSwipeGestureOptions = {}): void {
       active = false;
     };
 
-    const addEventListener = (
-      type: string,
-      listener: (e: TouchEvent) => void,
-      options?: AddEventListenerOptions,
-    ) => {
+    const addEventListener = (type: string, listener: (e: TouchEvent) => void, options?: AddEventListenerOptions) => {
       (target as EventTarget).addEventListener(type, listener as EventListener, options);
     };
 

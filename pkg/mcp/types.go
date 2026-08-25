@@ -11,11 +11,11 @@ import (
 // MCPServerConfig represents the configuration for an MCP server
 type MCPServerConfig struct {
 	Name        string            `json:"name"`
-	Type        string            `json:"type,omitempty"`    // "stdio" or "http"
-	Command     string            `json:"command,omitempty"` // For stdio servers
-	Args        []string          `json:"args,omitempty"`    // For stdio servers
-	URL         string            `json:"url,omitempty"`     // For HTTP servers
-	Env         map[string]string `json:"env,omitempty"`     // Non-secret environment variables
+	Type        string            `json:"type,omitempty"`        // "stdio" or "http"
+	Command     string            `json:"command,omitempty"`     // For stdio servers
+	Args        []string          `json:"args,omitempty"`        // For stdio servers
+	URL         string            `json:"url,omitempty"`         // For HTTP servers
+	Env         map[string]string `json:"env,omitempty"`         // Non-secret environment variables
 	Credentials map[string]string `json:"credentials,omitempty"` // Secret credentials (env var name -> placeholder)
 	WorkingDir  string            `json:"working_dir,omitempty"` // For stdio servers
 	Timeout     time.Duration     `json:"timeout,omitempty"`
@@ -269,7 +269,7 @@ type MCPToolWrapper struct {
 	category          string
 	timeout           time.Duration
 	available         bool
-	compiledSchema    any           // *jsonschema.Schema, typed in tool_wrapper.go to avoid coupling
+	compiledSchema    any // *jsonschema.Schema, typed in tool_wrapper.go to avoid coupling
 	schemaCompileOnce sync.Once
 }
 

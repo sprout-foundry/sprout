@@ -5,13 +5,16 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // CostRecord represents a single cost entry for an API request
@@ -24,6 +27,14 @@ type CostRecord struct {
 	Cost         float64   `json:"cost"`
 	SessionID    string    `json:"session_id,omitempty"`
 	ChatID       string    `json:"chat_id,omitempty"`
+	// Optional session metadata populated at record time.
+	Title       string `json:"title,omitempty"`
+	WorkingDir  string `json:"working_dir,omitempty"`
+	LastUpdated string `json:"last_updated,omitempty"` // RFC3339 timestamp
+	// Billing-model-aware cost tracking (SP-080)
+	BillingType string  `json:"billing_type,omitempty"`
+	ChargedCost float64 `json:"charged_cost,omitempty"`
+	TokenCost   float64 `json:"token_cost,omitempty"`
 }
 
 // CostStore handles persisting and querying cost records
@@ -44,18 +55,17 @@ var (
 // GetCostStore returns the singleton cost store instance
 func GetCostStore() *CostStore {
 	costStoreOnce.Do(func() {
-		configDir, err := configuration.GetConfigDir()
+		stateDir, err := envutil.StateDir()
 		if err != nil {
-			log.Printf("coststore: failed to get config dir: %v", err)
-			// Fallback to home directory
-			homeDir, _ := os.UserHomeDir()
-			configDir = filepath.Join(homeDir, ".sprout")
+			webuiLogger.Error("cost store state directory lookup failed", slog.Any("err", err))
+			// Fallback: use config dir
+			stateDir, _ = configuration.GetConfigDir()
 		}
 		costStore = &CostStore{
-			filePath: filepath.Join(configDir, "cost_history.json"),
+			filePath: filepath.Join(stateDir, "cost_history.json"),
 		}
 		if err := costStore.load(); err != nil {
-			log.Printf("coststore: failed to load existing records: %v", err)
+			webuiLogger.Error("cost store existing record load failed", slog.Any("err", err))
 		}
 	})
 	return costStore
@@ -63,10 +73,15 @@ func GetCostStore() *CostStore {
 
 // RecordCost adds a new cost record
 func (cs *CostStore) RecordCost(provider, model, sessionID, chatID string, promptTokens, outputTokens int, cost float64) {
+	cs.RecordCostWithSession(provider, model, sessionID, chatID, "", "", promptTokens, outputTokens, cost)
+}
+
+// RecordCostWithSession adds a new cost record with optional session metadata.
+func (cs *CostStore) RecordCostWithSession(provider, model, sessionID, chatID, title, workingDir string, promptTokens, outputTokens int, cost float64) {
 	if cost <= 0 {
 		return
 	}
-	record := CostRecord{
+	cs.appendRecord(CostRecord{
 		Timestamp:    time.Now(),
 		Provider:     provider,
 		Model:        model,
@@ -75,12 +90,43 @@ func (cs *CostStore) RecordCost(provider, model, sessionID, chatID string, promp
 		Cost:         cost,
 		SessionID:    sessionID,
 		ChatID:       chatID,
-	}
+		Title:        title,
+		WorkingDir:   workingDir,
+		LastUpdated:  time.Now().Format(time.RFC3339),
+		BillingType:  "pay_per_token",
+		ChargedCost:  cost,
+	})
+}
 
+func (cs *CostStore) RecordCostWithBilling(provider, model, sessionID, chatID, title, workingDir, billingType string, promptTokens, outputTokens int, chargedCost, tokenCost float64) {
+	if chargedCost <= 0 && tokenCost <= 0 {
+		return
+	}
+	if billingType == "" {
+		billingType = "pay_per_token"
+	}
+	cs.appendRecord(CostRecord{
+		Timestamp:    time.Now(),
+		Provider:     provider,
+		Model:        model,
+		PromptTokens: promptTokens,
+		OutputTokens: outputTokens,
+		Cost:         chargedCost,
+		SessionID:    sessionID,
+		ChatID:       chatID,
+		Title:        title,
+		WorkingDir:   workingDir,
+		LastUpdated:  time.Now().Format(time.RFC3339),
+		BillingType:  billingType,
+		ChargedCost:  chargedCost,
+		TokenCost:    tokenCost,
+	})
+}
+
+func (cs *CostStore) appendRecord(record CostRecord) {
 	cs.mu.Lock()
 	cs.records = append(cs.records, record)
 
-	// Persist every 10 records or every 30 seconds
 	if len(cs.records)%10 == 0 || time.Since(cs.lastPersist) > 30*time.Second {
 		recordsCopy := make([]CostRecord, len(cs.records))
 		copy(recordsCopy, cs.records)
@@ -122,16 +168,20 @@ func (cs *CostStore) GetDailyCosts(days int) []DailyCost {
 
 	for _, r := range cs.records {
 		if r.Timestamp.After(startDate) {
+			dailyCost := r.Cost
+			if dailyCost == 0 && r.TokenCost > 0 {
+				dailyCost = r.TokenCost
+			}
 			dateKey := r.Timestamp.Format("2006-01-02")
 			if dc, ok := dailyMap[dateKey]; ok {
-				dc.TotalCost += r.Cost
-				dc.ByProvider[r.Provider] += r.Cost
+				dc.TotalCost += dailyCost
+				dc.ByProvider[r.Provider] += dailyCost
 				dailyMap[dateKey] = dc
 			} else {
 				dailyMap[dateKey] = DailyCost{
 					Date:       dateKey,
-					TotalCost:  r.Cost,
-					ByProvider: map[string]float64{r.Provider: r.Cost},
+					TotalCost:  dailyCost,
+					ByProvider: map[string]float64{r.Provider: dailyCost},
 				}
 			}
 		}
@@ -146,28 +196,61 @@ func (cs *CostStore) GetDailyCosts(days int) []DailyCost {
 
 // DailyCost represents cost for a single day
 type DailyCost struct {
-	Date       string              `json:"date"`
-	TotalCost  float64             `json:"total_cost"`
-	ByProvider map[string]float64  `json:"by_provider,omitempty"`
+	Date       string             `json:"date"`
+	TotalCost  float64            `json:"total_cost"`
+	ByProvider map[string]float64 `json:"by_provider,omitempty"`
+}
+
+// SessionCostRow represents a single session's aggregated cost data
+type SessionCostRow struct {
+	SessionID   string  `json:"session_id"`
+	Title       string  `json:"title"`
+	WorkingDir  string  `json:"working_dir"`
+	TotalCost   float64 `json:"total_cost"`
+	LastUpdated string  `json:"last_updated"` // RFC3339 timestamp
+}
+
+// BillingTypeBreakdown holds aggregated cost and token data for one billing model.
+type BillingTypeBreakdown struct {
+	Cost   float64 `json:"cost"`
+	Tokens int     `json:"tokens"`
 }
 
 // CostSummary represents aggregated cost data
 type CostSummary struct {
-	TotalCost  float64            `json:"total_cost"`
-	ByProvider map[string]float64 `json:"by_provider"`
-	ByModel    map[string]float64 `json:"by_model"`
-	Last30Days float64            `json:"last_30_days"`
-	Last7Days  float64            `json:"last_7_days"`
-	ThisMonth  float64            `json:"this_month"`
-	LastMonth  float64            `json:"last_month"`
+	TotalCost             float64                         `json:"total_cost"`
+	ByProvider            map[string]float64              `json:"by_provider"`
+	ByModel               map[string]float64              `json:"by_model"`
+	ByProviderThisMonth   map[string]float64              `json:"by_provider_this_month"`
+	ByProviderLastMonth   map[string]float64              `json:"by_provider_last_month"`
+	Last30Days            float64                         `json:"last_30_days"`
+	Last7Days             float64                         `json:"last_7_days"`
+	ThisMonth             float64                         `json:"this_month"`
+	LastMonth             float64                         `json:"last_month"`
+	TopSessions           []SessionCostRow                `json:"top_sessions"`
+	ByBillingType         map[string]BillingTypeBreakdown `json:"by_billing_type,omitempty"`
+	ByProviderBillingType map[string]string               `json:"by_provider_billing_type,omitempty"`
+	ChargedCost           float64                         `json:"charged_cost,omitempty"`
+	TokenValue            float64                         `json:"token_value,omitempty"`
+	// FirstActivity / LastActivity span all recorded records (not the
+	// requested time range), so the WebUI can show a "data is older than
+	// the current period" banner without re-fetching the raw history.
+	FirstActivity *time.Time `json:"first_activity,omitempty"`
+	LastActivity  *time.Time `json:"last_activity,omitempty"`
 }
 
-// GetCostSummary returns overall cost summary
-func (cs *CostStore) GetCostSummary() CostSummary {
+// GetCostSummary returns overall cost summary.
+// When start and end are both zero, all records are included (all-time).
+// When start/end are set, TopSessions is filtered to that range.
+func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 	now := time.Now()
 	summary := CostSummary{
-		ByProvider: make(map[string]float64),
-		ByModel:    make(map[string]float64),
+		ByProvider:            make(map[string]float64),
+		ByModel:               make(map[string]float64),
+		ByProviderThisMonth:   make(map[string]float64),
+		ByProviderLastMonth:   make(map[string]float64),
+		ByBillingType:         make(map[string]BillingTypeBreakdown),
+		ByProviderBillingType: make(map[string]string),
 	}
 
 	// Get last 30 days
@@ -176,15 +259,74 @@ func (cs *CostStore) GetCostSummary() CostSummary {
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	startOfLastMonth := startOfMonth.AddDate(0, -1, 1)
 
+	// Check if a date range was requested
+	hasRange := !start.IsZero() && !end.IsZero()
+
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
+	// Per-session aggregation for TopSessions
+	type sessionAccum struct {
+		totalCost  float64
+		title      string
+		workingDir string
+		lastUpdate string
+	}
+	sessionMap := make(map[string]*sessionAccum)
+
+	// Track the bounds of all recorded activity so the WebUI can show a
+	// "data is older than the current period" banner with the right
+	// earliest/latest dates — independent of any date-range filter.
+	var firstT, lastT time.Time
+
 	for _, r := range cs.records {
-		// Always add to totals
+		// Skip records outside the requested range for TopSessions
+		inRange := true
+		if hasRange {
+			if !r.Timestamp.After(start) || !r.Timestamp.Before(end.Add(24*time.Hour)) {
+				inRange = false
+			}
+		}
+
+		if inRange && r.SessionID != "" {
+			acc, ok := sessionMap[r.SessionID]
+			if !ok {
+				acc = &sessionAccum{}
+				sessionMap[r.SessionID] = acc
+			}
+			acc.totalCost += r.Cost
+			if acc.title == "" && r.Title != "" {
+				acc.title = r.Title
+			}
+			if acc.workingDir == "" && r.WorkingDir != "" {
+				acc.workingDir = r.WorkingDir
+			}
+			if r.LastUpdated != "" && (acc.lastUpdate == "" || r.LastUpdated > acc.lastUpdate) {
+				acc.lastUpdate = r.LastUpdated
+			} else if acc.lastUpdate == "" {
+				acc.lastUpdate = r.Timestamp.Format(time.RFC3339)
+			}
+		}
+
+		// All-time bounds — independent of inRange.
+		if firstT.IsZero() || r.Timestamp.Before(firstT) {
+			firstT = r.Timestamp
+		}
+		if lastT.IsZero() || r.Timestamp.After(lastT) {
+			lastT = r.Timestamp
+		}
+
+		// Always add to totals (all-time)
 		summary.TotalCost += r.Cost
 		summary.ByProvider[r.Provider] += r.Cost
 		key := r.Provider + ":" + r.Model
 		summary.ByModel[key] += r.Cost
+
+		// Track billing type per provider (SP-113 Phase 4). A provider's billing
+		// type is consistent across records, so last-seen wins.
+		if r.BillingType != "" {
+			summary.ByProviderBillingType[r.Provider] = r.BillingType
+		}
 
 		// Last 30 days
 		if r.Timestamp.After(start30) {
@@ -197,11 +339,66 @@ func (cs *CostStore) GetCostSummary() CostSummary {
 		// This month
 		if r.Timestamp.After(startOfMonth) {
 			summary.ThisMonth += r.Cost
+			summary.ByProviderThisMonth[r.Provider] += r.Cost
 		}
 		// Last month
 		if r.Timestamp.After(startOfLastMonth) && r.Timestamp.Before(startOfMonth) {
 			summary.LastMonth += r.Cost
+			summary.ByProviderLastMonth[r.Provider] += r.Cost
 		}
+
+		// Billing-type-aware aggregation (SP-080)
+		bt := r.BillingType
+		if bt == "" {
+			bt = "pay_per_token"
+		}
+		charged := r.ChargedCost
+		if charged == 0 {
+			charged = r.Cost
+		}
+		bd := summary.ByBillingType[bt]
+		bd.Cost += charged
+		bd.Tokens += r.PromptTokens + r.OutputTokens
+		summary.ByBillingType[bt] = bd
+		summary.ChargedCost += charged
+		summary.TokenValue += r.TokenCost
+	}
+
+	// For backward-compat: providers with old records (no billing_type field)
+	// get resolved from the provider config.
+	for provider := range summary.ByProvider {
+		if summary.ByProviderBillingType[provider] == "" {
+			summary.ByProviderBillingType[provider] = resolveBillingTypeForProvider(provider)
+		}
+	}
+
+	// Build TopSessions: sort by cost desc, take top 10
+	summary.TopSessions = make([]SessionCostRow, 0, len(sessionMap))
+	for sid, acc := range sessionMap {
+		summary.TopSessions = append(summary.TopSessions, SessionCostRow{
+			SessionID:   sid,
+			Title:       acc.title,
+			WorkingDir:  acc.workingDir,
+			TotalCost:   acc.totalCost,
+			LastUpdated: acc.lastUpdate,
+		})
+	}
+	// Sort descending by cost
+	sort.Slice(summary.TopSessions, func(i, j int) bool {
+		return summary.TopSessions[i].TotalCost > summary.TopSessions[j].TotalCost
+	})
+	// Cap at 10
+	if len(summary.TopSessions) > 10 {
+		summary.TopSessions = summary.TopSessions[:10]
+	}
+
+	if !firstT.IsZero() {
+		firstT = firstT.UTC()
+		summary.FirstActivity = &firstT
+	}
+	if !lastT.IsZero() {
+		lastT = lastT.UTC()
+		summary.LastActivity = &lastT
 	}
 
 	return summary
@@ -273,4 +470,14 @@ func (cs *CostStore) ForcePersist() error {
 	copy(recordsCopy, cs.records)
 	cs.mu.Unlock()
 	return cs.persistRecords(recordsCopy)
+}
+
+func resolveBillingTypeForProvider(providerName string) string {
+	if cfg, err := providers.GlobalFactory().GetProviderConfig(providerName); err == nil && cfg != nil {
+		return cfg.BillingTypeResolved()
+	}
+	if providerName == "zai-coding" {
+		return providers.BillingSubscription
+	}
+	return providers.BillingPayPerToken
 }

@@ -1,8 +1,8 @@
 // @ts-nocheck
+import { ContextMenu } from '@sprout/ui';
 import { Fragment, act } from 'react';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ContextMenu } from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
 // Mocks

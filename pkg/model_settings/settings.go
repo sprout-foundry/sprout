@@ -34,6 +34,7 @@ type creatorProfile struct {
 	MatchPrefixes         []string               `json:"match_prefixes"`
 	MatchExact            []string               `json:"match_exact,omitempty"`
 	Parameters            map[string]interface{} `json:"parameters"`
+	InstructParameters    map[string]interface{} `json:"instruct_parameters,omitempty"`
 	UnsupportedParameters []string               `json:"unsupported_parameters,omitempty"`
 	Source                string                 `json:"source"`
 	SourceType            string                 `json:"source_type"`
@@ -90,7 +91,16 @@ func loadCatalogs() {
 
 // ResolveModelSettings applies precedence:
 // model exact rule > model family rule > openrouter fallback defaults.
+// It resolves the model's default (thinking) mode parameters.
 func ResolveModelSettings(model string) ModelSettings {
+	return ResolveModelSettingsForMode(model, false)
+}
+
+// ResolveModelSettingsForMode applies precedence and selects the creator
+// recommendation for the given generation mode. When instruct is true, a
+// profile's instruct_parameters override its parameters (used for models such
+// as Qwen3.8 that recommend different sampling for non-thinking mode).
+func ResolveModelSettingsForMode(model string, instruct bool) ModelSettings {
 	ensureLoaded()
 	key := normalizeModelKey(model)
 	exact, family := matchCreatorProfile(key)
@@ -112,10 +122,10 @@ func ResolveModelSettings(model string) ModelSettings {
 			Supported:   map[string]bool{},
 			Unsupported: map[string]bool{},
 		}
-		for param := range profile.Parameters {
+		for param := range parametersForMode(profile, instruct) {
 			settings.Supported[strings.ToLower(strings.TrimSpace(param))] = true
 		}
-		mergeCreatorProfile(&settings, profile)
+		mergeCreatorProfileForMode(&settings, profile, instruct)
 		return settings
 	}
 
@@ -129,22 +139,32 @@ func ResolveModelSettings(model string) ModelSettings {
 	}
 
 	if exact != nil {
-		mergeCreatorProfile(&settings, exact)
+		mergeCreatorProfileForMode(&settings, exact, instruct)
 		return settings
 	}
 	if family != nil {
-		mergeCreatorProfile(&settings, family)
+		mergeCreatorProfileForMode(&settings, family, instruct)
 		return settings
 	}
 
 	return settings
 }
 
-func mergeCreatorProfile(settings *ModelSettings, profile *creatorProfile) {
+// parametersForMode returns the parameter set to apply for a profile in the
+// given mode: instruct_parameters when set and instruct is true, else
+// parameters.
+func parametersForMode(profile *creatorProfile, instruct bool) map[string]interface{} {
+	if instruct && len(profile.InstructParameters) > 0 {
+		return profile.InstructParameters
+	}
+	return profile.Parameters
+}
+
+func mergeCreatorProfileForMode(settings *ModelSettings, profile *creatorProfile, instruct bool) {
 	if settings.Parameters == nil {
 		settings.Parameters = map[string]interface{}{}
 	}
-	for k, v := range profile.Parameters {
+	for k, v := range parametersForMode(profile, instruct) {
 		settings.Parameters[strings.ToLower(strings.TrimSpace(k))] = v
 	}
 	for _, p := range profile.UnsupportedParameters {

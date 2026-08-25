@@ -36,8 +36,8 @@ vi.mock('./notificationBus', () => ({
   },
 }));
 
-import { WebSocketService } from './websocket';
 import { clientFetch } from './clientSession';
+import { WebSocketService } from './websocket';
 
 // ---------------------------------------------------------------------------
 // Helpers — singleton management & WebSocket mock

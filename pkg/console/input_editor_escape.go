@@ -50,7 +50,7 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 	}
 	fmt.Print(bracketedPasteDisable)
 	fmt.Print(MouseTrackingDisable)
-	fmt.Print(modifyOtherKeysDisable)
+	writeModifyOtherKeysDisable(os.Stdout)
 	fmt.Println()
 
 	cmd := exec.Command(editor, tmpPath)
@@ -67,7 +67,7 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 	}
 	fmt.Print(bracketedPasteEnable)
 	fmt.Print(MouseTrackingSGR)
-	fmt.Print(modifyOtherKeysEnable)
+	writeModifyOtherKeysEnable(os.Stdout)
 
 	if runErr != nil {
 		fmt.Fprint(os.Stderr, "\r\n")
@@ -95,6 +95,7 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 	ir.cursorPos = len(newLine)
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
+	ir.resetCompletionCycle()
 
 	if mErr != nil {
 		return nil

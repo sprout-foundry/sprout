@@ -11,11 +11,11 @@ func SweepStaleSessions(sproutDir string) (int, error) {
 
 // AutomateSessionInfo is a stub type for JS/WASM builds.
 type AutomateSessionInfo struct {
-	Workflow       string `json:"workflow"`
-	PID            int    `json:"pid"`
+	Workflow       string      `json:"workflow"`
+	PID            int         `json:"pid"`
 	StartedAt      interface{} `json:"started_at"`
-	OutputFilePath string `json:"output_file_path,omitempty"`
-	Kind           string `json:"kind"`
+	OutputFilePath string      `json:"output_file_path,omitempty"`
+	Kind           string      `json:"kind"`
 }
 
 // WriteSessionFile is a no-op for JS/WASM builds.
@@ -31,4 +31,9 @@ func ReadSessionFile(sproutDir string, sessionID string) (*AutomateSessionInfo, 
 // ListSessionFiles returns an empty list for JS/WASM builds.
 func ListSessionFiles(sproutDir string) ([]AutomateSessionInfo, error) {
 	return nil, fmt.Errorf("session file listing is not supported on JS/WASM platforms")
+}
+
+// FinalizeSessionFile is a no-op for JS/WASM builds.
+func FinalizeSessionFile(sproutDir string, sessionID string, exitCode int) error {
+	return fmt.Errorf("session finalization is not supported on JS/WASM platforms")
 }

@@ -1,18 +1,22 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"golang.org/x/image/draw"
 )
 
 // ProcessQuery handles the main conversation loop with the LLM
@@ -20,14 +24,22 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	return a.processQueryWithSeed(userQuery)
 }
 
-// ProcessQueryWithContinuity processes a query with continuity from previous actions
 func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
-	// Ensure changes are committed even if there are unexpected errors or early termination
+	if userQuery != "" {
+		a.EnableWakeupIfDisabled()
+	}
+	if notifications := a.DrainNotifications(); len(notifications) > 0 {
+		wakeupMsg := FormatWakeupBatch(notifications)
+		if userQuery != "" {
+			userQuery = wakeupMsg + "\n\n" + userQuery
+		} else {
+			userQuery = wakeupMsg
+		}
+	}
+	// Commit any uncommitted changes and auto-save state on exit.
 	defer func() {
-		// Only commit if we have changes and they haven't been committed yet
 		if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
 			a.Logger().Debug("DEFER: Attempting to commit %d tracked changes\n", a.GetChangeCount())
-			// Check if changes are already committed by trying to commit (it's safe due to committed flag)
 			if commitErr := a.CommitChanges("Session cleanup - ensuring changes are not lost"); commitErr != nil {
 				a.Logger().Debug("Warning: Failed to commit tracked changes during cleanup: %v\n", commitErr)
 			} else {
@@ -37,59 +49,55 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 			a.Logger().Debug("DEFER: No changes to commit (enabled: %v, count: %d)\n", a.IsChangeTrackingEnabled(), a.GetChangeCount())
 		}
 
-		// Auto-save memory state after every successful turn
 		a.autoSaveState()
 		a.Logger().Debug("DEFER: Auto-saved memory state\n")
 	}()
 
-	// Load previous state if available
 	if a.state.GetPreviousSummary() != "" {
-		// Inject the summary as a one-shot system supplement so it is attributed to
-		// the system (not the user) and does not consume the user input budget.
-		a.setPendingSystemSupplement(fmt.Sprintf(
+		prevSupplement := fmt.Sprintf(
 			"## Context From Previous Session\n\n%s\n\nNote: The user cannot see the previous session's responses. Build upon that work but present your response as if it's the first time addressing this topic.",
-			a.state.GetPreviousSummary()))
+			a.state.GetPreviousSummary())
+		if existing := a.state.GetPendingSystemSupplement(); existing != "" {
+			a.setPendingSystemSupplement(existing + "\n\n" + prevSupplement)
+		} else {
+			a.setPendingSystemSupplement(prevSupplement)
+		}
 	}
 
-	// Process the user's actual query, with or without previous context.
 	return a.ProcessQuery(userQuery)
 }
 
-// getOptimizedToolDefinitions returns tool definitions optimized based on conversation context
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
-	// Start with standard tools. Pulls from the canonical registry
-	// (pkg/agent/tool_registrations.go) via BuildToolDefinitions —
-	// the same registry seedRegistry uses, so the LLM and this
-	// optimisation path stay in sync.
-	tools := BuildToolDefinitions()
+	tools := BuildToolDefinitionsForAgent(a)
 
-	// Filter out run_subagent and run_parallel_subagents when
-	// the agent is not allowed to spawn subagents (depth limit or NO_SUBAGENTS env).
-	if !a.CanSpawnSubagents() {
-		filtered := make([]api.Tool, 0, len(tools))
-		for _, tool := range tools {
-			// Skip run_subagent and run_parallel_subagents
-			if tool.Function.Name == "run_subagent" || tool.Function.Name == "run_parallel_subagents" {
-				continue
-			}
-			filtered = append(filtered, tool)
-		}
-		tools = filtered
+	// LCM allowlist: applied first as the broadest narrowing pass.
+	if allow := a.contextProfile.ToolAllowlist; len(allow) > 0 {
+		tools = filterToolsByName(tools, makeAllowedToolSet(allow))
 	}
 
-	// Add MCP tools if available
-	mcpTools := a.getMCPTools()
-	if mcpTools != nil {
+	// Filter subagent tools by mode and depth.
+	filtered := make([]api.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if tool.Function.Name == "run_parallel_subagents" {
+			if a.contextProfile.Mode == configuration.ContextModeLowContext || !a.CanSpawnSubagents() {
+				continue
+			}
+		}
+		if tool.Function.Name == "run_subagent" && !a.CanSpawnSubagents() {
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	tools = filtered
+
+	if mcpTools := a.getMCPTools(); mcpTools != nil {
 		tools = append(tools, mcpTools...)
 	}
 
-	// For custom providers, apply tool filtering only when tool_calls is explicitly configured.
-	// Always preserve skill and memory tools regardless of the allowlist — these are
-	// lightweight context tools that should never be hidden from the model.
+	// Custom provider tool filtering preserves skill and memory tools.
 	if customProvider, ok := a.getCurrentCustomProvider(); ok {
 		if len(customProvider.ToolCalls) > 0 {
 			allowedToolSet := makeAllowedToolSet(customProvider.ToolCalls)
-			// Always include skill and memory tools so models can discover and use them
 			for _, t := range alwaysIncludedTools {
 				allowedToolSet[t] = struct{}{}
 			}
@@ -97,20 +105,12 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		}
 	}
 
-	// Apply active persona tool filter (used for direct /persona and subagent persona runs).
-	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 {
+	// Persona tool filter skipped in LCM mode (allowlist is final).
+	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 &&
+		len(a.contextProfile.ToolAllowlist) == 0 {
 		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
 	}
 
-	// Vision models retain access to analyze_image_content and analyze_ui_screenshot tools
-	// even when direct multimodal images are present. This allows the agent to:
-	// - Analyze images from URLs or file paths mentioned in the conversation
-	// - Use specialized analysis modes (OCR, frontend analysis, etc.)
-	// - Get viewport-adjusted analysis for HTML files
-	// Direct multimodal images and tool-based analysis are complementary, not mutually exclusive.
-
-	// Future: Could optimize by analyzing conversation context
-	// and only returning relevant tools
 	return tools
 }
 
@@ -130,9 +130,7 @@ func (a *Agent) getCurrentCustomProvider() (*configuration.CustomProviderConfig,
 	return &provider, true
 }
 
-// alwaysIncludedTools are tools that must always be available to models regardless
-// of custom provider tool_calls filtering. These are lightweight context tools
-// for skill discovery, memory, and self-management that should never be hidden.
+// alwaysIncludedTools are always available regardless of custom provider filtering.
 var alwaysIncludedTools = []string{
 	"list_skills",
 	"activate_skill",
@@ -165,7 +163,10 @@ func filterToolsByName(tools []api.Tool, allowed map[string]struct{}) []api.Tool
 }
 
 func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) bool {
-	if a == nil || a.client == nil || !a.client.SupportsVision() {
+	if a == nil || a.client == nil {
+		return false
+	}
+	if !a.effectiveVisionSupport() {
 		return false
 	}
 
@@ -179,9 +180,7 @@ func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) 
 	return false
 }
 
-// ClearConversationHistory clears the conversation history
 func (a *Agent) ClearConversationHistory() {
-	// Keep messages empty; system prompt is added during prepareMessages
 	a.state.SetMessages([]api.Message{})
 	a.clearTurnCheckpoints()
 	a.state.SetCurrentIteration(0)
@@ -190,7 +189,6 @@ func (a *Agent) ClearConversationHistory() {
 	a.Logger().Debug("[clean] Conversation history cleared\n")
 }
 
-// SetConversationOptimization enables or disables conversation optimization
 func (a *Agent) SetConversationOptimization(enabled bool) {
 	if a.state.GetOptimizer() != nil {
 		a.state.GetOptimizer().SetEnabled(enabled)
@@ -202,7 +200,6 @@ func (a *Agent) SetConversationOptimization(enabled bool) {
 	}
 }
 
-// GetOptimizationStats returns optimization statistics
 func (a *Agent) GetOptimizationStats() map[string]interface{} {
 	if a.state.GetOptimizer() != nil {
 		return a.state.GetOptimizer().GetOptimizationStats()
@@ -213,34 +210,105 @@ func (a *Agent) GetOptimizationStats() map[string]interface{} {
 	}
 }
 
-// maxTotalImagePayloadBytes is the maximum combined size of all images sent in a
-// single query (20 MB).  Individual images are capped by console.MaxPastedImageSize.
-const maxTotalImagePayloadBytes = 20 * 1024 * 1024
+// Fallback max combined image payload (20 MB) when VisionCapabilities are unavailable.
+const maxTotalImagePayloadBytesDefault = 20 * 1024 * 1024
 
-// pastedImagePlaceholderRe matches the placeholder inserted by the console
-// when a user pastes an image.  ONLY this pattern is considered safe to load
-// and send as multimodal content — arbitrary file paths in user text are ignored.
+// Matches the placeholder inserted by the console when a user pastes an image.
 var pastedImagePlaceholderRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
 
+// Fallback longest-edge cap for embedded images (1568px, per Anthropic recommendation).
+const visionEmbedMaxEdgePxDefault = 1568
+
+// resizeImageForVisionEmbed caps the long edge at maxEdgePx using bilinear resampling.
+func resizeImageForVisionEmbed(data []byte, maxEdgePx int) ([]byte, error) {
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return data, nil // unsupported format, pass through
+	}
+	_ = format
+
+	longEdge := cfg.Width
+	if cfg.Height > longEdge {
+		longEdge = cfg.Height
+	}
+	if longEdge <= maxEdgePx {
+		return data, nil
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data, nil
+	}
+
+	scale := float64(maxEdgePx) / float64(longEdge)
+	newW := int(float64(cfg.Width)*scale + 0.5)
+	newH := int(float64(cfg.Height)*scale + 0.5)
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+
+	// Resize with bilinear interpolation.
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	resample := draw.BiLinear
+	resample.Scale(dst, dst.Rect, img, img.Bounds(), draw.Over, nil)
+
+	// Re-encode as JPEG at quality 85.
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85}); err != nil {
+		return data, agenterrors.NewAgent("conversation", "jpeg encode after resize", err)
+	}
+	return buf.Bytes(), nil
+}
+
 // processImagesInQuery detects and processes images in user queries.
-// If the primary model supports vision it returns the image data as multimodal
-// content so the model can see the images directly.  Otherwise it falls back
-// to the existing OCR pipeline which converts images to text descriptions.
 func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, error) {
-	// Skip if no client is available
 	if a.client == nil {
 		return nil, query, nil
 	}
 
-	// Multimodal path: if the active client reports vision capability, send
-	// pasted images as direct image payloads and strip placeholder text.
-	if c := a.getClient(); c != nil && c.SupportsVision() {
+	if c := a.getClient(); c != nil && a.effectiveConversationalVision(c) {
 		return a.processImagesAsMultimodal(query)
 	}
 
-	// Non-multimodal path: keep the original text placeholder in the prompt so
-	// the model can choose OCR/image-analysis tools.
-	return nil, query, nil
+	paths := extractPastedImagePaths(query)
+	if len(paths) == 0 {
+		return nil, query, nil
+	}
+
+	if c := a.getClient(); c != nil && a.effectiveVisionSupport() {
+		enhancedQuery, err := a.processImagesViaOCR(query)
+		if err != nil {
+			a.Logger().Debug("[WARN] OCR fallback failed: %v\n", err)
+			return nil, query, nil
+		}
+		return nil, enhancedQuery, nil
+	}
+
+	return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
+}
+
+// effectiveConversationalVision reports whether the model is suitable for
+// inline multimodal chat messages, consulting probe ground truth when
+// available. If the probe says the model has no vision, we skip the
+// conversational path regardless of config flags.
+func (a *Agent) effectiveConversationalVision(c api.ClientInterface) bool {
+	if probe := a.probeVisionResult(); probe != nil && !*probe {
+		return false
+	}
+	return supportsConversationalVision(c)
+}
+
+// supportsConversationalVision reports whether the client's vision capability
+// is suitable for inline multimodal chat. Falls back to true when the client
+// doesn't implement SupportsConversationalVision (older or non-Ollama clients).
+func supportsConversationalVision(c api.ClientInterface) bool {
+	if typed, ok := c.(interface{ SupportsConversationalVision() bool }); ok {
+		return typed.SupportsConversationalVision()
+	}
+	return c.SupportsVision()
 }
 
 func extractPastedImagePaths(query string) []string {
@@ -281,26 +349,30 @@ func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) stri
 	return b.String()
 }
 
-// processImagesAsMultimodal extracts pasted-image references from the query,
-// reads each file, and returns the image data for multimodal embedding.
+// processImagesAsMultimodal extracts pasted-image references and returns image data for multimodal embedding.
 func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string, error) {
 	cwd := a.currentWorkspaceRoot()
+
+	caps := api.VisionCapabilitiesDefault()
+	if c := a.getClient(); c != nil {
+		caps = api.VisionCapabilitiesOrDefault(c.VisionCapabilities())
+	}
+	maxEdgePx := caps.MaxImageDimension
+	maxImageBytes := caps.MaxImageBytes
+	maxImageCount := caps.MaxImageCount
+	maxTotalImagePayloadBytes := maxImageBytes * maxImageCount
+	if maxTotalImagePayloadBytes < maxTotalImagePayloadBytesDefault {
+		maxTotalImagePayloadBytes = maxTotalImagePayloadBytesDefault
+	}
 
 	var images []api.ImageData
 	totalBytes := 0
 
-	// Run the regex once: it serves as both the "any matches?" check and
-	// the source of file paths for processing.
 	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
 	if len(uniqueMatches) == 0 {
 		return nil, query, nil
 	}
 
-	// Build replacement map so we can rewrite the query in a single pass.
-	type placeholderInfo struct {
-		fullMatch string
-		filePath  string
-	}
 	var placeholders []placeholderInfo
 	seen := make(map[string]struct{}, len(uniqueMatches))
 	for _, loc := range uniqueMatches {
@@ -313,47 +385,60 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		placeholders = append(placeholders, placeholderInfo{fullMatch: fullMatch, filePath: filePath})
 	}
 
-	// Rewrite the query once, replacing every occurrence of each placeholder.
+	inlinePlaceholders, overflowPlaceholders := a.splitPlaceholdersWithBatchSplit(placeholders, caps, maxImageCount, maxTotalImagePayloadBytes)
+
+	// Rewrite the query, labeling images numerically for multi-image queries.
 	cleanedQuery := query
-	for _, ph := range placeholders {
+	totalImages := len(placeholders)
+	multi := totalImages > 1
+	for i, ph := range inlinePlaceholders {
 		fileName := filepath.Base(ph.filePath)
-		replacement := fmt.Sprintf("[image: %s]", fileName)
+		var replacement string
+		if multi {
+			replacement = fmt.Sprintf("[image %d of %d: %s]", i+1, totalImages, fileName)
+		} else {
+			replacement = fmt.Sprintf("[image: %s]", fileName)
+		}
 		cleanedQuery = strings.ReplaceAll(cleanedQuery, ph.fullMatch, replacement)
 	}
+	for i, ph := range overflowPlaceholders {
+		fileName := filepath.Base(ph.filePath)
+		idx := len(inlinePlaceholders) + i + 1
+		cleanedQuery = strings.ReplaceAll(cleanedQuery, ph.fullMatch,
+			fmt.Sprintf("[image %d of %d: %s]", idx, totalImages, fileName))
+	}
 
-	// Load image files.
+	// Load inline image files, enforcing directory containment and size caps.
 	expectedDir := filepath.Join(cwd, console.PastedImageDirName)
-	for _, ph := range placeholders {
+	for _, ph := range inlinePlaceholders {
 		filePath := ph.filePath
 
-		// Resolve all paths to absolute for containment checking.
 		if !filepath.IsAbs(filePath) {
 			filePath = filepath.Join(cwd, filePath)
 		}
 
-		// Defense-in-depth: only read files under the pasted-images directory.
-		// This prevents reading arbitrary files if an LLM were to produce text
-		// matching the placeholder pattern.
 		relToExpected, err := filepath.Rel(expectedDir, filePath)
 		if err != nil || strings.HasPrefix(relToExpected, "..") {
 			a.Logger().Debug("[WARN] Skipping image %s: not in pasted images directory\n", filePath)
 			continue
 		}
 
-		imgData, imgSize, err := readImageAsImageData(filePath)
+		imgData, imgSize, err := readImageAsImageData(filePath, maxEdgePx)
 		if err != nil {
 			a.Logger().Debug("[WARN] Skipping image %s: %v\n", filePath, err)
 			continue
 		}
 
-		// Enforce per-image size cap (should already be enforced by console, but be safe).
-		if imgSize > console.MaxPastedImageSize {
+		perImageCap := maxImageBytes
+		if perImageCap <= 0 {
+			perImageCap = console.MaxPastedImageSize
+		}
+		if imgSize > perImageCap {
 			a.Logger().Debug("[WARN] Skipping image %s: exceeds per-image size cap (%d > %d)\n",
-				filePath, imgSize, console.MaxPastedImageSize)
+				filePath, imgSize, perImageCap)
 			continue
 		}
 
-		// Enforce total payload cap.
 		if totalBytes+imgSize > maxTotalImagePayloadBytes {
 			a.Logger().Debug("[WARN] Skipping image %s: total payload would exceed cap (%d bytes)\n",
 				filePath, maxTotalImagePayloadBytes)
@@ -368,32 +453,29 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		a.Logger().Debug("[img] Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
 	}
 
+	if len(overflowPlaceholders) > 0 {
+		cleanedQuery = a.appendOCRFallback(cleanedQuery, overflowPlaceholders)
+	}
+
 	return images, cleanedQuery, nil
 }
 
-// processImagesViaOCR uses the existing VisionProcessor to convert images to
-// text descriptions and embed them in the query.
+// processImagesViaOCR converts images to text descriptions via the VisionProcessor.
 func (a *Agent) processImagesViaOCR(query string) (string, error) {
-	// Check if vision processing is available
 	if !tools.HasVisionCapability() {
-		// No vision capability available, return original query
 		return query, nil
 	}
 
-	// Resolve via unified deterministic chain:
-	// active provider vision -> explicit custom fallback -> global list -> local Ollama.
 	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.getClientType())
 	if err != nil {
-		return query, fmt.Errorf("failed to create vision processor: %w", err)
+		return query, agenterrors.NewAgent("conversation", "failed to create vision processor", err)
 	}
 
-	// Process any images found in the text
 	enhancedQuery, analyses, err := processor.ProcessImagesInText(a.InterruptCtx(), query)
 	if err != nil {
-		return query, fmt.Errorf("failed to process images: %w", err)
+		return query, agenterrors.NewAgent("conversation", "failed to process images", err)
 	}
 
-	// If images were processed, log the enhancement
 	if len(analyses) > 0 {
 		a.Logger().Debug("[img] Processed %d image(s) and enhanced query with vision analysis\n", len(analyses))
 		for _, analysis := range analyses {
@@ -404,36 +486,117 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 	return enhancedQuery, nil
 }
 
-// readImageAsImageData reads an image file from disk, validates it, detects
-// the MIME type from magic bytes, optimizes the image for vision models, and
-// returns base64-encoded ImageData with the byte length of the (possibly
-// optimized) image data.
-func readImageAsImageData(filePath string) (api.ImageData, int, error) {
-	// Check size before reading to avoid loading huge files into memory.
+type placeholderInfo struct {
+	fullMatch string
+	filePath  string
+}
+
+// splitPlaceholdersWithBatchSplit splits images into inline and overflow lists using byte-aware BatchSplit.
+func (a *Agent) splitPlaceholdersWithBatchSplit(placeholders []placeholderInfo, caps api.VisionCapabilities, maxImageCount int, maxTotalImagePayloadBytes int) (inline, overflow []placeholderInfo) {
+	if len(placeholders) == 0 {
+		return placeholders, nil
+	}
+
+	sizes := make([]int, len(placeholders))
+	for i, ph := range placeholders {
+		stat, err := os.Stat(ph.filePath)
+		if err != nil {
+			sizes[i] = 0
+			continue
+		}
+		sizes[i] = int(stat.Size())
+	}
+
+	result := BatchSplit(sizes, caps)
+
+	inline = make([]placeholderInfo, 0, len(result.InlineIndices))
+	overflow = make([]placeholderInfo, 0, len(result.OverflowIndices))
+
+	for _, idx := range result.InlineIndices {
+		if idx >= 0 && idx < len(placeholders) {
+			inline = append(inline, placeholders[idx])
+		}
+	}
+	for _, idx := range result.OverflowIndices {
+		if idx >= 0 && idx < len(placeholders) {
+			overflow = append(overflow, placeholders[idx])
+		}
+	}
+
+	if len(overflow) > 0 {
+		a.Logger().Debug("[WARN] Query has %d images, but provider %s supports at most %d inline with ~%d bytes total; %d will be processed via OCR fallback\n",
+			len(placeholders), a.getClientType(), maxImageCount, maxTotalImagePayloadBytes, len(overflow))
+	}
+
+	return inline, overflow
+}
+
+// appendOCRFallback processes overflow images through OCR and appends the descriptions.
+func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []placeholderInfo) string {
+	if len(overflowPlaceholders) == 0 {
+		return cleanedQuery
+	}
+
+	var ocrBuilder strings.Builder
+	ocrBuilder.WriteString("Please analyze the following images:\n")
+	for _, ph := range overflowPlaceholders {
+		ocrBuilder.WriteString(ph.filePath)
+		ocrBuilder.WriteString("\n")
+	}
+	ocrQuery := ocrBuilder.String()
+
+	enhanced, err := a.processImagesViaOCR(ocrQuery)
+	if err != nil {
+		a.Logger().Debug("[WARN] OCR fallback for %d overflow image(s) failed: %v\n",
+			len(overflowPlaceholders), err)
+		for _, ph := range overflowPlaceholders {
+			cleanedQuery += fmt.Sprintf("\n[OCR analysis unavailable for %s]", filepath.Base(ph.filePath))
+		}
+		return cleanedQuery
+	}
+
+	a.Logger().Debug("[img] OCR fallback processed %d overflow image(s)\n", len(overflowPlaceholders))
+
+	cleanedQuery += "\n\n## Additional Image Analysis (OCR fallback)\n"
+	cleanedQuery += enhanced
+
+	return cleanedQuery
+}
+
+// readImageAsImageData reads, validates, optimizes, and base64-encodes an image for vision embedding.
+func readImageAsImageData(filePath string, maxEdgePx int) (api.ImageData, int, error) {
 	stat, err := os.Stat(filePath)
 	if err != nil {
-		return api.ImageData{}, 0, fmt.Errorf("failed to stat file: %w", err)
+		return api.ImageData{}, 0, agenterrors.NewAgent("conversation", "failed to stat file", err)
 	}
 	if stat.Size() > console.MaxPastedImageSize {
-		return api.ImageData{}, 0, fmt.Errorf("image too large (%d bytes)", stat.Size())
+		return api.ImageData{}, 0, agenterrors.NewInvalidInputError(fmt.Sprintf("image too large (%d bytes)", stat.Size()), nil)
 	}
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return api.ImageData{}, 0, fmt.Errorf("failed to read file: %w", err)
+		return api.ImageData{}, 0, agenterrors.NewAgent("conversation", "failed to read file", err)
 	}
 
-	// Validate it is actually an image by checking magic bytes.
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
 		return api.ImageData{}, 0, agenterrors.NewInvalidInputError("unrecognised image format", nil)
 	}
 
-	// Optimize to cap dimensions at 4096px and compress for context efficiency.
 	optimized, optMime, optErr := tools.OptimizeImageData(filePath, data)
 	if optErr == nil && len(optimized) > 0 {
 		mimeType = optMime
 		data = optimized
+	}
+
+	// Resize to cap long edge. NOTE: chaining nearest-neighbor (OptimizeImageData) then bilinear
+	// may compound artifacts for very large inputs (>4096px).
+	resized, resizeErr := resizeImageForVisionEmbed(data, maxEdgePx)
+	if resizeErr == nil && len(resized) > 0 {
+		if !bytes.Equal(resized, data) {
+			data = resized
+			mimeType = "image/jpeg"
+		}
 	}
 
 	encoded := base64.StdEncoding.EncodeToString(data)

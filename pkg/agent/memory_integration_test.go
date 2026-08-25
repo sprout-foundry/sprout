@@ -184,8 +184,12 @@ func TestHandleSearchMemories_NoEmbeddingManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
-	if !strings.Contains(result, "embedding index") {
-		t.Errorf("expected helpful error message; got: %s", result)
+	// With embeddings off, the tool falls back to text-based search of memory
+	// files on disk. With no memory files in the test agent's isolated config
+	// dir, that returns "No memories found" — a genuine search result, not a
+	// broken-tool error.
+	if !strings.Contains(result, "No memories found") {
+		t.Errorf("expected 'No memories found' from text fallback; got: %s", result)
 	}
 }
 

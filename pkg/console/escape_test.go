@@ -86,21 +86,21 @@ func TestEscapeParserMultipleSequences(t *testing.T) {
 func TestEscapeParserMixedSequences(t *testing.T) {
 	ep := NewEscapeParser()
 
-	// ESC followed by 'x' (not a valid sequence starter)
+	// ESC followed by 'x' (not a valid sequence starter).
 	event := ep.Parse(27)
 	if event != nil {
 		t.Errorf("Expected nil after ESC, got %v", event)
 	}
 
 	event = ep.Parse('x')
-	// Should return EventEscape and reset
-	if event == nil || event.Type != EventEscape {
-		t.Errorf("Expected EventEscape, got %v", event)
-	}
-	// Drain pending printable char from the invalid ESC sequence.
-	event = ep.Parse(0)
-	if event == nil || event.Type != EventChar || event.Data != "x" {
-		t.Errorf("Expected pending char event 'x', got %v", event)
+	// CLI-D: ESC + printable letter now yields EventAltLetter with the
+	// letter in Data. The legacy "EventEscape + pending char" path
+	// was removed because the InputReader's keymap dispatch wants a
+	// single-shot event instead of a two-step drain. The pending-char
+	// path is preserved for control bytes outside 32..126 (e.g. raw
+	// CSI sequences whose introducer we don't recognize yet).
+	if event == nil || event.Type != EventAltLetter || event.Data != "x" {
+		t.Errorf("Expected EventAltLetter Data=x, got %v", event)
 	}
 
 	// Now a valid arrow sequence

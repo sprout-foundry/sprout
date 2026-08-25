@@ -15,9 +15,13 @@ vi.mock('../services/apiAdapter', () => {
     getAdapter: () => mockAdapter,
     installAdapter: (adapter: APIAdapter | null) => {
       mockAdapter = adapter;
+      // Mirror the real installAdapter so post-mount installs are picked up
+      // via the event, not only by initial state.
+      window.dispatchEvent(new Event('sprout:adapter-installed'));
     },
     hasAdapter: () => mockAdapter !== null,
     requiresBackendHealthCheck: () => mockAdapter?.requiresBackendHealthCheck === true,
+    ADAPTER_INSTALLED_EVENT: 'sprout:adapter-installed',
     __esModule: true,
   };
 });
@@ -29,6 +33,7 @@ vi.mock('../services/clientSession', () => {
     ...actual,
     clientFetch: vi.fn(),
     getWebUIClientId: vi.fn(() => 'test-client-id'),
+    resolveWebUIClientId: vi.fn(() => Promise.resolve('test-client-id')),
     WEBUI_CLIENT_ID_HEADER: 'X-Sprout-Client-ID',
     __esModule: true,
   };
@@ -36,7 +41,7 @@ vi.mock('../services/clientSession', () => {
 
 // Import after mocking to get the mocked functions
 import { installAdapter, getAdapter } from '../services/apiAdapter';
-import { clientFetch, getWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
+import { clientFetch, resolveWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
 
 // ---------------------------------------------------------------------------
 // Mock Adapter Helper
@@ -445,7 +450,7 @@ describe('SproutAdapterProvider', () => {
   });
 
   it('handles adapter with all optional fields', () => {
-    const navItems = [{ id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 1 }];
+    const navItems = [{ id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 1 }];
 
     const adapter = createMockAdapter({
       name: 'FullFieldsAdapter',

@@ -9,9 +9,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // File size constants for read operations
@@ -39,15 +40,26 @@ func ReadFile(ctx context.Context, filePath string) (string, error) {
 	return ReadFileWithRange(ctx, filePath, 0, 0)
 }
 
+// resolveReadPath resolves the path for reading. PrecheckFileAccess should
+// have already set up the bypass context for "allow" paths.
+func resolveReadPath(ctx context.Context, filePath string) (string, error) {
+	return filesystem.SafeResolvePathWithBypass(ctx, filePath)
+}
+
 func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine int) (string, error) {
-	// SECURITY: Validate path is within working directory (handles symlinks properly)
-	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
+	// SECURITY: Validate path is within working directory (handles symlinks properly).
+	// PrecheckFileAccess should have already set up the bypass context for
+	// "allow" paths. For "prompt" paths, this will fail with a filesystem
+	// error since the interactive gate is gone (SP-127 M4).
+	cleanPath, err := resolveReadPath(ctx, filePath)
 	if err != nil {
 		return "", fmt.Errorf("resolve file path: %w", err)
 	}
 
 	// Security check passed - now check if file exists
-	info, err := os.Stat(cleanPath)
+	// Note: os.Stat uses blocking syscalls. On network filesystems, this can hang.
+	// The symlink resolution above already has a timeout; stat gets a short timeout too.
+	info, err := statWithTimeout(ctx, cleanPath)
 	if os.IsNotExist(err) {
 		return "", fmt.Errorf("file does not exist: %s", cleanPath)
 	}
@@ -87,7 +99,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 
 	if startLine > 0 || endLine > 0 {
 		// For line-range reads, just read up to maxFileSize (could be lineRangeMaxSize)
-		content, err = io.ReadAll(file)
+		content, err = readAllWithContext(ctx, cleanPath, maxFileSize)
 		if err != nil {
 			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
@@ -105,9 +117,9 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		tailSize := maxFileSize - headSize
 
 		head := make([]byte, headSize)
-		n, err := file.Read(head)
+		n, err := fileReadWithContext(ctx, cleanPath, 0, head)
 		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read head %s: %w", cleanPath, err)
 		}
 		head = head[:n]
 		headLines = strings.Count(string(head), "\n")
@@ -117,14 +129,11 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		if tailOffset < 0 {
 			tailOffset = 0
 		}
-		if _, err := file.Seek(tailOffset, io.SeekStart); err != nil {
-			return "", fmt.Errorf("seek in file %s: %w", cleanPath, err)
-		}
 
 		tail := make([]byte, tailSize)
-		n, err = file.Read(tail)
+		n, err = fileReadWithContext(ctx, cleanPath, tailOffset, tail)
 		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read tail %s: %w", cleanPath, err)
 		}
 		tail = tail[:n]
 		tailLines = strings.Count(string(tail), "\n")
@@ -137,8 +146,8 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		content = []byte(string(head) + "\n\n... [~" + fmt.Sprintf("%d", omittedKB) + "KB omitted] ...\n\n" + string(tail))
 		truncated = true
 	} else {
-		// For smaller files, read all content
-		content, err = io.ReadAll(file)
+		// For smaller files, read all content with context cancellation support
+		content, err = readAllWithContext(ctx, cleanPath, int(maxFileSize))
 		if err != nil {
 			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
@@ -263,4 +272,98 @@ func isBinaryContent(content []byte) bool {
 	}
 
 	return false
+}
+
+// statWithTimeout wraps os.Stat with a short timeout to guard against hangs
+// on unresponsive network filesystems (NFS, cloud mounts, Docker volumes).
+func statWithTimeout(ctx context.Context, path string) (os.FileInfo, error) {
+	type statResult struct {
+		info os.FileInfo
+		err  error
+	}
+	resultCh := make(chan statResult, 1)
+	go func() {
+		info, err := os.Stat(path)
+		resultCh <- statResult{info, err}
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(5 * time.Second):
+		return nil, fmt.Errorf("stat timed out after 5s for: %s", path)
+	case res := <-resultCh:
+		return res.info, res.err
+	}
+}
+
+// readAllWithContext reads an entire file with context cancellation support.
+// Unlike io.ReadAll, this launches the read in a goroutine so that if the context
+// is cancelled (e.g., tool timeout fires), the goroutine is abandoned rather than
+// blocking until EOF. The maxSize parameter limits memory usage for very large files.
+func readAllWithContext(ctx context.Context, path string, maxSize int) ([]byte, error) {
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	resultCh := make(chan readResult, 1)
+
+	go func() {
+		file, err := os.Open(path)
+		if err != nil {
+			resultCh <- readResult{nil, fmt.Errorf("open file: %w", err)}
+			return
+		}
+		defer file.Close()
+
+		limited := &io.LimitedReader{R: file, N: int64(maxSize)}
+		data, err := io.ReadAll(limited)
+		if err != nil {
+			resultCh <- readResult{nil, fmt.Errorf("read file: %w", err)}
+			return
+		}
+		resultCh <- readResult{data: data}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.data, res.err
+	case <-ctx.Done():
+		// Abandon the goroutine — file handle will be GC'd eventually
+		return nil, ctx.Err()
+	}
+}
+
+// fileReadWithContext reads a specific portion of a file using read(2) syscalls.
+// This is used for head+tail reads where we need precise positioning.
+func fileReadWithContext(ctx context.Context, path string, offset int64, buf []byte) (int, error) {
+	type readResult struct {
+		n   int
+		err error
+	}
+	resultCh := make(chan readResult, 1)
+
+	go func() {
+		file, err := os.Open(path)
+		if err != nil {
+			resultCh <- readResult{0, fmt.Errorf("open file: %w", err)}
+			return
+		}
+		defer file.Close()
+
+		if offset > 0 {
+			if _, err := file.Seek(offset, io.SeekStart); err != nil {
+				resultCh <- readResult{0, fmt.Errorf("seek: %w", err)}
+				return
+			}
+		}
+		n, err := file.Read(buf)
+		resultCh <- readResult{n, err}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.n, res.err
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
 }

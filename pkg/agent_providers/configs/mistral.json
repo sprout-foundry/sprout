@@ -1,81 +1,371 @@
 {
-  "name": "mistral",
-  "endpoint": "https://api.mistral.ai/v1/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "MISTRAL_API_KEY"
+    "env_var": "MISTRAL_API_KEY",
+    "type": "bearer"
   },
-  "headers": {},
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0.3,
+    "output_token_cost": 0.9
+  },
   "defaults": {
+    "max_tokens": -1,
     "model": "devstral-2512",
     "temperature": 0.7,
-    "max_tokens": -1,
-    "top_p": 1.0
+    "top_p": 1
   },
+  "display_name": "Mistral",
+  "endpoint": "https://api.mistral.ai/v1/chat/completions",
+  "headers": {},
   "message_conversion": {
-    "include_tool_call_id": true,
     "convert_tool_role_to_user": false,
-    "reasoning_content_field": "",
-    "force_tool_call_type": "function"
-  },
-  "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 120000,
-    "done_marker": "[DONE]"
+    "force_tool_call_type": "function",
+    "include_tool_call_id": true,
+    "reasoning_content_field": ""
   },
   "models": {
+    "available_models": [],
     "default_context_limit": 32768,
+    "default_model": "devstral-2512",
+    "model_info": [
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 131072,
+        "description": "Mistral Large - Flagship model for complex tasks",
+        "id": "mistral-large-latest",
+        "input_cost": 0.5,
+        "name": "Mistral Large",
+        "output_cost": 1.5,
+        "tags": [
+          "reasoning",
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 32768,
+        "description": "Mistral Medium - Balanced model for most tasks",
+        "id": "mistral-medium-latest",
+        "input_cost": 1.5,
+        "name": "Mistral Medium",
+        "output_cost": 7.5,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 32768,
+        "description": "Mistral Small - Cost-effective model for simple tasks",
+        "id": "mistral-small-latest",
+        "input_cost": 0.15,
+        "name": "Mistral Small",
+        "output_cost": 0.6,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 32768,
+        "description": "Codestral - Coding specialized model",
+        "id": "codestral-latest",
+        "input_cost": 0.3,
+        "name": "Codestral",
+        "output_cost": 0.9,
+        "tags": [
+          "coding"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 256000,
+        "description": "Mistral's cutting-edge language model for coding released end of July 2025. Codestral specializes in low-latency, high-frequency tasks such as fill-in-the-middle (FIM), code correction and test generation.\n\n[Blog Post](https://mistral.ai/news/codestral-25-08)",
+        "id": "codestral-2508",
+        "input_cost": 0.3,
+        "name": "Mistral: Codestral 2508",
+        "output_cost": 0.9,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 262144,
+        "description": "The largest model in the Ministral 3 family, Ministral 3 14B offers frontier capabilities and performance comparable to its larger Mistral Small 3.2 24B counterpart. A powerful and efficient language...",
+        "id": "ministral-14b-2512",
+        "input_cost": 0.2,
+        "name": "Mistral: Ministral 3 14B 2512",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 131072,
+        "description": "The smallest model in the Ministral 3 family, Ministral 3 3B is a powerful, efficient tiny language model with vision capabilities.",
+        "id": "ministral-3b-2512",
+        "input_cost": 0.1,
+        "name": "Mistral: Ministral 3 3B 2512",
+        "output_cost": 0.1,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 262144,
+        "description": "A balanced model in the Ministral 3 family, Ministral 3 8B is a powerful, efficient tiny language model with vision capabilities.",
+        "id": "ministral-8b-2512",
+        "input_cost": 0.15,
+        "name": "Mistral: Ministral 3 8B 2512",
+        "output_cost": 0.15,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 128000,
+        "description": "This is Mistral AI's flagship model, Mistral Large 2 (version `mistral-large-2407`). It's a proprietary weights-available model and excels at reasoning, code, JSON, chat, and more. Read the launch announcement [here](https://mistral.ai/news/mistral-large-2407/)....",
+        "id": "mistral-large",
+        "input_cost": 2,
+        "name": "Mistral Large",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 131072,
+        "description": "This is Mistral AI's flagship model, Mistral Large 2 (version mistral-large-2407). It's a proprietary weights-available model and excels at reasoning, code, JSON, chat, and more. Read the launch announcement [here](https://mistral.ai/news/mistral-large-2407/)....",
+        "id": "mistral-large-2407",
+        "input_cost": 2,
+        "name": "Mistral Large 2407",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 262144,
+        "description": "Mistral Large 3 2512 is Mistral’s most capable model to date, featuring a sparse mixture-of-experts architecture with 41B active parameters (675B total), and released under the Apache 2.0 license.",
+        "id": "mistral-large-2512",
+        "input_cost": 0.5,
+        "name": "Mistral: Mistral Large 3 2512",
+        "output_cost": 1.5,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 131072,
+        "description": "Mistral Medium 3 is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances state-of-the-art reasoning and multimodal performance with 8× lower cost...",
+        "id": "mistral-medium-3",
+        "input_cost": 0.4,
+        "name": "Mistral: Mistral Medium 3",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Mistral Medium 3.5 is a dense 128B instruction-following model from Mistral AI. It supports text and image inputs with text output, and is designed for agentic workflows, coding, and complex...",
+        "id": "mistral-medium-3-5",
+        "input_cost": 1.5,
+        "name": "Mistral: Mistral Medium 3.5",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 131072,
+        "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances...",
+        "id": "mistral-medium-3.1",
+        "input_cost": 0.4,
+        "name": "Mistral: Mistral Medium 3.1",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "A 12B parameter model with a 128k token context length built by Mistral in collaboration with NVIDIA. The model is multilingual, supporting English, French, German, Spanish, Italian, Portuguese, Chinese, Japanese,...",
+        "id": "mistral-nemo",
+        "input_cost": 0.019,
+        "name": "Mistral: Mistral Nemo",
+        "output_cost": 0.03,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 32768,
+        "description": "Mistral Saba is a 24B-parameter language model specifically designed for the Middle East and South Asia, delivering accurate and contextually relevant responses while maintaining efficient performance. Trained on curated regional...",
+        "id": "mistral-saba",
+        "input_cost": 0.2,
+        "name": "Mistral: Saba",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 32768,
+        "description": "Mistral Small 3 is a 24B-parameter language model optimized for low-latency performance across common AI tasks. Released under the Apache 2.0 license, it features both pre-trained and instruction-tuned versions designed...",
+        "id": "mistral-small-24b-instruct-2501",
+        "input_cost": 0.05,
+        "name": "Mistral: Mistral Small 3",
+        "output_cost": 0.08,
+        "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 262144,
+        "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from...",
+        "id": "mistral-small-2603",
+        "input_cost": 0.15,
+        "name": "Mistral: Mistral Small 4",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Mistral Small 3.1 24B Instruct is an upgraded variant of Mistral Small 3 (2501), featuring 24 billion parameters with advanced multimodal capabilities. It provides state-of-the-art performance in text-based reasoning and...",
+        "id": "mistral-small-3.1-24b-instruct",
+        "input_cost": 0.351,
+        "name": "Mistral: Mistral Small 3.1 24B",
+        "output_cost": 0.555,
+        "tags": [
+          "vision"
+        ]
+      },
+      {
+        "context_length": 256000,
+        "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
+        "id": "mistral-small-3.2-24b-instruct",
+        "input_cost": 0.075,
+        "name": "Mistral: Mistral Small 3.2 24B",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 65536,
+        "description": "Mistral's official instruct fine-tuned version of [Mixtral 8x22B](/models/mistralai/mixtral-8x22b). It uses 39B active parameters out of 141B, offering unparalleled cost efficiency for its size. Its strengths include: - strong math, coding,...",
+        "id": "mixtral-8x22b-instruct",
+        "input_cost": 2,
+        "name": "Mistral: Mixtral 8x22B Instruct",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 32000,
+        "description": "Voxtral Small is an enhancement of Mistral Small 3, incorporating state-of-the-art audio input capabilities while retaining best-in-class text performance. It excels at speech transcription, translation and audio understanding. Input audio...",
+        "id": "voxtral-small-24b-2507",
+        "input_cost": 0.1,
+        "name": "Mistral: Voxtral Small 24B 2507",
+        "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      }
+    ],
     "model_overrides": {
-      "mistral-large-latest": 131072,
-      "mistral-large-2411": 131072,
-      "mistral-large-2407": 131072,
-      "mistral-medium-latest": 32768,
-      "mistral-medium-2312": 32768,
-      "mistral-small-latest": 32768,
-      "mistral-small-2409": 32768,
-      "mistral-tiny-latest": 32768,
-      "open-mistral-nemo": 131072,
-      "open-mistral-7b": 32768,
+      "codestral-2405": 32768,
       "codestral-latest": 32768,
       "devstral-2512": 32768,
-      "codestral-2405": 32768,
-      "mistral-embed": 32768
+      "mistral-embed": 32768,
+      "mistral-large-2407": 131072,
+      "mistral-large-2411": 131072,
+      "mistral-large-latest": 131072,
+      "mistral-medium-2312": 32768,
+      "mistral-medium-latest": 32768,
+      "mistral-small-2409": 32768,
+      "mistral-small-latest": 32768,
+      "mistral-tiny-latest": 32768,
+      "open-mistral-7b": 32768,
+      "open-mistral-nemo": 131072
     },
     "pattern_overrides": [
       {
-        "pattern": "mistral-large.*",
-        "context_limit": 131072
+        "context_limit": 131072,
+        "pattern": "mistral-large.*"
       },
       {
-        "pattern": "mistral-medium.*",
-        "context_limit": 32768
+        "context_limit": 32768,
+        "pattern": "mistral-medium.*"
       },
       {
-        "pattern": "mistral-small.*",
-        "context_limit": 32768
+        "context_limit": 32768,
+        "pattern": "mistral-small.*"
       },
       {
-        "pattern": "mistral-tiny.*",
-        "context_limit": 32768
+        "context_limit": 32768,
+        "pattern": "mistral-tiny.*"
       },
       {
-        "pattern": "open-mistral.*",
-        "context_limit": 32768
+        "context_limit": 32768,
+        "pattern": "open-mistral.*"
       },
       {
-        "pattern": "codestral.*",
-        "context_limit": 32768
+        "context_limit": 32768,
+        "pattern": "codestral.*"
       }
     ],
     "supports_vision": true,
-    "vision_model": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
-    "default_model": "devstral-2512",
-    "available_models": []
+    "vision_model": "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
   },
+  "name": "mistral",
   "retry": {
-    "max_attempts": 3,
+    "backoff_multiplier": 2,
     "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
+    "max_attempts": 3,
     "max_delay_ms": 10000,
     "retryable_errors": [
       "rate_limit_exceeded",
@@ -83,10 +373,9 @@
       "timeout"
     ]
   },
-  "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
-    "currency": "USD"
-  },
-  "display_name": "Mistral"
+  "streaming": {
+    "chunk_timeout_ms": 120000,
+    "done_marker": "[DONE]",
+    "format": "sse"
+  }
 }

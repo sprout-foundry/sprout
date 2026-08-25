@@ -6,15 +6,12 @@
  */
 
 import { debugLog } from '../utils/log';
-import { getAdapter } from './apiAdapter';
+import { isCloud } from '../config/mode';
 
 export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
-  // Skip SW registration when adapter is installed (cloud mode doesn't have sw.js)
-  if (getAdapter()) {
-    debugLog('SW registration skipped: adapter installed (cloud mode)');
-    return null;
-  }
-
+  // In cloud mode, register the SW for app-shell caching + installability.
+  // The SW caches navigations (network-first) and static assets (cache-first)
+  // so the app loads fast and works offline (IndexedDB backs the VFS).
   if (!('serviceWorker' in navigator)) {
     return null;
   }
@@ -27,7 +24,9 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
   }
 
   try {
-    const swUrl = `${import.meta.env.PUBLIC_URL || ''}/sw.js`;
+    // In cloud mode the SW is served at /webui/sw.js (relative to the app
+    // scope). In local mode it's at the root.
+    const swUrl = isCloud ? '/webui/sw.js' : `${import.meta.env.PUBLIC_URL || ''}/sw.js`;
     const registration = await navigator.serviceWorker.register(swUrl);
     await registration.update();
     debugLog('SW registered:', registration);

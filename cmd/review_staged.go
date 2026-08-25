@@ -39,19 +39,19 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 
 		// Override model if specified by flag
 		var customAgentClient api.ClientInterface
-			if reviewStagedModel != "" {
-				clientType, resolvedModel, err := configuration.ResolveProviderModel(cfg, "", reviewStagedModel)
-				if err != nil {
-					logger.LogError(fmt.Errorf("failed to resolve provider/model from '%s': %w", reviewStagedModel, err))
-					return
-				}
-				customAgentClient, err = factory.CreateProviderClient(clientType, resolvedModel)
-				if err != nil {
-					logger.LogError(fmt.Errorf("failed to create agent client with provider '%s' model '%s': %w", clientType, resolvedModel, err))
-					return
-				}
-				logger.LogProcessStep(fmt.Sprintf("Using custom provider/model: %s | %s", clientType, resolvedModel))
+		if reviewStagedModel != "" {
+			clientType, resolvedModel, err := configuration.ResolveProviderModel(cfg, "", reviewStagedModel)
+			if err != nil {
+				logger.LogError(fmt.Errorf("failed to resolve provider/model from '%s': %w", reviewStagedModel, err))
+				return
 			}
+			customAgentClient, err = factory.CreateProviderClient(clientType, resolvedModel)
+			if err != nil {
+				logger.LogError(fmt.Errorf("failed to create agent client with provider '%s' model '%s': %w", clientType, resolvedModel, err))
+				return
+			}
+			logger.LogProcessStep(fmt.Sprintf("Using custom provider/model: %s | %s", clientType, resolvedModel))
+		}
 
 		// Check for staged changes
 		cmdCheckStaged := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code")

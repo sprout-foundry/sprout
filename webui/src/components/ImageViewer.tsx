@@ -372,7 +372,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
 
   if (!dimensions) {
     return (
-      <div className="image-viewer">
+      <div className="image-viewer" data-testid="image-viewer">
         <div className="image-viewer-empty">
           <div className="image-viewer-empty-icon">
             <ImageIcon size={48} />
@@ -384,7 +384,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   }
 
   return (
-    <div className="image-viewer" tabIndex={0} onKeyDown={handleKeyDown}>
+    <div className="image-viewer" tabIndex={0} onKeyDown={handleKeyDown} data-testid="image-viewer">
       {loading && (
         <div className="loading-indicator">
           <Loader2 size={16} className="spinner" />
@@ -407,6 +407,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        data-testid="image-viewer"
       >
         <div
           className="image-viewer-content"

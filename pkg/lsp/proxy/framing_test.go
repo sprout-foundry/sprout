@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -101,6 +102,45 @@ func TestReadMessage(t *testing.T) {
 		assert.Equal(t, body, result)
 	})
 
+	// CRLF is what every real language server emits, and what WriteMessage
+	// produces. It went untested, which let a header-loop bug that hung the
+	// LSP proxy on every language ship green.
+	t.Run("reads simple message with \\r\\n line endings", func(t *testing.T) {
+		msg := "Content-Length: 4\r\n\r\ntest"
+		body, err := ReadMessage(strings.NewReader(msg))
+		require.NoError(t, err)
+		assert.Equal(t, "test", body)
+	})
+
+	t.Run("reads CRLF message with extra headers", func(t *testing.T) {
+		msg := "Content-Type: application/vscode-jsonrpc; charset=utf-8\r\nContent-Length: 4\r\n\r\ntest"
+		body, err := ReadMessage(strings.NewReader(msg))
+		require.NoError(t, err)
+		assert.Equal(t, "test", body)
+	})
+
+	// Mirrors LSPProcess.readLoop: one long-lived MessageReader draining a
+	// stream of back-to-back frames.
+	t.Run("reads consecutive CRLF messages from one stream", func(t *testing.T) {
+		body := `{"jsonrpc":"2.0","id":1}`
+		frame := "Content-Length: " + strconv.Itoa(len(body)) + "\r\n\r\n" + body
+		mr := NewMessageReader(strings.NewReader(frame + frame))
+		for i := 0; i < 2; i++ {
+			result, err := mr.Read()
+			require.NoError(t, err, "message %d", i)
+			assert.Equal(t, body, result, "message %d", i)
+		}
+	})
+
+	t.Run("round-trips what WriteMessage produces", func(t *testing.T) {
+		var buf bytes.Buffer
+		body := `{"jsonrpc":"2.0","result":{"capabilities":{}}}`
+		require.NoError(t, WriteMessage(&buf, body))
+		result, err := ReadMessage(&buf)
+		require.NoError(t, err)
+		assert.Equal(t, body, result)
+	})
+
 	t.Run("reads with extra headers", func(t *testing.T) {
 		msg := "Content-Type: application/json\nContent-Length: 4\n\ntest"
 		result, err := ReadMessage(strings.NewReader(msg))
@@ -167,8 +207,6 @@ func TestReadMessage(t *testing.T) {
 	})
 }
 
-
-
 func TestMessageReader(t *testing.T) {
 	t.Run("NewMessageReader creates reader", func(t *testing.T) {
 		r := strings.NewReader("test")
@@ -221,16 +259,18 @@ func TestMessageWriter(t *testing.T) {
 // --- Coverage gap tests for framing.go ---
 
 func TestReadMessageWithCROnlyLine(t *testing.T) {
-	t.Run("handles \\r only line between headers", func(t *testing.T) {
-		// Covers line 50: the `if line == "\r"` branch
-		// When a \r\n appears in the header section, after stripping \n we get "\r".
-		// The parser's \r-only check triggers `continue`, skipping to find the real blank line.
-		// Input: "Content-Length: 4\n\r\n\ntest"
-		//   - ReadString('\n') → "Content-Length: 4\n" → strip \n → "Content-Length: 4" → header
-		//   - ReadString('\n') → "\r\n" → strip \n → "\r" → continue (line 50!)
-		//   - ReadString('\n') → "\n" → strip \n → "" → break (end of headers)
-		//   - ReadFull(4 bytes) → "test"
-		msg := "Content-Length: 4\n\r\n\ntest"
+	t.Run("a bare \\r\\n line terminates the header block", func(t *testing.T) {
+		// A CRLF blank line is the spec-mandated header terminator. Treating it
+		// as anything else (the old code did `continue`) makes the reader run
+		// past the delimiter and swallow the body as another header line.
+		msg := "Content-Length: 4\r\n\r\ntest"
+		result, err := ReadMessage(strings.NewReader(msg))
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+	})
+
+	t.Run("mixed LF header and CRLF terminator", func(t *testing.T) {
+		msg := "Content-Length: 4\n\r\ntest"
 		result, err := ReadMessage(strings.NewReader(msg))
 		require.NoError(t, err)
 		assert.Equal(t, "test", result)
@@ -260,7 +300,7 @@ func TestReadMessageReadBodyNonEOFError(t *testing.T) {
 	t.Run("non-EOF/non-UnexpectedEOF error reading body", func(t *testing.T) {
 		// Covers line 84: io.ReadFull returns some other error
 		r := &readErrorReader{
-			header: "Content-Length: 10\n\n",
+			header:  "Content-Length: 10\n\n",
 			bodyErr: errors.New("read failure"),
 		}
 		_, err := ReadMessage(r)

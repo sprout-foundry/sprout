@@ -125,7 +125,7 @@ func getProvidersSlice(statusResp map[string]interface{}) ([]interface{}, bool) 
 // ---------------------------------------------------------------------------
 
 func TestOnboardingE2E_FreshUserSkipsToEditorMode(t *testing.T) {
-	// This test simulates a fresh user who decides to use ledit as an editor-only tool
+	// This test simulates a fresh user who decides to use sprout as an editor-only tool
 	// without configuring any AI provider.
 	ws, _ := setupOnboardingTestServer(t)
 

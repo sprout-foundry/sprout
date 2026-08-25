@@ -17,24 +17,16 @@
  *   - Feed returns null when no activities
  */
 
-import { createElement } from 'react';
+import { createElement, act } from 'react';
 
 // ── Mock lucide-react icons ──────────────────────────────────────────
 
 vi.mock('lucide-react', () => {
   const { createElement: h } = require('react');
-  const icons = [
-    'Bot',
-    'CheckCircle2',
-    'XCircle',
-    'ChevronDown',
-    'ChevronRight',
-    'Loader2',
-  ];
+  const icons = ['Bot', 'CheckCircle2', 'XCircle', 'ChevronDown', 'ChevronRight', 'Loader2'];
   const result: Record<string, (props: any) => JSX.Element> = {};
   for (const name of icons) {
-    result[name] = (props: any) =>
-      h('svg', { 'data-testid': name.toLowerCase().replace('2', ''), ...props });
+    result[name] = (props: any) => h('svg', { 'data-testid': name.toLowerCase().replace('2', ''), ...props });
   }
   return result;
 });
@@ -150,10 +142,10 @@ vi.mock('@sprout/ui', () => {
 
   // ── Mock LiveLog ────────────────────────────────────────────────
   function LiveLog({ lines, maxLines }) {
-    return h('div', { 'data-testid': 'live-log', 'data-max-lines': maxLines },
-      (lines || []).map((line, i) =>
-        h('div', { key: i, 'data-testid': 'live-log-line' }, line.text)
-      )
+    return h(
+      'div',
+      { 'data-testid': 'live-log', 'data-max-lines': maxLines },
+      (lines || []).map((line, i) => h('div', { key: i, 'data-testid': 'live-log-line' }, line.text)),
     );
   }
 
@@ -169,7 +161,6 @@ vi.mock('@sprout/ui', () => {
   };
 });
 
-import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SubagentActivityFeed } from './SubagentActivityFeed';
@@ -600,7 +591,7 @@ describe('SubagentActivityFeed', () => {
         toolCallId: 'call-ccost',
         depth: 0,
         isComplete: true,
-        cost: 0.0150,
+        cost: 0.015,
       });
 
       act(() => {

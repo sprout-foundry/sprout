@@ -16,10 +16,10 @@ import (
 
 // Match describes a single secret detected in input text.
 type Match struct {
-	RuleID    string  // gitleaks rule ID (e.g. "openai-api-key", "generic-api-key")
-	Match     string  // the broader matched substring (rule-defined; may include the var name)
-	Secret    string  // the extracted secret value (the part to actually redact)
-	StartLine int     // 1-based line number of the match
+	RuleID    string // gitleaks rule ID (e.g. "openai-api-key", "generic-api-key")
+	Match     string // the broader matched substring (rule-defined; may include the var name)
+	Secret    string // the extracted secret value (the part to actually redact)
+	StartLine int    // 1-based line number of the match
 	StartCol  int
 	EndLine   int
 	EndCol    int

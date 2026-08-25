@@ -10,6 +10,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
 
 // TestGetModel tests the GetModel method
@@ -164,8 +165,9 @@ func TestHasSessionOverrides_AfterSetProvider(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "test-provider",
@@ -238,8 +240,9 @@ func TestHasSessionOverrides_AfterClearSessionOverrides(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "test-provider",
@@ -338,8 +341,9 @@ func TestGetProvider_ReturnsSessionOverride(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "custom-provider",
@@ -430,8 +434,9 @@ func TestGetProviderType_ReturnsSessionOverride(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "custom-provider-type",
@@ -521,8 +526,9 @@ func TestGetModel_ReturnsSessionOverride(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "model-session-test",
@@ -616,8 +622,9 @@ func TestSetProvider_DoesNotPersistToConfig(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "no-persist-provider",
@@ -735,8 +742,9 @@ func TestSetModel_DoesNotPersistToConfig(t *testing.T) {
 
 	// Set up custom provider config with initial model
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "model-persist-test",
@@ -827,8 +835,9 @@ func TestSetProviderPersisted_DoesPersistToConfig(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "persisted-provider",
@@ -915,8 +924,9 @@ func TestSessionOverrides_TakePrecedenceOverConfig(t *testing.T) {
 
 	// Set up custom provider config with a specific model
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "precedence-test",
@@ -1006,8 +1016,9 @@ func TestSetProvider_WithSessionOverrideFlag(t *testing.T) {
 
 	// Set up custom provider config
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "session-override",
@@ -1047,5 +1058,334 @@ func TestSetProvider_WithSessionOverrideFlag(t *testing.T) {
 	// Verify GetProviderType returns the new provider type
 	if agent.GetProviderType() != "session-override" {
 		t.Errorf("Expected GetProviderType to return 'session-override', got %q", agent.GetProviderType())
+	}
+}
+
+// TestSelectProbeRecommended verifies the probe-first default-model selection.
+// Capability probe results drive selection when present; un-probed models keep
+// the legacy behavior (no RecommendedRoles → ignored).
+func TestSelectProbeRecommended(t *testing.T) {
+	tests := []struct {
+		name   string
+		models []api.ModelInfo
+		want   string
+	}{
+		{
+			name:   "empty list",
+			models: nil,
+			want:   "",
+		},
+		{
+			name: "all un-probed — no probe-backed candidate",
+			models: []api.ModelInfo{
+				{ID: "alpha", RecommendedRoles: nil},
+				{ID: "beta", RecommendedRoles: []string{}},
+			},
+			want: "",
+		},
+		{
+			name: "primary beats subagent",
+			models: []api.ModelInfo{
+				{ID: "small", RecommendedRoles: []string{"subagent"}},
+				{ID: "strong", RecommendedRoles: []string{"primary", "subagent"}},
+				{ID: "medium", RecommendedRoles: []string{"primary"}},
+			},
+			want: "strong", // first primary in iteration order
+		},
+		{
+			name: "subagent-only after no-primary",
+			models: []api.ModelInfo{
+				{ID: "first", RecommendedRoles: []string{"subagent"}},
+				{ID: "second", RecommendedRoles: []string{"subagent"}},
+			},
+			want: "first",
+		},
+		{
+			name: "un-probed is ignored even when first",
+			models: []api.ModelInfo{
+				{ID: "unprobed", RecommendedRoles: nil},
+				{ID: "good", RecommendedRoles: []string{"subagent"}},
+			},
+			want: "good",
+		},
+		{
+			name: "unknown role label is ignored",
+			models: []api.ModelInfo{
+				{ID: "x", RecommendedRoles: []string{"vision"}}, // not primary/subagent
+				{ID: "y", RecommendedRoles: []string{"subagent"}},
+			},
+			want: "y",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := selectProbeRecommended(tt.models)
+			if got != tt.want {
+				t.Errorf("selectProbeRecommended() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestModelcontractRoleHas covers the membership helper used by
+// selectProbeRecommended (and shared via pkg/modelcontract with the webui).
+func TestModelcontractRoleHas(t *testing.T) {
+	if modelcontract.RoleHas(nil, modelcontract.RolePrimary) {
+		t.Error("RoleHas(nil, primary) = true, want false")
+	}
+	if modelcontract.RoleHas([]string{}, modelcontract.RolePrimary) {
+		t.Error("RoleHas([], primary) = true, want false")
+	}
+	if !modelcontract.RoleHas([]string{modelcontract.RolePrimary}, modelcontract.RolePrimary) {
+		t.Error("RoleHas([primary], primary) = false, want true")
+	}
+	if modelcontract.RoleHas([]string{modelcontract.RolePrimary}, modelcontract.RoleSubagent) {
+		t.Error("RoleHas([primary], subagent) = true, want false")
+	}
+	// Exact match — substring "primary" inside "primary-only" must not match.
+	if modelcontract.RoleHas([]string{"primary-only"}, modelcontract.RolePrimary) {
+		t.Error("substring match leaked through RoleHas")
+	}
+}
+
+func TestSetProviderFallsBackWhenConfiguredCustomModelIsInvalid(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "qwen3.5-4b"},
+					{"id": "qwen3.5-35-A3B"},
+				},
+			})
+		case "/v1/chat/completions":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode chat request: %v", err)
+			}
+
+			model, _ := body["model"].(string)
+			if model != "qwen3.5-4b" {
+				http.Error(w, "error code: 502", http.StatusBadGateway)
+				return
+			}
+
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "chatcmpl-test",
+				"object":  "chat.completion",
+				"created": 1,
+				"model":   model,
+				"choices": []map[string]any{
+					{
+						"index": 0,
+						"message": map[string]any{
+							"role":    "assistant",
+							"content": "ok",
+						},
+						"finish_reason": "stop",
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	configDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "ai-worker",
+		Endpoint:       server.URL + "/v1",
+		ModelName:      "2",
+		RequiresAPIKey: false,
+	})
+	if err != nil {
+		t.Fatalf("failed to save custom provider: %v", err)
+	}
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	if err := agent.SetProviderPersisted(api.ClientType("ai-worker")); err != nil {
+		t.Fatalf("expected provider switch to recover from invalid configured model, got error: %v", err)
+	}
+
+	if got := agent.GetModel(); got != "qwen3.5-4b" {
+		t.Fatalf("expected fallback model to be persisted on switch, got %q", got)
+	}
+
+	savedCfg, err := configuration.Load()
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+	if got := savedCfg.GetModelForProvider("ai-worker"); got != "qwen3.5-4b" {
+		t.Fatalf("expected saved provider model to be updated, got %q", got)
+	}
+}
+
+func TestSelectDefaultModel(t *testing.T) {
+	a := &Agent{}
+	tests := []struct {
+		name     string
+		provider api.ClientType
+		models   []api.ModelInfo
+		want     string
+	}{
+		{"empty", api.DeepInfraClientType, nil, ""},
+		{"deepinfra ordered compound pattern", api.DeepInfraClientType, []api.ModelInfo{{ID: "other"}, {ID: "DeepSeek-Chat"}, {ID: "DeepSeek-Coder-Instruct"}}, "DeepSeek-Coder-Instruct"},
+		{"deepinfra fallback pattern", api.DeepInfraClientType, []api.ModelInfo{{ID: "other"}, {ID: "DeepSeek-Chat"}}, "DeepSeek-Chat"},
+		{"openrouter free", api.OpenRouterClientType, []api.ModelInfo{{ID: "paid"}, {ID: "model:FREE"}}, "model:FREE"},
+		{"ollama local ordered patterns", api.OllamaLocalClientType, []api.ModelInfo{{ID: "llama3.1:8b"}, {ID: "llama3.2:3b"}}, "llama3.2:3b"},
+		{"ollama cloud", api.OllamaCloudClientType, []api.ModelInfo{{ID: "deepseek"}, {ID: "gpt-oss:20b"}}, "gpt-oss:20b"},
+		{"lmstudio skips embedding", api.LMStudioClientType, []api.ModelInfo{{ID: "text-embedding"}, {ID: "chat-model"}}, "chat-model"},
+		{"default first", api.OpenAIClientType, []api.ModelInfo{{ID: "first"}, {ID: "second"}}, "first"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := a.selectDefaultModel(tt.models, tt.provider); got != tt.want {
+				t.Fatalf("selectDefaultModel() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchPattern(t *testing.T) {
+	for _, tc := range []struct {
+		id, pattern string
+		want        bool
+	}{
+		{"Org/DeepSeek-Coder-Instruct", "deepseek*instruct", true},
+		{"model:free", ":free", true},
+		{"llama3.2:3b", "llama3.2", true},
+		{"deepseek-chat", "deepseek*instruct", false},
+		{"anything", "", false},
+	} {
+		if got := matchPattern(tc.id, tc.pattern); got != tc.want {
+			t.Errorf("matchPattern(%q, %q) = %v, want %v", tc.id, tc.pattern, got, tc.want)
+		}
+	}
+}
+
+// TestSetProviderPersisted_UpdatesSessionState guards the stale-footer
+// regression: GetModel()/GetProvider() check session state FIRST and fall
+// back to the client only when the session override is empty. SetProviderPersisted
+// swaps the client pointer, and before the fix it never wrote the new
+// provider/model into session state — so a stale session override left by a
+// prior SetProvider/SetModel call masked the freshly-switched client, making
+// the CLI footer show the old model/provider "for a while" until the override
+// was cleared. The fix adds SetSessionProvider/SetSessionModel calls to
+// SetProviderPersisted; this test fails without them.
+func TestSetProviderPersisted_UpdatesSessionState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "modelA"},
+					{"id": "modelB"},
+				},
+			})
+		case "/v1/chat/completions":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode chat request: %v", err)
+			}
+			model, _ := body["model"].(string)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "chatcmpl-test",
+				"object":  "chat.completion",
+				"created": 1,
+				"model":   model,
+				"choices": []map[string]any{
+					{
+						"index": 0,
+						"message": map[string]any{
+							"role":    "assistant",
+							"content": "ok",
+						},
+						"finish_reason": "stop",
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	configDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	if err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "provider-a",
+		Endpoint:       server.URL + "/v1",
+		ModelName:      "modelA",
+		RequiresAPIKey: false,
+	}); err != nil {
+		t.Fatalf("failed to save provider-a: %v", err)
+	}
+	if err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
+		Name:           "provider-b",
+		Endpoint:       server.URL + "/v1",
+		ModelName:      "modelB",
+		RequiresAPIKey: false,
+	}); err != nil {
+		t.Fatalf("failed to save provider-b: %v", err)
+	}
+
+	ag, err := NewAgent()
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Step 1: Establish a stale session override on provider-a.
+	// SetProvider populates session state; SetModel pins a specific model
+	// into the session override that GetModel() returns first.
+	if err := ag.SetProvider(api.ClientType("provider-a")); err != nil {
+		t.Fatalf("failed to set provider-a: %v", err)
+	}
+	if err := ag.SetModel("modelA"); err != nil {
+		t.Fatalf("failed to set session model on provider-a: %v", err)
+	}
+	staleModel := ag.GetModel()
+	if staleModel != "modelA" {
+		t.Fatalf("setup: expected stale session model %q, got %q", "modelA", staleModel)
+	}
+
+	// Step 2: Switch to provider-b via SetProviderPersisted. Before the fix,
+	// session state still held provider-a/modelA, so GetProvider()/GetModel()
+	// returned the stale values instead of the new client's.
+	if err := ag.SetProviderPersisted(api.ClientType("provider-b")); err != nil {
+		t.Fatalf("failed to set provider-b persisted: %v", err)
+	}
+
+	// Step 3: GetProvider must reflect the new provider immediately.
+	if got := ag.GetProvider(); got != "provider-b" {
+		t.Errorf("GetProvider() = %q, want %q (stale session override not cleared)", got, "provider-b")
+	}
+
+	// Step 4: GetModel must match the new client's model — i.e. session state
+	// was refreshed and no longer masks the swapped client. We compare against
+	// the client's own model rather than a hardcoded name because model
+	// resolution for custom providers may fall back to selectDefaultModel.
+	clientModel := ag.getClient().GetModel()
+	if clientModel == "" {
+		t.Fatal("client returned empty model after switch; cannot verify")
+	}
+	if got := ag.GetModel(); got != clientModel {
+		t.Errorf("GetModel() = %q, want %q (new client's model; stale session override %q not cleared)",
+			got, clientModel, staleModel)
+	}
+	if ag.GetModel() == staleModel && staleModel != clientModel {
+		t.Errorf("GetModel() still returns stale session override %q after SetProviderPersisted", staleModel)
 	}
 }

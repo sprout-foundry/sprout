@@ -9,13 +9,18 @@
 // implementation is registered, SuspendIndicator is a no-op.
 package clihooks
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 var (
-	mu          sync.RWMutex
-	suspendFunc func()
-	steerPause  func()
-	steerResume func()
+	mu                 sync.RWMutex
+	suspendFunc        func()
+	resumeFunc         func()
+	steerPause         func()
+	steerResume        func()
+	streamingSuspended atomic.Bool
 )
 
 // SetSuspendIndicator installs (or clears, with nil) the global function
@@ -32,6 +37,26 @@ func SetSuspendIndicator(fn func()) {
 func SuspendIndicator() {
 	mu.RLock()
 	fn := suspendFunc
+	mu.RUnlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+// SetResumeIndicator installs (or clears, with nil) the global function
+// used to resume the active CLI activity indicator. Called by the indicator
+// owner (typically the agent CLI entry point).
+func SetResumeIndicator(fn func()) {
+	mu.Lock()
+	defer mu.Unlock()
+	resumeFunc = fn
+}
+
+// ResumeIndicator runs the registered resume hook if one is set. Safe to
+// call from anywhere; no-op when nothing is registered.
+func ResumeIndicator() {
+	mu.RLock()
+	fn := resumeFunc
 	mu.RUnlock()
 	if fn != nil {
 		fn()
@@ -100,4 +125,28 @@ func WithCookedStdin(fn func() error) error {
 	PauseSteer()
 	defer ResumeSteer()
 	return fn()
+}
+
+// SuspendStreaming sets a flag that the streaming callback checks before
+// writing prose to the terminal. Used by interactive prompts (security
+// approvals, edit review) that render to the terminal while the agent's
+// streaming goroutine may still be receiving chunks — without this, the
+// streaming callback clobbers the prompt with mid-stream prose.
+//
+// The flag is process-global and atomic; callers MUST pair this with a
+// deferred ResumeStreaming to avoid permanently suppressing output.
+func SuspendStreaming() {
+	streamingSuspended.Store(true)
+}
+
+// ResumeStreaming clears the SuspendStreaming flag. Safe to call when
+// streaming was never suspended (the flag defaults to false).
+func ResumeStreaming() {
+	streamingSuspended.Store(false)
+}
+
+// IsStreamingSuspended reports whether SuspendStreaming is active.
+// Called by the streaming callback to decide whether to suppress a chunk.
+func IsStreamingSuspended() bool {
+	return streamingSuspended.Load()
 }

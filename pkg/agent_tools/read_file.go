@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -75,25 +75,52 @@ func (h *readFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// SP-127 M2: Consult Gate 1's path-tier classifier up-front so
+	// Allow paths skip the gate entirely and Deny paths return a
+	// typed error immediately — without waiting for SafeResolvePath
+	// to fail first. Prompt paths fall through to the interactive
+	// dialog.
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	// Parse view_range
-	var startLine, endLine int
-	if vr, exists := args["view_range"]; exists && vr != nil {
-		arr := vr.([]any)
-		startLine = toIntArg(arr[0])
-		endLine = toIntArg(arr[1])
+	// Gate 1 precheck — resolves the path and classifies it.
+	resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "read_file", path)
+	if decision == "deny" {
+		// A deny on read_file is not a read_only violation — reads are
+		// always allowed under read_only grants. Surface a neutral message.
+		return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", path), IsError: true},
+			fmt.Errorf("read blocked: %s is not accessible", path)
+	}
+	// "allow"  → path is workspace/tmp/allowlisted; proceed directly.
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "read_file", path, resolvedPath, "read"); approved {
+			ctx = ctx2
+		}
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "read_file",
-			"path": path,
-		})
+	// Parse view_range (defensive — Validate() should have been called,
+	// but we guard against panic if it wasn't or input is malformed)
+	var startLine, endLine int
+	if vr, exists := args["view_range"]; exists && vr != nil {
+		if arr, ok := vr.([]any); ok && len(arr) == 2 {
+			startLine = toIntArg(arr[0])
+			endLine = toIntArg(arr[1])
+		}
+	}
+
+	// SP-046-2: Record the read for staleness tracking (all code paths, including PDF)
+	// Use a defer so this runs regardless of which branch handles the file.
+	if tracker := GetGlobalTurnReadTracker(); tracker != nil {
+		meta, _ := GetGlobalSyncState().GetMetadata(path)
+		seq := int64(0)
+		if meta != nil {
+			seq = meta.BrowserSeq
+		}
+		tracker.RecordRead(path, seq)
 	}
 
 	// Check if this is a PDF file
@@ -101,7 +128,8 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return h.handlePDF(ctx, env, path)
 	}
 
-	// Use existing read logic
+	// Use existing read logic. Off-workspace paths will fail
+	// with the raw filesystem error since the interactive gate is gone.
 	var content string
 	if startLine > 0 || endLine > 0 {
 		content, err = ReadFileWithRange(ctx, path, startLine, endLine)
@@ -109,26 +137,11 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		content, err = ReadFile(ctx, path)
 	}
 
-	// NOTE: Security approvals for path traversal are handled by the legacy
-	// dispatch path (tool_definitions.go). In the new ToolHandler path,
-	// errors from SafeResolvePathWithBypass are returned directly.
-	// To enable cross-directory reads, use workspace configuration or unsafe mode.
-
 	if err != nil {
 		return ToolResult{
 			Output:  "",
 			IsError: true,
 		}, fmt.Errorf("read file %q: %w", path, err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "read_file",
-			"path":   path,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(content),
-		})
 	}
 
 	// Write to output writer if available
@@ -142,9 +155,16 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}, nil
 }
 
+func (h *readFileHandler) Aliases() []string      { return nil }
+func (h *readFileHandler) Timeout() time.Duration { return 0 }
+func (h *readFileHandler) MaxResultSize() int     { return 0 }
+func (h *readFileHandler) SafeForParallel() bool  { return false }
+func (h *readFileHandler) Interactive() bool      { return false }
+
 // handlePDF processes a PDF file and returns it as base64 data URI for vision-capable models.
 func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {
-	// Resolve path securely
+	// Resolve path securely. Off-workspace paths will fail with the raw
+	// filesystem error since the interactive gate is gone.
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
 	if err != nil {
 		return ToolResult{
@@ -192,15 +212,6 @@ func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path strin
 		textContent = fmt.Sprintf("[PDF file: %s (%d pages rendered as images for visual analysis)]", cleanPath, len(result.Images))
 	} else {
 		textContent = fmt.Sprintf("[PDF file: %s (%d bytes). Text extraction unavailable: %v. Base64 data URI provided for vision-capable models.]", cleanPath, len(data), pipelineErr)
-	}
-
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "read_file",
-			"path":   path,
-			"bytes":  len(data),
-			"images": 1,
-		})
 	}
 
 	return ToolResult{

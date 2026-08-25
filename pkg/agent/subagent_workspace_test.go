@@ -70,10 +70,10 @@ func TestIsPathInWorkspace(t *testing.T) {
 	workspaceDir := "/home/user/project"
 
 	tests := []struct {
-		name     string
-		path     string
+		name      string
+		path      string
 		workspace string
-		expected bool
+		expected  bool
 	}{
 		{
 			name:      "file in workspace",

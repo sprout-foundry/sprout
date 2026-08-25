@@ -14,7 +14,7 @@ func TestGetCredentialNames_WithCredentials(t *testing.T) {
 	config := MCPServerConfig{
 		Name: "test-server",
 		Credentials: map[string]string{
-			"API_KEY":     "secret-key",
+			"API_KEY":      "secret-key",
 			"ACCESS_TOKEN": "token-123",
 			"PASSWORD":     "pass-456",
 		},

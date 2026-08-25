@@ -25,6 +25,9 @@ const FONT_SIZE_DEFAULT = 14;
 export interface EditorPaneFooterProps {
   buffer: EditorBuffer | null | undefined;
   selectionInfo: { selectionCount?: number; charCount?: number } | null;
+  /** Live cursor position — updates on every cursor move/keystroke, unlike
+   *  `buffer.cursorPosition` which is mutated in place and does not re-render. */
+  cursorPosition: { line: number; column: number };
   whitespaceRenderingMode: WhitespaceRenderingMode;
   settings: {
     editorFontSize: number;
@@ -56,12 +59,10 @@ export interface EditorPaneFooterProps {
  * React.memo skips re-renders when the parent recreates these wrapper objects
  * with the same underlying values/functions.
  */
-export function areEditorPaneFooterPropsEqual(
-  prev: EditorPaneFooterProps,
-  next: EditorPaneFooterProps,
-): boolean {
+export function areEditorPaneFooterPropsEqual(prev: EditorPaneFooterProps, next: EditorPaneFooterProps): boolean {
   if (prev.buffer !== next.buffer) return false;
   if (prev.selectionInfo !== next.selectionInfo) return false;
+  if (prev.cursorPosition !== next.cursorPosition) return false;
   if (prev.whitespaceRenderingMode !== next.whitespaceRenderingMode) return false;
   if (prev.setWhitespaceRenderingMode !== next.setWhitespaceRenderingMode) return false;
 
@@ -104,6 +105,7 @@ export function areEditorPaneFooterPropsEqual(
 const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
   buffer,
   selectionInfo,
+  cursorPosition,
   whitespaceRenderingMode,
   settings,
   lsp,
@@ -139,13 +141,12 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
   }, [content]);
 
   return (
-    <div className="pane-footer">
+    <div className="pane-footer" data-testid="editor-footer">
       <div className="editor-stats">
         <span className="line-count">Lines: {lineCount}</span>
         <span className="char-count">Chars: {charCount}</span>
         <span className="cursor-position">
-          Ln {buffer?.cursorPosition?.line !== undefined ? buffer.cursorPosition.line : 0}, Col{' '}
-          {buffer?.cursorPosition?.column !== undefined ? buffer.cursorPosition.column + 1 : 0}
+          Ln {cursorPosition.line}, Col {cursorPosition.column + 1}
           {selectionInfo &&
             selectionInfo.selectionCount !== undefined &&
             selectionInfo.selectionCount > 1 &&
@@ -220,11 +221,21 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
           onClick={handleWhitespaceToggle}
           onKeyDown={(e) => handleKeyDown(e, handleWhitespaceToggle)}
           title="Click to change whitespace rendering (none → boundary → all)"
+          data-testid="settings-whitespace-mode"
         >
           WS: {whitespaceRenderingMode === 'none' ? 'off' : whitespaceRenderingMode}
         </span>
         {lsp.lspLanguage && (
-          <span className={`cm-footer-lsp cm-footer-lsp--${lsp.lspState}`} title={`LSP: ${lsp.lspState}`}>
+          <span
+            className={`cm-footer-lsp cm-footer-lsp--${lsp.lspState}`}
+            title={
+              lsp.lspState === 'connected'
+                ? `LSP connected — ${lsp.lspLanguage} language server is running`
+                : lsp.lspState === 'connecting' || lsp.lspState === 'reconnecting'
+                  ? `LSP connecting — starting ${lsp.lspLanguage} language server...`
+                  : `LSP disconnected — ${lsp.lspLanguage} language server is not running. Check that the language tool is installed and available on PATH.`
+            }
+          >
             <span>LSP</span>
             {lsp.lspState === 'connected' ? (
               <Check size={11} aria-hidden="true" />

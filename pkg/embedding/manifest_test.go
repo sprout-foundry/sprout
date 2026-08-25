@@ -252,9 +252,9 @@ func TestDiffManifest_DeletedFiles(t *testing.T) {
 
 	manifest := &BuildManifest{
 		Files: map[string]int64{
-			filepath.Join(dir, "test.go"):      1000,
-			filepath.Join(dir, "deleted.go"):   2000,
-			filepath.Join(dir, "another.go"):   3000,
+			filepath.Join(dir, "test.go"):    1000,
+			filepath.Join(dir, "deleted.go"): 2000,
+			filepath.Join(dir, "another.go"): 3000,
 		},
 		ModelHash: "same-hash",
 	}

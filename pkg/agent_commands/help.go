@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -13,6 +14,16 @@ import (
 // HelpCommand implements the /help slash command
 type HelpCommand struct {
 	registry *CommandRegistry
+	stdout   io.Writer
+}
+
+func (h *HelpCommand) SetOutput(w io.Writer) { h.stdout = w }
+
+func (h *HelpCommand) out() io.Writer {
+	if h.stdout != nil {
+		return h.stdout
+	}
+	return os.Stdout
 }
 
 // Name returns the command name
@@ -20,9 +31,25 @@ func (h *HelpCommand) Name() string {
 	return "help"
 }
 
+// SafeDuringSteer returns true - /help is read-only
+func (h *HelpCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (h *HelpCommand) Description() string {
 	return "Show help information and available slash commands"
+}
+
+// Usage returns the detailed help text shown by `/help help`.
+func (h *HelpCommand) Usage() string {
+	return strings.Join([]string{
+		"/help              List all slash commands.",
+		"/help <command>    Show detailed help for a specific command.",
+		"/help <alias>      Resolves aliases (e.g. /help m → /help model).",
+		"",
+		"Aliases: /h, /?",
+	}, "\n")
 }
 
 // Execute runs the help command. With no args, prints the global help and
@@ -31,9 +58,9 @@ func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) > 0 {
 		return h.printCommandHelp(strings.TrimPrefix(args[0], "/"))
 	}
-	fmt.Println()
-	console.GlyphInfo.Fprintln(os.Stdout, "Sprout - AI Coding Agent")
-	fmt.Print(`
+	fmt.Fprintln(h.out())
+	console.GlyphInfo.Fprintln(h.out(), "Sprout - AI Coding Agent")
+	fmt.Fprint(h.out(), `
 A command-line coding assistant that uses AI to help you build software.
 
 USAGE:
@@ -67,12 +94,15 @@ AVAILABLE TOOLS:
   • list_skills/activate_skill - Load skill instructions into context
 
 KEY COMMANDS:
-  /help       - Show this help message
-  /commit     - Interactive commit workflow
-  /subagent-provider - Configure subagent provider
-  /subagent-model - Configure subagent model
-  /persona    - Apply/configure personas (provider/model/tools/prompt). Aliases: /subagent-persona, /subagent-personas
-  /self-review-gate - Configure automatic self-review gate mode
+  /help       - Show this help message (aliases: /h, /?)
+  /commit     - Interactive commit workflow (alias: /c)
+  /model      - Switch model (alias: /m)
+  /provider   - Switch provider (alias: /p)
+  /persona    - Configure personas (provider/model/tools/prompt). Aliases: /subagent-persona, /subagent-personas
+  /search     - Semantic code search (alias: /s)
+  /review     - AI code review on staged changes (alias: /r)
+  /skill      - Install, update, remove, and list skills
+  /info       - Quick agent state overview (model, provider, context, cost)
 
 Type 'exit' or 'quit' to end the session.
 
@@ -83,7 +113,7 @@ Type 'exit' or 'quit' to end the session.
 	sort.Slice(commands, func(i, j int) bool {
 		return commands[i].Name() < commands[j].Name()
 	})
-	fmt.Println("AVAILABLE SLASH COMMANDS:")
+	fmt.Fprintln(h.out(), "AVAILABLE SLASH COMMANDS:")
 	for _, cmd := range commands {
 		aliases := h.registry.AliasesOf(cmd.Name())
 		sort.Strings(aliases)
@@ -92,17 +122,35 @@ Type 'exit' or 'quit' to end the session.
 			for i, a := range aliases {
 				aliasParts[i] = "/" + a
 			}
-			fmt.Printf("  /%s (%s) - %s\n", cmd.Name(), strings.Join(aliasParts, ", "), cmd.Description())
+			fmt.Fprintf(h.out(), "  /%s (%s) - %s\n", cmd.Name(), strings.Join(aliasParts, ", "), cmd.Description())
 		} else {
-			fmt.Printf("  /%s - %s\n", cmd.Name(), cmd.Description())
+			fmt.Fprintf(h.out(), "  /%s - %s\n", cmd.Name(), cmd.Description())
 		}
 	}
 
-	fmt.Println()
-	fmt.Println("Tip: type /help <command> for per-command details, or press Tab after / to autocomplete.")
-	fmt.Println()
+	fmt.Fprintln(h.out())
+	fmt.Fprintln(h.out(), "Tip: type /help <command> for per-command details, or press Tab after / to autocomplete.")
+	fmt.Fprintln(h.out())
 
 	return nil
+}
+
+// Complete provides argument completions for /help. Suggests command
+// names (canonical and aliases) from the registry.
+func (h *HelpCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	prefix := ""
+	if len(args) > 0 {
+		prefix = args[len(args)-1]
+	}
+	candidates := h.registry.CompletionCandidates()
+	var matches []string
+	for _, name := range candidates {
+		if prefix == "" || strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+			matches = append(matches, name)
+		}
+	}
+	sort.Strings(matches)
+	return matches
 }
 
 // printCommandHelp emits a single command's detailed help. Commands that
@@ -124,9 +172,9 @@ func (h *HelpCommand) printCommandHelp(name string) error {
 		return fmt.Errorf("no such command: /%s", name)
 	}
 
-	fmt.Println()
-	console.GlyphInfo.Fprintf(os.Stdout, "/%s — %s", cmd.Name(), cmd.Description())
-	fmt.Println()
+	fmt.Fprintln(h.out())
+	console.GlyphInfo.Fprintf(h.out(), "/%s — %s", cmd.Name(), cmd.Description())
+	fmt.Fprintln(h.out())
 
 	aliases := h.registry.AliasesOf(cmd.Name())
 	if len(aliases) > 0 {
@@ -135,14 +183,14 @@ func (h *HelpCommand) printCommandHelp(name string) error {
 		for i, a := range aliases {
 			aliasParts[i] = "/" + a
 		}
-		fmt.Printf("Aliases: %s\n\n", strings.Join(aliasParts, ", "))
+		fmt.Fprintf(h.out(), "Aliases: %s\n\n", strings.Join(aliasParts, ", "))
 	}
 
 	if u, ok := cmd.(UsageProvider); ok {
-		fmt.Println(u.Usage())
+		fmt.Fprintln(h.out(), u.Usage())
 	} else {
-		fmt.Println("(No additional usage details available.)")
+		fmt.Fprintln(h.out(), "(No additional usage details available.)")
 	}
-	fmt.Println()
+	fmt.Fprintln(h.out())
 	return nil
 }

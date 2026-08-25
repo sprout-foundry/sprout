@@ -5,10 +5,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/events"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -18,93 +19,110 @@ import (
 
 type mockStateManager struct{}
 
-func (m *mockStateManager) GetMessages() []api.Message                      { return nil }
-func (m *mockStateManager) SetMessages([]api.Message)                        {}
-func (m *mockStateManager) AddMessage(api.Message)                          {}
-func (m *mockStateManager) GetSessionID() string                             { return "" }
-func (m *mockStateManager) SetSessionID(string)                              {}
-func (m *mockStateManager) GetTurnCheckpoints() []TurnCheckpoint             { return nil }
-func (m *mockStateManager) SetTurnCheckpoints([]TurnCheckpoint)              {}
-func (m *mockStateManager) AddTurnCheckpoint(TurnCheckpoint)                 {}
-func (m *mockStateManager) GetCheckpointMutex() *sync.RWMutex                { return nil }
-func (m *mockStateManager) GetPreviousSummary() string                       { return "" }
-func (m *mockStateManager) SetPreviousSummary(string)                        {}
-func (m *mockStateManager) GetOptimizer() *ConversationOptimizer             { return nil }
-func (m *mockStateManager) SetOptimizer(*ConversationOptimizer)              {}
-func (m *mockStateManager) GetCurrentContextTokens() int                     { return 0 }
-func (m *mockStateManager) SetCurrentContextTokens(int)                      {}
-func (m *mockStateManager) GetMaxContextTokens() int                         { return 0 }
-func (m *mockStateManager) SetMaxContextTokens(int)                          {}
-func (m *mockStateManager) IsContextWarningIssued() bool                     { return false }
-func (m *mockStateManager) SetContextWarningIssued(bool)                     {}
-func (m *mockStateManager) GetTaskActions() []TaskAction                     { return nil }
-func (m *mockStateManager) SetTaskActions([]TaskAction)                      {}
-func (m *mockStateManager) AddTaskAction(TaskAction)                         {}
-func (m *mockStateManager) GetTaskActionsMutex() *sync.RWMutex               { return nil }
-func (m *mockStateManager) GetTotalCost() float64                            { return 0 }
-func (m *mockStateManager) SetTotalCost(float64)                             {}
-func (m *mockStateManager) AddCost(float64)                                  {}
-func (m *mockStateManager) GetTotalTokens() int                              { return 0 }
-func (m *mockStateManager) SetTotalTokens(int)                               {}
-func (m *mockStateManager) GetPromptTokens() int                             { return 0 }
-func (m *mockStateManager) SetPromptTokens(int)                              {}
-func (m *mockStateManager) GetCompletionTokens() int                         { return 0 }
-func (m *mockStateManager) SetCompletionTokens(int)                          {}
-func (m *mockStateManager) GetLLMCallCount() int                             { return 0 }
-func (m *mockStateManager) SetLLMCallCount(int)                              {}
-func (m *mockStateManager) IncrementLLMCallCount()                           {}
-func (m *mockStateManager) GetTotalToolCalls() int                           { return 0 }
-func (m *mockStateManager) SetTotalToolCalls(int)                            {}
-func (m *mockStateManager) IncrementTotalToolCalls()                         {}
-func (m *mockStateManager) GetEstimatedTokenResponses() int                  { return 0 }
-func (m *mockStateManager) SetEstimatedTokenResponses(int)                   {}
-func (m *mockStateManager) GetCachedTokens() int                             { return 0 }
-func (m *mockStateManager) SetCachedTokens(int)                              {}
-func (m *mockStateManager) GetCachedCostSavings() float64                    { return 0 }
-func (m *mockStateManager) SetCachedCostSavings(float64)                     {}
-func (m *mockStateManager) GetActiveSkills() []string                        { return nil }
-func (m *mockStateManager) SetActiveSkills([]string)                         {}
-func (m *mockStateManager) GetActivePersona() string                         { return "" }
-func (m *mockStateManager) SetActivePersona(string)                          {}
-func (m *mockStateManager) GetCircuitBreaker() *CircuitBreakerState          { return nil }
-func (m *mockStateManager) SetCircuitBreaker(*CircuitBreakerState)           {}
-func (m *mockStateManager) IsToolCallGuidanceAdded() bool                    { return false }
-func (m *mockStateManager) SetToolCallGuidanceAdded(bool)                    {}
-func (m *mockStateManager) GetPendingSwitchContextRefresh() string           { return "" }
-func (m *mockStateManager) SetPendingSwitchContextRefresh(string)            {}
-func (m *mockStateManager) GetPendingStrictSwitchNotice() string             { return "" }
-func (m *mockStateManager) SetPendingStrictSwitchNotice(string)              {}
-func (m *mockStateManager) GetPendingSystemSupplement() string               { return "" }
-func (m *mockStateManager) SetPendingSystemSupplement(string)                {}
-func (m *mockStateManager) IsFalseStopDetectionEnabled() bool                { return false }
-func (m *mockStateManager) SetFalseStopDetectionEnabled(bool)                {}
-func (m *mockStateManager) GetLastRunTerminationReason() string              { return "" }
-func (m *mockStateManager) SetLastRunTerminationReason(string)               {}
-func (m *mockStateManager) GetConversationPruner() *ConversationPruner       { return nil }
-func (m *mockStateManager) SetConversationPruner(*ConversationPruner)        {}
-func (m *mockStateManager) GetCommandHistory() []string                      { return nil }
-func (m *mockStateManager) SetCommandHistory([]string)                       {}
-func (m *mockStateManager) GetHistoryIndex() int                             { return 0 }
-func (m *mockStateManager) SetHistoryIndex(int)                              {}
-func (m *mockStateManager) GetHistoryMutex() *sync.Mutex                     { return nil }
-func (m *mockStateManager) GetPauseState() *PauseState                       { return nil }
-func (m *mockStateManager) SetPauseState(*PauseState)                        {}
-func (m *mockStateManager) GetPauseMutex() *sync.Mutex                       { return nil }
-func (m *mockStateManager) GetTraceSession() interface{}                     { return nil }
-func (m *mockStateManager) SetTraceSession(interface{})                      {}
-func (m *mockStateManager) GetSessionProvider() api.ClientType              { return "" }
-func (m *mockStateManager) SetSessionProvider(api.ClientType)                {}
-func (m *mockStateManager) GetSessionModel() string                          { return "" }
-func (m *mockStateManager) SetSessionModel(string)                           {}
-func (m *mockStateManager) GetConfigOverrides() map[string]interface{}       { return nil }
-func (m *mockStateManager) SetConfigOverrides(map[string]interface{})        {}
-func (m *mockStateManager) GetCurrentIteration() int                         { return 0 }
-func (m *mockStateManager) SetCurrentIteration(int)                          {}
-func (m *mockStateManager) GetSessionIntentEmbedding() []float32             { return nil }
-func (m *mockStateManager) SetSessionIntentEmbedding([]float32)              {}
-func (m *mockStateManager) SetSessionIntentEmbeddingIfNil([]float32) bool    { return false }
-func (m *mockStateManager) GetLastProviderError() *ProviderErrorInfo         { return nil }
-func (m *mockStateManager) SetLastProviderError(*ProviderErrorInfo)          {}
+func (m *mockStateManager) GetMessages() []api.Message                    { return nil }
+func (m *mockStateManager) SetMessages([]api.Message)                     {}
+func (m *mockStateManager) AddMessage(api.Message)                        {}
+func (m *mockStateManager) GetMessageTimestamps() []time.Time             { return nil }
+func (m *mockStateManager) SetMessageTimestamps([]time.Time)              {}
+func (m *mockStateManager) GetSessionID() string                          { return "" }
+func (m *mockStateManager) SetSessionID(string)                           {}
+func (m *mockStateManager) GetTurnCheckpoints() []TurnCheckpoint          { return nil }
+func (m *mockStateManager) SetTurnCheckpoints([]TurnCheckpoint)           {}
+func (m *mockStateManager) AddTurnCheckpoint(TurnCheckpoint)              {}
+func (m *mockStateManager) GetCheckpointMutex() *sync.RWMutex             { return nil }
+func (m *mockStateManager) GetPreviousSummary() string                    { return "" }
+func (m *mockStateManager) SetPreviousSummary(string)                     {}
+func (m *mockStateManager) GetOptimizer() *ConversationOptimizer          { return nil }
+func (m *mockStateManager) SetOptimizer(*ConversationOptimizer)           {}
+func (m *mockStateManager) GetCurrentContextTokens() int                  { return 0 }
+func (m *mockStateManager) SetCurrentContextTokens(int)                   {}
+func (m *mockStateManager) GetMaxContextTokens() int                      { return 0 }
+func (m *mockStateManager) SetMaxContextTokens(int)                       {}
+func (m *mockStateManager) IsContextWarningIssued() bool                  { return false }
+func (m *mockStateManager) SetContextWarningIssued(bool)                  {}
+func (m *mockStateManager) GetTaskActions() []TaskAction                  { return nil }
+func (m *mockStateManager) SetTaskActions([]TaskAction)                   {}
+func (m *mockStateManager) AddTaskAction(TaskAction)                      {}
+func (m *mockStateManager) GetTaskActionsMutex() *sync.RWMutex            { return nil }
+func (m *mockStateManager) GetTotalCost() float64                         { return 0 }
+func (m *mockStateManager) SetTotalCost(float64)                          {}
+func (m *mockStateManager) AddCost(float64)                               {}
+func (m *mockStateManager) AddCostEntry(CostEntry)                        {}
+func (m *mockStateManager) GetChargedCostTotal() float64                  { return 0 }
+func (m *mockStateManager) GetTokenCostTotal() float64                    { return 0 }
+func (m *mockStateManager) GetSubscriptionTokens() int                    { return 0 }
+func (m *mockStateManager) GetFreeTokens() int                            { return 0 }
+func (m *mockStateManager) SetChargedCostTotal(float64)                   {}
+func (m *mockStateManager) SetTokenCostTotal(float64)                     {}
+func (m *mockStateManager) SetSubscriptionTokens(int)                     {}
+func (m *mockStateManager) SetFreeTokens(int)                             {}
+func (m *mockStateManager) GetTotalTokens() int                           { return 0 }
+func (m *mockStateManager) SetTotalTokens(int)                            {}
+func (m *mockStateManager) GetPromptTokens() int                          { return 0 }
+func (m *mockStateManager) SetPromptTokens(int)                           {}
+func (m *mockStateManager) GetCompletionTokens() int                      { return 0 }
+func (m *mockStateManager) SetCompletionTokens(int)                       {}
+func (m *mockStateManager) GetLLMCallCount() int                          { return 0 }
+func (m *mockStateManager) SetLLMCallCount(int)                           {}
+func (m *mockStateManager) IncrementLLMCallCount()                        {}
+func (m *mockStateManager) GetTotalToolCalls() int                        { return 0 }
+func (m *mockStateManager) SetTotalToolCalls(int)                         {}
+func (m *mockStateManager) IncrementTotalToolCalls()                      {}
+func (m *mockStateManager) GetEstimatedTokenResponses() int               { return 0 }
+func (m *mockStateManager) SetEstimatedTokenResponses(int)                {}
+func (m *mockStateManager) RecordContinuationNudges(int)                  {}
+func (m *mockStateManager) GetContinuationNudges() int                    { return 0 }
+func (m *mockStateManager) GetCachedTokens() int                          { return 0 }
+func (m *mockStateManager) SetCachedTokens(int)                           {}
+func (m *mockStateManager) GetCacheWriteTokens() int                      { return 0 }
+func (m *mockStateManager) SetCacheWriteTokens(int)                       {}
+func (m *mockStateManager) GetCachedCostSavings() float64                 { return 0 }
+func (m *mockStateManager) SetCachedCostSavings(float64)                  {}
+func (m *mockStateManager) GetImageTokens() int                           { return 0 }
+func (m *mockStateManager) SetImageTokens(int)                            {}
+func (m *mockStateManager) GetActiveSkills() []string                     { return nil }
+func (m *mockStateManager) SetActiveSkills([]string)                      {}
+func (m *mockStateManager) GetActivePersona() string                      { return "" }
+func (m *mockStateManager) SetActivePersona(string)                       {}
+func (m *mockStateManager) GetCircuitBreaker() *CircuitBreakerState       { return nil }
+func (m *mockStateManager) SetCircuitBreaker(*CircuitBreakerState)        {}
+func (m *mockStateManager) IsToolCallGuidanceAdded() bool                 { return false }
+func (m *mockStateManager) SetToolCallGuidanceAdded(bool)                 {}
+func (m *mockStateManager) GetPendingSwitchContextRefresh() string        { return "" }
+func (m *mockStateManager) SetPendingSwitchContextRefresh(string)         {}
+func (m *mockStateManager) GetPendingStrictSwitchNotice() string          { return "" }
+func (m *mockStateManager) SetPendingStrictSwitchNotice(string)           {}
+func (m *mockStateManager) GetPendingSystemSupplement() string            { return "" }
+func (m *mockStateManager) SetPendingSystemSupplement(string)             {}
+func (m *mockStateManager) IsFalseStopDetectionEnabled() bool             { return false }
+func (m *mockStateManager) SetFalseStopDetectionEnabled(bool)             {}
+func (m *mockStateManager) GetLastRunTerminationReason() string           { return "" }
+func (m *mockStateManager) SetLastRunTerminationReason(string)            {}
+func (m *mockStateManager) GetConversationPruner() *ConversationPruner    { return nil }
+func (m *mockStateManager) SetConversationPruner(*ConversationPruner)     {}
+func (m *mockStateManager) GetCommandHistory() []string                   { return nil }
+func (m *mockStateManager) SetCommandHistory([]string)                    {}
+func (m *mockStateManager) GetHistoryIndex() int                          { return 0 }
+func (m *mockStateManager) SetHistoryIndex(int)                           {}
+func (m *mockStateManager) GetHistoryMutex() *sync.Mutex                  { return nil }
+func (m *mockStateManager) GetPauseState() *PauseState                    { return nil }
+func (m *mockStateManager) SetPauseState(*PauseState)                     {}
+func (m *mockStateManager) GetPauseMutex() *sync.Mutex                    { return nil }
+func (m *mockStateManager) GetTraceSession() interface{}                  { return nil }
+func (m *mockStateManager) SetTraceSession(interface{})                   {}
+func (m *mockStateManager) GetSessionProvider() api.ClientType            { return "" }
+func (m *mockStateManager) SetSessionProvider(api.ClientType)             {}
+func (m *mockStateManager) GetSessionModel() string                       { return "" }
+func (m *mockStateManager) SetSessionModel(string)                        {}
+func (m *mockStateManager) GetConfigOverrides() map[string]interface{}    { return nil }
+func (m *mockStateManager) SetConfigOverrides(map[string]interface{})     {}
+func (m *mockStateManager) GetCurrentIteration() int                      { return 0 }
+func (m *mockStateManager) SetCurrentIteration(int)                       {}
+func (m *mockStateManager) GetSessionIntentEmbedding() []float32          { return nil }
+func (m *mockStateManager) SetSessionIntentEmbedding([]float32)           {}
+func (m *mockStateManager) SetSessionIntentEmbeddingIfNil([]float32) bool { return false }
+func (m *mockStateManager) GetLastProviderError() *ProviderErrorInfo      { return nil }
+func (m *mockStateManager) SetLastProviderError(*ProviderErrorInfo)       {}
 
 // ---------------------------------------------------------------------------
 // Mock OutputManager — satisfies every method on OutputManager with no-ops
@@ -112,33 +130,33 @@ func (m *mockStateManager) SetLastProviderError(*ProviderErrorInfo)          {}
 
 type mockOutputManager struct{}
 
-func (m *mockOutputManager) SetStreamingEnabled(bool)               {}
-func (m *mockOutputManager) IsStreamingEnabled() bool               { return false }
-func (m *mockOutputManager) SetStreamingCallback(func(string))      {}
-func (m *mockOutputManager) GetStreamingCallback() func(string)     { return nil }
-func (m *mockOutputManager) SetReasoningCallback(func(string))      {}
-func (m *mockOutputManager) GetReasoningCallback() func(string)     { return nil }
-func (m *mockOutputManager) SetFlushCallback(func())                {}
-func (m *mockOutputManager) GetFlushCallback() func()               { return nil }
-func (m *mockOutputManager) SetOutputMutex(*sync.Mutex)             {}
-func (m *mockOutputManager) GetOutputMutex() *sync.Mutex            { return nil }
-func (m *mockOutputManager) GetStreamingBuffer() *strings.Builder   { return nil }
-func (m *mockOutputManager) GetReasoningBuffer() *strings.Builder   { return nil }
-func (m *mockOutputManager) GetOutputRouter() *OutputRouter         { return nil }
-func (m *mockOutputManager) SetOutputRouter(*OutputRouter)          {}
-func (m *mockOutputManager) GetAsyncOutput() chan string            { return nil }
-func (m *mockOutputManager) SetAsyncOutput(chan string)             {}
-func (m *mockOutputManager) EnsureAsyncOutputWorker(func())         {}
-func (m *mockOutputManager) GetAsyncBufferSize() int                { return 0 }
-func (m *mockOutputManager) SetAsyncBufferSize(int)                 {}
-func (m *mockOutputManager) GetEventMetadata() map[string]interface{} { return nil }
-func (m *mockOutputManager) SetEventMetadata(map[string]interface{}) { }
-func (m *mockOutputManager) SetEventMetadataUnlocked(map[string]interface{}) { }
+func (m *mockOutputManager) SetStreamingEnabled(bool)                        {}
+func (m *mockOutputManager) IsStreamingEnabled() bool                        { return false }
+func (m *mockOutputManager) SetStreamingCallback(func(string))               {}
+func (m *mockOutputManager) GetStreamingCallback() func(string)              { return nil }
+func (m *mockOutputManager) SetReasoningCallback(func(string))               {}
+func (m *mockOutputManager) GetReasoningCallback() func(string)              { return nil }
+func (m *mockOutputManager) SetFlushCallback(func())                         {}
+func (m *mockOutputManager) GetFlushCallback() func()                        { return nil }
+func (m *mockOutputManager) SetOutputMutex(*sync.Mutex)                      {}
+func (m *mockOutputManager) GetOutputMutex() *sync.Mutex                     { return nil }
+func (m *mockOutputManager) GetStreamingBuffer() *strings.Builder            { return nil }
+func (m *mockOutputManager) GetReasoningBuffer() *strings.Builder            { return nil }
+func (m *mockOutputManager) GetOutputRouter() *OutputRouter                  { return nil }
+func (m *mockOutputManager) SetOutputRouter(*OutputRouter)                   {}
+func (m *mockOutputManager) GetAsyncOutput() chan string                     { return nil }
+func (m *mockOutputManager) SetAsyncOutput(chan string)                      {}
+func (m *mockOutputManager) EnsureAsyncOutputWorker(func())                  {}
+func (m *mockOutputManager) GetAsyncBufferSize() int                         { return 0 }
+func (m *mockOutputManager) SetAsyncBufferSize(int)                          {}
+func (m *mockOutputManager) GetEventMetadata() map[string]interface{}        { return nil }
+func (m *mockOutputManager) SetEventMetadata(map[string]interface{})         {}
+func (m *mockOutputManager) SetEventMetadataUnlocked(map[string]interface{}) {}
 func (m *mockOutputManager) GetEventMetadataMutex() *sync.RWMutex {
 	return &sync.RWMutex{}
 }
-func (m *mockOutputManager) SetTerminalWriter(func(string))    {}
-func (m *mockOutputManager) GetTerminalWriter() func(string)   { return nil }
+func (m *mockOutputManager) SetTerminalWriter(func(string))  {}
+func (m *mockOutputManager) GetTerminalWriter() func(string) { return nil }
 
 // ---------------------------------------------------------------------------
 // minimalAgent creates a bare Agent with initialized sub-managers for testing.
@@ -153,6 +171,53 @@ func minimalAgent(t *testing.T) *Agent {
 	a.security = NewAgentSecurityManager()
 	a.eventBus = events.NewEventBus()
 	return a
+}
+
+// ---------------------------------------------------------------------------
+// Test 1: postProcessResult with empty result
+// ---------------------------------------------------------------------------
+
+func TestSeedRegistry_FiltersSubagentToolsAtDepthLimit(t *testing.T) {
+	// A subagent at depth 1 with a non-coordinator root (MaxSubagentDepth=1)
+	// cannot spawn further subagents. The seed registry must NOT register
+	// run_subagent / run_parallel_subagents for such an agent — otherwise
+	// the LLM sees the tool, wastes turns attempting the call, and gets
+	// confused by the PreExecuteHook error.
+	agent := minimalAgent(t)
+	agent.subagentDepth = 1 // depth 1 = first-level subagent; MaxSubagentDepth()=1 → CanSpawn=false
+
+	registry := newSeedToolRegistryWithPublisher(agent, nil)
+
+	if registry.HasTool("run_subagent") {
+		t.Error("run_subagent should not be registered for an agent at its depth limit")
+	}
+	if registry.HasTool("run_parallel_subagents") {
+		t.Error("run_parallel_subagents should not be registered for an agent at its depth limit")
+	}
+
+	// Sanity check: non-subagent tools ARE still registered.
+	if !registry.HasTool("read_file") {
+		t.Error("read_file should still be registered")
+	}
+	if !registry.HasTool("shell_command") {
+		t.Error("shell_command should still be registered")
+	}
+}
+
+func TestSeedRegistry_KeepsSubagentToolsForPrimaryAgent(t *testing.T) {
+	// The primary agent (depth 0) with MaxSubagentDepth=1 can spawn
+	// subagents (0 < 1 = true). The tools must be present.
+	agent := minimalAgent(t)
+	agent.subagentDepth = 0
+
+	registry := newSeedToolRegistryWithPublisher(agent, nil)
+
+	if !registry.HasTool("run_subagent") {
+		t.Error("run_subagent should be registered for the primary agent")
+	}
+	if !registry.HasTool("run_parallel_subagents") {
+		t.Error("run_parallel_subagents should be registered for the primary agent")
+	}
 }
 
 // ---------------------------------------------------------------------------

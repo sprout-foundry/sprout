@@ -25,9 +25,10 @@ func TestShellIsDestructive(t *testing.T) {
 		{"git reset --merge", true},
 		{"git reset --keep", true},
 
-		// `git stash` — pop/apply/drop/clear clobber active state; bare/push save it.
-		{"git stash", false},
-		{"git stash push", false},
+		// `git stash` — all variants that aren't list/show are destructive.
+		// Bare stash and push revert the working tree to HEAD.
+		{"git stash", true},
+		{"git stash push", true},
 		{"git stash pop", true},
 		{"git stash apply", true},
 		{"git stash drop stash@{0}", true},

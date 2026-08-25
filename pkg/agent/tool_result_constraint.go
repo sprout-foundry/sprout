@@ -1,9 +1,10 @@
 // Tool result constraint: truncation and compaction of tool results
-// before they are sent to the model context window.
+// before they are sent to the model context window. It also owns the shared
+// result-size limits and universal truncation helper moved from the legacy
+// tool executor configuration.
 package agent
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,7 +14,39 @@ import (
 	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
+
+const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/token heuristic)
+const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
+// defaultFetchURLArchiveDir returns the directory where over-limit fetch_url
+// output is archived. Rooted at os.TempDir() so it is writable on every
+// supported platform — including Termux, where /tmp is not writable but
+// $TMPDIR (the value os.TempDir() resolves to) is. On plain Linux this
+// still yields /tmp/sprout/downloads.
+func defaultFetchURLArchiveDir() string {
+	return filepath.Join(os.TempDir(), "sprout", "downloads")
+}
+
+const defaultAnalyzeImageResultExcerptChars = 4000
+const defaultToolResultMaxChars = 50000 // Universal cap on tool result size (~12K tokens)
+
+// truncateToolResult truncates large tool results to prevent blowing up the LLM context window.
+// Keeps the first 45K chars and last 5K chars with a truncation notice in between.
+func truncateToolResult(result string) string {
+	if len(result) <= defaultToolResultMaxChars {
+		return result
+	}
+
+	headChars := 45000
+	tailChars := 5000
+	omitted := len(result) - headChars - tailChars
+
+	packageLogWarnf("tool result truncated: %d -> %d chars (omitted %d)", len(result), defaultToolResultMaxChars, omitted)
+
+	return result[:headChars] + fmt.Sprintf("\n[... truncated: %d chars omitted. Total was %d chars ...]\n", omitted, len(result)) + result[len(result)-tailChars:]
+}
 
 func constrainToolResultForModel(toolName string, args map[string]interface{}, result string) string {
 	if toolName == "analyze_image_content" {
@@ -65,11 +98,11 @@ func buildFetchURLTruncationNotice(omitted int, archivePath string, archiveErr e
 func saveFetchURLOutputToFile(args map[string]interface{}, output string) (string, error) {
 	dir := strings.TrimSpace(envutil.GetEnvSimple("FETCH_URL_ARCHIVE_DIR"))
 	if dir == "" {
-		dir = defaultFetchURLArchiveDir
+		dir = defaultFetchURLArchiveDir()
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create archive directory: %w", err)
+		return "", agenterrors.Wrap(err, "failed to create archive directory")
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -89,7 +122,7 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 	}
 
 	if err := os.WriteFile(path, []byte(fullOutput), 0o644); err != nil {
-		return "", fmt.Errorf("failed to write fetch URL output file: %w", err)
+		return "", agenterrors.Wrap(err, "failed to write fetch URL output file")
 	}
 	return path, nil
 }

@@ -73,10 +73,31 @@ func (r *ToolRegistry) All() map[string]ToolHandler {
 	return out
 }
 
-// ForPersona returns tools available for a given persona. Initially returns all tools.
-// TODO(SP-038): Implement per-persona tool filtering
-func (r *ToolRegistry) ForPersona(persona string) map[string]ToolHandler {
-	return r.All()
+// ForPersona returns the subset of registered tools whose names appear in
+// allowlist. An empty or nil allowlist returns every tool (matching the
+// behavior of unrestricted personas). Tool names present in allowlist but not
+// in the registry are silently skipped — callers shouldn't have to defend
+// against stale allowlists.
+//
+// The returned map is a copy; callers may mutate it without affecting the
+// registry's state.
+func (r *ToolRegistry) ForPersona(allowlist []string) map[string]ToolHandler {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if len(allowlist) == 0 {
+		out := make(map[string]ToolHandler, len(r.tools))
+		for k, v := range r.tools {
+			out[k] = v
+		}
+		return out
+	}
+	out := make(map[string]ToolHandler, len(allowlist))
+	for _, name := range allowlist {
+		if h, ok := r.tools[name]; ok {
+			out[name] = h
+		}
+	}
+	return out
 }
 
 // Unregister removes a tool handler by name. Returns true if the tool was found and removed.

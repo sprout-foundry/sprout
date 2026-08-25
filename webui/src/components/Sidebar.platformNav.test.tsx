@@ -20,8 +20,8 @@ import type { PlatformNavItem } from '../services/apiAdapter';
 
 // Cloud nav items matching bootstrapAdapter.ts
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
-  { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
-  { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 2 },
+  { id: 'tasks', label: 'Tasks', href: '/', icon: 'list-checks', order: 1 },
+  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2 },
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
 ];
 
@@ -99,6 +99,8 @@ vi.mock('../config/mode', () => {
     isCloud: false,
     supportsSettings: true,
     supportsLocalTerminal: false,
+    supportsGit: true,
+    supportsWorkspaceSwitching: false,
   };
 });
 
@@ -201,14 +203,25 @@ import Sidebar from './Sidebar';
 let container: HTMLDivElement;
 let root: Root;
 
+// Mock window.location.href so we can assert that clicking platform nav
+// buttons triggers external navigation via window.location.href assignment.
+const originalLocation = window.location;
+
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  delete (window as any).location;
+  (window as any).location = { ...originalLocation, href: '' };
+});
+
+afterAll(() => {
+  (window as any).location = originalLocation;
 });
 
 beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  (window as any).location.href = '';
 });
 
 afterEach(() => {
@@ -331,11 +344,9 @@ describe('Sidebar PlatformNav Integration', () => {
       expect(buttons.length).toBe(3);
     });
 
-    it('clicking Tasks button calls onViewChange with "tasks"', () => {
-      const onViewChange = vi.fn();
-
+    it('clicking Tasks button navigates to the tasks route via window.location.href', () => {
       act(() => {
-        root.render(createElement(Sidebar, { ...minimalProps, onViewChange }));
+        root.render(createElement(Sidebar, minimalProps));
       });
 
       const nav = container.querySelector('nav[aria-label="Platform navigation"]');
@@ -345,14 +356,12 @@ describe('Sidebar PlatformNav Integration', () => {
         tasksBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
-      expect(onViewChange).toHaveBeenCalledWith('tasks');
+      expect(window.location.href).toBe('/');
     });
 
-    it('clicking Billing button calls onViewChange with "billing"', () => {
-      const onViewChange = vi.fn();
-
+    it('clicking Billing button navigates to the billing route via window.location.href', () => {
       act(() => {
-        root.render(createElement(Sidebar, { ...minimalProps, onViewChange }));
+        root.render(createElement(Sidebar, minimalProps));
       });
 
       const nav = container.querySelector('nav[aria-label="Platform navigation"]');
@@ -362,14 +371,12 @@ describe('Sidebar PlatformNav Integration', () => {
         billingBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
-      expect(onViewChange).toHaveBeenCalledWith('billing');
+      expect(window.location.href).toBe('/account/billing');
     });
 
-    it('clicking Team button calls onViewChange with "team"', () => {
-      const onViewChange = vi.fn();
-
+    it('clicking Team button navigates to the team route via window.location.href', () => {
       act(() => {
-        root.render(createElement(Sidebar, { ...minimalProps, onViewChange }));
+        root.render(createElement(Sidebar, minimalProps));
       });
 
       const nav = container.querySelector('nav[aria-label="Platform navigation"]');
@@ -379,7 +386,7 @@ describe('Sidebar PlatformNav Integration', () => {
         teamBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
-      expect(onViewChange).toHaveBeenCalledWith('team');
+      expect(window.location.href).toBe('/team');
     });
 
     it('highlights the active platform nav item with "active" class', () => {
@@ -391,7 +398,7 @@ describe('Sidebar PlatformNav Integration', () => {
             ...minimalProps,
             currentView: 'billing',
             onViewChange,
-          })
+          }),
         );
       });
 
@@ -424,13 +431,13 @@ describe('Sidebar PlatformNav Integration', () => {
 
       // Find positions
       const mainTablistIdx = children.findIndex(
-        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Git"]')
+        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Git"]'),
       );
       const platformNavIdx = children.findIndex(
-        (c) => c.tagName === 'NAV' && c.getAttribute('aria-label') === 'Platform navigation'
+        (c) => c.tagName === 'NAV' && c.getAttribute('aria-label') === 'Platform navigation',
       );
       const bottomTablistIdx = children.findIndex(
-        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Logs"]')
+        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Logs"]'),
       );
 
       // Platform nav should be after main tablist and before bottom tablist

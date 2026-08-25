@@ -32,24 +32,33 @@ type AgentResultMetrics struct {
 	TokensIn       int     `json:"tokens_in"`  // Total prompt/input tokens
 	TokensOut      int     `json:"tokens_out"` // Total completion/output tokens
 	LLMCalls       int     `json:"llm_calls"`  // Number of LLM API calls made
+	Cost           float64 `json:"cost"`       // Total estimated USD cost
 	Provider       string  `json:"provider"`   // LLM provider name (e.g., "openai", "anthropic")
 	Model          string  `json:"model"`      // Model identifier (e.g., "gpt-4o")
 
 	// Security telemetry — track post-caution LLM behavior so external tools
 	// can measure SECURITY_CAUTION_REQUIRED signal effectiveness.
-	SecurityCautionsIssued      int64 `json:"security_cautions_issued"`      // Times a SECURITY_CAUTION_REQUIRED was produced
+	SecurityCautionsIssued      int64 `json:"security_cautions_issued"`       // Times a SECURITY_CAUTION_REQUIRED was produced
 	SecurityRetriesAfterCaution int64 `json:"security_retries_after_caution"` // Times the LLM retried the same blocked op after a caution
-	SecurityLoopsDetected       int64 `json:"security_loops_detected"`       // Times loop-detection fired (3+ identical blocks)
+	SecurityLoopsDetected       int64 `json:"security_loops_detected"`        // Times loop-detection fired (3+ identical blocks)
 }
 
 // outputFormatJSON is the flag value for JSON output mode.
 var outputFormatJSON bool
+
+// outputPath, when set, redirects the structured JSON result to this file
+// instead of stdout. It only takes effect when outputFormatJSON is also
+// true. Keeping stdout free lets logs flow through the Fly machine log
+// fallback path without being interleaved with the JSON payload.
+var outputPath string
 
 // maxDiffBytes is the maximum size of git diff output to include.
 const maxDiffBytes = 1 << 20 // 1MB
 
 func init() {
 	agentCmd.Flags().BoolVar(&outputFormatJSON, "output-json", false, "Output structured JSON result to stdout after execution (for CI/SaaS integration)")
+	agentCmd.Flags().StringVar(&outputPath, "output-path", "", "Write the structured JSON result to this file instead of stdout (requires --output-json)")
+	agentCmd.Flags().StringVar(&progressEventsTarget, "progress-events", "", "Emit one-line progress milestones to stderr, stdout, or a file path (e.g. --progress-events stderr)")
 }
 
 // emitJSONResult writes the AgentResult as indented JSON to stdout.
@@ -73,6 +82,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		result.Metrics.TokensIn = a.GetPromptTokens()
 		result.Metrics.TokensOut = a.GetCompletionTokens()
 		result.Metrics.LLMCalls = a.GetLLMCallCount()
+		result.Metrics.Cost = a.GetTotalCost()
 		result.Metrics.Provider = a.GetProvider()
 		result.Metrics.Model = a.GetModel()
 		// Security telemetry
@@ -193,9 +203,36 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		}
 	}
 
-	enc := json.NewEncoder(os.Stdout)
+	// Determine the output destination. When --output-path is set, write the
+	// JSON to that file so stdout stays free for logs (important for the Fly
+	// machine log fallback path). On file-write failure, fall back to stdout
+	// so the structured result is never silently lost.
+	var out *os.File = os.Stdout
+	if outputPath != "" {
+		f, err := os.Create(outputPath)
+		if err != nil {
+			console.GlyphWarning.Fprintf(os.Stderr, "Failed to open output path %q for JSON result: %v; falling back to stdout", outputPath, err)
+		} else {
+			out = f
+			defer func() {
+				if cerr := out.Close(); cerr != nil {
+					console.GlyphWarning.Fprintf(os.Stderr, "Failed to close output path %q: %v", outputPath, cerr)
+				}
+			}()
+		}
+	}
+
+	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(result); err != nil {
 		console.GlyphWarning.Fprintf(os.Stderr, "Failed to encode JSON result: %v", err)
+		// If we were writing to a file and the encode failed (disk full,
+		// broken pipe mid-write), the file is likely partial/empty. Fall
+		// back to stdout so the structured result is never silently lost.
+		if out != os.Stdout {
+			stdoutEnc := json.NewEncoder(os.Stdout)
+			stdoutEnc.SetIndent("", "  ")
+			_ = stdoutEnc.Encode(result) // best-effort; nothing more we can do
+		}
 	}
 }

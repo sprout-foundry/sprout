@@ -13,16 +13,15 @@ const (
 	toolExecutionContextKeyToolName   toolExecutionContextKey = "tool_name"
 )
 
-// SP-068 Phase 3 removed the former Gate-1 → Gate-2 approval bridge
-// (WithUserApproved/HasUserApproval context values, then
-// recordGateApproval → consumeShellCommandApproval agent-scoped map).
 // The unified risk resolver (UnifiedRiskResolver flag, default ON) runs
 // a single gate, so no bridge plumbing is needed.
 
-func withToolExecutionMetadata(ctx context.Context, toolCallID, toolName, workspaceRoot string) context.Context {
+func withToolExecutionMetadata(ctx context.Context, toolCallID, toolName, workspaceRoot string, effectiveCwd string, sessionFolders []string, auditLogger filesystem.AuditLogger) context.Context {
 	ctx = context.WithValue(ctx, toolExecutionContextKeyToolCallID, toolCallID)
 	ctx = context.WithValue(ctx, toolExecutionContextKeyToolName, toolName)
 	ctx = filesystem.WithWorkspaceRoot(ctx, workspaceRoot)
+	ctx = filesystem.WithAgentContext(ctx, effectiveCwd, sessionFolders)
+	ctx = filesystem.WithAuditLogger(ctx, auditLogger)
 	return ctx
 }
 

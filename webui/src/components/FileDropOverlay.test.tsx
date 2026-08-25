@@ -87,7 +87,8 @@ describe('FileDropOverlay', () => {
       ({ container, root } = renderInContainer(<FileDropOverlay visible={true} />));
       const icon = container.querySelector('.file-drop-overlay-icon');
       expect(icon).not.toBeNull();
-      expect(icon?.textContent).toBe('📄');
+      // The icon is a lucide FileText SVG (renders no textContent).
+      expect(icon?.querySelector('svg')).not.toBeNull();
     });
 
     it('displays the "Drop files to open" text', () => {
@@ -140,7 +141,8 @@ describe('FileDropOverlay', () => {
       ({ container, root } = renderInContainer(<FileDropOverlay visible={true} />));
       const icon = container.querySelector('.file-drop-overlay-icon');
       expect(icon).not.toBeNull();
-      expect(icon?.textContent).toBe('📄');
+      // The icon is a lucide FileText SVG (renders no textContent).
+      expect(icon?.querySelector('svg')).not.toBeNull();
     });
 
     it('has the text container with correct class', () => {

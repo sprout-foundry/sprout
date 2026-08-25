@@ -2,7 +2,8 @@ import { SkeletonText } from '@sprout/ui';
 import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
 import React, { Suspense, lazy, useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
-import type { PerChatState } from '../types/app';
+import { usePlugins } from '../contexts/PluginContext';
+import type { PerChatState, ViewType } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
 import ErrorBoundary from './ErrorBoundary';
@@ -12,9 +13,7 @@ import WorkspacePane from './WorkspacePane';
 // Route-level lazy-loaded panels — split out of the main bundle so the
 // initial chat-mode load doesn't pay for code paths the user may never
 // open. Each render site below wraps the component in <Suspense>.
-const TasksPage = lazy(() => import('./platform').then((m) => ({ default: m.TasksPage })));
-const TeamPage = lazy(() => import('./platform').then((m) => ({ default: m.TeamPage })));
-const BillingPage = lazy(() => import('./platform').then((m) => ({ default: m.BillingPage })));
+const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
   <div className="editor-workspace-route-fallback">
@@ -23,7 +22,7 @@ const RouteFallback: React.FC = () => (
 );
 
 export interface EditorWorkspaceProps {
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
+  currentView: ViewType;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   onCreateChat?: () => Promise<string | null>;
@@ -31,6 +30,10 @@ export interface EditorWorkspaceProps {
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
   handleOutlineNavigateToSymbol: (line: number) => void;
+  /** Called when a cost session row is clicked to restore that session */
+  onSessionRestore?: (sessionId: string) => void;
+  /** Called when the user clicks Back from a non-chat view (e.g. costs). */
+  onViewChange?: (view: ViewType) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -113,6 +116,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   reviewProps,
   diffState,
   handleOutlineNavigateToSymbol,
+  onSessionRestore,
+  onViewChange,
 }) => {
   const {
     panes,
@@ -544,27 +549,27 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [handleFocusPaneIndex]);
 
-  if (currentView === 'tasks') {
+  const { pluginViews } = usePlugins();
+
+  const activePluginView = pluginViews.find((v) => v.id === currentView);
+  if (activePluginView) {
+    const Component = activePluginView.component;
     return (
-      <Suspense fallback={<RouteFallback />}>
-        <TasksPage />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Component onBack={() => onViewChange?.('chat')} onNavigate={(id) => onViewChange?.(id)} />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
-  if (currentView === 'billing') {
+  if (currentView === 'costs') {
     return (
-      <Suspense fallback={<RouteFallback />}>
-        <BillingPage />
-      </Suspense>
-    );
-  }
-
-  if (currentView === 'team') {
-    return (
-      <Suspense fallback={<RouteFallback />}>
-        <TeamPage />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <CostsPage onSessionClick={onSessionRestore} onBack={onViewChange ? () => onViewChange('chat') : undefined} />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 

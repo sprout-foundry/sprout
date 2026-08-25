@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -22,17 +24,18 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-		return "", fmt.Errorf("failed to parse tool arguments: %w", err)
+		return "", agenterrors.Wrap(err, "failed to parse tool arguments")
 	}
 
 	// Log the tool call for debugging
 	a.Logger().Debug("[tool] Executing tool: %s with args: %v\n", toolName, args)
 
 	// Validate tool name and provide helpful error for common mistakes
-	registry := GetToolRegistry()
-	availableTools := registry.GetAvailableTools()
-	validTools := make([]string, 0, len(availableTools)+1)
-	validTools = append(validTools, availableTools...)
+	allHandlers := tools.GetNewToolRegistry().All()
+	validTools := make([]string, 0, len(allHandlers)+1)
+	for _, h := range allHandlers {
+		validTools = append(validTools, h.Name())
+	}
 	validTools = append(validTools, "mcp_tools")
 	sort.Strings(validTools)
 
@@ -57,21 +60,30 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		// Check for common misnamed tools and suggest corrections
 		suggestion := a.suggestCorrectToolName(toolName)
 		if suggestion != "" {
-			return "", fmt.Errorf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %s",
-				toolName, suggestion, strings.Join(validTools, ", "))
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %s",
+				toolName, suggestion, strings.Join(validTools, ", ")), nil)
 		}
-		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %s", toolName, strings.Join(validTools, ", "))
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'. Valid tools are: %s", toolName, strings.Join(validTools, ", ")), nil)
 	}
 
-	// Use the tool registry for data-driven tool execution
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), a.GetWorkspaceRoot())
-	_, result, err := registry.ExecuteTool(ctx, toolName, args, a)
+	// Execute the tool
+	// Wire workspace root, effective cwd, and session folders into context for
+	// filesystem path resolution (SafeResolvePathWithBypass).
+	workspaceRoot := a.GetWorkspaceRoot()
+	effectiveCwd := a.effectiveCwd()
+	sessionFolders := a.SnapshotSessionAllowedFolders()
+	ctx := filesystem.WithAgentContext(
+		filesystem.WithWorkspaceRoot(context.Background(), workspaceRoot),
+		effectiveCwd,
+		sessionFolders,
+	)
+	_, result, err := ExecuteTool(ctx, toolName, args, a, toolCall.Function.Arguments)
 
 	// Track tool call count
 	a.state.IncrementTotalToolCalls()
 
 	// If tool not found in registry, check for special cases
-	if err != nil && strings.Contains(err.Error(), "unknown tool") {
+	if err != nil && agenterrors.IsInvalidInput(err) {
 		// Handle mcp_tools meta-tool
 		if toolName == "mcp_tools" {
 			return a.handleMCPToolsCommand(args)
@@ -81,11 +93,11 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if isMCPTool {
 			return a.executeMCPTool(toolName, args)
 		}
-		return "", fmt.Errorf("unknown tool %q: %w", toolName, err)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'", toolName), err)
 	}
 
 	if err != nil {
-		return result, fmt.Errorf("execute tool %q: %w", toolName, err)
+		return result, agenterrors.Wrap(err, fmt.Sprintf("execute tool %q", toolName))
 	}
 	return result, nil
 }

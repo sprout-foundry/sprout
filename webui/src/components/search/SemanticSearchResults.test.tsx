@@ -60,10 +60,7 @@ async function renderResults(results: SemanticSearchResult[]) {
 
 describe('SemanticSearchResults', () => {
   it('renders results with no clusters in original order', async () => {
-    const results = [
-      makeResult({ file: '/a.ts', name: 'funcA' }),
-      makeResult({ file: '/b.ts', name: 'funcB' }),
-    ];
+    const results = [makeResult({ file: '/a.ts', name: 'funcA' }), makeResult({ file: '/b.ts', name: 'funcB' })];
     await renderResults(results);
 
     const rows = container!.querySelectorAll('.search-semantic-result');
@@ -119,7 +116,9 @@ describe('SemanticSearchResults', () => {
 
     const icon = container!.querySelector('.search-duplicate-hint-icon');
     expect(icon).not.toBeNull();
-    expect(icon!.textContent).toContain('⚠️');
+    // The warning is rendered as a TriangleAlert lucide SVG icon rather
+    // than the legacy '⚠️' text glyph.
+    expect(icon!.querySelector('svg')).not.toBeNull();
   });
 
   it('preserves original order within each cluster', async () => {

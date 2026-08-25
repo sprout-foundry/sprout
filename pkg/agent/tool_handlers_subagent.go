@@ -11,15 +11,15 @@ import (
 )
 
 const (
-	MAX_SUBAGENT_OUTPUT_SIZE    = 10 * 1024 * 1024 // 10MB
-	MAX_SUBAGENT_CONTEXT_SIZE   = 1024 * 1024      // 1MB
+	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
+	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
 	// Lines to batch before publishing a subagent "output" event. Kept small
 	// so output streams to the WebUI in near-real-time — subagent output is
 	// line-level (LLM-paced), not char-level, so this won't flood the event
 	// bus, while still coalescing bursty tool dumps. (Was 50, which made most
 	// subagent runs show nothing until they finished.)
-	BATCH_SIZE = 8
-	DefaultSubagentTokenBudget  = 2_000_000        // Default token budget for subagents
+	BATCH_SIZE                 = 8
+	DefaultSubagentTokenBudget = 2_000_000 // Default token budget for subagents
 )
 
 // MILESTONE_PHASES defines phases that trigger immediate publish without batching

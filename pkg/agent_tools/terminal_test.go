@@ -15,12 +15,12 @@ import (
 
 // mockTerminalManager is a mock implementation of TerminalAccess for testing.
 type mockTerminalManager struct {
-	executeCommandFunc       func(ctx context.Context, sessionID, command string) (string, int, error)
-	getOrCreateFunc          func(ctx context.Context, chatID string) (string, error)
-	executeBackgroundFunc    func(ctx context.Context, chatID, command string) (string, error)
-	getBackgroundOutputFunc  func(sessionID string) (string, error)
-	stopBackgroundFunc       func(sessionID string) error
-	isSessionActiveFunc      func(sessionID string) bool
+	executeCommandFunc      func(ctx context.Context, sessionID, command string) (string, int, error)
+	getOrCreateFunc         func(ctx context.Context, chatID string) (string, error)
+	executeBackgroundFunc   func(ctx context.Context, chatID, command string) (string, error)
+	getBackgroundOutputFunc func(sessionID string) (string, error)
+	stopBackgroundFunc      func(sessionID string) error
+	isSessionActiveFunc     func(sessionID string) bool
 }
 
 func (m *mockTerminalManager) ExecuteCommandInHidden(ctx context.Context, sessionID, command string) (string, int, error) {

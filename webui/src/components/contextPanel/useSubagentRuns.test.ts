@@ -7,11 +7,11 @@
  * active/queued/completed/failed/cancelled counts.
  */
 
+import type { SubagentActivity, ToolExecution } from '@sprout/ui';
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useSubagentRuns } from './useSubagentRuns';
 import type { ChatContextPanelProps } from './types';
-import type { SubagentActivity, ToolExecution } from '@sprout/ui';
+import { useSubagentRuns } from './useSubagentRuns';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -206,9 +206,7 @@ describe('useSubagentRuns resource counts', () => {
 
   it('counts completed with failures=0 as completed (not failed)', () => {
     const props = makeBaseProps({
-      subagentActivities: [
-        makeActivity({ taskId: 'task-1', status: 'completed', failures: 0, message: 'clean run' }),
-      ],
+      subagentActivities: [makeActivity({ taskId: 'task-1', status: 'completed', failures: 0, message: 'clean run' })],
     });
     const { result } = renderHook(() => useSubagentRuns(props));
 
@@ -223,9 +221,7 @@ describe('useSubagentRuns resource counts', () => {
 
   it('counts completed with undefined failures as completed (not failed)', () => {
     const props = makeBaseProps({
-      subagentActivities: [
-        makeActivity({ taskId: 'task-1', status: 'completed', message: 'finished successfully' }),
-      ],
+      subagentActivities: [makeActivity({ taskId: 'task-1', status: 'completed', message: 'finished successfully' })],
     });
     const { result } = renderHook(() => useSubagentRuns(props));
 
@@ -257,9 +253,7 @@ describe('useSubagentRuns resource counts', () => {
 
   it('counts completed with "fail" in message as failed (case-insensitive)', () => {
     const props = makeBaseProps({
-      subagentActivities: [
-        makeActivity({ taskId: 'task-1', status: 'completed', message: 'TASK FAIL after retries' }),
-      ],
+      subagentActivities: [makeActivity({ taskId: 'task-1', status: 'completed', message: 'TASK FAIL after retries' })],
     });
     const { result } = renderHook(() => useSubagentRuns(props));
 

@@ -1,15 +1,16 @@
 package credentials
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
-	configDirName      = ".sprout"
+	credentialsDirName = "credentials"
 	apiKeysFileName    = "api_keys.json"
 	machineKeyFileName = "key.age"
 	encryptedMagic     = "age-encryption.org/v1"
@@ -26,25 +27,27 @@ type Resolved struct {
 	Source   string
 }
 
+// ConfigDir returns the credentials directory, creating it if it doesn't exist.
+// SP-133: credentials now live in <config>/credentials/ (mode 0700), isolated
+// from the config dir so "don't sync / don't bundle" is a one-line path rule.
+// The legacy ~/.sprout path is no longer used.
+func ConfigDir() (string, error) {
+	configDir, err := envutil.ConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get config directory: %w", err)
+	}
+	credDir := filepath.Join(configDir, credentialsDirName)
+	if err := os.MkdirAll(credDir, 0o700); err != nil {
+		return "", fmt.Errorf("failed to create credentials directory: %w", err)
+	}
+	return credDir, nil
+}
+
 // GetConfigDir returns the configuration directory path, creating it if it doesn't exist.
+//
+// Deprecated: use ConfigDir(). Retained for callers that haven't been migrated.
 func GetConfigDir() (string, error) {
-	configDir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
-	if configDir == "" {
-		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
-		if xdgConfigHome != "" {
-			configDir = filepath.Join(xdgConfigHome, "sprout")
-		} else {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return "", fmt.Errorf("failed to get home directory: %w", err)
-			}
-			configDir = filepath.Join(homeDir, configDirName)
-		}
-	}
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create config directory: %w", err)
-	}
-	return configDir, nil
+	return ConfigDir()
 }
 
 // GetAPIKeysPath returns the path to the API keys file.
@@ -58,10 +61,11 @@ func GetAPIKeysPath() (string, error) {
 
 // GetAPIKeysPathFromDir returns the path to the API keys file in a specific config directory.
 func GetAPIKeysPathFromDir(configDir string) (string, error) {
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create config directory: %w", err)
+	credDir := filepath.Join(configDir, credentialsDirName)
+	if err := os.MkdirAll(credDir, 0o700); err != nil {
+		return "", fmt.Errorf("failed to create credentials directory: %w", err)
 	}
-	return filepath.Join(configDir, apiKeysFileName), nil
+	return filepath.Join(credDir, apiKeysFileName), nil
 }
 
 // GetAPIKeysLockPath returns the path to the API keys lock file.
@@ -93,10 +97,11 @@ func GetMachineKeyPath() (string, error) {
 
 // GetMachineKeyPathFromDir returns the path to the machine key file in a specific config directory.
 func GetMachineKeyPathFromDir(configDir string) (string, error) {
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create config directory: %w", err)
+	credDir := filepath.Join(configDir, credentialsDirName)
+	if err := os.MkdirAll(credDir, 0o700); err != nil {
+		return "", fmt.Errorf("failed to create credentials directory: %w", err)
 	}
-	return filepath.Join(configDir, machineKeyFileName), nil
+	return filepath.Join(credDir, machineKeyFileName), nil
 }
 
 // encryptionModePath returns the path to the encryption mode file.
@@ -111,10 +116,11 @@ func encryptionModePath() (string, error) {
 
 // encryptionModePathFromDir returns the path to the encryption mode file in a specific config directory.
 func encryptionModePathFromDir(configDir string) (string, error) {
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return "", err
+	credDir := filepath.Join(configDir, credentialsDirName)
+	if err := os.MkdirAll(credDir, 0o700); err != nil {
+		return "", fmt.Errorf("failed to create credentials directory: %w", err)
 	}
-	return filepath.Join(configDir, "api_keys.mode"), nil
+	return filepath.Join(credDir, "api_keys.mode"), nil
 }
 
 // GetEncryptionMode returns the current encryption mode ("machine-key", "passphrase", or "").

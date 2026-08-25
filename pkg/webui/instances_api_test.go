@@ -15,7 +15,6 @@ import (
 
 func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 	_tmpCfg := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", _tmpCfg)
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	now := time.Now()
@@ -39,14 +38,14 @@ func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 			LastPing:   now.Add(-1 * time.Hour),
 		},
 	}
-	writeJSONFile(t, filepath.Join(getSproutConfigDir(), "instances.json"), instances)
-	writeJSONFile(t, filepath.Join(getSproutConfigDir(), "webui_host.json"), webUIHostRecordDTO{
+	writeJSONFile(t, filepath.Join(getSproutStateDir(), "instances.json"), instances)
+	writeJSONFile(t, filepath.Join(getSproutStateDir(), "webui_host.json"), webUIHostRecordDTO{
 		PID:       currentPID,
 		Port:      56000,
 		StartedAt: now.Add(-2 * time.Minute),
 		UpdatedAt: now,
 	})
-	writeJSONFile(t, filepath.Join(getSproutConfigDir(), "webui_desired_host.json"), desiredHostRecordDTO{
+	writeJSONFile(t, filepath.Join(getSproutStateDir(), "webui_desired_host.json"), desiredHostRecordDTO{
 		PID:       currentPID,
 		UpdatedAt: now,
 	})
@@ -93,7 +92,6 @@ func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 
 func TestHandleAPIInstanceSelectWritesDesiredHost(t *testing.T) {
 	_tmpCfg := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", _tmpCfg)
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 	pid := os.Getpid()
 
@@ -108,7 +106,7 @@ func TestHandleAPIInstanceSelectWritesDesiredHost(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", w.Code)
 	}
 
-	data, err := os.ReadFile(filepath.Join(getSproutConfigDir(), "webui_desired_host.json"))
+	data, err := os.ReadFile(filepath.Join(getSproutStateDir(), "webui_desired_host.json"))
 	if err != nil {
 		t.Fatalf("failed to read desired host file: %v", err)
 	}
@@ -123,7 +121,6 @@ func TestHandleAPIInstanceSelectWritesDesiredHost(t *testing.T) {
 
 func TestHandleAPIInstanceSelectRejectsInvalidPID(t *testing.T) {
 	_tmpCfg := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", _tmpCfg)
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/instances/select", bytes.NewReader([]byte(`{"pid":0}`)))
@@ -139,7 +136,6 @@ func TestHandleAPIInstanceSelectRejectsInvalidPID(t *testing.T) {
 
 func TestHandleAPIInstancesRejectsInvalidMethod(t *testing.T) {
 	_tmpCfg := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", _tmpCfg)
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/instances", nil)
@@ -235,7 +231,6 @@ func TestHandleAPISSHOpenRejectsMissingAlias(t *testing.T) {
 
 func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {
 	_tmpCfg := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", _tmpCfg)
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	session := &sshWorkspaceSession{
@@ -277,7 +272,6 @@ func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {
 
 func TestHandleAPISSHSessionsReturnsPersistedEntries(t *testing.T) {
 	_tmpCfg := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", _tmpCfg)
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{
@@ -319,7 +313,6 @@ func TestHandleAPISSHSessionsReturnsPersistedEntries(t *testing.T) {
 
 func TestHandleAPISSHSessionDeleteRemovesPersistedEntry(t *testing.T) {
 	_tmpCfg := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", _tmpCfg)
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{

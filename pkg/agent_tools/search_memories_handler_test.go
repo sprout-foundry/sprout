@@ -247,7 +247,7 @@ func TestSearchMemoriesHandler_Execute_EventBus(t *testing.T) {
 	ctx := newTestCtx(dir)
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 	env := newTestEnv(t, dir)
 	env.EventBus = bus
 
@@ -266,20 +266,13 @@ func TestSearchMemoriesHandler_Execute_EventBus(t *testing.T) {
 		return // memory dir might not be available
 	}
 
-	// Verify tool_start event
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Verify tool_end event
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -337,7 +330,7 @@ func TestSearchMemoriesHandler_Validate(t *testing.T) {
 	require.Contains(t, err.Error(), "must be a number")
 }
 
-// Test searchMemoriesByText directly
+// Test SearchMemoriesByText directly
 func TestSearchMemoriesByText(t *testing.T) {
 	t.Parallel()
 	names := createTestMemories(t, []struct {
@@ -350,7 +343,7 @@ func TestSearchMemoriesByText(t *testing.T) {
 	})
 	defer removeTestMemories(t, names)
 
-	results, err := searchMemoriesByText("zephyr", 10, 0.0)
+	results, err := SearchMemoriesByText("zephyr", 10, 0.0)
 	require.NoError(t, err)
 	require.Greater(t, len(results), 0, "should find at least one result")
 
@@ -435,21 +428,21 @@ func TestFirstLine(t *testing.T) {
 	}
 }
 
-// Test formatMemorySearchResults
+// Test FormatMemorySearchResults
 func TestFormatMemorySearchResults(t *testing.T) {
 	t.Parallel()
 
 	// Empty results
-	output := formatMemorySearchResults("test query", nil, 0.75)
+	output := FormatMemorySearchResults("test query", nil, 0.75)
 	require.Contains(t, output, "No memories found")
 	require.Contains(t, output, "test query")
 
 	// With results
-	results := []memorySearchResult{
+	results := []MemorySearchResult{
 		{Name: "test-memory", Preview: "# Test Memory", Score: 0.95},
 		{Name: "another-memory", Preview: "# Another", Score: 0.8},
 	}
-	output = formatMemorySearchResults("test", results, 0.5)
+	output = FormatMemorySearchResults("test", results, 0.5)
 	require.Contains(t, output, "Found 2 memory/memories")
 	require.Contains(t, output, "test-memory")
 	require.Contains(t, output, "0.95")

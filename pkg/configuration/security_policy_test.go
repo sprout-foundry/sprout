@@ -556,9 +556,9 @@ func TestIsCommandDenied(t *testing.T) {
 
 func TestMaxAllowedRisk(t *testing.T) {
 	tests := []struct {
-		name    string
-		policy  *SecurityPolicy
-		want    int
+		name   string
+		policy *SecurityPolicy
+		want   int
 	}{
 		{"nil policy", nil, 0},
 		{"safe", &SecurityPolicy{MaxRiskLevel: "safe"}, 0},

@@ -12,13 +12,35 @@
 
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
-import { CloudAdapter } from './services/cloudAdapter';
 import type { RuntimeConfig } from './types/runtimeConfig';
 
+/** Shape of the JSON returned by /api/bootstrap (all fields optional). */
+interface BootstrapResponse {
+  apiBaseURL?: string;
+  wsURL?: string;
+  authMode?: 'none' | 'bearer';
+  appMode?: 'local' | 'cloud';
+  buildVersion?: string;
+  sharedMode?: boolean;
+  navItems?: PlatformNavItem[];
+  /** Authenticated user identity, injected by the platform in cloud mode. */
+  user?: {
+    id: string;
+    email: string;
+    tier: string;
+  };
+  /** URLs of external plugin script bundles (IIFE) to load after adapter installation. */
+  pluginScripts?: string[];
+}
+
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', href: '/', icon: 'layout-dashboard', order: 0 },
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
-  { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 2 },
+  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2 },
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
+  { id: 'runners', label: 'Runners', href: '/runners', icon: 'server', order: 4 },
+  { id: 'workspaces', label: 'Workspaces', href: '/workspaces', icon: 'monitor', order: 5 },
+  { id: 'admin', label: 'Admin', href: '/admin', icon: 'shield', order: 6 },
 ];
 
 const LOCALHOST_DEFAULTS: RuntimeConfig = {
@@ -30,6 +52,40 @@ const LOCALHOST_DEFAULTS: RuntimeConfig = {
 };
 
 let lastConfig: RuntimeConfig = LOCALHOST_DEFAULTS;
+
+/**
+ * Load external plugin scripts (IIFE bundles) by injecting <script> tags.
+ * Called after the adapter is installed so the registration global
+ * (window.__sproutRegisterPlugin) is in place before the script runs.
+ */
+function loadPluginScripts(urls: string[]): void {
+  if (typeof document === 'undefined') return;
+  for (const url of urls) {
+    const script = document.createElement('script');
+    script.src = url;
+    script.defer = true;
+    script.onload = () => console.warn(`[sprout] Plugin script loaded: ${url}`);
+    script.onerror = () => console.error(`[sprout] Failed to load plugin script: ${url}`);
+    document.head.appendChild(script);
+  }
+}
+
+/**
+ * Most recently resolved user identity from bootstrap. Undefined when the
+ * platform did not inject a user (local mode, or cloud mode without a session).
+ *
+ * Components that need the authenticated identity read this via getBootstrapUser()
+ * instead of re-fetching /user/me.
+ */
+let currentUserIdentity: { id: string; email: string; tier: string } | undefined;
+
+/**
+ * Return the authenticated user identity resolved from the bootstrap response,
+ * or undefined when there is no session. Safe to call before bootstrap resolves.
+ */
+export function getBootstrapUser(): { id: string; email: string; tier: string } | undefined {
+  return currentUserIdentity;
+}
 
 /**
  * Derive same-origin API/WS URLs from the current page location. Used when
@@ -85,45 +141,78 @@ function fromEnvVars(): RuntimeConfig | null {
  *   3. Localhost defaults
  *
  * The resolved config is cached and also used to install the adapter.
+ *
+ * Memoized: the first call performs the tier fallback, installs the adapter,
+ * and caches the resulting promise. Subsequent calls return the same promise
+ * so awaiting bootstrap from multiple places (the module auto-run plus
+ * useAppInitialization's auth gate) does NOT trigger duplicate /api/bootstrap
+ * requests or re-install the adapter.
  */
-export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
+let bootstrapPromise: Promise<RuntimeConfig> | null = null;
+
+export function fetchRuntimeConfig(): Promise<RuntimeConfig> {
+  if (!bootstrapPromise) {
+    bootstrapPromise = resolveRuntimeConfig().catch((err) => {
+      // resolveRuntimeConfig never rejects in practice (it falls back to
+      // localhost defaults), but clear the cache defensively so a transient
+      // throw allows a future retry rather than caching the failure forever.
+      bootstrapPromise = null;
+      throw err;
+    });
+  }
+  return bootstrapPromise;
+}
+
+async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
   let fetchError: string | null = null;
 
   // — Tier 1: fetch from server —
   try {
     const resp = await fetch('/api/bootstrap');
     const json = await resp.json();
-    if (json && typeof json === 'object' && typeof (json as any).apiBaseURL === 'string') {
+    const data = json as BootstrapResponse;
+    if (json && typeof json === 'object' && typeof data.apiBaseURL === 'string') {
       const config: RuntimeConfig = {
-        apiBaseURL: (json as any).apiBaseURL,
-        wsURL: (json as any).wsURL,
-        authMode: (json as any).authMode ?? 'none',
-        appMode: (json as any).appMode ?? 'local',
-        buildVersion: (json as any).buildVersion ?? 'dev',
+        apiBaseURL: data.apiBaseURL,
+        wsURL: data.wsURL ?? '',
+        authMode: data.authMode ?? 'none',
+        appMode: data.appMode ?? 'local',
+        buildVersion: data.buildVersion ?? 'dev',
+        sharedMode: data.sharedMode ?? false,
+        navItems: data.navItems,
+        user: data.user,
       };
       lastConfig = config;
-      console.log('bootstrap: fetched config from /api/bootstrap');
-      installAdapterForConfig(config);
+      currentUserIdentity = config.user;
+      // eslint-disable-next-line no-console
+      await installAdapterForConfig(config);
+
+      // Load any plugin scripts advertised by the server.
+      if (data.pluginScripts && Array.isArray(data.pluginScripts)) {
+        loadPluginScripts(data.pluginScripts);
+      }
+
       return config;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // fetch failed or response was invalid — fall through to tier 2
-    fetchError = err?.message || String(err);
+    fetchError = err instanceof Error ? err.message : String(err);
   }
 
   // — Tier 2: Vite env vars —
   const fromEnv = fromEnvVars();
   if (fromEnv) {
     lastConfig = fromEnv;
+    // eslint-disable-next-line no-console
     console.warn('bootstrap: using VITE env vars (fetch failed: %s)', fetchError);
-    installAdapterForConfig(fromEnv);
+    await installAdapterForConfig(fromEnv);
     return fromEnv;
   }
 
   // — Tier 3: localhost defaults —
   lastConfig = LOCALHOST_DEFAULTS;
-  console.log('bootstrap: using localhost defaults');
-  installAdapterForConfig(LOCALHOST_DEFAULTS);
+  // eslint-disable-next-line no-console
+  await installAdapterForConfig(LOCALHOST_DEFAULTS);
   return LOCALHOST_DEFAULTS;
 }
 
@@ -137,19 +226,73 @@ export function getBootstrapConfig(): RuntimeConfig {
 
 /**
  * Install the appropriate adapter based on the resolved config's appMode.
+ *
+ * Cloud-adapter-only rule (Trust-Boundary Principle, see root AGENTS.md):
+ * platform-auth behaviors (401 → /login?return_to=) live inside the
+ * CloudAdapter proxy path only — they must NOT be in local-mode entry chunks.
+ * The dynamic import below ensures cloudAdapter code is excluded from the
+ * local-mode build entirely.
  */
-function installAdapterForConfig(config: RuntimeConfig): void {
+async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
   if (config.appMode === 'cloud') {
-    console.log('bootstrap: active mode = cloud, installing CloudAdapter');
-    installAdapter(
-      new CloudAdapter({
-        apiBase: config.apiBaseURL,
-        wsUrl: config.wsURL,
-        navItems: CLOUD_NAV_ITEMS,
-      })
-    );
+    const { CloudAdapter } = await import('./services/cloudAdapter');
+    // eslint-disable-next-line no-console
+    const adapter = new CloudAdapter({
+      apiBase: config.apiBaseURL,
+      wsUrl: config.wsURL,
+      navItems: config.navItems ?? CLOUD_NAV_ITEMS,
+    });
+    installAdapter(adapter);
+
+    // Auto-import repo from ?repo= query param if present.
+    // Cached per-repo via IndexedDB so revisiting the same repo doesn't re-import.
+    const repoParam = CloudAdapter.getRepoFromQuery();
+    if (repoParam) {
+      const cacheKey = `sprout:repo-import:${repoParam}`;
+
+      // Check if this repo was already imported (cached)
+      const cached =
+        typeof window !== 'undefined'
+          ? (window as unknown as Record<string, unknown>).__repoImported === repoParam
+          : false;
+
+      if (cached) {
+        console.warn(`bootstrap: repo ${repoParam} already imported — skipping`);
+      } else {
+        console.warn(`bootstrap: ?repo= detected — importing ${repoParam}`);
+        // Signal that an import is in progress (before WASM shell is ready).
+        (window as unknown as Record<string, unknown>).__repoImporting = repoParam;
+        // Fire-and-forget: import runs after adapter is installed and WASM is ready.
+        adapter.importRepo(repoParam).then((result) => {
+          if (result.success) {
+            console.warn(`bootstrap: repo import succeeded: ${result.repo ?? repoParam}`);
+            (window as unknown as Record<string, unknown>).__repoImported = result.repo ?? repoParam;
+            delete (window as unknown as Record<string, unknown>).__repoImporting;
+            window.dispatchEvent(
+              new CustomEvent('sprout:repo-imported', {
+                detail: { repo: result.repo ?? repoParam },
+              }),
+            );
+          } else {
+            console.warn(`bootstrap: repo import failed: ${result.error}`);
+            delete (window as unknown as Record<string, unknown>).__repoImporting;
+            (window as unknown as Record<string, unknown>).__repoImportFailed = result.error;
+            window.dispatchEvent(
+              new CustomEvent('sprout:repo-import-failed', {
+                detail: { error: result.error ?? 'Unknown error' },
+              }),
+            );
+          }
+          // Clean the URL after import to prevent re-import on refresh.
+          if (typeof window !== 'undefined' && window.history.replaceState) {
+            const cleanURL = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, '', cleanURL);
+          }
+        });
+      }
+    }
   } else {
-    console.log('bootstrap: active mode = local, no adapter installed');
+    // eslint-disable-next-line no-console
   }
 }
 

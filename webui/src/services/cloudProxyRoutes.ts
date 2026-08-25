@@ -11,16 +11,77 @@
  * Mapping of webui chat endpoints to their Foundry proxy equivalents.
  * The webui sends { query, chat_id } while Foundry expects
  * { provider, model, messages, stream }.
+ *
+ * Note: The platform hosts chat at /proxy/chat (not /api/proxy/chat).
  */
 export const CHAT_ENDPOINT_MAP: Record<string, string> = {
-  '/api/query': '/api/proxy/chat',
-  '/api/query/steer': '/api/proxy/chat',
-  '/api/query/stop': '/api/proxy/chat/stop',
-  '/api/query/status': '/api/proxy/chat/status',
+  // /api/query, /api/query/stop, and /api/query/steer are NOT here — they
+  // route through the WASM shell's in-browser agent loop (see wasm-local.ts).
+  // The platform proxy only handles status.
+  '/api/query/status': '/proxy/chat/status',
 };
 
-/** Paths that require request body translation (query → messages format). */
-export const TRANSLATE_BODY_PATHS = new Set(['/api/query', '/api/query/steer']);
+/** Paths that require request body translation (query -> messages format). */
+export const TRANSLATE_BODY_PATHS = new Set(['/api/query']);
+
+// ── Session-expired (401) handling ────────────────────────────────────────
+// Trust-Boundary Principle (see root AGENTS.md): platform-auth behaviors
+// (401 → /login?return_to=) live inside the CloudAdapter proxy path only,
+// never in shared fetch/session code — local-mode builds must not contain
+// these code paths. This module is cloud-only and is dynamically imported
+// only when appMode === 'cloud'.
+
+/** CustomEvent name dispatched when a Foundry backend response returns 401. */
+export const SESSION_EXPIRED_EVENT = 'sprout:session-expired';
+
+/** Module-level guard: ensures only ONE event dispatch + ONE redirect fire. */
+let redirectScheduled = false;
+
+/**
+ * Dispatch the session-expired CustomEvent once and schedule a deferred
+ * redirect to the login page. The 750ms delay gives toast/listeners time
+ * to react before full-page navigation.
+ */
+function notifySessionExpired(): void {
+  if (redirectScheduled) return;
+  redirectScheduled = true;
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { status: 401 } }));
+    // Defer redirect so event listeners (toast, analytics, etc.) can react
+    // before full-page navigation.
+    setTimeout(() => {
+      window.location.href =
+        '/login?return_to=' + encodeURIComponent(window.location.pathname + window.location.search);
+    }, 750);
+  }
+}
+
+/**
+ * Inspect a foundry-backend Response for a 401 and trigger the
+ * session-expired flow. Returns the response unchanged.
+ *
+ * Must be called at every foundry-backend fetch site (proxyToFoundry,
+ * translateAndProxyChat, and the catch-all proxy in CloudAdapter.fetch).
+ * Do NOT call this on wasm-local, synthetic, or browser-git responses —
+ * they never hit the foundry backend and are not subject to platform auth.
+ */
+export function handleFoundryAuthError(response: Response): Response {
+  if (response.status === 401) {
+    notifySessionExpired();
+  }
+  return response;
+}
+
+/**
+ * Reset the session-expired guard for testing.
+ *
+ * @internal Test-only — allows vitest tests to reset module state between
+ * tests without needing vi.resetModules() gymnastics.
+ */
+export function _resetSessionExpiredGuardForTest(): void {
+  redirectScheduled = false;
+}
 
 /**
  * Proxy a request to the Foundry backend with a pre-rewritten path.
@@ -57,7 +118,7 @@ function proxyToFoundry(
     body: init?.body ?? requestBody ?? undefined,
     headers,
     credentials: 'include',
-  });
+  }).then(handleFoundryAuthError);
 }
 
 /**
@@ -108,7 +169,7 @@ export function translateAndProxyChat(
     headers,
     body,
     credentials: 'include',
-  });
+  }).then(handleFoundryAuthError);
 }
 
 /**
@@ -128,6 +189,14 @@ export function translateRequestBody(webuiPath: string, parsed: Record<string, u
     messages: [{ role: 'user', content: query }],
     stream: true,
   };
+
+  // In cloud mode, default to platform-managed LLM (routes to the
+  // platform's local inference server) unless the user has configured
+  // their own provider key (BYOK), in which case the provider field
+  // is already set by the chat input.
+  if (!parsed.provider) {
+    translated.provider = 'platform';
+  }
 
   // Warn if we're overwriting an existing messages field
   if (parsed.messages) {

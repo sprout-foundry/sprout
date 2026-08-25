@@ -24,7 +24,6 @@ func newSyncTestAgent(t *testing.T) *agent.Agent {
 	if err != nil {
 		t.Fatalf("NewManagerWithDir failed: %v", err)
 	}
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 
 	ag, err := agent.NewAgentWithModel("test:test")
@@ -44,7 +43,6 @@ func newSyncTestAgent(t *testing.T) *agent.Agent {
 func newNoProviderConfig(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Write a minimal config.json with last_used_provider = "editor"
@@ -93,15 +91,15 @@ func TestHandleContainerRecoveryWithSeqs_Success(t *testing.T) {
 
 	ag := newSyncTestAgent(t)
 	ag.SetFileMetadata("foo.txt", agent.WorkspaceFileMetadata{
-		BrowserSeq:        3,
-		ContainerSeq:      5,
-		LastSyncedBrowser: 3,
+		BrowserSeq:          3,
+		ContainerSeq:        5,
+		LastSyncedBrowser:   3,
 		LastSyncedContainer: 3,
 	})
 	ag.SetFileMetadata("bar.txt", agent.WorkspaceFileMetadata{
-		BrowserSeq:        2,
-		ContainerSeq:      2,
-		LastSyncedBrowser: 2,
+		BrowserSeq:          2,
+		ContainerSeq:        2,
+		LastSyncedBrowser:   2,
 		LastSyncedContainer: 2,
 	})
 	// Register agent in client context so getClientAgent can find it
@@ -517,9 +515,9 @@ func TestHandleSyncRecoverMessage_Success_SyncOK(t *testing.T) {
 
 	ag := newSyncTestAgent(t)
 	ag.SetFileMetadata("in_sync.txt", agent.WorkspaceFileMetadata{
-		BrowserSeq:        5,
-		ContainerSeq:      5,
-		LastSyncedBrowser: 5,
+		BrowserSeq:          5,
+		ContainerSeq:        5,
+		LastSyncedBrowser:   5,
 		LastSyncedContainer: 5,
 	})
 	// Register agent in client context so getClientAgent can find it

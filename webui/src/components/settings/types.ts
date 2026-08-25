@@ -1,5 +1,4 @@
 import type { SproutSettings, ProviderOption, ApiService } from '../../services/api';
-import type { SubagentTypeInfo } from '../../services/api/types';
 
 /**
  * Shared context passed to domain-specific mutation hooks.
@@ -25,9 +24,6 @@ export interface MutationContext {
    *  the ProviderSettingsTab and SubagentSettingsTab dropdowns. */
   refreshProviderCatalog?: () => void;
 }
-
-/** @deprecated Use SubagentTypeInfo from services/api/types */
-export type SubagentTypeEntry = SubagentTypeInfo;
 
 /**
  * Legacy flat tab IDs — kept for backward compatibility with useSettingsState.
@@ -81,7 +77,7 @@ export interface SettingsPanelProps {
 
 /* ─── Hierarchical section model (SP-017) ──────────────────── */
 
-export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor';
+export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor' | 'experimental';
 
 export type SettingsSubsection =
   // Agent (session scope)
@@ -96,12 +92,13 @@ export type SettingsSubsection =
   | 'workspace-lsp'
   // Environment (global scope)
   | 'env-providers'
-  | 'env-performance'
-  | 'env-commit-review'
-  | 'env-ocr'
+  | 'env-local-llm'
+  | 'env-advanced'
   // Editor
   | 'editor-preferences'
-  | 'editor-notifications';
+  | 'editor-notifications'
+  // Experimental (global scope)
+  | 'experimental-computer-use';
 
 export interface SectionDef {
   id: SettingsSection;
@@ -143,9 +140,8 @@ export const SECTION_GROUPS: SectionDef[] = [
     description: 'Global infrastructure config (~/.config/sprout)',
     subsections: [
       { id: 'env-providers', label: 'Providers' },
-      { id: 'env-performance', label: 'Performance' },
-      { id: 'env-commit-review', label: 'Commit & Review' },
-      { id: 'env-ocr', label: 'PDF OCR' },
+      { id: 'env-local-llm', label: 'Local LLM' },
+      { id: 'env-advanced', label: 'Advanced' },
     ],
   },
   {
@@ -157,6 +153,13 @@ export const SECTION_GROUPS: SectionDef[] = [
       { id: 'editor-preferences', label: 'Display' },
       { id: 'editor-notifications', label: 'Notifications' },
     ],
+  },
+  {
+    id: 'experimental',
+    label: 'Experimental',
+    scope: 'global',
+    description: 'Preview features — use at your own risk',
+    subsections: [{ id: 'experimental-computer-use', label: 'Computer Use' }],
   },
 ];
 
@@ -187,11 +190,15 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'workspace-mcp': 'mcp',
     'workspace-lsp': 'general',
     'env-providers': 'providers',
-    'env-performance': 'performance',
-    'env-commit-review': 'commit-review',
-    'env-ocr': 'pdf-ocr',
+    'env-local-llm': 'general',
+    // env-advanced is the collapsed Advanced tab (SP-091-10 / SP-017). It
+    // renders Performance + Commit & Review + OCR side-by-side. Route its
+    // legacy fetch effect through 'performance' as a representative
+    // global-scope ancestor so any state-layer fetch fires correctly.
+    'env-advanced': 'performance',
     'editor-preferences': 'general',
     'editor-notifications': 'general',
+    'experimental-computer-use': 'general',
   };
   return map[subsectionId];
 }

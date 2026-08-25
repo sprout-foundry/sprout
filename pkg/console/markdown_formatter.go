@@ -1,9 +1,9 @@
+// Package console: ANSI color constants, MarkdownFormatter struct, and the top-level Format entry point (split from markdown_formatter.go)
 package console
 
 import (
 	"bufio"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -119,6 +119,15 @@ func (f *MarkdownFormatter) Format(text string) string {
 
 	inCodeBlock := false
 	inCodeBlockLang := ""
+	// codeBlockIndent records the leading-whitespace depth of the opening
+	// fence line. Fences indented inside a list item (e.g. "  ```go") are
+	// valid CommonMark: their content and the closing fence are indented
+	// to the same depth. We dedent content lines by this amount so the
+	// gutter isn't double-indented. 0 means a column-0 fence, which keeps
+	// byte-identical output with the original behavior.
+	codeBlockIndent := 0
+	// Table buffering state
+	var tableBuffer []string
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -130,25 +139,65 @@ func (f *MarkdownFormatter) Format(text string) string {
 		// `│`, `└─ End Code Block`), which more than doubled the size
 		// of short snippets and crowded the scroll buffer on responses
 		// with several blocks.
-		if strings.HasPrefix(line, "```") {
+		//
+		// Fence detection uses the left-trimmed line so that fences
+		// indented inside a list item (e.g. "  ```go") are still
+		// recognized as fences rather than leaking raw backticks into
+		// the rendered output.
+		trimmedLine := strings.TrimLeft(line, " \t")
+		if strings.HasPrefix(trimmedLine, "```") {
+			indent := len(line) - len(trimmedLine)
 			if !inCodeBlock {
+				// Opening fence.
 				inCodeBlock = true
-				lang := strings.TrimSpace(line[3:])
+				lang := strings.TrimSpace(trimmedLine[3:])
 				inCodeBlockLang = lang
+				codeBlockIndent = indent
 				if lang != "" {
 					result.WriteString(fmt.Sprintf("%s──── %s ────%s\n", ColorDim, lang, ColorReset))
 				}
-			} else {
+				continue
+			} else if indent <= 3 {
+				// Closing fence. CommonMark: a closing fence may be
+				// preceded by up to three spaces of indentation,
+				// independent of the opening fence's indentation.
 				inCodeBlock = false
-				// No closing line — the next non-code row reads as the
-				// natural boundary. Saves a row per block.
+				codeBlockIndent = 0
+				continue
 			}
-			continue
+			// else: inside a code block but this fence-like line is
+			// indented more than three spaces → treat it as regular code
+			// content (the inCodeBlock branch below renders it).
 		}
 
 		if inCodeBlock {
-			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, f.formatCodeLine(line, inCodeBlockLang), ColorReset))
+			// Dedent content lines by the opening fence's indentation so
+			// nested code blocks don't appear double-indented behind the
+			// gutter. For column-0 fences (codeBlockIndent == 0) this is
+			// a no-op, preserving byte-identical output.
+			codeLine := dedentLine(line, codeBlockIndent)
+			// Dim only the gutter, then reset BEFORE the code so syntax
+			// highlighting (which embeds its own ColorReset sequences)
+			// renders at full color. The prior form wrapped the whole
+			// line in ColorDim…ColorReset, but the inner resets from
+			// highlightGo/highlightJSON/etc. killed the dim mid-line,
+			// producing an inconsistently-styled row (dim gutter, then
+			// bright code after the first highlighted token).
+			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, ColorReset, f.formatCodeLine(codeLine, inCodeBlockLang)))
 			continue
+		}
+
+		// Table detection: lines starting with "|" are buffered until the
+		// table ends (a line not starting with "|" or a blank line).
+		if strings.HasPrefix(line, "|") {
+			tableBuffer = append(tableBuffer, line)
+			continue
+		}
+
+		// If we were buffering a table, flush it now.
+		if len(tableBuffer) > 0 {
+			result.WriteString(f.flushTable(tableBuffer))
+			tableBuffer = nil
 		}
 
 		// Process regular markdown line
@@ -156,499 +205,33 @@ func (f *MarkdownFormatter) Format(text string) string {
 		result.WriteString(formattedLine + "\n")
 	}
 
+	// Flush any remaining table buffer at end of input.
+	if len(tableBuffer) > 0 {
+		result.WriteString(f.flushTable(tableBuffer))
+		tableBuffer = nil
+	}
+
 	return strings.TrimSuffix(result.String(), "\n") // Remove trailing newline
 }
 
-// formatMarkdownLine formats a single markdown line
-func (f *MarkdownFormatter) formatMarkdownLine(line string) string {
-	// Headers
-	if strings.HasPrefix(line, "# ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold+ColorBrightBlue, strings.Repeat("█", 3), line[2:], ColorReset)
+// dedentLine removes up to n leading space characters from line. If the line
+// has fewer than n leading spaces, they are all removed. Tabs are treated as
+// a single character and are not counted as spaces. Used to strip the
+// indentation of an opening code fence from its content lines so nested code
+// blocks (indented inside a list item) render behind the gutter without being
+// double-indented.
+func dedentLine(line string, n int) string {
+	if n <= 0 {
+		return line
 	}
-	if strings.HasPrefix(line, "## ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold+ColorCyan, strings.Repeat("▪ ", 2), line[3:], ColorReset)
-	}
-	if strings.HasPrefix(line, "### ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold+ColorBlue, "▸ ", line[4:], ColorReset)
-	}
-	if strings.HasPrefix(line, "#### ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold, "• ", line[5:], ColorReset)
-	}
-
-	// If it starts with "- " or "* " or "+ " with optional leading whitespace
-	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "+ ") ||
-		regexp.MustCompile(`^\s*[-*+]\s`).MatchString(line) {
-		// Simple list style: color the bullet
-		bulletPattern := `^(\s*)([-*+])(\s+)(.*)$`
-		re := regexp.MustCompile(bulletPattern)
-		if matches := re.FindStringSubmatch(line); len(matches) > 0 {
-			return fmt.Sprintf("%s%s%s%s%s", matches[1], ColorGreen+matches[2], ColorReset+matches[3], matches[4], ColorReset)
-		}
-	}
-
-	// Horizontal rule
-	if strings.TrimSpace(line) == "---" || strings.TrimSpace(line) == "***" {
-		return fmt.Sprintf("%s%s%s", ColorDim, strings.Repeat("─", f.hrWidth()), ColorReset)
-	}
-
-	// Blockquotes
-	if strings.HasPrefix(line, "> ") {
-		quoted := f.formatMarkdownLine(line[2:])
-		return fmt.Sprintf("%s│ %s%s", ColorDim, quoted, ColorReset)
-	}
-
-	// Inline formatting
-	if f.enableInline {
-		line = f.formatInlineElements(line)
-	}
-
-	return line
-}
-
-// formatInlineElements formats inline markdown elements
-func (f *MarkdownFormatter) formatInlineElements(text string) string {
-	// Bold text (**text** or __text__)
-	boldRegex := regexp.MustCompile(`\*\*(.*?)\*\*|__(.*?)__`)
-	text = boldRegex.ReplaceAllStringFunc(text, func(match string) string {
-		var content string
-		if strings.HasPrefix(match, "**") {
-			content = match[2 : len(match)-2]
+	removed := 0
+	for i := 0; i < len(line) && removed < n; i++ {
+		if line[i] == ' ' {
+			removed++
 		} else {
-			content = match[2 : len(match)-2]
-		}
-		return ColorBold + content + ColorReset
-	})
-
-	// Italic text — *text* is always safe (asterisks never appear in identifiers)
-	italicAsteriskRegex := regexp.MustCompile(`\*(.*?)\*`)
-	text = italicAsteriskRegex.ReplaceAllStringFunc(text, func(match string) string {
-		if strings.HasPrefix(match, "**") {
-			return match
-		}
-		content := match[1 : len(match)-1]
-		return ColorItalic + content + ColorReset
-	})
-
-	// Italic via underscore _text_ — CommonMark requires underscores NOT
-	// adjacent to alphanumeric chars (so handle_read_file stays intact).
-	text = f.formatUnderscoreItalic(text)
-
-	// Inline code (`code`)
-	codeRegex := regexp.MustCompile("`(.*?)`")
-	text = codeRegex.ReplaceAllStringFunc(text, func(match string) string {
-		content := match[1 : len(match)-1]
-		return fmt.Sprintf("%s%s%s", BgGray, content, ColorReset)
-	})
-
-	// Links [text](url) - just highlight the text part
-	linkRegex := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
-	text = linkRegex.ReplaceAllStringFunc(text, func(match string) string {
-		re := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
-		matches := re.FindStringSubmatch(match)
-		if len(matches) >= 3 {
-			return ColorUnderline + ColorCyan + matches[1] + ColorReset + ColorDim + "(" + matches[2] + ")" + ColorReset
-		}
-		return match
-	})
-
-	return text
-}
-
-// formatUnderscoreItalic handles `_text_` italic markers with CommonMark-style
-// boundary checks: the underscore must NOT be adjacent to alphanumeric characters
-// or other underscores. This prevents `handle_read_file` from being mangled.
-func (f *MarkdownFormatter) formatUnderscoreItalic(text string) string {
-	out := make([]byte, 0, len(text))
-	for len(text) > 0 {
-		i := strings.Index(text, "_")
-		if i < 0 {
-			out = append(out, text...)
+			// First non-space byte (or tab) ends the dedent region.
 			break
 		}
-		// Copy everything before this underscore
-		out = append(out, text[:i]...)
-		text = text[i:] // text now starts with "_"
-
-		// Check left boundary: previous byte must NOT be alphanumeric or underscore
-		if len(out) > 0 {
-			prev := out[len(out)-1]
-			if isIdentChar(prev) {
-				// Underscore is part of an identifier — keep literal
-				out = append(out, '_')
-				text = text[1:]
-				continue
-			}
-		}
-
-		// Find the next underscore (the closing candidate)
-		j := strings.Index(text[1:], "_")
-		if j < 0 {
-			// No closing underscore — keep literal
-			out = append(out, '_')
-			text = text[1:]
-			continue
-		}
-		closingPos := j + 1 // position relative to text start
-
-		// Check right boundary: byte after closing _ must NOT be alphanumeric or underscore
-		if closingPos+1 < len(text) {
-			next := text[closingPos+1]
-			if isIdentChar(next) {
-				// Underscore is part of an identifier — keep literal opening _
-				out = append(out, '_')
-				text = text[1:]
-				continue
-			}
-		}
-
-		// Italic: apply formatting to content between the two underscores
-		content := text[1:closingPos]
-		out = append(out, []byte(ColorItalic+content+ColorReset)...)
-		text = text[closingPos+1:]
 	}
-	return string(out)
-}
-
-// isIdentChar returns true if b is a character that can appear in identifiers
-// (letters, digits, underscore). Used to enforce CommonMark boundary rules for
-// underscore-based formatting.
-func isIdentChar(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') ||
-		(b >= '0' && b <= '9') || b == '_'
-}
-
-// formatCodeLine provides basic syntax highlighting for code lines
-func (f *MarkdownFormatter) formatCodeLine(line, lang string) string {
-	lang = strings.ToLower(lang)
-
-	switch lang {
-	case "go", "golang":
-		return f.highlightGo(line)
-	case "python", "py":
-		return f.highlightPython(line)
-	case "bash", "sh", "shell":
-		return f.highlightBash(line)
-	case "json":
-		return f.highlightJSON(line)
-	case "yaml", "yml":
-		return f.highlightYAML(line)
-	case "javascript", "js":
-		return f.highlightJavaScript(line)
-	case "typescript", "ts":
-		return f.highlightTypeScript(line)
-	default:
-		// Generic highlighting
-		return f.highlightGeneric(line)
-	}
-}
-
-// Language-specific highlighters
-func (f *MarkdownFormatter) highlightGo(line string) string {
-	// Comments
-	if strings.Contains(line, "//") {
-		parts := strings.SplitN(line, "//", 2)
-		return ColorGreen + parts[0] + ColorDim + "//" + parts[1] + ColorReset
-	}
-
-	// Keywords
-	keywords := []string{"func", "var", "const", "type", "struct", "interface", "if", "else", "for", "range", "return", "import", "package"}
-	for _, kw := range keywords {
-		re := regexp.MustCompile(`\b` + kw + `\b`)
-		line = re.ReplaceAllString(line, ColorBlue+kw+ColorReset)
-	}
-
-	// Strings
-	stringRegex := regexp.MustCompile(`"(.*?)"`)
-	line = stringRegex.ReplaceAllString(line, ColorGreen+"$1"+ColorReset)
-
-	return line
-}
-
-func (f *MarkdownFormatter) highlightPython(line string) string {
-	// Comments
-	if strings.Contains(line, "#") && !strings.Contains(line, "\"#") && !strings.Contains(line, "'#") {
-		parts := strings.SplitN(line, "#", 2)
-		return ColorGreen + parts[0] + ColorDim + "#" + parts[1] + ColorReset
-	}
-
-	// Keywords
-	keywords := []string{"def", "class", "if", "elif", "else", "for", "in", "return", "import", "from", "as", "try", "except", "with"}
-	for _, kw := range keywords {
-		re := regexp.MustCompile(`\b` + kw + `\b`)
-		line = re.ReplaceAllString(line, ColorBlue+kw+ColorReset)
-	}
-
-	// Strings
-	stringRegex := regexp.MustCompile(`"(.*?)"|'(.*?)'`)
-	line = stringRegex.ReplaceAllStringFunc(line, func(match string) string {
-		if strings.HasPrefix(match, `"`) {
-			return ColorGreen + match + ColorReset
-		}
-		return ColorGreen + match + ColorReset
-	})
-
-	return line
-}
-
-func (f *MarkdownFormatter) highlightBash(line string) string {
-	// Comments
-	if strings.HasPrefix(strings.TrimSpace(line), "#") {
-		return ColorDim + line + ColorReset
-	}
-
-	// Commands
-	commands := []string{"cd", "ls", "pwd", "echo", "cat", "grep", "sed", "awk", "find", "mkdir", "rm", "cp", "mv", "chmod"}
-	for _, cmd := range commands {
-		re := regexp.MustCompile(`\b` + cmd + `\b`)
-		line = re.ReplaceAllString(line, ColorCyan+cmd+ColorReset)
-	}
-
-	// Options
-	optionRegex := regexp.MustCompile(`(-\w+|--\w+)`)
-	line = optionRegex.ReplaceAllString(line, ColorYellow+"$1"+ColorReset)
-
-	return line
-}
-
-func (f *MarkdownFormatter) highlightJSON(line string) string {
-	// Strings (keys and values)
-	stringRegex := regexp.MustCompile(`"(.*?)"`)
-	line = stringRegex.ReplaceAllString(line, ColorGreen+"\"$1\""+ColorReset)
-
-	// Brackets and braces
-	line = strings.ReplaceAll(line, "{", ColorBold+"{"+ColorReset)
-	line = strings.ReplaceAll(line, "}", ColorBold+"}"+ColorReset)
-	line = strings.ReplaceAll(line, "[", ColorBold+"["+ColorReset)
-	line = strings.ReplaceAll(line, "]", ColorBold+"]"+ColorReset)
-
-	return line
-}
-
-func (f *MarkdownFormatter) highlightYAML(line string) string {
-	// Keys (before colon)
-	if strings.Contains(line, ":") {
-		parts := strings.SplitN(line, ":", 2)
-		return ColorCyan + parts[0] + ColorReset + ":" + ColorGreen + parts[1] + ColorReset
-	}
-
-	// Comments
-	if strings.Contains(line, "#") {
-		parts := strings.SplitN(line, "#", 2)
-		return ColorGreen + parts[0] + ColorDim + "#" + parts[1] + ColorReset
-	}
-
-	return line
-}
-
-func (f *MarkdownFormatter) highlightJavaScript(line string) string {
-	// Comments
-	if strings.Contains(line, "//") {
-		parts := strings.SplitN(line, "//", 2)
-		return ColorGreen + parts[0] + ColorDim + "//" + parts[1] + ColorReset
-	}
-	if strings.Contains(line, "/*") {
-		return ColorDim + line + ColorReset
-	}
-
-	// Keywords
-	keywords := []string{"function", "const", "let", "var", "if", "else", "for", "while", "return", "class", "import", "export"}
-	for _, kw := range keywords {
-		re := regexp.MustCompile(`\b` + kw + `\b`)
-		line = re.ReplaceAllString(line, ColorBlue+kw+ColorReset)
-	}
-
-	// Strings
-	stringRegex := regexp.MustCompile("(\".*?\")|('.*?')|(`.*?`)")
-	line = stringRegex.ReplaceAllString(line, ColorGreen+"$1"+ColorReset)
-
-	return line
-}
-
-func (f *MarkdownFormatter) highlightTypeScript(line string) string {
-	// Similar to JavaScript but with TypeScript specifics
-	result := f.highlightJavaScript(line)
-
-	// TypeScript keywords
-	tsKeywords := []string{"interface", "type", "enum", "implements", "extends", "public", "private", "protected"}
-	for _, kw := range tsKeywords {
-		re := regexp.MustCompile(`\b` + kw + `\b`)
-		result = re.ReplaceAllString(result, ColorMagenta+kw+ColorReset)
-	}
-
-	return result
-}
-
-func (f *MarkdownFormatter) highlightGeneric(line string) string {
-	// Generic syntax highlighting
-	line = strings.ReplaceAll(line, "true", ColorGreen+"true"+ColorReset)
-	line = strings.ReplaceAll(line, "false", ColorRed+"false"+ColorReset)
-	line = strings.ReplaceAll(line, "null", ColorDim+"null"+ColorReset)
-
-	// Strings
-	stringRegex := regexp.MustCompile(`"(.*?)"|'(.*?)'`)
-	line = stringRegex.ReplaceAllString(line, ColorGreen+"$1"+ColorReset)
-
-	return line
-}
-
-// stripMarkdown removes markdown formatting when colors are disabled
-func (f *MarkdownFormatter) stripMarkdown(text string) string {
-	// Remove code blocks
-	codeBlockRegex := regexp.MustCompile("```[\\s\\S]*?```")
-	text = codeBlockRegex.ReplaceAllString(text, "[CODE BLOCK]")
-
-	// Remove headers
-	text = regexp.MustCompile("^#{1,6}\\s").ReplaceAllString(text, "")
-
-	// Remove bold/italic
-	text = regexp.MustCompile("\\*\\*(.*?)\\*\\*").ReplaceAllString(text, "$1")
-	text = regexp.MustCompile("__(.*?)__").ReplaceAllString(text, "$1")
-	text = regexp.MustCompile("\\*(.*?)\\*").ReplaceAllString(text, "$1")
-	text = regexp.MustCompile("_(.*?)_").ReplaceAllString(text, "$1")
-
-	// Remove inline code
-	text = regexp.MustCompile("`(.*?)`").ReplaceAllString(text, "$1")
-
-	// Remove links but keep text
-	text = regexp.MustCompile("\\[(.*?)\\]\\(.*?\\)").ReplaceAllString(text, "$1")
-
-	// Remove list markers
-	text = regexp.MustCompile("^\\s*[-*+]\\s").ReplaceAllString(text, "• ")
-
-	// Remove blockquotes
-	text = regexp.MustCompile("^>\\s").ReplaceAllString(text, "")
-
-	// Remove horizontal rules
-	text = regexp.MustCompile("^---$|^---$").ReplaceAllString(text, "")
-
-	return text
-}
-
-// IsLikelyMarkdown checks if text contains markdown patterns
-// More selective to avoid formatting code blocks, shell output, or other non-summary text
-func IsLikelyMarkdown(text string) bool {
-	// Skip if text looks like command output or code
-	// Tool calls already have their own formatting via ToolLog()
-	if looksLikeCommandOrCodeOutput(text) {
-		return false
-	}
-
-	// Check for headers (# ## ### etc.)
-	if strings.Contains(text, "#") {
-		// Look for lines that start with #
-		lines := strings.Split(text, "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "#") {
-				// Also ensure this isn't a comment in code
-				if !strings.Contains(line, "//") && !strings.Contains(line, "#include") && !strings.Contains(line, "#define") && !strings.HasPrefix(line, "#include") && !strings.HasPrefix(line, "##") && len(line) > 2 {
-					return true
-				}
-			}
-		}
-	}
-
-	// Check for markdown patterns that are likely for summary text
-	lines := strings.Split(text, "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-
-		// Header patterns - must be at start of line or early in text
-		if strings.HasPrefix(trimmed, "# ") || strings.HasPrefix(trimmed, "## ") ||
-			strings.HasPrefix(trimmed, "### ") || strings.HasPrefix(trimmed, "#### ") {
-			// Ensure not a comment
-			if !strings.Contains(trimmed, "//") && !strings.Contains(trimmed, "#include") && !strings.Contains(trimmed, "#define") {
-				return true
-			}
-		}
-
-		// Bold for emphasis (e.g., **Key points**)
-		if strings.Count(trimmed, "**") >= 2 {
-			return true
-		}
-
-		// Bullet lists with descriptive text after
-		if strings.HasPrefix(trimmed, "- ") && len(trimmed) > 3 {
-			// Accept if it looks like a meaningful list item (not just flags)
-			// Good: "- Completed the setup"
-			// Bad: "-v" or just a flag
-			if len(trimmed) > 10 && !regexp.MustCompile(`^-\s+[a-z]$`).MatchString(trimmed) {
-				return true
-			}
-		}
-
-		// Blockquotes are markdown
-		if strings.HasPrefix(trimmed, "> ") {
-			return true
-		}
-
-		// Inline code backticks are markdown
-		if strings.Count(trimmed, "`") >= 2 {
-			return true
-		}
-
-		// Links are markdown
-		if strings.Contains(trimmed, "](") && strings.Contains(trimmed, "[") {
-			return true
-		}
-
-		// Code block delimiters
-		if trimmed == "```" || strings.HasPrefix(trimmed, "```") {
-			return true
-		}
-	}
-
-	return false
-}
-
-// looksLikeCommandOrCodeOutput returns true if text appears to be
-// command output, code, or other non-summary content that shouldn't be markdown-formatted
-func looksLikeCommandOrCodeOutput(text string) bool {
-	// Tool call patterns - things that look like tool logs
-	// Format: [1 - 0%] read file filename.go
-	if regexp.MustCompile(`^\[\d+\s*-\s*\d+%\s*\]\s+\w+\s+\w+`).MatchString(text) {
-		return true
-	}
-
-	// Lines starting with file paths or similar
-	if regexp.MustCompile(`^[\w\/\-\_\.]+\.\w+:\d+`).MatchString(text) {
-		return true
-	}
-
-	// Check if majority of lines look like code
-	lines := strings.Split(text, "\n")
-	if len(lines) > 1 {
-		codeLineCount := 0
-		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			// Skip empty lines
-			if trimmed == "" {
-				continue
-			}
-
-			// Lines with common code patterns
-			if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '}' ||
-				strings.Contains(trimmed, "func ") || strings.Contains(trimmed, "var ") ||
-				strings.Contains(trimmed, "const ") || strings.Contains(trimmed, "type ") ||
-				strings.Contains(trimmed, "import") || strings.Contains(trimmed, "package") ||
-				strings.Contains(trimmed, "}") || strings.Contains(trimmed, "{") ||
-				strings.Contains(trimmed, "// ")) {
-				codeLineCount++
-			}
-
-			// Lines ending with semicolons or parentheses (code-like)
-			if strings.HasSuffix(trimmed, ";") || strings.Contains(trimmed, "(){") {
-				codeLineCount++
-			}
-		}
-		// If more than 50% of lines look like code, skip markdown formatting
-		if codeLineCount > 0 && codeLineCount > len(lines)/2 {
-			return true
-		}
-	}
-
-	return false
+	return line[removed:]
 }

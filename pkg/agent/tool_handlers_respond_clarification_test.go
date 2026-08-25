@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestHandleRespondClarification_MissingRequestID(t *testing.T) {
@@ -156,14 +156,14 @@ func TestHandleRespondClarification_DeliversToWaitingRequest(t *testing.T) {
 
 	// Subagent (has subagentID) - requests clarification
 	delegateAgent := &Agent{
-		eventBus:           eb,
-		subagentID:         "delegate-multi",
+		eventBus:             eb,
+		subagentID:           "delegate-multi",
 		clarificationManager: cm,
 	}
 
 	// Parent agent (no subagentID) - responds to clarification
 	parentAgent := &Agent{
-		eventBus:           eb,
+		eventBus:             eb,
 		clarificationManager: cm,
 	}
 

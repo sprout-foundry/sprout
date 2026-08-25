@@ -40,12 +40,12 @@ func TestHandleTodoWrite(t *testing.T) {
 		}
 	})
 
-	t.Run("todo item not an object", func(t *testing.T) {
+	t.Run("todo item not an object or string", func(t *testing.T) {
 		_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
-			"todos": []interface{}{"not an object"},
+			"todos": []interface{}{42},
 		})
 		if err == nil {
-			t.Error("expected error for non-object todo item")
+			t.Error("expected error for non-object, non-string todo item")
 		}
 	})
 
@@ -218,5 +218,281 @@ func TestHandleTodoWrite_InvalidPriority(t *testing.T) {
 	}
 
 	// Clean up global state
+	tools.TodoWrite([]tools.TodoItem{})
+}
+
+// ---------------------------------------------------------------------------
+// Coercion tests — malformed inputs from models that don't follow the schema
+// ---------------------------------------------------------------------------
+
+func TestCoerceTodoItem_BareString(t *testing.T) {
+	item, err := coerceTodoItem("Do something")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if item.Content != "Do something" {
+		t.Errorf("content = %q, want %q", item.Content, "Do something")
+	}
+	if item.Status != "pending" {
+		t.Errorf("status = %q, want %q", item.Status, "pending")
+	}
+}
+
+func TestCoerceTodoItem_AlternativeFieldNames(t *testing.T) {
+	item, err := coerceTodoItem(map[string]interface{}{
+		"text":  "Build the thing",
+		"state": "done",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if item.Content != "Build the thing" {
+		t.Errorf("content = %q, want %q", item.Content, "Build the thing")
+	}
+	if item.Status != "completed" {
+		t.Errorf("status = %q, want %q (normalized from 'done')", item.Status, "completed")
+	}
+}
+
+func TestCoerceTodoItem_StatusNormalization(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"done", "completed"},
+		{"complete", "completed"},
+		{"finished", "completed"},
+		{"in-progress", "in_progress"},
+		{"inProgress", "in_progress"},
+		{"active", "in_progress"},
+		{"started", "in_progress"},
+		{"doing", "in_progress"},
+		{"todo", "pending"},
+		{"new", "pending"},
+		{"not-started", "pending"},
+		{"canceled", "cancelled"},
+		{"skipped", "cancelled"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			item, err := coerceTodoItem(map[string]interface{}{
+				"content": "Test task",
+				"status":  tc.input,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error for status %q: %v", tc.input, err)
+			}
+			if item.Status != tc.expected {
+				t.Errorf("status = %q, want %q (from %q)", item.Status, tc.expected, tc.input)
+			}
+		})
+	}
+}
+
+func TestCoerceTodoItem_PriorityNormalization(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hi", "high"},
+		{"high", "high"},
+		{"med", "medium"},
+		{"medium", "medium"},
+		{"normal", "medium"},
+		{"default", "medium"},
+		{"lo", "low"},
+		{"low", "low"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			item, err := coerceTodoItem(map[string]interface{}{
+				"content":  "Test task",
+				"status":   "pending",
+				"priority": tc.input,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error for priority %q: %v", tc.input, err)
+			}
+			if item.Priority != tc.expected {
+				t.Errorf("priority = %q, want %q (from %q)", item.Priority, tc.expected, tc.input)
+			}
+		})
+	}
+}
+
+func TestCoerceTodosFromArgs_AlternativeTopLevelKey(t *testing.T) {
+	args := map[string]interface{}{
+		"tasks": []interface{}{
+			map[string]interface{}{
+				"content": "Task via 'tasks' key",
+				"status":  "pending",
+			},
+		},
+	}
+	todos, err := coerceTodosFromArgs(args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(todos) != 1 {
+		t.Fatalf("expected 1 todo, got %d", len(todos))
+	}
+	if todos[0].Content != "Task via 'tasks' key" {
+		t.Errorf("content = %q", todos[0].Content)
+	}
+}
+
+func TestCoerceTodosFromArgs_JSONString(t *testing.T) {
+	jsonStr := `[{"content":"Decoded task","status":"pending"}]`
+	args := map[string]interface{}{
+		"todos": jsonStr,
+	}
+	todos, err := coerceTodosFromArgs(args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(todos) != 1 {
+		t.Fatalf("expected 1 todo, got %d", len(todos))
+	}
+	if todos[0].Content != "Decoded task" {
+		t.Errorf("content = %q", todos[0].Content)
+	}
+}
+
+func TestCoerceTodosFromArgs_MixedItems(t *testing.T) {
+	args := map[string]interface{}{
+		"todos": []interface{}{
+			map[string]interface{}{
+				"content": "Map task",
+				"status":  "in_progress",
+			},
+			"Bare string task",
+		},
+	}
+	todos, err := coerceTodosFromArgs(args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(todos) != 2 {
+		t.Fatalf("expected 2 todos, got %d", len(todos))
+	}
+	if todos[0].Content != "Map task" {
+		t.Errorf("first content = %q", todos[0].Content)
+	}
+	if todos[0].Status != "in_progress" {
+		t.Errorf("first status = %q", todos[0].Status)
+	}
+	if todos[1].Content != "Bare string task" {
+		t.Errorf("second content = %q", todos[1].Content)
+	}
+	if todos[1].Status != "pending" {
+		t.Errorf("second status = %q", todos[1].Status)
+	}
+}
+
+func TestCoerceTodosFromArgs_BackwardsCompatible(t *testing.T) {
+	// Standard shape should still work exactly as before
+	args := map[string]interface{}{
+		"todos": []interface{}{
+			map[string]interface{}{
+				"content":    "Standard task",
+				"status":     "pending",
+				"priority":   "high",
+				"id":         "todo_1",
+				"activeForm": "Doing standard task",
+			},
+		},
+	}
+	todos, err := coerceTodosFromArgs(args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(todos) != 1 {
+		t.Fatalf("expected 1 todo, got %d", len(todos))
+	}
+	todo := todos[0]
+	if todo.Content != "Standard task" {
+		t.Errorf("content = %q", todo.Content)
+	}
+	if todo.Status != "pending" {
+		t.Errorf("status = %q", todo.Status)
+	}
+	if todo.Priority != "high" {
+		t.Errorf("priority = %q", todo.Priority)
+	}
+	if todo.ID != "todo_1" {
+		t.Errorf("id = %q", todo.ID)
+	}
+	if todo.ActiveForm != "Doing standard task" {
+		t.Errorf("activeForm = %q", todo.ActiveForm)
+	}
+}
+
+func TestHandleTodoWrite_CoercionViaHandler(t *testing.T) {
+	a := &Agent{
+		state: NewAgentStateManager(false),
+	}
+
+	t.Run("alternative key 'tasks' via handler", func(t *testing.T) {
+		_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
+			"tasks": []interface{}{
+				map[string]interface{}{
+					"content": "Via tasks key",
+					"status":  "pending",
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		read := a.GetTodoManager().Read()
+		if len(read) != 1 {
+			t.Fatalf("expected 1 todo, got %d", len(read))
+		}
+		if read[0].Content != "Via tasks key" {
+			t.Errorf("content = %q", read[0].Content)
+		}
+	})
+
+	t.Run("bare string item via handler", func(t *testing.T) {
+		_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
+			"todos": []interface{}{"Quick task"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		read := a.GetTodoManager().Read()
+		if len(read) != 1 {
+			t.Fatalf("expected 1 todo, got %d", len(read))
+		}
+		if read[0].Content != "Quick task" {
+			t.Errorf("content = %q", read[0].Content)
+		}
+		if read[0].Status != "pending" {
+			t.Errorf("status = %q, want 'pending'", read[0].Status)
+		}
+	})
+
+	t.Run("status normalization via handler", func(t *testing.T) {
+		_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
+			"todos": []interface{}{
+				map[string]interface{}{
+					"content": "Done task",
+					"status":  "done",
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		read := a.GetTodoManager().Read()
+		if len(read) != 1 {
+			t.Fatalf("expected 1 todo, got %d", len(read))
+		}
+		if read[0].Status != "completed" {
+			t.Errorf("status = %q, want 'completed' (normalized from 'done')", read[0].Status)
+		}
+	})
+
+	// Clean up
 	tools.TodoWrite([]tools.TodoItem{})
 }

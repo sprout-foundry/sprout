@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
-	"github.com/spf13/cobra"
 )
 
 var embeddingsCmd = &cobra.Command{
@@ -164,16 +164,18 @@ func resolveEmbeddingIndexDir() (string, error) {
 		return cfg.EmbeddingIndex.IndexDir, nil
 	}
 
-	// Fall back to default, matching manager.go resolution order
-	configDir := os.Getenv("SPROUT_CONFIG")
-	if configDir == "" {
-		configDir = os.Getenv("LEDIT_CONFIG")
+	// SP-133: the index is regenerable data, so it lives under the data root
+	// ($SPROUT_DATA_DIR → $XDG_DATA_HOME/sprout → ~/.local/share/sprout) — NOT
+	// the config root. Deriving it from $SPROUT_CONFIG here made this CLI read
+	// a different, stale index than the daemon writes. DefaultIndexDir is the
+	// single resolver the manager also uses.
+	//
+	// The index is scoped per workspace, and the CLI's workspace is its working
+	// directory — the same root agent.NewAgent resolves — so pass that through
+	// rather than the unscoped base, which holds no index.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve working directory: %w", err)
 	}
-	if configDir == "" {
-		configDir, err = configuration.GetConfigDir()
-		if err != nil {
-			return "", fmt.Errorf("get config directory: %w", err)
-		}
-	}
-	return filepath.Join(configDir, "embeddings"), nil
+	return embedding.DefaultIndexDir(cwd), nil
 }

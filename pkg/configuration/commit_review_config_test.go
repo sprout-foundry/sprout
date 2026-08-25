@@ -15,36 +15,36 @@ func TestGetCommitProvider_ExplicitValue_ReturnsValue(t *testing.T) {
 	assert.Equal(t, "openai", result)
 }
 
-// TestGetCommitProvider_EmptyFallsBackToLastUsedProvider tests that GetCommitProvider falls back to LastUsedProvider
-func TestGetCommitProvider_EmptyFallsBackToLastUsedProvider(t *testing.T) {
+// TestGetCommitProvider_EmptyReturnsEmpty tests that GetCommitProvider returns empty when not explicitly set
+func TestGetCommitProvider_EmptyReturnsEmpty(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:    "",
+		CommitProvider:   "",
 		LastUsedProvider: "openrouter",
 	}
 	result := cfg.GetCommitProvider()
-	assert.Equal(t, "openrouter", result)
+	assert.Equal(t, "", result)
 }
 
-// TestGetCommitProvider_EmptyFallsBackToProviderPriority tests that GetCommitProvider falls back to ProviderPriority
-func TestGetCommitProvider_EmptyFallsBackToProviderPriority(t *testing.T) {
+// TestGetCommitProvider_OnlyProviderPriorityReturnsEmpty tests that GetCommitProvider does not fall back to ProviderPriority
+func TestGetCommitProvider_OnlyProviderPriorityReturnsEmpty(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:    "",
+		CommitProvider:   "",
 		LastUsedProvider: "",
 		ProviderPriority: []string{"ollama-local", "openrouter"},
 	}
 	result := cfg.GetCommitProvider()
-	assert.Equal(t, "ollama-local", result)
+	assert.Equal(t, "", result)
 }
 
-// TestGetCommitProvider_AllEmptyReturnsDefault tests that GetCommitProvider returns ultimate fallback
-func TestGetCommitProvider_AllEmptyReturnsDefault(t *testing.T) {
+// TestGetCommitProvider_AllEmptyReturnsEmpty tests that GetCommitProvider returns empty with no explicit config
+func TestGetCommitProvider_AllEmptyReturnsEmpty(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:    "",
+		CommitProvider:   "",
 		LastUsedProvider: "",
 		ProviderPriority: []string{},
 	}
 	result := cfg.GetCommitProvider()
-	assert.Equal(t, "ollama-local", result)
+	assert.Equal(t, "", result)
 }
 
 // TestGetCommitModel_ExplicitValue_ReturnsValue tests that GetCommitModel returns the explicitly set model
@@ -59,8 +59,8 @@ func TestGetCommitModel_ExplicitValue_ReturnsValue(t *testing.T) {
 // TestGetCommitModel_EmptyFallsBackToProviderModel tests that GetCommitModel falls back to provider's default model
 func TestGetCommitModel_EmptyFallsBackToProviderModel(t *testing.T) {
 	cfg := &Config{
-		CommitModel:     "",
-		CommitProvider:  "openai",
+		CommitModel:    "",
+		CommitProvider: "openai",
 		ProviderModels: map[string]string{
 			"openai": "gpt-4",
 		},
@@ -92,36 +92,36 @@ func TestGetReviewProvider_ExplicitValue_ReturnsValue(t *testing.T) {
 	assert.Equal(t, "zai", result)
 }
 
-// TestGetReviewProvider_EmptyFallsBackToLastUsedProvider tests that GetReviewProvider falls back to LastUsedProvider
-func TestGetReviewProvider_EmptyFallsBackToLastUsedProvider(t *testing.T) {
+// TestGetReviewProvider_EmptyReturnsEmpty tests that GetReviewProvider returns empty when not explicitly set
+func TestGetReviewProvider_EmptyReturnsEmpty(t *testing.T) {
 	cfg := &Config{
 		ReviewProvider:   "",
 		LastUsedProvider: "openrouter",
 	}
 	result := cfg.GetReviewProvider()
-	assert.Equal(t, "openrouter", result)
+	assert.Equal(t, "", result)
 }
 
-// TestGetReviewProvider_EmptyFallsBackToProviderPriority tests that GetReviewProvider falls back to ProviderPriority
-func TestGetReviewProvider_EmptyFallsBackToProviderPriority(t *testing.T) {
+// TestGetReviewProvider_OnlyProviderPriorityReturnsEmpty tests that GetReviewProvider does not fall back to ProviderPriority
+func TestGetReviewProvider_OnlyProviderPriorityReturnsEmpty(t *testing.T) {
 	cfg := &Config{
 		ReviewProvider:   "",
 		LastUsedProvider: "",
 		ProviderPriority: []string{"ollama-local", "openrouter"},
 	}
 	result := cfg.GetReviewProvider()
-	assert.Equal(t, "ollama-local", result)
+	assert.Equal(t, "", result)
 }
 
-// TestGetReviewProvider_AllEmptyReturnsDefault tests that GetReviewProvider returns ultimate fallback
-func TestGetReviewProvider_AllEmptyReturnsDefault(t *testing.T) {
+// TestGetReviewProvider_AllEmptyReturnsEmpty tests that GetReviewProvider returns empty with no explicit config
+func TestGetReviewProvider_AllEmptyReturnsEmpty(t *testing.T) {
 	cfg := &Config{
 		ReviewProvider:   "",
 		LastUsedProvider: "",
 		ProviderPriority: []string{},
 	}
 	result := cfg.GetReviewProvider()
-	assert.Equal(t, "ollama-local", result)
+	assert.Equal(t, "", result)
 }
 
 // TestGetReviewModel_ExplicitValue_ReturnsValue tests that GetReviewModel returns the explicitly set model
@@ -163,10 +163,10 @@ func TestSetReviewModel_SetsValue(t *testing.T) {
 // TestCommitAndReviewConfigIndependence tests that commit and review configs are independent
 func TestCommitAndReviewConfigIndependence(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:  "openai",
-		CommitModel:     "gpt-4",
-		ReviewProvider:  "ollama-local",
-		ReviewModel:     "qwen3-coder:30b",
+		CommitProvider:   "openai",
+		CommitModel:      "gpt-4",
+		ReviewProvider:   "ollama-local",
+		ReviewModel:      "qwen3-coder:30b",
 		LastUsedProvider: "openrouter",
 	}
 
@@ -179,48 +179,48 @@ func TestCommitAndReviewConfigIndependence(t *testing.T) {
 // TestCommitConfigFallbackChain tests the complete fallback chain for commit config
 func TestCommitConfigFallbackChain(t *testing.T) {
 	tests := []struct {
-		name              string
-		commitProvider    string
-		lastUsedProvider  string
-		providerPriority  []string
-		expectedProvider  string
+		name             string
+		commitProvider   string
+		lastUsedProvider string
+		providerPriority []string
+		expectedProvider string
 	}{
 		{
-			name:              "explicit commit provider",
-			commitProvider:    "zai",
-			lastUsedProvider:  "openrouter",
-			providerPriority:  []string{"ollama-local"},
-			expectedProvider:  "zai",
+			name:             "explicit commit provider",
+			commitProvider:   "zai",
+			lastUsedProvider: "openrouter",
+			providerPriority: []string{"ollama-local"},
+			expectedProvider: "zai",
 		},
 		{
-			name:              "fallback to last used",
-			commitProvider:    "",
-			lastUsedProvider:  "deepinfra",
-			providerPriority:  []string{"ollama-local"},
-			expectedProvider:  "deepinfra",
+			name:             "empty returns empty (no fallback to last used)",
+			commitProvider:   "",
+			lastUsedProvider: "deepinfra",
+			providerPriority: []string{"ollama-local"},
+			expectedProvider: "",
 		},
 		{
-			name:              "fallback to provider priority",
-			commitProvider:    "",
-			lastUsedProvider:  "",
-			providerPriority:  []string{"openai", "ollama-local"},
-			expectedProvider:  "openai",
+			name:             "empty returns empty (no fallback to provider priority)",
+			commitProvider:   "",
+			lastUsedProvider: "",
+			providerPriority: []string{"openai", "ollama-local"},
+			expectedProvider: "",
 		},
 		{
-			name:              "fallback to ultimate default",
-			commitProvider:    "",
-			lastUsedProvider:  "",
-			providerPriority:  []string{},
-			expectedProvider:  "ollama-local",
+			name:             "all empty returns empty (no ultimate default)",
+			commitProvider:   "",
+			lastUsedProvider: "",
+			providerPriority: []string{},
+			expectedProvider: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &Config{
-				CommitProvider:    tt.commitProvider,
-				LastUsedProvider:  tt.lastUsedProvider,
-				ProviderPriority:  tt.providerPriority,
+				CommitProvider:   tt.commitProvider,
+				LastUsedProvider: tt.lastUsedProvider,
+				ProviderPriority: tt.providerPriority,
 			}
 			result := cfg.GetCommitProvider()
 			assert.Equal(t, tt.expectedProvider, result)
@@ -231,39 +231,39 @@ func TestCommitConfigFallbackChain(t *testing.T) {
 // TestReviewConfigFallbackChain tests the complete fallback chain for review config
 func TestReviewConfigFallbackChain(t *testing.T) {
 	tests := []struct {
-		name              string
-		reviewProvider    string
-		lastUsedProvider  string
-		providerPriority  []string
-		expectedProvider  string
+		name             string
+		reviewProvider   string
+		lastUsedProvider string
+		providerPriority []string
+		expectedProvider string
 	}{
 		{
-			name:              "explicit review provider",
-			reviewProvider:    "ollama-cloud",
-			lastUsedProvider:  "openrouter",
-			providerPriority:  []string{"ollama-local"},
-			expectedProvider:  "ollama-cloud",
+			name:             "explicit review provider",
+			reviewProvider:   "ollama-cloud",
+			lastUsedProvider: "openrouter",
+			providerPriority: []string{"ollama-local"},
+			expectedProvider: "ollama-cloud",
 		},
 		{
-			name:              "fallback to last used",
-			reviewProvider:    "",
-			lastUsedProvider:  "openrouter",
-			providerPriority:  []string{"ollama-local"},
-			expectedProvider:  "openrouter",
+			name:             "empty returns empty (no fallback to last used)",
+			reviewProvider:   "",
+			lastUsedProvider: "openrouter",
+			providerPriority: []string{"ollama-local"},
+			expectedProvider: "",
 		},
 		{
-			name:              "fallback to provider priority",
-			reviewProvider:    "",
-			lastUsedProvider:  "",
-			providerPriority:  []string{"deepinfra", "zai"},
-			expectedProvider:  "deepinfra",
+			name:             "empty returns empty (no fallback to provider priority)",
+			reviewProvider:   "",
+			lastUsedProvider: "",
+			providerPriority: []string{"deepinfra", "zai"},
+			expectedProvider: "",
 		},
 		{
-			name:              "fallback to ultimate default",
-			reviewProvider:    "",
-			lastUsedProvider:  "",
-			providerPriority:  []string{},
-			expectedProvider:  "ollama-local",
+			name:             "all empty returns empty (no ultimate default)",
+			reviewProvider:   "",
+			lastUsedProvider: "",
+			providerPriority: []string{},
+			expectedProvider: "",
 		},
 	}
 
@@ -294,10 +294,10 @@ func TestNewConfigIncludesCommitReviewFields(t *testing.T) {
 // TestCommitReviewConfigCanBeSetToEmpty tests that configs can be explicitly set to empty
 func TestCommitReviewConfigCanBeSetToEmpty(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:  "openai",
-		CommitModel:     "gpt-4",
-		ReviewProvider:  "ollama-local",
-		ReviewModel:     "qwen3-coder:30b",
+		CommitProvider:   "openai",
+		CommitModel:      "gpt-4",
+		ReviewProvider:   "ollama-local",
+		ReviewModel:      "qwen3-coder:30b",
 		LastUsedProvider: "openrouter",
 	}
 
@@ -312,9 +312,9 @@ func TestCommitReviewConfigCanBeSetToEmpty(t *testing.T) {
 	assert.Empty(t, cfg.ReviewProvider)
 	assert.Empty(t, cfg.ReviewModel)
 
-	// Getters should now use fallback
-	assert.Equal(t, "openrouter", cfg.GetCommitProvider())
-	assert.Equal(t, "openrouter", cfg.GetReviewProvider())
+	// Getters return empty — no fallback
+	assert.Equal(t, "", cfg.GetCommitProvider())
+	assert.Equal(t, "", cfg.GetReviewProvider())
 }
 
 // TestCommitModelFallbackUsesCommitProvider tests that commit model uses commit provider, not last used

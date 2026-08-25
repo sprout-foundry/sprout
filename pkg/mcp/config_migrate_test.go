@@ -15,21 +15,20 @@ import (
 // and forces the file-based credential backend so tests do not depend on an OS
 // keyring being present. Returns the temp directory path (the .sprout subdirectory).
 //
-// NOTE: getConfigDir() in config.go now respects LEDIT_CONFIG, so we set both
-// HOME (for os.UserHomeDir fallback) and LEDIT_CONFIG to ensure MCP config is
-// written to the correct location. The credentials package also uses LEDIT_CONFIG.
+// NOTE: getConfigDir() in config.go now respects SPROUT_CONFIG, so we set both
+// HOME (for os.UserHomeDir fallback) and SPROUT_CONFIG to ensure MCP config is
+// written to the correct location. The credentials package also uses SPROUT_CONFIG.
 func setupConfigTestEnv(t *testing.T) string {
 	t.Helper()
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".sprout")
 	t.Setenv("HOME", homeDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	// Prevent env var overrides from interfering with LoadMCPConfig
-	t.Setenv("LEDIT_MCP_ENABLED", "")
-	t.Setenv("LEDIT_MCP_AUTO_START", "")
-	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "")
+	t.Setenv("SPROUT_MCP_ENABLED", "")
+	t.Setenv("SPROUT_MCP_AUTO_START", "")
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "")
 	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 	credentials.ResetStorageBackend()
 	return configDir
@@ -39,11 +38,11 @@ func setupConfigTestEnv(t *testing.T) string {
 // the saved file (so we can inspect env values without deserialising through
 // the custom UnmarshalJSON which would resolve the timeout field).
 type rawMCPConfigFile struct {
-	Enabled      bool                         `json:"enabled"`
-	Servers      map[string]rawServerOnDisk   `json:"servers"`
-	AutoStart    bool                         `json:"auto_start"`
-	AutoDiscover bool                         `json:"auto_discover"`
-	Timeout      interface{}                  `json:"timeout"` // string or number
+	Enabled      bool                       `json:"enabled"`
+	Servers      map[string]rawServerOnDisk `json:"servers"`
+	AutoStart    bool                       `json:"auto_start"`
+	AutoDiscover bool                       `json:"auto_discover"`
+	Timeout      interface{}                `json:"timeout"` // string or number
 }
 
 type rawServerOnDisk struct {
@@ -55,7 +54,7 @@ type rawServerOnDisk struct {
 	Env         map[string]string `json:"env,omitempty"`
 	Credentials map[string]string `json:"credentials,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"`
-	Timeout     interface{}      `json:"timeout,omitempty"`
+	Timeout     interface{}       `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
 	MaxRestarts int               `json:"max_restarts"`
 }

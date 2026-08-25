@@ -353,8 +353,8 @@ func findPlaywrightChromium(cacheDir string) []string {
 	}
 
 	type version struct {
-		bin  string
-		num  int
+		bin string
+		num int
 	}
 	var versions []version
 

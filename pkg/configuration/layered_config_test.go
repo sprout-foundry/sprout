@@ -11,9 +11,9 @@ import (
 
 func TestMergeConfig_NilBase(t *testing.T) {
 	override := &Config{
-		Version:            "2.0",
-		LastUsedProvider:   "openai",
-		ReasoningEffort:    "high",
+		Version:          "2.0",
+		LastUsedProvider: "openai",
+		ReasoningEffort:  "high",
 	}
 
 	result := MergeConfig(nil, override)
@@ -42,7 +42,7 @@ func TestMergeConfig_NilOverride(t *testing.T) {
 	assert.Equal(t, base.LastUsedProvider, result.LastUsedProvider)
 	assert.Equal(t, base.ReasoningEffort, result.ReasoningEffort)
 	assert.Equal(t, base.ProviderPriority, result.ProviderPriority)
-	
+
 	// Verify it's a clone, not the same pointer
 	assert.NotSame(t, base, result)
 }
@@ -54,16 +54,16 @@ func TestMergeConfig_BothNil(t *testing.T) {
 
 func TestMergeConfig_StringOverrides(t *testing.T) {
 	base := &Config{
-		Version:            "2.0",
-		LastUsedProvider:   "anthropic",
-		ReasoningEffort:    "medium",
+		Version:           "2.0",
+		LastUsedProvider:  "anthropic",
+		ReasoningEffort:   "medium",
 		ResourceDirectory: "old-resources",
 		SystemPromptText:  "old prompt",
 	}
 
 	override := &Config{
-		LastUsedProvider:   "openai",
-		ReasoningEffort:    "high",
+		LastUsedProvider:  "openai",
+		ReasoningEffort:   "high",
 		ResourceDirectory: "new-resources",
 		SystemPromptText:  "new prompt",
 	}
@@ -82,7 +82,7 @@ func TestMergeConfig_MapMerge(t *testing.T) {
 	base := &Config{
 		ProviderModels: map[string]string{
 			"anthropic": "claude-3-sonnet",
-			"openai":     "gpt-3.5-turbo",
+			"openai":    "gpt-3.5-turbo",
 		},
 		Preferences: map[string]interface{}{
 			"theme": "dark",
@@ -92,12 +92,12 @@ func TestMergeConfig_MapMerge(t *testing.T) {
 
 	override := &Config{
 		ProviderModels: map[string]string{
-			"openai":   "gpt-4",           // Should replace
-			"deepinfra": "mixtral-8x7b",   // Should add
+			"openai":    "gpt-4",        // Should replace
+			"deepinfra": "mixtral-8x7b", // Should add
 		},
 		Preferences: map[string]interface{}{
-			"theme": "light",             // Should replace
-			"size":  "large",             // Should add
+			"theme": "light", // Should replace
+			"size":  "large", // Should add
 		},
 	}
 
@@ -131,15 +131,15 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	// Note: The current implementation only overrides booleans when they are true
 	// This test reflects the actual behavior, not necessarily desired behavior
 	base := &Config{
-		DisableThinking:             false,
-		SkipPrompt:                  false,
-		PDFOCREnabled:               false,
+		DisableThinking: false,
+		SkipPrompt:      false,
+		PDFOCREnabled:   false,
 	}
 
 	override := &Config{
-		DisableThinking:             true,
-		SkipPrompt:                  true,
-		PDFOCREnabled:               true,
+		DisableThinking: true,
+		SkipPrompt:      true,
+		PDFOCREnabled:   true,
 	}
 
 	result := MergeConfig(base, override)
@@ -168,16 +168,16 @@ func TestMergeConfig_IntOverrides(t *testing.T) {
 func TestMergeConfig_NestedAPITimeouts(t *testing.T) {
 	base := &Config{
 		APITimeouts: &APITimeoutConfig{
-			ConnectionTimeoutSec:   300,
-			FirstChunkTimeoutSec:  600,
-			ChunkTimeoutSec:       600,
-			OverallTimeoutSec:     1800,
+			ConnectionTimeoutSec: 300,
+			FirstChunkTimeoutSec: 600,
+			ChunkTimeoutSec:      600,
+			OverallTimeoutSec:    1800,
 		},
 	}
 
 	override := &Config{
 		APITimeouts: &APITimeoutConfig{
-			FirstChunkTimeoutSec:  900,  // Should update
+			FirstChunkTimeoutSec:    900, // Should update
 			CommitMessageTimeoutSec: 600, // Should add
 		},
 	}
@@ -232,17 +232,17 @@ func TestMergeConfig_SubagentTypes(t *testing.T) {
 
 	require.NotNil(t, result)
 	require.NotNil(t, result.SubagentTypes)
-	
+
 	// Verify existing coder unchanged
 	assert.Equal(t, "coder", result.SubagentTypes["coder"].ID)
 	assert.Equal(t, "Coder", result.SubagentTypes["coder"].Name)
 	assert.True(t, result.SubagentTypes["coder"].Enabled)
-	
+
 	// Verify tester was overridden
 	assert.Equal(t, "tester", result.SubagentTypes["tester"].ID)
 	assert.Equal(t, "Enhanced Tester", result.SubagentTypes["tester"].Name)
 	assert.False(t, result.SubagentTypes["tester"].Enabled)
-	
+
 	// Verify debugger was added
 	assert.Equal(t, "debugger", result.SubagentTypes["debugger"].ID)
 	assert.Equal(t, "Debugger", result.SubagentTypes["debugger"].Name)
@@ -251,10 +251,10 @@ func TestMergeConfig_SubagentTypes(t *testing.T) {
 
 func TestMergeConfig_EmptyOverrideNoChange(t *testing.T) {
 	base := &Config{
-		Version:            "2.0",
-		LastUsedProvider:   "anthropic",
-		ReasoningEffort:    "medium",
-		ProviderModels:     map[string]string{"anthropic": "claude-3-sonnet"},
+		Version:          "2.0",
+		LastUsedProvider: "anthropic",
+		ReasoningEffort:  "medium",
+		ProviderModels:   map[string]string{"anthropic": "claude-3-sonnet"},
 	}
 
 	override := &Config{} // Empty override
@@ -325,10 +325,10 @@ func TestLoadConfigWithLayers_WorkspaceOverride(t *testing.T) {
 	require.NotNil(t, result)
 
 	assert.Equal(t, "2.0", result.Version)
-	assert.Equal(t, "anthropic", result.LastUsedProvider) // Override takes precedence
-	assert.Equal(t, "gpt-3.5-turbo", result.ProviderModels["openai"]) // From global
+	assert.Equal(t, "anthropic", result.LastUsedProvider)                // Override takes precedence
+	assert.Equal(t, "gpt-3.5-turbo", result.ProviderModels["openai"])    // From global
 	assert.Equal(t, "claude-3-opus", result.ProviderModels["anthropic"]) // Overridden
-	assert.Equal(t, "mixtral-8x7b", result.ProviderModels["deepinfra"]) // Added by override
+	assert.Equal(t, "mixtral-8x7b", result.ProviderModels["deepinfra"])  // Added by override
 }
 
 func TestLoadConfigWithLayers_SessionOverride(t *testing.T) {
@@ -368,7 +368,7 @@ func TestLoadConfigWithLayers_SessionOverride(t *testing.T) {
 
 	assert.Equal(t, "2.0", result.Version)
 	assert.Equal(t, "deepinfra", result.LastUsedProvider) // Session takes highest precedence
-	assert.Equal(t, "low", result.ReasoningEffort) // Session takes highest precedence
+	assert.Equal(t, "low", result.ReasoningEffort)        // Session takes highest precedence
 }
 
 func TestLoadConfigWithLayers_MissingWorkspace(t *testing.T) {
@@ -509,7 +509,7 @@ func TestMergeConfig_DeepClone(t *testing.T) {
 	// Modify the result to ensure it's a deep clone
 	result.ProviderModels["openai"] = "gpt-5"
 	result.Preferences["theme"] = "light"
-	
+
 	// For SubagentTypes, we need to replace the entire struct since map values are not addressable
 	coderType := result.SubagentTypes["coder"]
 	coderType.Name = "Super Coder"

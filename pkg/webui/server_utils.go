@@ -24,7 +24,14 @@ func CheckPortAvailable(port int) bool {
 	return true // Port is free
 }
 
-// FindAvailablePort finds an available port starting from a base port
+// FindAvailablePort finds an available port starting from a base port,
+// scanning upward by one until it finds a free port (up to basePort+99).
+//
+// IMPORTANT: This function is ONLY for non-daemon interactive instances.
+// Daemon mode MUST NEVER call this function — daemons always bind to
+// DaemonPort (56000) or an explicit --web-port.  Calling FindAvailablePort
+// in daemon mode would break the single-port invariant and prevent the
+// single-port supervisor from coordinating leadership.
 func FindAvailablePort(basePort int) (int, error) {
 	port := basePort
 	for port < basePort+100 {

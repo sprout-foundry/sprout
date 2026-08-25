@@ -2,10 +2,11 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Provider defines the interface all LLM providers must implement
@@ -27,9 +28,19 @@ type Provider interface {
 
 	// Feature support
 	SupportsVision() bool
+	// SupportsConversationalVision reports whether the provider is suitable as
+	// the inline multimodal target for chat-format vision messages. OCR-only
+	// models accept image input but produce extraction outputs unsuitable for
+	// free-form multimodal conversation. Default: SupportsVision().
+	SupportsConversationalVision() bool
 	SupportsTools() bool
 	SupportsStreaming() bool
 	SupportsReasoning() bool
+	// VisionCapabilities returns the per-provider vision limits (max bytes
+	// per image, max images per request, max dimension, supported detail
+	// tiers). Zero-valued fields mean "unknown" and should be filled from
+	// VisionCapabilitiesDefault() at the call site. SP-103-D3 / AUDIT-GAP-2.
+	VisionCapabilities() VisionCapabilities
 
 	// Configuration
 	SetDebug(debug bool)
@@ -82,6 +93,20 @@ type BaseProvider struct {
 	supportsTools     bool
 	supportsStreaming bool
 	supportsReasoning bool
+
+	// visionCaps is the extension point for providers that embed
+	// BaseProvider and want to set their vision caps at construction.
+	// Today no production provider in pkg/agent_providers/ embeds
+	// BaseProvider — GenericProvider supplies its own VisionCapabilities()
+	// override. This field remains as the documented hook for future
+	// providers that DO embed BaseProvider (likely a thin Anthropic-only
+	// client). The zero value is the "unknown, fall back to defaults"
+	// sentinel; callers reading p.VisionCapabilities() through the
+	// BaseProvider method do not need to wrap through OrDefault because
+	// the BaseProvider method itself returns whatever was set.
+	//
+	// SP-103-D3 / AUDIT-GAP-2.
+	visionCaps VisionCapabilities
 
 	// HTTP client with reasonable defaults
 	httpClient HTTPClient
@@ -148,6 +173,12 @@ func (p *BaseProvider) SupportsVision() bool {
 	return p.supportsVision
 }
 
+// SupportsConversationalVision returns whether the provider handles inline
+// multimodal chat messages (vs. OCR-only models). Default: supportsVision.
+func (p *BaseProvider) SupportsConversationalVision() bool {
+	return p.supportsVision
+}
+
 // SupportsTools returns whether the provider supports tools
 func (p *BaseProvider) SupportsTools() bool {
 	return p.supportsTools
@@ -163,13 +194,22 @@ func (p *BaseProvider) SupportsReasoning() bool {
 	return p.supportsReasoning
 }
 
+// VisionCapabilities returns the per-provider vision limits configured on
+// this BaseProvider. The zero value means "unknown — caller should fall
+// back to VisionCapabilitiesOrDefault()". Concrete providers (Anthropic,
+// OpenAI, etc.) populate p.visionCaps at construction; this method just
+// exposes it. SP-103-D3 / AUDIT-GAP-2.
+func (p *BaseProvider) VisionCapabilities() VisionCapabilities {
+	return p.visionCaps
+}
+
 // Helper methods for derived providers
 
 // MakeAuthRequest creates an HTTP request with authentication
 func (p *BaseProvider) MakeAuthRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create auth request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create auth request", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)

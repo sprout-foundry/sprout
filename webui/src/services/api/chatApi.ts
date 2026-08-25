@@ -23,8 +23,8 @@ export async function uploadImage(fetchFn: typeof fetch, file: File | Blob): Pro
   formData.append('image', file);
   const response = await fetchFn('/api/upload/image', { method: 'POST', body: formData });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ message: 'Upload failed' }));
-    throw new Error(data.message || data.error || 'Failed to upload image');
+    const data = await response.json().catch(() => ({ message: 'Failed to attach image' }));
+    throw new Error(data.message || data.error || 'Failed to attach image');
   }
   return response.json();
 }
@@ -41,6 +41,68 @@ export async function steerQuery(fetchFn: typeof fetch, query: string, chatId?: 
     const data = await response.json().catch(() => ({ message: 'Steer failed' }));
     throw new Error(data.message || data.error || 'Failed to steer query');
   }
+}
+
+export interface RetractSteerResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function retractSteer(fetchFn: typeof fetch, chatId?: string): Promise<RetractSteerResponse> {
+  const reqBody: Record<string, string> = {};
+  if (chatId) reqBody.chat_id = chatId;
+  const response = await fetchFn('/api/query/steer/retract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reqBody),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ message: 'Retract failed' }));
+    throw new Error(data.message || data.error || 'Failed to retract steer');
+  }
+  return response.json();
+}
+
+/**
+ * SP-114 Phase 2: execute a slash command on the dedicated /api/command/execute
+ * surface. Returns the captured stdout from the command. Throws on error.
+ *
+ * Unlike steerQuery this endpoint does not require an active query — it's the
+ * canonical surface for invoking safe read-only / config commands from the
+ * WebUI command bar at any time.
+ */
+export interface ExecuteCommandResponse {
+  command: string;
+  output: string;
+  error: string;
+  accepted: boolean;
+}
+
+export async function executeCommand(
+  fetchFn: typeof fetch,
+  command: string,
+  chatId?: string,
+): Promise<ExecuteCommandResponse> {
+  const reqBody: Record<string, string> = { command };
+  if (chatId) reqBody.chat_id = chatId;
+  const response = await fetchFn('/api/command/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reqBody),
+  });
+  const data = (await response.json().catch(() => ({}))) as Partial<ExecuteCommandResponse> & {
+    error?: string;
+    message?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || data.message || `Command failed (HTTP ${response.status})`);
+  }
+  return {
+    command: data.command ?? '',
+    output: data.output ?? '',
+    error: data.error ?? '',
+    accepted: data.accepted ?? false,
+  };
 }
 
 export async function stopQuery(fetchFn: typeof fetch): Promise<void> {

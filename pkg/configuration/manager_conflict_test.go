@@ -12,7 +12,6 @@ import (
 func setupManagerInTempDir(t *testing.T, seedJSON string) (*Manager, string) {
 	t.Helper()
 	tmp := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmp)
 	t.Setenv("SPROUT_CONFIG", tmp)
 
 	configPath := filepath.Join(tmp, ConfigFileName)

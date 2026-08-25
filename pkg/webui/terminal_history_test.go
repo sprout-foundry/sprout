@@ -129,8 +129,8 @@ func TestAddToHistory_CapAt1000(t *testing.T) {
 	// Add 1100 commands
 	for i := 0; i < 1100; i++ {
 		err := tm.AddToHistory("s1", fmt.Sprintf("cmd-%d", i))
-	if err != nil {
-		t.Fatalf("AddToHistory failed at %d: %v", i, err)
+		if err != nil {
+			t.Fatalf("AddToHistory failed at %d: %v", i, err)
 		}
 	}
 

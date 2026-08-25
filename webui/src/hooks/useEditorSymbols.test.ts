@@ -89,18 +89,15 @@ function renderTestHook(
 }
 
 /** Create a minimal EditorBuffer-like object for testing */
-function createBuffer(options: {
-  fileExt?: string;
-  cursorLine?: number;
-  cursorColumn?: number;
-  fileName?: string;
-} = {}) {
-  const {
-    fileExt = 'ts',
-    cursorLine = 0,
-    cursorColumn = 0,
-    fileName = 'test.ts',
-  } = options;
+function createBuffer(
+  options: {
+    fileExt?: string;
+    cursorLine?: number;
+    cursorColumn?: number;
+    fileName?: string;
+  } = {},
+) {
+  const { fileExt = 'ts', cursorLine = 0, cursorColumn = 0, fileName = 'test.ts' } = options;
 
   return {
     file: {
@@ -388,10 +385,7 @@ describe('memoization behavior', () => {
 
     expect(mockExtractSymbols).toHaveBeenCalledTimes(2);
     // Hook passes buffer.file.ext which includes the dot prefix
-    expect(mockExtractSymbols).toHaveBeenLastCalledWith(
-      'class OtherClass { otherMethod() {} }',
-      '.ts',
-    );
+    expect(mockExtractSymbols).toHaveBeenLastCalledWith('class OtherClass { otherMethod() {} }', '.ts');
   });
 
   it('re-calls extractSymbols when file extension changes', () => {

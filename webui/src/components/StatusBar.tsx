@@ -1,9 +1,11 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Zap } from 'lucide-react';
 import { useMemo, useRef, useState, useCallback } from 'react';
-import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
+import { supportsGit, isCloud } from '../config/mode';
+import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useNotifications } from '../contexts/NotificationContext';
+import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import { ChatStatusBarItems } from './chat/ChatStatusBarItems';
 import NotificationCenter from './NotificationCenter';
 import './StatusBar.css';
@@ -91,10 +93,7 @@ function StatusBar({
 }: WebuiStatusBarProps): JSX.Element {
   // Notification context — derive unread count for the bell badge
   const { notifications } = useNotifications();
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
-  );
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   // Internal notification panel state
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
@@ -157,7 +156,7 @@ function StatusBar({
   ) : undefined;
 
   return (
-    <div className="statusbar-wrapper">
+    <div className="statusbar-wrapper" data-testid="status-bar">
       {workspaceName && (
         <div
           className="statusbar-item statusbar-item-workspace"
@@ -166,6 +165,7 @@ function StatusBar({
           tabIndex={0}
           title={`Workspace: ${workspacePath}`}
           aria-label={`Workspace: ${workspaceName}`}
+          data-testid="status-bar-workspace"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -177,8 +177,23 @@ function StatusBar({
           <span className="statusbar-text">{workspaceName}</span>
         </div>
       )}
+      {isCloud &&
+        (() => {
+          const cfg = getBootstrapConfig();
+          if (['pro', 'team', 'runner'].includes(cfg.user?.tier ?? '')) return null;
+          return (
+            <div
+              className="statusbar-item statusbar-item-auto-tier"
+              title="Auto mode — shared compute. Limited daily requests."
+              data-testid="status-bar-auto-tier"
+            >
+              <Zap size={12} />
+              <span className="statusbar-text">Auto</span>
+            </div>
+          );
+        })()}
       <SproutStatusBar
-        branch={branch}
+        branch={supportsGit ? branch : 'Browser IDE'}
         cursorPosition={buffer?.cursorPosition}
         language={language}
         encoding={encoding}
@@ -194,6 +209,7 @@ function StatusBar({
         role="button"
         tabIndex={0}
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+        data-testid="status-bar-notification"
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();

@@ -6,7 +6,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -16,8 +16,7 @@ import (
 
 // handleAPISessions handles GET /api/sessions - lists all saved sessions with metadata
 func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -34,8 +33,8 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 		workingDir := ws.getWorkspaceRootForRequest(r)
 		sessionInfos, err := agent.ListSessionsWithTimestampsScoped(workingDir)
 		if err != nil {
-			log.Printf("handleAPISessions: failed to list scoped sessions: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to list sessions: %v", err), http.StatusInternalServerError)
+			ws.log().Error("failed to list scoped sessions", slog.Any("err", err))
+			writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_sessions", fmt.Sprintf("Failed to list sessions: %v", err))
 			return
 		}
 		if len(sessionInfos) > 100 {
@@ -46,8 +45,8 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 		// Get all sessions across all scopes
 		sessionInfos, err := agent.ListAllSessionsWithTimestamps()
 		if err != nil {
-			log.Printf("handleAPISessions: failed to list all sessions: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to list sessions: %v", err), http.StatusInternalServerError)
+			ws.log().Error("failed to list all sessions", slog.Any("err", err))
+			writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_sessions", fmt.Sprintf("Failed to list sessions: %v", err))
 			return
 		}
 		if len(sessionInfos) > 100 {
@@ -59,8 +58,7 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 	// Get current session ID
 	currentSessionID := ws.getCurrentSessionIDForRequest(r)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":            "success",
 		"sessions":           sessions,
 		"current_session_id": currentSessionID,
@@ -89,6 +87,7 @@ func (ws *ReactWebServer) buildSessionList(sessionInfos []agent.SessionInfo) []m
 			"last_updated":      info.LastUpdated.Format(time.RFC3339),
 			"message_count":     messageCount,
 			"total_tokens":      totalTokens,
+			"interrupted":       info.Interrupted,
 		}
 		sessions = append(sessions, session)
 	}
@@ -98,8 +97,7 @@ func (ws *ReactWebServer) buildSessionList(sessionInfos []agent.SessionInfo) []m
 
 // handleAPIRestoreSession handles POST /api/sessions/restore - restores a specific session
 func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -109,26 +107,33 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("handleAPIRestoreSession: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		ws.log().Warn("invalid restore session JSON", slog.Any("err", err))
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if strings.TrimSpace(req.SessionID) == "" {
-		log.Printf("handleAPIRestoreSession: session_id is required")
-		http.Error(w, "session_id is required", http.StatusBadRequest)
+		ws.log().Warn("restore session ID is required")
+		writeJSONErr(w, http.StatusBadRequest, "session_id_required", "session_id is required")
 		return
 	}
 
 	sessionID := strings.TrimSpace(req.SessionID)
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
-	// Load the session state
-	state, err := agent.LoadStateWithoutAgentScoped(sessionID, workspaceRoot)
-	if err != nil {
-		log.Printf("handleAPIRestoreSession: failed to load session %s: %v", sessionID, err)
-		http.Error(w, fmt.Sprintf("Failed to load session: %v", err), http.StatusBadRequest)
-		return
+	var state *agent.ConversationState
+	recovered := false
+	if baseState, _, journalErr := agent.LoadStateRecoverable(sessionID, workspaceRoot); journalErr == nil {
+		state = baseState
+		recovered = state.RecoveredFromJournal
+	} else {
+		loaded, loadErr := agent.LoadStateWithoutAgentScoped(sessionID, workspaceRoot)
+		if loadErr != nil {
+			ws.log().Error("failed to load session", slog.String("session_id", sessionID), slog.Any("err", loadErr))
+			writeJSONErr(w, http.StatusBadRequest, "failed_to_load_session", fmt.Sprintf("Failed to load session: %v", loadErr))
+			return
+		}
+		state = loaded
 	}
 
 	// Build a live agent snapshot for this client
@@ -146,8 +151,8 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		SessionID:               state.SessionID,
 	})
 	if err != nil {
-		log.Printf("handleAPIRestoreSession: failed to marshal state: %v", err)
-		http.Error(w, "Failed to prepare session data", http.StatusInternalServerError)
+		ws.log().Error("failed to marshal session state", slog.Any("err", err))
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_prepare_session_data", "Failed to prepare session data")
 		return
 	}
 
@@ -156,6 +161,9 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	if clientAgent, err := ws.getClientAgent(clientID); err == nil && clientAgent != nil {
 		_ = clientAgent.ImportState(stateData)
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
+		if recovered {
+			clientAgent.NoteRecoveredSession()
+		}
 	}
 
 	// Restore config overrides from the saved session into the active chat session.
@@ -185,12 +193,12 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		"connected":     true,
 		"session_id":    state.SessionID,
 		"restored":      true,
+		"recovered":     recovered,
 		"message_count": len(state.Messages),
 	})
 
 	// Return success response including messages so the frontend can populate the chat
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":           "Session restored",
 		"session_id":        state.SessionID,
 		"message_count":     len(state.Messages),

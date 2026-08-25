@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { CheckSquare, Square, Circle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -17,6 +18,9 @@ export interface AskUserDialogProps {
   options?: AskUserDialogOption[];
   multiSelect?: boolean;
   defaultValue?: string;
+  // Visible error when the user's response could not be delivered.
+  // The dialog stays open for retry instead of silently hanging.
+  deliveryError?: string;
   onRespond: (requestId: string, response: string) => void;
 }
 
@@ -30,6 +34,7 @@ function AskUserDialog({
   options,
   multiSelect,
   defaultValue,
+  deliveryError,
   onRespond,
 }: AskUserDialogProps): JSX.Element {
   const hasOptions = Array.isArray(options) && options.length > 0;
@@ -42,7 +47,10 @@ function AskUserDialog({
 
   const initialSelection = useMemo(() => {
     if (!hasOptions || !defaultValue) return new Set<string>();
-    const values = defaultValue.split(',').map((v) => v.trim()).filter(Boolean);
+    const values = defaultValue
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
     return new Set<string>(values);
   }, [hasOptions, defaultValue]);
 
@@ -51,10 +59,7 @@ function AskUserDialog({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const firstOptionRef = useRef<HTMLButtonElement>(null);
 
-  const buildSelectionResponse = useCallback(
-    (set: Set<string>): string => Array.from(set).join(','),
-    [],
-  );
+  const buildSelectionResponse = useCallback((set: Set<string>): string => Array.from(set).join(','), []);
 
   const submitSingleOption = useCallback(
     (opt: AskUserDialogOption) => {
@@ -89,21 +94,18 @@ function AskUserDialog({
     onRespond(requestId, trimmedResponse);
   }, [requestId, response, onRespond, hasOptions, isMulti, selected, defaultValue, buildSelectionResponse]);
 
-  const toggleOption = useCallback(
-    (opt: AskUserDialogOption) => {
-      const value = optionValue(opt);
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(value)) {
-          next.delete(value);
-        } else {
-          next.add(value);
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const toggleOption = useCallback((opt: AskUserDialogOption) => {
+    const value = optionValue(opt);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) {
+        next.delete(value);
+      } else {
+        next.add(value);
+      }
+      return next;
+    });
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -158,7 +160,9 @@ function AskUserDialog({
         <div className="ask-user-accent-bar" />
 
         <div className="ask-user-header">
-          <span className="ask-user-icon" aria-hidden="true">?</span>
+          <span className="ask-user-icon" aria-hidden="true">
+            ?
+          </span>
           <div className="ask-user-heading-stack">
             {header && <span className="ask-user-chip">{header}</span>}
             <h2 className="ask-user-title">Question</h2>
@@ -187,6 +191,15 @@ function AskUserDialog({
             </ReactMarkdown>
           </div>
 
+          {/* Delivery failure — the response did not reach the WASM agent.
+              Kept visible so the retry affordance is obvious; the dialog
+              stays open until the user retries successfully. */}
+          {deliveryError && (
+            <div className="security-approval-delivery-error" role="alert">
+              {deliveryError}
+            </div>
+          )}
+
           {hasOptions ? (
             <div
               className={`ask-user-options ${isMulti ? 'ask-user-options--multi' : 'ask-user-options--single'}`}
@@ -209,13 +222,21 @@ function AskUserDialog({
                     {...ariaProps}
                   >
                     <span className="ask-user-option-marker" aria-hidden="true">
-                      {isMulti ? (isSelected ? '☑' : '☐') : (isSelected ? '●' : '○')}
+                      {isMulti ? (
+                        isSelected ? (
+                          <CheckSquare size={16} />
+                        ) : (
+                          <Square size={16} />
+                        )
+                      ) : isSelected ? (
+                        <Circle size={16} fill="currentColor" />
+                      ) : (
+                        <Circle size={16} />
+                      )}
                     </span>
                     <span className="ask-user-option-body">
                       <span className="ask-user-option-label">{opt.label}</span>
-                      {opt.description && (
-                        <span className="ask-user-option-description">{opt.description}</span>
-                      )}
+                      {opt.description && <span className="ask-user-option-description">{opt.description}</span>}
                     </span>
                   </button>
                 );

@@ -1,0 +1,688 @@
+//go:build !js
+
+package cmd
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
+)
+
+func runMCPAdd() error {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("MCP Server Setup")
+	fmt.Println("==================")
+	fmt.Println()
+
+	// Load existing config
+	_, err := configuration.LoadOrInitConfig(false)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mcpConfig, err := mcp.LoadMCPConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load MCP config: %w", err)
+	}
+
+	// Get templates from registry
+	registry := mcp.NewMCPServerRegistry()
+	templates := registry.ListTemplates()
+
+	if len(templates) == 0 {
+		return errors.New("no templates available. Add templates to ~/.config/sprout/mcp_templates.json")
+	}
+
+	// Display templates (filter out generic templates for main menu)
+	var visibleTemplates []mcp.MCPServerTemplate
+	for _, t := range templates {
+		if t.ID == "http-generic" || t.ID == "stdio-generic" {
+			continue
+		}
+		visibleTemplates = append(visibleTemplates, t)
+	}
+
+	items := make([]console.SelectItem, 0, len(visibleTemplates)+1)
+	for _, t := range visibleTemplates {
+		items = append(items, console.SelectItem{
+			Label:  t.Name,
+			Detail: t.Description,
+			Value:  t.ID,
+		})
+	}
+	items = append(items, console.SelectItem{
+		Label:  "Custom MCP Server (stdio or http)",
+		Detail: "configure manually",
+		Value:  "__custom__",
+	})
+
+	sl := console.NewSelectList(console.SelectListOptions{
+		Title:      "Pick a server type",
+		Items:      items,
+		Searchable: true,
+		PageSize:   10,
+	})
+
+	ctx := context.Background()
+	value, ok, err := sl.Run(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
+
+	// Handle custom server option
+	if value == "__custom__" {
+		return setupCustomMCPServer(&mcpConfig, reader, registry)
+	}
+
+	// Find the matching template by ID (picker returns the template's ID).
+	var selectedTemplate mcp.MCPServerTemplate
+	for _, t := range visibleTemplates {
+		if t.ID == value {
+			selectedTemplate = t
+			break
+		}
+	}
+	if selectedTemplate.ID == "" {
+		return fmt.Errorf("unknown template: %s", value)
+	}
+
+	// Dispatch to a rich guided setup flow when one is available for the
+	// selected template. These guided flows (Git, GitHub, Playwright, Chrome
+	// DevTools) collect richer input than the generic template path and offer
+	// installation-method pickers, so they take precedence when matched.
+	if guided, ok := guidedSetupFor(selectedTemplate.ID); ok {
+		return guided(&mcpConfig, reader)
+	}
+
+	// Prompt for server name (with default from template)
+	serverName := selectedTemplate.ID
+	if selectedTemplate.Type == "stdio" || selectedTemplate.Type == "http" {
+		fmt.Printf("Enter server name [%s]: ", selectedTemplate.ID)
+		nameInput, _ := reader.ReadString('\n')
+		nameInput = strings.TrimSpace(nameInput)
+		if nameInput != "" {
+			serverName = nameInput
+		}
+	}
+
+	// Check if server already exists
+	if _, exists := mcpConfig.Servers[serverName]; exists {
+		fmt.Printf("Server '%s' is already configured. Reconfigure? (y/N): ", serverName)
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Collect environment variables if required
+	envValues := make(map[string]string)
+	for _, envVar := range selectedTemplate.EnvVars {
+		prompt := fmt.Sprintf("Enter %s", envVar.Name)
+		if envVar.Description != "" {
+			prompt += fmt.Sprintf(" (%s)", envVar.Description)
+		}
+		if envVar.Default != "" {
+			prompt += fmt.Sprintf(" [%s]", envVar.Default)
+		}
+		prompt += ": "
+
+		fmt.Print(prompt)
+		value, _ := reader.ReadString('\n')
+		value = strings.TrimSpace(value)
+		if value == "" && envVar.Default != "" {
+			value = envVar.Default
+		}
+		if value != "" || envVar.Required {
+			envValues[envVar.Name] = value
+		}
+	}
+
+	// For HTTP servers, prompt for URL if not set in template
+	customURL := ""
+	if selectedTemplate.Type == "http" && selectedTemplate.URL == "" {
+		fmt.Print("Enter server URL: ")
+		customURL, _ = reader.ReadString('\n')
+		customURL = strings.TrimSpace(customURL)
+	}
+
+	// For stdio servers, allow custom command/args
+	customCommand := ""
+	customArgs := []string{}
+	if selectedTemplate.ID == "git-uvx" || selectedTemplate.ID == "git" {
+		// Special handling for git - ask for repo path
+		fmt.Print("Enter repository path (optional, leave empty to use current directory): ")
+		repoPath, _ := reader.ReadString('\n')
+		repoPath = strings.TrimSpace(repoPath)
+		if repoPath != "" {
+			customArgs = []string{"mcp-server-git", "--repository", repoPath}
+		}
+	}
+
+	// Create server config from template
+	serverConfig := selectedTemplate.CreateServerConfig(serverName, envValues, customURL, customCommand, customArgs)
+
+	// Add server to config
+	mcpConfig.Servers[serverName] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(&mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	console.GlyphSuccess.Fprintf(os.Stdout, "%s configured successfully!", serverConfig.Name)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Println()
+	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
+	fmt.Println()
+
+	if selectedTemplate.Docs != "" {
+		fmt.Printf("%sDocumentation: %s\n", console.GlyphInfo.Prefix(), selectedTemplate.Docs)
+	}
+
+	return nil
+}
+
+// mcpSetupFunc is the signature shared by the guided per-server setup flows.
+type mcpSetupFunc func(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error
+
+// guidedSetupFor returns the rich guided setup function for a template ID, if
+// one exists. Templates with a guided flow (Git, GitHub, Playwright, Chrome
+// DevTools) install-method pickers and richer prompts than the generic
+// template-driven path, so runMCPAdd dispatches to them when matched.
+//
+// Mapping multiple template IDs to the same flow (e.g. both "git" and the
+// registry's "git-uvx" entry route to setupGitMCPServer) keeps the picker
+// resilient to renamed/aliased template IDs.
+func guidedSetupFor(templateID string) (mcpSetupFunc, bool) {
+	guidedSetups := map[string]mcpSetupFunc{
+		"git":             setupGitMCPServer,
+		"git-uvx":         setupGitMCPServer,
+		"playwright":      setupPlaywrightMCPServer,
+		"chrome-devtools": setupChromeDevToolsMCPServer,
+	}
+	fn, ok := guidedSetups[templateID]
+	return fn, ok
+}
+
+func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+	fmt.Println()
+	fmt.Println("Git MCP Server Setup")
+	fmt.Println("========================")
+	fmt.Println()
+
+	// Check if Git server already exists
+	if _, exists := mcpConfig.Servers["git"]; exists {
+		fmt.Print("Git MCP server is already configured. Reconfigure? (y/N): ")
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Get repository path (optional)
+	fmt.Print("Enter repository path (optional, leave empty to use current directory): ")
+	repoInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read repository path: %w", err)
+	}
+	repoPath := strings.TrimSpace(repoInput)
+
+	// Installation method picker
+	installChoice, ok, err := promptInstallMethod(reader, []console.SelectItem{
+		{Label: "uvx (recommended)", Value: "1"},
+		{Label: "pip/pipx", Value: "2"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to read installation method: %w", err)
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
+
+	var serverConfig mcp.MCPServerConfig
+
+	switch installChoice {
+	case "1", "":
+		args := []string{"mcp-server-git"}
+		if repoPath != "" {
+			args = append(args, "--repository", repoPath)
+		}
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "git",
+			Command:     "uvx",
+			Args:        args,
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     30 * time.Second,
+		}
+	case "2":
+		args := []string{"-m", "mcp_server_git"}
+		if repoPath != "" {
+			args = append(args, "--repository", repoPath)
+		}
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "git",
+			Command:     "python",
+			Args:        args,
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     30 * time.Second,
+		}
+	default:
+		return fmt.Errorf("invalid choice: %s", installChoice)
+	}
+
+	// Add server to config
+	mcpConfig.Servers["git"] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	console.GlyphSuccess.Fprintln(os.Stdout, "Git MCP Server configured successfully!")
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Println()
+	fmt.Println("To test the configuration, run: sprout mcp test git")
+	fmt.Println()
+
+	// Installation instructions
+	if installChoice == "1" {
+		console.GlyphInfo.Print("Installation (if not already installed):")
+		fmt.Println("No installation needed - uvx will install automatically")
+	} else {
+		console.GlyphInfo.Print("Installation (if not already installed):")
+		fmt.Println("pip install mcp-server-git")
+	}
+
+	return nil
+}
+
+// promptInstallMethod shows the install-method picker used by the setup*MCPServer
+// helpers. On a TTY it delegates to console.SelectList for a slick interactive UI;
+// in non-TTY contexts (e.g. piped stdin in tests) it falls back to a direct
+// bufio.Reader numeric read so EOF surfaces as a wrapped error rather than being
+// silently absorbed by the picker's runFallback path.
+//
+// Returns:
+//   - (value, true, nil) on confirm
+//   - ("", false, nil) on Esc/Ctrl+C cancellation, or empty input in non-TTY
+//   - ("", false, err) on read failure (typically io.EOF or parse failure)
+//
+// Callers treat ("", false, nil) as a graceful cancel that returns nil to the
+// user, and any non-nil error as a setup failure.
+func promptInstallMethod(reader *bufio.Reader, items []console.SelectItem) (string, bool, error) {
+	if StdinIsTerminal() {
+		sl := console.NewSelectList(console.SelectListOptions{
+			Title:      "Pick an installation method",
+			Items:      items,
+			Searchable: false,
+		})
+		return sl.Run(context.Background())
+	}
+
+	fmt.Println("Pick an installation method:")
+	for i, item := range items {
+		label := item.Label
+		if item.Detail != "" {
+			label = fmt.Sprintf("%s  —  %s", label, item.Detail)
+		}
+		fmt.Printf("  %d. %s\n", i+1, label)
+	}
+	fmt.Printf("Choice (1-%d): ", len(items))
+
+	raw, err := reader.ReadString('\n')
+	if err != nil {
+		return "", false, err
+	}
+	choice := strings.TrimSpace(raw)
+	if choice == "" {
+		return "", false, nil
+	}
+	n, err := strconv.Atoi(choice)
+	if err != nil || n < 1 || n > len(items) {
+		return "", false, fmt.Errorf("invalid choice: %s", choice)
+	}
+	return items[n-1].Value, true, nil
+}
+
+func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+	fmt.Println()
+	console.GlyphInfo.Print("Playwright MCP Server Setup")
+	fmt.Println("=============================")
+	fmt.Println()
+
+	// Check if Playwright server already exists
+	if _, exists := mcpConfig.Servers["playwright"]; exists {
+		fmt.Print("Playwright MCP server is already configured. Reconfigure? (y/N): ")
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Installation method picker
+	installItems := []console.SelectItem{
+		{Label: "Official Playwright MCP Server (recommended)", Value: "1"},
+		{Label: "Automata Labs Playwright MCP Server", Value: "2"},
+		{Label: "Execute Automation Playwright MCP Server", Value: "3"},
+	}
+	installChoice, ok, err := promptInstallMethod(reader, installItems)
+	if err != nil {
+		return fmt.Errorf("failed to read installation method: %w", err)
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
+
+	var serverConfig mcp.MCPServerConfig
+
+	switch installChoice {
+	case "1":
+		// Official Playwright MCP Server
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "playwright",
+			Command:     "npx",
+			Args:        []string{"-y", "@playwright/mcp"},
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     60 * time.Second, // Longer timeout for browser operations
+		}
+	case "2":
+		// Automata Labs Playwright MCP Server
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "playwright",
+			Command:     "npx",
+			Args:        []string{"-y", "@automatalabs/mcp-server-playwright"},
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     60 * time.Second,
+		}
+	case "3":
+		// Execute Automation Playwright MCP Server
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "playwright",
+			Command:     "npx",
+			Args:        []string{"-y", "@executeautomation/playwright-mcp-server"},
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     60 * time.Second,
+		}
+	default:
+		return fmt.Errorf("invalid choice: %s", installChoice)
+	}
+
+	// Add server to config
+	mcpConfig.Servers["playwright"] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	console.GlyphSuccess.Fprintln(os.Stdout, "Playwright MCP Server configured successfully!")
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Println()
+	fmt.Println("To test the configuration, run: sprout mcp test playwright")
+	fmt.Println()
+	console.GlyphInfo.Print("Installation (if not already installed):")
+	fmt.Println("npx will install the package automatically")
+	fmt.Println()
+	console.GlyphInfo.Print("Features available:")
+	fmt.Println("• Browser automation (Chromium, Firefox, WebKit)")
+	fmt.Println("• Web scraping and data extraction")
+	fmt.Println("• UI testing and validation")
+	fmt.Println("• Screenshot capture and visual testing")
+	fmt.Println("• Form filling and navigation automation")
+
+	return nil
+}
+
+func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+	fmt.Println()
+	fmt.Println("ⓘ Chrome DevTools MCP Server Setup")
+	fmt.Println("====================================")
+	fmt.Println()
+
+	// Check if Chrome DevTools server already exists
+	if _, exists := mcpConfig.Servers["chrome-devtools"]; exists {
+		fmt.Print("Chrome DevTools MCP server is already configured. Reconfigure? (y/N): ")
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Chrome DevTools MCP Server
+	serverConfig := mcp.MCPServerConfig{
+		Name:        "chrome-devtools",
+		Command:     "npx",
+		Args:        []string{"-y", "chrome-devtools-mcp@latest", "--isolated"},
+		AutoStart:   true,
+		MaxRestarts: 3,
+		Timeout:     60 * time.Second, // Longer timeout for browser operations
+	}
+
+	// Optional configuration picker
+	configItems := []console.SelectItem{
+		{Label: "Default settings (recommended)", Value: "1"},
+		{Label: "Headless mode (no visible browser window)", Value: "2"},
+		{Label: "Custom Chrome channel (stable/beta/dev/canary)", Value: "3"},
+	}
+	configChoice, ok, err := promptInstallMethod(reader, configItems)
+	if err != nil {
+		return fmt.Errorf("failed to read configuration choice: %w", err)
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
+
+	switch configChoice {
+	case "2":
+		// Headless mode
+		serverConfig.Args = append(serverConfig.Args, "--headless=true")
+	case "3":
+		fmt.Print("Enter Chrome channel (stable/beta/dev/canary) [stable]: ")
+		channelInput, _ := reader.ReadString('\n')
+		channel := strings.TrimSpace(channelInput)
+		if channel == "" {
+			channel = "stable"
+		}
+		serverConfig.Args = append(serverConfig.Args, "--channel="+channel)
+	}
+
+	// Add server to config
+	mcpConfig.Servers["chrome-devtools"] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	console.GlyphSuccess.Fprintln(os.Stdout, "Chrome DevTools MCP Server configured successfully!")
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Println()
+	fmt.Println("To test the configuration, run: sprout mcp test chrome-devtools")
+	fmt.Println()
+	console.GlyphInfo.Print("Installation (if not already installed):")
+	fmt.Println("npx will install the package automatically")
+	fmt.Println()
+	fmt.Println("ⓘ Features available:")
+	fmt.Println("• Browser automation (click, fill forms, navigation)")
+	fmt.Println("• Performance analysis and tracing")
+	fmt.Println("• Network request inspection")
+	fmt.Println("• Console message capture")
+	fmt.Println("• Screenshot and snapshot capture")
+	fmt.Println("• DOM inspection and scripting")
+	fmt.Println()
+	fmt.Println("[read] Documentation: https://github.com/ChromeDevTools/chrome-devtools-mcp")
+
+	return nil
+}
+
+func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, registry *mcp.MCPServerRegistry) error {
+	fmt.Println()
+	console.GlyphInfo.Print("Custom MCP Server Setup")
+	fmt.Println("==========================")
+	fmt.Println()
+
+	// Server name
+	fmt.Print("Enter server name: ")
+	nameInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read server name: %w", err)
+	}
+	serverName := strings.TrimSpace(nameInput)
+
+	if serverName == "" {
+		return errors.New("server name is required")
+	}
+
+	// Check if server already exists
+	if _, exists := mcpConfig.Servers[serverName]; exists {
+		fmt.Printf("Server '%s' already exists. Reconfigure? (y/N): ", serverName)
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Command
+	fmt.Print("Enter command to run the server: ")
+	commandInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read command: %w", err)
+	}
+	command := strings.TrimSpace(commandInput)
+
+	if command == "" {
+		return errors.New("command is required")
+	}
+
+	// Arguments
+	fmt.Print("Enter command arguments (space-separated, or press Enter for none): ")
+	argsInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read arguments: %w", err)
+	}
+	argsStr := strings.TrimSpace(argsInput)
+
+	var args []string
+	if argsStr != "" {
+		args = strings.Fields(argsStr)
+	}
+
+	// Environment variables
+	fmt.Print("Enter environment variables (KEY=VALUE format, comma-separated, or press Enter for none): ")
+	envInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read environment variables: %w", err)
+	}
+	envStr := strings.TrimSpace(envInput)
+
+	env := make(map[string]string)
+	if envStr != "" {
+		envPairs := strings.Split(envStr, ",")
+		for _, pair := range envPairs {
+			pair = strings.TrimSpace(pair)
+			if parts := strings.SplitN(pair, "=", 2); len(parts) == 2 {
+				env[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+
+	// Working directory
+	fmt.Print("Enter working directory (or press Enter for default): ")
+	workDirInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read working directory: %w", err)
+	}
+	workDir := strings.TrimSpace(workDirInput)
+
+	// Auto-start
+	fmt.Print("Auto-start this server? (Y/n): ")
+	autoStartInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read auto-start preference: %w", err)
+	}
+	autoStart := strings.ToLower(strings.TrimSpace(autoStartInput)) != "n"
+
+	// Timeout
+	fmt.Print("Server timeout in seconds (default: 30): ")
+	timeoutInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read timeout: %w", err)
+	}
+	timeoutStr := strings.TrimSpace(timeoutInput)
+
+	timeout := 30 * time.Second
+	if timeoutStr != "" {
+		if timeoutSecs, err := strconv.Atoi(timeoutStr); err == nil && timeoutSecs > 0 {
+			timeout = time.Duration(timeoutSecs) * time.Second
+		}
+	}
+
+	// Create server config
+	serverConfig := mcp.MCPServerConfig{
+		Name:        serverName,
+		Command:     command,
+		Args:        args,
+		Env:         env,
+		WorkingDir:  workDir,
+		AutoStart:   autoStart,
+		MaxRestarts: 3,
+		Timeout:     timeout,
+	}
+
+	// Add server to config
+	mcpConfig.Servers[serverName] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	console.GlyphSuccess.Fprintf(os.Stdout, "Custom MCP Server '%s' configured successfully!", serverName)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Println()
+	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
+
+	return nil
+}

@@ -16,7 +16,7 @@ func TestNormalizeReleaseTagCandidate(t *testing.T) {
 	}{
 		{"v1.0.0", "v1.0.0"},
 		{"v1.2.3", "v1.2.3"},
-		{"1.0.0", ""},           // missing v prefix
+		{"1.0.0", ""},          // missing v prefix
 		{"v1.0.0-0.beta1", ""}, // pre-release
 		{"v1.0.0+dirty", ""},   // dirty
 		{"v1.0.0 (devel)", ""}, // devel
@@ -104,8 +104,8 @@ func TestResolveGitHubReleaseAssetURL(t *testing.T) {
 	t.Run("empty tag resolves to latest URL", func(t *testing.T) {
 		logger := &sshLaunchLogger{}
 		url, err := resolveGitHubReleaseAssetURL("", "sprout-linux-amd64.tar.gz", logger)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(url, "/releases/latest/download/") {
 			t.Errorf("expected latest URL pattern, got: %s", url)
@@ -118,8 +118,8 @@ func TestResolveGitHubReleaseAssetURL(t *testing.T) {
 	t.Run("latest tag resolves to latest URL", func(t *testing.T) {
 		logger := &sshLaunchLogger{}
 		url, err := resolveGitHubReleaseAssetURL("latest", "sprout-linux-amd64.tar.gz", logger)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(url, "/releases/latest/download/") {
 			t.Errorf("expected latest URL pattern, got: %s", url)
@@ -129,8 +129,8 @@ func TestResolveGitHubReleaseAssetURL(t *testing.T) {
 	t.Run("tagged version resolves to tagged URL", func(t *testing.T) {
 		logger := &sshLaunchLogger{}
 		url, err := resolveGitHubReleaseAssetURL("v1.2.3", "sprout-linux-amd64.tar.gz", logger)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(url, "/releases/download/v1.2.3/") {
 			t.Errorf("expected tagged URL pattern, got: %s", url)
@@ -143,8 +143,8 @@ func TestResolveGitHubReleaseAssetURL(t *testing.T) {
 	t.Run("tag with whitespace is trimmed", func(t *testing.T) {
 		logger := &sshLaunchLogger{}
 		url, err := resolveGitHubReleaseAssetURL("  v2.0.0  ", "asset.tar.gz", logger)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(url, "/releases/download/v2.0.0/") {
 			t.Errorf("expected trimmed tag in URL, got: %s", url)
@@ -154,8 +154,8 @@ func TestResolveGitHubReleaseAssetURL(t *testing.T) {
 	t.Run("URL contains github.com", func(t *testing.T) {
 		logger := &sshLaunchLogger{}
 		url, err := resolveGitHubReleaseAssetURL("v1.0.0", "asset.tar.gz", logger)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.HasPrefix(url, "https://github.com/") {
 			t.Errorf("expected https://github.com/ prefix, got: %s", url)

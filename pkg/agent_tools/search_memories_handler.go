@@ -7,19 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // searchMemoriesHandler implements ToolHandler for the search_memories tool.
-//
-// Because ToolEnv does not carry an EmbeddingManager, this handler implements
-// a text-based fallback: it lists all memory files and filters them by
-// matching the query against each memory's name and first-line preview.
-//
-// When the ToolHandler path eventually gains embedding support (e.g. via a
-// dedicated EmbeddingAccessor interface in ToolEnv), this can be extended to
-// also run vector search.
+// Uses text-based fallback since ToolEnv doesn't carry an EmbeddingManager.
 type searchMemoriesHandler struct{}
 
 func (h *searchMemoriesHandler) Name() string {
@@ -60,7 +54,7 @@ func (h *searchMemoriesHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(query) == "" {
-		return fmt.Errorf("parameter 'query' must not be empty")
+		return agenterrors.NewValidation("parameter 'query' must not be empty", nil)
 	}
 
 	// Validate top_k if provided
@@ -69,7 +63,7 @@ func (h *searchMemoriesHandler) Validate(args map[string]any) error {
 		case int, float64:
 			// Valid
 		default:
-			return fmt.Errorf("parameter 'top_k' must be an integer, got %T", tkRaw)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'top_k' must be an integer, got %T", tkRaw), nil)
 		}
 	}
 
@@ -79,7 +73,7 @@ func (h *searchMemoriesHandler) Validate(args map[string]any) error {
 		case float64, float32, int:
 			// Valid
 		default:
-			return fmt.Errorf("parameter 'threshold' must be a number, got %T", tRaw)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'threshold' must be a number, got %T", tRaw), nil)
 		}
 	}
 
@@ -123,35 +117,16 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 		threshold = 1
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":  "search_memories",
-			"query": query,
-			"top_k": topK,
-		})
-	}
-
 	// Perform text-based memory search
-	results, err := searchMemoriesByText(query, topK, threshold)
+	results, err := SearchMemoriesByText(query, topK, threshold)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("memory search failed: %v", err),
 			IsError: true,
-		}, fmt.Errorf("search memories: %w", err)
+		}, agenterrors.NewTool("search_memories", fmt.Sprintf("search memories: %v", err), err)
 	}
 
-	output := formatMemorySearchResults(query, results, threshold)
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":          "search_memories",
-			"query":        query,
-			"results_found": len(results),
-			"tokens":       estimateTokenUsage(output),
-		})
-	}
+	output := FormatMemorySearchResults(query, results, threshold)
 
 	// Write to output writer if available
 	if env.OutputWriter != nil {
@@ -164,34 +139,40 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}, nil
 }
 
-// memorySearchResult holds a single result from a text-based memory search.
-type memorySearchResult struct {
-	Name       string
-	Preview    string
-	Score      float64
-	Content    string
+func (h *searchMemoriesHandler) Aliases() []string      { return nil }
+func (h *searchMemoriesHandler) Timeout() time.Duration { return 0 }
+func (h *searchMemoriesHandler) MaxResultSize() int     { return 0 }
+func (h *searchMemoriesHandler) SafeForParallel() bool  { return false }
+func (h *searchMemoriesHandler) Interactive() bool      { return false }
+
+// MemorySearchResult holds a single result from a text-based memory search.
+type MemorySearchResult struct {
+	Name    string
+	Preview string
+	Score   float64
+	Content string
 }
 
-// searchMemoriesByText lists all memory files and scores them against the query
-// using simple text matching. This is a fallback when no embedding index is available.
-func searchMemoriesByText(query string, topK int, threshold float64) ([]memorySearchResult, error) {
+// SearchMemoriesByText lists all memory files and scores them against the query
+// using simple text matching. Returns nil when no embedding index is available.
+func SearchMemoriesByText(query string, topK int, threshold float64) ([]MemorySearchResult, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
 		return nil, nil // No memory directory = no results, not an error
 	}
 
-	entries, err := os.ReadDir(memoryDir)
+	entries, err := readDirCompat(memoryDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("read memories directory: %w", err)
+		return nil, agenterrors.NewTool("search_memories", fmt.Sprintf("read memories directory: %v", err), err)
 	}
 
 	queryLower := strings.ToLower(query)
 	queryWords := strings.Fields(queryLower)
 
-	var results []memorySearchResult
+	var results []MemorySearchResult
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
@@ -217,7 +198,7 @@ func searchMemoriesByText(query string, topK int, threshold float64) ([]memorySe
 		score := scoreMemoryMatch(name, preview, content, queryWords)
 
 		if score >= threshold {
-			results = append(results, memorySearchResult{
+			results = append(results, MemorySearchResult{
 				Name:    name,
 				Preview: preview,
 				Score:   score,
@@ -264,7 +245,7 @@ func scoreMemoryMatch(name, preview, content string, queryWords []string) float6
 		// Name match is weighted highest
 		if strings.Contains(nameLower, word) {
 			matches++
-			totalScore += 0.5 // Name matches are very valuable
+			totalScore += 0.5
 		}
 
 		// Preview match is next
@@ -284,8 +265,7 @@ func scoreMemoryMatch(name, preview, content string, queryWords []string) float6
 		return 0
 	}
 
-	// Normalize to 0-1 range
-	// Maximum possible score per word is 1.0 (name + preview + content match)
+	// Normalize to 0-1 range (max possible per word is 1.0)
 	maxPossible := float64(len(queryWords))
 	if maxPossible == 0 {
 		return 0
@@ -306,8 +286,8 @@ func firstLine(content string) string {
 	return ""
 }
 
-// formatMemorySearchResults formats search results for display.
-func formatMemorySearchResults(query string, results []memorySearchResult, threshold float64) string {
+// FormatMemorySearchResults formats search results for display.
+func FormatMemorySearchResults(query string, results []MemorySearchResult, threshold float64) string {
 	if len(results) == 0 {
 		return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold)
 	}

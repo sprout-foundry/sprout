@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { SproutSettings, ApiService } from '../../services/api';
 import { debugLog } from '../../utils/log';
-import { setNestedValue } from './settingsHelpers';
+import { getNestedValue, setNestedValue } from './settingsHelpers';
 import type { MutationContext } from './types';
 import { useMCPServerMutations } from './useMCPServerMutations';
 import { useProviderMutations } from './useProviderMutations';
@@ -65,10 +65,14 @@ interface MutationHookParams {
   setProviderContextSize: (v: number) => void;
   providerEnvVar: string;
   setProviderEnvVar: (v: string) => void;
+  providerApiKey: string;
+  setProviderApiKey: (v: string) => void;
   providerSupportsVision: boolean;
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
   setProviderVisionModel: (v: string) => void;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   providerModelContextSizes: string;
   setProviderModelContextSizes: (v: string) => void;
   // Shared settings ref (kept up-to-date by useSettingsState)
@@ -126,10 +130,14 @@ export function useSettingsMutation(params: MutationHookParams) {
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
     creatingWorkspaceConfig,
@@ -196,10 +204,14 @@ export function useSettingsMutation(params: MutationHookParams) {
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
   });
@@ -211,7 +223,13 @@ export function useSettingsMutation(params: MutationHookParams) {
       const current = settingsRef.current;
       if (!current) return;
 
-      const prev = { ...current };
+      // Capture only the specific field's previous value for targeted
+      // rollback. A full-state shallow copy (`{ ...current }`) is unsafe
+      // under concurrent saves: if setting B changes while setting A's
+      // API call is in-flight, rolling back A to the full-state snapshot
+      // would silently revert B's optimistic update. By reverting only
+      // the failed key, concurrent saves to other keys are preserved.
+      const prevValue = getNestedValue(current, keyOrPath);
       setSavingKey(keyOrPath);
 
       try {
@@ -234,7 +252,13 @@ export function useSettingsMutation(params: MutationHookParams) {
         }
       } catch (err) {
         debugLog('[SettingsPanel] failed to save setting:', err);
-        onSettingsChanged(prev);
+        // Roll back only the failed key, preserving any concurrent
+        // optimistic updates to other keys.
+        const latest = settingsRef.current;
+        if (latest) {
+          const reverted = setNestedValue(latest, keyOrPath, prevValue) as SproutSettings;
+          onSettingsChanged(reverted);
+        }
         addNotification('error', 'Settings', 'Save failed', 5000);
       } finally {
         setSavingKey(null);

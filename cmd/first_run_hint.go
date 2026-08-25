@@ -5,14 +5,18 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
-// firstRunStateFile is the absolute path to the persisted state used to
-// track which workspaces have seen the first-run hint.
-const firstRunStateFile = ".sprout/state.json"
+// firstRunStateFile is the filename of the persisted state used to
+// track which workspaces have seen the first-run hint. Lives in the
+// state directory.
+const firstRunStateFile = "state.json"
 
 // sproutState is the on-disk shape persisted at ~/.sprout/state.json. Only
 // fields that survive across sprout versions belong here; per-run state
@@ -66,15 +70,17 @@ func maybeShowFirstRunHint() {
 	fmt.Fprintln(os.Stderr, "Type /help for commands, or ? for keyboard shortcuts. Ctrl-D exits.")
 
 	state.SeenFirstRunHint = append(state.SeenFirstRunHint, cwd)
-	_ = saveFirstRunState(statePath, state) // best-effort — we don't care if persist fails
+	if err := saveFirstRunState(statePath, state); err != nil {
+		log.Printf("warning: could not persist first-run hint state to %s: %v", statePath, err)
+	}
 }
 
 func firstRunStatePath() (string, error) {
-	home, err := os.UserHomeDir()
+	stateDir, err := envutil.StateDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, firstRunStateFile), nil
+	return filepath.Join(stateDir, firstRunStateFile), nil
 }
 
 func loadFirstRunState(path string) (*sproutState, error) {

@@ -2,6 +2,7 @@ import { Bot, Wrench, History, ListTodo, Clock, Activity, PanelRightOpen, PanelR
 import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
 
+import AgentChangesPanel from './AgentChangesPanel';
 import { SessionsTab } from './contextPanel/SessionsTab';
 import { StatusTab } from './contextPanel/StatusTab';
 import { SubagentsTab } from './contextPanel/SubagentsTab';
@@ -19,7 +20,6 @@ import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { useSessionManager } from './contextPanel/useSessionManager';
 import { useStatusMetrics } from './contextPanel/useStatusMetrics';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
-import AgentChangesPanel from './AgentChangesPanel';
 import TodoPanel from './TodoPanel';
 
 const TAB_IDS = ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'] as const;
@@ -87,19 +87,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     };
   }, [isProcessing, messageCount, firstMessageTs]);
 
-  // ── Auto-expand latest query group ────────────────────────────────
-
-  useEffect(() => {
-    if (maxQueryId > 0) {
-      state.setExpandedQueries((prev) => {
-        if (prev.size === 1 && prev.has(maxQueryId)) return prev;
-        const next = new Set<number>();
-        next.add(maxQueryId);
-        return next;
-      });
-    }
-  }, [maxQueryId, state]);
-
   // ── Imperative handle ─────────────────────────────────────────────
 
   const handleTabClick = (tabId: string) => {
@@ -126,8 +113,21 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       const tool = chatProps.toolExecutions.find((t) => t.id === toolId);
       if (tool) {
         const qid = tool.queryId ?? 0;
+        const maxQid = chatProps.toolExecutions.reduce((max, t) => Math.max(max, t.queryId ?? 0), 0);
         state.setExpandedQueries((prev) => {
-          if (prev.has(qid)) return prev;
+          // expandedQueries has inverted semantics for the current turn:
+          //   current turn: isExpanded = !isInSet (in-set = collapsed)
+          //   past turns:   isExpanded = isInSet  (in-set = expanded)
+          // To guarantee the target group is visible, we need:
+          //   - current turn: REMOVE qid from the set (so it defaults to expanded)
+          //   - past turn:    ADD qid to the set (so it expands)
+          if (qid === maxQid) {
+            if (!prev.has(qid)) return prev; // already expanded
+            const next = new Set(prev);
+            next.delete(qid);
+            return next;
+          }
+          if (prev.has(qid)) return prev; // already expanded
           const next = new Set(prev);
           next.add(qid);
           return next;
@@ -259,12 +259,23 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             sessionRestoreError={sessionManager.sessionRestoreError}
             loadSessions={sessionManager.loadSessions}
             handleRestoreSession={sessionManager.handleRestoreSession}
+            sessionSearchQuery={sessionManager.sessionSearchQuery}
+            sessionSearchResults={sessionManager.sessionSearchResults}
+            sessionSearchLoading={sessionManager.sessionSearchLoading}
+            sessionSearchError={sessionManager.sessionSearchError}
+            showSessionSearchDropdown={sessionManager.showSessionSearchDropdown}
+            handleSessionSearchChange={sessionManager.handleSessionSearchChange}
+            handleSessionSearchClear={sessionManager.handleSessionSearchClear}
+            handleSessionSearchBlur={sessionManager.handleSessionSearchBlur}
+            handleSessionSearchFocus={sessionManager.handleSessionSearchFocus}
+            handleSessionSearchResultClick={sessionManager.handleSessionSearchResultClick}
+            isExportingAll={sessionManager.isExportingAll}
+            exportAllError={sessionManager.exportAllError}
+            handleExportAllSessions={sessionManager.handleExportAllSessions}
           />
         );
       case 'status':
-        return (
-          <StatusTab chatProps={chatProps} statusMetrics={statusMetrics} liveDurationMs={liveDurationMs} />
-        );
+        return <StatusTab chatProps={chatProps} statusMetrics={statusMetrics} liveDurationMs={liveDurationMs} />;
       default:
         return (
           <SubagentsTab
@@ -307,6 +318,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
               : { width: `${state.panelCollapsed ? PANEL_COLLAPSED_WIDTH : state.panelWidth}px` }
           }
           ref={state.panelContainerRef}
+          data-testid="context-panel"
         >
           <div className="side-panel-rail">
             {chatPanelTabs.map((tab) => (
@@ -317,6 +329,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 title={tab.label}
                 aria-label={tab.label}
                 aria-pressed={state.chatTab === tab.id}
+                data-testid="context-panel-tab"
               >
                 {tab.icon}
               </button>
@@ -325,6 +338,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
               className="side-collapse-btn"
               onClick={() => state.setPanelCollapsed((prev) => !prev)}
               title={state.panelCollapsed ? 'Expand panel' : 'Collapse panel'}
+              data-testid="context-panel-collapse"
             >
               {state.panelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
             </button>

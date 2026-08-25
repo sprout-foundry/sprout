@@ -54,40 +54,59 @@
 /* ── Tool query groups (rolling history) ── */
 
 .tool-query-group {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+}
+
+.tool-query-group--current {
+  /* Subtle accent border to distinguish current turn */
+  border-left: 2px solid color-mix(in srgb, var(--accent-primary) 40%, transparent);
+  margin-left: -2px;
+  padding-left: 4px;
 }
 
 .tool-query-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
   color: var(--text-secondary, #8b949e);
   cursor: pointer;
-  border-bottom: 1px solid var(--border-default, #30363d);
-  border-radius: 4px;
   user-select: none;
-  transition: background 0.15s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+  border-radius: var(--radius-sm, 4px);
 }
 
 .tool-query-header:hover {
   background: var(--bg-hover, rgba(110, 118, 129, 0.1));
+  color: var(--text-primary, #e6edf3);
+}
+
+.tool-query-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary, #8b949e);
+  flex-shrink: 0;
 }
 
 .tool-query-label {
   font-weight: 500;
+  letter-spacing: -0.005em;
 }
 
 .tool-query-count {
   color: var(--text-tertiary, #8b949e);
   margin-left: auto;
-  font-size: 11px;
+  font-size: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
 }
 
 .tool-depth-badge {
   display: inline-block;
-  margin-left: 6px;
+  margin-left: 4px;
+  vertical-align: middle;
   padding: 1px 6px;
   border-radius: var(--radius-sm, 4px);
   font-size: 10px;
@@ -108,6 +127,43 @@
 .tool-depth-badge[data-depth-tier='deep'] {
   background: var(--accent-warning);
   color: var(--accent-warning-fg);
+}
+
+/* ── Nesting depth visual cues (Change 3) ──────────────────────
+ * Uses a ::before pseudo-element for the depth indicator instead of
+ * border-left, so it doesn't conflict with the existing status-based
+ * left border. Only applies to depth > 0 tools (nested subagents and
+ * their children). Depth-0 tools keep their status border only. */
+.tool-execution[data-depth='1'],
+.tool-execution[data-depth='2'] {
+  position: relative;
+}
+
+.tool-execution[data-depth='1'] {
+  margin-left: 8px;
+}
+
+.tool-execution[data-depth='2'] {
+  margin-left: 16px;
+}
+
+.tool-execution[data-depth='1']::before,
+.tool-execution[data-depth='2']::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+}
+
+.tool-execution[data-depth='1']::before {
+  background: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+}
+
+.tool-execution[data-depth='2']::before {
+  background: color-mix(in srgb, var(--accent-warning) 50%, transparent);
 }
 
 .tool-query-tools {
@@ -347,6 +403,201 @@
   border-radius: 6px;
   border: 1px solid var(--border-default, #30363d);
   background: var(--bg-primary, #0d1117);
+}
+
+/* ── Sessions panel ─────────────────────────────────────────────── */
+
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 8px 8px;
+}
+
+.history-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
+}
+
+.history-refresh-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.history-refresh-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.history-error-inline {
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--accent-error);
+  background: var(--bg-error);
+  border-radius: var(--radius-sm);
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.1s var(--ease-out);
+}
+
+.history-item:hover {
+  background: var(--bg-elevated);
+}
+
+.history-item.session-current {
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+}
+
+.session-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-id {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.history-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.history-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.session-dir {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.session-current-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.history-rollback-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out);
+}
+
+.history-rollback-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.history-rollback-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.history-rollback-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.history-fork-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 4px;
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out);
+}
+
+.history-fork-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.history-fork-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.history-fork-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ── Skeleton loading states ───────────────────────────────────── */

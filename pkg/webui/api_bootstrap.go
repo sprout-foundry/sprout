@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"net/http"
 )
 
@@ -25,11 +24,15 @@ type RuntimeConfig struct {
 
 	// BuildVersion is the version string embedded at build time.
 	BuildVersion string `json:"buildVersion"`
+
+	// SharedMode is true when the server shares the CLI's agent instance
+	// (non-daemon interactive mode). The frontend uses this to hide
+	// multi-chat UI and show "coupled with terminal" messaging.
+	SharedMode bool `json:"sharedMode"`
 }
 
 func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	authMode := "none"
@@ -59,7 +62,7 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		AuthMode:     authMode,
 		AppMode:      appMode,
 		BuildVersion: "dev",
+		SharedMode:   ws.IsSharedMode(),
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	writeJSON(w, http.StatusOK, config)
 }

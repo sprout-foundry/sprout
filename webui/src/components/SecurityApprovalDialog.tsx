@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
-import type { SecurityApprovalAction } from '../hooks/useSecurityApproval';
+import { Check, Eye, TriangleAlert, X } from 'lucide-react';
+import type { SecurityApprovalAction } from '../hooks/useSecurityHandlers';
 import './ThemedDialog.css';
 
 export interface SecurityApprovalDialogProps {
@@ -22,15 +23,79 @@ export interface SecurityApprovalDialogProps {
   fsKind?: 'fs_external' | 'fs_sensitive';
   fsFolder?: string;
   fsPath?: string;
+  // SP-124-2: LLM-generated analysis. Rendered above the command block when present.
+  // SP-124b Phase 2: when chainLength > 1, also renders a per-subcommand
+  // stepper with tone-coded risk dots.
+  securityAnalysis?: {
+    summary: string;
+    modifies: string;
+    riskAssessment: string;
+    recommendation: string;
+    chainLength?: number;
+    chainSubcommands?: string[];
+    chainClassifications?: ('low' | 'moderate' | 'high')[];
+  };
+  // Visible error when the user's response could not be delivered (socket
+  // down). The dialog stays open for retry instead of silently hanging.
+  deliveryError?: string;
   onRespond: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
 }
 
 type RiskKey = 'safe' | 'caution' | 'dangerous';
 
-const RISK_ICON: Record<RiskKey, string> = {
-  safe: '✓',
-  caution: '⚠',
-  dangerous: '✕',
+// SP-124-2: recommendation badge colors
+type RecommendationKey = 'approve' | 'review' | 'reject';
+const RECOMMENDATION_ICON: Record<RecommendationKey, JSX.Element> = {
+  approve: <Check size={14} />,
+  review: <Eye size={14} />,
+  reject: <X size={14} />,
+};
+const RECOMMENDATION_LABEL: Record<RecommendationKey, string> = {
+  approve: 'Safe to approve',
+  review: 'Review carefully',
+  reject: 'Not recommended',
+};
+const RECOMMENDATION_COLOR: Record<RecommendationKey, string> = {
+  approve: 'var(--accent-success)',
+  review: 'var(--accent-warning)',
+  reject: 'var(--accent-error)',
+};
+const RECOMMENDATION_BG: Record<RecommendationKey, string> = {
+  approve: 'var(--bg-success)',
+  review: 'var(--bg-warning)',
+  reject: 'var(--bg-error)',
+};
+const RECOMMENDATION_FG: Record<RecommendationKey, string> = {
+  approve: 'var(--accent-success)',
+  review: 'var(--accent-warning-fg)',
+  reject: 'var(--accent-error)',
+};
+
+// Risk assessment pill colors
+type RiskAssessmentKey = 'low' | 'moderate' | 'high';
+const RISK_ASSESSMENT_COLOR: Record<RiskAssessmentKey, string> = {
+  low: 'var(--accent-success)',
+  moderate: 'var(--accent-warning)',
+  high: 'var(--accent-error)',
+};
+
+// SP-124b Phase 2: chain stepper tone colors. Mirrors RISK_ASSESSMENT_COLOR
+// but is a separate map so future stepper-specific styling (e.g. a darker
+// outline) can diverge without touching the existing pill mapping. The
+// `undefined` branch falls back to a neutral muted color (defensive — the
+// server may emit an empty string or "unknown" while the analyzer is
+// mid-flight).
+type ChainStepperTone = 'low' | 'moderate' | 'high';
+const CHAIN_STEPPER_TONE_COLOR: Record<ChainStepperTone, string> = {
+  low: 'var(--accent-success)',
+  moderate: 'var(--accent-warning)',
+  high: 'var(--accent-error)',
+};
+
+const RISK_ICON: Record<RiskKey, JSX.Element> = {
+  safe: <Check size={16} />,
+  caution: <TriangleAlert size={16} />,
+  dangerous: <X size={16} />,
 };
 
 const RISK_LABEL: Record<RiskKey, string> = {
@@ -58,6 +123,8 @@ function SecurityApprovalDialog({
   fsKind,
   fsFolder,
   fsPath,
+  securityAnalysis,
+  deliveryError,
   onRespond,
 }: SecurityApprovalDialogProps): JSX.Element {
   const risk = toRiskKey(riskLevel);
@@ -83,6 +150,10 @@ function SecurityApprovalDialog({
 
   const handleAlways = useCallback(() => {
     onRespond(requestId, true, 'approve_always');
+  }, [requestId, onRespond]);
+
+  const handleAlwaysAsk = useCallback(() => {
+    onRespond(requestId, false, 'always_ask');
   }, [requestId, onRespond]);
 
   const handleElevate = useCallback(() => {
@@ -158,8 +229,118 @@ function SecurityApprovalDialog({
           {/* Reasoning */}
           {reasoning && <div className="security-approval-reasoning">{reasoning}</div>}
 
+          {/* Delivery failure (socket down) — the click did not reach the
+              server. Kept visible so the retry affordance is obvious; the
+              dialog stays open until the connection is restored. */}
+          {deliveryError && (
+            <div className="security-approval-delivery-error" role="alert">
+              {deliveryError}
+            </div>
+          )}
+
           {/* Risk type category */}
           {riskType && <div className="security-approval-risk-type">{riskType}</div>}
+
+          {/* LLM analysis block (SP-124-2) */}
+          {securityAnalysis && (
+            <div className="security-approval-analysis-block">
+              {/* Header row */}
+              <div className="security-approval-analysis-header">
+                <span className="security-approval-analysis-label">
+                  <Eye size={14} />
+                  What this command does
+                </span>
+                {securityAnalysis.recommendation && (
+                  <span
+                    className="security-approval-analysis-recommendation"
+                    style={{
+                      background:
+                        RECOMMENDATION_BG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--bg-tertiary)',
+                      color:
+                        RECOMMENDATION_FG[securityAnalysis.recommendation as RecommendationKey] ?? 'var(--text-muted)',
+                    }}
+                  >
+                    {RECOMMENDATION_ICON[securityAnalysis.recommendation as RecommendationKey] ?? null}
+                    {RECOMMENDATION_LABEL[securityAnalysis.recommendation as RecommendationKey] ??
+                      securityAnalysis.recommendation}
+                  </span>
+                )}
+              </div>
+              {/* Summary */}
+              {securityAnalysis.summary && (
+                <p className="security-approval-analysis-summary-text">{securityAnalysis.summary}</p>
+              )}
+              {/* Modifies line */}
+              {securityAnalysis.modifies && (
+                <p className="security-approval-analysis-modifies">
+                  <span className="security-approval-analysis-modifies-label">Modifies: </span>
+                  {securityAnalysis.modifies}
+                </p>
+              )}
+              {/* Risk assessment pill */}
+              {securityAnalysis.riskAssessment && (
+                <span
+                  className="security-approval-analysis-risk-pill"
+                  style={{
+                    color:
+                      RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ??
+                      'var(--text-muted)',
+                    background: 'var(--bg-elevated)',
+                    borderColor:
+                      RISK_ASSESSMENT_COLOR[securityAnalysis.riskAssessment as RiskAssessmentKey] ??
+                      'var(--border-default)',
+                  }}
+                >
+                  {securityAnalysis.riskAssessment}
+                </span>
+              )}
+
+              {/* SP-124b Phase 2: chain stepper. Renders a horizontal pill
+                  per subcommand with a tone-coded risk dot when the LLM
+                  analyzed a chain (chainLength > 1). Single-command and
+                  legacy (no chain_length) callers see no stepper — the
+                  `&& length > 1` guard is the regression contract. The
+                  WebUI shows ALL subcommands; the CLI caps at 3 with a
+                  "(+N more)" affordance to keep the terminal panel
+                  scannable (see writeSecurityAnalysisChainStepper). */}
+              {securityAnalysis.chainSubcommands && securityAnalysis.chainSubcommands.length > 1 && (
+                <div className="security-approval-chain-stepper" data-testid="chain-stepper">
+                  <div className="security-approval-chain-stepper-label">
+                    Chain ({securityAnalysis.chainLength ?? securityAnalysis.chainSubcommands.length} steps)
+                  </div>
+                  <ol className="security-approval-chain-stepper-list">
+                    {securityAnalysis.chainSubcommands.map((sub, idx) => {
+                      // Map the server-supplied tone to a dot color, falling
+                      // back to the neutral muted token for any value not in
+                      // the three-tone vocabulary (defensive — the server
+                      // may emit an empty string or a future tone like
+                      // "unknown" while the analyzer is mid-flight).
+                      const rawTone = securityAnalysis.chainClassifications?.[idx];
+                      const tone = (['low', 'moderate', 'high'] as const).includes(rawTone as ChainStepperTone)
+                        ? (rawTone as ChainStepperTone)
+                        : undefined;
+                      const toneColor = tone ? CHAIN_STEPPER_TONE_COLOR[tone] : 'var(--text-muted)';
+                      return (
+                        <li
+                          key={`${idx}-${sub}`}
+                          className="security-approval-chain-stepper-pill"
+                          data-testid="chain-stepper-pill"
+                          data-tone={rawTone ?? 'unknown'}
+                        >
+                          <span
+                            className="security-approval-chain-stepper-dot"
+                            style={{ background: toneColor }}
+                            aria-hidden="true"
+                          />
+                          <code className="security-approval-chain-stepper-cmd">{sub}</code>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Command (for shell_command) */}
           {command && (
@@ -192,7 +373,9 @@ function SecurityApprovalDialog({
           )}
           {fsKind === 'fs_external' && fsFolder && (
             <div className="security-approval-target-wrapper">
-              <div className="security-approval-target-label">Folder to allowlist if you pick &ldquo;Allow folder this session&rdquo;</div>
+              <div className="security-approval-target-label">
+                Folder to allowlist if you pick &ldquo;Allow folder this session&rdquo;
+              </div>
               <div className="security-approval-target-box">{fsFolder}</div>
             </div>
           )}
@@ -201,18 +384,17 @@ function SecurityApprovalDialog({
         {/* SP-058: disclaimer for the Elevate action, shown only in 4-option mode */}
         {allowOptions && !isFilesystem && (
           <div className="security-approval-elevate-note" role="note">
-            <strong>Elevate</strong> bumps this session to the <code>permissive</code> risk profile —
-            you won&apos;t see high-risk prompts again until restart. Critical operations
-            (rm&nbsp;-rf&nbsp;/, fork bombs) still block. Run{' '}
+            <strong>Elevate</strong> bumps this session to the <code>permissive</code> risk profile — you won&apos;t see
+            high-risk prompts again until restart. Critical operations (rm&nbsp;-rf&nbsp;/, fork bombs) still block. Run{' '}
             <code>/risk-profile&nbsp;permissive</code> to make this persistent.
           </div>
         )}
         {/* Filesystem sensitive-tier note: explain why "Allow folder this session" is missing */}
         {fsKind === 'fs_sensitive' && (
           <div className="security-approval-elevate-note" role="note">
-            This is a <strong>sensitive</strong> path (system directory, or a home-directory path while your
-            working directory is outside <code>$HOME</code>). It can&apos;t be added to the session allowlist —
-            every access will prompt.
+            This is a <strong>sensitive</strong> path (system directory, or a home-directory path while your working
+            directory is outside <code>$HOME</code>). It can&apos;t be added to the session allowlist — every access
+            will prompt.
           </div>
         )}
 
@@ -293,6 +475,14 @@ function SecurityApprovalDialog({
                 title="Persist this exact command to your allowlist so it won't prompt again"
               >
                 Always approve
+              </button>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow security-approval-btn--allow--caution"
+                onClick={handleAlwaysAsk}
+                title="Always prompt before this command — overrides risk profile auto-approve"
+              >
+                Always ask
               </button>
               <button
                 type="button"

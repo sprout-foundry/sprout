@@ -17,11 +17,14 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/daemon"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 	"github.com/sprout-foundry/sprout/pkg/webui"
+	"github.com/sprout-foundry/sprout/pkg/workflow"
 	"golang.org/x/term"
 )
 
@@ -39,11 +42,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	}
 
 	ensureContinuationSessionID(chatAgent)
-	workflowConfig, workflowLoadErr := loadAgentWorkflowConfig(agentWorkflowConfig)
+	workflowOverrides := buildWorkflowCLIOverrides()
+	workflowConfig, workflowLoadErr := workflow.LoadAgentWorkflowConfig(agentWorkflowConfig)
 	if workflowLoadErr != nil {
 		return workflowLoadErr
 	}
-	applyWorkflowCommandOverrides(workflowConfig)
+	workflow.ApplyWorkflowCommandOverrides(workflowConfig, workflowOverrides)
 
 	// When a workflow config defines an initial prompt, force non-interactive
 	// (direct) mode. Without this, the isInteractive branch calls
@@ -63,16 +67,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// "no provider configured" when the webui can handle provider setup interactively.
 	if daemonMode {
 		os.Setenv("SPROUT_DAEMON", "1")
+		// Unset on RunAgent exit so the flag never leaks to subprocesses
+		// the user explicitly runs after us, or to tests sharing the process.
+		// Children spawned during the daemon's lifetime inherit the var at
+		// fork time and are unaffected by the unset on our exit.
+		defer os.Unsetenv("SPROUT_DAEMON")
 
 		// Set up log rotation for managed daemon services (SPROUT_SERVICE=1).
 		// This must happen early, before any stdout/stderr writes, so that
 		// all subsequent output is captured by the rotating log files.
-		homeDir, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			console.GlyphWarning.Fprintf(os.Stderr, "Could not determine home directory, skipping daemon log rotation: %v", homeErr)
-		} else {
-			setupDaemonLogging(homeDir)
-		}
+		setupDaemonLogging()
 	}
 
 	// Create event bus
@@ -88,6 +92,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// Create a single cancellable context for the entire application
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Start OOM watchdog in daemon mode to monitor Node.js process count
+	// and total RSS. This alerts via the event bus (and WebUI) before
+	// the kernel OOM-killer fires.
+	if daemonMode && chatAgent != nil {
+		oomWatchdog := agent.NewOOMWatchdog(eventBus)
+		oomWatchdog.Start(ctx)
+		// Goroutine automatically exits when ctx is cancelled on shutdown.
+	}
 
 	// Create web server if enabled
 	var webServer *webui.ReactWebServer
@@ -116,22 +129,38 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		// Determine port strategy.
 		//
-		// Daemon mode (no explicit port): use the single-port supervisor on
-		// the unified daemon port (56000) so all daemons compete for one
-		// stable port.  This is the "primary" instance users bookmark.
+		// IN VARIANT: The daemon serves ALL workspaces from a single port.
+		//   When daemon mode is active and no explicit --web-port is given,
+		//   the port is always DaemonPort (56000).  The daemon handles
+		//   multiple workspaces by routing internally per-workspace via
+		//   clientContext / chat_sessions — there are NO folder-scoped
+		//   daemon ports.  The single-port supervisor handles leadership
+		//   election so exactly one daemon process serves 56000; additional
+		//   daemon instances attach to the leader.
 		//
 		// Non-daemon interactive (no explicit port): each instance gets its
-		// own unique port so browser windows can connect independently.
-		// We scan from 56001 (DaemonPort+1) for a free port.
+		// own dynamic port (starting at 56001 = DaemonPort+1) so that
+		// separate browser windows can connect independently.  This is
+		// intentional: non-daemon instances are short-lived and do not share
+		// a persistent port.
 		//
 		// Explicit --web-port N: always start directly on that port,
-		// regardless of daemon mode.
+		// regardless of daemon mode (user override).
+		//
+		// GUARD: daemon mode NEVER falls into the FindAvailablePort path.
+		//   If daemonMode is true and webPort is 0, the port is set to
+		//   webui.DaemonPort unconditionally below.
 		port := webPort
 		if port == 0 {
 			if daemonMode {
+				// Daemon mode: always use the single shared DaemonPort.
+				// This path is mutually exclusive with the dynamic-port branch
+				// — if daemonMode is true, FindAvailablePort is never called.
 				port = webui.DaemonPort
 			} else {
-				// Non-daemon: find a free dynamic port.
+				// Non-daemon interactive: find a free dynamic port so each
+				// instance gets its own browser window.  This path is only
+				// reachable when daemonMode is false.
 				dynamicPort, dynErr := webui.FindAvailablePort(webui.DaemonPort + 1)
 				if dynErr != nil {
 					console.GlyphWarning.Fprintf(os.Stderr, "Could not find a dynamic port: %v; web UI disabled", dynErr)
@@ -149,6 +178,24 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				log.Fatalf("%v", webErr)
 			}
 
+			// SP-118 Phase 1: Route to Mode 1 (single-active-session) for the
+			// sprout agent path (interactive / direct / non-daemon). The daemon
+			// path (daemonMode=true) leaves agentEnforceSingleSession=false so
+			// connections route to the Mode 2 stub until SP-118-2 lands. The
+			// stub logs and drops connections, so daemon mode's WebUI is
+			// intentionally broken in this phase. The flag is the dispatch
+			// signal — NOT serviceMode, which tests manipulate independently
+			// to exercise Mode 1 in service-mode setups.
+			if !daemonMode {
+				webServer.SetAgentEnforceSingleSession(true)
+			}
+
+			// In shared mode, register the server so the CLI's ProcessQuery
+			// wrapper can sync agent state after each CLI query.
+			if !daemonMode {
+				setSharedWebServer(webServer)
+			}
+
 			// Inject webui-owned managers into the agent so that security
 			// prompts and ask_user requests route through the same instances
 			// the webui handlers resolve responses on — no global singletons.
@@ -160,6 +207,36 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// correctly: use the event bus only when a browser tab is open,
 				// otherwise fall back to CLI prompting (avoids 5-min timeouts).
 				chatAgent.SetHasActiveWebUIClients(webServer.HasActiveWebUIClients)
+
+				// Register the password prompter mux so shell commands that trigger
+				// sudo/passwd prompts route through the most appropriate surface:
+				//   1. WebUI prompter (browser dialog) when a tab is open — best UX
+				//   2. CLI prompter (terminal ReadPassword) when no tab is open
+				//   3. Neither — sudo prompts hang as before (safe default)
+				//
+				// The mux is necessary because the agent_creation.go path sets a CLI
+				// prompter unconditionally when stdin is a TTY. Setting only the WebUI
+				// prompter here would clobber the CLI fallback and leave headless runs
+				// with no prompt surface at all.
+				if existing := chatAgent.GetPasswordPrompter(); existing != nil {
+					chatAgent.SetPasswordPrompter(agent.NewCascadingPasswordPrompter(
+						agent.NewWebUIPasswordPrompter(chatAgent),
+						existing,
+					))
+				} else {
+					chatAgent.SetPasswordPrompter(agent.NewWebUIPasswordPrompter(chatAgent))
+				} // In shared mode (non-daemon interactive), seed the agent's
+				// event metadata with the default client/chat IDs so that
+				// CLI-initiated queries publish events the WebUI can route.
+				// Without this, CLI events lack client_id/chat_id and the
+				// WebUI tab never receives streaming output or completion
+				// notifications for CLI queries.
+				if !daemonMode {
+					chatAgent.SetEventMetadata(map[string]interface{}{
+						"client_id": "default",
+						"chat_id":   "default",
+					})
+				}
 			}
 
 			startInstanceTracker(ctx, port, chatAgent)
@@ -171,11 +248,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					port,
 					func(activePort int) {
 						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
-						fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
+						console.GlyphInfo.Printf("Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 					func(activePort int) {
 						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
-						fmt.Printf("\n[web] Reusing active Web UI at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
+						console.GlyphInfo.Printf("Reusing active Web UI at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 				)
 				go webUISup.Run(ctx)
@@ -188,13 +265,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 			daemonStartupLoop:
 				for {
-					if webServer.IsRunning() {
+					if webServer.IsRunning() || webUISup.HasAttached() {
 						break
 					}
 
 					select {
 					case <-startupDeadline.C:
-						if !webServer.IsRunning() {
+						if !webServer.IsRunning() && !webUISup.HasAttached() {
 							return fmt.Errorf("web UI failed to start on port %d (daemon mode)", port)
 						}
 						break daemonStartupLoop
@@ -238,7 +315,41 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				}
 
 				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
-				fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+				console.GlyphInfo.Printf("Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+			}
+		}
+
+		// SP-136 P3: the daemon hosts the embedding socket so CLI processes
+		// route embedding ops through it (one model load, one index writer).
+		var socketActivities []*daemon.DaemonActivity
+		if daemonMode {
+			embedSrv := startDaemonEmbeddingServer(ctx, true)
+			if embedSrv != nil {
+				defer embedSrv.Close()
+				socketActivities = append(socketActivities, embedSrv.Activity)
+			}
+		}
+
+		// SP-136 P4: the daemon hosts the agent socket so the CLI can run
+		// one-shot queries through the daemon-owned agent.
+		if daemonMode {
+			agentSrv := startDaemonAgentServer(ctx, true, chatAgent)
+			if agentSrv != nil {
+				defer agentSrv.Close()
+				socketActivities = append(socketActivities, agentSrv.Activity)
+			}
+		}
+
+		// SP-136 P2: idle reaping for auto-started daemons.
+		// When SPROUT_DAEMON_IDLE_TIMEOUT is a positive duration, the daemon
+		// self-terminates after the web UI has had no active clients and no
+		// active queries — and no socket traffic — for that long. Auto-start
+		// (cmd/daemon_autostart.go) sets this on daemons it spawns;
+		// explicitly-started daemons (sprout agent -d) are unaffected unless
+		// the operator opts in.
+		if daemonMode && webServer != nil {
+			if idleTimeout, perr := time.ParseDuration(os.Getenv("SPROUT_DAEMON_IDLE_TIMEOUT")); perr == nil && idleTimeout > 0 {
+				go reapIdleDaemon(ctx, cancel, webServer, socketActivities, idleTimeout)
 			}
 		}
 	}
@@ -261,32 +372,34 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// to the foreground process group when the tty hangs
 				// up. Treating that as "reload" leaves an orphaned
 				// sprout running with PPID=1 forever (it keeps
-				// heartbeating to instances.json and holding the
-				// task_queue.json flock against new sessions). Fall
-				// through to the shutdown path so terminal close cleans
-				// up the process.
-							if sig == syscall.SIGHUP && daemonMode {
-				fmt.Println()
-				console.GlyphAction.Printf("Received SIGHUP, reloading configuration...")
-				if chatAgent != nil {
-					if mgr := chatAgent.GetConfigManager(); mgr != nil {
-						if err := mgr.Reload(); err != nil {
-							console.GlyphError.Fprintf(os.Stdout, "Reload failed: %v", err)
-						} else {
-							console.GlyphSuccess.Print("Configuration reloaded successfully.")
+				// heartbeating to instances.json against new sessions).
+				// Fall through to the shutdown path so terminal close
+				// cleans up the process.
+				if sig == syscall.SIGHUP && daemonMode {
+					fmt.Println()
+					console.GlyphAction.Printf("Received SIGHUP, reloading configuration...")
+					if chatAgent != nil {
+						if mgr := chatAgent.GetConfigManager(); mgr != nil {
+							if err := mgr.Reload(); err != nil {
+								console.GlyphError.Fprintf(os.Stdout, "Reload failed: %v", err)
+							} else {
+								console.GlyphSuccess.Print("Configuration reloaded successfully.")
+							}
 						}
 					}
+					continue
 				}
-				continue
-			}
 
-			if isInteractive && isQueryInProgress() {
+				if isInteractive && isQueryInProgress() {
 					nowUnix := time.Now().UnixNano()
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {
 						console.StopGlobalStatusFooter()
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
+						if chatAgent != nil {
+							chatAgent.ForceSaveAndExit(1)
+						}
 						os.Exit(1)
 					}
 
@@ -296,6 +409,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					console.GlyphDim.Printf("  (Press Ctrl+C again quickly to force quit)")
 					if chatAgent != nil {
 						chatAgent.TriggerInterrupt()
+					}
+					// SP-056-6d: Resolve any active reasoning fold on interrupt.
+					if fold := currentReasoningFold; fold != nil && fold.IsActive() {
+						fold.Interrupt()
 					}
 					continue
 				}
@@ -319,6 +436,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					console.StopGlobalStatusFooter()
 					fmt.Println()
 					console.GlyphStopped.Printf("Force quitting...")
+					if chatAgent != nil {
+						chatAgent.ForceSaveAndExit(1)
+					}
 					os.Exit(1)
 				}()
 
@@ -328,6 +448,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					case <-sigCh:
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
+						if chatAgent != nil {
+							chatAgent.ForceSaveAndExit(1)
+						}
 						os.Exit(1)
 					case <-ctx.Done():
 						return
@@ -356,16 +479,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		SetupAgentEvents(chatAgent, eventBus, indicator)
 	}
 
-	// Check for queue mode before interactive mode
-	// (skip when agent is nil in daemon mode — provider not configured yet)
-	if chatAgent != nil && chatAgent.GetConfigManager().GetConfig().GetEAMode() == "queue" {
-		return runQueueMode(ctx, chatAgent, eventBus, indicator)
-	}
+	// Start progress event emitter (opt-in via --progress-events flag).
+	// Works for both interactive and direct modes. Emits one-line milestones
+	// to stderr, stdout, or a file. Safe no-op when flag is not set.
+	progressEmitter := startProgressEmitter(ctx, eventBus)
+	defer progressEmitter.stop()
 
 	// When agent is nil (provider not configured in daemon mode), skip to
 	// the daemon wait path. The web UI handles provider setup interactively.
 	if chatAgent == nil && daemonMode && webServer != nil && webServer.IsRunning() {
-		fmt.Printf("\n[web] Web UI running at http://%s:%d (no provider configured — configure via web UI)\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+		console.GlyphInfo.Printf("Web UI running at http://%s:%d (no provider configured — configure via web UI)\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 		if !isServiceMode() {
 			fmt.Println("Press Ctrl+C to stop the server.")
 		}
@@ -382,9 +505,6 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return fmt.Errorf("failed to update config for interactive mode: %w", err)
 		}
 
-		// Check if we should prompt for GitHub MCP setup (interactive, non-SkipPrompt)
-		promptGitHubMCPSetupIfNeeded(&AgentAdapter{agent: chatAgent})
-
 		err = runInteractiveMode(ctx, chatAgent, eventBus, indicator)
 	} else {
 		directModeStart := time.Now()
@@ -393,6 +513,25 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return nil
 		}); err != nil {
 			return fmt.Errorf("failed to update config for direct mode: %w", err)
+		}
+
+		// SP-048-4: When the direct-mode run has a terminal on stderr
+		// (workflow coordinator invoked with shared stdout/stderr but no
+		// stdin), start the status footer and terminal tool subscriber
+		// so the user sees the same tool timeline and footer as the
+		// interactive CLI. The footer is TTY-gated internally; we gate
+		// the subscriber too so agent_message rendering through the
+		// subscriber only activates when there is a real terminal.
+		if chatAgent != nil && !daemonMode && term.IsTerminal(int(os.Stderr.Fd())) {
+			footerSource := &agentFooterSource{agent: chatAgent}
+			footer := console.NewStatusFooter(os.Stderr, footerSource)
+			console.RegisterGlobalStatusFooter(footer)
+			footer.Start()
+			defer footer.Stop()
+
+			subCtx, cancelSub := context.WithCancel(ctx)
+			defer cancelSub()
+			_ = cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 		}
 
 		// Direct mode
@@ -416,16 +555,27 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			}
 		}
 
-		query, err = resolveWorkflowInitialPrompt(query, workflowConfig)
+		query, err = workflow.ResolveWorkflowInitialPrompt(query, workflowConfig)
 		if err != nil {
 			return fmt.Errorf("failed to resolve workflow initial prompt: %w", err)
 		}
-		if query == "" && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {
+
+		// SP-136 P4: one-shot CLI-on-daemon. Plain (non-workflow) one-shot
+		// queries route through the daemon's agent socket when it is
+		// available; the daemon owns the agent. Falls back to in-process
+		// when the socket is unreachable.
+		if query != "" && workflowConfig == nil && !daemonMode {
+			if handled, derr := tryDaemonOneShot(ctx, query, outputFormatJSON); handled {
+				return derr
+			}
+		}
+		hasLoop := workflowConfig != nil && workflowConfig.Loop != nil
+		if query == "" && !hasLoop && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
 				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
-				fmt.Printf("\n[web] Web UI running at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+				console.GlyphInfo.Printf("Web UI running at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 				if !isServiceMode() {
 					fmt.Println("Press Ctrl+C to stop the server.")
 				}
@@ -441,7 +591,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			return nil
 		}
 
-		restoreRuntimeOverrides, restoreSetupErr := prepareWorkflowRuntimeRestorer(chatAgent, workflowConfig)
+		restoreRuntimeOverrides, restoreSetupErr := workflow.PrepareWorkflowRuntimeRestorer(chatAgent, workflowConfig, workflowOverrides)
 		if restoreSetupErr != nil {
 			return fmt.Errorf("failed to prepare runtime override restoration: %w", restoreSetupErr)
 		}
@@ -456,11 +606,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				}
 			}()
 		}
-		workflowState, workflowStateErr := loadWorkflowExecutionState(workflowConfig)
+		workflowState, workflowStateErr := workflow.LoadWorkflowExecutionState(workflowConfig)
 		if workflowStateErr != nil {
 			return fmt.Errorf("failed to load workflow execution state: %w", workflowStateErr)
 		}
-		if restoreErr := restoreWorkflowConversationState(chatAgent, workflowConfig, workflowState); restoreErr != nil {
+		if restoreErr := workflow.RestoreWorkflowConversationState(chatAgent, workflowConfig, workflowState); restoreErr != nil {
 			return fmt.Errorf("failed to restore workflow conversation state: %w", restoreErr)
 		}
 
@@ -468,10 +618,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// any LLM call. stopBudget MUST be invoked before the agent
 		// shuts down so the heartbeat goroutine exits and callbacks are
 		// cleared. Safe no-op when no budget is configured.
-		stopBudget := attachWorkflowBudget(chatAgent, workflowConfig)
+		stopBudget := workflow.AttachWorkflowBudget(chatAgent, workflowConfig)
 		defer stopBudget()
-		if workflowConfig != nil && workflowConfig.orchestrationEnabled() {
-			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
+		if workflowConfig != nil && workflowConfig.OrchestrationEnabled() {
+			if eventErr := workflow.EmitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
 				"initial_completed": workflowState.InitialCompleted,
 				"next_step_index":   workflowState.NextStepIndex,
 			}); eventErr != nil {
@@ -479,9 +629,24 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			}
 		}
 
+		// SP-127 Phase 2.3: apply Initial.AllowedPaths (if any) to the
+		// session allowlist before anything else. Unlike per-step paths,
+		// initial paths are NOT removed — they persist for the entire
+		// workflow run. This ensures the cd-target gate (Phase 2.1) and
+		// the filesystem gate (Phase 2.2) see these paths as approved
+		// from step 1 onward. On resume, RestoreWorkflowConversationState
+		// (called above) restores the agent state which includes the
+		// session allowlist — the re-apply here is a cheap no-op since
+		// AddSessionAllowedFolder is idempotent.
+		if workflowConfig != nil && workflowConfig.Initial != nil && len(workflowConfig.Initial.AllowedPaths) > 0 {
+			if _, _, _, applyErr := workflow.ApplyWorkflowRuntimeAllowedPaths(chatAgent, workflowConfig.Initial.AllowedPaths); applyErr != nil {
+				return fmt.Errorf("failed to apply initial allowed_paths: %w", applyErr)
+			}
+		}
+
 		shouldRunInitialQuery := strings.TrimSpace(query) != "" && !workflowState.InitialCompleted
 		if shouldRunInitialQuery {
-			if err := applyWorkflowInitialOverrides(chatAgent, workflowConfig); err != nil {
+			if err := workflow.ApplyWorkflowInitialOverrides(chatAgent, workflowConfig, workflowOverrides); err != nil {
 				return fmt.Errorf("failed to apply workflow initial runtime overrides: %w", err)
 			}
 
@@ -492,10 +657,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			if err != nil {
 				workflowState.FirstError = err.Error()
 			}
-			if persistErr := persistWorkflowCheckpoint(workflowConfig, workflowState, chatAgent); persistErr != nil {
+			if persistErr := workflow.PersistWorkflowCheckpoint(workflowConfig, workflowState, chatAgent); persistErr != nil {
 				return fmt.Errorf("failed to persist workflow checkpoint: %w", persistErr)
 			}
-			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_initial_completed", map[string]interface{}{
+			if eventErr := workflow.EmitWorkflowOrchestrationEvent(workflowConfig, "workflow_initial_completed", map[string]interface{}{
 				"provider":  workflowState.LastProvider,
 				"has_error": workflowState.HasError,
 			}); eventErr != nil {
@@ -506,7 +671,26 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}
 
 		workflowState.HasError = workflowState.HasError || err != nil
-		workflowYielded, workflowErr := runAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, workflowState)
+
+		// Loop mode: iterate over TODO items with stateless gate + context reset.
+		if workflowConfig != nil && workflowConfig.Loop != nil {
+			workflowYielded, workflowErr := workflow.RunAgentWorkflowLoop(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery), workflowOverrides)
+			if workflowYielded {
+				return nil
+			}
+			if workflowErr != nil {
+				if err != nil {
+					return fmt.Errorf("%w (workflow loop failed: %w)", err, workflowErr)
+				}
+				return workflowErr
+			}
+			if outputFormatJSON {
+				emitJSONResult(query, directModeStart, nil, chatAgent)
+			}
+			return nil
+		}
+
+		workflowYielded, workflowErr := workflow.RunAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery), workflowOverrides)
 		if workflowYielded {
 			return nil
 		}
@@ -580,65 +764,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	return nil
 }
 
-// SetupAgentEvents configures the agent for event-driven output routing.
-// The OutputRouter handles dual-path delivery (EventBus + terminal)
-// so no separate streaming callback is needed here. This function ensures
-// the agent's output router is wired to the event bus for WebUI subscribers.
-//
-// When indicator is non-nil, the streaming callback also stops it on the
-// first chunk so any "Thinking…" spinner is cleared before tokens appear.
-func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator) {
-	// Ensure the output router is connected to the event bus.
-	// When WebUI is active, events flow to both terminal and WebUI.
-	// When WebUI is inactive, events only flow to terminal.
-	if router := chatAgent.OutputRouter(); router != nil {
-		router.SetEventBus(eventBus)
-		router.SetReasoningTerminalEnabled(agentShowReasoningTerminal)
-	}
-
-	// Set a simple streaming callback for direct terminal output of
-	// assistant text. The OutputRouter's RouteStreamChunk publishes
-	// the event AND calls this callback — no duplicate events or writes.
-	//
-	// Routing: if a per-turn AssistantTurnRenderer is active (set up by
-	// the REPL loop), the chunk goes through it for indent + segment
-	// tracking. Otherwise it falls back to raw fmt.Print (non-REPL
-	// callers like queue mode).
-	//
-	// Assistant prose flows verbatim end-to-end: the terminal handles
-	// soft-wrap on long lines. We deliberately do NOT clamp line length
-	// here — prior versions truncated lines beyond `terminalWidth × 2`,
-	// which clipped long prose paragraphs that lacked `\n` breaks
-	// ("text being shown to the user shouldn't be cut off"). Tool
-	// results don't reach this callback (they route via RouteAgentMessage
-	// / RouteTerminalOnly), so there's no blob-output risk on this path.
-	if !agentNoStreaming {
-		chatAgent.EnableStreaming(func(chunk string) {
-			if chunk != "" {
-				// CompareAndSwap: only the FIRST non-empty chunk records
-				// the ttft. Subsequent chunks are a no-op so reading the
-				// timestamp later yields "first token landed at X".
-				noteFirstStreamChunk()
-			}
-			// A browser is watching the Web UI — hand off there instead of
-			// duplicating the token stream in the terminal. Print one handoff
-			// line per turn and stay quiet.
-			if chatAgent.HasActiveWebUIClients() {
-				showWebUIHandoffOnce(indicator)
-				return
-			}
-			indicator.Stop()
-			if r := currentTurnRenderer.Load(); r != nil {
-				r.WriteChunk(chunk)
-				return
-			}
-			fmt.Print(chunk)
-		})
-	}
-}
-
-// currentTurnRenderer holds the AssistantTurnRenderer for the in-progress
-// REPL turn (or nil between turns / outside the REPL). The streaming
-// callback registered in SetupAgentEvents loads from this pointer on each
-// chunk so per-turn renderers can be swapped without re-registering the
-// callback. Safe because only one turn is active at a time in a CLI REPL.
+// Turn state singletons (currentTurnRenderer, firstProseChunk) and the
+// beginTurn/endTurn helpers live in agent_mode_state.go so they are
+// declared in one place and both interactive and queue mode use the same
+// reset pattern.

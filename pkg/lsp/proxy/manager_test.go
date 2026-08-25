@@ -632,15 +632,14 @@ func TestManagerGetOrCreateReusesHealthyProcess(t *testing.T) {
 		// First call should create exactly 1 server
 		assert.Equal(t, 1, m.Count())
 
-		// Second call: since Healthy() uses Signal(nil) which may not work
-		// on all platforms, GetOrCreate may start a new process or reuse the
-		// existing one. Either way, the manager should handle it correctly.
+		// Second call must hand back the same live process. Respawning here
+		// would tear the server out from under the already-connected client.
 		proc2, release2, err := m.GetOrCreate("/tmp", "cat")
 		require.NoError(t, err)
 		require.NotNil(t, proc2)
+		assert.Same(t, proc1, proc2, "a healthy process must be reused, not respawned")
 
-		// After both calls, there should be at least one tracked server
-		assert.GreaterOrEqual(t, m.Count(), 1)
+		assert.Equal(t, 1, m.Count())
 
 		release1()
 		release2()
@@ -833,7 +832,7 @@ func TestManagerGetOrCreateFindByIDFallback(t *testing.T) {
 		// Let's set a config where a language ID can be found by its ID field but not LanguageIDs
 		m.SetConfig([]LanguageServerConfig{
 			{
-				ID:          "special-go", // ID that GetOrCreate can find by ID
+				ID:          "special-go",       // ID that GetOrCreate can find by ID
 				LanguageIDs: []string{"golang"}, // NOT "special-go"
 				Binary:      "cat",
 				Args:        []string{},

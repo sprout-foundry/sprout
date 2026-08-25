@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { subscribeAutomate } from '../services/automateEvents';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 import './AutomationsSessionDetail.css';
@@ -45,8 +46,8 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
 
   const outputContainerRef = useRef<HTMLPreElement>(null);
   const isAutoScrolling = useRef<boolean>(true);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const outputOffsetRef = useRef<number>(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ── Format Duration ─────────────────────────────────── */
 
@@ -69,9 +70,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
 
   const fetchSession = useCallback(async () => {
     try {
-      const response = await clientFetch(
-        `/api/automate/sessions/${encodeURIComponent(sessionId)}`
-      );
+      const response = await clientFetch(`/api/automate/sessions/${encodeURIComponent(sessionId)}`);
       if (!response.ok) {
         if (response.status === 404) {
           setSession(null);
@@ -89,7 +88,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
   const fetchOutput = useCallback(async () => {
     try {
       const response = await clientFetch(
-        `/api/automate/sessions/${encodeURIComponent(sessionId)}/output?since=${outputOffsetRef.current}`
+        `/api/automate/sessions/${encodeURIComponent(sessionId)}/output?since=${outputOffsetRef.current}`,
       );
       if (!response.ok) {
         throw new Error(`Failed to fetch output: ${response.status}`);
@@ -142,27 +141,34 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // Event-driven refetch (replaces setInterval polling).
+  // - automate.output_chunk: debounced 250ms re-fetch of session output.
+  // - automate.session_started / session_ended: re-fetch session metadata.
+  // Both filter by session_id so a panel for "s1" doesn't react to events
+  // about "s2". The combined cleanup unsubscribes AND clears any pending
+  // debounce timer so we never setState after unmount.
   useEffect(() => {
-    if (session?.status !== 'running') {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+    const unsub = subscribeAutomate((eventType, payload) => {
+      if (payload.session_id !== sessionId) return;
+
+      if (eventType === 'automate.output_chunk') {
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = setTimeout(() => {
+          debounceTimerRef.current = null;
+          fetchOutput();
+        }, 250);
+      } else if (eventType === 'automate.session_started' || eventType === 'automate.session_ended') {
+        fetchSession();
       }
-      return;
-    }
-
-    pollIntervalRef.current = setInterval(() => {
-      fetchSession();
-      fetchOutput();
-    }, 2000);
-
+    });
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+      unsub();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
-  }, [session?.status, fetchSession, fetchOutput]);
+  }, [sessionId, fetchOutput, fetchSession]);
 
   /* ── After output changes, scroll if auto-scrolling ──── */
 
@@ -186,13 +192,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
       tabIndex={-1}
     >
       {/* Close Button */}
-      <button
-        type="button"
-        className="automations-detail-close"
-        onClick={onClose}
-        title="Close"
-        aria-label="Close"
-      >
+      <button type="button" className="automations-detail-close" onClick={onClose} title="Close" aria-label="Close">
         <X size={16} />
       </button>
 
@@ -202,24 +202,16 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
           <div className="automations-detail-session-id" title={session?.session_id}>
             {session?.session_id || sessionId}
           </div>
-          <div className="automations-detail-workflow-name">
-            {session?.workflow || 'Unknown'}
-          </div>
+          <div className="automations-detail-workflow-name">{session?.workflow || 'Unknown'}</div>
         </div>
         <div className="automations-detail-header-meta">
           <span className={`automations-status-badge ${session?.status || 'running'}`}>
             <span className="automations-status-dot" />
             <span>
-              {session?.status === 'exited'
-                ? 'Exited'
-                : session?.status === 'stopped'
-                  ? 'Stopped'
-                  : 'Running'}
+              {session?.status === 'exited' ? 'Exited' : session?.status === 'stopped' ? 'Stopped' : 'Running'}
             </span>
           </span>
-          {session && (
-            <span className="automations-detail-elapsed">{elapsed}</span>
-          )}
+          {session && <span className="automations-detail-elapsed">{elapsed}</span>}
         </div>
       </div>
 
@@ -228,13 +220,8 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
         <div className="automations-detail-section-title">Budget</div>
         {session?.budget_usd && session.budget_usd > 0 ? (
           <div className="automations-budget-bar">
-            <div
-              className="automations-budget-fill"
-              style={{ width: '0%', background: 'var(--accent-success)' }}
-            />
-            <span className="automations-budget-text">
-              ${(session.budget_usd || 0).toFixed(2)} cap
-            </span>
+            <div className="automations-budget-fill" style={{ width: '0%', background: 'var(--accent-success)' }} />
+            <span className="automations-budget-text">${(session.budget_usd || 0).toFixed(2)} cap</span>
           </div>
         ) : (
           <div className="automations-no-budget">No limit</div>
@@ -250,11 +237,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
           <div className="automations-output-empty">{error}</div>
         ) : session?.output_file_path ? (
           <div className="automations-output-container">
-            <pre
-              className="automations-output-pre"
-              ref={outputContainerRef}
-              onScroll={handleScroll}
-            >
+            <pre className="automations-output-pre" ref={outputContainerRef} onScroll={handleScroll}>
               <code className="automations-output-code">{output || '(empty)'}</code>
             </pre>
           </div>
@@ -266,20 +249,25 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
       {/* Step Timeline Section */}
       <div className="automations-detail-section">
         <div className="automations-detail-section-title">Step Progress</div>
-        {/* TODO(SP-065-4c): Implement step timeline when agent workflow state is exposed via API */}
+        {/* SP-065-4c: step events are not yet exposed by the automate backend.
+            The session response only includes workflow-level status; per-step
+            state (when each step ran, cost, output) requires backend changes
+            tracked under SP-065. */}
         <div className="automations-detail-placeholder">
-          Step progress not available
+          Step-level events aren&apos;t tracked yet. The workflow &quot;{session?.workflow ?? ''}&quot; is currently{' '}
+          {session?.status ?? 'unknown'}.
         </div>
       </div>
 
-      {/* Budget Events Section */}
+      {/* Budget Section */}
       <div className="automations-detail-section">
-        <div className="automations-detail-section-title">Budget Events</div>
-        {/* TODO(SP-065-4d): Implement per-session budget event logging in a follow-up */}
+        <div className="automations-detail-section-title">Budget</div>
+        {/* SP-065-4d: per-event budget log isn't tracked yet; show the session-level
+            cap the workflow was started with. Per-step cost requires backend changes. */}
         <div className="automations-detail-placeholder">
           {session?.budget_usd && session.budget_usd > 0
-            ? `Utilization: $0.00 / $${session.budget_usd.toFixed(2)}`
-            : 'No budget tracking available'}
+            ? `Session budget cap: $${session.budget_usd.toFixed(2)}. Per-event cost tracking is not available yet.`
+            : 'No budget cap was set for this session.'}
         </div>
       </div>
     </div>

@@ -286,9 +286,9 @@ func TestHandleColdHydrateRequest_BasicFlow(t *testing.T) {
 	// Create a temp workspace with 3 files
 	dir := t.TempDir()
 	fileContents := map[string]string{
-		"hello.txt":     "hello world",
-		"foo.go":        "package foo",
-		"bar/baz.json":  `{"key":"value"}`,
+		"hello.txt":    "hello world",
+		"foo.go":       "package foo",
+		"bar/baz.json": `{"key":"value"}`,
 	}
 	for name, content := range fileContents {
 		path := filepath.Join(dir, name)
@@ -851,11 +851,11 @@ func TestHydrateRequestData_Validate(t *testing.T) {
 
 func TestHandleColdHydrateRequest_EstimateSeconds(t *testing.T) {
 	tests := []struct {
-		name              string
-		totalBytes        int64
-		wantEstimateMin   int64
-		wantEstimateMax   int64
-		fileName          string
+		name            string
+		totalBytes      int64
+		wantEstimateMin int64
+		wantEstimateMax int64
+		fileName        string
 	}{
 		{"empty workspace", 0, 0, 0, ""},
 		{"small content ~1KB", 1024, 1, 1, "small.txt"},
@@ -1212,7 +1212,7 @@ func TestHandleWebSocketMessage_HydrateRequest(t *testing.T) {
 				})
 				continue
 			}
-			ws.handleWebSocketMessage(pair.server, sessionID, msg, clientID)
+			ws.handleWebSocketMessage(pair.server, sessionID, msg, clientID, "", "", false)
 		}
 	}()
 
@@ -1261,11 +1261,14 @@ func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptes
 	ws, err := NewReactWebServer(nil, bus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		// Fall back to minimal server — NewReactWebServer may fail
-		// in some test environments (e.g., missing home dir)
+		// in some test environments (e.g., missing home dir). We assign
+		// workspaceRoot directly so the hydration handler reads from
+		// the test temp dir, not the original cwd.
 		ws = &ReactWebServer{eventBus: events.NewEventBus()}
+		ws.workspaceRoot = workspaceRoot
+	} else {
+		ws.workspaceRoot = workspaceRoot
 	}
-	// Override the workspace root for the test
-	ws.workspaceRoot = workspaceRoot
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin:     func(_ *http.Request) bool { return true },
@@ -1298,7 +1301,7 @@ func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptes
 				})
 				continue
 			}
-			ws.handleWebSocketMessage(safeConn, sessionID, msg, clientID)
+			ws.handleWebSocketMessage(safeConn, sessionID, msg, clientID, "", "", false)
 		}
 	}))
 
@@ -1528,7 +1531,7 @@ func TestHandleColdHydrateRequest_SymlinkSkipped(t *testing.T) {
 
 func TestIsSensitiveFile(t *testing.T) {
 	tests := []struct {
-		path       string
+		path        string
 		isSensitive bool
 	}{
 		// Sensitive by name

@@ -262,6 +262,22 @@ func parseSkillFrontMatter(content string) (name, description string) {
 	return name, description
 }
 
+// discoverSkills runs both user-level and project-level skill discovery
+// and returns the combined list of discovered skill names. Callers can use
+// this single function instead of invoking discoverUserSkills and
+// discoverProjectSkills separately. The SPROUT_NO_USER_SKILLS and
+// SPROUT_NO_PROJECT_SKILLS env guards are applied inside.
+func (c *Config) discoverSkills() []string {
+	var found []string
+	if os.Getenv("SPROUT_NO_USER_SKILLS") != "1" {
+		found = append(found, discoverUserSkills(c)...)
+	}
+	if os.Getenv("SPROUT_NO_PROJECT_SKILLS") != "1" {
+		found = append(found, discoverProjectSkills(c)...)
+	}
+	return found
+}
+
 // GetSkill retrieves a skill configuration by ID
 // Returns nil if the skill doesn't exist or is disabled
 func (c *Config) GetSkill(id string) *Skill {

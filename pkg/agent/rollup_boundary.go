@@ -3,33 +3,15 @@ package agent
 import (
 	"context"
 	"math"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
-// SP-066 Phase 3d: embedding-driven rollup boundary detection.
-//
-// The default rollup picks the first rollupSourceCount contiguous entries
-// at the over-budget level. This produces fine results when those N
-// entries are about a single topic; it produces a fragmented summary when
-// the user shifted topics partway through the span (e.g. "fix the auth
-// bug" → "now help me set up CI").
-//
-// This file adds an opt-in refinement: if embeddings are available for
-// the candidate range, look for the largest pairwise-similarity drop
-// between consecutive entries. If the drop exceeds a threshold, treat
-// it as a natural topic boundary and shrink the rollup to stop before
-// it, so each rollup stays topically coherent.
-//
-// Behavior:
-//   - When embeddings aren't available (no manager, no records for these
-//     checkpoints, or an embed failure), fall back to the default first-N
-//     window. The worker never blocks on this.
-//   - When the largest drop is below the threshold, fall back to first-N.
-//     A small drop isn't a topic shift; it's normal turn-to-turn drift.
-//   - When the boundary would leave fewer than rollupBoundaryMin source
-//     items, fall back to first-N. Don't produce trivially-small rollups.
-
+// Embedding-driven rollup boundary detection. If embeddings are available for the
+// candidate range, look for the largest pairwise-similarity drop between consecutive
+// entries. If the drop exceeds a threshold, treat it as a natural topic boundary
+// and shrink the rollup to stop before it, keeping each rollup topically coherent.
 const (
 	// rollupBoundarySimilarityDrop is the minimum drop in cosine
 	// similarity (vs. the prior pairwise similarity in the candidate
@@ -44,14 +26,7 @@ const (
 	rollupBoundaryMin = 5
 )
 
-// refineRollupEnd returns an adjusted endIdx ≤ defaultEnd, narrowing the
-// rollup range to the largest topic boundary in [startIdx, defaultEnd]
-// when one is present. Returns defaultEnd unchanged when no manager,
-// no usable embeddings, or no significant drop is found.
-//
-// The function is best-effort: any retrieval failure causes a fall-back
-// to the default range. This keeps the rollup worker on its critical
-// path even when the embedding store is misbehaving.
+// refineRollupEnd returns an adjusted endIdx ≤ defaultEnd, narrowing the rollup range to the largest topic boundary.
 func (a *Agent) refineRollupEnd(ctx context.Context, checkpoints []TurnCheckpoint, startIdx, defaultEnd int) int {
 	if a == nil {
 		return defaultEnd
@@ -98,6 +73,19 @@ func (a *Agent) refineRollupEnd(ctx context.Context, checkpoints []TurnCheckpoin
 // checkpoint, returning the vector slice in candidate order. Returns
 // ok=false when any vector is missing or when checkpoints lack the IDs
 // we need to look them up — boundary detection is opt-in.
+//
+// ID resolution contract:
+//   - Per-turn records (Type="conversation_turn"): metadata["checkpoint_id"]
+//     holds the TurnCheckpoint.ID ("cp-<uuid>"). r.ID is a 32-char hex turn
+//     ID and is ignored.
+//   - Rollup records (Type=checkpointRollupRecordType): metadata["checkpoint_id"]
+//     holds the RollupCheckpoint.ID (same as its source checkpoint IDs).
+//     r.ID has the form "rollup:<checkpoint_id>" so we strip the prefix as a
+//     fallback key.
+//
+// This dual-key strategy lets callers pass cp.ID ("cp-...") directly for
+// both per-turn and rollup candidates without needing to know which type
+// each one is.
 func collectCheckpointVectors(store *embedding.ConversationStore, cps []TurnCheckpoint) ([][]float32, bool) {
 	if store == nil {
 		return nil, false
@@ -107,20 +95,22 @@ func collectCheckpointVectors(store *embedding.ConversationStore, cps []TurnChec
 		return nil, false
 	}
 
-	// Index by the conversation-turn / rollup ID we wrote into Metadata.
+	// Index by checkpoint ID. See ID resolution contract above.
 	byID := make(map[string][]float32, len(all))
 	for _, r := range all {
 		if r.Type != checkpointRollupRecordType && r.Type != "conversation_turn" {
 			continue
 		}
+		// Primary key: checkpoint_id in metadata (works for both per-turn and rollup).
 		var cid string
-		if v, ok := r.Metadata["checkpoint_id"].(string); ok {
+		if v, ok := r.Metadata["checkpoint_id"].(string); ok && v != "" {
 			cid = v
 		}
 		if cid == "" {
-			// Legacy per-turn records may use the turn ID as VectorRecord.ID
-			// instead of the checkpoint_id metadata field.
-			cid = r.ID
+			// Fallback: r.ID stripped of "rollup:" prefix. This handles legacy
+			// per-turn records that have no checkpoint_id metadata, and also
+			// rollup records where only r.ID was written.
+			cid = strings.TrimPrefix(r.ID, "rollup:")
 		}
 		if cid == "" || len(r.Embedding) == 0 {
 			continue

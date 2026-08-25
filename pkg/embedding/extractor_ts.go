@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/ast"
 	gotreesitter "github.com/odvcencio/gotreesitter"
+	"github.com/sprout-foundry/sprout/pkg/ast"
 )
 
 // tsTestFilePattern matches common test file naming conventions.
@@ -215,29 +215,4 @@ func langFromPath(path string) string {
 	default:
 		return "javascript"
 	}
-}
-
-// isTSFile returns true if the file extension is handled by the TS/JS extractor.
-func isTSFile(path string) bool {
-	return tsSupportedExtensions[filepath.Ext(path)]
-}
-
-// --------------------------------------------------------------------------
-// Shared helpers used by extractor_py.go
-// --------------------------------------------------------------------------
-
-// lineRange represents a start/end line pair (1-based, inclusive).
-type lineRange struct {
-	start int
-	end   int
-}
-
-// isWithinConsumedRange returns true if line falls within any consumed range.
-func isWithinConsumedRange(line int, ranges []lineRange) bool {
-	for _, r := range ranges {
-		if line >= r.start && line <= r.end {
-			return true
-		}
-	}
-	return false
 }

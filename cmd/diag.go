@@ -8,13 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
-	"github.com/spf13/cobra"
 )
 
 var diagCmd = &cobra.Command{
@@ -31,30 +32,34 @@ func runDiag() {
 	fmt.Println("=== Sprout Configuration Diagnostics ===")
 	fmt.Println()
 
-	// Check global config
-	homeDir, _ := os.UserHomeDir()
-	globalConfigPath := filepath.Join(homeDir, configuration.ConfigDirName, configuration.ConfigFileName)
-	projectConfigPath := filepath.Join(".", configuration.ConfigDirName, configuration.ConfigFileName)
+	// Check global config — report the canonical config dir, not a
+	// hard-coded ~/.sprout path.
+	globalDir, _ := configuration.GetConfigDir()
+	globalConfigPath := filepath.Join(globalDir, configuration.ConfigFileName)
+	// Resolve rather than hard-code the filename: the workspace layer is
+	// workspace.json, with a legacy config.json fallback. Reporting a fixed
+	// name would tell the user "does not exist" about a config that is in fact
+	// being loaded.
+	projectConfigPath := configuration.GetWorkspaceConfigPath(".")
 
 	fmt.Printf("Global config: %s\n", globalConfigPath)
 	if info, err := os.Stat(globalConfigPath); err == nil {
-		fmt.Printf("  ✓ EXISTS (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
+		fmt.Printf("  %sEXISTS (modified: %s)\n", console.GlyphSuccess.Prefix(), info.ModTime().Format("2006-01-02 15:04:05"))
 	} else {
-		fmt.Printf("  ✗ Does not exist\n")
+		fmt.Printf("  %sDoes not exist\n", console.GlyphError.Prefix())
 	}
 	fmt.Println()
 
 	fmt.Printf("Project-local config: %s\n", projectConfigPath)
 	if info, err := os.Stat(projectConfigPath); err == nil {
-		fmt.Printf("  ✓ EXISTS (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
+		fmt.Printf("  %sEXISTS (modified: %s)\n", console.GlyphSuccess.Prefix(), info.ModTime().Format("2006-01-02 15:04:05"))
 	} else {
-		fmt.Printf("  ✗ Does not exist\n")
+		fmt.Printf("  %sDoes not exist\n", console.GlyphError.Prefix())
 	}
 	fmt.Println()
 
 	// Check what the code will actually load
 	fmt.Printf("Loaded config path: %s\n", globalConfigPath)
-	fmt.Println("(Note: sprout currently ONLY uses global config, not project-local)")
 	fmt.Println()
 
 	providersDir, _ := configuration.GetProvidersDir()
@@ -64,12 +69,12 @@ func runDiag() {
 	// Load and show custom providers
 	config, err := configuration.Load()
 	if err != nil {
-		fmt.Printf("✗ Error loading config: %v\n", err)
+		console.GlyphError.Fprintf(os.Stdout, "Error loading config: %v", err)
 		return
 	}
 
 	if config.CustomProviders == nil || len(config.CustomProviders) == 0 {
-		fmt.Println("⚠ No custom providers configured")
+		console.GlyphWarning.Fprintln(os.Stdout, "No custom providers configured")
 	} else {
 		fmt.Printf("Custom providers found: %d\n", len(config.CustomProviders))
 		for name, provider := range config.CustomProviders {
@@ -86,7 +91,7 @@ func runDiag() {
 	fmt.Println("=================")
 	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
-		fmt.Printf("  ✗ Error loading MCP config: %v\n", err)
+		console.GlyphError.Fprintf(os.Stdout, "  Error loading MCP config: %v", err)
 	} else {
 		fmt.Printf("  Enabled: %t\n", mcpConfig.Enabled)
 		fmt.Printf("  Auto-start: %t\n", mcpConfig.AutoStart)
@@ -145,19 +150,19 @@ func runDiag() {
 	// Check python availability for runtime tooling
 	fmt.Println("Python runtime:")
 	if interp, err := pythonruntime.FindPython3Interpreter(); err != nil {
-		fmt.Printf("  ✗ Python 3 runtime not found: %v\n", err)
+		fmt.Printf("  %sPython 3 runtime not found: %v\n", console.GlyphError.Prefix(), err)
 	} else {
-		fmt.Printf("  ✓ Python 3 runtime: %s (%s)\n", interp.Path, interp.Version)
+		fmt.Printf("  %sPython 3 runtime: %s (%s)\n", console.GlyphSuccess.Prefix(), interp.Path, interp.Version)
 	}
 	fmt.Println()
 
 	fmt.Println("PDF Python runtime (requires 3.10+):")
 	if err := tools.CheckPDFPython3Available(); err != nil {
-		fmt.Printf("  ✗ PDF runtime precheck failed: %v\n", err)
+		fmt.Printf("  %sPDF runtime precheck failed: %v\n", console.GlyphError.Prefix(), err)
 	} else if interp, err := pythonruntime.FindPython3InterpreterAtLeast(10); err == nil {
-		fmt.Printf("  ✓ PDF runtime: %s (%s)\n", interp.Path, interp.Version)
+		fmt.Printf("  %sPDF runtime: %s (%s)\n", console.GlyphSuccess.Prefix(), interp.Path, interp.Version)
 	} else {
-		fmt.Println("  ✓ PDF runtime available")
+		fmt.Printf("  %sPDF runtime available\n", console.GlyphSuccess.Prefix())
 	}
 	fmt.Println()
 
@@ -165,7 +170,7 @@ func runDiag() {
 	if config.ProviderModels != nil {
 		for provider, model := range config.ProviderModels {
 			if _, isCustom := config.CustomProviders[provider]; isCustom {
-				fmt.Printf("✓ Custom provider '%s' is in provider_models (model: %s)\n", provider, model)
+				console.GlyphSuccess.Fprintf(os.Stdout, "Custom provider '%s' is in provider_models (model: %s)", provider, model)
 			}
 		}
 	}
@@ -176,11 +181,11 @@ func runDiag() {
 		for _, provider := range config.ProviderPriority {
 			if _, isCustom := config.CustomProviders[provider]; isCustom {
 				customInPriority++
-				fmt.Printf("✓ Custom provider '%s' is in provider_priority\n", provider)
+				console.GlyphSuccess.Fprintf(os.Stdout, "Custom provider '%s' is in provider_priority", provider)
 			}
 		}
 		if customInPriority == 0 && len(config.CustomProviders) > 0 {
-			fmt.Println("⚠ Custom providers exist but are NOT in provider_priority")
+			console.GlyphWarning.Fprintln(os.Stdout, "Custom providers exist but are NOT in provider_priority")
 		}
 	}
 }

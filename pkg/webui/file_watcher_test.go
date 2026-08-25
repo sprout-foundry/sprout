@@ -283,7 +283,7 @@ func TestFileWatcher_StaleWatchCleanup_RemovesOldPaths(t *testing.T) {
 
 	// Manually backdate the watch timestamp so it appears stale.
 	fw.mu.Lock()
-	fw.watches[filePath] = watchEntry{lastSeen: time.Now().Add(-(fileWatcherStaleThreshold + 1 * time.Second))}
+	fw.watches[filePath] = watchEntry{lastSeen: time.Now().Add(-(fileWatcherStaleThreshold + 1*time.Second))}
 	fw.mu.Unlock()
 
 	// Trigger cleanup — the unexported method is accessible within the same package.
@@ -365,7 +365,7 @@ func TestFileWatcher_Stop_ShutsDownCleanly(t *testing.T) {
 
 	// Verify watch() is a no-op after stop (doesn't panic)
 	fw.watch(filePath, filePath) // should not panic
-	fw.stop()          // double-stop should be a no-op, should not panic
+	fw.stop()                    // double-stop should be a no-op, should not panic
 }
 
 // TestFileWatcher_Stop_NoMoreEventsAfterStop verifies that file changes

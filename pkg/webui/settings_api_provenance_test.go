@@ -65,8 +65,8 @@ func TestExpandNestedKeys_EmptyMap(t *testing.T) {
 
 func TestExpandNestedKeys_MixedValues(t *testing.T) {
 	input := map[string]interface{}{
-		"simple":      "value",
-		"top_level":   123,
+		"simple":    "value",
+		"top_level": 123,
 		"nested": map[string]interface{}{
 			"a": 1,
 			"b": 2,
@@ -103,15 +103,18 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 	t.Setenv("HOME", isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
+	// Ensure SPROUT_CONFIG/SPROUT_CONFIG don't override XDG_CONFIG_HOME
+	// (they take priority in GetConfigDir resolution).
+	t.Setenv("SPROUT_CONFIG", "")
 
 	// Write global config if provided
 	if globalCfg != nil {
-		// getDefaultConfigDir() checks XDG_CONFIG_HOME first, then $HOME.
+		// GetConfigDir() checks XDG_CONFIG_HOME first, then $HOME.
 		// The test sets XDG_CONFIG_HOME, so the config dir resolves to
-		// $XDG_CONFIG_HOME/ledit (not $HOME/.sprout).
+		// $XDG_CONFIG_HOME/sprout.
 		var configDir string
 		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-			configDir = filepath.Join(xdg, "ledit")
+			configDir = filepath.Join(xdg, "sprout")
 		} else {
 			configDir = filepath.Join(isolatedHome, ".sprout")
 		}
@@ -180,13 +183,13 @@ func TestHandleGetProvenanceSettings_NestedKey_FromWorkspace(t *testing.T) {
 	globalCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
-			ChunkTimeoutSec:     60,
+			ChunkTimeoutSec:      60,
 		},
 	}
 	workspaceCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 45, // different
-			ChunkTimeoutSec:     90,   // different
+			ChunkTimeoutSec:      90, // different
 		},
 	}
 
@@ -253,14 +256,14 @@ func TestHandleGetProvenanceSettings_NestedSessionOverride(t *testing.T) {
 	globalCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
-			ChunkTimeoutSec:     60,
+			ChunkTimeoutSec:      60,
 		},
 	}
 	// Workspace has different overall_timeout_sec
 	workspaceCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
-			ConnectionTimeoutSec:  30,
-			ChunkTimeoutSec:       60,
+			ConnectionTimeoutSec: 30,
+			ChunkTimeoutSec:      60,
 			OverallTimeoutSec:    300,
 		},
 	}
@@ -465,6 +468,6 @@ func TestHandleGetProvenanceSettings_WorkspaceMatchesGlobal(t *testing.T) {
 	sources, ok := resp["sources"].(map[string]interface{})
 	require.True(t, ok, "sources should be present")
 
-	assert.Equal(t, "workspace", sources["reasoning_effort"],
+	assert.Equal(t, "global", sources["reasoning_effort"],
 		"identical workspace value should not claim workspace provenance")
 }

@@ -1,4 +1,9 @@
-This directory is populated by the React build ("npm run build" in webui/)
-or by "go generate ./pkg/webui/".
-When present, these files are embedded into the Go binary at compile time.
-If absent, the server falls back to reading from webui/build/ at runtime.
+This file exists so that `//go:embed static` in static_loader.go is
+satisfied on a fresh checkout (before `make build-all` / `make deploy-ui`
+populates this directory with the Vite build output).
+
+It is intentionally tracked despite `pkg/webui/static/*` being gitignored;
+the `!pkg/webui/static/placeholder` exception in .gitignore permits it.
+
+It is never served: readStaticFile looks up named assets (index.html, etc.)
+and falls back to webui/dist/ at runtime when the named asset is absent here.

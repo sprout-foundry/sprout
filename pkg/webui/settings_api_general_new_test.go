@@ -86,33 +86,12 @@ func TestApplyPartialSettings_InvalidHistoryScope(t *testing.T) {
 	}
 }
 
-func TestApplyPartialSettings_SelfReviewGateMode(t *testing.T) {
-	cfg := configuration.NewConfig()
-	patch := map[string]interface{}{"self_review_gate_mode": "code"}
-	_, err := applyPartialSettings(cfg, patch)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.SelfReviewGateMode != "code" {
-		t.Errorf("SelfReviewGateMode = %q, want %q", cfg.SelfReviewGateMode, "code")
-	}
-}
-
-func TestApplyPartialSettings_InvalidSelfReviewGateMode(t *testing.T) {
-	cfg := configuration.NewConfig()
-	patch := map[string]interface{}{"self_review_gate_mode": "invalid"}
-	_, err := applyPartialSettings(cfg, patch)
-	if err == nil {
-		t.Error("expected error for invalid self_review_gate_mode")
-	}
-}
-
 func TestApplyPartialSettings_SubagentFields(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{
-		"subagent_provider":      "anthropic",
-		"subagent_model":         "claude-3",
-		"subagent_max_parallel":  float64(5),
+		"subagent_provider":     "anthropic",
+		"subagent_model":        "claude-3",
+		"subagent_max_parallel": float64(5),
 	}
 	unknown, err := applyPartialSettings(cfg, patch)
 	if err != nil {
@@ -136,8 +115,8 @@ func TestApplyPartialSettings_ProviderModels(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{
 		"provider_models": map[string]interface{}{
-			"openai":      "gpt-4",
-			"anthropic":   "claude-3",
+			"openai":    "gpt-4",
+			"anthropic": "claude-3",
 		},
 	}
 	_, err := applyPartialSettings(cfg, patch)
@@ -275,8 +254,8 @@ func TestApplyPartialSettings_ReviewFields(t *testing.T) {
 func TestApplyPartialSettings_EnableZshDetection(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{
-		"enable_zsh_command_detection":     true,
-		"auto_execute_detected_commands":   true,
+		"enable_zsh_command_detection":   true,
+		"auto_execute_detected_commands": true,
 	}
 	_, err := applyPartialSettings(cfg, patch)
 	if err != nil {
@@ -294,10 +273,10 @@ func TestApplyPartialSettings_APITimeouts(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{
 		"api_timeouts": map[string]interface{}{
-			"connection_timeout_sec": float64(30),
+			"connection_timeout_sec":  float64(30),
 			"first_chunk_timeout_sec": float64(60),
-			"chunk_timeout_sec":      float64(120),
-			"overall_timeout_sec":    float64(600),
+			"chunk_timeout_sec":       float64(120),
+			"overall_timeout_sec":     float64(600),
 		},
 	}
 	_, err := applyPartialSettings(cfg, patch)
@@ -397,7 +376,7 @@ func TestApplyPartialSettings_MixedKnownAndUnknown(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{
 		"reasoning_effort": "high",
-		"bogus_key":       "value",
+		"bogus_key":        "value",
 	}
 	unknown, err := applyPartialSettings(cfg, patch)
 	if err != nil {
@@ -425,10 +404,10 @@ func TestApplyPartialSettings_EmptyPatch(t *testing.T) {
 func TestApplyPartialSettings_MultipleFields(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{
-		"reasoning_effort":          "high",
-		"system_prompt_text":        "my prompt",
-		"skip_prompt":               false,
-		"last_used_provider":        "openai",
+		"reasoning_effort":             "high",
+		"system_prompt_text":           "my prompt",
+		"skip_prompt":                  false,
+		"last_used_provider":           "openai",
 		"enable_zsh_command_detection": true,
 	}
 	unknown, err := applyPartialSettings(cfg, patch)

@@ -1,20 +1,25 @@
 package agent
 
 import (
+	"bytes"
+	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFormatRiskType_AllTypes verifies that formatRiskType returns a human-readable
 // description for each known risk type.
 func TestFormatRiskType_AllTypes(t *testing.T) {
 	tests := []struct {
-		riskType   string
-		expected   string
-		contains   string // substring that must appear
+		riskType string
+		expected string
+		contains string // substring that must appear
 	}{
 		{"mass_deletion", "Mass deletion", "Mass deletion"},
 		{"source_code_destruction", "Source code destruction", "Source code destruction"},
@@ -309,7 +314,7 @@ func TestStaticGateAutoApprove_UnsafeShellModeNotTriggered(t *testing.T) {
 		Reasoning:    "Test",
 	}
 
-	if a.staticGateAutoApprove(secResult) {
+	if a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should NOT trigger when only unsafe shell mode is set")
 	}
 }
@@ -327,7 +332,7 @@ func TestStaticGateAutoApprove_UnsafeModeTriggers(t *testing.T) {
 		IsHardBlock:  false,
 	}
 
-	if !a.staticGateAutoApprove(secResult) {
+	if !a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should trigger when unsafe mode is set")
 	}
 }
@@ -347,7 +352,7 @@ func TestStaticGateAutoApprove_HardBlockNeverAutoApproved(t *testing.T) {
 
 	// --unsafe (full) DOES return true from staticGateAutoApprove
 	// regardless of IsHardBlock — it's a full bypass.
-	if !a.staticGateAutoApprove(secResult) {
+	if !a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove with unsafe mode returns true even for hard blocks")
 	}
 
@@ -370,7 +375,7 @@ func TestStaticGateAutoApprove_NilAgent(t *testing.T) {
 		IsHardBlock: false,
 	}
 
-	if a.staticGateAutoApprove(secResult) {
+	if a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove with nil agent should return false")
 	}
 }
@@ -389,13 +394,109 @@ func TestStaticGateAutoApprove_ElevatedSessionNonHardBlock(t *testing.T) {
 		IsHardBlock: false,
 	}
 
-	if !a.staticGateAutoApprove(secResult) {
+	if !a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should return true for elevated session with non-hard-block")
 	}
 
 	// Hard block should still not auto-approve under elevation.
 	secResult.IsHardBlock = true
-	if a.staticGateAutoApprove(secResult) {
+	if a.staticGateAutoApprove(secResult, "", "", "") {
 		t.Error("staticGateAutoApprove should NOT auto-approve hard blocks under elevation")
+	}
+}
+
+// TestOutputRouter_WriteRoutesToPrintLineAsync verifies that the outputRouter
+// io.Writer flushes complete lines to agent.PrintLineAsync and buffers partial
+// lines until a newline arrives.
+//
+// Chrome (tool logs, system messages) must NOT route through the streaming
+// callback — that's reserved for prose via RouteStreamChunk. Chrome goes to
+// stdout with a row clear (\r\033[K) so partial prose streams don't get
+// appended to. So this test asserts the lines land on stdout (not the
+// streaming callback) and are newline-terminated in order.
+func TestOutputRouter_WriteRoutesToPrintLineAsync(t *testing.T) {
+	a := NewTestAgent()
+	a.output.SetOutputMutex(&sync.Mutex{})
+
+	// The streaming callback must NOT fire for chrome. If it does, the
+	// bug that caused prose/tool-log clobbering has regressed.
+	a.output.SetStreamingCallback(func(s string) {
+		t.Fatalf("streamingCallback must not fire for chrome: got %q", s)
+	})
+	a.output.SetStreamingEnabled(true)
+	a.output.SetOutputRouter(NewOutputRouter(a, nil))
+
+	// Capture stdout so we can assert what actually reaches the terminal.
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	wRouter := newOutputRouter(a)
+
+	// Two complete lines in one Write — both must arrive as separate flushed lines.
+	if _, err := wRouter.Write([]byte("line1\nline2\n")); err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+
+	// A partial line followed by its completion should arrive as ONE flushed
+	// line, not two. The router must buffer the partial chunk.
+	if _, err := wRouter.Write([]byte("partial")); err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+	if _, err := wRouter.Write([]byte(" line\n")); err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+
+	// Poll the pipe until all 3 lines arrive (or 2s timeout). PrintLineAsync
+	// is asynchronous — a worker drains the channel.
+	wantLines := []string{"line1\n", "line2\n", "partial line\n"}
+	var buf bytes.Buffer
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		tmp := make([]byte, 4096)
+		_ = r.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		n, _ := r.Read(tmp)
+		if n > 0 {
+			buf.Write(tmp[:n])
+		}
+		out := buf.String()
+		allFound := true
+		for _, want := range wantLines {
+			if !strings.Contains(out, want) {
+				allFound = false
+				break
+			}
+		}
+		if allFound {
+			break
+		}
+	}
+	w.Close()
+
+	out := buf.String()
+	// Each line must arrive on stdout, newline-terminated. No \r\033[K
+	// prefix — in TTY mode the externalWriteHook handles row management,
+	// and in non-TTY mode there's no cursor to clear.
+	for _, want := range wantLines {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected stdout to contain %q, got %q", want, out)
+		}
+	}
+}
+
+// TestOutputRouter_NilAgentFallback verifies that when the agent is nil,
+// Write forwards directly to os.Stdout (no panic, byte count passthrough).
+// It does not — and cannot — capture stdout from inside the test process, so
+// the assertion is limited to: no panic, return value matches input length.
+func TestOutputRouter_NilAgentFallback(t *testing.T) {
+	w := newOutputRouter(nil)
+	n, err := w.Write([]byte("hello\n"))
+	if err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+	if n != 6 {
+		t.Errorf("Write returned n=%d, want 6", n)
 	}
 }

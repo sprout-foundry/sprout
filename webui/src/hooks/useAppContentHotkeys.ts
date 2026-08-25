@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 import type { EditorBuffer } from '../types/editor';
+import type { ViewType } from '../types/app';
 
 export interface UseAppContentHotkeysParams {
   activeBufferId: string | null;
@@ -18,7 +19,7 @@ export interface UseAppContentHotkeysParams {
     isPinned?: boolean;
     metadata?: Record<string, unknown>;
   }) => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
+  onViewChange: (view: ViewType) => void;
   handlePrimaryViewChange: (view: 'chat' | 'editor' | 'git') => void;
   closeBuffer: (bufferId: string) => void;
   setCommandPaletteMode: (mode: 'all' | 'files' | 'symbols') => void;
@@ -149,13 +150,16 @@ export const useAppContentHotkeys = ({
     setIsCommandPaletteOpen,
   ]);
 
-  // Listen for open hotkeys config event
+  // Listen for open hotkeys config event — the modal listens for the
+  // legacy `sprout:open-hotkeys-config` event (Help menu / Welcome tab),
+  // and the explicit "Edit Keyboard Shortcuts (JSON)" button dispatches
+  // a dedicated event so it doesn't accidentally open the modal.
   useEffect(() => {
     const handleOpenHotkeys = () => {
       handleOpenHotkeysConfig();
     };
-    window.addEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
-    return () => window.removeEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
+    window.addEventListener('sprout:open-hotkeys-json', handleOpenHotkeys);
+    return () => window.removeEventListener('sprout:open-hotkeys-json', handleOpenHotkeys);
   }, [handleOpenHotkeysConfig]);
 
   return { handleOpenHotkeysConfig };

@@ -77,6 +77,158 @@ func TestAutomateDetachFlagDefaults(t *testing.T) {
 	}
 }
 
+// TestAppendDetachedSessionFileArg pins the launcher-side half of child-side
+// self-finalization: --detach adds --automate-session-file with the exact
+// record path, attached mode adds nothing (its launcher-side deferred
+// FinalizeSessionFile already owns the record — two writers would race).
+func TestAppendDetachedSessionFileArg(t *testing.T) {
+	defer resetAutomateGlobals()()
+	base := []string{"agent", "--workflow-config", "automate/wf.json", "--skip-prompt", "--no-web-ui"}
+
+	automateDetach = false
+	assert.Equal(t, base, appendDetachedSessionFileArg(base, "/root/.sprout", "cli-automate-aa"),
+		"attached runs must not receive --automate-session-file")
+	assert.Equal(t, base, []string{"agent", "--workflow-config", "automate/wf.json", "--skip-prompt", "--no-web-ui"},
+		"attached runs must leave the base args untouched")
+
+	automateDetach = true
+	withFlag := appendDetachedSessionFileArg(base, "/root/.sprout", "cli-automate-aa")
+	assert.Equal(t, append(append([]string{}, base...), "--automate-session-file", "/root/.sprout/automate/cli-automate-aa.json"), withFlag)
+	assert.Equal(t, "/root/.sprout/automate/cli-automate-aa.json", detachedSessionFilePath("/root/.sprout", "cli-automate-aa"),
+		"flag path must match the launcher's own PID-file location")
+}
+
+// captureAgentArgs installs a buildAgentCommandFn stand-in whose child writes
+// one argument per line to capturePath, so a test can assert on the argv the
+// launcher really handed to the agent subprocess. The temp-file + rename
+// makes the capture atomic: once capturePath exists its content is complete,
+// which matters in detach mode where the launcher returns before the child
+// has run a single instruction.
+func captureAgentArgs(t *testing.T, capturePath string) {
+	t.Helper()
+	savedFn := buildAgentCommandFn
+	buildAgentCommandFn = func(_ string, args []string) *exec.Cmd {
+		script := `printf '%s\n' "$@" > "$ARGV_CAPTURE.tmp" && mv "$ARGV_CAPTURE.tmp" "$ARGV_CAPTURE"`
+		c := exec.Command("/bin/sh", append([]string{"-c", script, "sprout-standin"}, args...)...)
+		c.Env = append(os.Environ(), "ARGV_CAPTURE="+capturePath)
+		return c
+	}
+	t.Cleanup(func() { buildAgentCommandFn = savedFn })
+}
+
+// readCapturedArgs reads back the argv written by the capture stand-in,
+// polling briefly first: a detached launcher returns before its child has
+// necessarily executed a single instruction.
+func readCapturedArgs(t *testing.T, capturePath string) []string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(capturePath); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stand-in child never wrote its argv to %s", capturePath)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	data, err := os.ReadFile(capturePath)
+	require.NoError(t, err)
+	var args []string
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if line != "" {
+			args = append(args, line)
+		}
+	}
+	return args
+}
+
+// TestAutomateRun_Detach_PassesSessionFileFlag runs the real detach launch
+// machinery against an argv-capturing stand-in child and asserts the child is
+// told which record to finalize: --automate-session-file followed by the
+// launcher's own <sproutDir>/automate/<sessionID>.json path.
+func TestAutomateRun_Detach_PassesSessionFileFlag(t *testing.T) {
+	if !fileExists("/bin/sh") {
+		t.Skip("/bin/sh not available")
+	}
+
+	defer resetAutomateGlobals()()
+	automateAssumeYes = true
+	automateDetach = true
+	t.Setenv("SPROUT_AUTOMATE_MIN_MEM_MB", "0")
+
+	capturePath := filepath.Join(t.TempDir(), "argv")
+	captureAgentArgs(t, capturePath)
+
+	sproutDir := setupTestSproutDir(t)
+	wfPath := filepath.Join(t.TempDir(), "wf.json")
+	require.NoError(t, os.WriteFile(wfPath, []byte(`{"description":"argv capture"}`), 0o600))
+
+	require.NoError(t, runWorkflowByPath(wfPath))
+
+	sessionID := findOnlySessionID(t, sproutDir)
+	wantPath := filepath.Join(sproutDir, "automate", sessionID+".json")
+	if resolved, rerr := filepath.EvalSymlinks(sproutDir); rerr == nil {
+		wantPath = filepath.Join(resolved, "automate", sessionID+".json")
+	}
+
+	args := readCapturedArgs(t, capturePath)
+	idx := -1
+	for i, a := range args {
+		if a == "--automate-session-file" {
+			idx = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, idx, 0, "detached child argv must contain --automate-session-file, got %v", args)
+	require.Len(t, args, idx+2, "flag must be followed by its value, got %v", args)
+	assert.Equal(t, wantPath, args[idx+1],
+		"--automate-session-file must point at the record the launcher itself writes")
+
+	// The stand-in child ignores the flag, so the launcher-side no-finalize
+	// contract still holds: only a real agent child writes its end state.
+	info, err := automate.ReadSessionFile(sproutDir, sessionID)
+	require.NoError(t, err)
+	require.Nil(t, info.EndedAt, "launcher must not finalize in detach mode")
+	require.Nil(t, info.ExitCode, "launcher must not record an exit code in detach mode")
+}
+
+// TestAutomateRun_Attach_DoesNotPassSessionFileFlag is the attach-mode guard
+// for the same seam: attached children get no finalization flag, and the
+// launcher's own deferred FinalizeSessionFile (post-Wait) still owns the
+// record — exactly the pre-AUTOM-4 attached behavior.
+func TestAutomateRun_Attach_DoesNotPassSessionFileFlag(t *testing.T) {
+	if !fileExists("/bin/sh") {
+		t.Skip("/bin/sh not available")
+	}
+
+	defer resetAutomateGlobals()()
+	automateAssumeYes = true
+	automateDetach = false
+	t.Setenv("SPROUT_AUTOMATE_MIN_MEM_MB", "0")
+
+	capturePath := filepath.Join(t.TempDir(), "argv")
+	captureAgentArgs(t, capturePath)
+
+	sproutDir := setupTestSproutDir(t)
+	wfPath := filepath.Join(t.TempDir(), "wf.json")
+	require.NoError(t, os.WriteFile(wfPath, []byte(`{"description":"attach argv capture"}`), 0o600))
+
+	require.NoError(t, runWorkflowByPath(wfPath), "attached run of an exiting stand-in child succeeds")
+
+	args := readCapturedArgs(t, capturePath)
+	assert.NotContains(t, args, "--automate-session-file",
+		"attached child argv must not contain --automate-session-file, got %v", args)
+
+	sessionID := findOnlySessionID(t, sproutDir)
+	info, err := automate.ReadSessionFile(sproutDir, sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, info.EndedAt, "attached launcher must still finalize via its deferred FinalizeSessionFile")
+	require.NotNil(t, info.ExitCode)
+	assert.Equal(t, 0, *info.ExitCode)
+	assert.Equal(t, "success", info.Status)
+	assert.Zero(t, info.PID)
+}
+
 // TestAutomateRun_Detach_ReapsFastExit pins the AUTOM-3 reaper: a detached
 // child that exits immediately must not linger as a zombie in a
 // long-lived launcher process. kill(pid,0) succeeds against zombies, so
@@ -152,13 +304,14 @@ func TestAutomateRun_Detach_ReapsFastExit(t *testing.T) {
 		"detached child PID %d must be reaped (no zombie): IsProcessAlive stayed true for 5s — "+
 			"the detach branch's background cmd.Wait() is missing or never ran", pid)
 
-	// End-state semantics are AUTOM-4's job, not the reaper's: the session
-	// record must still be unfinalized (launcher never finalizes in detach
-	// mode), so this pins the scope boundary too.
+	// End-state semantics are the child's job, not the reaper's: this
+	// stand-in ignores --automate-session-file, so the record must still
+	// be unfinalized — which also pins that the launcher never finalizes
+	// in detach mode (only the real agent child self-finalizes).
 	fresh, err := automate.ReadSessionFile(sproutDir, sessionID)
 	require.NoError(t, err)
-	require.Nil(t, fresh.EndedAt, "reaper must not finalize the session record (AUTOM-4 scope)")
-	require.Nil(t, fresh.ExitCode, "reaper must not record an exit code (AUTOM-4 scope)")
+	require.Nil(t, fresh.EndedAt, "reaper must not finalize the session record (child-side finalization)")
+	require.Nil(t, fresh.ExitCode, "reaper must not record an exit code (child-side finalization)")
 	require.Equal(t, "running", fresh.Status, "unfinalized record keeps its launch-time status")
 
 	// Status output must not regress: the dead unfinalized session renders

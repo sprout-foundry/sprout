@@ -1329,13 +1329,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 1048576,
         "description": "DeepSeek-V4-Pro-0813 is the official release of DeepSeek-V4-Pro, superseding the preview version, with greatly enhanced agentic capabilities and performance improvements that are especially pronounced in production environments. It is built on the DeepSeek-V4-Pro (Preview) model structure, with a DSpark speculative decoding module attached.",
         "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
         "input_cost": 1.3,
         "name": "deepseek-ai/DeepSeek-V4-Pro-0813",
         "output_cost": 2.6,
-        "cached_input_cost": 0.1,
         "tags": [
           "tools",
           "reasoning",
@@ -1349,6 +1349,21 @@
         "input_cost": 0.75,
         "name": "google/gemini-3.7-flash",
         "output_cost": 3.75,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 262144,
+        "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
+        "id": "Qwen/Qwen3.8-27B",
+        "input_cost": 0.4,
+        "name": "Qwen/Qwen3.8-27B",
+        "output_cost": 3,
         "tags": [
           "tools",
           "vision",

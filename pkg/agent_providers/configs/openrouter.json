@@ -23,6 +23,8 @@
   "message_conversion": {
     "cache_control": true,
     "convert_tool_role_to_user": false,
+    "fill_missing_array_items": true,
+    "array_items_fallback": "object",
     "include_tool_call_id": true,
     "reasoning_content_field": "reasoning_content"
   },

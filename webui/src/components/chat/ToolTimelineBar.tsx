@@ -26,8 +26,22 @@ export function ToolTimelineBar({
   useEffect(() => {
     const hasRunning = toolExecutions.some((t) => t.status === 'started' || t.status === 'running');
     if (!hasRunning) return;
-    const id = window.setInterval(() => forceTick((n) => n + 1), 250);
-    return () => window.clearInterval(id);
+    const id = window.setInterval(() => {
+      // Skip work when the tab is hidden — the bar isn't visible and the
+      // render only refreshes elapsed-time labels.
+      if (document.visibilityState !== 'visible') return;
+      forceTick((n) => n + 1);
+    }, 250);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        forceTick((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [toolExecutions]);
 
   const completedAtRef = useRef<Map<string, number>>(new Map());
@@ -50,8 +64,18 @@ export function ToolTimelineBar({
 
   useEffect(() => {
     if (completedAtRef.current.size === 0) return;
-    const tick = window.setInterval(() => setNow(Date.now()), 500);
-    return () => window.clearInterval(tick);
+    const tick = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      setNow(Date.now());
+    }, 500);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(tick);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [toolExecutions]);
 
   const visible = useMemo(() => {

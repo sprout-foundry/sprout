@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sprout-foundry/sprout/pkg/filesystem"
-	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"

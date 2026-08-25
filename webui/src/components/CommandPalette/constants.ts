@@ -81,6 +81,31 @@ export const SKIP_DIRECTORIES = new Set([
   '__pycache__',
   '.venv',
   'vendor',
+  // TCC-protected / never-a-project home folders (macOS, XDG, Windows
+  // profile, cloud-sync roots). Listing any of these raises a macOS
+  // privacy prompt, so they must never enter the crawl queue even when
+  // the user consented to a home workspace.
+  'Library',
+  'Applications',
+  'Documents',
+  'Desktop',
+  'Downloads',
+  'Pictures',
+  'Music',
+  'Movies',
+  'Public',
+  'Videos',
+  'Templates',
+  'AppData',
+  'OneDrive',
+  'Contacts',
+  'Favorites',
+  'Links',
+  'Saved Games',
+  'Searches',
+  'Dropbox',
+  'Google Drive',
+  'iCloud Drive',
 ]);
 export const MAX_DIRECTORY_DEPTH = 8;
 export const MAX_SYMBOL_RESULTS = 100;

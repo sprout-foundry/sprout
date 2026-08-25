@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -92,6 +93,19 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 	if stats["provider"] == "" && clientID != "" {
 		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
 			populateAgentStats(stats, agentInst)
+		}
+	}
+
+	// Fill provider/model from user config when no agent exists yet, so
+	// the frontend doesn't flash "no provider" — outside ws.mutex because
+	// configuration.Load does disk I/O and would extend the exclusive-lock
+	// window on every /api/stats poll.
+	if stats["provider"] == "" {
+		if cfg, cfgErr := configuration.Load(); cfgErr == nil && cfg != nil {
+			if p := strings.TrimSpace(cfg.LastUsedProvider); p != "" && p != "editor" {
+				stats["provider"] = p
+				stats["model"] = cfg.GetModelForProvider(p)
+			}
 		}
 	}
 

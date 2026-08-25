@@ -37,13 +37,34 @@ func PrecheckFileAccess(ctx context.Context, classifier FileAccessClassifier, to
 	}
 
 	mode := accessModeForTool(toolName)
-	resolved, resolveErr := filesystem.SafeResolvePath(filePath)
+
+	// Resolve against the workspace root carried on ctx — the same
+	// basis the actual read/write below uses (SafeResolvePathWithBypass).
+	// The context-free SafeResolvePath resolves against the process CWD,
+	// which can differ from the agent's workspace root; that mismatch
+	// produced false "prompt" verdicts for paths inside the workspace
+	// (e.g. a read_file of a relative path from a daemon whose CWD is
+	// elsewhere).
+	resolved, resolveErr := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 
 	if resolveErr != nil {
-		// Path is outside workspace — classify it to determine whether
-		// to prompt or deny. Use filePath as resolvedPath since the
-		// canonical target couldn't be determined.
-		verdict := classifier.ClassifyFileAccess(ctx, filePath, filePath, mode)
+		// Path is outside workspace (or does not exist) — classify it to
+		// determine whether to prompt or deny.
+		//
+		// The classifier performs prefix containment checks against the
+		// workspace root and session allowlist, both absolute paths. A
+		// bare relative filePath can never satisfy them, which turns
+		// every non-existent relative path into a spurious "prompt".
+		// Resolve the candidate absolutely (without symlink evaluation,
+		// since the target does not exist) so containment checks work
+		// for paths inside the workspace even when they do not yet
+		// exist; the final read/write still fails with the raw
+		// filesystem error if the path is absent.
+		classifyTarget, _ := filesystem.SafeResolveAbs(ctx, filePath)
+		if classifyTarget == "" {
+			classifyTarget = filePath
+		}
+		verdict := classifier.ClassifyFileAccess(ctx, filePath, classifyTarget, mode)
 
 		// SP-127 Phase 2.7: discriminated audit event for session-allowlist hits.
 		// Even when the path can't be canonically resolved (e.g. dangling symlink

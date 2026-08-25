@@ -196,6 +196,40 @@ func SafeResolvePath(filePath string) (string, error) {
 	return SafeResolvePathWithBypass(context.Background(), filePath)
 }
 
+// SafeResolveAbs resolves filePath to an absolute path against the
+// workspace root carried on ctx (falling back to the process CWD),
+// WITHOUT symlink evaluation. Use for classification of paths that may
+// not exist yet — EvalSymlinks fails on absent targets, but containment
+// checks against absolute workspace/allowlist roots still need an
+// absolute candidate. Returns ("", err) on failure; callers fall back
+// to the raw input.
+func SafeResolveAbs(ctx context.Context, filePath string) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("empty file path provided")
+	}
+	workspaceRoot := WorkspaceRootFromContext(ctx)
+	if workspaceRoot == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get current working directory: %w", err)
+		}
+		workspaceRoot = cwd
+	}
+	base, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
+	}
+	abs := filepath.Clean(filePath)
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(base, abs)
+	}
+	abs, err = filepath.Abs(abs)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	return abs, nil
+}
+
 // symlinkTimeout is the maximum time allowed for symlink resolution.
 // Network filesystems (NFS, cloud mounts) can hang indefinitely on EvalSymlinks
 // if the server is unreachable. This prevents file operations from blocking forever.

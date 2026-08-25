@@ -20,6 +20,18 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Home-workspace hardening (SP-130): same gate as handleAPIBrowse.
+	// Listing the daemon's CWD-derived home workspace raises macOS TCC
+	// prompts for protected folders and is exactly what the workspace
+	// gate exists to prevent.
+	if isHomeWorkspace(workspaceRoot) && !hasHomeWorkspaceConsent() {
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{
+			"error": "Workspace is the home directory and no consent was granted; select a workspace first",
+			"code":  "workspace_not_selected",
+		})
+		return
+	}
+
 	// Optionally skip git status computation (for performance when not needed)
 	includeGitStatus := r.URL.Query().Get("git_status") != "false"
 

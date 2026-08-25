@@ -27,9 +27,9 @@ import (
 //	{"id":"1","op":"list_sessions"}                        → ListSessionsResponse
 //	{"id":"2","op":"create_session","session_name":"x"}    → SessionInfo
 //	{"id":"3","op":"switch_session","session_id":"s1"}     → SessionInfo
-//	{"id":"4","op":"query","prompt":"..."}                 → QueryResponse (one-shot)
-//	{"id":"5","op":"stream_query","prompt":"..."}          → stream of StreamEvents (newline JSON)
-//	{"id":"6","op":"execute_tool","tool":"name","tool_args":{...}} → ToolResponse
+//	{"id":"4","op":"query","prompt":"...","work_dir":"...","options":{"persona":"coder"}}  → QueryResponse (one-shot)
+//	{"id":"5","op":"stream_query","prompt":"...","work_dir":"...","options":{...}}         → stream of StreamEvents (newline JSON)
+//	{"id":"6","op":"execute_tool","tool":"name","tool_args":{...},"work_dir":"..."} → ToolResponse
 //
 // One-shot and stream are mutually exclusive per connection op; stream_query
 // holds the connection until the run completes, emitting one event per line.
@@ -68,18 +68,30 @@ type ToolResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// QueryOptions carries the calling CLI's session-scoped flag overrides for
+// query/stream_query ops. Zero fields mean "use the daemon's own defaults".
+type QueryOptions struct {
+	Persona       string `json:"persona,omitempty"`
+	Provider      string `json:"provider,omitempty"`
+	Model         string `json:"model,omitempty"`
+	RiskProfile   string `json:"risk_profile,omitempty"`
+	MaxIterations int    `json:"max_iterations,omitempty"`
+}
+
 // AgentRequest is a single protocol request.
 type AgentRequest struct {
 	ID     string  `json:"id"`
 	Op     AgentOp `json:"op"`
 	Prompt string  `json:"prompt,omitempty"`
-	// WorkDir is the caller's working directory for query/query_stream ops.
-	// The daemon has no other way to know which project a one-shot query is
-	// for: it's a single long-lived process that may serve callers from many
-	// different directories over its lifetime. Required for those ops —
+	// WorkDir is the caller's working directory for query, stream_query,
+	// and execute_tool ops. The daemon has no other way to know which
+	// project a one-shot query or tool call is for: it's a single
+	// long-lived process that may serve callers from many different
+	// directories over its lifetime. Required for those ops —
 	// AgentService implementations must scope tool execution to WorkDir
 	// rather than the daemon process's own (fixed, arbitrary) cwd.
 	WorkDir     string         `json:"work_dir,omitempty"`
+	Options     *QueryOptions  `json:"options,omitempty"`
 	SessionName string         `json:"session_name,omitempty"`
 	SessionID   string         `json:"session_id,omitempty"`
 	Tool        string         `json:"tool,omitempty"`
@@ -108,11 +120,11 @@ type AgentService interface {
 	// response. Implementations must not let query state (conversation
 	// history, workspace root) leak between calls with different workDir —
 	// each call may be for an unrelated project.
-	Query(ctx context.Context, prompt, workDir string) (string, error)
+	Query(ctx context.Context, prompt, workDir string, opts QueryOptions) (string, error)
 	// StreamQuery is Query with streamed events instead of a single result.
-	StreamQuery(ctx context.Context, prompt, workDir string, emit func(StreamEvent) error) error
-	// ExecuteTool invokes a tool by name with args.
-	ExecuteTool(ctx context.Context, name string, args map[string]any) (*ToolResult, error)
+	StreamQuery(ctx context.Context, prompt, workDir string, opts QueryOptions, emit func(StreamEvent) error) error
+	// ExecuteTool invokes a tool by name with args, scoped to workDir.
+	ExecuteTool(ctx context.Context, name string, args map[string]any, workDir string) (*ToolResult, error)
 }
 
 // AgentServer serves the SP-136 P4 agent socket protocol.
@@ -234,6 +246,25 @@ func (s *AgentServer) handleConn(ctx context.Context, conn net.Conn) {
 // everything else dispatches and writes a single response. Each request
 // Begin/Ends the Activity tracker so the daemon idle reaper sees socket use.
 func (s *AgentServer) serveRequest(ctx context.Context, rw *bufio.ReadWriter, req AgentRequest) {
+	// A panic in query/tool execution must kill the request, not the
+	// daemon: this is a long-lived process other CLI processes and the
+	// WebUI depend on.
+	defer func() {
+		if r := recover(); r != nil {
+			s.Logger.Error("agent request panicked", slog.String("op", string(req.Op)), slog.Any("panic", r))
+			if req.Op == AgentOpStreamQuery {
+				// The streaming client parses StreamEvent lines, not
+				// AgentResponse — a terminal error event closes the stream.
+				ev := StreamEvent{Type: "error", Error: fmt.Sprintf("internal error: request panicked: %v", r)}
+				payload, _ := json.Marshal(ev)
+				_, _ = rw.Write(append(payload, '\n'))
+				_ = rw.Flush()
+				return
+			}
+			s.writeAgentError(rw, req.ID, fmt.Sprintf("internal error: request panicked: %v", r))
+		}
+	}()
+
 	if s.Activity != nil {
 		s.Activity.Begin()
 		defer s.Activity.End()
@@ -272,12 +303,22 @@ func (s *AgentServer) serveStreamQuery(ctx context.Context, rw *bufio.ReadWriter
 		return rw.Flush()
 	}
 
-	runErr := s.Service.StreamQuery(ctx, req.Prompt, req.WorkDir, emit)
+	runErr := s.Service.StreamQuery(ctx, req.Prompt, req.WorkDir, requestOptions(req), emit)
 	done := StreamEvent{Type: "done"}
 	if runErr != nil {
 		done = StreamEvent{Type: "error", Error: runErr.Error()}
 	}
 	_ = emit(done)
+}
+
+// requestOptions dereferences req.Options nil-safely: an absent options
+// block means "use the daemon's own defaults" (zero QueryOptions).
+func requestOptions(req AgentRequest) QueryOptions {
+	var opts QueryOptions
+	if req.Options != nil {
+		opts = *req.Options
+	}
+	return opts
 }
 
 func (s *AgentServer) dispatch(ctx context.Context, req AgentRequest) AgentResponse {
@@ -309,7 +350,7 @@ func (s *AgentServer) dispatch(ctx context.Context, req AgentRequest) AgentRespo
 		resp.Session = sess
 
 	case AgentOpQuery:
-		result, err := s.Service.Query(ctx, req.Prompt, req.WorkDir)
+		result, err := s.Service.Query(ctx, req.Prompt, req.WorkDir, requestOptions(req))
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
@@ -317,7 +358,7 @@ func (s *AgentServer) dispatch(ctx context.Context, req AgentRequest) AgentRespo
 		resp.Result = result
 
 	case AgentOpExecuteTool:
-		tool, err := s.Service.ExecuteTool(ctx, req.Tool, req.ToolArgs)
+		tool, err := s.Service.ExecuteTool(ctx, req.Tool, req.ToolArgs, req.WorkDir)
 		if err != nil {
 			resp.Error = err.Error()
 			return resp

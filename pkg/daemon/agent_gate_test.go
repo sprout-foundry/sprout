@@ -19,10 +19,12 @@ import (
 // emulates the daemon owning agent state: sessions, one-shot queries,
 // streaming, and tool dispatch.
 type stubAgentService struct {
-	sessions []SessionInfo
-	active   string
-	queries  int64
-	tools    int64
+	sessions    []SessionInfo
+	active      string
+	queries     int64
+	tools       int64
+	lastWorkDir atomic.Value // string
+	lastOpts    atomic.Value // QueryOptions
 }
 
 func newStubAgentService() *stubAgentService {
@@ -53,12 +55,13 @@ func (s *stubAgentService) SwitchSession(_ context.Context, id string) (*Session
 	return nil, fmt.Errorf("session %q not found", id)
 }
 
-func (s *stubAgentService) Query(_ context.Context, prompt, _ string) (string, error) {
+func (s *stubAgentService) Query(_ context.Context, prompt, _ string, opts QueryOptions) (string, error) {
 	atomic.AddInt64(&s.queries, 1)
+	s.lastOpts.Store(opts)
 	return "daemon answer: " + prompt, nil
 }
 
-func (s *stubAgentService) StreamQuery(_ context.Context, prompt, _ string, emit func(StreamEvent) error) error {
+func (s *stubAgentService) StreamQuery(_ context.Context, prompt, _ string, _ QueryOptions, emit func(StreamEvent) error) error {
 	for _, chunk := range []string{"a", "b", "c"} {
 		if err := emit(StreamEvent{Type: "delta", Content: chunk}); err != nil {
 			return err
@@ -68,8 +71,15 @@ func (s *stubAgentService) StreamQuery(_ context.Context, prompt, _ string, emit
 	return nil
 }
 
-func (s *stubAgentService) ExecuteTool(_ context.Context, name string, args map[string]any) (*ToolResult, error) {
+func (s *stubAgentService) ExecuteTool(_ context.Context, name string, args map[string]any, workDir string) (*ToolResult, error) {
+	if workDir == "" {
+		// Mirror SharedAgentService: an execute_tool without work_dir is
+		// rejected server-side and must surface to the client as an
+		// AgentResponse.Error, not a dropped connection.
+		return nil, fmt.Errorf("daemon: execute_tool missing work_dir — refusing to guess a project directory")
+	}
 	atomic.AddInt64(&s.tools, 1)
+	s.lastWorkDir.Store(workDir)
 	return &ToolResult{Content: fmt.Sprintf("tool %s ran with %d args", name, len(args))}, nil
 }
 
@@ -110,13 +120,15 @@ func TestAgentSocketGate(t *testing.T) {
 	require.Error(t, err, "unknown session must error")
 
 	// --- One-shot query (the daemon owns the agent; CLI is presentation) ---
-	result, err := client.Query(ctx, "hello daemon", "/tmp/project")
+	result, err := client.Query(ctx, "hello daemon", "/tmp/project", QueryOptions{Persona: "coder"})
 	require.NoError(t, err)
 	assert.Equal(t, "daemon answer: hello daemon", result)
+	gotOpts, _ := svc.lastOpts.Load().(QueryOptions)
+	assert.Equal(t, "coder", gotOpts.Persona, "the daemon must receive the caller's persona flag")
 
 	// --- Streaming ---
 	var deltas []string
-	err = client.StreamQuery(ctx, "stream me", "/tmp/project", func(ev StreamEvent) error {
+	err = client.StreamQuery(ctx, "stream me", "/tmp/project", QueryOptions{}, func(ev StreamEvent) error {
 		if ev.Type == "delta" {
 			deltas = append(deltas, ev.Content)
 		}
@@ -126,14 +138,22 @@ func TestAgentSocketGate(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c"}, deltas, "stream delivered all chunks in order")
 
 	// --- Tool execution ---
-	tool, err := client.ExecuteTool(ctx, "run_bash", map[string]any{"command": "echo hi"})
+	tool, err := client.ExecuteTool(ctx, "run_bash", map[string]any{"command": "echo hi"}, "/tmp/project")
 	require.NoError(t, err)
 	require.NotNil(t, tool)
 	assert.Contains(t, tool.Content, "run_bash")
+	gotWorkDir, _ := svc.lastWorkDir.Load().(string)
+	assert.Equal(t, "/tmp/project", gotWorkDir, "the daemon must receive the caller's working directory for tool calls")
 
 	// The daemon (stub) served all three query-ish ops and one tool op.
 	assert.Equal(t, int64(2), atomic.LoadInt64(&svc.queries), "one-shot + stream each count as a query")
 	assert.Equal(t, int64(1), atomic.LoadInt64(&svc.tools), "exactly one tool execution")
+
+	// --- Tool execution without work_dir: server-side error must reach the
+	// client as an AgentResponse.Error, not a dropped connection. ---
+	_, err = client.ExecuteTool(ctx, "run_bash", map[string]any{"command": "echo hi"}, "")
+	require.Error(t, err, "execute_tool without work_dir must error")
+	assert.Contains(t, err.Error(), "work_dir")
 }
 
 // TestAgentClient_DialFailure verifies the thin client surfaces a clear
@@ -158,7 +178,7 @@ func TestAgentServer_ServiceErrorPropagation(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Close()
 
-	_, err = client.Query(ctx, "boom", "/tmp/project")
+	_, err = client.Query(ctx, "boom", "/tmp/project", QueryOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "injected failure")
 }
@@ -174,12 +194,12 @@ func (f *failingAgentService) CreateSession(context.Context, string) (*SessionIn
 func (f *failingAgentService) SwitchSession(context.Context, string) (*SessionInfo, error) {
 	return nil, errors.New("injected failure")
 }
-func (f *failingAgentService) Query(context.Context, string, string) (string, error) {
+func (f *failingAgentService) Query(context.Context, string, string, QueryOptions) (string, error) {
 	return "", errors.New("injected failure")
 }
-func (f *failingAgentService) StreamQuery(context.Context, string, string, func(StreamEvent) error) error {
+func (f *failingAgentService) StreamQuery(context.Context, string, string, QueryOptions, func(StreamEvent) error) error {
 	return errors.New("injected failure")
 }
-func (f *failingAgentService) ExecuteTool(context.Context, string, map[string]any) (*ToolResult, error) {
+func (f *failingAgentService) ExecuteTool(context.Context, string, map[string]any, string) (*ToolResult, error) {
 	return nil, errors.New("injected failure")
 }

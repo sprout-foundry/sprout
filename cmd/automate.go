@@ -31,6 +31,10 @@ func init() {
 	automateCmd.AddCommand(automateStopCmd)
 	automateCmd.AddCommand(automateLogsCmd)
 
+	automateStatusCmd.Flags().StringVar(&automateSessionDir, "dir", "", "Path to the .sprout session root (default: nearest .sprout/automate/ found walking up from the current directory)")
+	automateStopCmd.Flags().StringVar(&automateSessionDir, "dir", "", "Path to the .sprout session root (default: nearest .sprout/automate/ found walking up from the current directory)")
+	automateLogsCmd.Flags().StringVar(&automateSessionDir, "dir", "", "Path to the .sprout session root (default: nearest .sprout/automate/ found walking up from the current directory)")
+
 	automateCmd.PersistentFlags().StringVar(&automateDir, "dir", "", "Workflow directory (default: ./automate)")
 	automateCmd.PersistentFlags().BoolVarP(&automateAssumeYes, "yes", "y", false, "Skip the confirmation prompt before starting the workflow")
 	automateCmd.PersistentFlags().BoolVar(&automateDetach, "detach", false, "Run the workflow in the background: log output to .sprout/automate/logs/<session>.log and return immediately instead of streaming to the terminal")
@@ -56,11 +60,10 @@ To create workflows, activate the workflow-automation skill in an agent session
 or see: sprout skill list`,
 	Args: cobra.NoArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		cwd, err := os.Getwd()
+		sproutDir, err := automateSessionRoot()
 		if err != nil {
-			return fmt.Errorf("get working directory: %w", err)
+			return err
 		}
-		sproutDir := filepath.Join(cwd, ".sprout")
 		removed, err := automate.SweepStaleSessions(sproutDir)
 		if err != nil {
 			// Log warning but don't fail
@@ -105,12 +108,15 @@ Examples:
 }
 
 var automateStatusCmd = &cobra.Command{
-	Use:   "status [--all] [--json]",
+	Use:   "status [--all] [--json] [--dir PATH]",
 	Short: "Show running automate sessions",
 	Long: `Show currently running automate workflow sessions.
 
 By default only shows running (alive) sessions. Use --all to include
-exited sessions as well. Use --json for machine-readable output.`,
+exited sessions as well. Use --json for machine-readable output.
+
+Sessions are found by walking up from the current directory to the nearest
+.sprout/automate/ (then the central registry); --dir overrides that root.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAutomateStatus()
@@ -118,13 +124,16 @@ exited sessions as well. Use --json for machine-readable output.`,
 }
 
 var automateStopCmd = &cobra.Command{
-	Use:   "stop <session_id> [--all]",
+	Use:   "stop <session_id> [--all] [--dir PATH]",
 	Short: "Stop a running automate session",
 	Long: `Stop a running automate workflow session by session ID.
 
 The process is stopped via signal escalation: SIGINT, then SIGTERM,
 then SIGKILL if the process persists. The PID file is removed after
 the process is confirmed dead.
+
+Sessions are found by walking up from the current directory to the nearest
+.sprout/automate/ (then the central registry); --dir overrides that root.
 
 Use --all to stop all running sessions.`,
 	Args: cobra.MaximumNArgs(1),
@@ -140,12 +149,15 @@ Use --all to stop all running sessions.`,
 }
 
 var automateLogsCmd = &cobra.Command{
-	Use:   "logs <session_id> [-f] [-n N]",
+	Use:   "logs <session_id> [-f] [-n N] [--dir PATH]",
 	Short: "View output from an automate session",
 	Long: `View the captured output from an automate workflow session.
 
 Use -f to follow the output in real time (stops when the process exits).
 Use -n N to show only the last N lines.
+
+Sessions are found by walking up from the current directory to the nearest
+.sprout/automate/ (then the central registry); --dir overrides that root.
 
 Note: CLI sessions that pipe to terminal do not have captured output files.`,
 	Args: cobra.ExactArgs(1),

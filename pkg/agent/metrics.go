@@ -34,6 +34,15 @@ func (a *Agent) GetMaxContextTokens() int {
 	return a.getModelContextLimit()
 }
 
+// GetMaxContextTokensCached returns the state-cached context limit.
+// Unlike GetMaxContextTokens it never resolves the limit from the
+// provider, so it is safe to call from hot poll paths (WebUI /api/stats)
+// that run under the server's exclusive mutex — GetModelContextLimit on
+// local providers can block for seconds on a network fetch.
+func (a *Agent) GetMaxContextTokensCached() int {
+	return a.state.GetMaxContextTokens()
+}
+
 // GetEffectiveContextCap returns the user-facing effective context cap — min of native window and user's MaxContextTokens setting.
 func (a *Agent) GetEffectiveContextCap() int {
 	if cap := a.effectiveCapSnapshot(); cap > 0 {

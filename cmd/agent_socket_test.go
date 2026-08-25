@@ -22,6 +22,7 @@ import (
 type stubAgentForCmd struct {
 	queries     int64
 	lastWorkDir atomic.Value // string
+	lastOpts    atomic.Value // daemon.QueryOptions
 }
 
 func (s *stubAgentForCmd) ListSessions(context.Context) ([]daemon.SessionInfo, error) {
@@ -36,18 +37,20 @@ func (s *stubAgentForCmd) SwitchSession(context.Context, string) (*daemon.Sessio
 	return &daemon.SessionInfo{ID: "s1", Name: "default", Active: true}, nil
 }
 
-func (s *stubAgentForCmd) Query(_ context.Context, prompt, workDir string) (string, error) {
+func (s *stubAgentForCmd) Query(_ context.Context, prompt, workDir string, opts daemon.QueryOptions) (string, error) {
 	atomic.AddInt64(&s.queries, 1)
 	s.lastWorkDir.Store(workDir)
+	s.lastOpts.Store(opts)
 	return "stub answer: " + prompt, nil
 }
 
-func (s *stubAgentForCmd) StreamQuery(_ context.Context, _, workDir string, _ func(daemon.StreamEvent) error) error {
+func (s *stubAgentForCmd) StreamQuery(_ context.Context, _, workDir string, _ daemon.QueryOptions, _ func(daemon.StreamEvent) error) error {
 	s.lastWorkDir.Store(workDir)
 	return nil
 }
 
-func (s *stubAgentForCmd) ExecuteTool(context.Context, string, map[string]any) (*daemon.ToolResult, error) {
+func (s *stubAgentForCmd) ExecuteTool(_ context.Context, name string, args map[string]any, workDir string) (*daemon.ToolResult, error) {
+	s.lastWorkDir.Store(workDir)
 	return &daemon.ToolResult{Content: "ok"}, nil
 }
 
@@ -106,9 +109,9 @@ func TestNewEphemeralDaemonAgent_IsolatedPerCall(t *testing.T) {
 	dirA := t.TempDir()
 	dirB := t.TempDir()
 
-	a, err := newEphemeralDaemonAgent(dirA)
+	a, err := newEphemeralDaemonAgent(dirA, daemon.QueryOptions{})
 	require.NoError(t, err)
-	b, err := newEphemeralDaemonAgent(dirB)
+	b, err := newEphemeralDaemonAgent(dirB, daemon.QueryOptions{})
 	require.NoError(t, err)
 
 	assert.NotSame(t, a, b, "each call must get its own Agent, not a shared one")
@@ -125,7 +128,7 @@ func TestNewEphemeralDaemonAgent_IsolatedPerCall(t *testing.T) {
 // guess a project directory rather than silently defaulting to its own —
 // the direct fix for the wrong-project bug.
 func TestNewEphemeralDaemonAgent_RequiresWorkDir(t *testing.T) {
-	_, err := newEphemeralDaemonAgent("")
+	_, err := newEphemeralDaemonAgent("", daemon.QueryOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "work_dir")
 }
@@ -135,7 +138,25 @@ func TestNewEphemeralDaemonAgent_RequiresWorkDir(t *testing.T) {
 // closing the loop on the fix: wire protocol → dispatch → per-call ephemeral
 // agent → ProcessQuery, all together, not just each piece in isolation.
 func TestSharedAgentService_Query_EndToEnd(t *testing.T) {
-	svc := NewSharedAgentService(nil) // Query/StreamQuery don't use the wrapped agent
+	// Wrap (not replace) the real constructor so the real layered-config
+	// path runs, while capturing the ephemeral agent to await its async
+	// shutdown: Shutdown flushes session files into the workspace temp dir,
+	// and t.TempDir's RemoveAll races those writes if the test returns first.
+	var mu sync.Mutex
+	var created []*agent.Agent
+	origFn := newEphemeralDaemonAgentFn
+	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
+	newEphemeralDaemonAgentFn = func(workDir string, opts daemon.QueryOptions) (*agent.Agent, error) {
+		a, err := origFn(workDir, opts)
+		if a != nil {
+			mu.Lock()
+			created = append(created, a)
+			mu.Unlock()
+		}
+		return a, err
+	}
+
+	svc := NewSharedAgentService(nil)
 	sockPath := startCmdAgentServer(t, svc)
 	t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", sockPath)
 	t.Setenv("SPROUT_DAEMON_AGENT", "1")
@@ -151,6 +172,16 @@ func TestSharedAgentService_Query_EndToEnd(t *testing.T) {
 	handled, err := tryDaemonOneShot(ctx, "say hello", false)
 	require.NoError(t, err)
 	assert.True(t, handled, "query must be served by the real SharedAgentService")
+
+	mu.Lock()
+	agents := append([]*agent.Agent(nil), created...)
+	mu.Unlock()
+	require.NotEmpty(t, agents, "the query must have created an ephemeral agent")
+	for _, a := range agents {
+		require.Eventually(t, func() bool { return a.IsShutdown() },
+			10*time.Second, 20*time.Millisecond,
+			"ephemeral agent must finish shutting down before the workspace temp dir is removed")
+	}
 }
 
 // TestTryDaemonOneShot_SendsCallerWorkDir is the regression test for the
@@ -228,7 +259,7 @@ func TestSharedAgentService_ReleasesEphemeralAgents(t *testing.T) {
 
 	var mu sync.Mutex
 	var created []*agent.Agent
-	newEphemeralDaemonAgentFn = func(workDir string) (*agent.Agent, error) {
+	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
 		a := newTestAgent(t)
 		a.SetWorkspaceRoot(workDir)
 		mu.Lock()
@@ -238,7 +269,7 @@ func TestSharedAgentService_ReleasesEphemeralAgents(t *testing.T) {
 	}
 
 	svc := NewSharedAgentService(nil) // Query/StreamQuery don't use the wrapped agent
-	_, err := svc.Query(context.Background(), "hi", t.TempDir())
+	_, err := svc.Query(context.Background(), "hi", t.TempDir(), daemon.QueryOptions{})
 	require.NoError(t, err)
 
 	mu.Lock()
@@ -265,7 +296,7 @@ func TestSharedAgentService_WaitForTeardown_BlocksUntilShutdown(t *testing.T) {
 
 	var mu sync.Mutex
 	var created []*agent.Agent
-	newEphemeralDaemonAgentFn = func(workDir string) (*agent.Agent, error) {
+	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
 		a := newTestAgent(t)
 		a.SetWorkspaceRoot(workDir)
 		mu.Lock()
@@ -275,7 +306,7 @@ func TestSharedAgentService_WaitForTeardown_BlocksUntilShutdown(t *testing.T) {
 	}
 
 	svc := NewSharedAgentService(nil) // Query/StreamQuery don't use the wrapped agent
-	_, err := svc.Query(context.Background(), "hi", t.TempDir())
+	_, err := svc.Query(context.Background(), "hi", t.TempDir(), daemon.QueryOptions{})
 	require.NoError(t, err)
 
 	done := make(chan struct{})
@@ -326,7 +357,7 @@ func TestSharedAgentService_QueryRejectedAfterTeardownBegins(t *testing.T) {
 	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
 
 	var seamCalls atomic.Int64
-	newEphemeralDaemonAgentFn = func(workDir string) (*agent.Agent, error) {
+	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
 		seamCalls.Add(1)
 		return nil, nil
 	}
@@ -334,7 +365,7 @@ func TestSharedAgentService_QueryRejectedAfterTeardownBegins(t *testing.T) {
 	svc := &SharedAgentService{} // zero value is fine — Query only needs the tracker
 	svc.WaitForTeardown()        // nothing tracked → returns fast
 
-	_, err := svc.Query(context.Background(), "x", "/tmp")
+	_, err := svc.Query(context.Background(), "x", "/tmp", daemon.QueryOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "shutting down")
 	assert.Zero(t, seamCalls.Load(), "the query must be rejected before the agent constructor is invoked")
@@ -386,4 +417,104 @@ func TestAgentServer_OnClose_Invoked(t *testing.T) {
 
 	require.NoError(t, srv.Close(), "a second Close must be a no-op")
 	assert.Equal(t, int64(1), calls.Load(), "OnClose must be invoked exactly once")
+}
+
+// setEphemeralAgentSeam overrides newEphemeralDaemonAgentFn to build a
+// hermetic test agent per workDir, recording each created agent in *created
+// (pass nil to skip recording). Restored via t.Cleanup.
+func setEphemeralAgentSeam(t *testing.T, created *[]*agent.Agent) {
+	t.Helper()
+	origFn := newEphemeralDaemonAgentFn
+	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
+	var mu sync.Mutex
+	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
+		a := newTestAgent(t)
+		a.SetWorkspaceRoot(workDir)
+		if created != nil {
+			mu.Lock()
+			*created = append(*created, a)
+			mu.Unlock()
+		}
+		return a, nil
+	}
+}
+
+// TestSharedAgentService_ExecuteTool_EndToEnd wires the real SharedAgentService
+// behind a real socket and runs a real tool call through it — closing the loop
+// on ExecuteTool: wire protocol → dispatch → per-call ephemeral agent →
+// ExecuteToolByName → seed registry → tool handler, all together.
+func TestSharedAgentService_ExecuteTool_EndToEnd(t *testing.T) {
+	setEphemeralAgentSeam(t, nil)
+
+	svc := NewSharedAgentService(nil)
+	sockPath := startCmdAgentServer(t, svc)
+
+	workDir := t.TempDir()
+	filePath := filepath.Join(workDir, "hello.txt")
+	require.NoError(t, os.WriteFile(filePath, []byte("hello from daemon tool"), 0o644))
+
+	client, err := daemon.NewAgentClient(sockPath)
+	require.NoError(t, err)
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := client.ExecuteTool(ctx, "read_file", map[string]any{"path": filePath}, workDir)
+	require.NoError(t, err, "RPC must succeed")
+	require.NotNil(t, result)
+	assert.Empty(t, result.Error, "tool must not have returned an error")
+	assert.Contains(t, result.Content, "hello from daemon tool", "read_file must return file contents")
+}
+
+// TestSharedAgentService_ExecuteTool_RejectsEmptyWorkDir verifies ExecuteTool
+// refuses a call without a work_dir before the agent constructor is invoked.
+func TestSharedAgentService_ExecuteTool_RejectsEmptyWorkDir(t *testing.T) {
+	var seamCalls atomic.Int64
+	origFn := newEphemeralDaemonAgentFn
+	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
+	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
+		seamCalls.Add(1)
+		return nil, nil
+	}
+
+	svc := NewSharedAgentService(nil)
+	_, err := svc.ExecuteTool(context.Background(), "read_file", map[string]any{"path": "x"}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "work_dir")
+	assert.Zero(t, seamCalls.Load(), "the agent constructor must not be invoked for empty work_dir")
+}
+
+// TestSharedAgentService_ExecuteTool_UnknownTool verifies that an unknown
+// tool name returns a ToolResult with a non-empty Error and nil RPC error.
+func TestSharedAgentService_ExecuteTool_UnknownTool(t *testing.T) {
+	setEphemeralAgentSeam(t, nil)
+
+	svc := NewSharedAgentService(nil)
+	result, err := svc.ExecuteTool(context.Background(), "no_such_tool", map[string]any{}, t.TempDir())
+	require.NoError(t, err, "RPC must succeed even when the tool is unknown")
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Error, "unknown tool must return an error in ToolResult.Error")
+}
+
+// TestSharedAgentService_ExecuteTool_ReleasesEphemeralAgents verifies that
+// an ephemeral agent created by ExecuteTool is shut down after the call
+// returns (same pattern as TestSharedAgentService_ReleasesEphemeralAgents).
+func TestSharedAgentService_ExecuteTool_ReleasesEphemeralAgents(t *testing.T) {
+	var created []*agent.Agent
+	setEphemeralAgentSeam(t, &created)
+
+	workDir := t.TempDir()
+	filePath := filepath.Join(workDir, "f.txt")
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o644))
+
+	svc := NewSharedAgentService(nil)
+	_, err := svc.ExecuteTool(context.Background(), "read_file", map[string]any{"path": filePath}, workDir)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, created, "the tool call must have created an ephemeral agent")
+	for _, a := range created {
+		require.Eventually(t, func() bool { return a.IsShutdown() },
+			10*time.Second, 20*time.Millisecond,
+			"ephemeral agent must be shut down after the tool call returns")
+	}
 }

@@ -2,58 +2,30 @@ package embedding
 
 import "testing"
 
-// planChunks mirrors the chunking arithmetic in embedBatchInternal so the
-// bound can be asserted without a live ONNX session.
-func planChunks(lens []int) (rows []int, seqs []int) {
-	work := make([]int, 0, len(lens))
-	for i, n := range lens {
-		if n > 0 {
-			work = append(work, i)
-		}
-	}
-	for s := 0; s < len(work); {
-		maxLen, e := 0, s
-		for e < len(work) && e-s < defaultBatchChunkSize {
-			candLen := maxLen
-			if n := lens[work[e]]; n > candLen {
-				candLen = n
-			}
-			r := int64(e - s + 1)
-			if r > 1 && r*int64(candLen)*int64(candLen) > defaultBatchAttentionBudget {
-				break
-			}
-			maxLen = candLen
-			e++
-		}
-		rows = append(rows, e-s)
-		seqs = append(seqs, maxLen)
-		s = e
-	}
-	return rows, seqs
-}
-
 // The regression: one 2048-token unit in a 32-row chunk forced all 32 rows to
-// pad to 2048, so attention cost hit 32 × 2048² and a routine index build held
-// ~18 GB in a single ORT call.
+// pad to 2048, so attention cost hit 32 × 2048² — the ONNX backend held
+// ~18 GB in a single call, and the MLX backend pooled those transient score
+// tensors indefinitely in its freed-buffer cache (observed as a multi-GB
+// daemon footprint with a flat Go heap).
 func TestChunkingBoundsAttentionCost(t *testing.T) {
-	lens := make([]int, 32)
+	lens := make([]int32, 32)
 	for i := range lens {
 		lens[i] = 64
 	}
 	lens[10] = 2048 // one long unit poisons the whole chunk under the old scheme
 
-	rows, seqs := planChunks(lens)
-	for i := range rows {
-		cost := int64(rows[i]) * int64(seqs[i]) * int64(seqs[i])
-		if rows[i] > 1 && cost > defaultBatchAttentionBudget {
+	chunks := planInferenceChunks(lens)
+	for i, c := range chunks {
+		cost := int64(len(c.Rows)) * int64(c.SeqLen) * int64(c.SeqLen)
+		if len(c.Rows) > 1 && cost > defaultBatchAttentionBudget {
 			t.Errorf("chunk %d: rows=%d seq=%d cost=%d exceeds budget %d",
-				i, rows[i], seqs[i], cost, defaultBatchAttentionBudget)
+				i, len(c.Rows), c.SeqLen, cost, defaultBatchAttentionBudget)
 		}
 	}
 	worst := int64(0)
-	for i := range rows {
-		if c := int64(rows[i]) * int64(seqs[i]) * int64(seqs[i]); c > worst {
-			worst = c
+	for _, c := range chunks {
+		if cost := int64(len(c.Rows)) * int64(c.SeqLen) * int64(c.SeqLen); cost > worst {
+			worst = cost
 		}
 	}
 	old := int64(32) * 2048 * 2048
@@ -67,30 +39,27 @@ func TestChunkingBoundsAttentionCost(t *testing.T) {
 // Short units must still batch at the full row cap — the budget must not
 // pessimize the common case.
 func TestChunkingKeepsShortUnitsBatched(t *testing.T) {
-	lens := make([]int, 128)
+	lens := make([]int32, 128)
 	for i := range lens {
 		lens[i] = 256
 	}
-	rows, _ := planChunks(lens)
-	for i, r := range rows {
-		if r != defaultBatchChunkSize {
-			t.Errorf("chunk %d: rows=%d, want full %d for short units", i, r, defaultBatchChunkSize)
+	for i, c := range planInferenceChunks(lens) {
+		if len(c.Rows) != defaultBatchChunkSize {
+			t.Errorf("chunk %d: rows=%d, want full %d for short units", i, len(c.Rows), defaultBatchChunkSize)
 		}
 	}
 }
 
 // A single unit longer than the budget must still be admitted, not skipped.
 func TestChunkingAlwaysAdmitsOneRow(t *testing.T) {
-	rows, seqs := planChunks([]int{2048, 2048, 2048})
-	for i, r := range rows {
-		if r < 1 {
-			t.Fatalf("chunk %d admitted %d rows", i, r)
-		}
-		t.Logf("chunk %d: rows=%d seq=%d", i, r, seqs[i])
-	}
+	chunks := planInferenceChunks([]int32{2048, 2048, 2048})
 	total := 0
-	for _, r := range rows {
-		total += r
+	for i, c := range chunks {
+		if len(c.Rows) < 1 {
+			t.Fatalf("chunk %d admitted %d rows", i, len(c.Rows))
+		}
+		t.Logf("chunk %d: rows=%d seq=%d", i, len(c.Rows), c.SeqLen)
+		total += len(c.Rows)
 	}
 	if total != 3 {
 		t.Errorf("processed %d rows, want all 3", total)
@@ -99,12 +68,31 @@ func TestChunkingAlwaysAdmitsOneRow(t *testing.T) {
 
 // Empty inputs must not consume a batch slot.
 func TestChunkingSkipsEmptyRows(t *testing.T) {
-	rows, _ := planChunks([]int{0, 0, 128, 0, 128})
+	chunks := planInferenceChunks([]int32{0, 0, 128, 0, 128})
 	total := 0
-	for _, r := range rows {
-		total += r
+	for _, c := range chunks {
+		total += len(c.Rows)
 	}
 	if total != 2 {
 		t.Errorf("processed %d rows, want 2 non-empty", total)
+	}
+}
+
+// Row ORDER is preserved — providers write results back by original index,
+// so the planner must never reorder rows across chunks.
+func TestChunkingPreservesRowOrder(t *testing.T) {
+	lens := []int32{10, 2048, 5, 2048, 7, 300, 300}
+	var got []int
+	for _, c := range planInferenceChunks(lens) {
+		got = append(got, c.Rows...)
+	}
+	want := []int{0, 1, 2, 3, 4, 5, 6}
+	if len(got) != len(want) {
+		t.Fatalf("planner dropped rows: got %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("row order changed: got %v want %v", got, want)
+		}
 	}
 }

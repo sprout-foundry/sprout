@@ -113,45 +113,39 @@ func (p *JinaONNXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []stri
 		return nil, nil
 	}
 
-	// Tokenize all texts.
+	// Pre-tokenize all texts so the chunk planner (batch_planner.go) can
+	// size each inference call by the longest row IN that call. Padding
+	// every chunk to the batch-wide max re-priced all rows of every chunk
+	// to the longest single unit — attention cost is rows × seqLen².
 	seqs := make([][]int32, len(texts))
-	maxLen := 0
+	lens := make([]int32, len(texts))
+	results := make([][]float32, len(texts))
 	for i, text := range texts {
 		seqs[i] = p.tokenize(text)
-		if len(seqs[i]) > maxLen {
-			maxLen = len(seqs[i])
-		}
-	}
-	if maxLen == 0 {
-		results := make([][]float32, len(texts))
-		for i := range results {
+		lens[i] = int32(len(seqs[i]))
+		if len(seqs[i]) == 0 {
+			// Empty input → zero vector, no inference call.
 			results[i] = make([]float32, p.dims)
 		}
-		return results, nil
-	}
-	if maxLen > p.maxSeqLen {
-		maxLen = p.maxSeqLen
 	}
 
-	results := make([][]float32, len(texts))
-
-	// Process in chunks of defaultBatchChunkSize, matching the Gemma provider's
-	// attention-budget approach: batch rows × seqLen² is the memory cost.
-	chunkSize := defaultBatchChunkSize
-	for start := 0; start < len(texts); start += chunkSize {
+	for _, chunk := range planInferenceChunks(lens) {
 		if err := ctx.Err(); err != nil {
 			return results, err
 		}
-		end := start + chunkSize
-		if end > len(texts) {
-			end = len(texts)
+
+		rows := make([][]int32, len(chunk.Rows))
+		for bi, idx := range chunk.Rows {
+			rows[bi] = seqs[idx]
 		}
 
-		batchVecs, err := p.runInferenceBatch(ctx, seqs[start:end], maxLen)
+		batchVecs, err := p.runInferenceBatch(ctx, rows, chunk.SeqLen)
 		if err != nil {
-			return results, fmt.Errorf("jina embedding: batch [%d:%d]: %w", start, end, err)
+			return results, fmt.Errorf("jina embedding: batch [%d rows, seq %d]: %w", len(rows), chunk.SeqLen, err)
 		}
-		copy(results[start:end], batchVecs)
+		for bi, idx := range chunk.Rows {
+			results[idx] = batchVecs[bi]
+		}
 	}
 
 	return results, nil

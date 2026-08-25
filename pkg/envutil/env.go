@@ -58,17 +58,26 @@ func homeDir() (string, error) {
 // an XDG variable, and a home-relative default. The dir is created if
 // missing.
 func resolveRoot(envVar, xdgVar, homeRelative string, mode os.FileMode) (string, error) {
+	p, err := resolveRootPath(envVar, xdgVar, homeRelative)
+	if err != nil {
+		return "", err
+	}
+	return ensureDir(p, mode)
+}
+
+// resolveRootPath returns the resolved category root without creating it.
+func resolveRootPath(envVar, xdgVar, homeRelative string) (string, error) {
 	if v := strings.TrimSpace(os.Getenv(envVar)); v != "" {
-		return ensureDir(v, mode)
+		return filepath.Clean(v), nil
 	}
 	if xdg := strings.TrimSpace(os.Getenv(xdgVar)); xdg != "" {
-		return ensureDir(filepath.Join(xdg, "sprout"), mode)
+		return filepath.Join(xdg, "sprout"), nil
 	}
 	home, err := homeDir()
 	if err != nil {
 		return "", err
 	}
-	return ensureDir(filepath.Join(home, homeRelative), mode)
+	return filepath.Join(home, homeRelative), nil
 }
 
 func ensureDir(path string, mode os.FileMode) (string, error) {
@@ -109,6 +118,13 @@ func ConfigDir() (string, error) {
 // $HOME/.local/state/sprout.
 func StateDir() (string, error) {
 	return resolveRoot("SPROUT_STATE_DIR", "XDG_STATE_HOME", filepath.Join(".local", "state", "sprout"), 0700)
+}
+
+// StateDirPath returns the same resolution as StateDir but does not create
+// the directory — for callers whose behavior is gated on existence
+// (registry fallbacks).
+func StateDirPath() (string, error) {
+	return resolveRootPath("SPROUT_STATE_DIR", "XDG_STATE_HOME", filepath.Join(".local", "state", "sprout"))
 }
 
 // DataDir returns the sprout shared data directory path (regenerable

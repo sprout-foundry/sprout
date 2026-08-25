@@ -1,6 +1,7 @@
 package envutil
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -115,6 +116,25 @@ func TestStateDir_Home(t *testing.T) {
 	want := filepath.Join(filepath.Join(base, "test-home"), ".local", "state", "sprout")
 	if dir != want {
 		t.Errorf("StateDir() = %q, want %q", dir, want)
+	}
+}
+
+func TestStateDirPath_HonorsEnvOverrideWithoutCreating(t *testing.T) {
+	base := t.TempDir()
+	stateDir := filepath.Join(base, "state-must-not-be-created")
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(base, "test-xdg-state"))
+	t.Setenv("HOME", filepath.Join(base, "test-home"))
+
+	dir, err := StateDirPath()
+	if err != nil {
+		t.Fatalf("StateDirPath() error: %v", err)
+	}
+	if dir != stateDir {
+		t.Errorf("StateDirPath() = %q, want %q", dir, stateDir)
+	}
+	if _, statErr := os.Stat(stateDir); !os.IsNotExist(statErr) {
+		t.Errorf("StateDirPath() must not create %q (stat err = %v)", stateDir, statErr)
 	}
 }
 

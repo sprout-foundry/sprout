@@ -19,11 +19,10 @@ var (
 )
 
 func runAutomateStatus() error {
-	cwd, err := os.Getwd()
+	sproutDir, err := automateSessionRoot()
 	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
+		return err
 	}
-	sproutDir := filepath.Join(cwd, ".sprout")
 
 	sessions, err := readAllSessions(sproutDir)
 	if err != nil {

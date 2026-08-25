@@ -13,8 +13,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"github.com/sprout-foundry/sprout/pkg/clihooks"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // Logger represents a workspace logger.

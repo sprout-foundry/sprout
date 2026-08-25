@@ -234,26 +234,9 @@ func (p *ONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts 
 	return p.embedBatchInternal(ctx, texts, prefix)
 }
 
-// defaultBatchChunkSize caps the ROW count per ORT call. Throughput scales
-// near-linearly up to ~16–32 rows, after which memory bandwidth dominates.
-const defaultBatchChunkSize = 32
-
-// defaultBatchAttentionBudget caps the ATTENTION cost per ORT call, measured
-// in rows × seqLen² "score cells".
-//
-// Row count alone is not a memory bound. The input tensors are small — 32 rows
-// × 2048 tokens of int64 is ~512 KB — but transformer self-attention
-// materializes a [batch, heads, seq, seq] score tensor, so working memory
-// grows with rows × seqLen², not rows × seqLen. Because every row in a chunk
-// is padded up to the chunk's longest row, ONE long unit in a 32-row chunk
-// makes all 32 rows pay 2048², and a routine project index was observed
-// holding ~18 GB of ORT allocations in a single Run().
-//
-// At ~48 bytes per score cell (12 heads × float32) this budget keeps a call
-// near ~400 MB. Short units still batch the full 32 rows (a 256-token chunk
-// costs 32 × 256² ≈ 2.1M cells, well under budget); only long units drop the
-// row count, down to a floor of 1 so a single maxSeqLen unit always proceeds.
-const defaultBatchAttentionBudget = 8 << 20 // 8M cells ≈ 400 MB
+// defaultBatchChunkSize and defaultBatchAttentionBudget — the row cap and
+// attention budget for batched inference — now live in batch_planner.go,
+// shared with the MLX provider so both backends chunk identically.
 
 // embedBatchInternal is the shared body for EmbedBatch and
 // EmbedBatchWithPrefix. Tokenizes every input up front, partitions into
@@ -278,11 +261,12 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 		return nil, fmt.Errorf("onnx embedding: provider is closed")
 	}
 
-	// Pre-tokenize every row so the chunk loop can size each batch by
+	// Pre-tokenize every row so the chunk planner can size each batch by
 	// the longest non-empty row in that chunk (no point padding to the
 	// global max if a chunk's contents are all short).
 	tokIDs := make([][]int32, len(texts))
 	results := make([][]float32, len(texts))
+	lens := make([]int32, len(texts))
 	for i, text := range texts {
 		if prefix != "" {
 			text = prefix + text
@@ -292,51 +276,21 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 			ids = ids[:p.maxSeqLen]
 		}
 		tokIDs[i] = ids
+		lens[i] = int32(len(ids))
 		if len(ids) == 0 {
 			// Empty input → zero vector. Mirrors single-call Embed().
 			results[i] = make([]float32, p.dims)
 		}
 	}
 
-	// Rows that actually need inference. Empty inputs already hold a zero
-	// vector, and excluding them here keeps chunks packed with real work so a
-	// run of empties can't shrink an otherwise full batch.
-	work := make([]int, 0, len(texts))
-	for i := range tokIDs {
-		if len(tokIDs[i]) > 0 {
-			work = append(work, i)
-		}
-	}
-
-	for s := 0; s < len(work); {
+	for _, chunk := range planInferenceChunks(lens) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 
-		// Grow the chunk while it stays within BOTH the row cap and the
-		// attention budget. Every row pads up to the chunk's longest row, so
-		// admitting a long row re-prices every row already in the chunk —
-		// hence the budget is re-checked against the candidate maxLen, not the
-		// incoming row alone. At least one row is always admitted so a single
-		// maxSeqLen unit still makes progress.
-		maxLen := 0
-		e := s
-		for e < len(work) && e-s < defaultBatchChunkSize {
-			candLen := maxLen
-			if n := len(tokIDs[work[e]]); n > candLen {
-				candLen = n
-			}
-			rows := int64(e - s + 1)
-			if rows > 1 && rows*int64(candLen)*int64(candLen) > defaultBatchAttentionBudget {
-				break
-			}
-			maxLen = candLen
-			e++
-		}
-
-		nonEmptyIdx := work[s:e]
+		nonEmptyIdx := chunk.Rows
 		batchSize := int64(len(nonEmptyIdx))
-		seqLen := int64(maxLen)
+		seqLen := int64(chunk.SeqLen)
 
 		// Pack input_ids + attention_mask as [batch * seq] row-major.
 		// Padding positions get id=0 and mask=0; the attention mask
@@ -355,13 +309,11 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 
 		batchVecs, err := p.runInferenceBatch(ctx, inputIDs, attnMask, batchSize, seqLen)
 		if err != nil {
-			return nil, fmt.Errorf("batch embed[rows %d:%d, seq %d]: %w", s, e, seqLen, err)
+			return nil, fmt.Errorf("batch embed[%d rows, seq %d]: %w", len(nonEmptyIdx), seqLen, err)
 		}
 		for bi, idx := range nonEmptyIdx {
 			results[idx] = batchVecs[bi]
 		}
-
-		s = e
 	}
 	return results, nil
 }

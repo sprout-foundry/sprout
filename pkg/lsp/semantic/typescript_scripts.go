@@ -633,13 +633,13 @@ rl.on('line', (line) => {
 
   try {
     const out = analyze(input);
-    process.stdout.write(JSON.stringify(out) + '\\n');
+    process.stdout.write(JSON.stringify(out) + '\n');
   } catch (err) {
     const out = {
       capabilities: { diagnostics: false, definition: false, hover: false, rename: false, signature_help: false },
       error: String(err && err.message ? err.message : err),
     };
-    process.stdout.write(JSON.stringify(out) + '\\n');
+    process.stdout.write(JSON.stringify(out) + '\n');
   }
 });
 `

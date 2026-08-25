@@ -177,3 +177,76 @@ describe('sendRawInput diagnostic logging', () => {
     expect(result).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pong watchdog liveness — any inbound server frame must count as liveness,
+// not just pongs. Before this, a connection actively delivering output (but
+// no pongs) was force-cycled by the watchdog, destroying running TUIs.
+// ---------------------------------------------------------------------------
+
+describe('pong watchdog liveness', () => {
+  it('feedWatchdog (markAlive) resets the liveness timestamp', () => {
+    const { service } = makeReadyService();
+    const s = service as unknown as {
+      lastPongTime: number;
+      markAlive: () => void;
+      maxPongAge: number;
+    };
+    // Simulate an old timestamp (older than the watchdog window).
+    s.lastPongTime = Date.now() - s.maxPongAge - 1000;
+    s.markAlive();
+    expect(s.lastPongTime).toBeGreaterThan(Date.now() - 1000);
+  });
+
+  it('onmessage marks the connection alive for non-pong frames', async () => {
+    const listeners: Record<string, ((e: { data: string }) => void) | undefined> = {};
+    const OrigWebSocket = globalThis.WebSocket;
+    class StubWebSocket {
+      static OPEN = 1;
+      static CONNECTING = 0;
+      readyState = 1;
+      send = vi.fn();
+      close = vi.fn(() => {});
+      set onopen(cb: () => void) {
+        listeners.open = cb;
+      }
+      get onopen() {
+        return listeners.open;
+      }
+      set onmessage(cb: (e: { data: string }) => void) {
+        listeners.message = cb;
+      }
+      get onmessage() {
+        return listeners.message;
+      }
+      set onclose(cb: () => void) {
+        listeners.close = cb;
+      }
+      get onclose() {
+        return listeners.close;
+      }
+      set onerror(cb: () => void) {
+        listeners.error = cb;
+      }
+      get onerror() {
+        return listeners.error;
+      }
+    }
+    globalThis.WebSocket = StubWebSocket as unknown as typeof WebSocket;
+
+    try {
+      const service = TerminalWebSocketService.createInstance();
+      service.connect();
+      listeners.open?.();
+      const s = service as unknown as { lastPongTime: number; maxPongAge: number };
+      s.lastPongTime = Date.now() - s.maxPongAge - 1000;
+
+      listeners.message?.({ data: JSON.stringify({ type: 'output', data: { output: 'hello' } }) });
+
+      expect(s.lastPongTime).toBeGreaterThan(Date.now() - 1000);
+      service.disconnect();
+    } finally {
+      globalThis.WebSocket = OrigWebSocket;
+    }
+  });
+});

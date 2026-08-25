@@ -3299,6 +3299,12 @@
         "cached_per_mtok": 0.13312
       },
       {
+        "id": "z-ai/glm-5.3",
+        "input_per_mtok": 1.4,
+        "output_per_mtok": 4.4,
+        "cached_per_mtok": 0.26
+      },
+      {
         "id": "z-ai/glm-5v-turbo",
         "input_per_mtok": 1.2,
         "output_per_mtok": 4,
@@ -3874,6 +3880,11 @@
         "output_per_mtok": 4.4
       },
       {
+        "id": "glm-5.3",
+        "input_per_mtok": 1.4,
+        "output_per_mtok": 4.4
+      },
+      {
         "id": "glm-5v-turbo",
         "input_per_mtok": 1.2,
         "output_per_mtok": 4
@@ -3981,6 +3992,12 @@
       },
       {
         "id": "glm-5.2",
+        "input_per_mtok": 1.4,
+        "output_per_mtok": 4.4,
+        "cached_per_mtok": 0.26
+      },
+      {
+        "id": "glm-5.3",
         "input_per_mtok": 1.4,
         "output_per_mtok": 4.4,
         "cached_per_mtok": 0.26

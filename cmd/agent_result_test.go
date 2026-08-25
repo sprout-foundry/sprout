@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
@@ -450,6 +452,89 @@ func TestEmitJSONResult_SuccessWithAccumulatedMetrics(t *testing.T) {
 	}
 	if result.Metrics.LLMCalls != 3 { // Three TrackMetricsFromResponse calls
 		t.Errorf("LLMCalls = %d, want 3", result.Metrics.LLMCalls)
+	}
+}
+
+// TestEmitJSONResult_InProcessOneShotEnvelope pins the envelope fields
+// produced by an in-process --output-json one-shot run: the final response
+// text, real LLM metrics, and provider/model. Regression pin for the
+// daemon one-shot bug where tryDaemonOneShot discarded the daemon's
+// response and passed a nil agent to emitJSONResult, zeroing
+// llm_calls/tokens/provider/model and dropping the response. --output-json
+// one-shots now always run in-process (see tryDaemonOneShot's jsonOut
+// guard), so this path must keep producing a complete envelope.
+func TestEmitJSONResult_InProcessOneShotEnvelope(t *testing.T) {
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	mgr, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+
+	client := agent.NewScriptedClient(&agent.ScriptedResponse{
+		Content:      "Hello! One-shot response text.",
+		FinishReason: "stop",
+	})
+	a, err := agent.NewAgentWithClient(client, api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient: %v", err)
+	}
+	defer a.Shutdown()
+
+	const query = "hi"
+	startTime := time.Now().Add(-3 * time.Second)
+	if _, err := a.ProcessQuery(query); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	output := testutil.CaptureStdout(t, func() {
+		emitJSONResult(query, startTime, nil, a)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON output: %v\noutput was:\n%s", err, output)
+	}
+
+	if result.Status != "success" {
+		t.Errorf("Status = %q, want %q", result.Status, "success")
+	}
+	if result.Query != query {
+		t.Errorf("Query = %q, want %q", result.Query, query)
+	}
+	if result.Response != "Hello! One-shot response text." {
+		t.Errorf("Response = %q, want the agent's final assistant text", result.Response)
+	}
+	if result.Metrics.LLMCalls < 1 {
+		t.Errorf("Metrics.LLMCalls = %d, want >= 1", result.Metrics.LLMCalls)
+	}
+	if result.Metrics.TokensIn <= 0 || result.Metrics.TokensOut <= 0 {
+		t.Errorf("Metrics.TokensIn = %d, TokensOut = %d, want both > 0",
+			result.Metrics.TokensIn, result.Metrics.TokensOut)
+	}
+	if result.Metrics.Provider == "" {
+		t.Error("Metrics.Provider should not be empty for an in-process run")
+	}
+	if result.Metrics.Model == "" {
+		t.Error("Metrics.Model should not be empty for an in-process run")
+	}
+	if result.Metrics.ElapsedSeconds < 2.9 {
+		t.Errorf("Metrics.ElapsedSeconds = %f, want ~3.0 (startTime backdated 3s)",
+			result.Metrics.ElapsedSeconds)
+	}
+
+	// The nil-agent error path (what the broken daemon route produced) must
+	// not emit a response: the key is omitted, not a zero-filled envelope.
+	errOut := testutil.CaptureStdout(t, func() {
+		emitJSONResult(query, time.Now(), errors.New("boom"), nil)
+	})
+	var errResult AgentResult
+	if err := json.Unmarshal([]byte(errOut), &errResult); err != nil {
+		t.Fatalf("failed to parse error JSON: %v", err)
+	}
+	if errResult.Status != "error" {
+		t.Errorf("Status = %q, want %q", errResult.Status, "error")
+	}
+	if errResult.Response != "" {
+		t.Errorf("Response = %q, want empty when no agent produced a turn", errResult.Response)
 	}
 }
 

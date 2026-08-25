@@ -191,6 +191,22 @@ func TestTryDaemonOneShot_Disabled(t *testing.T) {
 	assert.Zero(t, atomic.LoadInt64(&stub.queries), "daemon must not serve when disabled")
 }
 
+// TestTryDaemonOneShot_JSONOutputNeverRoutes is the pin for SP-136 P4
+// option (a): --output-json one-shots must never route through the daemon
+// socket, even when one is healthy — the protocol can't carry the envelope's
+// metrics or response text, so they run in-process instead.
+func TestTryDaemonOneShot_JSONOutputNeverRoutes(t *testing.T) {
+	stub := &stubAgentForCmd{}
+	sockPath := startCmdAgentServer(t, stub)
+	t.Setenv("SPROUT_DAEMON_AGENT_SOCKET", sockPath)
+	t.Setenv("SPROUT_DAEMON_AGENT", "1")
+
+	handled, err := tryDaemonOneShot(context.Background(), "hello", true)
+	require.NoError(t, err)
+	assert.False(t, handled, "jsonOut runs must never route to the daemon, even when reachable")
+	assert.Zero(t, atomic.LoadInt64(&stub.queries), "daemon must not serve jsonOut queries")
+}
+
 // TestTryDaemonOneShot_EmptyQuery verifies empty queries are never routed.
 func TestTryDaemonOneShot_EmptyQuery(t *testing.T) {
 	stub := &stubAgentForCmd{}

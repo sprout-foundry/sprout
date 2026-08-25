@@ -40,8 +40,8 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 		Description: "Execute 2+ INDEPENDENT subagent tasks CONCURRENTLY. " +
 			"Use when tasks have no dependencies on each other (e.g. researching different code areas, code + tests, analyzing multiple files). " +
 			"Waits for ALL to complete; returns per-ID `{stdout, stderr, exit_code, completed, timed_out}`.\n\n" +
-			"Accepts an array of strings: `[\"task 1\", \"task 2\", …]`. " +
-			"IDs auto-generate as task-1, task-2, etc.\n\n" +
+			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?}. " +
+			"IDs auto-generate as task-1, task-2, etc. when omitted.\n\n" +
 			"Personas are NOT supported here (use `run_subagent` for per-task personas) " +
 			"— parallel subagents use the default subagent config. " +
 			"Provider/model from `subagent_provider` / `subagent_model`.\n\n" +
@@ -56,7 +56,15 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 				Name:        "subagents",
 				Type:        "array",
 				Required:    true,
-				Description: "Array of task descriptions as strings: [\"task 1\", \"task 2\", \"task 3\"]. Auto-generates IDs like task-1, task-2, etc. Example: [\"Research X\", \"Implement Y\", \"Write tests for Z\"]",
+				Description: "Array of subagent tasks: [{id?, prompt}]. `prompt` is the task description; `id` is optional and auto-generated as task-1, task-2, etc. when omitted. Example: [{\"prompt\": \"Research X\"}, {\"id\": \"impl-y\", \"prompt\": \"Implement Y\"}]",
+				Items: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"id":     map[string]any{"type": "string", "description": "Optional task ID (auto-generated as task-N when omitted)"},
+						"prompt": map[string]any{"type": "string", "description": "Task description for the subagent to execute"},
+					},
+					"required": []any{"prompt"},
+				},
 			},
 		},
 	}

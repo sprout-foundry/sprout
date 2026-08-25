@@ -19,7 +19,16 @@ func (h *askUserHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "question", Type: "string", Required: true, Description: "Question to ask (supports Markdown)"},
 			{Name: "header", Type: "string", Required: false, Description: "Short label (≤40 chars) for categorizing the prompt"},
-			{Name: "options", Type: "array", Required: false, Description: "Selectable choices: {label, value?, description?}"},
+			{Name: "options", Type: "array", Required: false, Description: "Selectable choices: {label, value?, description?}",
+				Items: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"label":       map[string]any{"type": "string", "description": "Human-readable choice label (required)"},
+						"value":       map[string]any{"type": "string", "description": "Optional machine value returned on selection (falls back to label)"},
+						"description": map[string]any{"type": "string", "description": "Optional short description of the choice"},
+					},
+					"required": []any{"label"},
+				}},
 			{Name: "multi_select", Type: "boolean", Required: false, Description: "Allow multiple selections (default false)"},
 			{Name: "default", Type: "string", Required: false, Description: "Default response when user submits empty"},
 		},

@@ -276,12 +276,21 @@ func startDaemonAgentServer(ctx context.Context, daemonMode bool, chatAgent *age
 }
 
 // tryDaemonOneShot implements SP-136 P4 one-shot CLI-on-daemon:
-// `sprout agent "query"` / `sprout agent --json "query"` connects to the
-// daemon's agent socket, runs the query there, prints the result, and
-// disconnects. Returns (handled=true, err) when the daemon served the query.
-// Returns (false, nil) when the daemon socket is unavailable — the caller
-// falls back to in-process execution (the safety net).
+// `sprout agent "query"` connects to the daemon's agent socket, runs the
+// query there, prints the result, and disconnects. Returns (handled=true,
+// err) when the daemon served the query. Returns (false, nil) when the
+// daemon socket is unavailable or the run must not route (see below) —
+// the caller falls back to in-process execution (the safety net).
+//
+// jsonOut runs never route: the socket protocol can't carry the JSON
+// envelope's metrics or the response text, so --output-json one-shots run
+// in-process instead (the agent_modes.go gate skips this call for them;
+// this guard keeps the contract self-contained even if a future caller
+// forgets). The daemon path is interactive/plain-text use only.
 func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, error) {
+	if jsonOut {
+		return false, nil
+	}
 	if v := os.Getenv("SPROUT_DAEMON_AGENT"); v == "0" {
 		return false, nil
 	}
@@ -309,17 +318,9 @@ func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, er
 	if err != nil {
 		// The daemon was up but the query failed — surface it, don't
 		// silently re-run in-process (the daemon owns the agent state).
-		if jsonOut {
-			emitJSONResult(query, time.Now(), err, nil)
-			return true, nil
-		}
 		return true, err
 	}
 
-	if jsonOut {
-		emitJSONResult(query, time.Now(), nil, nil)
-	} else {
-		fmt.Println(result)
-	}
+	fmt.Println(result)
 	return true, nil
 }

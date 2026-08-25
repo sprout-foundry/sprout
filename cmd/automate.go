@@ -35,6 +35,17 @@ func init() {
 	automateStopCmd.Flags().StringVar(&automateSessionDir, "dir", "", "Path to the .sprout session root (default: nearest .sprout/automate/ found walking up from the current directory)")
 	automateLogsCmd.Flags().StringVar(&automateSessionDir, "dir", "", "Path to the .sprout session root (default: nearest .sprout/automate/ found walking up from the current directory)")
 
+	// AUTOM-6: these globals were always read by the run functions and
+	// advertised in the Use/Long help text, but never bound to cobra —
+	// `sprout automate status --all`, `stop --all`, and `logs -f`/`-n`
+	// all failed with "unknown flag". In-process callers (agent tool
+	// layer, tests) set the globals directly and are unaffected.
+	automateStatusCmd.Flags().BoolVar(&automateStatusAll, "all", false, "Include exited sessions (default: running sessions plus those that ended within the last 24h)")
+	automateStatusCmd.Flags().BoolVar(&automateStatusJSON, "json", false, "Output sessions as a JSON array (machine-readable)")
+	automateStopCmd.Flags().BoolVar(&automateStopAll, "all", false, "Stop all running sessions (session ID not required)")
+	automateLogsCmd.Flags().BoolVarP(&automateLogsFollow, "follow", "f", false, "Follow output in real time (stops when the process exits)")
+	automateLogsCmd.Flags().IntVarP(&automateLogsLines, "lines", "n", 0, "Show only the last N lines (0 = all)")
+
 	automateCmd.PersistentFlags().StringVar(&automateDir, "dir", "", "Workflow directory (default: ./automate)")
 	automateCmd.PersistentFlags().BoolVarP(&automateAssumeYes, "yes", "y", false, "Skip the confirmation prompt before starting the workflow")
 	automateCmd.PersistentFlags().BoolVar(&automateDetach, "detach", false, "Run the workflow in the background: log output to .sprout/automate/logs/<session>.log and return immediately instead of streaming to the terminal")

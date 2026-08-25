@@ -9,8 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/history"
-	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"

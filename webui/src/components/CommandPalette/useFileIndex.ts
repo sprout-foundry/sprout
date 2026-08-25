@@ -42,14 +42,29 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
       // Resolve workspace root first so we can decide whether the cache is
       // still valid for it.
       let resolvedRoot = '';
+      let needsSelection = false;
       try {
         const workspace = await apiService.getWorkspace();
         if (cancelled) return;
         resolvedRoot = String(workspace.workspace_root || '').trim();
+        needsSelection = Boolean(workspace.needs_workspace_selection);
         setWorkspaceRoot(resolvedRoot);
       } catch (err) {
         if (!cancelled) setWorkspaceRoot('');
         debugLog('[FileIndex] Failed to fetch workspace root:', err);
+      }
+
+      // Workspace gate: when the daemon's resolved workspace is the home
+      // directory awaiting selection, crawling it would walk TCC-protected
+      // folders (Documents, Music, …) for every palette open — and the
+      // server now refuses those listings anyway. Show an empty index.
+      if (needsSelection) {
+        if (!cancelled) {
+          setAllFiles([]);
+          lastIndexedAtRef.current = Date.now();
+          lastIndexedRootRef.current = resolvedRoot;
+        }
+        return;
       }
 
       const isFresh =

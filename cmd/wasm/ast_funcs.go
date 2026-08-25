@@ -77,7 +77,8 @@ func parseFileFunc(_ js.Value, args []js.Value) interface{} {
 // (Uint8Array or ArrayBuffer).  Synchronous.
 //
 // Returns JSON array of symbols:
-//   [{name, kind, scope, depth, startLine, endLine, startByte, endByte}]
+//
+//	[{name, kind, scope, depth, startLine, endLine, startByte, endByte}]
 //
 // On error: {"error": "..."}.
 func extractSymbolsFunc(_ js.Value, args []js.Value) interface{} {

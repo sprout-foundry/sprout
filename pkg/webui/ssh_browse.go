@@ -36,6 +36,9 @@ func browseSSHDirectory(hostAlias, requestedPath string) ([]sshRemoteEntry, stri
 		"    path = os.path.join(target, name)",
 		"    if os.path.isdir(path):",
 		"        entries.append({'name': name, 'path': path, 'type': 'directory'})",
+		"# Sentinel marker so login-profile stdout (MOTD, fortune) doesn't",
+		"# corrupt the JSON parsing on the caller side.",
+		"print('SPROUT_DIR_LISTING_START')",
 		"print(json.dumps({'path': target, 'home_path': home, 'files': entries}))",
 	}, "\n")
 
@@ -65,12 +68,19 @@ func browseSSHDirectory(hostAlias, requestedPath string) ([]sshRemoteEntry, stri
 		return nil, "", "", fmt.Errorf("SSH command failed: %s: %w", details, err)
 	}
 
+	// Extract JSON after the sentinel marker — login-profile stdout
+	// (MOTD, fortune) can prepend output that would break json.Unmarshal.
+	jsonOutput, err := extractSentinelResult(string(out), "SPROUT_DIR_LISTING_START")
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to find directory listing marker: %w", err)
+	}
+
 	var payload struct {
 		Path     string           `json:"path"`
 		HomePath string           `json:"home_path"`
 		Files    []sshRemoteEntry `json:"files"`
 	}
-	if err := json.Unmarshal(out, &payload); err != nil {
+	if err := json.Unmarshal([]byte(strings.TrimSpace(jsonOutput)), &payload); err != nil {
 		return nil, "", "", fmt.Errorf("failed to decode ssh directory listing: %w", err)
 	}
 

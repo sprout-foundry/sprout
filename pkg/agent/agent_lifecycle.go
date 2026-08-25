@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // Shutdown attempts to gracefully stop background work and child processes
@@ -11,6 +13,22 @@ func (a *Agent) Shutdown() {
 	if a == nil {
 		return
 	}
+	a.shutdownOnce.Do(a.shutdownLocked)
+}
+
+// IsShutdown reports whether Shutdown() has completed. The WebUI releases
+// agents on background goroutines (workspace switch, chat deletion, idle
+// eviction), so callers that need teardown to have finished — flushed history,
+// closed embedding store, stopped MCP servers — have to be able to observe it.
+func (a *Agent) IsShutdown() bool {
+	if a == nil {
+		return true
+	}
+	return a.shutdown.Load()
+}
+
+func (a *Agent) shutdownLocked() {
+	defer a.shutdown.Store(true)
 
 	// Save command history to configuration before shutdown.
 	// saveHistoryToConfig reads state via getters (which are individually
@@ -29,6 +47,11 @@ func (a *Agent) Shutdown() {
 			_ = mgr.StopAll(ctx)
 			cancel()
 		}
+	}
+
+	// Cancel lifetime context so background watchers (wakeup, etc.) stop.
+	if a.lifetimeCancel != nil {
+		a.lifetimeCancel()
 	}
 
 	// Cancel interrupt context
@@ -60,14 +83,13 @@ func (a *Agent) Shutdown() {
 		a.debugLogFile = nil
 	}
 
-	// Close embedding manager resources
+	// Release embedding manager resources. The manager is shared across every
+	// agent on this workspace, so it is closed by the last releaser, not here.
 	a.embeddingMu.Lock()
 	mgr := a.embeddingMgr
 	a.embeddingMgr = nil
 	a.embeddingMu.Unlock()
-	if mgr != nil {
-		_ = mgr.Close()
-	}
+	embedding.ReleaseManager(mgr)
 }
 
 // SetInterruptHandler sets the interrupt handler for UI mode

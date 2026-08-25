@@ -8,9 +8,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
@@ -57,7 +58,7 @@ func (h *saveMemoryHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("parameter 'name' must not be empty")
+		return agenterrors.NewValidation("parameter 'name' must not be empty", nil)
 	}
 
 	content, err := extractString(args, "content")
@@ -65,7 +66,7 @@ func (h *saveMemoryHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(content) == "" {
-		return fmt.Errorf("parameter 'content' must not be empty")
+		return agenterrors.NewValidation("parameter 'content' must not be empty", nil)
 	}
 
 	return nil
@@ -91,17 +92,7 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		return ToolResult{
 			Output:  fmt.Sprintf("failed to save memory '%s': %v", name, err),
 			IsError: true,
-		}, fmt.Errorf("save memory %q: %w", name, err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "save_memory",
-			"name":   sanitized,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(result),
-		})
+		}, agenterrors.NewTool("save_memory", fmt.Sprintf("save memory %q: %v", name, err), err)
 	}
 
 	// Write to output writer if available
@@ -115,19 +106,25 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	}, nil
 }
 
+func (h *saveMemoryHandler) Aliases() []string      { return nil }
+func (h *saveMemoryHandler) Timeout() time.Duration { return 0 }
+func (h *saveMemoryHandler) MaxResultSize() int     { return 0 }
+func (h *saveMemoryHandler) SafeForParallel() bool  { return false }
+func (h *saveMemoryHandler) Interactive() bool      { return false }
+
 // saveMemoryToDisk writes a memory file to ~/.config/sprout/memories/<name>.md
 // This is a standalone implementation that doesn't depend on *Agent.
 func saveMemoryToDisk(sanitized, content string) (string, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
-		return "", fmt.Errorf("unable to locate config directory for memories")
+		return "", agenterrors.NewConfig("unable to locate config directory for memories", nil)
 	}
 
 	filePath := filepath.Join(memoryDir, sanitized+".md")
 
 	err := os.WriteFile(filePath, []byte(content), 0600)
 	if err != nil {
-		return "", fmt.Errorf("failed to write memory file %q: %w", sanitized, err)
+		return "", agenterrors.NewTool("save_memory", fmt.Sprintf("failed to write memory file %q: %v", sanitized, err), err)
 	}
 
 	return fmt.Sprintf("Memory '%s' saved to ~/.config/sprout/memories/%s.md. This memory will be loaded in all future conversations.", sanitized, sanitized), nil

@@ -1,17 +1,17 @@
 #!/bin/bash
 
-echo "=== Updating ledit with alternate screen support ==="
+echo "=== Updating sprout with alternate screen support ==="
 echo
 
 # Show current versions
 echo "1. Checking current installations:"
-echo "   Local build: $(ls -la ./ledit 2>/dev/null | awk '{print $6, $7, $8, $9}')"
-echo "   GOPATH bin:  $(ls -la ~/go/bin/ledit 2>/dev/null | awk '{print $6, $7, $8, $9}')"
+echo "   Local build: $(ls -la ./sprout 2>/dev/null | awk '{print $6, $7, $8, $9}')"
+echo "   GOPATH bin:  $(ls -la ~/go/bin/sprout 2>/dev/null | awk '{print $6, $7, $8, $9}')"
 echo
 
 # Build fresh
 echo "2. Building fresh version..."
-go build -o ledit main.go || { echo "Build failed"; exit 1; }
+go build -o sprout main.go || { echo "Build failed"; exit 1; }
 echo "   ✓ Built successfully"
 echo
 
@@ -23,30 +23,30 @@ echo
 
 # Verify the installation
 echo "4. Verifying installation:"
-echo "   which ledit: $(which ledit)"
-echo "   Local build: $(ls -la ./ledit | awk '{print $6, $7, $8}')"
-echo "   Installed:   $(ls -la ~/go/bin/ledit | awk '{print $6, $7, $8}')"
+echo "   which sprout: $(which sprout)"
+echo "   Local build: $(ls -la ./sprout | awk '{print $6, $7, $8}')"
+echo "   Installed:   $(ls -la ~/go/bin/sprout | awk '{print $6, $7, $8}')"
 echo
 
 # Test alternate screen
 echo "5. Testing alternate screen functionality:"
-echo "   When you run ledit agent and then exit, this text should still be visible."
+echo "   When you run sprout agent and then exit, this text should still be visible."
 echo ""
 echo "   Current directory:"
 ls -la | head -3
 echo ""
-echo "Press Enter to test with LOCAL build (./ledit agent)..."
+echo "Press Enter to test with LOCAL build (./sprout agent)..."
 read
 
-./ledit agent
+./sprout agent
 
 echo ""
 echo "✓ Back to original screen after LOCAL build test"
 echo ""
-echo "Press Enter to test with INSTALLED version (ledit agent)..."
+echo "Press Enter to test with INSTALLED version (sprout agent)..."
 read
 
-ledit agent
+sprout agent
 
 echo ""
 echo "✓ Back to original screen after INSTALLED version test"

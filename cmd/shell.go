@@ -4,8 +4,8 @@
 package cmd
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/agent_commands"
 )
 
 var (

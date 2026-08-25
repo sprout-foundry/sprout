@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/gorilla/websocket"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // testingConnPair holds a connected client websocket.Conn and server SafeConn

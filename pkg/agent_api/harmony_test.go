@@ -348,7 +348,7 @@ func TestFormatMessagesForCompletion_WithMultipleTools(t *testing.T) {
 			Function: ToolFunction{
 				Name:        "read_file",
 				Description: "Read a file",
-				Parameters: nil,
+				Parameters:  nil,
 			},
 		},
 		{
@@ -356,7 +356,7 @@ func TestFormatMessagesForCompletion_WithMultipleTools(t *testing.T) {
 			Function: ToolFunction{
 				Name:        "write_file",
 				Description: "Write to a file",
-				Parameters: nil,
+				Parameters:  nil,
 			},
 		},
 	}

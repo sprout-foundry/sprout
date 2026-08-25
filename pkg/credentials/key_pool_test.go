@@ -55,7 +55,10 @@ func TestParseKeyArray(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIsJSONArrayValue(t *testing.T) {
-	tests := []struct{ input string; want bool }{
+	tests := []struct {
+		input string
+		want  bool
+	}{
 		{"plain string", false},
 		{`["key1","key2"]`, true},
 		{`  ["key1"]  `, true},
@@ -64,8 +67,8 @@ func TestIsJSONArrayValue(t *testing.T) {
 		{"sk-123", false},
 		{`{"not":"array"}`, false},
 		{`[]`, true},
-		{"[", false},               // no closing bracket
-		{"[]something", false},     // trailing chars after ]
+		{"[", false},           // no closing bracket
+		{"[]something", false}, // trailing chars after ]
 		{`["nested",{"obj":true}]`, true},
 	}
 	for _, tc := range tests {
@@ -247,9 +250,8 @@ func TestDefaultRotator_Isolation(t *testing.T) {
 func setupFileBackend(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 }
 

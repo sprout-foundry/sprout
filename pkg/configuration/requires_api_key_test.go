@@ -8,8 +8,9 @@ import (
 
 func TestRequiresAPIKey_LocalProviders(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	assert.False(t, RequiresAPIKey("ollama"))
 	assert.False(t, RequiresAPIKey("ollama-local"))
@@ -19,8 +20,9 @@ func TestRequiresAPIKey_LocalProviders(t *testing.T) {
 
 func TestRequiresAPIKey_CloudProviders(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	assert.True(t, RequiresAPIKey("openai"))
 	assert.True(t, RequiresAPIKey("openrouter"))
@@ -31,8 +33,9 @@ func TestRequiresAPIKey_CloudProviders(t *testing.T) {
 
 func TestRequiresAPIKey_EmptyProvider(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Empty provider → true (safe default)
 	assert.True(t, RequiresAPIKey(""))
@@ -40,8 +43,9 @@ func TestRequiresAPIKey_EmptyProvider(t *testing.T) {
 
 func TestRequiresAPIKey_CustomProvider_WithEnvVar(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	customProvider := CustomProviderConfig{
 		Name:           "my-gateway",
@@ -57,8 +61,9 @@ func TestRequiresAPIKey_CustomProvider_WithEnvVar(t *testing.T) {
 
 func TestRequiresAPIKey_UnknownProvider(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// Unknown provider defaults to true
 	assert.True(t, RequiresAPIKey("totally-unknown-provider"))

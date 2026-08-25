@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"testing"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -10,8 +11,8 @@ import (
 // TestSubagentRunner_InheritsTerminalManagerFromParent locks in the fix for
 // the regression where subagents (including the persona/orchestrator chain)
 // failed shell_command background=true / check_background / stop_background
-// with "background mode requires WebUI terminal manager" even when the
-// root agent had a TerminalManager attached. The Agent struct construction
+// because no TerminalManager or BackgroundProcessManager was attached, even
+// when the root agent had a TerminalManager. The Agent struct construction
 // in createSubagent was propagating todoMgr / eventBus / embeddingMgr from
 // the parent but missing terminalManager.
 func TestSubagentRunner_InheritsTerminalManagerFromParent(t *testing.T) {
@@ -36,7 +37,7 @@ func TestSubagentRunner_InheritsTerminalManagerFromParent(t *testing.T) {
 	// RunParallel. We call it directly so the test stays focused on the
 	// inheritance behavior rather than a full subagent run (which would
 	// require provider credentials etc).
-	sub, err := runner.createSubagent(SubagentOptions{})
+	sub, err := runner.createSubagent(SubagentOptions{}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestSubagentRunner_NoTerminalManagerWhenParentHasNone(t *testing.T) {
 	}
 	runner := NewSubagentRunner(parent, shared)
 
-	sub, err := runner.createSubagent(SubagentOptions{})
+	sub, err := runner.createSubagent(SubagentOptions{}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}

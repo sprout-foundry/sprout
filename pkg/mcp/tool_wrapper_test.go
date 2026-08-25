@@ -144,7 +144,7 @@ func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
 		m := NewMCPManager(nil)
 		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
 		w := NewMCPToolWrapper(MCPTool{
-			Name:     "search",
+			Name:       "search",
 			ServerName: "srv",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -168,7 +168,7 @@ func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
 		m := NewMCPManager(nil)
 		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
 		w := NewMCPToolWrapper(MCPTool{
-			Name:     "search",
+			Name:       "search",
 			ServerName: "srv",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -186,7 +186,7 @@ func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
 		m := NewMCPManager(nil)
 		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
 		w := NewMCPToolWrapper(MCPTool{
-			Name:     "count",
+			Name:       "count",
 			ServerName: "srv",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -226,7 +226,7 @@ func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
 		m := NewMCPManager(nil)
 		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
 		w := NewMCPToolWrapper(MCPTool{
-			Name:     "search",
+			Name:       "search",
 			ServerName: "srv",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -303,7 +303,7 @@ func TestMCPToolWrapper_CanExecute_InvalidArgs(t *testing.T) {
 		},
 	}
 	w := NewMCPToolWrapper(MCPTool{
-		Name:     "search",
+		Name:       "search",
 		ServerName: "srv",
 		InputSchema: map[string]interface{}{
 			"type": "object",
@@ -1214,7 +1214,7 @@ func TestNormalizePath(t *testing.T) {
 		{"/query", ".query"},
 		{"/filters/0", ".filters.0"},
 		{"/nested/deep/field", ".nested.deep.field"},
-		{"query", "query"},   // already normalized
+		{"query", "query"}, // already normalized
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

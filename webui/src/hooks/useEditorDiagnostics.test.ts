@@ -14,6 +14,9 @@
  * - fetchDiagnosticsRef stays in sync
  * - Debounced cleanup on unmount
  * - Unmount guard during async operations
+ * - Edit-trigger fetch debounce/coalescing (rapid edits → one request, latest content)
+ * - Save trigger bypasses the pending debounce (fires immediately)
+ * - Unmount cancels a pending debounced fetch
  */
 // @ts-nocheck
 import { act, createElement } from 'react';
@@ -32,6 +35,8 @@ const mocks = vi.hoisted(() => {
   const mockClearDiagnostics = vi.fn();
   const mockDebouncedUpdate = vi.fn();
   const mockGetClientForLanguageSync = vi.fn();
+  const mockGetLSPClientService = vi.fn();
+  const mockGetLSPState = vi.fn();
   const mockGetInstance = vi.fn();
   const mockGetSemanticDiagnostics = vi.fn();
   const mockGetDiagnostics = vi.fn();
@@ -40,6 +45,10 @@ const mocks = vi.hoisted(() => {
     getInstance: (...a) => mockGetInstance(...a),
     getSemanticDiagnostics: (...a) => mockGetSemanticDiagnostics(...a),
     getDiagnostics: (...a) => mockGetDiagnostics(...a),
+  };
+
+  const mockLSPClientService = {
+    getLSPState: (...a) => mockGetLSPState(...a),
   };
 
   let _debouncedInstance = null;
@@ -56,10 +65,13 @@ const mocks = vi.hoisted(() => {
     mockClearDiagnostics,
     mockDebouncedUpdate,
     mockGetClientForLanguageSync,
+    mockGetLSPClientService,
+    mockGetLSPState,
     mockGetInstance,
     mockGetSemanticDiagnostics,
     mockGetDiagnostics,
     mockApiService,
+    mockLSPClientService,
     createDebouncedDiagnosticsUpdater,
     getDebouncedInstance: () => _debouncedInstance,
   };
@@ -79,6 +91,7 @@ vi.mock('../extensions/lintDiagnostics', () => ({
 
 vi.mock('../extensions/lspExtensions', () => ({
   getClientForLanguageSync: (...a) => mocks.mockGetClientForLanguageSync(...a),
+  getLSPClientService: (...a) => mocks.mockGetLSPClientService(...a),
 }));
 
 vi.mock('../services/api', () => ({
@@ -91,14 +104,17 @@ const {
   mockClearDiagnostics,
   mockDebouncedUpdate,
   mockGetClientForLanguageSync,
+  mockGetLSPClientService,
+  mockGetLSPState,
   mockGetInstance,
   mockGetSemanticDiagnostics,
   mockGetDiagnostics,
   mockApiService,
+  mockLSPClientService,
 } = mocks;
 
 // Static imports — Vitest hoists vi.mock above all imports automatically
-import { useEditorDiagnostics } from './useEditorDiagnostics';
+import { useEditorDiagnostics, FETCH_DEBOUNCE_MS } from './useEditorDiagnostics';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -117,7 +133,19 @@ function createMockView() {
   };
 }
 
+/**
+ * Advance fake timers past the fetch debounce window so any pending (debounced)
+ * 'edit' fetch fires. Use after calling fetchDiagnostics to let the request run.
+ */
+async function flushFetches() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(FETCH_DEBOUNCE_MS + 50);
+  });
+}
+
 beforeEach(() => {
+  vi.useFakeTimers();
+
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -140,6 +168,11 @@ beforeEach(() => {
   mockGetClientForLanguageSync.mockReset();
   mockGetClientForLanguageSync.mockReturnValue(null);
 
+  mockGetLSPClientService.mockReset();
+  mockGetLSPClientService.mockReturnValue(mockLSPClientService);
+  mockGetLSPState.mockReset();
+  mockGetLSPState.mockReturnValue('disconnected');
+
   mockClearDiagnostics.mockReset();
   mockDebouncedUpdate.mockReset();
 
@@ -157,9 +190,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Unmount first so the hook's cleanup clears any pending debounce timer.
   act(() => {
     root?.unmount();
   });
+  vi.useRealTimers();
   container?.remove();
 });
 
@@ -186,6 +221,44 @@ function renderTestHook(options = {}) {
     getReturn: () => hookReturn,
     viewRef,
     buffer,
+  };
+}
+
+/**
+ * Like renderTestHook, but supports re-rendering with a different buffer —
+ * needed to simulate the user switching editor files while a debounced fetch
+ * is pending.
+ */
+function renderTestHookWithBufferSwitch(options = {}) {
+  const state = {
+    buffer: options.buffer,
+    viewRef: options.viewRef ?? { current: createMockView() },
+  };
+
+  let hookReturn = null;
+
+  function HookWrapper() {
+    hookReturn = useEditorDiagnostics(state.viewRef, state.buffer);
+    return null;
+  }
+
+  const render = () => {
+    act(() => {
+      flushSync(() => {
+        root.render(createElement(HookWrapper));
+      });
+    });
+  };
+
+  render();
+
+  return {
+    getReturn: () => hookReturn,
+    viewRef: state.viewRef,
+    setBuffer(nextBuffer) {
+      state.buffer = nextBuffer;
+      render();
+    },
   };
 }
 
@@ -270,6 +343,7 @@ describe('LSP client active', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    await flushFetches();
 
     expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
     expect(mockGetDiagnostics).not.toHaveBeenCalled();
@@ -287,9 +361,68 @@ describe('LSP client active', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
     });
+    await flushFetches();
 
     // For non-semantic languages, should fall through to basic diagnostics
     expect(mockGetDiagnostics).toHaveBeenCalled();
+  });
+
+  it('skips semantic diagnostics while LSP client is connecting', async () => {
+    // File open races the LSP bootstrap: loadFile fires fetchDiagnostics
+    // before the LSP client exists (getClientForLanguageSync → null) but
+    // while getClientForLanguage is mid-flight. The LSP will push
+    // diagnostics via serverDiagnostics() once installed, so the semantic
+    // HTTP fallback must not fire (it would duplicate work and can paint
+    // stale results over the LSP's fresher push).
+    mockGetClientForLanguageSync.mockReturnValue(null);
+    mockGetLSPState.mockReturnValue('connecting');
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.tsx', name: 'test.tsx' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.tsx', 'const x = 1;');
+    });
+    await flushFetches();
+
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('skips semantic diagnostics while LSP client is reconnecting', async () => {
+    mockGetClientForLanguageSync.mockReturnValue(null);
+    mockGetLSPState.mockReturnValue('reconnecting');
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+    await flushFetches();
+
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('still uses semantic diagnostics when LSP is fully disconnected', async () => {
+    // LSP unavailable entirely (no binary, status said not-supported):
+    // semantic fallback must keep working.
+    mockGetClientForLanguageSync.mockReturnValue(null);
+    mockGetLSPState.mockReturnValue('disconnected');
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+    await flushFetches();
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalled();
   });
 });
 
@@ -312,13 +445,9 @@ describe('semantic diagnostics success', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    await flushFetches();
 
-    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'const x = 1;',
-      'typescript',
-      'edit',
-    );
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;', 'typescript', 'edit');
     expect(mockDebouncedUpdate).toHaveBeenCalledWith(viewRef.current, expect.any(Array));
   });
 
@@ -336,6 +465,7 @@ describe('semantic diagnostics success', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    await flushFetches();
 
     expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
     expect(mockDebouncedUpdate).not.toHaveBeenCalled();
@@ -353,6 +483,7 @@ describe('semantic diagnostics success', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    await flushFetches();
 
     expect(mockGetDiagnostics).toHaveBeenCalled();
   });
@@ -367,6 +498,7 @@ describe('semantic diagnostics success', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    await flushFetches();
 
     expect(mockGetDiagnostics).toHaveBeenCalled();
   });
@@ -390,6 +522,7 @@ describe('semantic diagnostics error -> fallback', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    await flushFetches();
 
     expect(mockGetSemanticDiagnostics).toHaveBeenCalled();
     expect(mockGetDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;');
@@ -414,6 +547,7 @@ describe('basic diagnostics', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
     });
+    await flushFetches();
 
     expect(mockGetDiagnostics).toHaveBeenCalledWith('/test/file.py', 'x = 1');
     expect(mockDebouncedUpdate).toHaveBeenCalled();
@@ -429,6 +563,7 @@ describe('basic diagnostics', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
     });
+    await flushFetches();
 
     expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
   });
@@ -443,6 +578,7 @@ describe('basic diagnostics', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
     });
+    await flushFetches();
 
     expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
   });
@@ -457,6 +593,7 @@ describe('basic diagnostics', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
     });
+    await flushFetches();
 
     expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
   });
@@ -475,13 +612,9 @@ describe('trigger parameter', () => {
     await act(async () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    await flushFetches();
 
-    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'const x = 1;',
-      'typescript',
-      'edit',
-    );
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;', 'typescript', 'edit');
   });
 
   it('passes "save" trigger when specified', async () => {
@@ -493,12 +626,144 @@ describe('trigger parameter', () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;', 'save');
     });
 
-    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'const x = 1;',
-      'typescript',
-      'save',
+    // Save bypasses the debounce — the request fires immediately.
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;', 'typescript', 'save');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: fetch debounce / coalescing
+// ---------------------------------------------------------------------------
+
+describe('fetch debounce / coalescing', () => {
+  it('coalesces rapid edit fetches into a single request with the latest content', async () => {
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    // Three rapid edits inside one tick — only the last should reach the API.
+    act(() => {
+      getReturn().fetchDiagnostics('/test/file.ts', 'const a = 1;');
+      getReturn().fetchDiagnostics('/test/file.ts', 'const ab = 1;');
+      getReturn().fetchDiagnostics('/test/file.ts', 'const abc = 1;');
+    });
+    await flushFetches();
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledTimes(1);
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const abc = 1;', 'typescript', 'edit');
+    // The earlier contents must never have reached the API.
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalledWith('/test/file.ts', 'const a = 1;', 'typescript', 'edit');
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalledWith('/test/file.ts', 'const ab = 1;', 'typescript', 'edit');
+  });
+
+  it('save bypasses a pending debounced edit fetch', async () => {
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    act(() => {
+      getReturn().fetchDiagnostics('/test/file.ts', 'const a = 1;', 'edit'); // schedules
+      getReturn().fetchDiagnostics('/test/file.ts', 'const b = 1;', 'save'); // cancels + fires now
+    });
+
+    // Save fires immediately — no timer advancement needed.
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledTimes(1);
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const b = 1;', 'typescript', 'save');
+
+    // Advancing timers must NOT fire the cancelled edit fetch.
+    await flushFetches();
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledTimes(1);
+  });
+
+  it('unmount cancels a pending debounced fetch', async () => {
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    act(() => {
+      getReturn().fetchDiagnostics('/test/file.ts', 'const a = 1;'); // schedules
+    });
+
+    act(() => {
+      root.unmount();
+    });
+
+    await vi.advanceTimersByTimeAsync(FETCH_DEBOUNCE_MS + 50);
+
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('does not apply a pending fetch for a file the user switched away from', async () => {
+    mockGetSemanticDiagnostics.mockResolvedValue({
+      capabilities: { diagnostics: true },
+      diagnostics: [{ severity: 'error', message: 'stale', from: 0, to: 5 }],
+    });
+
+    const { getReturn, setBuffer } = renderTestHookWithBufferSwitch({
+      buffer: { file: { path: '/test/a.ts', ext: '.ts', name: 'a.ts' } },
+    });
+
+    // Edit a.ts — schedules a debounced fetch.
+    act(() => {
+      getReturn().fetchDiagnostics('/test/a.ts', 'const a = 1;');
+    });
+
+    // Switch to another file before the debounce window elapses.
+    act(() => {
+      setBuffer({ file: { path: '/test/b.py', ext: '.py', name: 'b.py' } });
+    });
+    await flushFetches();
+
+    // The stale fetch for a.ts must never reach the backend.
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+    expect(mockDebouncedUpdate).not.toHaveBeenCalled();
+    expect(mockClearDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('a slow older response does not overwrite a newer save-triggered result', async () => {
+    let resolveEditFetch;
+    mockGetSemanticDiagnostics.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveEditFetch = resolve;
+        }),
     );
+    mockGetSemanticDiagnostics.mockResolvedValueOnce({
+      capabilities: { diagnostics: true },
+      diagnostics: [{ severity: 'warning', message: 'from save', from: 0, to: 5 }],
+    });
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    // Edit triggers a debounced fetch that stays in flight (held promise).
+    act(() => {
+      getReturn().fetchDiagnostics('/test/file.ts', 'const a = 1;');
+    });
+    await flushFetches();
+
+    // Save bypasses the debounce and resolves immediately with fresh content.
+    act(() => {
+      getReturn().fetchDiagnostics('/test/file.ts', 'const b = 1;', 'save');
+    });
+    await act(async () => {});
+
+    // Now the older edit response lands — it must NOT overwrite the save result.
+    await act(async () => {
+      resolveEditFetch({
+        capabilities: { diagnostics: true },
+        diagnostics: [{ severity: 'error', message: 'stale edit', from: 0, to: 5 }],
+      });
+    });
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledTimes(2);
+    expect(mockDebouncedUpdate).toHaveBeenCalledTimes(1);
+    expect(mockDebouncedUpdate).toHaveBeenCalledWith(expect.anything(), [
+      expect.objectContaining({ message: 'from save' }),
+    ]);
   });
 });
 
@@ -510,26 +775,28 @@ describe('unmount guard during async', () => {
   it('does not apply diagnostics if viewRef becomes null during semantic fetch', async () => {
     let resolveSemantic;
     mockGetSemanticDiagnostics.mockReturnValue(
-      new Promise((resolve) => { resolveSemantic = resolve; }),
+      new Promise((resolve) => {
+        resolveSemantic = resolve;
+      }),
     );
 
     const { getReturn, viewRef } = renderTestHook({
       buffer: { file: { ext: '.ts', name: 'test.ts' } },
     });
 
-    let fetchPromise;
-    act(() => {
-      fetchPromise = getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    await act(async () => {
+      getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
+    // Start the (debounced) fetch; the semantic promise is held until below.
+    await flushFetches();
 
     viewRef.current = null;
 
-    act(() => {
+    await act(async () => {
       resolveSemantic({
         capabilities: { diagnostics: true },
         diagnostics: [{ severity: 'error', message: 'err' }],
       });
-      return fetchPromise;
     });
 
     expect(mockDebouncedUpdate).not.toHaveBeenCalled();

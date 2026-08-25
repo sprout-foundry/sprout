@@ -1256,8 +1256,8 @@ func TestIsValidProviderID(t *testing.T) {
 	}
 
 	invalidIDs := []struct {
-		id   string
-		why  string
+		id  string
+		why string
 	}{
 		{"", "empty string"},
 		{"OpenRouter", "uppercase O"},

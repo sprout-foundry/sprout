@@ -108,9 +108,9 @@ func TestBridgeClose(t *testing.T) {
 		bridge := NewBridge(nil, proc)
 		bridge.Close()
 
-		// Verify fields are cleaned up
+		// Close before Run means no session was ever opened; it must not panic.
 		assert.Nil(t, bridge.wsConn)
-		assert.Nil(t, bridge.unsubscribe)
+		assert.Nil(t, bridge.session)
 	})
 
 	t.Run("close without websocket", func(t *testing.T) {
@@ -141,15 +141,15 @@ func TestBridgeClose(t *testing.T) {
 		// Should not panic even after unsubscribe was called
 	})
 
-	t.Run("close with real subscribe and websocket closes both", func(t *testing.T) {
+	t.Run("close with real session and websocket closes both", func(t *testing.T) {
 		ctx := context.Background()
 		proc, err := StartLSPProcess(ctx, "/", "cat", []string{})
 		require.NoError(t, err)
 		defer proc.Close()
 
-		// Subscribe to the process
-		ch, unsubscribe, err := proc.Subscribe()
+		session, err := proc.NewSession()
 		require.NoError(t, err)
+		ch := session.Out()
 
 		// Create a test websocket connection via httptest
 		upgrader := websocket.Upgrader{
@@ -172,10 +172,9 @@ func TestBridgeClose(t *testing.T) {
 		require.NoError(t, err)
 
 		bridge := NewBridge(wsConn, proc)
-		bridge.lspCh = ch
-		bridge.unsubscribe = unsubscribe
+		bridge.session = session
 
-		// Close the bridge - should unsubscribe and close wsConn
+		// Close the bridge - should close the session and wsConn
 		bridge.Close()
 
 		// Verify behavior, not implementation: the previous version of
@@ -185,9 +184,9 @@ func TestBridgeClose(t *testing.T) {
 		// just closes the resources without nilling — verify the
 		// behavior we actually care about.
 
-		// Verify the channel was closed by unsubscribe
+		// Verify the channel was closed by the session teardown
 		_, ok := <-ch
-		assert.False(t, ok, "channel should be closed after unsubscribe")
+		assert.False(t, ok, "channel should be closed after session close")
 
 		// Verify wsConn was closed — writing should now fail.
 		writeErr := bridge.wsConn.WriteMessage(websocket.TextMessage, []byte("ping"))
@@ -239,7 +238,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "workspace parameter is required")
 	})
 
-	t.Run("workspace not matching root returns 403", func(t *testing.T) {
+	t.Run("non-existent workspace path proceeds to LSP startup which fails with 500", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -255,8 +254,11 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 
 		handler(w, req)
 
-		assert.Equal(t, http.StatusForbidden, w.Code)
-		assert.Contains(t, w.Body.String(), "workspace not allowed")
+		// Workspace check no longer enforces strict equality against the
+		// handler-level root — the frontend is trusted. The request proceeds
+		// to LSP startup, which fails because /forbidden doesn't exist.
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Failed to start language server")
 	})
 
 	t.Run("unknown language returns 500", func(t *testing.T) {
@@ -358,31 +360,6 @@ func TestBridgeRunWithNilWebSocket(t *testing.T) {
 			_ = bridge.Run(ctx)
 		})
 	})
-}
-
-func TestBridgeHandlerRejectsNonMatchingWorkspace(t *testing.T) {
-	t.Run("exact match required for workspace", func(t *testing.T) {
-		ctx := context.Background()
-		manager := NewManager(ctx)
-		defer manager.Close()
-
-		upgrader := websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
-		}
-
-		// Use /tmp/other as allowed root
-		handler := BridgeHandler(manager, upgrader, "/tmp/other")
-
-		req := httptest.NewRequest("GET", "/?language=go&workspace=/tmp", nil)
-		w := httptest.NewRecorder()
-
-		handler(w, req)
-
-		// Should get 403 because /tmp != /tmp/other
-		assert.Equal(t, http.StatusForbidden, w.Code)
-		assert.Contains(t, w.Body.String(), "workspace not allowed")
-	})
-
 }
 
 // NOTE: There is a known race condition in bridge.go between runWSToLSP (which

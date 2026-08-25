@@ -3,9 +3,10 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,10 +14,14 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
-	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
+	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
@@ -127,15 +132,27 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		RecommendedPrefixes: []string{},
 		RecommendedModelWhy: "Good default for high-performance inference use.",
 	},
+	"sprout-local": {
+		Description:         "Run fully offline on your Mac — no API key, no network. GPU-accelerated via Apple MLX with quantized Qwen3.5 models.",
+		SetupHint:           "No setup needed if a model is already downloaded. First use downloads a ~2–5 GB model automatically.",
+		DocsURL:             "",
+		SignupURL:           "",
+		APIKeyLabel:         "",
+		APIKeyHelp:          "",
+		Recommended:         false,
+		RecommendedPrefixes: []string{"qwen3.5-"},
+		RecommendedModelWhy: "Best speed-to-capability ratio for local hardware.",
+	},
 }
 
 var onboardingProviderOrder = map[string]int{
-	"zai":        0,
-	"minimax":    1,
-	"openrouter": 2,
-	"deepinfra":  3,
-	"chutes":     4,
-	"cerebras":   5,
+	"zai":          0,
+	"minimax":      1,
+	"openrouter":   2,
+	"deepinfra":    3,
+	"chutes":       4,
+	"cerebras":     5,
+	"sprout-local": 6,
 }
 
 func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {
@@ -164,6 +181,20 @@ func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {
 		}
 		if entry.RecommendedModel == "" {
 			entry.RecommendedModel = provider.DefaultModel
+		}
+	}
+
+	// Probe-first: the capability probe is the authoritative signal for whether
+	// a model is usable for primary or subagent work; if the published registry
+	// carries probe-backed recommendations for this provider, prefer the
+	// strongest one over both the curated catalog entry and the prefix-match
+	// fallback below. A short timeout keeps onboarding responsive if the
+	// registry is slow or unreachable; any error / no-data falls through to
+	// the existing logic. Priority: probe > catalog curated > prefix-match.
+	if probe := probeRecommendedModel(entry.ID); probe != "" {
+		entry.RecommendedModel = probe
+		if entry.RecommendedModelWhy == "" {
+			entry.RecommendedModelWhy = "Picked the strongest model confirmed by automated capability testing."
 		}
 	}
 
@@ -204,6 +235,45 @@ func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {
 	}
 	return entry
 }
+
+// probeRecommendedModel fetches the per-provider file from the published model
+// registry and returns the strongest probe-backed model ID for onboarding, or
+// "" if none. Prefers models whose RecommendedRoles contain "primary" (complex
+// stage passed — the strongest signal); falls back to "subagent" (gates passed).
+// A short context timeout keeps onboarding responsive if the registry is slow;
+// any error or no-data yields "" so the caller falls back to existing logic.
+func probeRecommendedModel(providerID string) string {
+	if !modelregistry.IsEnabled() {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	raw, err := modelregistry.FetchModels(ctx, providerID)
+	if err != nil || len(raw) == 0 {
+		return ""
+	}
+	var primaryPick, subagentPick string
+	for _, m := range raw {
+		if modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RolePrimary) {
+			if primaryPick == "" {
+				primaryPick = m.ID
+			}
+		} else if modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RoleSubagent) {
+			if subagentPick == "" {
+				subagentPick = m.ID
+			}
+		}
+	}
+	if primaryPick != "" {
+		return primaryPick
+	}
+	return subagentPick
+}
+
+// resolveRecommendedModel picks the first model whose ID starts with any of
+// the curated prefixes (case-insensitive); falls back to the first available
+// model. Used only as a last-resort default when neither the catalog nor the
+// capability probe yielded a recommendation.
 
 func resolveRecommendedModel(models []string, prefixes []string) string {
 	for _, prefix := range prefixes {
@@ -328,8 +398,7 @@ func hasGitBashShell() bool {
 }
 
 func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
@@ -339,7 +408,11 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	}
 
 	cfg := cm.GetConfig()
-	descriptors := ws.listProviders(ws.resolveClientID(r))
+	// Derive a context from the request so model discovery is cancelled if
+	// the client disconnects. Matches handleAPIProviders' timeout.
+	listCtx, listCancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer listCancel()
+	descriptors := ws.listProvidersCtx(listCtx, ws.resolveClientID(r))
 	providers := make([]onboardingProvider, 0, len(descriptors))
 	indexByID := make(map[string]onboardingProvider, len(descriptors))
 
@@ -431,8 +504,7 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 }
 
 func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -532,12 +604,23 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		}
 	}
 	if saveErr := cm.SaveConfig(); saveErr != nil {
-		log.Printf("webui: failed to save onboarding config: %v", saveErr)
+		ws.log().Warn("failed to save onboarding config", slog.Any("err", saveErr))
 	}
 
 	// Clear any cached agent so it is re-created with the updated config
 	// (real provider instead of "editor").
 	ws.clearCachedAgent(clientID)
+
+	// Pre-load the local model in-process when sprout-local is selected
+	// so the first chat request is fast. On Apple Silicon this loads the
+	// model directly via MLX — no HTTP server, no separate process.
+	if req.Provider == "sprout-local" {
+		if err := localmodel.EnsureServerForProviderWithCheck(r.Context(), "sprout-local"); err != nil {
+			ws.log().Info("local model pre-load deferred (will lazy-load on first request)", "error", err)
+		} else {
+			ws.log().Info("local model loaded in-process")
+		}
+	}
 
 	// Now create/get the agent with the newly configured provider.
 	clientAgent, err := ws.getClientAgent(clientID)
@@ -558,7 +641,7 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 		// Re-persist the actual model (may differ from requested due to resolution)
 		if actualModel := clientAgent.GetModel(); actualModel != "" {
 			if persistErr := cm.SetModelForProvider(providerType, actualModel); persistErr != nil {
-				log.Printf("webui: failed to re-persist resolved model %q: %v", actualModel, persistErr)
+				ws.log().Warn("failed to re-persist resolved model", slog.String("model", actualModel), slog.Any("err", persistErr))
 			}
 			_ = cm.SaveConfig()
 		}
@@ -566,6 +649,22 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 
 	_ = ws.syncAgentStateForClient(clientID)
 	ws.publishProviderState(clientID)
+
+	// The catalog default persisted earlier can diverge from the model the
+	// agent actually resolved (e.g. ram-tiered local-model catalog on hosts
+	// where the tier-0 default isn't runnable). Re-align persisted config
+	// with the live agent so a restart doesn't silently change models.
+	if req.Model == "" {
+		if actualModel := clientAgent.GetModel(); actualModel != "" && actualModel != modelToPersist {
+			if agentCM := clientAgent.GetConfigManager(); agentCM != nil {
+				if persistErr := agentCM.SetModelForProvider(providerType, actualModel); persistErr != nil {
+					ws.log().Warn("failed to re-persist resolved default model", slog.String("model", actualModel), slog.Any("err", persistErr))
+				} else {
+					_ = agentCM.SaveConfig()
+				}
+			}
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
@@ -576,8 +675,7 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 }
 
 func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 

@@ -12,7 +12,7 @@ import (
 // NewTestManager builds a configuration Manager backed by an isolated
 // temp directory so that tests never read, modify, or create files in
 // the caller's real ~/.config/sprout config. Sets SPROUT_CONFIG +
-// LEDIT_CONFIG to that temp dir via t.Setenv so any code path that
+// SPROUT_CONFIG to that temp dir via t.Setenv so any code path that
 // uses GetConfigPath() (rather than the Manager) lands in the temp
 // dir too.
 //
@@ -50,11 +50,27 @@ func NewTestManager(t *testing.T) (*Manager, func()) {
 		t.Fatalf("NewTestManager: create temp config dir: %v", err)
 	}
 
-	// Scope BOTH env vars (SPROUT_CONFIG canonical, LEDIT_CONFIG legacy
-	// alias) so any indirect Load() that bypasses our Manager still
-	// lands in the temp dir. t.Setenv unwinds at test end.
+	// Scope BOTH env vars so any indirect Load() that bypasses our Manager
+	// still lands in the temp dir. t.Setenv unwinds at test end.
+	//
+	// SPROUT_CONFIG_DIR is the canonical name and envutil.ConfigDir() checks
+	// it FIRST — setting only the SPROUT_CONFIG alias left isolation defeatable
+	// by an ambient SPROUT_CONFIG_DIR in the developer's environment.
+	t.Setenv("SPROUT_CONFIG_DIR", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
-	t.Setenv("LEDIT_CONFIG", configDir)
+
+	// Isolate all four category roots so state/cache/data never leak
+	// to the developer's real directories. Each gets a subdirectory
+	// under the same temp HOME so they share the lifecycle.
+	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpDir, ".local", "state", "sprout"))
+	t.Setenv("SPROUT_CACHE_DIR", filepath.Join(tmpDir, ".cache", "sprout"))
+	t.Setenv("SPROUT_DATA_DIR", filepath.Join(tmpDir, ".local", "share", "sprout"))
+
+	// Custom providers always resolve to the global dir (HOME-based),
+	// so HOME must also be isolated to prevent test provider files from
+	// polluting the real ~/.config/sprout/providers/.
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	mgr, err := NewManagerWithDir(configDir)
 	if err != nil {

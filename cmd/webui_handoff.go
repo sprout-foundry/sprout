@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
 // When a browser is connected to the Web UI, the full assistant stream and
@@ -19,7 +20,23 @@ import (
 var (
 	webUIDisplayURL           atomic.Pointer[string]
 	webUIHandoffShownThisTurn atomic.Bool
+
+	// sharedWebServer holds a reference to the web server when running in
+	// shared-agent mode (CLI + WebUI). The CLI's ProcessQuery wrapper uses
+	// it to sync agent state back to the WebUI after each CLI query so the
+	// browser tab's conversation history stays fresh. nil in daemon mode.
+	sharedWebServer atomic.Pointer[webui.ReactWebServer]
 )
+
+// setSharedWebServer stores the web server reference for shared-agent mode.
+func setSharedWebServer(ws *webui.ReactWebServer) {
+	sharedWebServer.Store(ws)
+}
+
+// getSharedWebServer returns the web server if in shared mode, or nil.
+func getSharedWebServer() *webui.ReactWebServer {
+	return sharedWebServer.Load()
+}
 
 // setWebUIDisplayURL records the address shown in the handoff line. Called once
 // the web server is listening and its URL is known.

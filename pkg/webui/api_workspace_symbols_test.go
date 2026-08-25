@@ -37,8 +37,8 @@ type symbolsResponse struct {
 }
 
 type fileSymbolsEntry struct {
-	File    string           `json:"file"`
-	Symbols []symbolEntry    `json:"symbols"`
+	File    string        `json:"file"`
+	Symbols []symbolEntry `json:"symbols"`
 }
 
 type symbolEntry struct {

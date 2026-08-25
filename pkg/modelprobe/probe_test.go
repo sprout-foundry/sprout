@@ -202,7 +202,10 @@ func TestRun_GateFailSkipsComplex(t *testing.T) {
 }
 
 func TestRun_FullPass(t *testing.T) {
-	turns := passingGateTurns()
+	turns := []api.Message{
+		turn(toolCall("v1", "describe_image", map[string]string{"color": "red"})), // vision pass
+	}
+	turns = append(turns, passingGateTurns()...)
 	turns = append(turns,
 		turn(toolCall("c1", "list_dir", map[string]string{"path": "."})),
 		turn(toolCall("c2", "read_file", map[string]string{"path": "internal/users/service.go"})),
@@ -216,6 +219,9 @@ func TestRun_FullPass(t *testing.T) {
 	}
 	if !r.Passed || !r.Complex {
 		t.Fatalf("expected pass+complex, got passed=%v complex=%v reason=%q", r.Passed, r.Complex, r.Reason)
+	}
+	if !r.Vision {
+		t.Error("vision should pass")
 	}
 	if r.Score <= 0.5 {
 		t.Errorf("a full pass should score > 0.5, got %.2f", r.Score)
@@ -260,8 +266,12 @@ func TestRun_GateTransportErrorIsInconclusive(t *testing.T) {
 }
 
 func TestRun_ComplexTransportErrorIsInconclusive(t *testing.T) {
-	// Gates all pass, then the complex stage's first request errors.
-	c := &erroringClient{gateTurns: passingGateTurns()}
+	// Vision pass + gates all pass, then the complex stage's first request errors.
+	turns := []api.Message{
+		turn(toolCall("v1", "describe_image", map[string]string{"color": "red"})), // vision pass
+	}
+	turns = append(turns, passingGateTurns()...) // 5 gates pass
+	c := &erroringClient{gateTurns: turns}
 	r, err := Run(context.Background(), c, "test", "m")
 	if err != nil {
 		t.Fatalf("gate result is valid, Run should not return an error: %v", err)
@@ -277,6 +287,104 @@ func TestRun_ComplexTransportErrorIsInconclusive(t *testing.T) {
 	}
 }
 
+// permanentErrorClient returns a fixed permanent error (e.g. HTTP 405) on every
+// SendChatRequest, simulating a model that can't do tool calls.
+type permanentErrorClient struct {
+	api.ClientInterface
+	err error
+}
+
+func (c *permanentErrorClient) SendChatRequest(_ context.Context, _ []api.Message, _ []api.Tool, _ string, _ bool) (*api.ChatResponse, error) {
+	return nil, c.err
+}
+
+func TestIsPermanentError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"transport error", errors.New("connection reset"), false},
+		{"5xx server error", errors.New("HTTP 500: internal server error"), false},
+		{"502 gateway", errors.New("HTTP 502: bad gateway"), false},
+		{"429 rate limit", errors.New("HTTP 429: rate limit exceeded"), false},
+		{"402 insufficient balance", errors.New("HTTP 402: insufficient balance (1008)"), true},
+		{"403 forbidden", errors.New("HTTP 403: forbidden"), true},
+		{"404 not found", errors.New("HTTP 404: model not found"), true},
+		{"405 tool calling not supported", errors.New("HTTP 405: Tool calling is not supported for model: foo"), true},
+		{"missing env var", errors.New("[validation] environment variable CHUTES_API_KEY is not set"), true},
+		{"generic error", errors.New("something went wrong"), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := IsPermanentError(c.err)
+			if got != c.want {
+				t.Errorf("IsPermanentError(%v) = %v, want %v", c.err, got, c.want)
+			}
+		})
+	}
+}
+
+func TestRun_PermanentErrorAtVisionIsDefinitiveFail(t *testing.T) {
+	c := &permanentErrorClient{err: errors.New("HTTP 405: Tool calling is not supported for model: guard-model")}
+	r, err := Run(context.Background(), c, "test", "guard-model")
+	if err != nil {
+		t.Fatalf("permanent error should not be returned as an error: %v", err)
+	}
+	if r.Errored {
+		t.Error("a permanent failure must NOT be marked Errored (it should be persisted)")
+	}
+	if r.Passed {
+		t.Error("a permanent failure must not report Passed")
+	}
+	if !strings.Contains(r.Reason, "permanent") {
+		t.Errorf("reason should mention permanent, got %q", r.Reason)
+	}
+}
+
+func TestRun_PermanentErrorAtComplexIsDefinitive(t *testing.T) {
+	// Vision pass + gates all pass, then the complex stage gets a permanent error.
+	turns := []api.Message{
+		turn(toolCall("v1", "describe_image", map[string]string{"color": "red"})), // vision pass
+	}
+	turns = append(turns, passingGateTurns()...) // 5 gates pass
+	c := &permanentAfterGatesClient{gateTurns: turns, err: errors.New("HTTP 402: insufficient balance")}
+	r, err := Run(context.Background(), c, "test", "m")
+	if err != nil {
+		t.Fatalf("permanent error should not be returned: %v", err)
+	}
+	if r.Errored {
+		t.Error("a permanent complex failure must NOT be marked Errored")
+	}
+	if !r.Passed {
+		t.Error("gates passed, so Passed should be true")
+	}
+	if r.Complex {
+		t.Error("complex must be false when it permanently failed")
+	}
+}
+
+// permanentAfterGatesClient replays gateTurns, then returns a permanent error.
+type permanentAfterGatesClient struct {
+	api.ClientInterface
+	gateTurns []api.Message
+	err       error
+	i         int
+}
+
+func (c *permanentAfterGatesClient) SendChatRequest(_ context.Context, _ []api.Message, _ []api.Tool, _ string, _ bool) (*api.ChatResponse, error) {
+	if c.i < len(c.gateTurns) {
+		msg := c.gateTurns[c.i]
+		c.i++
+		if msg.Role == "" {
+			msg.Role = "assistant"
+		}
+		return &api.ChatResponse{Choices: []api.ChatChoice{{Message: msg, FinishReason: "tool_calls"}}}, nil
+	}
+	return nil, c.err
+}
+
 func TestWithinCostBudget(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -290,6 +398,9 @@ func TestWithinCostBudget(t *testing.T) {
 		{"premium over budget", 3, 15, true, 0.10, false},
 		{"unknown price with budget", 0, 0, false, 0.10, false},
 		{"unknown price no budget", 0, 0, false, 0, true},
+		{"negative input price rejected", -1000000, 1.5, true, 0.10, false},
+		{"negative output price rejected", 0.5, -1000000, true, 0.10, false},
+		{"negative price no budget still allowed", -1, -1, true, 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

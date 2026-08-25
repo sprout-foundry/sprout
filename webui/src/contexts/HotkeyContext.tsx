@@ -58,6 +58,7 @@ const fallbackHotkeys: HotkeyEntry[] = [
   { key: 'Cmd+Alt+W', command_id: 'close_other_editors', global: true },
   { key: 'Ctrl+Tab', command_id: 'focus_next_tab', global: false },
   { key: 'Ctrl+Shift+Tab', command_id: 'focus_prev_tab', global: false },
+  { key: 'Cmd+Shift+Tab', command_id: 'focus_prev_tab', global: false },
   { key: 'Alt+Z', command_id: 'editor_toggle_word_wrap', global: false },
   { key: 'Shift+Alt+F', command_id: 'format_document', global: false },
   { key: 'Shift+Cmd+F', command_id: 'format_document', global: false },
@@ -237,7 +238,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
       const mac = isMac();
 
       let matchingHotkey: HotkeyEntry | undefined;
-      if (hotkeys) {
+      if (hotkeys && Array.isArray(hotkeys)) {
         matchingHotkey = hotkeys.find((entry) => {
           let storedKey = entry.key;
           if (mac) {
@@ -327,7 +328,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
 
   const hotkeyForCommand = useCallback(
     (commandId: string): string | null => {
-      if (!hotkeys) return null;
+      if (!hotkeys || !Array.isArray(hotkeys)) return null;
       const entry = hotkeys.find((h) => h.command_id === commandId);
       if (!entry) return null;
       let displayKey = entry.key;

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -158,10 +159,13 @@ const (
 	sshLaunchHealthTimeout  = 30 * time.Second
 	sshRestoreHealthTimeout = 12 * time.Second
 
-	// DaemonPort is the unified fixed port used by all sprout daemons
-	// (both local and SSH-launched remote).  All daemons on a given host
-	// share this port — the launcher detects an existing daemon and
-	// reuses it rather than starting a duplicate.
+	// DaemonPort is the single shared port used by all sprout daemons for
+	// every workspace.  Both local daemons (sprout daemon / sprout service)
+	// and SSH-launched remote daemons listen on this port.  The daemon
+	// serves ALL workspaces from this single port, routing per-workspace
+	// internally via clientContext and chat_sessions — there are no
+	// folder-scoped daemon ports.  The launcher detects an existing daemon
+	// on this port and reuses it rather than starting a duplicate.
 	DaemonPort = 56000
 )
 
@@ -172,11 +176,11 @@ var errNoReleaseTagForArtifact = errors.New("no release tag available for curren
 // ---------------------------------------------------------------------------
 
 func workspaceLogPath() string {
-	home := os.Getenv("HOME")
-	if strings.TrimSpace(home) == "" {
-		return ".sprout/workspace.log"
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		return "workspace.log"
 	}
-	return filepath.Join(home, ".sprout", "workspace.log")
+	return filepath.Join(stateDir, "workspace.log")
 }
 
 func newSSHLaunchFailure(step, message, details string, logger *sshLaunchLogger) error {
@@ -251,11 +255,8 @@ func localSSHCacheRoot() string {
 
 	home := strings.TrimSpace(os.Getenv("HOME"))
 	if home != "" {
-		for _, base := range []string{
-			filepath.Join(home, ".cache"),
-			filepath.Join(home, ".sprout", "cache"),
-		} {
-			candidate := filepath.Join(base, "sprout-ssh-cache")
+		if cacheDir, err := envutil.CacheDir(); err == nil {
+			candidate := filepath.Join(cacheDir, "sprout-ssh-cache")
 			if err := os.MkdirAll(candidate, 0755); err == nil {
 				return candidate
 			}

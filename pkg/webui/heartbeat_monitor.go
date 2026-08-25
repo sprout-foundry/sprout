@@ -4,7 +4,7 @@ package webui
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -57,7 +57,7 @@ func (ws *ReactWebServer) checkStaleConnections() {
 	ws.mutex.Unlock()
 
 	for _, clientID := range staleClients {
-		log.Printf("[heartbeat] Stale connection detected for client %s (no heartbeat for >%s), cancelling active query", clientID, heartbeatStaleThreshold)
+		ws.log().Warn("stale connection detected; cancelling active query", slog.String("client_id", clientID), slog.Duration("stale_threshold", heartbeatStaleThreshold))
 		ws.cancelQueryForClient(clientID, "heartbeat_timeout", "Query cancelled: no heartbeat received for 60 seconds")
 	}
 }

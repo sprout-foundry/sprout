@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"os"
-	goruntime "runtime"
 	"sync"
 
 	onnxruntime "github.com/yalue/onnxruntime_go"
@@ -44,8 +43,8 @@ type ONNXEmbeddingProvider struct {
 	runtime   *ONNXRuntime
 	session   *onnxruntime.DynamicAdvancedSession
 	tokenizer *GemmaTokenizer
-	dims      int           // output dimensions (after MRL truncation)
-	fullDims  int           // model's native output dimensions (e.g., 768)
+	dims      int // output dimensions (after MRL truncation)
+	fullDims  int // model's native output dimensions (e.g., 768)
 	modelHash string
 	closed    bool
 
@@ -78,18 +77,10 @@ func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPa
 	// Intra-op parallelism unlocks the batched-embedding speedup: with the
 	// previous IntraOpNumThreads=1 setting, ORT processes each matmul on
 	// one core, so feeding a [batch, seq] tensor takes the same wallclock
-	// as N sequential per-row calls. The bench harness (default ORT
-	// threading on M1+) showed ~1.7× batched-vs-single speedup; we get
-	// roughly the same here. Cap at min(NumCPU, 4) so we don't starve
-	// other sprout work (the chat loop, file watchers, etc.) on a small
-	// machine, and to keep this consistent across CI runners.
-	intraThreads := goruntime.NumCPU()
-	if intraThreads > 4 {
-		intraThreads = 4
-	}
-	if intraThreads < 1 {
-		intraThreads = 1
-	}
+	// as N sequential per-row calls. The thread budget is process-aware:
+	// it divides (NumCPU-1) across concurrent sprout instances so 5
+	// processes don't each spawn 8 ORT threads and oversubscribe the CPU.
+	intraThreads := defaultIntraOpThreads()
 	session, err := runtime.NewDynamicSession(modelPath,
 		[]string{"input_ids", "attention_mask"},
 		[]string{"sentence_embedding"},
@@ -168,7 +159,7 @@ func (p *ONNXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float
 	}
 
 	// Run inference.
-	vec, err := p.runInference(inputIDs, attentionMask)
+	vec, err := p.runInference(ctx, inputIDs, attentionMask)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +219,7 @@ func (p *ONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text, prefi
 	}
 
 	// Run inference.
-	vec, err := p.runInference(inputIDs, attentionMask)
+	vec, err := p.runInference(ctx, inputIDs, attentionMask)
 	if err != nil {
 		return nil, err
 	}
@@ -243,19 +234,14 @@ func (p *ONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts 
 	return p.embedBatchInternal(ctx, texts, prefix)
 }
 
-// defaultBatchChunkSize bounds memory per ORT call. With 32 rows at
-// the 2048-token max seq, the input tensors are ~512 KB each (int64 ×
-// 32 × 2048) and the output is ~96 KB (float32 × 32 × 768). The
-// embedding model itself (~168 MB Q4f16 weights) stays loaded once;
-// per-call allocations are negligible. Throughput scales near-linearly
-// up to ~16–32 rows, after which memory bandwidth dominates and bigger
-// chunks stop helping.
-const defaultBatchChunkSize = 32
+// defaultBatchChunkSize and defaultBatchAttentionBudget — the row cap and
+// attention budget for batched inference — now live in batch_planner.go,
+// shared with the MLX provider so both backends chunk identically.
 
 // embedBatchInternal is the shared body for EmbedBatch and
-// EmbedBatchWithPrefix. Tokenizes every input up front, partitions
-// into fixed-size chunks, and runs each chunk through ORT as a single
-// padded [batch, seq_len] tensor.
+// EmbedBatchWithPrefix. Tokenizes every input up front, partitions into
+// chunks bounded by both row count and attention cost, and runs each chunk
+// through ORT as a single padded [batch, seq_len] tensor.
 //
 // Empty-string inputs (tokenize to zero tokens) get a zero embedding
 // without an ORT call — matches the prior per-text behavior and keeps
@@ -275,11 +261,12 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 		return nil, fmt.Errorf("onnx embedding: provider is closed")
 	}
 
-	// Pre-tokenize every row so the chunk loop can size each batch by
+	// Pre-tokenize every row so the chunk planner can size each batch by
 	// the longest non-empty row in that chunk (no point padding to the
 	// global max if a chunk's contents are all short).
 	tokIDs := make([][]int32, len(texts))
 	results := make([][]float32, len(texts))
+	lens := make([]int32, len(texts))
 	for i, text := range texts {
 		if prefix != "" {
 			text = prefix + text
@@ -289,40 +276,21 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 			ids = ids[:p.maxSeqLen]
 		}
 		tokIDs[i] = ids
+		lens[i] = int32(len(ids))
 		if len(ids) == 0 {
 			// Empty input → zero vector. Mirrors single-call Embed().
 			results[i] = make([]float32, p.dims)
 		}
 	}
 
-	for start := 0; start < len(texts); start += defaultBatchChunkSize {
+	for _, chunk := range planInferenceChunks(lens) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		end := start + defaultBatchChunkSize
-		if end > len(texts) {
-			end = len(texts)
-		}
 
-		// Collect indices of rows in this chunk that actually need
-		// inference (skip ones we already filled with the zero vector).
-		nonEmptyIdx := make([]int, 0, end-start)
-		maxLen := 0
-		for i := start; i < end; i++ {
-			if len(tokIDs[i]) == 0 {
-				continue
-			}
-			nonEmptyIdx = append(nonEmptyIdx, i)
-			if len(tokIDs[i]) > maxLen {
-				maxLen = len(tokIDs[i])
-			}
-		}
-		if len(nonEmptyIdx) == 0 {
-			continue
-		}
-
+		nonEmptyIdx := chunk.Rows
 		batchSize := int64(len(nonEmptyIdx))
-		seqLen := int64(maxLen)
+		seqLen := int64(chunk.SeqLen)
 
 		// Pack input_ids + attention_mask as [batch * seq] row-major.
 		// Padding positions get id=0 and mask=0; the attention mask
@@ -339,9 +307,9 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 			}
 		}
 
-		batchVecs, err := p.runInferenceBatch(inputIDs, attnMask, batchSize, seqLen)
+		batchVecs, err := p.runInferenceBatch(ctx, inputIDs, attnMask, batchSize, seqLen)
 		if err != nil {
-			return nil, fmt.Errorf("batch embed[%d:%d]: %w", start, end, err)
+			return nil, fmt.Errorf("batch embed[%d rows, seq %d]: %w", len(nonEmptyIdx), seqLen, err)
 		}
 		for bi, idx := range nonEmptyIdx {
 			results[idx] = batchVecs[bi]
@@ -356,7 +324,13 @@ func (p *ONNXEmbeddingProvider) embedBatchInternal(ctx context.Context, texts []
 // representation learning truncation, then L2-normalize.
 //
 // Must be called with p.mu.RLock held.
-func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []int64) ([]float32, error) {
+func (p *ONNXEmbeddingProvider) runInference(ctx context.Context, inputIDs []int64, attentionMask []int64) ([]float32, error) {
+	release, err := acquireInference(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	batchSize := int64(1)
 	seqLen := int64(len(inputIDs))
 	fullDim := int64(p.fullDims)
@@ -379,7 +353,7 @@ func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []i
 	}
 	defer outputTensor.Destroy()
 
-	if err := p.session.Run(
+	if err := p.runWithOptions(ctx,
 		[]onnxruntime.Value{inputIDsTensor, attnMaskTensor},
 		[]onnxruntime.Value{outputTensor},
 	); err != nil {
@@ -414,8 +388,29 @@ func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []i
 // positions get the model's "ignore this token" behavior so the
 // per-row output matches what unpadded inference would have produced.
 //
+// runWithOptions wraps session.RunWithOptions with ctx-aware termination.
+//
+// See runSessionWithOptions in onnx_run_options.go for the rationale and the
+// watchdog implementation. Kept as a thin pass-through so the call sites in
+// this file read as `p.runWithOptions(ctx, ...)` rather than handing the
+// session pointer through every call.
+func (p *ONNXEmbeddingProvider) runWithOptions(
+	ctx context.Context,
+	inputs, outputs []onnxruntime.Value,
+) error {
+	return runSessionWithOptions(ctx, p.session, inputs, outputs)
+}
+
 // Must be called with p.mu.RLock held.
-func (p *ONNXEmbeddingProvider) runInferenceBatch(inputIDs []int64, attentionMask []int64, batchSize, seqLen int64) ([][]float32, error) {
+func (p *ONNXEmbeddingProvider) runInferenceBatch(ctx context.Context, inputIDs []int64, attentionMask []int64, batchSize, seqLen int64) ([][]float32, error) {
+	// Gate before allocating: the tensors and the Run's activations are the
+	// memory this bounds, so the permit has to cover both.
+	release, err := acquireInference(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	fullDim := int64(p.fullDims)
 
 	inputIDsTensor, err := onnxruntime.NewTensor(onnxruntime.NewShape(batchSize, seqLen), inputIDs)
@@ -436,7 +431,7 @@ func (p *ONNXEmbeddingProvider) runInferenceBatch(inputIDs []int64, attentionMas
 	}
 	defer outputTensor.Destroy()
 
-	if err := p.session.Run(
+	if err := p.runWithOptions(ctx,
 		[]onnxruntime.Value{inputIDsTensor, attnMaskTensor},
 		[]onnxruntime.Value{outputTensor},
 	); err != nil {

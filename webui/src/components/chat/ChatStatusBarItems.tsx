@@ -1,5 +1,6 @@
-import { Cloud, Server, Cpu } from 'lucide-react';
 import { getPersonaColor } from '@sprout/ui';
+import { Cloud, Server, Cpu } from 'lucide-react';
+import { useProviderCatalog } from '../../contexts/ProviderCatalogContext';
 import './ChatStatusBarItems.css';
 
 /**
@@ -83,10 +84,16 @@ function ProviderIcon({ provider }: { provider?: string }): JSX.Element | null {
 }
 
 export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatStatusBarItemsProps): JSX.Element | null {
+  const { getProviderName } = useProviderCatalog();
+
   if (!stats) return null;
 
   const provider = typeof stats.provider === 'string' ? stats.provider : '';
   const model = typeof stats.model === 'string' ? stats.model : '';
+  // The metrics_update event carries the raw provider id (e.g. `openrouter`).
+  // Settings dropdowns show the display name (`OpenRouter (Recommended)`);
+  // resolve through the shared catalog so the status bar matches.
+  const providerDisplay = getProviderName(provider) || provider;
   const persona = typeof stats.persona === 'string' ? stats.persona : '';
   const totalTokens = Number(stats.total_tokens ?? NaN);
   const currentCtx = Number(stats.current_context_tokens ?? NaN);
@@ -128,6 +135,19 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
     );
   }
 
+  // Offline badge when using a local/offline provider.
+  if (provider === 'sprout-local') {
+    segments.push(
+      <span
+        key="offline"
+        className="chat-statusbar-item chat-statusbar-offline"
+        title="Running fully on-device — no network"
+      >
+        Offline
+      </span>,
+    );
+  }
+
   // Persona chip — only when the agent's active persona is something
   // other than the unmarked primary. The CLI shows persona via tool-line
   // badges; this surfaces the same signal at the status level so users
@@ -147,9 +167,16 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
     );
   }
 
-  if (provider || model) {
-    const modelLabel = model || provider;
-    const tooltip = onModelClick ? `${provider} · ${model} — click to change model` : `${provider} · ${model}`;
+  // Provider/model are already visible in the Status bar's middle section.
+  // Only surface the model here when a non-orchestrator subagent is running
+  // (persona segment already signals which agent; adding model makes it
+  // actionable) OR when disconnected (no middle-bar context available).
+  const showModel = (provider || model) && (isConnected === false || (persona && persona !== 'orchestrator'));
+  if (showModel) {
+    const modelLabel = model || providerDisplay;
+    const tooltip = onModelClick
+      ? `${providerDisplay} · ${model} — click to change model`
+      : `${providerDisplay} · ${model}`;
     segments.push(
       <span key="provider" className="chat-statusbar-item chat-statusbar-model" title={tooltip}>
         <ProviderIcon provider={provider} />
@@ -188,6 +215,7 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
       <span
         key="cost"
         className={`chat-statusbar-item chat-statusbar-cost ${costClass(totalCost)}`}
+        data-testid="status-bar-cost"
         title="Session cost"
       >
         {formatCost(totalCost)}
@@ -199,7 +227,13 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
   // dot when a segment is missing.
   const out: JSX.Element[] = [];
   segments.forEach((seg, i) => {
-    if (i > 0) out.push(<span key={`sep-${i}`} className="chat-statusbar-sep" aria-hidden="true">·</span>);
+    if (i > 0) {
+      out.push(
+        <span key={`sep-${i}`} className="chat-statusbar-sep" aria-hidden="true">
+          ·
+        </span>,
+      );
+    }
     out.push(seg);
   });
 

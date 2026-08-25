@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"testing"
 
@@ -13,14 +13,14 @@ import (
 // githubRouterMCPManager is a test MCPManager that supports GetServer
 // with a configurable fakeMCPServer and tracks CallTool invocations.
 type githubRouterMCPManager struct {
-	servers      map[string]mcp.MCPServer
-	callResult   *mcp.MCPToolCallResult
-	callErr      error
-	lastServer   string
-	lastTool     string
-	lastArgs     map[string]interface{}
-	callCount    int
-	mu           sync.Mutex
+	servers    map[string]mcp.MCPServer
+	callResult *mcp.MCPToolCallResult
+	callErr    error
+	lastServer string
+	lastTool   string
+	lastArgs   map[string]interface{}
+	callCount  int
+	mu         sync.Mutex
 }
 
 func newGitHubRouterMCPManager() *githubRouterMCPManager {
@@ -50,7 +50,7 @@ func (m *githubRouterMCPManager) AddServer(config mcp.MCPServerConfig) error {
 	m.servers[config.Name] = nil // just record existence
 	return nil
 }
-func (m *githubRouterMCPManager) RemoveServer(name string) error     { return nil }
+func (m *githubRouterMCPManager) RemoveServer(name string) error { return nil }
 func (m *githubRouterMCPManager) GetServer(name string) (mcp.MCPServer, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -58,8 +58,8 @@ func (m *githubRouterMCPManager) GetServer(name string) (mcp.MCPServer, bool) {
 	return s, ok
 }
 func (m *githubRouterMCPManager) ListServers() []mcp.MCPServer       { return nil }
-func (m *githubRouterMCPManager) StartAll(ctx context.Context) error  { return nil }
-func (m *githubRouterMCPManager) StopAll(ctx context.Context) error   { return nil }
+func (m *githubRouterMCPManager) StartAll(ctx context.Context) error { return nil }
+func (m *githubRouterMCPManager) StopAll(ctx context.Context) error  { return nil }
 func (m *githubRouterMCPManager) GetAllTools(ctx context.Context) ([]mcp.MCPTool, error) {
 	return nil, nil
 }
@@ -82,19 +82,25 @@ type routerFakeMCPServer struct {
 	running bool
 }
 
-func (f *routerFakeMCPServer) Start(_ context.Context) error                              { f.running = true; return nil }
-func (f *routerFakeMCPServer) Stop(_ context.Context) error                               { f.running = false; return nil }
-func (f *routerFakeMCPServer) IsRunning() bool                                            { return f.running }
-func (f *routerFakeMCPServer) GetName() string                                            { return f.name }
-func (f *routerFakeMCPServer) GetConfig() mcp.MCPServerConfig                              { return mcp.MCPServerConfig{} }
-func (f *routerFakeMCPServer) Initialize(_ context.Context) error                          { return nil }
-func (f *routerFakeMCPServer) ListTools(_ context.Context) ([]mcp.MCPTool, error)         { return nil, nil }
+func (f *routerFakeMCPServer) Start(_ context.Context) error                      { f.running = true; return nil }
+func (f *routerFakeMCPServer) Stop(_ context.Context) error                       { f.running = false; return nil }
+func (f *routerFakeMCPServer) IsRunning() bool                                    { return f.running }
+func (f *routerFakeMCPServer) GetName() string                                    { return f.name }
+func (f *routerFakeMCPServer) GetConfig() mcp.MCPServerConfig                     { return mcp.MCPServerConfig{} }
+func (f *routerFakeMCPServer) Initialize(_ context.Context) error                 { return nil }
+func (f *routerFakeMCPServer) ListTools(_ context.Context) ([]mcp.MCPTool, error) { return nil, nil }
 func (f *routerFakeMCPServer) CallTool(_ context.Context, _ mcp.MCPToolCallRequest) (*mcp.MCPToolCallResult, error) {
 	return nil, nil
 }
-func (f *routerFakeMCPServer) ListResources(_ context.Context) ([]mcp.MCPResource, error)  { return nil, nil }
-func (f *routerFakeMCPServer) ReadResource(_ context.Context, _ string) (*mcp.MCPContent, error) { return nil, nil }
-func (f *routerFakeMCPServer) ListPrompts(_ context.Context) ([]mcp.MCPPrompt, error)          { return nil, nil }
+func (f *routerFakeMCPServer) ListResources(_ context.Context) ([]mcp.MCPResource, error) {
+	return nil, nil
+}
+func (f *routerFakeMCPServer) ReadResource(_ context.Context, _ string) (*mcp.MCPContent, error) {
+	return nil, nil
+}
+func (f *routerFakeMCPServer) ListPrompts(_ context.Context) ([]mcp.MCPPrompt, error) {
+	return nil, nil
+}
 func (f *routerFakeMCPServer) GetPrompt(_ context.Context, _ string, _ map[string]interface{}) (*mcp.MCPContent, error) {
 	return nil, nil
 }
@@ -308,7 +314,7 @@ func TestTryRouteGitHubToMCP_GistURL_NotHandled(t *testing.T) {
 func TestTryRouteGitHubToMCP_MCPError_FallsThrough(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().
 		withGitHubServer(true).
-		withCallErr(fmt.Errorf("server unreachable"))
+		withCallErr(errors.New("server unreachable"))
 	a := testAgent(mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/1")

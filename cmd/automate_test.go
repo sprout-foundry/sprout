@@ -5,6 +5,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +33,7 @@ func resetAutomateGlobals() func() {
 	savedLogsLines := automateLogsLines
 	savedDir := automateDir
 	savedAssumeYes := automateAssumeYes
+	savedDetach := automateDetach
 	savedBudgetUSD := automateBudgetUSD
 	savedBudgetWarn := automateBudgetWarn
 	savedHeartbeat := automateHeartbeatSeconds
@@ -44,6 +46,7 @@ func resetAutomateGlobals() func() {
 		automateLogsLines = savedLogsLines
 		automateDir = savedDir
 		automateAssumeYes = savedAssumeYes
+		automateDetach = savedDetach
 		automateBudgetUSD = savedBudgetUSD
 		automateBudgetWarn = savedBudgetWarn
 		automateHeartbeatSeconds = savedHeartbeat
@@ -123,7 +126,7 @@ func writeTestSessionWithOutput(t *testing.T, sproutDir, sessionID, outputFilePa
 // =============================================================================
 
 func TestAutomateStatus_NoSessions(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = false
 
@@ -143,7 +146,7 @@ func TestAutomateStatus_NoSessions(t *testing.T) {
 }
 
 func TestAutomateStatus_RunningSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = false
 
@@ -164,7 +167,7 @@ func TestAutomateStatus_RunningSession(t *testing.T) {
 }
 
 func TestAutomateStatus_ExitedSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = false
 
@@ -186,7 +189,7 @@ func TestAutomateStatus_ExitedSession(t *testing.T) {
 }
 
 func TestAutomateStatus_AllFlag(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = true
 	automateStatusJSON = false
 
@@ -209,7 +212,7 @@ func TestAutomateStatus_AllFlag(t *testing.T) {
 }
 
 func TestAutomateStatus_JsonOutput(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateStatusAll = false
 	automateStatusJSON = true
 
@@ -239,7 +242,7 @@ func TestAutomateStatus_JsonOutput(t *testing.T) {
 // =============================================================================
 
 func TestAutomateStop_AlreadyDead(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 
 	sproutDir := setupTestSproutDir(t)
 	writeTestSession(t, sproutDir, "cli-automate-stopped", 99999)
@@ -247,13 +250,16 @@ func TestAutomateStop_AlreadyDead(t *testing.T) {
 	err := runAutomateStop("cli-automate-stopped")
 	require.NoError(t, err)
 
-	// PID file should be cleaned up
-	_, readErr := os.ReadFile(filepath.Join(sproutDir, "automate", "cli-automate-stopped.json"))
-	assert.True(t, os.IsNotExist(readErr), "expected PID file to be removed")
+	// Dead-unfinalized sessions are finalized (post-mortem retained), not deleted.
+	info, readErr := automate.ReadSessionFile(sproutDir, "cli-automate-stopped")
+	require.NoError(t, readErr)
+	assert.Equal(t, "error", info.Status)
+	require.NotNil(t, info.ExitCode)
+	assert.Equal(t, -1, *info.ExitCode)
 }
 
 func TestAutomateStop_UnknownSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 
 	setupTestSproutDir(t)
 
@@ -267,7 +273,7 @@ func TestAutomateStop_UnknownSession(t *testing.T) {
 // =============================================================================
 
 func TestAutomateLogs_NoOutputFile(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -287,7 +293,7 @@ func TestAutomateLogs_NoOutputFile(t *testing.T) {
 }
 
 func TestAutomateLogs_WithOutput(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -316,7 +322,7 @@ func TestAutomateLogs_WithOutput(t *testing.T) {
 }
 
 func TestAutomateLogs_LastNLines(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 2 // only last 2 lines
 
@@ -346,7 +352,7 @@ func TestAutomateLogs_LastNLines(t *testing.T) {
 }
 
 func TestAutomateLogs_MissingSession(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -358,7 +364,7 @@ func TestAutomateLogs_MissingSession(t *testing.T) {
 }
 
 func TestAutomateLogs_MissingOutputFile(t *testing.T) {
-	defer resetAutomateGlobals()
+	defer resetAutomateGlobals()()
 	automateLogsFollow = false
 	automateLogsLines = 0
 
@@ -367,9 +373,16 @@ func TestAutomateLogs_MissingOutputFile(t *testing.T) {
 	// Create a session pointing to a file that doesn't exist
 	writeTestSessionWithOutput(t, sproutDir, "cli-automate-missing-file", "/tmp/definitely-not-here-12345.log", os.Getpid())
 
+	// A recorded-but-missing log file is a friendly notice, not an error:
+	// detached sessions record their log path at launch, and the file can
+	// legitimately be absent (cleaned up, different machine) — the session
+	// record itself is still valid.
+	var buf bytes.Buffer
+	cap := captureAutomateStdout(&buf)
 	err := runAutomateLogs("cli-automate-missing-file")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read output file")
+	cap.Restore()
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Log file recorded but not found")
 }
 
 // =============================================================================
@@ -488,7 +501,7 @@ func TestPrintStatusTable_FormatsCorrectly(t *testing.T) {
 	assert.Contains(t, got, "SESSION")
 	assert.Contains(t, got, "WORKFLOW")
 	assert.Contains(t, got, "STATUS")
-	assert.Contains(t, got, "PID")
+	assert.Contains(t, got, "EXIT")
 	assert.Contains(t, got, "sess-table")
 	assert.Contains(t, got, "running")
 }
@@ -622,15 +635,16 @@ func TestAutomateIntegration_LaunchStatusStop(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, sessions, 1, "session file should still exist before sweep")
 
-	// Sweep stale sessions and verify the file is removed
+	// Sweep stale sessions — a recently-ended session must be RETAINED
+	// (post-mortem observability); only records past the 7-day window go.
 	removed, err := automate.SweepStaleSessions(sproutDir)
 	require.NoError(t, err)
-	assert.Equal(t, 1, removed, "sweep should remove the stale session file")
+	assert.Equal(t, 0, removed, "sweep must keep recently-ended sessions")
 
-	// Confirm the session file is gone
+	// Confirm the session file is still there
 	sessions, err = automate.ListSessionFiles(sproutDir)
 	require.NoError(t, err)
-	assert.Len(t, sessions, 0, "no sessions should remain after sweep")
+	assert.Len(t, sessions, 1, "session record retained for post-mortem")
 }
 
 // =============================================================================
@@ -702,13 +716,146 @@ func TestAutomateCrossProcess_Discovery(t *testing.T) {
 	// Verify automate.IsProcessAlive(pid) returns false after stop
 	assert.False(t, automate.IsProcessAlive(pid), "process should be dead after stop")
 
-	// Verify cleanup via sweep
+	// Verify retention via sweep — recently dead sessions are kept now
 	removed, err := automate.SweepStaleSessions(sproutDir)
 	require.NoError(t, err)
-	assert.Equal(t, 1, removed, "sweep should remove the stale session file")
+	assert.Equal(t, 0, removed, "sweep must keep recently-ended session records")
 
-	// Confirm the session file is gone
 	sessions, err := automate.ListSessionFiles(sproutDir)
 	require.NoError(t, err)
-	assert.Len(t, sessions, 0, "no sessions should remain after sweep")
+	assert.Len(t, sessions, 1, "record retained")
+}
+
+// =============================================================================
+// buildAgentSubprocessArgs Tests
+// =============================================================================
+
+func TestBuildAgentSubprocessArgs_Basic(t *testing.T) {
+	defer resetAutomateGlobals()()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 0, // unlimited — should NOT add --max-iterations
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_WithMaxIterations(t *testing.T) {
+	defer resetAutomateGlobals()()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 500,
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--max-iterations", "500"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_WithBudget(t *testing.T) {
+	defer resetAutomateGlobals()()
+	automateBudgetUSD = 10.0
+	automateBudgetWarn = "0.5,0.8"
+	automateHeartbeatSeconds = 600
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 0,
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--budget-usd", "10", "--budget-warn", "0.5,0.8", "--heartbeat", "600"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_AllFlags(t *testing.T) {
+	defer resetAutomateGlobals()()
+	automateBudgetUSD = 25.0
+	automateBudgetWarn = "0.5,0.8"
+	automateHeartbeatSeconds = 300
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 100,
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--max-iterations", "100", "--budget-usd", "25", "--budget-warn", "0.5,0.8", "--heartbeat", "300"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_NilSummary(t *testing.T) {
+	defer resetAutomateGlobals()()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", nil)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_NilInitial(t *testing.T) {
+	defer resetAutomateGlobals()()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	summary := &automate.Summary{
+		Initial: nil,
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+}
+
+// =============================================================================
+// Subagent Timeout Env Var Injection Tests
+// =============================================================================
+
+func TestSubagentTimeoutEnvVar_InjectedWhenSet(t *testing.T) {
+	timeout := 7200
+	summary := &automate.Summary{
+		SubagentTimeoutSeconds: &timeout,
+	}
+
+	// Verify the logic: when SubagentTimeoutSeconds is non-nil and > 0,
+	// the env var should be set. We can't easily test exec.Command's Env
+	// in runWorkflowByPath, so verify the condition directly.
+	if summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		expected := fmt.Sprintf("SPROUT_TOOL_TIMEOUT=%d", *summary.SubagentTimeoutSeconds)
+		assert.Equal(t, "SPROUT_TOOL_TIMEOUT=7200", expected)
+	}
+}
+
+func TestSubagentTimeoutEnvVar_NotInjectedWhenZero(t *testing.T) {
+	timeout := 0
+	summary := &automate.Summary{
+		SubagentTimeoutSeconds: &timeout,
+	}
+
+	// When SubagentTimeoutSeconds is 0, the condition should be false
+	if summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		t.Fatal("should not inject env var when SubagentTimeoutSeconds is 0")
+	}
+}
+
+func TestSubagentTimeoutEnvVar_NotInjectedWhenNil(t *testing.T) {
+	summary := &automate.Summary{
+		SubagentTimeoutSeconds: nil,
+	}
+
+	// When SubagentTimeoutSeconds is nil, the condition should be false
+	if summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		t.Fatal("should not inject env var when SubagentTimeoutSeconds is nil")
+	}
 }

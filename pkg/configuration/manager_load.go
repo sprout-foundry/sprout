@@ -1,0 +1,264 @@
+package configuration
+
+// Package configuration: config loading, reload, and save-locking (split from manager.go)
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// GetConfig returns the current configuration
+func (m *Manager) GetConfig() *Config {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return cloneConfig(m.config)
+}
+
+// GetAPIKeys returns the current API keys
+func (m *Manager) GetAPIKeys() *APIKeys {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return cloneAPIKeys(m.apiKeys)
+}
+
+// GetConfigDir returns the stored config directory for this manager.
+// Returns empty string if the manager uses the default (env-based) location.
+func (m *Manager) GetConfigDir() string {
+	return m.configDir
+}
+
+// LoadConfigWithLayers loads configuration from three layers:
+// globalPath -> workspacePath -> sessionPath (each overrides previous)
+// Each layer is optional; missing layers are skipped.
+// globalDir is the directory for global providers (used when globalPath is empty but custom providers need loading).
+//
+// Local override files (config.local.json / workspace.local.json) are
+// automatically loaded as a higher-precedence sibling within their
+// scope: global config.json is overridden by global config.local.json,
+// workspace workspace.json by workspace.local.json. The session layer
+// (highest) remains unchanged.
+func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir string) (*Config, error) {
+	var result *Config
+
+	// 1. Load global config (base)
+	if globalPath != "" {
+		if data, err := os.ReadFile(globalPath); err == nil {
+			var cfg Config
+			if err := unmarshalLayer(data, &cfg); err != nil {
+				log.Printf("[config] warning: failed to parse global config %s: %v", globalPath, err)
+			} else {
+				result = &cfg
+			}
+		}
+		// 1b. Merge global-local override (config.local.json) if present
+		localPath := filepath.Join(filepath.Dir(globalPath), ConfigLocalFileName)
+		if localPath != globalPath {
+			if data, err := os.ReadFile(localPath); err == nil {
+				var localCfg Config
+				if err := unmarshalLayer(data, &localCfg); err != nil {
+					log.Printf("[config] warning: failed to parse global-local config %s: %v", localPath, err)
+				} else {
+					if result == nil {
+						result = NewConfig()
+					}
+					result = MergeConfig(result, &localCfg)
+				}
+			}
+		}
+	}
+
+	if result == nil {
+		result = NewConfig()
+	}
+
+	// 2. Merge workspace config if exists
+	if workspacePath != "" {
+		if data, err := os.ReadFile(workspacePath); err == nil {
+			var workspaceCfg Config
+			if err := unmarshalLayer(data, &workspaceCfg); err != nil {
+				log.Printf("[config] warning: failed to parse workspace config %s: %v", workspacePath, err)
+			} else {
+				result = MergeConfig(result, &workspaceCfg)
+			}
+		}
+		// 2b. Merge workspace-local override (workspace.local.json) if present
+		localWsPath := filepath.Join(filepath.Dir(workspacePath), WorkspaceLocalFileName)
+		if localWsPath != workspacePath {
+			if data, err := os.ReadFile(localWsPath); err == nil {
+				var localWsCfg Config
+				if err := unmarshalLayer(data, &localWsCfg); err != nil {
+					log.Printf("[config] warning: failed to parse workspace-local config %s: %v", localWsPath, err)
+				} else {
+					result = MergeConfig(result, &localWsCfg)
+				}
+			}
+		}
+	}
+
+	// 3. Merge session config if exists (highest priority)
+	if sessionPath != "" {
+		if data, err := os.ReadFile(sessionPath); err == nil {
+			var sessionCfg Config
+			if err := unmarshalLayer(data, &sessionCfg); err != nil {
+				log.Printf("[config] warning: failed to parse session config %s: %v", sessionPath, err)
+			} else {
+				result = MergeConfig(result, &sessionCfg)
+			}
+		}
+	}
+
+	// 4. Load custom providers from individual files.
+	// Custom providers are never persisted to config.json (CustomProviders is set
+	// to nil before saving), so they must be loaded from the provider directory.
+	// Custom providers are global-first with optional project-scoped overrides:
+	// load from both the global home dir and the scoped config dir, with the
+	// scoped dir overriding the global one on name conflicts.
+	if result.CustomProviders == nil {
+		result.CustomProviders = make(map[string]CustomProviderConfig)
+	}
+
+	// Determine the scoped providers dir (from globalPath or globalDir).
+	var scopedProvidersDir string
+	if globalPath != "" {
+		scopedProvidersDir = filepath.Join(filepath.Dir(globalPath), ProvidersDirName)
+	} else if globalDir != "" {
+		scopedProvidersDir = filepath.Join(globalDir, ProvidersDirName)
+	}
+
+	// Determine the true global home providers dir (always from the
+	// home/XDG path, never from SPROUT_CONFIG — that's the scoped dir).
+	globalHomeProvidersDir := ""
+	if homeDir, err := getDefaultConfigDir(); err == nil {
+		candidate := filepath.Join(homeDir, ProvidersDirName)
+		// Only treat it as a separate global dir if it differs from the
+		// scoped dir (avoids double-loading the same files).
+		if candidate != scopedProvidersDir {
+			globalHomeProvidersDir = candidate
+		}
+	}
+
+	// Load global home providers first (lowest priority).
+	if globalHomeProvidersDir != "" {
+		if fileProviders, err := LoadCustomProvidersFromDir(globalHomeProvidersDir); err != nil {
+			log.Printf("[config] warning: failed to load global custom providers from %s: %v", globalHomeProvidersDir, err)
+		} else {
+			for name, provider := range fileProviders {
+				result.CustomProviders[name] = provider
+			}
+		}
+	}
+
+	// Load scoped providers second (overrides global on conflict).
+	if scopedProvidersDir != "" {
+		if fileProviders, err := LoadCustomProvidersFromDir(scopedProvidersDir); err != nil {
+			log.Printf("[config] warning: failed to load scoped custom providers from %s: %v", scopedProvidersDir, err)
+		} else {
+			for name, provider := range fileProviders {
+				result.CustomProviders[name] = provider
+			}
+		}
+	}
+
+	// Same self-heal as Load() — a stale "test" sentinel on disk
+	// shouldn't drive the real CLI.
+	sanitizeTestProvider(result)
+
+	// Personas are catalog-fixed and never read from disk; hydrate from the
+	// embedded catalog so every layered-load path matches the regular Load().
+	result.SubagentTypes = defaultSubagentTypes()
+
+	// Merge missing default (built-in) skills so that a hot-reload via
+	// Manager.Reload() picks up new builtins added to the embedded library
+	// without requiring a process restart. Mirrors what Load() does.
+	if result.Skills == nil {
+		result.Skills = make(map[string]Skill)
+	}
+	mergeMissingDefaultSkills(result)
+
+	// Discover user-level and project-specific skills so that hot-reload
+	// paths (Manager.Reload -> LoadConfigWithLayers) pick up new SKILL.md
+	// files without requiring a process restart.
+	if discovered := result.discoverSkills(); len(discovered) > 0 {
+		log.Printf("[skills] Discovered %d skill(s): %s",
+			len(discovered), strings.Join(discovered, ", "))
+	}
+
+	// Migrate legacy approved_shell_commands to unified command_policies
+	MigrateCommandPolicies(result)
+
+	return result, nil
+}
+
+// saveConfigLocked persists the in-memory config to disk.
+// If m.configDir is set, it uses SaveToDir (bypassing env vars).
+// Otherwise it falls back to Config.Save() (which reads env vars).
+//
+// On ConfigConflictError (another process modified the file since we loaded),
+// it reloads the on-disk config, merges pending in-memory changes on top,
+// and retries once. Caller must hold m.mu.
+func (m *Manager) saveConfigLocked() error {
+	err := m.saveConfigDirectLocked()
+	if err == nil || !IsConfigConflict(err) {
+		return err
+	}
+
+	// Config changed on disk (likely another process); reload and merge our pending changes.
+	log.Printf("[config] merged external config change: %v", err)
+	if mergeErr := m.reloadAndMergeLocked(); mergeErr != nil {
+		return fmt.Errorf("config conflict, reload-merge failed: %w (original: %v)", mergeErr, err)
+	}
+
+	// Retry save with the merged config.
+	return m.saveConfigDirectLocked()
+}
+
+// saveConfigDirectLocked performs the actual config write without retry logic.
+func (m *Manager) saveConfigDirectLocked() error {
+	if m.configDir != "" {
+		if err := m.config.SaveToDirAs(m.configDir, m.configFileName); err != nil {
+			return fmt.Errorf("save config: %w", err)
+		}
+	} else {
+		if err := m.config.Save(); err != nil {
+			return fmt.Errorf("save config: %w", err)
+		}
+	}
+	return nil
+}
+
+// reloadAndMergeLocked reloads the config from disk, then overlays the
+// in-memory changes that haven't been persisted yet (diff of m.config vs
+// m.lastSaved). Caller must hold m.mu.
+func (m *Manager) reloadAndMergeLocked() error {
+	// Capture pending changes (what m.config has that m.lastSaved doesn't).
+	pending := m.pendingChangesLocked()
+
+	// Reload from disk.
+	var reloaded *Config
+	var err error
+	if m.configDir != "" {
+		// Must match the file saveConfigDirectLocked writes, or the
+		// conflict-merge path reloads a different file than it persists.
+		fileName := m.configFileName
+		if fileName == "" {
+			fileName = ConfigFileName
+		}
+		configPath := filepath.Join(m.configDir, fileName)
+		reloaded, err = LoadConfigWithLayers(configPath, "", "", m.configDir)
+	} else {
+		reloaded, err = Load()
+	}
+	if err != nil {
+		return fmt.Errorf("reload: %w", err)
+	}
+
+	// Apply pending changes on top of the reloaded config.
+	pending.applyTo(reloaded)
+
+	// Swap in the merged config.
+	m.config = reloaded
+	return nil
+}

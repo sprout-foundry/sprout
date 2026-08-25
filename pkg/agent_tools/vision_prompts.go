@@ -111,8 +111,3 @@ func GetUIElementPrompt() string {
 func GetOCRPrompt() string {
 	return "Extract all text from this image. Return only the extracted text."
 }
-
-// GetPDFOCRPrompt returns a prompt for PDF OCR
-func GetPDFOCRPrompt() string {
-	return "Extract all text from this PDF document. Return only the extracted text, preserving the structure."
-}

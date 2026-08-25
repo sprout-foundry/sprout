@@ -1,7 +1,7 @@
-import { createContext, useContext, useMemo, type ReactNode, useCallback } from 'react';
+import { createContext, useContext, useMemo, type ReactNode, useCallback, useState, useEffect } from 'react';
 import type { APIAdapter } from '../services/apiAdapter';
-import { getAdapter } from '../services/apiAdapter';
-import { clientFetch, getWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
+import { getAdapter, ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
+import { clientFetch, resolveWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
 
 interface SproutAdapterContextValue {
   adapter: APIAdapter | null;
@@ -36,8 +36,14 @@ export function useSproutFetch(): (input: RequestInfo | URL, init?: RequestInit)
 
   return useCallback(
     async (input: RequestInfo | URL, init?: RequestInit) => {
+      // Resolve the client ID asynchronously. In cloud mode (cross-origin),
+      // getWebUIClientId() (synchronous) would generate a bogus UUID because
+      // document.cookie is unreadable — that bogus ID poisons sessionStorage
+      // and makes resolveWebUIClientId()'s fast-path skip server recovery.
+      // Awaiting resolveWebUIClientId() ensures the real ID is used.
+      const clientId = await resolveWebUIClientId();
       const headers = new Headers(init?.headers || {});
-      headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
+      headers.set(WEBUI_CLIENT_ID_HEADER, clientId);
 
       if (adapter) {
         // Cloud mode: route through adapter (adapter.fetch does NOT add client ID header)
@@ -70,11 +76,22 @@ export interface SproutAdapterProviderProps {
  * ThemeProvider, to ensure all components have access to the adapter.
  */
 export function SproutAdapterProvider({ children }: SproutAdapterProviderProps): JSX.Element {
-  // Read adapter from singleton - this is the source of truth
-  const adapter = getAdapter();
+  // The adapter is installed asynchronously (after the /api/bootstrap
+  // fetch resolves), which can happen AFTER this provider's first mount.
+  // Track the singleton in state and refresh on the install event so
+  // consumers (e.g. useSproutFetch) see the adapter deterministically
+  // instead of depending on an unrelated parent re-render.
+  const [adapter, setAdapter] = useState<APIAdapter | null>(() => getAdapter());
+  useEffect(() => {
+    const onAdapterInstalled = () => setAdapter(getAdapter());
+    window.addEventListener(ADAPTER_INSTALLED_EVENT, onAdapterInstalled);
+    return () => {
+      window.removeEventListener(ADAPTER_INSTALLED_EVENT, onAdapterInstalled);
+    };
+  }, []);
 
-  // Memoize context value to prevent unnecessary re-renders
-  // The adapter reference is stable, so this only updates when getAdapter() returns a different value
+  // Memoize context value to prevent unnecessary re-renders.
+  // The adapter reference is stable once installed.
   const value = useMemo(() => ({ adapter }), [adapter]);
 
   return <SproutAdapterContext.Provider value={value}>{children}</SproutAdapterContext.Provider>;

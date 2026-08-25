@@ -1,5 +1,6 @@
-import { Bot, Settings, CloudOff } from 'lucide-react';
+import { Settings, CloudOff } from 'lucide-react';
 import { forwardRef } from 'react';
+import SproutLogo from '../SproutLogo';
 
 interface EmptyChatPanelProps {
   /** Show offline panel when backend requires health check and is unreachable */
@@ -17,7 +18,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   if (showOffline) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
-        <div className="chat-offline-panel" role="status">
+        <div className="chat-offline-panel" role="status" data-testid="chat-offline-panel">
           <CloudOff size={48} className="chat-offline-icon" aria-hidden="true" />
           <h3 className="chat-offline-title">No Server Connection</h3>
           <p className="chat-offline-description">
@@ -28,6 +29,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
             onClick={onRetryConnection}
             type="button"
             aria-label="Retry connection"
+            data-testid="chat-offline-retry"
           >
             Retry Connection
           </button>
@@ -39,9 +41,9 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   if (providerAvailable === false) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
-        <div className="welcome-message no-provider-state">
+        <div className="welcome-message no-provider-state" data-testid="chat-no-provider">
           <div className="welcome-icon">
-            <Bot size={32} />
+            <SproutLogo showWordmark={false} />
           </div>
           <div className="welcome-text">No AI provider configured</div>
           <div className="welcome-hint">
@@ -54,6 +56,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
               className="provider-setup-btn"
               onClick={onRequestProviderSetup}
               aria-label="Open provider setup"
+              data-testid="chat-provider-setup"
             >
               <Settings size={14} />
               Configure Provider
@@ -67,9 +70,9 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   // Default welcome
   return (
     <div className="chat-container chat-container--empty" ref={ref}>
-      <div className="welcome-message">
+      <div className="welcome-message" data-testid="chat-welcome">
         <div className="welcome-icon">
-          <Bot size={32} />
+          <SproutLogo showWordmark={false} />
         </div>
         <div className="welcome-text">
           Welcome to sprout! I&apos;m ready to help you with code analysis, editing, and more.

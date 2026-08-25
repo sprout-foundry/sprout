@@ -3,12 +3,13 @@ package api
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // StreamCallback is called for each content chunk received.
@@ -56,6 +57,7 @@ type StreamingUsage struct {
 	TotalTokens         int     `json:"total_tokens"`
 	EstimatedCost       float64 `json:"estimated_cost"`
 	Cost                float64 `json:"cost,omitempty"` // OpenRouter returns cost directly
+	ImageTokens         int     `json:"image_tokens,omitempty"`
 	PromptTokensDetails struct {
 		CachedTokens     int  `json:"cached_tokens"`
 		CacheWriteTokens *int `json:"cache_write_tokens"`
@@ -82,8 +84,49 @@ type StreamingResponseBuilder struct {
 	toolCallArgs     map[int]*strings.Builder // Index to arguments builder
 	finishReason     string
 	streamCallback   StreamCallback
-	firstTokenTime   time.Time // Track when first token arrives
-	lastTokenTime    time.Time // Track when last token arrives
+	firstTokenTime   time.Time          // Track when first token arrives
+	lastTokenTime    time.Time          // Track when last token arrives
+	repetition       repetitionDetector // Detects model degeneration (repetition loops)
+}
+
+// repetitionDetector tracks recent content deltas to catch repetition loops.
+// When a model degenerates it emits the same short token/phrase over and over.
+type repetitionDetector struct {
+	window    []string // last 20 content deltas (trimmed)
+	threshold int      // consecutive repeats before flagging (10)
+	maxLen    int      // skip deltas longer than this (30 chars)
+}
+
+// checkRepetition returns an error if the same short content delta has been
+// received consec exceeds the threshold. Long deltas are skipped because
+// degenerate loops produce short tokens, not meaningful text.
+func (d *repetitionDetector) checkRepetition(content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" || len(content) > d.maxLen {
+		return nil
+	}
+
+	d.window = append(d.window, content)
+	// Keep only the last 20 entries
+	for len(d.window) > 20 {
+		d.window = d.window[1:]
+	}
+
+	// Count consecutive trailing matches
+	count := 0
+	for i := len(d.window) - 1; i >= 0; i-- {
+		if d.window[i] == content {
+			count++
+		} else {
+			break
+		}
+	}
+
+	if count > d.threshold {
+		return agenterrors.NewNetwork("repetition loop detected — model generating degenerate output", nil)
+	}
+
+	return nil
 }
 
 // NewStreamingResponseBuilder creates a new streaming response builder
@@ -92,6 +135,7 @@ func NewStreamingResponseBuilder(callback StreamCallback) *StreamingResponseBuil
 		toolCalls:      make(map[int]*ToolCall),
 		toolCallArgs:   make(map[int]*strings.Builder),
 		streamCallback: callback,
+		repetition:     repetitionDetector{window: make([]string, 0, 20), threshold: 10, maxLen: 30},
 	}
 }
 
@@ -131,6 +175,11 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 
 		// Process content delta
 		if choice.Delta.Content != "" {
+			// Check for degenerate repetition before accumulating content
+			if err := b.repetition.checkRepetition(choice.Delta.Content); err != nil {
+				return err
+			}
+
 			b.content.WriteString(choice.Delta.Content)
 			// Sanitize content before displaying (remove think tags and ANSI codes)
 			sanitizedContent := sanitizeStreamingContent(choice.Delta.Content)
@@ -188,6 +237,7 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 			Cost:             chunk.Usage.Cost,
 			CachedTokens:     chunk.Usage.PromptTokensDetails.CachedTokens,
 			CacheWriteTokens: chunk.Usage.PromptTokensDetails.CacheWriteTokens,
+			ImageTokens:      chunk.Usage.ImageTokens,
 		}
 	}
 
@@ -355,12 +405,12 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 					// Process any remaining data
 					if dataBuilder.Len() > 0 && r.onEvent != nil {
 						if err := r.onEvent(event, dataBuilder.String()); err != nil {
-							return fmt.Errorf("failed to process remaining data: %w", err)
+							return agenterrors.Wrap(err, "failed to process remaining data")
 						}
 					}
 					return nil
 				}
-				return fmt.Errorf("failed to read stream: %w", result.err)
+				return agenterrors.NewNetwork("failed to read stream", result.err)
 			}
 
 			line := strings.TrimSpace(result.line)
@@ -369,7 +419,7 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 			if line == "" {
 				if dataBuilder.Len() > 0 && r.onEvent != nil {
 					if err := r.onEvent(event, dataBuilder.String()); err != nil {
-						return fmt.Errorf("processing SSE event: %w", err)
+						return agenterrors.Wrap(err, "processing SSE event")
 					}
 				}
 				// Reset for next event
@@ -391,7 +441,7 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 			// Ignore other fields like id:, retry:
 
 		case <-timerChan:
-			return fmt.Errorf("SSE stream timeout after %s", timeout)
+			return agenterrors.NewTimeout("SSE stream", timeout)
 		}
 	}
 }
@@ -405,7 +455,7 @@ func ParseSSEData(data string) (*StreamingChatResponse, error) {
 
 	var chunk StreamingChatResponse
 	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-		return nil, fmt.Errorf("failed to parse SSE data: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to parse SSE data")
 	}
 
 	// Flexible cost fallback: if the typed decode didn't capture a cost

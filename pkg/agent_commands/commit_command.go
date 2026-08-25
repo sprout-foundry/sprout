@@ -95,9 +95,34 @@ func editInEditor(initial string) (string, error) {
 
 // --- Command interface ---
 
+// Usage returns the detailed help text shown by `/help commit`.
+func (c *CommitCommand) Usage() string {
+	return strings.Join([]string{
+		"/commit [instructions] [--skip-prompt] [--dry-run] [--allow-secrets]",
+		"",
+		"Interactive commit workflow: stage files, generate an AI commit",
+		"message from the staged diff, confirm, and create the commit.",
+		"",
+		"Flags:",
+		"  --skip-prompt     Auto-proceed without the confirm picker.",
+		"  --dry-run         Generate the message but do not commit.",
+		"  --allow-secrets   Bypass the secret-detection security check.",
+		"",
+		"Examples:",
+		`  /commit`,
+		`  /commit "fix auth flow in login handler"`,
+		`  /commit --dry-run`,
+	}, "\n")
+}
+
 // Name returns the command name
 func (c *CommitCommand) Name() string {
 	return "commit"
+}
+
+// SafeDuringSteer returns false - /commit is git mutation + agent interaction
+func (c *CommitCommand) SafeDuringSteer() bool {
+	return false
 }
 
 // Description returns the command description
@@ -604,4 +629,29 @@ retryLoop:
 	c.printf("Output: %s\n", string(output))
 
 	return nil
+}
+
+// Complete returns flag completions for the /commit command. The primary
+// arguments are free-text instructions, so only tokens starting with "--"
+// are completed.
+func (c *CommitCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	flags := []string{"--skip-prompt", "--dry-run", "--allow-secrets"}
+	if len(args) == 0 {
+		return flags
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		return flags
+	}
+	if !strings.HasPrefix(last, "--") {
+		return nil
+	}
+
+	var matches []string
+	for _, flag := range flags {
+		if strings.HasPrefix(strings.ToLower(flag), strings.ToLower(last)) {
+			matches = append(matches, flag)
+		}
+	}
+	return matches
 }

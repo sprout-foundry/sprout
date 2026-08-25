@@ -31,7 +31,7 @@ import {
   FileMinus,
   FolderCog,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiService } from '../services/api';
 import type {
   SessionChangeEntry,
@@ -193,24 +193,34 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
 
   // ── Diff modal ─────────────────────────────────────────────────
 
+  // Monotonic token that invalidates stale diff fetches. If the user
+  // opens diff A then B quickly, A's late response must not overwrite
+  // B's diff text while the modal header shows path B.
+  const diffTokenRef = useRef(0);
+
   const openDiff = useCallback(
     async (path: string) => {
+      const token = ++diffTokenRef.current;
       setDiffPath(path);
       setDiffOpen(true);
       setDiffLoading(true);
       setDiffText('');
       try {
         const res = await apiService.getAgentChangeDiff(path);
+        if (token !== diffTokenRef.current) return;
         if (!res.found) {
           setDiffText(`(no tracked change for ${path})`);
         } else {
           setDiffText(res.diff || '(empty diff)');
         }
       } catch (err) {
+        if (token !== diffTokenRef.current) return;
         const msg = err instanceof Error ? err.message : String(err);
         setDiffText(`Error fetching diff: ${msg}`);
       } finally {
-        setDiffLoading(false);
+        if (token === diffTokenRef.current) {
+          setDiffLoading(false);
+        }
       }
     },
     [apiService],
@@ -220,15 +230,12 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
 
   const revertOne = useCallback(
     async (path: string) => {
-      const ok = await showThemedConfirm(
-        `Restore ${path} to the state before the agent's first edit this session?`,
-        {
-          title: 'Revert this file?',
-          confirmLabel: 'Revert',
-          cancelLabel: 'Keep changes',
-          type: 'warning',
-        },
-      );
+      const ok = await showThemedConfirm(`Restore ${path} to the state before the agent's first edit this session?`, {
+        title: 'Revert this file?',
+        confirmLabel: 'Revert',
+        cancelLabel: 'Keep changes',
+        type: 'warning',
+      });
       if (!ok) return;
       try {
         const res = await apiService.revertAgentChanges({ file: path });
@@ -401,7 +408,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
   // ── Render ─────────────────────────────────────────────────────
 
   return (
-    <div className="agent-changes-panel">
+    <div className="agent-changes-panel" data-testid="context-panel-changes">
       <div className="changes-tabs">
         <button
           type="button"
@@ -409,9 +416,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
           onClick={() => setTab('session')}
         >
           This session
-          {summary && summary.totals.changes > 0 && (
-            <span className="changes-tab-badge">{summary.totals.files}</span>
-          )}
+          {summary && summary.totals.changes > 0 && <span className="changes-tab-badge">{summary.totals.files}</span>}
         </button>
         <button
           type="button"
@@ -445,11 +450,10 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
           {isEmpty && (
             <div className="changes-empty">
               <Inbox size={32} />
-              <p>The agent hasn't changed anything this session yet.</p>
+              <p>The agent hasn&apos;t changed anything this session yet.</p>
               <p className="changes-empty-hint">
-                When the agent edits, creates, or deletes files, each entry will
-                have a <Eye size={12} aria-hidden="true" /> view-diff and{' '}
-                <Undo2 size={12} aria-hidden="true" /> revert button.
+                When the agent edits, creates, or deletes files, each entry will have a{' '}
+                <Eye size={12} aria-hidden="true" /> view-diff and <Undo2 size={12} aria-hidden="true" /> revert button.
               </p>
             </div>
           )}
@@ -458,9 +462,9 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
               <div className="changes-totals">
                 <FileText size={14} />
                 <span>
-                  {summary.totals.changes} change{summary.totals.changes === 1 ? '' : 's'} across{' '}
-                  {summary.totals.files} file{summary.totals.files === 1 ? '' : 's'}, in{' '}
-                  {summary.blocks.length} activity block{summary.blocks.length === 1 ? '' : 's'}
+                  {summary.totals.changes} change{summary.totals.changes === 1 ? '' : 's'} across {summary.totals.files}{' '}
+                  file{summary.totals.files === 1 ? '' : 's'}, in {summary.blocks.length} activity block
+                  {summary.blocks.length === 1 ? '' : 's'}
                 </span>
                 <div style={{ flex: 1 }} />
                 <button
@@ -485,11 +489,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
         <div className="changes-timeline">
           <div className="changes-timeline-controls">
             <label htmlFor="timeline-since">Since:</label>
-            <select
-              id="timeline-since"
-              value={timelineSince}
-              onChange={(e) => setTimelineSince(e.target.value)}
-            >
+            <select id="timeline-since" value={timelineSince} onChange={(e) => setTimelineSince(e.target.value)}>
               <option value="1d">Last 1 day</option>
               <option value="7d">Last 7 days</option>
               <option value="30d">Last 30 days</option>
@@ -562,9 +562,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                 Close
               </button>
             </div>
-            <pre className="changes-diff-body">
-              {diffLoading ? 'Loading…' : diffText}
-            </pre>
+            <pre className="changes-diff-body">{diffLoading ? 'Loading…' : diffText}</pre>
           </div>
         </div>
       )}

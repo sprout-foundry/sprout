@@ -97,7 +97,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -134,7 +134,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -640,7 +640,7 @@
 .provider-setup-btn {
   margin-top: 8px;
   padding: 10px 20px;
-  border-radius: var(--radius-lg, 8px);
+  border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
@@ -939,7 +939,7 @@
 .code-block {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 10px;
   margin: 8px 0;
   max-width: 100%;
@@ -967,13 +967,55 @@
 .code-language {
   position: absolute;
   top: 4px;
-  right: 6px;
+  right: 34px;
   font-size: 10px;
   color: var(--text-secondary);
   text-transform: uppercase;
   background: var(--bg-elevated);
   padding: 2px 6px;
   border-radius: 6px;
+}
+
+.code-copy-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-out, ease),
+              background 0.15s var(--ease-out, ease),
+              color 0.15s var(--ease-out, ease);
+  pointer-events: auto;
+}
+
+.code-copy-button:hover {
+  opacity: 1;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.code-copy-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  opacity: 1;
+}
+
+.code-copy-button.copied {
+  color: var(--accent-success);
+}
+
+.code-block:hover .code-copy-button,
+.code-block:focus-within .code-copy-button {
+  opacity: 0.7;
 }
 
 .input-container {
@@ -1099,13 +1141,13 @@
 .tool-execution {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md, 8px);
-  margin-bottom: 8px;
+  border-radius: var(--radius-sm, 6px);
+  margin-bottom: 4px;
   overflow: hidden;
   cursor: pointer;
-  transition: background 0.15s var(--ease-out, ease-out),
-    border-color 0.15s var(--ease-out, ease-out),
-    box-shadow 0.15s var(--ease-out, ease-out);
+  transition: background 0.12s var(--ease-out, ease-out),
+    border-color 0.12s var(--ease-out, ease-out),
+    box-shadow 0.12s var(--ease-out, ease-out);
 }
 
 .tool-execution:hover {
@@ -1118,20 +1160,34 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
+/* Status-tinted left border for visual scanning */
+.tool-execution.tool-completed {
+  border-left: 2px solid color-mix(in srgb, var(--accent-success) 50%, transparent);
+}
+
+.tool-execution.tool-started,
+.tool-execution.tool-running {
+  border-left: 2px solid color-mix(in srgb, var(--accent-primary) 60%, transparent);
+}
+
+.tool-execution.tool-error {
+  border-left: 2px solid color-mix(in srgb, var(--accent-error) 55%, transparent);
+}
+
 .tool-summary {
   display: grid;
   grid-template-columns: auto 1fr auto auto auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 10px 12px;
-  font-size: 12px;
+  padding: 6px 10px;
+  font-size: 11.5px;
 }
 
 .tool-expand {
   display: inline-flex;
   align-items: center;
   color: var(--text-tertiary);
-  transition: color 0.15s var(--ease-out, ease-out);
+  transition: color 0.12s var(--ease-out, ease-out);
 }
 
 .tool-execution:hover .tool-expand {
@@ -1141,44 +1197,65 @@
 .tool-name {
   color: var(--text-primary);
   font-weight: 560;
+  font-size: 11.5px;
 }
 
-.tool-duration,
+.tool-duration {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
 .tool-expand,
 .tool-status {
   color: var(--text-secondary);
 }
 
+/* Status icon accent colors */
+.tool-status .tool-status-icon-ok {
+  color: var(--accent-success);
+}
+
+.tool-status .tool-status-icon-error {
+  color: var(--accent-error);
+}
+
+.tool-status .tool-status-icon-running {
+  color: var(--accent-primary);
+}
+
 .tool-message {
-  padding: 6px 12px 10px;
+  padding: 4px 10px 8px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 .tool-details {
   border-top: 1px solid var(--border-subtle);
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px;
   background: var(--bg-secondary);
 }
 
 .tool-detail-section + .tool-detail-section {
   border-top: 1px solid var(--border-subtle);
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
 }
 
 .tool-detail-label {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
+  color: var(--accent-secondary);
+  margin-bottom: 4px;
 }
 
 .tool-details pre {
   margin: 0;
-  padding: 8px 10px;
+  padding: 6px 8px;
   font-size: 11px;
   color: var(--text-primary);
   background: var(--bg-tertiary);
@@ -1379,8 +1456,8 @@
   min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(var(--accent-primary-rgb, 99, 102, 241), 0.08);
-  border: 1px solid rgba(var(--accent-primary-rgb, 99, 102, 241), 0.18);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, transparent);
 }
 
 .subagent-current-text,
@@ -1509,7 +1586,7 @@
 
 .subagent-link-btn {
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
   color: var(--text-secondary);
@@ -1696,9 +1773,7 @@
 
 /* ── Message Segments ────────────────────────────────────────── */
 .message-segments {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: block;
 }
 
 .message-tool-links {
@@ -1766,7 +1841,7 @@
 }
 
 .segment-text {
-  /* prose markdown rendered normally */
+  display: inline;
 }
 
 .segment-tool-call {
@@ -1781,9 +1856,8 @@
   font-size: 11px;
   color: var(--text-secondary);
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-  max-width: max-content;
   user-select: none;
-  margin-right: 10px;
+  margin: 0 2px;
   vertical-align: middle;
 }
 
@@ -1834,25 +1908,33 @@
   opacity: 1;
 }
 
-/* ── Completed tool footnote link ────────────────────────────── */
+/* ── Completed tool badge (compact inline, same layout as running) ──
+ * Previously this was a superscript footnote [tool] that flickered
+ * when transitioning from the running pill. Now it's the same inline
+ * pill as a running tool, just with a muted style and no icon change.
+ * The badge never changes shape or position, eliminating flicker. */
 .segment-tool-footnote {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--accent-primary);
+  color: var(--text-tertiary);
   cursor: pointer;
   user-select: none;
-  vertical-align: super;
-  line-height: 1;
-  padding: 0 1px;
-  border-radius: 2px;
-  transition: color 0.12s ease, background 0.12s ease;
-  white-space: nowrap;
+  vertical-align: middle;
+  margin: 0 2px;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
 
 .segment-tool-footnote:hover {
-  color: var(--accent-hover, var(--accent-primary));
-  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-focus);
 }
 
 .segment-tool-footnote:focus-visible {
@@ -1861,7 +1943,19 @@
 }
 
 .segment-tool-footnote--error {
-  color: var(--status-error, #e5534b);
+  color: var(--accent-error);
+  border-color: color-mix(in srgb, var(--accent-error) 30%, var(--border-subtle));
+}
+
+.tool-footnote-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tool-footnote-name {
+  font-family: var(--font-mono);
+  font-weight: 500;
 }
 
 /* ── Inline Todo Summary ──────────────────────────────────────── */
@@ -1942,64 +2036,19 @@
 }
 
 /* ── Reasoning/Thinking Content ───────────────────────────────── */
+/*
+ * The reasoning toggle now uses the shared <Collapsible> primitive
+ * (see packages/ui/src/components/Collapsible.tsx). Border, radius,
+ * background, overflow, and the chevron are owned by `.collapsible`
+ * and `.collapsible__*` rules. The `.reasoning-block` classname is
+ * passed through onto Collapsible's outer <details> by MessageItem
+ * so consumers can keep targeting it for layout hooks — we keep only
+ * margin-bottom here since the Collapsible already handles the
+ * token-driven visual chrome (--border-default, --radius-md, and
+ * --bg-secondary with the canonical Atom-One dark fallback).
+ */
 .reasoning-block {
   margin-bottom: 12px;
-  border: 1px solid var(--border-color-light, #e2e8f0);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-secondary, #f8fafc);
-}
-
-.reasoning-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary, #64748b);
-  user-select: none;
-  transition: background-color 0.15s ease;
-}
-
-.reasoning-summary:hover {
-  background: var(--bg-hover, #f1f5f9);
-}
-
-.reasoning-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
-.reasoning-toggle {
-  margin-left: auto;
-  font-size: 10px;
-  transition: transform 0.2s ease;
-}
-
-.reasoning-block[open] .reasoning-toggle {
-  transform: rotate(90deg);
-}
-
-.reasoning-content {
-  padding: 0 12px 12px 12px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-tertiary, #94a3b8);
-  border-top: 1px solid var(--border-color-light, #e2e8f0);
-  margin-top: 0;
-  padding-top: 12px;
-}
-
-.reasoning-content pre {
-  background: var(--bg-tertiary, #f1f5f9);
-  padding: 8px;
-  border-radius: 6px;
-  overflow-x: auto;
-  font-size: 12px;
 }
 
 /* ── Virtual Scrolling (Virtuoso) ─────────────────────────────── */
@@ -2109,7 +2158,7 @@
 .chat-offline-retry-btn {
   margin-top: 4px;
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);

@@ -1,6 +1,8 @@
 import { GitCompareArrows, ChevronUp, ChevronDown } from 'lucide-react';
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import { writeFileWithConsent } from '../services/fileAccess';
 import { parseUnifiedDiffToDocuments } from '../utils/diffParser';
+import { useLog } from '../utils/log';
 import DiffSurface from './DiffSurface';
 import { MergeViewWrapper } from './MergeViewWrapper';
 
@@ -49,6 +51,11 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
 }: DiffWorkspaceTabProps): JSX.Element {
   const [viewMode, setViewMode] = useState<'merge' | 'text'>('merge');
   const [collapseUnchanged, setCollapseUnchanged] = useState(true);
+  // User-made merge-state edits (chunk reverts / typing in pane B). Lifted
+  // from the CodeMirror instance so they survive view-mode toggles and
+  // re-renders; null means "no edits yet, use the parsed diff content".
+  const [editedModified, setEditedModified] = useState<string | null>(null);
+  const log = useLog();
 
   const availableModes =
     modeOptions ||
@@ -62,11 +69,50 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
 
   const docs = useMemo(() => parseUnifiedDiffToDocuments(diffText), [diffText]);
 
+  // When the underlying diff changes (mode switch, git refresh), drop any
+  // in-progress merge edits so the view reflects the fresh content.
+  useEffect(() => {
+    setEditedModified(null);
+  }, [diffText]);
+
+  // Report pane-B changes (reverts / typing) up into local state.
+  const handleModifiedChange = useCallback((content: string) => {
+    setEditedModified(content);
+  }, []);
+
+  // Cmd+S in the merge view writes the reverted pane-B content back to disk.
+  const handleSave = useCallback(
+    async (content: string) => {
+      if (!path) return;
+      try {
+        // Set the save cooldown before the HTTP write so the server-side
+        // fsnotify echo is suppressed (same pattern as the editor save).
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: { path, mtime: Math.floor(Date.now() / 1000) },
+          }),
+        );
+        const response = await writeFileWithConsent(path, content);
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => response.statusText);
+          throw new Error(errorText || `Failed to save file: ${response.statusText}`);
+        }
+        log.success(`${path} saved successfully`, { title: 'File Saved', duration: 3000 });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Failed to save file';
+        log.error(msg, { title: 'Save Error' });
+      }
+    },
+    [path, log],
+  );
+
   // Stable reference to avoid recreating MergeView on every render
   const collapseConfig = useMemo(
     () => (collapseUnchanged ? { margin: 4, minSize: 3 } : undefined),
     [collapseUnchanged],
   );
+
+  const modifiedContent = editedModified ?? docs.modified;
 
   return (
     <div className="workspace-tab workspace-diff-tab">
@@ -133,12 +179,14 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
             </div>
             <MergeViewWrapper
               originalContent={docs.original}
-              modifiedContent={docs.modified}
+              modifiedContent={modifiedContent}
               mode="side-by-side"
               fileName={path}
               aLabel="Before"
               bLabel="After"
               collapseUnchanged={collapseConfig}
+              onModifiedChange={handleModifiedChange}
+              onSave={handleSave}
             />
           </div>
         ) : (

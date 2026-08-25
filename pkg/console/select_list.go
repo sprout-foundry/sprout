@@ -1,3 +1,4 @@
+// Select list UI component — types and rendering
 package console
 
 import (
@@ -12,7 +13,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"unicode/utf8"
 
 	"golang.org/x/term"
 
@@ -59,14 +59,20 @@ type SelectList struct {
 	opts SelectListOptions
 
 	mu       sync.Mutex
-	cursor   int      // index into the filtered list
-	filter   string   // current filter text (Searchable=true only)
-	filtered []int    // indices into opts.Items, in display order
-	offset   int      // scroll offset into filtered (top-of-page)
-	rendered int      // number of rows we last drew (for in-place redraw)
+	cursor   int    // index into the filtered list
+	filter   string // current filter text (Searchable=true only)
+	filtered []int  // indices into opts.Items, in display order
+	offset   int    // scroll offset into filtered (top-of-page)
+	rendered int    // number of rows we last drew (for in-place redraw)
 
-	fd     int
-	isTTY  bool
+	fd    int
+	isTTY bool
+
+	// testOut, when non-nil, overrides the destination for mouse-tracking
+	// escape sequences so tests can capture the emitted bytes. It is a
+	// test seam only; production code leaves it nil and sequences are
+	// written to os.Stderr.
+	testOut io.Writer
 
 	// dismissKey holds the printable text of the key that dismissed
 	// the picker under DismissOnAnyKey. Empty when the picker exited
@@ -74,6 +80,10 @@ type SelectList struct {
 	// that want to forward the dismissed keystroke (e.g. pre-filling
 	// the REPL input buffer) should read it via DismissKey().
 	dismissKey string
+
+	// lastEnterProcessed tracks whether we've already processed an Enter
+	// key to avoid re-processing multi-byte sequences like \r\n.
+	lastEnterProcessed bool
 }
 
 // NewSelectList constructs a picker with the given options. Items
@@ -142,88 +152,6 @@ func (s *SelectList) runFallback() (string, bool, error) {
 	return s.opts.Items[n-1].Value, true, nil
 }
 
-// processKey handles a single keypress (or escape-prefixed sequence)
-// and returns (done, val, ok). done=true means the caller should stop
-// (confirm, cancel, or dismiss).  n is the number of bytes read; buf
-// holds them.  Called from runTTY.
-func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val string, ok bool) {
-	switch {
-	case b == 0x03: // Ctrl+C
-		return true, "", false
-	case b == 0x0D, b == 0x0A: // Enter
-		val, ok := s.confirm()
-		return true, val, ok
-	case b == 0x1B: // Esc or arrow-key prefix
-		return s.handleEscape(n, buf[:])
-	case b == 0x7F, b == 0x08: // Backspace / DEL
-		if s.opts.Searchable {
-			s.filterBackspace()
-			s.render()
-		} else if s.opts.DismissOnAnyKey {
-			s.recordDismissKey(string(b))
-			return true, "", false
-		}
-		return false, "", false
-	case b >= 0x20 && b < 0x7F: // printable ASCII
-		if s.opts.Searchable {
-			s.filterAppend(string(b))
-			s.render()
-		} else if s.opts.DismissOnAnyKey {
-			s.recordDismissKey(string(b))
-			return true, "", false
-		}
-		return false, "", false
-	case b >= 0xC0: // UTF-8 lead byte
-		if s.opts.Searchable {
-			s.consumeUTF8(b, n, buf[:])
-			s.render()
-		} else if s.opts.DismissOnAnyKey {
-			s.recordDismissKey(utf8RuneFromBuf(b, n, buf[:]))
-			return true, "", false
-		}
-		return false, "", false
-	}
-	return false, "", false
-}
-
-// recordDismissKey stores the printable text of the key that dismissed
-// the picker so callers can forward it (e.g. into the REPL input buffer).
-// Backspace/DEL (0x7F/0x08) is intentionally NOT recorded — it's not a
-// character the user would want pre-filled into a prompt.
-func (s *SelectList) recordDismissKey(text string) {
-	if b := text[0]; b == 0x7F || b == 0x08 {
-		return
-	}
-	s.dismissKey = text
-}
-
-// utf8RuneFromBuf decodes the bytes in buf (starting at buf[0]=lead)
-// into a string. n is the number of bytes read so far; continuation
-// bytes already present in buf are used directly. If the buffer holds
-// an incomplete sequence, the decoded bytes are still returned (a
-// RuneError surfaces as "\ufffd", which callers may forward as-is).
-func utf8RuneFromBuf(lead byte, n int, buf []byte) string {
-	if n >= utf8Width(lead) {
-		// We already have the full sequence in buf.
-		if r, size := utf8.DecodeRune(buf[:n]); size > 0 {
-			return string(r)
-		}
-	}
-	// Incomplete — best effort: decode what we have.
-	if r, _ := utf8.DecodeRune(buf[:n]); r != utf8.RuneError {
-		return string(r)
-	}
-	return ""
-}
-
-// DismissKey returns the printable key that dismissed the picker under
-// DismissOnAnyKey (empty for Enter/Esc/Ctrl+C exits or when the
-// feature is off). Callers can forward it into their own input reader
-// so the user's keystroke isn't lost.
-func (s *SelectList) DismissKey() string {
-	return s.dismissKey
-}
-
 // runTTY drives the interactive picker. Returns when the user presses
 // Enter (confirm) or Esc/Ctrl+C (cancel).
 func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
@@ -231,10 +159,25 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 	if err != nil {
 		return "", false, fmt.Errorf("select list: enter raw mode: %w", err)
 	}
+	// Enable SGR mouse tracking for wheel scroll support (SP-106 T3).
+	s.enableMouseTracking()
 	defer func() {
+		s.disableMouseTracking()
 		_ = exitSteerMode(s.fd, st)
 		s.clearRendered()
 	}()
+
+	// Print the title once before entering the render loop. The title
+	// stays pinned above the list and is excluded from the render()
+	// row-clear math so subscriber output between keypresses doesn't
+	// misalign the walk-back count and stack duplicate titles.
+	// Hold the output lock across the title + first render so a
+	// background PrintExternal can't insert a line between them.
+	LockOutput()
+	if s.opts.Title != "" {
+		fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+s.opts.Title)
+	}
+	UnlockOutput()
 
 	s.render()
 
@@ -270,216 +213,36 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 	}
 }
 
-// handleEscape dispatches the bytes that follow ESC. Returns done=true
-// (with val/ok) when the user wants to cancel; done=false when the
-// sequence was just an arrow key or other navigation that mutated
-// cursor/filter state.
-func (s *SelectList) handleEscape(n int, buf []byte) (done bool, val string, ok bool) {
-	if n == 1 {
-		// Could be a plain ESC or the start of a CSI sequence. Read
-		// one more byte non-blockingly via a short poll; if nothing
-		// arrives, treat as cancel.
-		var follow [1]byte
-		deadline := time.Now().Add(20 * time.Millisecond)
-		for time.Now().Before(deadline) {
-			m, _ := os.Stdin.Read(follow[:])
-			if m == 1 {
-				if follow[0] != '[' && follow[0] != 'O' {
-					// Not a CSI sequence — treat ESC as cancel.
-					return true, "", false
-				}
-				// Read the final byte of the CSI sequence (A/B/C/D for
-				// arrows). For longer sequences (Page Up/Down etc.) we
-				// drain until we see a final byte in 0x40..0x7E.
-				return false, "", s.consumeCSI()
-			}
-			time.Sleep(2 * time.Millisecond)
-		}
-		// No follow-up byte → plain ESC means cancel.
-		return true, "", false
+// mouseOut returns the writer used for mouse-tracking escape sequences.
+// It prefers the test seam (s.testOut) so tests can capture the bytes;
+// otherwise it falls back to os.Stderr, which is what the interactive
+// TTY path has always used.
+func (s *SelectList) mouseOut() io.Writer {
+	if s.testOut != nil {
+		return s.testOut
 	}
-	// We got the whole sequence in one read.
-	if n >= 3 && buf[1] == '[' {
-		s.dispatchCSI(buf[2])
-		s.render()
-		return false, "", false
-	}
-	return true, "", false
+	return os.Stderr
 }
 
-// consumeCSI reads bytes from stdin until it finds the CSI final byte
-// (0x40..0x7E), then dispatches based on it. Always returns false (no
-// confirm/cancel — just navigation).
-func (s *SelectList) consumeCSI() bool {
-	var ch [1]byte
-	deadline := time.Now().Add(50 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		n, _ := os.Stdin.Read(ch[:])
-		if n == 0 {
-			time.Sleep(1 * time.Millisecond)
-			continue
-		}
-		b := ch[0]
-		if b >= 0x40 && b <= 0x7E {
-			s.dispatchCSI(b)
-			s.render()
-			return false
-		}
-		// Parameter byte (0x30..0x3F) or intermediate (0x20..0x2F) —
-		// keep reading.
-	}
-	return false
-}
-
-// dispatchCSI maps a final CSI byte onto a navigation action.
-func (s *SelectList) dispatchCSI(final byte) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	switch final {
-	case 'A': // Up
-		s.moveCursor(-1)
-	case 'B': // Down
-		s.moveCursor(1)
-	case 'H': // Home
-		s.cursor = 0
-		s.adjustOffset()
-	case 'F': // End
-		s.cursor = len(s.filtered) - 1
-		if s.cursor < 0 {
-			s.cursor = 0
-		}
-		s.adjustOffset()
-	case '5': // PgUp prefix (CSI 5~) — but we already ate the final char
-	case '6': // PgDn prefix
-	}
-}
-
-// moveCursor changes the cursor position with bounds clamping and
-// updates the scroll offset so the cursor stays visible. Must be
-// called with s.mu held.
-func (s *SelectList) moveCursor(delta int) {
-	if len(s.filtered) == 0 {
-		s.cursor = 0
-		s.offset = 0
+// enableMouseTracking writes the SGR + VT200 mouse-tracking enable
+// sequences. It is a no-op when stdin isn't a TTY, matching the
+// requirement that non-interactive runs never emit mouse escapes.
+func (s *SelectList) enableMouseTracking() {
+	if !s.isTTY {
 		return
 	}
-	s.cursor += delta
-	if s.cursor < 0 {
-		s.cursor = 0
-	}
-	if s.cursor >= len(s.filtered) {
-		s.cursor = len(s.filtered) - 1
-	}
-	s.adjustOffset()
+	fmt.Fprint(s.mouseOut(), MouseTrackingSGR)
+	fmt.Fprint(s.mouseOut(), MouseTrackingVT200)
 }
 
-// adjustOffset moves the page-top so cursor is visible. Must be called
-// with s.mu held.
-func (s *SelectList) adjustOffset() {
-	if s.cursor < s.offset {
-		s.offset = s.cursor
+// disableMouseTracking writes the disable sequence (which tears down
+// SGR, VT200, and X10 modes) to turn mouse tracking off on exit. Like
+// enableMouseTracking it is a no-op in non-TTY contexts.
+func (s *SelectList) disableMouseTracking() {
+	if !s.isTTY {
 		return
 	}
-	if s.cursor >= s.offset+s.opts.PageSize {
-		s.offset = s.cursor - s.opts.PageSize + 1
-	}
-	if s.offset < 0 {
-		s.offset = 0
-	}
-}
-
-// filterAppend adds runes to the filter and refilters.
-func (s *SelectList) filterAppend(text string) {
-	s.mu.Lock()
-	s.filter += text
-	s.mu.Unlock()
-	s.applyFilter(s.filter)
-}
-
-// filterBackspace removes the last rune from the filter.
-func (s *SelectList) filterBackspace() {
-	s.mu.Lock()
-	if s.filter == "" {
-		s.mu.Unlock()
-		return
-	}
-	_, size := utf8.DecodeLastRuneInString(s.filter)
-	s.filter = s.filter[:len(s.filter)-size]
-	s.mu.Unlock()
-	s.applyFilter(s.filter)
-}
-
-// consumeUTF8 collects the continuation bytes that follow a UTF-8
-// lead byte and appends the resulting rune to the filter. n is the
-// number of bytes already in buf[]; lead is at buf[0].
-func (s *SelectList) consumeUTF8(lead byte, n int, buf []byte) {
-	expected := utf8Width(lead)
-	collected := buf[:n]
-	deadline := time.Now().Add(30 * time.Millisecond)
-	for len(collected) < expected && time.Now().Before(deadline) {
-		var more [4]byte
-		m, _ := os.Stdin.Read(more[:expected-len(collected)])
-		if m > 0 {
-			collected = append(collected, more[:m]...)
-		} else {
-			time.Sleep(1 * time.Millisecond)
-		}
-	}
-	if r, _ := utf8.DecodeRune(collected); r != utf8.RuneError {
-		s.filterAppend(string(r))
-	}
-}
-
-// utf8Width returns the expected total byte count for a UTF-8 sequence
-// given its lead byte. 1 for single-byte (shouldn't happen for our
-// callers), 2/3/4 for multi-byte.
-func utf8Width(b byte) int {
-	switch {
-	case b&0xE0 == 0xC0:
-		return 2
-	case b&0xF0 == 0xE0:
-		return 3
-	case b&0xF8 == 0xF0:
-		return 4
-	default:
-		return 1
-	}
-}
-
-// applyFilter recomputes the filtered slice from opts.Items using the
-// current filter. Resets cursor/offset to 0 because positions don't
-// translate across filter changes.
-func (s *SelectList) applyFilter(filter string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.filter = filter
-	s.filtered = s.filtered[:0]
-	if filter == "" {
-		for i := range s.opts.Items {
-			s.filtered = append(s.filtered, i)
-		}
-	} else {
-		needle := strings.ToLower(filter)
-		for i, item := range s.opts.Items {
-			hay := strings.ToLower(item.Label + " " + item.Detail)
-			if strings.Contains(hay, needle) {
-				s.filtered = append(s.filtered, i)
-			}
-		}
-	}
-	s.cursor = 0
-	s.offset = 0
-}
-
-// confirm returns the value of the currently-selected filtered item.
-// Returns ok=false if the filter excludes every item.
-func (s *SelectList) confirm() (string, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if len(s.filtered) == 0 || s.cursor < 0 || s.cursor >= len(s.filtered) {
-		return "", false
-	}
-	return s.opts.Items[s.filtered[s.cursor]].Value, true
+	fmt.Fprint(s.mouseOut(), MouseTrackingDisable)
 }
 
 // render draws the current list state. Uses cursor-up + clear-to-EOL
@@ -487,7 +250,6 @@ func (s *SelectList) confirm() (string, bool) {
 func (s *SelectList) render() {
 	s.mu.Lock()
 	prev := s.rendered
-	title := s.opts.Title
 	filter := s.filter
 	searchable := s.opts.Searchable
 	dismissOnAnyKey := s.opts.DismissOnAnyKey
@@ -522,6 +284,12 @@ func (s *SelectList) render() {
 	}
 	s.mu.Unlock()
 
+	// Serialize against PrintExternal and other console chrome so
+	// background messages can't interleave with the row-clear/write
+	// sequence and leave duplicate rows on screen.
+	LockOutput()
+	defer UnlockOutput()
+
 	// Walk up over the previously-rendered rows and clear them so the
 	// new frame overwrites the old without leaving residue.
 	for i := 0; i < prev; i++ {
@@ -536,10 +304,10 @@ func (s *SelectList) render() {
 	}
 
 	rendered := 0
-	if title != "" {
-		fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+title)
-		rendered++
-	}
+	// Title is printed once in runTTY/runFallback before the render
+	// loop starts — not re-rendered here. Reprinting it on every frame
+	// caused duplicate stacking when the terminal subscriber wrote
+	// output between keypresses, misaligning the row-clear math.
 	if searchable {
 		fmt.Fprintf(os.Stderr, "  filter: %s_  (%d/%d)\n", filter, filteredCount, totalCount)
 		rendered++
@@ -646,7 +414,14 @@ func (s *SelectList) clearRendered() {
 	s.mu.Lock()
 	n := s.rendered
 	s.rendered = 0
+	hasTitle := s.opts.Title != ""
 	s.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
+	// +1 for the title row (printed once in runTTY, not tracked in rendered)
+	if hasTitle {
+		n++
+	}
 	for i := 0; i < n; i++ {
 		fmt.Fprint(os.Stderr, "\r\033[K\033[A")
 	}

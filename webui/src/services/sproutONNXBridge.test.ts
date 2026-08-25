@@ -7,13 +7,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BrowserONNXProvider } from './onnxEmbeddingProvider';
 import {
   bridgeBrowserProvider,
   installSproutONNXBridge,
   uninstallSproutONNXBridge,
   type SproutONNXBridge,
 } from './sproutONNXBridge';
-import { BrowserONNXProvider } from './onnxEmbeddingProvider';
 
 // Reuse the same onnxruntime-web mock from onnxEmbeddingProvider.test.ts.
 // We don't share the file, but we replicate just enough of the mock here

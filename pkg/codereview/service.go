@@ -39,7 +39,7 @@ type ReviewContext struct {
 	CommitMessage    string // Commit message/intent
 	KeyComments      string // Key code comments explaining WHY
 	ChangeCategories string // Categorization of changes
-}// ReviewType defines the type of code review being performed
+} // ReviewType defines the type of code review being performed
 type ReviewType int
 
 const (

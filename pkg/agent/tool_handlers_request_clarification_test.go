@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestHandleRequestClarification_MissingQuestion(t *testing.T) {

@@ -1,14 +1,17 @@
 package agent
 
 import (
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 const (
-	RunTerminationCompleted            = "completed"
-	RunTerminationMaxIterations        = "max_iterations"
-	RunTerminationInterrupted          = "interrupted"
-	RunTerminationFleetBudgetExceeded  = "fleet_budget_exceeded"
+	RunTerminationCompleted           = "completed"
+	RunTerminationMaxIterations       = "max_iterations"
+	RunTerminationInterrupted         = "interrupted"
+	RunTerminationFleetBudgetExceeded = "fleet_budget_exceeded"
 )
 
 // GetTotalTokens returns the total tokens used across all requests
@@ -23,13 +26,19 @@ func (a *Agent) GetCurrentIteration() int {
 
 // GetCurrentContextTokens returns the current context token count
 func (a *Agent) GetCurrentContextTokens() int {
-	// Return the current request context tokens, not cumulative
 	return a.state.GetCurrentContextTokens()
 }
 
 // GetMaxContextTokens returns the maximum context tokens for the current model
 func (a *Agent) GetMaxContextTokens() int {
-	// Get context limit from the model
+	return a.getModelContextLimit()
+}
+
+// GetEffectiveContextCap returns the user-facing effective context cap — min of native window and user's MaxContextTokens setting.
+func (a *Agent) GetEffectiveContextCap() int {
+	if cap := a.effectiveCapSnapshot(); cap > 0 {
+		return cap
+	}
 	return a.getModelContextLimit()
 }
 
@@ -62,45 +71,56 @@ func (a *Agent) GetPromptTokens() int {
 	return a.state.GetPromptTokens()
 }
 
-// TrackMetricsFromResponse updates agent metrics from API response usage data
-func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens int) {
+// TrackMetricsFromResponse updates agent metrics from API response usage data.
+// cacheWriteTokens: prompt tokens written to provider cache. imageTokens: tokens from image inputs (display only, not for budget).
+func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens, cacheWriteTokens, imageTokens int) {
 	a.state.IncrementLLMCallCount()
 	a.state.SetTotalTokens(a.state.GetTotalTokens() + totalTokens)
 	a.state.SetPromptTokens(a.state.GetPromptTokens() + promptTokens)
 	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + completionTokens)
-	a.state.AddCost(estimatedCost)
 	a.state.SetCachedTokens(a.state.GetCachedTokens() + cachedTokens)
+	a.state.SetCacheWriteTokens(a.state.GetCacheWriteTokens() + cacheWriteTokens)
+	// Track image tokens separately for display (already included in totals).
+	a.state.SetImageTokens(a.state.GetImageTokens() + imageTokens)
+
+	// Resolve billing type and compute dual costs (ChargedCost / TokenCost)
+	// using the same logic as seed_provider.go and agent_runtime.go.
+	billingType := a.resolveBillingType()
+	chargedCost := estimatedCost
+	if chargedCost == 0 && billingType == BillingPayPerToken && totalTokens > 0 {
+		chargedCost = a.estimateCostFromPricing(promptTokens, completionTokens)
+	}
+	var tokenCost float64
+	if billingType != BillingPayPerToken {
+		tokenCost = a.estimateCostFromPricing(promptTokens, completionTokens)
+	}
+
+	// AddCostEntry updates totalCost internally (for backward compat when
+	// ChargedCost > 0), so we must NOT also call AddCost — that would
+	// double-count.
+	a.state.AddCostEntry(CostEntry{
+		BillingType:      billingType,
+		Provider:         a.GetProvider(),
+		Model:            a.GetModel(),
+		ChargedCost:      chargedCost,
+		TokenCost:        tokenCost,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		CachedTokens:     cachedTokens,
+		ImageTokens:      imageTokens,
+	})
 
 	// Fleet budget tracking: debit tokens to the shared fleet tracker.
 	if a.fleetBudgetTracker != nil && a.fleetBudgetLimit > 0 {
 		newTotal := a.fleetBudgetTracker.Add(int64(totalTokens))
-		// Budget is exceeded when cumulative tokens reach or exceed the limit.
 		if newTotal >= a.fleetBudgetLimit && !a.fleetBudgetTrunc.Load() {
 			a.fleetBudgetTrunc.Store(true)
 		}
 	}
 
-	// Fleet USD budget tracking: debit cost to the shared USD budget,
-	// emit threshold-crossing warnings, and set the truncation flag if
-	// the cap is hit. Shares the same truncation flag as the token
-	// budget so the conversation loop has one place to check.
-	if a.fleetUsdBudget != nil && estimatedCost > 0 {
-		spent, crossed, justExceeded := a.fleetUsdBudget.Add(estimatedCost)
-		_, limit := a.fleetUsdBudget.Snapshot()
-		for _, t := range crossed {
-			if cb, ok := a.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {
-				cb(t, spent, limit)
-			}
-		}
-		if justExceeded {
-			a.fleetBudgetTrunc.Store(true)
-			if cb, ok := a.budgetExceededCallback.Load().(func(spent, limit float64)); ok && cb != nil {
-				cb(spent, limit)
-			}
-		}
-	}
+	// Fleet USD budget NOT debited here — subagents already debit via accumulateResponseCost.
 
-	// Calculate cost savings from cached tokens using the provider-aware heuristic.
+	// Calculate cost savings from cached tokens.
 	a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + a.calculateCachedTokenSavings(cachedTokens, totalTokens, estimatedCost))
 
 	// Trigger stats update callback if registered
@@ -114,21 +134,20 @@ func (a *Agent) GetCompletionTokens() int {
 	return a.state.GetCompletionTokens()
 }
 
+// GetImageTokens returns the total image tokens used (vision model inputs).
+// These are already included in PromptTokens/TotalTokens; this is for display only.
+func (a *Agent) GetImageTokens() int {
+	return a.state.GetImageTokens()
+}
+
 // GetLLMCallCount returns the total number of LLM API calls made
 func (a *Agent) GetLLMCallCount() int {
 	return a.state.GetLLMCallCount()
 }
 
-// ---------------------------------------------------------------------------
-// Security telemetry (Task 3)
-//
-// Lightweight counters that track what the LLM does after receiving a
-// SECURITY_CAUTION_REQUIRED signal. Exposed via the --output-json metrics
-// object so external tools can measure caution-signal effectiveness.
-// ---------------------------------------------------------------------------
+// Security telemetry: lightweight counters tracking LLM behavior after SECURITY_CAUTION_REQUIRED signals.
 
-// GetSecurityCautionsIssued returns the number of SECURITY_CAUTION_REQUIRED
-// errors produced this session.
+// GetSecurityCautionsIssued returns the number of SECURITY_CAUTION_REQUIRED errors produced this session.
 func (a *Agent) GetSecurityCautionsIssued() int64 {
 	if a == nil {
 		return 0
@@ -183,6 +202,14 @@ func (a *Agent) GetEstimatedTokenResponses() int {
 	return a.state.GetEstimatedTokenResponses()
 }
 
+// GetContinuationNudges returns how many seed transient continuation
+// nudges ("Please continue…") were observed at the provider seam. These
+// messages never enter conversation state, so this count explains
+// consecutive assistant messages in transcripts.
+func (a *Agent) GetContinuationNudges() int {
+	return a.state.GetContinuationNudges()
+}
+
 // MarkEstimatedTokenUsageResponse records that token usage for one response was estimated.
 func (a *Agent) MarkEstimatedTokenUsageResponse() {
 	a.state.SetEstimatedTokenResponses(a.state.GetEstimatedTokenResponses() + 1)
@@ -193,36 +220,39 @@ func (a *Agent) GetCachedTokens() int {
 	return a.state.GetCachedTokens()
 }
 
+// GetCacheWriteTokens returns the total tokens written to the provider cache
+func (a *Agent) GetCacheWriteTokens() int {
+	return a.state.GetCacheWriteTokens()
+}
+
 // GetCachedCostSavings returns the cost savings from cached tokens
 func (a *Agent) GetCachedCostSavings() float64 {
 	return a.state.GetCachedCostSavings()
 }
 
-// calculateCachedTokenSavings estimates the cost savings from cached prompt
-// tokens. Cached tokens are served from the provider's prompt cache instead
-// of being re-processed, so they cost a fraction of normal input price.
-//
-// The discount factor is provider-dependent:
-//   - Anthropic: cache reads are 0.1× input (90% savings) — the dominant case
-//     since Anthropic's cache_control is the primary caching mechanism.
-//   - OpenAI: cache reads are 0.5× input (50% savings).
-//   - OpenRouter: passes through the underlying provider's pricing.
-//
-// We use 0.9 (90% savings) as the default because most cached_tokens reporting
-// flows through OpenRouter→Anthropic, and over-estimating savings slightly is
-// safer than under-estimating for budget planning. The method is extracted so
-// it can be refined with provider-specific pricing when available.
-//
-// cachedTokens: number of prompt tokens served from cache.
-// estimatedCost: total cost charged for this request.
-// totalTokens: total tokens (prompt + completion) for this request.
+// calculateCachedTokenSavings estimates the cost savings from cached prompt tokens.
+// Returns exact savings when (provider, model) has a known cached-input rate; returns 0 when unknown.
 func (a *Agent) calculateCachedTokenSavings(cachedTokens, totalTokens int, estimatedCost float64) float64 {
 	if cachedTokens <= 0 || totalTokens <= 0 || estimatedCost <= 0 {
 		return 0
 	}
-	avgCostPerToken := estimatedCost / float64(totalTokens)
-	const cachedTokenSavingsFactor = 0.9 // 90% — matches Anthropic cache-read pricing
-	return float64(cachedTokens) * avgCostPerToken * cachedTokenSavingsFactor
+
+	// Try exact savings from per-model pricing.
+	provider := a.GetProvider()
+	model := a.GetModel()
+	if inputPerM, _, cachedPerM, ok := api.ResolveModelPricing(provider, model); ok && inputPerM > 0 {
+		switch {
+		case cachedPerM > 0 && cachedPerM < inputPerM:
+			return float64(cachedTokens) * (inputPerM - cachedPerM) / 1e6
+		case cachedPerM >= inputPerM:
+			return 0
+		default:
+			return 0
+		}
+	}
+
+	// Resolver miss: no reliable pricing to compute against.
+	return 0
 }
 
 // GetContextWarningIssued returns whether a context warning has been issued
@@ -265,4 +295,32 @@ func (a *Agent) GetTPSStats() map[string]float64 {
 		return c.GetTPSStats()
 	}
 	return map[string]float64{}
+}
+
+// RecordErrorCategory emits a metrics event with the given error's
+// category label, so the cost/status footer can show "rate-limited,
+// retrying…" vs "provider error" vs generic.
+func (a *Agent) RecordErrorCategory(err error) {
+	if err == nil || a.eventBus == nil {
+		return
+	}
+
+	category := "unknown"
+	if te := agenterrors.AsTypedError(err); te != nil {
+		category = string(te.Code)
+	} else if cat, ok := agenterrors.GetCategory(err); ok {
+		category = cat.String()
+	}
+
+	a.publishEvent(
+		events.EventTypeMetricsUpdate,
+		events.MetricsUpdateEventWithCategory(
+			a.state.GetTotalTokens(),
+			a.state.GetCurrentContextTokens(),
+			a.getModelContextLimit(),
+			a.state.GetCurrentIteration(),
+			a.state.GetTotalCost(),
+			category,
+		),
+	)
 }

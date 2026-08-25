@@ -82,7 +82,7 @@ export function useQueuedMessages(): UseQueuedMessagesReturn {
 /**
  * Hook for the auto-send effect that dispatches queued messages.
  * Separated so it can be placed AFTER handleSendMessage is defined,
- * avoiding a circular dependency between useQueuedMessages and useMessageSending.
+ * avoiding a circular dependency between useQueuedMessages and useChatSessionManager.
  */
 export function useQueuedMessagesAutoSend(
   state: AppState,

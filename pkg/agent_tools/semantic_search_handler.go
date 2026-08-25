@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type semanticSearchHandler struct{}
@@ -19,10 +18,16 @@ func (h *semanticSearchHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "semantic_search",
 		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
-		Required:    []string{"query"},
+		Hidden:      true, // superseded by `search`; still callable by name
+		// RequiresEmbeddings: without an embedding index this tool has nothing
+		// to search — the registration path drops it entirely (the model never
+		// sees it), and the nil-manager early return below keeps direct calls
+		// from a replayed session silent instead of reporting the feature off.
+		RequiresEmbeddings: true,
+		Required:           []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Required: true, Description: "Natural language description of what you're looking for"},
-			{Name: "threshold", Type: "number", Description: "Minimum similarity score 0.0-1.0 (default: 0.75)"},
+			{Name: "threshold", Type: "number", Description: "Minimum similarity score 0.0-1.0 (default: 0.4)"},
 			{Name: "top_k", Type: "integer", Description: "Maximum results to return (default: 5)"},
 		},
 	}
@@ -34,27 +39,10 @@ func (h *semanticSearchHandler) Validate(args map[string]any) error {
 }
 
 func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-
-	var hadError bool
-
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
 
 	// Extract query (required)
 	query, err := extractString(args, "query")
 	if err != nil {
-		hadError = true
 		return ToolResult{
 			Output:  err.Error(),
 			IsError: true,
@@ -75,8 +63,9 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		topK = 1
 	}
 
-	// Extract optional threshold (default: 0.75)
-	threshold := 0.75
+	// Threshold default — resolved after the manager is acquired below, so
+	// the right gate is used for the active provider (Jina 0.30, Gemma 0.40).
+	var threshold float64
 	if tRaw, exists := args["threshold"]; exists && tRaw != nil {
 		switch v := tRaw.(type) {
 		case float64:
@@ -94,57 +83,40 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		threshold = 1
 	}
 
-	// Prefer the agent's long-lived embedding manager. It holds the loaded
-	// ONNX model and an open HNSW handle; constructing a fresh one per call
-	// re-downloads the model on first use, double-opens the HNSW store, and
-	// can race the writer in the agent. Only fall back to a transient
-	// manager when running outside an agent context (CLI tools, tests).
+	// Use the agent's embedding manager when available; fall back to literal search.
 	mgr := env.EmbeddingMgr
-	ownsMgr := false
 	if mgr == nil {
-		var cfg *configuration.Config
-		if env.ConfigManager != nil {
-			cfg = env.ConfigManager.GetConfig()
-		} else {
-			cfgMgr, err := configuration.NewManager()
-			if err != nil {
-				hadError = true
-				return ToolResult{
-					Output:  fmt.Sprintf("Error getting configuration: %v", err),
-					IsError: true,
-				}, nil
-			}
-			cfg = cfgMgr.GetConfig()
-		}
-
-		workspaceRoot := env.WorkspaceRoot
-		if workspaceRoot == "" {
-			workspaceRoot = "."
-		}
-
-		embeddingCfg := cfg.EmbeddingIndex
-		if embeddingCfg == nil {
-			embeddingCfg = &configuration.EmbeddingIndexConfig{}
-		}
-
-		mgr = embedding.NewEmbeddingManager(embeddingCfg, workspaceRoot)
-		ownsMgr = true
-	}
-	if ownsMgr {
-		defer mgr.Close()
+		return literalFallbackSemantic(ctx, env, query), nil
 	}
 
 	if err := mgr.Init(ctx); err != nil {
-		hadError = true
 		return ToolResult{
 			Output:  fmt.Sprintf("Semantic search unavailable: %v\n\nThe embedding index could not be initialized. This is usually because the ONNX runtime is not available in this build, or the model has not been downloaded yet. Run `embedding_index operation=status` to check the current state.", err),
 			IsError: true,
 		}, nil
 	}
 
+	// Resolve the default threshold based on the active provider.
+	threshold = float64(mgr.SemanticSearchThreshold())
+
+	// Refuse to answer when the index is empty or still building.
+	if r := mgr.Readiness(); !r.CanAnswerQueries() {
+		switch {
+		case r.Building:
+			return ToolResult{
+				Output: fmt.Sprintf("The embedding index is still building (%d records so far), so semantic search cannot answer yet.\n\n"+
+					"This is not a statement about the codebase — nothing has been searched. Retry shortly, or use search_files for a literal match in the meantime.", r.Records),
+			}, nil
+		default:
+			return ToolResult{
+				Output: "The embedding index has not been built for this workspace, so semantic search cannot answer.\n\n" +
+					"This is not a statement about the codebase — nothing has been searched. Enable indexing with the /index command, or use search_files for a literal match.",
+			}, nil
+		}
+	}
+
 	results, err := mgr.QuerySimilar(ctx, query, topK, float32(threshold))
 	if err != nil {
-		hadError = true
 		return ToolResult{
 			Output:  fmt.Sprintf("Error searching embeddings: %v", err),
 			IsError: true,
@@ -152,6 +124,9 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}
 
 	output := formatEmbeddingSearchResults(query, results, threshold)
+	if r := mgr.Readiness(); r.Building {
+		output = fmt.Sprintf("Note: the embedding index is still building (%d records indexed so far); these results are incomplete.\n\n%s", r.Records, output)
+	}
 
 	if env.OutputWriter != nil {
 		_, _ = env.OutputWriter.Write([]byte(output))
@@ -162,6 +137,12 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		TokenUsage: int64(estimateTokenUsage(output)),
 	}, nil
 }
+
+func (h *semanticSearchHandler) Aliases() []string      { return nil }
+func (h *semanticSearchHandler) Timeout() time.Duration { return 0 }
+func (h *semanticSearchHandler) MaxResultSize() int     { return 0 }
+func (h *semanticSearchHandler) SafeForParallel() bool  { return false }
+func (h *semanticSearchHandler) Interactive() bool      { return false }
 
 // formatEmbeddingSearchResults formats QueryResult entries into readable output.
 func formatEmbeddingSearchResults(query string, results []embedding.QueryResult, threshold float64) string {

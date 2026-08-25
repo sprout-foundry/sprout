@@ -54,7 +54,12 @@
   border-bottom: 2px solid transparent;
   border-radius: 6px 6px 0 0;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
   position: relative;
 }
 
@@ -146,7 +151,12 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: background, color, border-color, box-shadow, transform 0.1s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.1s ease;
   flex-shrink: 0;
   opacity: 0.4;
 }
@@ -177,7 +187,12 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
   flex-shrink: 0;
   opacity: 0;
 }
@@ -397,7 +412,12 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
 }
 
 .close-confirm-dialog .dialog-btn.primary {

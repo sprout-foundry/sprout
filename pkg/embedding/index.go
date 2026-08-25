@@ -2,26 +2,27 @@ package embedding
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
+	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
-// EmbeddingGemma task prefixes for task-specific embedding.
-// These match the prefixes defined in the ONNX provider to ensure queries
-// and documents are embedded into the correct semantic space.
+// Task prefixes for embedding queries and documents.
 const (
 	// documentPrefix is prepended to code/text before embedding for indexing.
 	documentPrefix = "title: none | text: "
 
-	// queryPrefix is prepended to search queries before embedding.
-	queryPrefix = "task: search result | query: "
-
-	// codeQueryPrefix is prepended to code-specific search queries.
+	queryPrefix     = "task: search result | query: "
 	codeQueryPrefix = "task: code retrieval | query: "
 )
 
@@ -33,7 +34,7 @@ type IndexStats struct {
 	Duration       time.Duration
 }
 
-// IndexOptions configures the behavior of IndexManager.
+// IndexOptions configures IndexManager behavior.
 type IndexOptions struct {
 	// IncludeTests controls whether test functions are indexed.
 	IncludeTests bool
@@ -41,21 +42,21 @@ type IndexOptions struct {
 	BatchSize int
 	// MaxBodyLen truncates CodeUnit.Body to this many bytes before embedding (0 = no limit).
 	MaxBodyLen int
-	// IndexFileLevel controls whether non-code files (markdown, configs, etc.)
-	// are indexed at the file level. When true, files like README.md, package.json,
-	// Dockerfile, etc. are indexed as single records with Type="file".
+	// IndexFileLevel indexes non-code files (markdown, configs, etc.) at file level.
 	IndexFileLevel bool
-	// ManifestPath is the path to the build manifest file that tracks file
-	// modification times from the last successful build. When set, BuildIndex
-	// uses the manifest to skip parsing unchanged files.
+	// ManifestPath is the path to the build manifest file for incremental rebuilds.
 	ManifestPath string
+	// IndexDir is the directory containing the HNSW index files. Used to place
+	// the cross-process .build.lock file. Empty disables locking.
+	IndexDir string
 }
 
 // IndexManager orchestrates code extraction, embedding, and storage.
 type IndexManager struct {
-	provider EmbeddingProvider
-	store    VectorStore
-	opts     IndexOptions
+	provider      EmbeddingProvider
+	store         VectorStore
+	opts          IndexOptions
+	buildLockHeld atomic.Bool // true when this manager acquired the flock (for re-entrant calls)
 }
 
 // NewIndexManager creates an IndexManager with the given provider, store, and options.
@@ -74,17 +75,95 @@ func NewIndexManager(provider EmbeddingProvider, store VectorStore, opts IndexOp
 	}
 }
 
+// lockForBuild acquires the cross-process build lock with re-entrant behavior.
+//
+// If this IndexManager already holds the lock (e.g. UpdateFromGitDiff called
+// UpdateFile), it returns immediately without re-acquiring — avoiding the
+// deadlock that occurs when flock(2) is used on a different open file
+// description for the same lock file.
+//
+// Returns (nil, nil) when no lock is needed (IndexDir empty or flock unavailable).
+// Returns (release, nil) when the lock was acquired.
+// Returns (nil, errBuildLocked) when another process holds the lock.
+func (m *IndexManager) lockForBuild() (func(), error) {
+	// Re-entrant fast path: this manager already holds the lock.
+	if m.buildLockHeld.Load() {
+		return nil, nil
+	}
+
+	release, err := acquireBuildLock(m.opts.IndexDir)
+	if release != nil {
+		// Wrap the release to clear the re-entrant flag on unlock.
+		// Note: use a LOCAL variable, not a named return — a closure capturing
+		// a named return would recurse into itself after the return assigns it.
+		m.buildLockHeld.Store(true)
+		return func() {
+			m.buildLockHeld.Store(false)
+			release()
+		}, nil
+	}
+	// errBuildLocked or (nil, nil) from acquireBuildLock — pass through as-is.
+	return nil, err
+}
+
+// buildIndexMemoryLimit bounds Go heap growth for the duration of a build.
+// This is a bursty, allocation-heavy batch pass — tokenizing and embedding
+// every code unit across the whole repo, with all units for the current
+// batch of changed files held in memory (allUnits below) before anything
+// gets written out. Without an explicit limit, Go's GC waits for the heap
+// to roughly double before collecting; measured on a real 2,363-file repo,
+// that let RSS swing widely up to 7+ GB before reclaiming back down to
+// ~2GB — and this runs in the same process as, and concurrently with,
+// whatever else sprout is doing (e.g. a loaded local model holding its own
+// several-GB unified-memory footprint outside the Go heap entirely).
+// SetMemoryLimit makes the GC work harder as usage approaches the limit
+// instead of waiting for the heap to double.
+const buildIndexMemoryLimit = 3 * 1024 * 1024 * 1024
+
+// logMemCheckpoint reports Go's own runtime.MemStats at a named point in
+// the build. HeapAlloc is Go-managed live objects; Sys is total memory
+// obtained from the OS for the Go runtime itself (heap + stacks + GC
+// metadata). Comparing Sys against observed process RSS is what separates
+// "Go's own accounting is growing" from "something outside Go entirely is
+// growing" — on a real 2,363-file repo this showed Sys pinned flat at the
+// configured buildIndexMemoryLimit throughout the whole embedding loop
+// while RSS still swung up to 5+ GB above it, meaning the excess is native
+// (cgo) memory the ONNX runtime holds that neither this limit nor Go's GC
+// can see or reclaim — worth knowing precisely if this needs
+// re-investigating later rather than re-deriving it from scratch.
+func logMemCheckpoint(tag string) {
+	if !debugLogEnabled.Load() {
+		return
+	}
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	log.Printf("index: MEMCHECK %s heapAlloc=%.1fMB sys=%.1fMB numGC=%d",
+		tag, float64(ms.HeapAlloc)/1048576, float64(ms.Sys)/1048576, ms.NumGC)
+}
+
 // BuildIndex walks rootDir, extracts code units, embeds them, and stores them.
-// Uses incremental rebuild: loads existing records, compares content hashes,
-// and only re-embeds changed or new files. Deleted files have their records
-// removed from the store.
-// When ManifestPath is set, uses an mtime-based manifest to skip parsing
-// unchanged files entirely, turning a multi-minute full parse into a
-// ~2-second stat sweep on warm indexes.
-// When IndexFileLevel is enabled, also indexes non-code files at the file level.
+// Uses incremental rebuild with mtime-based manifest to skip unchanged files.
 func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexStats, error) {
+	prevLimit := debug.SetMemoryLimit(buildIndexMemoryLimit)
+	defer debug.SetMemoryLimit(prevLimit)
+	logMemCheckpoint("start")
+
 	start := time.Now()
 	stats := &IndexStats{}
+
+	// Cross-process lock to prevent concurrent builds from corrupting the index.
+	release, err := m.lockForBuild()
+	if release != nil {
+		defer release()
+	}
+	if err == errBuildLocked {
+		debugLogf("index: build skipped — lock held by another process")
+		stats.Duration = time.Since(start)
+		return stats, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("index: acquire build lock: %w", err)
+	}
 
 	// Load existing records for incremental comparison.
 	existingRecords, err := m.store.LoadAll()
@@ -161,7 +240,29 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 				continue
 			}
 		} else if isIndexableFile {
-			content, err := os.ReadFile(path)
+			// Skip oversized files before any read: file-level indexing
+			// truncates to 8 KB anyway, and a multi-GB corpus would OOM.
+			fi, err := os.Stat(path)
+			if err != nil {
+				debugLogf("index: skipping %s: %v", path, err)
+				continue
+			}
+			if fi.Size() > MaxIndexableFileBytes {
+				debugLogf("index: skipping %s: %d bytes exceeds %d-byte indexable limit",
+					path, fi.Size(), MaxIndexableFileBytes)
+				continue
+			}
+			// Defense-in-depth: LimitReader bounds the read even if the file
+			// grew between Stat and Open (or is a symlink to something huge).
+			f, err := os.Open(path)
+			if err != nil {
+				debugLogf("index: skipping %s: %v", path, err)
+				continue
+			}
+			content, err := io.ReadAll(io.LimitReader(f, MaxIndexableFileBytes))
+			if cerr := f.Close(); cerr != nil && err == nil {
+				err = cerr
+			}
 			if err != nil {
 				debugLogf("index: skipping %s: %v", path, err)
 				continue
@@ -184,10 +285,9 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	}
 
 	stats.UnitsExtracted = len(allUnits)
+	logMemCheckpoint(fmt.Sprintf("after-extraction (%d units)", len(allUnits)))
 
-	// Note: we no longer early-return when allUnits is empty. Even if no
-	// files changed, existing records for files that were deleted from
-	// the workspace must still be cleaned up below.
+	// Note: we don't early-return when allUnits is empty — deleted file records still need cleanup below.
 
 	// --- Incremental rebuild logic ---
 
@@ -243,21 +343,60 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		}
 	}
 
-	// Embed only changed units.
+	// Embed only changed units, checkpointing each file as it completes.
+	// Batch store writes to avoid O(N²) I/O — HNSWStore.Store rewrites
+	// the whole records JSON plus HNSW graph on every call.
 	var newRecords []VectorRecord
 	if len(unitsToEmbed) > 0 {
 		debugLogf("index: re-embedding %d units...", len(unitsToEmbed))
 		embedStart := time.Now()
-		newRecords, err = m.embedUnits(ctx, unitsToEmbed)
+
+		var checkpoint *checkpointManifest
+		if m.opts.ManifestPath != "" {
+			checkpoint, err = newCheckpointManifest(m.opts.ManifestPath, m.provider.ModelHash())
+			if err != nil {
+				debugLogf("index: manifest checkpoint disabled (continuing without): %v", err)
+				checkpoint = nil
+			}
+		}
+
+		batcher := newRecordBatcher(m.store, checkpoint, manifestCheckpointInterval)
+
+		newRecords, err = m.embedUnits(ctx, unitsToEmbed, rootDir, batcher.add)
+		// Flush whatever the callback left pending even when embedding
+		// aborted, so the store on disk matches the records embedUnits
+		// reports (and the manifest matches the store).
+		flushErr := batcher.flush()
+		if checkpoint != nil {
+			// Persist whatever the manifest checkpoint left pending even when
+			// embedding aborted, so the manifest on disk matches the store.
+			if cerr := checkpoint.flush(); cerr != nil {
+				debugLogf("index: manifest checkpoint flush failed (non-fatal): %v", cerr)
+			}
+		}
 		if err != nil {
+			if errors.Is(err, errMemFloor) && len(newRecords) > 0 {
+				// The floor is a system-wide condition, not a per-file failure,
+				// and partial records were already checkpointed per-file. Treat
+				// it as a clean stop: keep the partial index and fall through
+				// to the normal completion path (stale cleanup, manifest save).
+				// Zero-progress floor trips stay hard errors — an empty build
+				// result would be indistinguishable from "nothing to index".
+				log.Printf("index: embedding halted at memory floor; keeping partial results")
+			} else {
+				stats.Duration = time.Since(start)
+				return stats, fmt.Errorf("index: embed units: %w", err)
+			}
+		}
+		if flushErr != nil {
 			stats.Duration = time.Since(start)
-			return stats, fmt.Errorf("index: embed units: %w", err)
+			return stats, fmt.Errorf("index: flush pending records: %w", flushErr)
 		}
 		debugLogf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
+		logMemCheckpoint(fmt.Sprintf("after-embedUnits (%d records)", len(newRecords)))
 	}
 
-	// Manifest-invalidated path: model changed, every embedding is stale.
-	// ReplaceAll wipes the store and writes the freshly-embedded records.
+	// Model changed: replace all records with fresh embeddings.
 	if manifestInvalidated && len(newRecords) > 0 {
 		debugLogf("index: replacing all records with %d re-embedded records (model changed)", len(newRecords))
 		storeStart := time.Now()
@@ -267,14 +406,8 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
 		stats.UnitsEmbedded = len(newRecords)
 	} else {
-		// Compute stale record IDs: records whose owning file or symbol no
-		// longer exists in the workspace. Two cases:
-		//   1. The file was re-walked (in currentFileUnits) and the symbol
-		//      ID is missing from the new extraction → symbol was removed.
-		//   2. The file is absent from both changedFiles (walked) and
-		//      unchangedFiles (manifest-skipped) → file was deleted.
-		// Records for manifest-skipped files are left alone; we have no
-		// evidence they're stale.
+		// Compute stale record IDs: removed symbols and deleted files.
+		// Manifest-skipped files are left alone.
 		unchangedSet := make(map[string]bool, len(unchangedFiles))
 		for _, f := range unchangedFiles {
 			unchangedSet[f] = true
@@ -300,26 +433,45 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			}
 		}
 
+		stats.UnitsEmbedded = len(newRecords)
 		if len(newRecords) > 0 {
-			debugLogf("index: storing %d new records...", len(newRecords))
-			storeStart := time.Now()
-			if err := m.store.Store(newRecords); err != nil {
-				return stats, fmt.Errorf("index: store: %w", err)
-			}
-			debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
-			stats.UnitsEmbedded = len(newRecords)
+			// Records were already persisted per-file by the checkpoint
+			// callback during embedding; there is no end-of-build flush.
+			debugLogf("index: stored %d records via per-file checkpoints", len(newRecords))
 		} else if len(staleIDs) == 0 {
 			debugLogf("index: no changes detected, skipping store")
 		}
 	}
 
-	// Save manifest after successful store (always, when ManifestPath is set,
-	// so the manifest covers the full workspace including unchanged files).
+	// Save manifest covering only files this build actually finished.
+	// Partially-embedded files are excluded so the next build resumes them.
 	if m.opts.ManifestPath != "" {
-		// Build manifest from all files in the workspace (changed + unchanged).
+		wantByFile := make(map[string]int, len(unitsToEmbed))
+		for _, u := range unitsToEmbed {
+			wantByFile[u.File]++
+		}
+		gotByFile := make(map[string]int, len(newRecords))
+		for _, r := range newRecords {
+			gotByFile[r.File]++
+		}
+
 		allFiles := make([]string, 0, len(changedFiles)+len(unchangedFiles))
-		allFiles = append(allFiles, changedFiles...)
+		var incomplete int
+		for _, f := range changedFiles {
+			if gotByFile[f] < wantByFile[f] {
+				incomplete++
+				continue
+			}
+			allFiles = append(allFiles, f)
+		}
+		// Manifest-skipped files were never re-examined, so they remain as
+		// indexed as they were.
 		allFiles = append(allFiles, unchangedFiles...)
+
+		if incomplete > 0 {
+			debugLogf("index: %d file(s) only partially embedded; excluded from manifest so the next build resumes them", incomplete)
+		}
+
 		manifest = BuildManifestFromFiles(allFiles, m.provider.ModelHash())
 		if err := SaveManifest(m.opts.ManifestPath, manifest); err != nil {
 			debugLogf("index: manifest save failed (non-fatal): %v", err)
@@ -334,6 +486,18 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 // Handles both code files (symbol extraction) and non-code files (file-level embedding)
 // when IndexFileLevel is enabled.
 func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
+	// Cross-process lock (re-entrant: safe when called from UpdateFromGitDiff).
+	release, err := m.lockForBuild()
+	if release != nil {
+		defer release()
+	}
+	if err == errBuildLocked {
+		return fmt.Errorf("index: update %s: %w", filePath, errBuildLocked)
+	}
+	if err != nil {
+		return fmt.Errorf("index: acquire build lock: %w", err)
+	}
+
 	// Always delete old records first (handles deleted files too).
 	if err := m.store.DeleteByFile(filePath); err != nil {
 		return fmt.Errorf("index: delete file %s: %w", filePath, err)
@@ -342,7 +506,6 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 	// Determine which extractor to use
 	isCodeFile := hasCodeExtension(filePath)
 	var units []CodeUnit
-	var err error
 
 	if isCodeFile {
 		// Use code extractor for code files
@@ -351,8 +514,27 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 			return fmt.Errorf("index: extract %s: %w", filePath, err)
 		}
 	} else if m.opts.IndexFileLevel && IsSupportedIndexableFile(filePath) {
-		// Use file extractor for non-code files when file-level indexing is enabled
-		content, err := os.ReadFile(filePath)
+		// Skip oversized files entirely: file-level indexing truncates to
+		// 8 KB anyway, and a multi-GB corpus would OOM the read path.
+		fi, err := os.Stat(filePath)
+		if err != nil {
+			return fmt.Errorf("index: stat %s: %w", filePath, err)
+		}
+		if fi.Size() > MaxIndexableFileBytes {
+			debugLogf("index: skipping %s: %d bytes exceeds %d-byte indexable limit",
+				filePath, fi.Size(), MaxIndexableFileBytes)
+			return nil
+		}
+		// Defense-in-depth: LimitReader bounds the read even if the file
+		// grew between Stat and Open (or is a symlink to something huge).
+		f, err := os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("index: open %s: %w", filePath, err)
+		}
+		content, err := io.ReadAll(io.LimitReader(f, MaxIndexableFileBytes))
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
 		if err != nil {
 			return fmt.Errorf("index: read %s: %w", filePath, err)
 		}
@@ -370,7 +552,7 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 		return nil
 	}
 
-	records, err := m.embedUnits(ctx, units)
+	records, err := m.embedUnits(ctx, units, "", nil)
 	if err != nil {
 		return fmt.Errorf("index: embed %s: %w", filePath, err)
 	}
@@ -382,9 +564,10 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 	return nil
 }
 
-// QuerySimilar embeds query text and returns the top-K most similar records above threshold.
-func (m *IndexManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
-	vec, err := m.provider.EmbedWithPrefix(ctx, query, queryPrefix)
+// queryWithPrefix embeds text under a task prefix and returns the top-K records above threshold.
+// EmbeddingGemma uses different subspaces for queries vs documents, so the prefix matters.
+func (m *IndexManager) queryWithPrefix(ctx context.Context, text, prefix string, topK int, threshold float32) ([]QueryResult, error) {
+	vec, err := m.provider.EmbedWithPrefix(ctx, text, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("index: embed query: %w", err)
 	}
@@ -395,40 +578,154 @@ func (m *IndexManager) QuerySimilar(ctx context.Context, query string, topK int,
 	return results, nil
 }
 
-// CheckDuplicates is like QuerySimilar but uses a default threshold of 0.90.
+// QuerySimilar embeds a natural-language query and returns the top-K most
+// similar records above threshold. Use CheckDuplicates when the input is code
+// rather than a question.
+func (m *IndexManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
+	return m.queryWithPrefix(ctx, query, codeQueryPrefix, topK, threshold)
+}
+
+// CheckDuplicates finds indexed code similar to codeText.
+//
+// It embeds with documentPrefix, NOT the query prefix: this compares code
+// against code, and the index stores code as documents. Routing this through
+// QuerySimilar (which is for natural-language questions) put the two sides in
+// different subspaces and cost roughly 0.10 of similarity — enough that, on
+// top of an already unreachable 0.90 gate, duplicate detection could not fire
+// at all. See TestPrefixSymmetryAffectsDuplicateThresholds.
 func (m *IndexManager) CheckDuplicates(ctx context.Context, codeText string, topK int, threshold float32) ([]QueryResult, error) {
 	if threshold == 0 {
-		threshold = 0.90
+		threshold = DefaultDuplicateThreshold
 	}
-	return m.QuerySimilar(ctx, codeText, topK, threshold)
+	return m.queryWithPrefix(ctx, codeText, documentPrefix, topK, threshold)
 }
 
 // embedUnits converts CodeUnits to text, batch-embeds, and returns VectorRecords.
-// On context cancellation (timeout), it returns partial results instead of an error
-// so that the caller can store whatever was processed so far.
-// Detects file-level units (ID == file path) vs code units (ID == file:path) and
-// uses the appropriate converter to set the Type field correctly.
-func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]VectorRecord, error) {
+// Returns partial results on cancellation. Calls onFileComplete per-file for checkpointed persistence.
+func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit, repoRoot string, onFileComplete func(file string, records []VectorRecord) error) ([]VectorRecord, error) {
 	now := time.Now()
 	var records []VectorRecord
+	var embedded int
+	floorTripped := false // mid-loop floor halt: return errMemFloor with partial records
 
-	for i := 0; i < len(units); i += m.opts.BatchSize {
+	// Fail hard below the floor with zero progress: an empty build result
+	// would otherwise be indistinguishable from "nothing to index".
+	if err := checkMemFloor(); err != nil {
+		return nil, err
+	}
+
+	// Sort by length to minimize padding waste in batch embedding.
+	order := make([]int, len(units))
+	textOf := make([]string, len(units))
+	for i := range units {
+		order[i] = i
+		textOf[i] = embeddingText(units[i], m.opts.MaxBodyLen)
+	}
+
+	// Embed recently-touched files first so the partial index becomes
+	// semantically useful within ~1 min instead of ~17 min on a full build.
+	// The store is flushed and queryable during embedding, so ordering
+	// determines when useful results appear to the user.
+	priority := buildFilePriority(repoRoot, uniqueFiles(units))
+	if len(priority) > 0 {
+		var t0, t1, t2 int
+		for _, u := range units {
+			switch priority[u.File] {
+			case 0:
+				t0++
+			case 1:
+				t1++
+			default:
+				t2++
+			}
+		}
+		debugLogf("index: priority tiers — recent: %d, 30d: %d, older: %d units", t0, t1, t2)
+	}
+
+	sort.SliceStable(order, func(a, b int) bool {
+		pa := priority[units[order[a]].File]
+		pb := priority[units[order[b]].File]
+		if pa != pb {
+			return pa < pb
+		}
+		return len(textOf[order[a]]) < len(textOf[order[b]])
+	})
+
+	// Track vectors by original index for partial results.
+	vecByIndex := make([][]float32, len(units))
+
+	// Group unit indices by file so a file's completion can be detected the
+	// moment its last unit embeds, no matter which batch that lands in.
+	unitsByFile := make(map[string][]int, len(units))
+	for i, u := range units {
+		unitsByFile[u.File] = append(unitsByFile[u.File], i)
+	}
+	embeddedByFile := make(map[string]int, len(unitsByFile))
+	completedFiles := make(map[string]bool, len(unitsByFile))
+
+	// recordsForFile assembles one file's records from embedded vectors.
+	recordsForFile := func(file string) []VectorRecord {
+		idxs := unitsByFile[file]
+		out := make([]VectorRecord, 0, len(idxs))
+		for _, idx := range idxs {
+			u := units[idx]
+			if u.ID == u.File {
+				out = append(out, fileCodeUnitToRecord(u, vecByIndex[idx], now))
+			} else {
+				out = append(out, codeUnitToRecord(u, vecByIndex[idx], now))
+			}
+		}
+		return out
+	}
+
+	// markEmbedded advances per-file progress for one batch and fires
+	// onFileComplete for any file whose last unit just landed.
+	markEmbedded := func(idxs []int) error {
+		if onFileComplete == nil {
+			return nil
+		}
+		for _, idx := range idxs {
+			file := units[idx].File
+			if completedFiles[file] {
+				continue
+			}
+			embeddedByFile[file]++
+			if embeddedByFile[file] < len(unitsByFile[file]) {
+				continue
+			}
+			completedFiles[file] = true
+			if err := onFileComplete(file, recordsForFile(file)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for i := 0; i < len(order); i += m.opts.BatchSize {
 		if err := ctx.Err(); err != nil {
-			// Graceful degradation: return partial results on timeout/cancellation.
-			log.Printf("index: embedding interrupted after %d records (%d total units): %v",
-				len(records), len(units), err)
-			return records, nil
+			// Return partial results on cancellation; completed files were already flushed.
+			log.Printf("index: embedding interrupted after %d/%d units: %v", embedded, len(units), err)
+			break
+		}
+		// Same partial-flush behavior as cancellation: native allocations are
+		// invisible to the Go heap limit, so stop a runaway build before the
+		// kernel OOM killer picks a victim. Unlike cancellation, this is not a
+		// clean stop — callers must be able to see the memory condition.
+		if err := checkMemFloor(); err != nil {
+			log.Printf("index: embedding halted after %d/%d units: %v", embedded, len(units), err)
+			floorTripped = true
+			break
 		}
 
 		end := i + m.opts.BatchSize
-		if end > len(units) {
-			end = len(units)
+		if end > len(order) {
+			end = len(order)
 		}
 
-		batch := units[i:end]
-		texts := make([]string, len(batch))
-		for j, u := range batch {
-			texts[j] = embeddingText(u, m.opts.MaxBodyLen)
+		idxs := order[i:end]
+		texts := make([]string, len(idxs))
+		for j, idx := range idxs {
+			texts[j] = textOf[idx]
 		}
 
 		vecs, err := m.provider.EmbedBatchWithPrefix(ctx, texts, documentPrefix)
@@ -436,25 +733,40 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 			return records, fmt.Errorf("index: embed batch [%d:%d]: %w", i, end, err)
 		}
 
-		for j, u := range batch {
-			// Check if this is a file-level unit (ID == file path) or code unit (ID contains :)
-			// File-level units from FileExtractor have ID == File
-			// Code units from ExtractFromFile have ID == "file:functionName"
-			if u.ID == u.File {
-				// File-level unit
-				records = append(records, fileCodeUnitToRecord(u, vecs[j], now))
-			} else {
-				// Code unit
-				records = append(records, codeUnitToRecord(u, vecs[j], now))
-			}
+		for j, idx := range idxs {
+			vecByIndex[idx] = vecs[j]
+		}
+		embedded += len(idxs)
+
+		if err := markEmbedded(idxs); err != nil {
+			return records, err
 		}
 
 		// Log progress every ProgressInterval records embedded.
-		if len(records)%ProgressInterval == 0 {
-			debugLogf("index: embedding progress: %d/%d records", len(records), len(units))
+		if embedded%ProgressInterval < m.opts.BatchSize {
+			debugLogf("index: embedding progress: %d/%d records", embedded, len(units))
+			logMemCheckpoint(fmt.Sprintf("embedding-loop (%d/%d)", embedded, len(units)))
 		}
 	}
 
+	// Emit in input order for per-file grouping.
+	for i, u := range units {
+		if vecByIndex[i] == nil {
+			continue // not reached before cancellation/floor halt
+		}
+		// File-level units have ID == file path; code units have ID == "file:name".
+		if u.ID == u.File {
+			// File-level unit
+			records = append(records, fileCodeUnitToRecord(u, vecByIndex[i], now))
+		} else {
+			// Code unit
+			records = append(records, codeUnitToRecord(u, vecByIndex[i], now))
+		}
+	}
+
+	if floorTripped {
+		return records, errMemFloor
+	}
 	return records, nil
 }
 
@@ -538,6 +850,20 @@ func hasCodeExtension(path string) bool {
 func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (*IndexStats, error) {
 	start := time.Now()
 	stats := &IndexStats{}
+
+	// Cross-process lock to prevent concurrent builds from corrupting the index.
+	release, err := m.lockForBuild()
+	if release != nil {
+		defer release()
+	}
+	if err == errBuildLocked {
+		debugLogf("index: git-diff update skipped — lock held by another process")
+		stats.Duration = time.Since(start)
+		return stats, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("index: acquire build lock: %w", err)
+	}
 
 	// Collect deleted files from both staged and unstaged diffs (SHOULD_FIX #8).
 	var deletedFiles []string
@@ -625,6 +951,12 @@ func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (
 		}
 
 		if err := m.UpdateFile(ctx, f); err != nil {
+			// The memory floor is system-wide: every remaining file would hit
+			// the same wall, so abort rather than emit per-file skip spam.
+			if errors.Is(err, errMemFloor) {
+				stats.Duration = time.Since(start)
+				return stats, fmt.Errorf("index: update aborted: %w", err)
+			}
 			debugLogf("index: skipping %s: %v", f, err)
 			errs = append(errs, f)
 			continue
@@ -689,6 +1021,67 @@ func runGit(dir string, args ...string) ([]string, error) {
 		}
 	}
 	return lines, nil
+}
+
+// buildFilePriority assigns each file a priority tier using git recency.
+// Tier 0 = modified within 7 days, Tier 1 = modified within 30 days,
+// Tier 2 = older or not found in git history.
+// Returns a map of file path → tier. If git fails, returns an empty map
+// so the caller falls back to pure length-based ordering.
+func buildFilePriority(repoRoot string, files []string) map[string]int {
+	if repoRoot == "" {
+		return nil
+	}
+
+	recent7, err := runGit(repoRoot, "log", "--name-only", "--format=", "--since=7 days ago")
+	if err != nil {
+		return nil
+	}
+	recent30, err := runGit(repoRoot, "log", "--name-only", "--format=", "--since=30 days ago")
+	if err != nil {
+		return nil
+	}
+
+	set7 := make(map[string]bool)
+	for _, f := range recent7 {
+		set7[filepath.Clean(f)] = true
+	}
+	set30 := make(map[string]bool)
+	for _, f := range recent30 {
+		set30[filepath.Clean(f)] = true
+	}
+
+	result := make(map[string]int, len(files))
+	for _, f := range files {
+		rel, err := filepath.Rel(repoRoot, f)
+		if err != nil {
+			result[f] = 2
+			continue
+		}
+		clean := filepath.Clean(rel)
+		switch {
+		case set7[clean]:
+			result[f] = 0
+		case set30[clean]:
+			result[f] = 1
+		default:
+			result[f] = 2
+		}
+	}
+	return result
+}
+
+// uniqueFiles extracts the distinct file paths from a slice of CodeUnits.
+func uniqueFiles(units []CodeUnit) []string {
+	seen := make(map[string]bool)
+	var files []string
+	for _, u := range units {
+		if !seen[u.File] {
+			seen[u.File] = true
+			files = append(files, u.File)
+		}
+	}
+	return files
 }
 
 // isSupportedFile returns true if the file path has a supported source-code extension.

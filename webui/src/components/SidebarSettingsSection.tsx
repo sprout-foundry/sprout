@@ -2,10 +2,12 @@ import { SkeletonText } from '@sprout/ui';
 import { Keyboard, Upload, Trash2 } from 'lucide-react';
 import { Suspense, lazy, useRef, useState, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
+import { isCloud } from '../config/mode';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { SproutSettings } from '../services/api';
-import type { AgentConfigProps } from './settings/types';
 import { useLog } from '../utils/log';
+import CredentialsSettingsTab from './CredentialsSettingsTab';
+import type { AgentConfigProps } from './settings/types';
 
 // SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab,
 // onnxEmbeddingProvider, and a few other heavy dependencies. It only
@@ -149,6 +151,7 @@ export default function SidebarSettingsSection({
               value={themePack.id}
               onChange={(e) => setThemePack(e.target.value)}
               className="styled-select theme-picker-select"
+              data-testid="theme-toggle"
             >
               {availableThemePacks.map((pack) => (
                 <option key={pack.id} value={pack.id}>
@@ -207,8 +210,8 @@ export default function SidebarSettingsSection({
             type="button"
             className="settings-link-btn settings-link-btn--hotkeys"
             onClick={() => {
-              // Dispatch event to open hotkeys config
-              window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
+              // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
+              window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
             }}
           >
             <Keyboard size={14} />
@@ -217,21 +220,35 @@ export default function SidebarSettingsSection({
         </div>
       </div>
 
-      {/* Agent Config moved into SettingsPanel (Agent section body) */}
-      <Suspense fallback={<SkeletonText lines={6} />}>
-        <SettingsPanel
-          settings={settings}
-          onSettingsChanged={onSettingsChanged}
-          onRequestProviderSetup={onRequestProviderSetup}
-          editorPreferences={{ autoSaveEnabled, whitespaceRenderingMode, formatOnSaveEnabled }}
-          onEditorPreferenceChanged={(key, value) => {
-            if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
-            if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
-            if (key === 'formatOnSaveEnabled') setFormatOnSaveEnabled(value as boolean);
-          }}
-          agentConfig={agentConfigObj}
-        />
-      </Suspense>
+      {/* ─── Cloud mode: simplified settings ──────────────────── */}
+      {isCloud ? (
+        <div className="section">
+          <h4>API Key</h4>
+          <p className="settings-section-desc">
+            Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely on
+            the server.
+          </p>
+          <CredentialsSettingsTab />
+        </div>
+      ) : (
+        <>
+          {/* Agent Config moved into SettingsPanel (Agent section body) */}
+          <Suspense fallback={<SkeletonText lines={6} />}>
+            <SettingsPanel
+              settings={settings}
+              onSettingsChanged={onSettingsChanged}
+              onRequestProviderSetup={onRequestProviderSetup}
+              editorPreferences={{ autoSaveEnabled, whitespaceRenderingMode, formatOnSaveEnabled }}
+              onEditorPreferenceChanged={(key, value) => {
+                if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
+                if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
+                if (key === 'formatOnSaveEnabled') setFormatOnSaveEnabled(value as boolean);
+              }}
+              agentConfig={agentConfigObj}
+            />
+          </Suspense>
+        </>
+      )}
     </>
   );
 }

@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,13 @@ func isGitHistoryRewriteCommand(command string) bool {
 		rest := parts[subIdx+1:]
 		switch subcommand {
 		case "rebase":
+			// `git rebase --abort` is a recovery op, not a history rewrite.
+			// Any other rebase form (including `--abort` with other flags or
+			// arguments, or any other rebase variant) is treated as a rewrite.
+			// The only permitted rebase invocation is pure `--abort`.
+			if len(rest) == 1 && rest[0] == "--abort" {
+				return false
+			}
 			return true
 		case "reset":
 			hard := false
@@ -225,9 +234,114 @@ func isGitWriteCommand(command string) bool {
 	}
 }
 
+// isGitRebaseCommand reports whether `command` contains a `git rebase`
+// invocation that rewrites history (i.e. NOT `git rebase --abort`).
+// AGENTS.md bans rebase unconditionally; the only permitted rebase is
+// `--abort` (recovery from a prior session's interrupted rebase).
+func isGitRebaseCommand(command string) bool {
+	command = stripQuotedContent(command)
+	remaining := command
+	for {
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		gitCmd := remaining[idx:]
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
+			continue
+		}
+		subcommand := ""
+		subIdx := 0
+		for i := 1; i < len(parts); i++ {
+			part := parts[i]
+			if strings.HasPrefix(part, "-") {
+				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+					i++
+				}
+				continue
+			}
+			subcommand = strings.TrimRight(part, ");\"'")
+			subIdx = i
+			break
+		}
+		if subcommand == "rebase" {
+			rest := parts[subIdx+1:]
+			// Pure `git rebase --abort` is the only permitted rebase
+			// invocation (recovery from a prior session's interrupted
+			// rebase). Any additional token — even something as benign
+			// looking as `--no-verify` — makes the abort intent ambiguous
+			// and is treated as a rewrite attempt.
+			if len(rest) == 1 && rest[0] == "--abort" {
+				return false
+			}
+			return true
+		}
+		if subcommand == "pull" {
+			// AGENTS.md also bans `git pull --rebase` (and `-r`).
+			// Use whole-token matching so `--no-rebase` and
+			// `--recurse-submodules -r` don't false-positive.
+			// `--rebase-preserve` is a real git flag (rebases + preserves
+			// locally committed merges) — also a rebase, also banned.
+			for _, a := range parts[subIdx+1:] {
+				if a == "--rebase" || a == "-r" || a == "--rebase-preserve" {
+					return true
+				}
+			}
+		}
+		remaining = remaining[idx+1:]
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Contributing-check model
 // ---------------------------------------------------------------------------
+
+// formatTypedError formats a typed error with category, message, and metadata
+// for human-readable display. Returns the formatted string.
+func formatTypedError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	// Check for TypedError first (SP-094 hierarchy)
+	if te := agenterrors.AsTypedError(err); te != nil {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("Error [%s] (%s): %s", te.Code, te.Severity, te.Message))
+		if te.Component != "" {
+			b.WriteString(fmt.Sprintf("\n  Component: %s", te.Component))
+		}
+		if len(te.Details) > 0 {
+			b.WriteString("\n  Details:")
+			for k, v := range te.Details {
+				b.WriteString(fmt.Sprintf("\n    %s: %v", k, v))
+			}
+		}
+		return b.String()
+	}
+
+	// Check for AgentError (legacy category-based)
+	var agentErr *agenterrors.AgentError
+	if errors.As(err, &agentErr) {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("Category: %s\n", agentErr.Category))
+		b.WriteString(fmt.Sprintf("Message: %s\n", agentErr.Message))
+		if len(agentErr.Metadata) > 0 {
+			b.WriteString("Metadata:\n")
+			for k, v := range agentErr.Metadata {
+				b.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
+			}
+		}
+		if agentErr.Cause != nil {
+			b.WriteString(fmt.Sprintf("Cause: %v\n", agentErr.Cause))
+		}
+		return strings.TrimSpace(b.String())
+	}
+
+	// Fallback: just the error message
+	return err.Error()
+}
 
 // explainSource labels a single contributing check in the risk assessment.
 type explainSource struct {
@@ -285,14 +399,20 @@ Examples:
 		asJSON, _ := cmd.Flags().GetBool("json")
 
 		if !explainSupportedTools[toolName] {
-			return fmt.Errorf("unknown or unsupported tool %q (valid: %s)", toolName, explainToolList())
+			return agenterrors.NewInvalidInputError(
+				fmt.Sprintf("unknown or unsupported tool %q (valid: %s)", toolName, explainToolList()),
+				nil,
+			).WithMetadata("tool", toolName)
 		}
 
 		cliArgs := buildExplainArgs(args, toolName, pathFlag, opFlag)
 
 		if msg := validateExplainInput(toolName, cliArgs); msg != "" {
 			fmt.Fprintln(cmd.ErrOrStderr(), msg)
-			return fmt.Errorf("no input provided for tool %q", toolName)
+			return agenterrors.NewInvalidInputError(
+				fmt.Sprintf("no input provided for tool %q", toolName),
+				nil,
+			).WithMetadata("tool", toolName)
 		}
 
 		secResult := tools.ClassifyToolCall(toolName, cliArgs)
@@ -383,11 +503,25 @@ func explainSourcesFor(toolName string, res tools.SecurityResult, args map[strin
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if isGitHistoryRewriteCommand(cmd) {
-				sources = append(sources, explainSource{
-					id:      "git-history-rewrite",
-					explain: "git history-rewrite blocked unless allow_git_history_rewrite=true",
-					level:   configuration.RiskLevelCritical,
-				})
+				if isGitRebaseCommand(cmd) {
+					// AGENTS.md: rebase is unconditionally banned — every
+					// form including interactive, --continue, --skip, and
+					// `git pull --rebase`. The only permitted invocation is
+					// pure `git rebase --abort` (recovery from a prior
+					// session's interrupted rebase).
+					sources = append(sources, explainSource{
+						id:      "git-rebase",
+						explain: "AGENTS.md: rebase is unconditionally banned — interactive, --continue, --skip, and `git pull --rebase` are all blocked. The only permitted invocation is `git rebase --abort` for recovery. Use `git merge` to integrate upstream.",
+						level:   configuration.RiskLevelCritical,
+					})
+				} else {
+					// Other history-rewrite ops: branch -D, tag -d, reset --hard <commit-ish>
+					sources = append(sources, explainSource{
+						id:      "git-history-rewrite",
+						explain: "git history-rewrite — promptable; auto-approved when allow_git_history_rewrite=true",
+						level:   configuration.RiskLevelHigh,
+					})
+				}
 			}
 		}
 	}
@@ -447,8 +581,14 @@ func combinedAssessment(toolName string, secResult tools.SecurityResult, args ma
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if isGitHistoryRewriteCommand(cmd) {
-				level = configuration.RiskLevelCritical
-				hardBlock = true
+				if isGitRebaseCommand(cmd) {
+					// AGENTS.md: rebase is unconditionally banned — hard-block.
+					level = configuration.RiskLevelCritical
+					hardBlock = true
+				} else {
+					// Other history-rewrite ops: branch -D, tag -d, reset --hard <commit-ish>
+					level = configuration.RiskLevelHigh
+				}
 			}
 		}
 	}

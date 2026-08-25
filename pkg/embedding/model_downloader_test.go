@@ -92,10 +92,10 @@ func TestModelDownloader_Download_Timeout_BlocksForever(t *testing.T) {
 	defer server.Close()
 
 	cfg := ModelConfig{
-		Name:       "timeout-test",
-		ModelURL:   server.URL + "/model.onnx",
-		Dims:       768,
-		FullDims:   768,
+		Name:     "timeout-test",
+		ModelURL: server.URL + "/model.onnx",
+		Dims:     768,
+		FullDims: 768,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -134,10 +134,10 @@ func TestModelDownloader_Download_ContextCancellation(t *testing.T) {
 	defer close(cancelCh)
 
 	cfg := ModelConfig{
-		Name:       "cancel-test",
-		ModelURL:   server.URL + "/model.onnx",
-		Dims:       768,
-		FullDims:   768,
+		Name:     "cancel-test",
+		ModelURL: server.URL + "/model.onnx",
+		Dims:     768,
+		FullDims: 768,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -178,11 +178,11 @@ func TestModelDownloader_Download_SkipExistingFile_NoHash(t *testing.T) {
 	}
 
 	cfg := ModelConfig{
-		Name:       "skip-test",
-		ModelURL:   "http://example.com/model.onnx",  // should NOT be called
+		Name:         "skip-test",
+		ModelURL:     "http://example.com/model.onnx", // should NOT be called
 		TokenizerURL: "http://example.com/tokenizer.json",
-		Dims:       768,
-		FullDims:   768,
+		Dims:         768,
+		FullDims:     768,
 	}
 
 	err := d.Download(context.Background(), cfg, nil)

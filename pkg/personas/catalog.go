@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -101,7 +102,7 @@ func loadDefinitionsFromFS(fsys fs.FS, dir string) (map[string]Definition, error
 			continue
 		}
 
-		filename := filepath.Join(dir, entry.Name())
+		filename := path.Join(dir, entry.Name())
 		data, err := fs.ReadFile(fsys, filename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read persona config %s: %w", filename, err)
@@ -184,7 +185,7 @@ func fallbackDefinitions() map[string]Definition {
 			ID:           IDOrchestrator,
 			Name:         "Orchestrator",
 			Description:  "Primary orchestration persona",
-			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "view_history", "rollback_changes", "self_review", "list_skills", "activate_skill", "TodoWrite", "TodoRead", "manage_memory"},
+			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "view_history", "rollback_changes", "list_skills", "activate_skill", "TodoWrite", "TodoRead", "manage_memory"},
 			Enabled:      true,
 			Capabilities: []string{CapabilityGitWrite},
 		},

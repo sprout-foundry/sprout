@@ -10,11 +10,11 @@
  *   - Persona badge appears in the expected color when persona is set.
  */
 
+import type { ToolExecution } from '@sprout/ui';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi } from 'vitest';
 import { ToolTimelineBar } from './ToolTimelineBar';
-import type { ToolExecution } from '@sprout/ui';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -54,11 +54,14 @@ function tool(overrides: Partial<ToolExecution> = {}): ToolExecution {
 }
 
 describe('ToolTimelineBar', () => {
-  it('renders nothing when there are no tool executions', () => {
+  it('renders an empty bar when there are no tool executions', () => {
     act(() => {
       root.render(createElement(ToolTimelineBar, { toolExecutions: [] }));
     });
-    expect(container.querySelector('.tool-timeline-bar')).toBeNull();
+    // The bar is always mounted; CSS collapses the empty state via
+    // :empty so rapid back-to-back tools don't churn the DOM.
+    expect(container.querySelector('.tool-timeline-bar')).not.toBeNull();
+    expect(container.querySelector('.tool-timeline-card')).toBeNull();
   });
 
   it('shows a spinner card for a running tool', () => {
@@ -73,9 +76,11 @@ describe('ToolTimelineBar', () => {
 
   it('shows a green check card for a recently-completed tool', () => {
     act(() => {
-      root.render(createElement(ToolTimelineBar, { toolExecutions: [
-        tool({ status: 'completed', startTime: new Date(Date.now() - 200), endTime: new Date() }),
-      ]}));
+      root.render(
+        createElement(ToolTimelineBar, {
+          toolExecutions: [tool({ status: 'completed', startTime: new Date(Date.now() - 200), endTime: new Date() })],
+        }),
+      );
     });
     expect(container.querySelector('.tool-timeline-card--completed')).not.toBeNull();
     expect(container.querySelector('.tool-timeline-icon-ok')).not.toBeNull();
@@ -83,9 +88,11 @@ describe('ToolTimelineBar', () => {
 
   it('shows a red X card for an error tool', () => {
     act(() => {
-      root.render(createElement(ToolTimelineBar, { toolExecutions: [
-        tool({ status: 'error', startTime: new Date(Date.now() - 200), endTime: new Date() }),
-      ]}));
+      root.render(
+        createElement(ToolTimelineBar, {
+          toolExecutions: [tool({ status: 'error', startTime: new Date(Date.now() - 200), endTime: new Date() })],
+        }),
+      );
     });
     expect(container.querySelector('.tool-timeline-card--error')).not.toBeNull();
     expect(container.querySelector('.tool-timeline-icon-error')).not.toBeNull();
@@ -99,18 +106,19 @@ describe('ToolTimelineBar', () => {
     // Initially visible
     expect(container.querySelector('.tool-timeline-card--completed')).not.toBeNull();
     // Advance past the 3s fade window — the card is gone, but the bar
-    // container stays mounted during the hide-grace window so rapid
-    // back-to-back tools don't churn the DOM (the visible flicker bug).
+    // container stays mounted so rapid back-to-back tools don't churn
+    // the DOM (the visible flicker bug). The empty state collapses via
+    // CSS :empty.
     act(() => {
       vi.advanceTimersByTime(3500);
     });
     expect(container.querySelector('.tool-timeline-card--completed')).toBeNull();
     expect(container.querySelector('.tool-timeline-bar')).not.toBeNull();
-    // After the hide-grace window the bar unmounts.
+    // The bar remains mounted even after the hide-grace window.
     act(() => {
       vi.advanceTimersByTime(4500);
     });
-    expect(container.querySelector('.tool-timeline-bar')).toBeNull();
+    expect(container.querySelector('.tool-timeline-bar')).not.toBeNull();
   });
 
   it('error tool sticks past the fade window', () => {
@@ -126,9 +134,7 @@ describe('ToolTimelineBar', () => {
 
   it('renders persona badge with the persona color when persona is set', () => {
     act(() => {
-      root.render(createElement(ToolTimelineBar, { toolExecutions: [
-        tool({ persona: 'coder', status: 'running' }),
-      ]}));
+      root.render(createElement(ToolTimelineBar, { toolExecutions: [tool({ persona: 'coder', status: 'running' })] }));
     });
     const badge = container.querySelector('.tool-timeline-persona') as HTMLElement | null;
     expect(badge).not.toBeNull();
@@ -138,9 +144,7 @@ describe('ToolTimelineBar', () => {
   });
 
   it('caps the visible cards at maxVisible (most recent wins)', () => {
-    const tools = Array.from({ length: 8 }, (_, i) =>
-      tool({ id: `t${i}`, tool: `tool_${i}`, status: 'running' }),
-    );
+    const tools = Array.from({ length: 8 }, (_, i) => tool({ id: `t${i}`, tool: `tool_${i}`, status: 'running' }));
     act(() => {
       root.render(createElement(ToolTimelineBar, { toolExecutions: tools, maxVisible: 3 }));
     });

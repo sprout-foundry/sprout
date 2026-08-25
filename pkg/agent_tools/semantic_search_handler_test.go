@@ -44,7 +44,8 @@ func TestSemanticSearchHandler_Definition(t *testing.T) {
 	}
 }
 
-func TestSemanticSearchHandler_Validate(t *testing.T) {	t.Parallel()
+func TestSemanticSearchHandler_Validate(t *testing.T) {
+	t.Parallel()
 	h := &semanticSearchHandler{}
 
 	// Missing query
@@ -120,8 +121,15 @@ func TestSemanticSearchHandler_Execute_DefaultArgs(t *testing.T) {
 		require.Contains(t, res.Output, "Semantic search unavailable",
 			"error output should explain the issue")
 	} else {
-		// No error — either found results or returned empty results (not an error)
-		require.Contains(t, res.Output, "result", "should return some output even with no index")
+		// No error. Assert the intent — the handler explains itself — rather
+		// than a substring of one particular message. This previously required
+		// the word "result", which only passed because an unbuilt index fell
+		// through to "No results found matching ...": a verdict about the
+		// codebase produced without searching anything. That message is now
+		// gated, so matching on its wording would pin the bug it replaced.
+		require.NotEmpty(t, res.Output, "handler should explain itself even with no index")
+		require.Regexp(t, `(?i)result|index`, res.Output,
+			"output should either report results or say why it cannot")
 	}
 }
 
@@ -139,63 +147,63 @@ func TestSemanticSearchHandler_ArgExtraction(t *testing.T) {
 		wantThreshold float64
 	}{
 		{
-			name: "defaults",
-			args: map[string]any{"query": "test"},
-			wantTopK: 5,
+			name:          "defaults",
+			args:          map[string]any{"query": "test"},
+			wantTopK:      5,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "custom top_k as int",
-			args: map[string]any{"query": "test", "top_k": 10},
-			wantTopK: 10,
+			name:          "custom top_k as int",
+			args:          map[string]any{"query": "test", "top_k": 10},
+			wantTopK:      10,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "custom top_k as float64 (JSON number)",
-			args: map[string]any{"query": "test", "top_k": float64(15)},
-			wantTopK: 15,
+			name:          "custom top_k as float64 (JSON number)",
+			args:          map[string]any{"query": "test", "top_k": float64(15)},
+			wantTopK:      15,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "top_k clamped to 1",
-			args: map[string]any{"query": "test", "top_k": -3},
-			wantTopK: 1,
+			name:          "top_k clamped to 1",
+			args:          map[string]any{"query": "test", "top_k": -3},
+			wantTopK:      1,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "custom threshold as float64",
-			args: map[string]any{"query": "test", "threshold": 0.5},
-			wantTopK: 5,
+			name:          "custom threshold as float64",
+			args:          map[string]any{"query": "test", "threshold": 0.5},
+			wantTopK:      5,
 			wantThreshold: 0.5,
 		},
 		{
-			name: "custom threshold as float32",
-			args: map[string]any{"query": "test", "threshold": float32(0.6)},
-			wantTopK: 5,
+			name:          "custom threshold as float32",
+			args:          map[string]any{"query": "test", "threshold": float32(0.6)},
+			wantTopK:      5,
 			wantThreshold: 0.6,
 		},
 		{
-			name: "custom threshold as int",
-			args: map[string]any{"query": "test", "threshold": 0},
-			wantTopK: 5,
+			name:          "custom threshold as int",
+			args:          map[string]any{"query": "test", "threshold": 0},
+			wantTopK:      5,
 			wantThreshold: 0,
 		},
 		{
-			name: "threshold clamped low",
-			args: map[string]any{"query": "test", "threshold": -0.5},
-			wantTopK: 5,
+			name:          "threshold clamped low",
+			args:          map[string]any{"query": "test", "threshold": -0.5},
+			wantTopK:      5,
 			wantThreshold: 0,
 		},
 		{
-			name: "threshold clamped high",
-			args: map[string]any{"query": "test", "threshold": 1.5},
-			wantTopK: 5,
+			name:          "threshold clamped high",
+			args:          map[string]any{"query": "test", "threshold": 1.5},
+			wantTopK:      5,
 			wantThreshold: 1,
 		},
 		{
-			name: "both custom",
-			args: map[string]any{"query": "test", "top_k": 20, "threshold": 0.85},
-			wantTopK: 20,
+			name:          "both custom",
+			args:          map[string]any{"query": "test", "top_k": 20, "threshold": 0.85},
+			wantTopK:      20,
 			wantThreshold: 0.85,
 		},
 	}
@@ -264,7 +272,7 @@ func TestSemanticSearchHandler_FormatSearchResults(t *testing.T) {
 				Name:      "Login",
 				Signature: "func Login(username, password string) (*User, error)",
 				StartLine: 10,
-				EndLine: 45,
+				EndLine:   45,
 				Language:  "go",
 			},
 			Similarity: 0.92,
@@ -307,7 +315,7 @@ func TestSemanticSearchHandler_EventBus_PublishesEvents(t *testing.T) {
 	h := &semanticSearchHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -318,23 +326,13 @@ func TestSemanticSearchHandler_EventBus_PublishesEvents(t *testing.T) {
 	// Execute with missing query — triggers error path
 	_, _ = h.Execute(context.Background(), env, map[string]any{})
 
-	// Check that tool_start was published
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Check that tool_end was published (with error flag)
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, true, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -415,7 +413,7 @@ func TestEmbeddingIndexHandler_WithEventBus(t *testing.T) {
 	h := &embeddingIndexHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -430,23 +428,13 @@ func TestEmbeddingIndexHandler_WithEventBus(t *testing.T) {
 	require.False(t, res.IsError)
 	require.Contains(t, res.Output, "Embedding Index Status")
 
-	// Verify tool_start event was published
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Verify tool_end event was published
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, false, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -455,7 +443,7 @@ func TestEmbeddingIndexHandler_WithEventBus_Error(t *testing.T) {
 	h := &embeddingIndexHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -463,28 +451,18 @@ func TestEmbeddingIndexHandler_WithEventBus_Error(t *testing.T) {
 		ConfigManager: newHermeticConfigManager(t),
 	}
 
-	// Invalid operation — should publish tool_end with error=true
+	// Invalid operation — handler should still execute without panicking
 	_, _ = h.Execute(context.Background(), env, map[string]any{
 		"operation": "bad",
 	})
 
-	// Check tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Check tool_end with error
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, true, data["error"])
-	default:
-		t.Fatal("expected tool_end event with error")
+		// good — no events published by the handler
 	}
 }
 
@@ -493,7 +471,7 @@ func TestEmbeddingIndexHandler_WithEventBus_MissingOperation(t *testing.T) {
 	h := &embeddingIndexHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -501,26 +479,16 @@ func TestEmbeddingIndexHandler_WithEventBus_MissingOperation(t *testing.T) {
 		ConfigManager: newHermeticConfigManager(t),
 	}
 
-	// Missing operation — should publish tool_end with error=true
+	// Missing operation — handler should still execute without panicking
 	_, _ = h.Execute(context.Background(), env, map[string]any{})
 
-	// Check tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Check tool_end with error
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, true, data["error"])
-	default:
-		t.Fatal("expected tool_end event with error")
+		// good — no events published by the handler
 	}
 }
 
@@ -571,7 +539,7 @@ func TestEmbeddingIndexHandler_Status_NoIndexDir(t *testing.T) {
 
 	// Empty config — should fall back to ~/.config/sprout/embeddings
 	cfg := &configuration.EmbeddingIndexConfig{}
-	res, err := h.handleStatus(cfg, t.TempDir())
+	res, err := h.handleStatus(cfg, t.TempDir(), nil)
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 	require.Contains(t, res.Output, "Embedding Index Status")

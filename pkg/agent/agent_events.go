@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/validation"
 )
@@ -77,20 +78,12 @@ func (a *Agent) PublishTodoUpdate(todos []map[string]interface{}) {
 	a.publishEvent(events.EventTypeTodoUpdate, events.TodoUpdateEvent(todos))
 }
 
-// PublishAgentMessage publishes a structured agent system message event.
-// This is the single unified routing point for all agent output.
-// Safe to call even when eventBus is nil (CLI-only mode) — the
-// internal publishEvent method checks for nil before publishing.
-// PublishFileChange emits a file_changed event so the WebUI activity
-// feed can reflect ChangeTracker-detected mutations (including
-// shell-driven ones, not just direct write_file/edit_file calls).
-// Content is the captured original (for deletes/edits) — pass empty
-// for creates, where there's no prior content. Action: "created" /
-// "modified" / "deleted" — matches events.FileChangedEvent vocabulary.
+// PublishFileChange emits a file_changed event for ChangeTracker-detected mutations.
 func (a *Agent) PublishFileChange(filePath, action, content string) {
 	a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(filePath, action, content))
 }
 
+// PublishAgentMessage publishes a structured agent system message event.
 func (a *Agent) PublishAgentMessage(category, message string, extra map[string]interface{}) {
 	a.publishEvent(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 }
@@ -109,17 +102,16 @@ func (a *Agent) PublishCompactCompleted(source string, beforeCount, afterCount, 
 	a.publishEvent(events.EventTypeCompactCompleted, events.CompactCompletedEvent(source, beforeCount, afterCount, summaryChars, err))
 }
 
-// PublishContextManagementDiagnostic (SP-066 Phase 1) emits the per-iteration
-// context-budget snapshot so the WebUI metrics panel can render the effective
-// trigger threshold and verify substitution is doing the heavy lifting.
-// cachedTokens/promptTokens/cacheWriteTokens expose provider cache
-// effectiveness in the diagnostic payload.
+// PublishContextManagementDiagnostic emits the per-iteration context-budget snapshot.
+// Emits both the effective max (post-cap) and the native max (pre-cap).
 func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, iteration, messageCount, cachedTokens, promptTokens, cacheWriteTokens int) {
+	nativeMax := a.getNativeModelContextLimit()
 	a.publishEvent(
 		events.EventTypeContextManagementDiagnostic,
 		events.ContextManagementDiagnosticEvent(
 			currentTokens,
 			maxTokens,
+			nativeMax,
 			a.computeCompactionTriggerFraction(),
 			reservedForResponseFraction,
 			reservedForThinkingFraction,
@@ -133,10 +125,7 @@ func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, ite
 	)
 }
 
-// PublishRecallDiagnostic (SP-066 Phase 3) emits a single semantic-recall
-// pass diagnostic. Called from InjectSemanticRecall after every recall
-// query (including no-op queries) so subscribers can see the full
-// distribution of recall behavior, not just hits.
+// PublishRecallDiagnostic emits a single semantic-recall pass diagnostic.
 func (a *Agent) PublishRecallDiagnostic(diag recallRetrievalDiagnostic) {
 	a.publishEvent(
 		events.EventTypeRecallDiagnostic,
@@ -150,9 +139,56 @@ func (a *Agent) PublishRecallDiagnostic(diag recallRetrievalDiagnostic) {
 	)
 }
 
-// PublishBudgetUpdate publishes a budget update event for automate sessions.
-// This goes through decorateEventPayload to include client_id/chat_id metadata.
-func (a *Agent) PublishBudgetUpdate(eventType string, data interface{}) {
+// PublishRateLimited emits a rate_limited event so the WebUI can show
+// "rate-limited, retrying…" and gate the input until the backoff elapses.
+func (a *Agent) PublishRateLimited(ev *events.RateLimitedEvent) {
+	if ev != nil {
+		a.publishEvent(events.EventTypeRateLimited, ev)
+	}
+}
+
+// publishRetryEvent emits metrics updates for retry events with the
+// error category label. This is called from the provider retry loop
+// in seed_provider.go on each retry attempt.
+func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider string) {
+	if err == nil || a.eventBus == nil {
+		return
+	}
+	// Determine the error category for the metrics label.
+	category := "unknown"
+	if te := agenterrors.AsTypedError(err); te != nil {
+		category = string(te.Code)
+	} else if cat, ok := agenterrors.GetCategory(err); ok {
+		category = cat.String()
+	}
+
+	// Emit a metrics update with the category so the status footer can
+	// show "rate-limited, retrying…" vs "provider error, retrying…"
+	a.publishEvent(
+		events.EventTypeMetricsUpdate,
+		events.MetricsUpdateEventWithCategory(
+			a.state.GetTotalTokens(),
+			a.state.GetCurrentContextTokens(),
+			a.getModelContextLimit(),
+			a.state.GetCurrentIteration(),
+			a.state.GetTotalCost(),
+			category,
+		),
+	)
+
+	// Also publish a rate_limited event if this is a rate limit error.
+	if agenterrors.IsRateLimited(err) {
+		a.PublishRateLimited(&events.RateLimitedEvent{
+			Provider:    provider,
+			Attempt:     attempt,
+			MaxAttempts: maxRetries,
+			Message:     err.Error(),
+		})
+	}
+}
+
+// PublishEvent publishes an event through the agent's event bus with metadata decoration.
+func (a *Agent) PublishEvent(eventType string, data interface{}) {
 	a.publishEvent(eventType, data)
 }
 
@@ -202,11 +238,7 @@ func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
 	}
 }
 
-// MergeEventMetadata adds extras to the current event metadata without
-// discarding existing keys. Unlike SetEventMetadata, which replaces the
-// map wholesale, this is the right call when a subagent needs to layer
-// per-spawn fields (e.g. subagent_depth, active_persona) on top of
-// already-set chat/client routing keys inherited from its parent.
+// MergeEventMetadata adds extras to the current event metadata without discarding existing keys.
 func (a *Agent) MergeEventMetadata(extras map[string]interface{}) {
 	if len(extras) == 0 {
 		return

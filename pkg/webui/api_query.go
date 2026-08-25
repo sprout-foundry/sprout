@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -205,11 +208,22 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 	return buf.Append(events.UIEvent{Type: eventType, Data: data})
 }
 
-// handleAPIQuery handles API queries to the agent
+// handleAPIQuery handles API queries to the agent. It is a thin
+// wrapper over runChatQuery — the body parsing and chat-id resolution
+// stay here so the request schema (query, chat_id, provider, model,
+// workspace_root, system_prompt) is documented in one place. The
+// shared runner handles locking, agent creation, override application,
+// the slash-command-in-chat path, and the async ProcessQueryWithContinuity
+// goroutine with cost recording and state sync.
+//
+// Keeping the slash-command-in-chat path inside the shared runner
+// (gated by opts.AllowSlashCommands=true here) means the legacy
+// /api/query surface still lets users type `/info` in a fresh chat
+// input; the runner rejects destructive commands via SteerCapable.
+// See SP-114 Phase 2 for the gating rationale.
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
-	log.Printf("handleAPIQuery called")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -224,241 +238,39 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
-		log.Printf("handleAPIQuery: invalid JSON: %v", err)
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		ws.log().Warn("invalid query JSON", slog.String("err", err.Error()))
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	if query.Query == "" {
-		log.Printf("handleAPIQuery: empty query")
-		http.Error(w, "Query is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
 		return
 	}
 
-	log.Printf("handleAPIQuery: processing query: %s", query.Query)
 	clientID := ws.resolveClientID(r)
-	
+
 	// Resolve chat_id: prefer body parameter, fall back to query parameter
 	chatID := strings.TrimSpace(query.ChatID)
 	if chatID == "" {
 		chatID = ws.resolveChatID(r, clientID)
 	}
 
-	// Resolve workspace root with worktree awareness - check if chat has a worktree path
-	workspaceRoot := ws.resolveWorkspaceRootForChat(clientID, chatID)
-	if workspaceRoot == "" {
-		workspaceRoot = ws.getWorkspaceRootForRequest(r)
-	}
-
-	ws.mutex.Lock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil {
-		ws.mutex.Unlock()
-		http.Error(w, "Client context not found", http.StatusBadRequest)
-		return
-	}
-	if ctx.hasActiveQueryForChat(chatID) {
-		ws.mutex.Unlock()
-		http.Error(w, "A query is already running for this chat", http.StatusConflict)
-		return
-	}
-	// Atomically mark the query as active while still holding the lock so
-	// a concurrent request for the same chat cannot also pass the check.
-	// The previous implementation released the lock between the check and
-	// the set, creating a TOCTOU race where two requests could both enter
-	// the query goroutine and corrupt the same agent's state.
-	ws.queryCount++
-	ws.activeQueries++
-	ctx.setChatQueryActive(chatID, true, query.Query)
-	ws.mutex.Unlock()
-
-	// Resolve the agent AFTER the active-query lock is released. Creating
-	// an agent may block (config load, provider init), and holding ws.mutex
-	// during that would serialize all incoming queries across all chats.
-	clientAgent, err := ws.getChatAgent(clientID, chatID)
-	if err != nil {
-		// Roll back the active-query state we set above — the query never runs.
-		ws.mutex.Lock()
-		if ws.activeQueries > 0 {
-			ws.activeQueries--
-		}
-		ctx := ws.clientContexts[clientID]
-		if ctx != nil {
-			ctx.setChatQueryActive(chatID, false, "")
-		}
-		ws.mutex.Unlock()
-
-		if isProviderConfigError(err) {
-			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
-		} else {
-			http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Apply per-query overrides: provider, model.
-	// On failure, return an error to the client instead of silently
-	// proceeding with the wrong provider/model — the user's query would
-	// run against an unexpected model with no indication.
-	if query.Provider != "" {
-		cm := ws.getConfigManager(r, w)
-		if cm != nil {
-			// Enrich custom providers from disk before mapping — the config
-			// manager may not have them loaded if it was created via fallback.
-			cm.EnrichCustomProviders()
-			providerType, mapErr := cm.MapStringToClientType(query.Provider)
-			if mapErr != nil {
-				// Roll back active-query state and return error.
-				ws.mutex.Lock()
-				if ws.activeQueries > 0 {
-					ws.activeQueries--
-				}
-				if ctx := ws.clientContexts[clientID]; ctx != nil {
-					ctx.setChatQueryActive(chatID, false, "")
-				}
-				ws.mutex.Unlock()
-				writeJSONErr(w, http.StatusBadRequest, "invalid_provider",
-					fmt.Sprintf("Invalid provider %q: %v", query.Provider, mapErr))
-				return
-			}
-			if serr := clientAgent.SetProvider(providerType); serr != nil {
-				ws.mutex.Lock()
-				if ws.activeQueries > 0 {
-					ws.activeQueries--
-				}
-				if ctx := ws.clientContexts[clientID]; ctx != nil {
-					ctx.setChatQueryActive(chatID, false, "")
-				}
-				ws.mutex.Unlock()
-				writeJSONErr(w, http.StatusBadRequest, "provider_switch_failed",
-					fmt.Sprintf("Failed to switch to provider %q: %v", query.Provider, serr))
-				return
-			}
-		}
-	}
-	if query.Model != "" {
-		if err := clientAgent.SetModel(query.Model); err != nil {
-			ws.mutex.Lock()
-			if ws.activeQueries > 0 {
-				ws.activeQueries--
-			}
-			if ctx := ws.clientContexts[clientID]; ctx != nil {
-				ctx.setChatQueryActive(chatID, false, "")
-			}
-			ws.mutex.Unlock()
-			writeJSONErr(w, http.StatusBadRequest, "model_switch_failed",
-				fmt.Sprintf("Failed to switch to model %q: %v", query.Model, err))
-			return
-		}
-	}
-
-	// Apply per-query workspace root override
-	if query.WorkspaceRoot != "" {
-		workspaceRoot = query.WorkspaceRoot
-	}
-
-	// Apply per-query system prompt override (session-scoped, resets after query not needed)
-	if query.SystemPrompt != "" {
-		clientAgent.SetSystemPrompt(query.SystemPrompt)
-	}
-
-	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
-	go func() {
-		defer func() {
-			ws.mutex.Lock()
-			if ws.activeQueries > 0 {
-				ws.activeQueries--
-			}
-			if ctx := ws.clientContexts[clientID]; ctx != nil {
-				ctx.setChatQueryActive(chatID, false, "")
-			}
-			ws.mutex.Unlock()
-		}()
-		startedAt := time.Now()
-		registry := agent_commands.NewCommandRegistry()
-
-		if registry.IsSlashCommand(query.Query) {
-			log.Printf("handleAPIQuery: executing slash command: %s", query.Query)
-			queryEventData := events.QueryStartedEvent(
-				query.Query,
-				clientAgent.GetProvider(),
-				clientAgent.GetModel(),
-			)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryStarted, queryEventData)
-
-			clientAgent.SetWorkspaceRoot(workspaceRoot)
-			err := registry.Execute(query.Query, clientAgent)
-			_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
-			if err != nil {
-				log.Printf("handleAPIQuery: slash command error: %v", err)
-				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
-				return
-			}
-
-			trimmed := strings.TrimSpace(query.Query)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
-				fmt.Sprintf("Executed command: `%s`\n", trimmed),
-				"assistant_text",
-			))
-			queryCompletedData := events.QueryCompletedEvent(
-				query.Query,
-				fmt.Sprintf("Executed command: %s", trimmed),
-				0,
-				0,
-				time.Since(startedAt),
-			)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryCompleted, queryCompletedData)
-			return
-		}
-
-		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity chat_id=%s provider=%s model=%s", chatID, clientAgent.GetProvider(), clientAgent.GetModel())
-		queryStart := time.Now()
-		clientAgent.SetWorkspaceRoot(workspaceRoot)
-		_, err := clientAgent.ProcessQueryWithContinuity(query.Query)
-		queryDuration := time.Since(queryStart)
-
-		// Record cost after query completes
-		if cost := clientAgent.GetTotalCost(); cost > 0 {
-			GetCostStore().RecordCost(
-				clientAgent.GetProvider(),
-				clientAgent.GetModel(),
-				clientAgent.GetSessionID(),
-				chatID,
-				clientAgent.GetPromptTokens(),
-				clientAgent.GetCompletionTokens(),
-				cost,
-			)
-		}
-
-		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
-		if err != nil {
-			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", chatID, queryDuration, err)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Query failed", err))
-		} else {
-			// Success-path log: lets operators see that the provider responded
-			// and at what cost. Without this the log goes silent after
-			// "calling ProcessQueryWithContinuity" and the server looks hung.
-			log.Printf("handleAPIQuery: completed chat_id=%s duration=%s prompt_tokens=%d completion_tokens=%d total_cost=%.6f",
-				chatID, queryDuration,
-				clientAgent.GetPromptTokens(), clientAgent.GetCompletionTokens(),
-				clientAgent.GetTotalCost())
-		}
-	}()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"accepted":  true,
-		"query":     query.Query,
-		"chat_id":   chatID,
-		"timestamp": time.Now().Unix(),
+	ws.runChatQuery(w, r, clientID, chatID, query.Query, chatQueryOptions{
+		Provider:           query.Provider,
+		Model:              query.Model,
+		WorkspaceRoot:      query.WorkspaceRoot,
+		SystemPrompt:       query.SystemPrompt,
+		AllowSlashCommands: true,
+		EchoQueryInAccept:  true,
+		LogTag:             "handleAPIQuery",
 	})
 }
 
 // handleAPIQuerySteer injects user input into the currently running query loop.
 func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -468,18 +280,63 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	query.Query = strings.TrimSpace(query.Query)
 	if query.Query == "" {
-		http.Error(w, "Query is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
 		return
 	}
 
+	// Handle slash commands during active query
 	if strings.HasPrefix(query.Query, "/") {
-		http.Error(w, "Slash commands cannot be steered while a query is running", http.StatusBadRequest)
+		clientID := ws.resolveClientID(r)
+		chatID := ws.resolveChatID(r, clientID)
+
+		ws.mutex.RLock()
+		ctx := ws.clientContexts[clientID]
+		hasActiveQuery := ctx != nil && ctx.hasActiveQueryForChat(chatID)
+		ws.mutex.RUnlock()
+
+		if !hasActiveQuery {
+			writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
+			return
+		}
+
+		clientAgent, err := ws.getChatAgent(clientID, chatID)
+		if err != nil {
+			if isProviderConfigError(err) {
+				writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
+			} else {
+				writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
+			}
+			return
+		}
+
+		// Try to execute safe steer command
+		cmd, output, cmdErr := ws.executeSafeSteerCommand(query.Query, clientAgent)
+		if cmd != nil {
+			// Command was found and executed (success or error)
+			resp := map[string]interface{}{
+				"accepted": cmdErr == nil,
+				"mode":     "steer",
+				"command":  cmd.Name(),
+				"target":   "primary",
+			}
+			if output != "" {
+				resp["output"] = output
+			}
+			if cmdErr != nil {
+				resp["error"] = cmdErr.Error()
+			}
+			writeJSON(w, http.StatusOK, resp)
+			return
+		}
+
+		// Command not found or not safe to run mid-turn
+		writeJSONErr(w, http.StatusBadRequest, "slash_command_not_steerable", "Slash commands cannot be steered while a query is running")
 		return
 	}
 
@@ -490,7 +347,7 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.RUnlock()
-		http.Error(w, "No active query to steer", http.StatusConflict)
+		writeJSONErr(w, http.StatusConflict, "no_active_query", "No active query to steer")
 		return
 	}
 	ws.mutex.RUnlock()
@@ -500,31 +357,45 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
 
-	// SP-059 Phase 1b: if a subagent is the active executor, route the
-	// steer to it instead of letting the message sit in the primary's
-	// queue (where it wouldn't be read until the subagent returns).
+	// SP-059 Phase 1b / SP-094-8: if a subagent is the active executor,
+	// route the steer via InjectInputIntoActive. This now prefers the
+	// primary agent first (the parent decides whether to abort subagents,
+	// redirect them, or fold the steer into its own plan). Only if the
+	// primary's channel is full does it fall back to the deepest running
+	// subagent.
 	target := "primary"
 	subagentID := ""
+	delivered := false
 	if runner := clientAgent.GetSubagentRunner(); runner != nil {
 		if id, ok := runner.InjectInputIntoActive(query.Query); ok {
-			target = "subagent"
-			subagentID = id
+			delivered = true
+			if id == "primary" {
+				target = "primary"
+			} else {
+				target = "subagent"
+				subagentID = id
+			}
 		}
 	}
-	if target == "primary" {
+	if !delivered {
+		// No runner or runner couldn't deliver — fall back to primary directly.
 		if err := clientAgent.InjectInputContext(query.Query); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
+			ws.log().Error("steer failed",
+				slog.String("handler", "handleAPIQuerySteer"),
+				slog.String("chat_id", chatID),
+				slog.String("client_id", clientID),
+				slog.Any("err", err),
+			)
+			writeJSONErr(w, http.StatusConflict, "steer_failed", fmt.Sprintf("Failed to steer active query: %v", err))
 			return
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
 	resp := map[string]interface{}{
 		"accepted":  true,
 		"mode":      "steer",
@@ -535,89 +406,232 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	if subagentID != "" {
 		resp["subagent_id"] = subagentID
 	}
-	json.NewEncoder(w).Encode(resp)
+	ws.log().Info("query steered",
+		slog.String("handler", "handleAPIQuerySteer"),
+		slog.String("chat_id", chatID),
+		slog.String("client_id", clientID),
+		slog.String("target", target),
+	)
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
-// handleAPIQueryStop interrupts the currently running query loop.
-func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Request) {
+// handleAPIQuerySteerRetract pulls back the newest staged-but-unpicked steer
+// message so the user can edit it (Up-arrow on empty input while processing).
+// On success returns 200 with the retracted text. When nothing is pending
+// returns 200 with success=false (not an error — the frontend treats it as
+// "nothing to pull back").
+//
+// Note: if the steer was delivered to a SUBAGENT (rare fallback path in
+// handleAPIQuerySteer), RetractLatestSteer on the primary agent returns
+// false — the subagent's input channel is separate and not retractable.
+// This is acceptable; the steer is already in-flight.
+func (ws *ReactWebServer) handleAPIQuerySteerRetract(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
-
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	if ctx == nil || !ctx.hasActiveQueryForChat(chatID) {
-		ws.mutex.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":            "ok",
-			"already_completed": true,
-			"timestamp":         time.Now().Unix(),
-		})
-		return
-	}
-	ws.mutex.RUnlock()
 
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
 
-	clientAgent.TriggerInterrupt()
-
-	// SP-059 Phase 1a: also cancel any running subagents. Without this,
-	// the primary's TriggerInterrupt unblocks its own loop but the
-	// subagent's ProcessQuery continues until it finishes naturally —
-	// the user sees the Stop button do nothing for tens of seconds.
-	cancelledSubagents := 0
-	if runner := clientAgent.GetSubagentRunner(); runner != nil {
-		for _, sub := range runner.GetActiveSubagents() {
-			if runner.CancelSubagent(sub.ID) {
-				cancelledSubagents++
-			}
-		}
+	message, ok := clientAgent.RetractLatestSteer()
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"message": "",
+		})
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"accepted":            true,
-		"mode":                "stop",
-		"timestamp":           time.Now().Unix(),
-		"cancelled_subagents": cancelledSubagents,
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": message,
 	})
 }
 
-// handleAPIQueryStatus handles GET /api/query/status?chat_id=xxx
-// Returns whether a query is currently active for the specified chat.
-// This is a polling fallback for when the WebSocket drops and reconnects.
-func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+// handleAPIQueryStop interrupts the currently running query loop. Thin
+// wrapper over the shared stopActiveQuery helper — the body parsing
+// and chat-id resolution stay here so the HTTP method gate runs first,
+// then the shared helper handles active-state lookup, agent
+// resolution, TriggerInterrupt, and subagent cancellation.
+func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
 
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	active := ctx != nil && ctx.hasActiveQueryForChat(chatID)
-	ws.mutex.RUnlock()
+	ws.stopActiveQuery(w, r, clientID, chatID)
+}
 
+// handleAPIQueryStatus handles GET /api/query/status?chat_id=xxx
+// Returns whether a query is currently active for the specified chat.
+// This is a polling fallback for when the WebSocket drops and reconnects.
+// Thin wrapper over the shared chatQueryStatus helper.
+func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+	chatID := ws.resolveChatID(r, clientID)
+
+	active := ws.chatQueryStatus(clientID, chatID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"active":  active,
 		"chat_id": chatID,
 	})
 }
 
+// executeSafeSteerCommand tries to execute a slash command mid-turn.
+// Returns (cmd, output, error) where:
+//   - cmd is the command if found and executed
+//   - output is the captured stdout from the command
+//   - error is any execution error
+//   - (nil, "", nil) is returned if the command was not found or not safe
+func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent.Agent) (agent_commands.Command, string, error) {
+	return ws.executeSafeSteerCommandStreaming(input, chatAgent, nil, nil)
+}
+
+// executeSafeSteerCommandStreaming is the streaming variant of
+// executeSafeSteerCommand (SP-114 Phase 2c). When onChunk is non-nil it
+// receives each UTF-8-safe chunk from the command's configured output
+// writer, in addition to being appended to the aggregated output string.
+// When onChunk is nil the behavior is byte-for-byte identical to the
+// non-streaming executeSafeSteerCommand — the /api/query/steer call
+// site relies on this and uses the non-streaming entry point.
+//
+// onComplete is invoked exactly once after the command finishes
+// (success or error). Use it for post-command housekeeping like state
+// sync — the shared function calls it so callers don't have to remember.
+//
+// onChunk is invoked from a goroutine that reads the command output pipe
+// concurrently with Execute. It MUST be safe to call concurrently with
+// the rest of the program; in particular it must not block on slow
+// consumers (callers are expected to fan out to the WebSocket
+// non-blockingly via the event bus). The reader goroutine exits once
+// Execute returns and writeEnd is closed; onChunk will not be called
+// after this function returns.
+func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAgent *agent.Agent, onChunk func(string), onComplete func(agent_commands.Command, string, error)) (agent_commands.Command, string, error) {
+	// Parse command name from input
+	trimmed := strings.TrimSpace(input)
+	if !strings.HasPrefix(trimmed, "/") {
+		return nil, "", nil
+	}
+	parts := strings.Fields(trimmed[1:]) // Remove leading /
+	if len(parts) == 0 {
+		return nil, "", nil
+	}
+	cmdName := parts[0]
+
+	// Get the registry from the agent
+	registryRaw := chatAgent.SlashCommands()
+	if registryRaw == nil {
+		return nil, "", nil
+	}
+	registry, ok := registryRaw.(*agent_commands.CommandRegistry)
+	if !ok {
+		return nil, "", nil
+	}
+
+	cmd, ok := registry.GetCommand(cmdName)
+	if !ok {
+		return nil, "", nil
+	}
+
+	// Check if command is safe to run mid-turn
+	sc, ok := cmd.(agent_commands.SteerCapable)
+	if !ok || !sc.SafeDuringSteer() {
+		return nil, "", nil
+	}
+
+	// Capture command output without redirecting process-global os.Stdout.
+	// The registry wires this invocation-local writer into OutputCommand
+	// implementations, so commands from different clients can run concurrently.
+	output, cmdErr := captureCommandOutput(
+		ws.log(), "executeSafeSteerCommandStreaming",
+		registry, input, chatAgent, onChunk, true,
+	)
+
+	if onComplete != nil {
+		onComplete(cmd, output, cmdErr)
+	}
+
+	return cmd, output, cmdErr
+}
+
+// streamPipeChunks drains r into buf while invoking onChunk for each
+// UTF-8-safe chunk. It buffers trailing partial runes so onChunk never
+// receives an incomplete multi-byte rune, then emits a single event per
+// pipe read containing every complete rune from that read. Callers can
+// batch events from multiple reads (the WebUI panel will append
+// monotonically). The chunk size (4 KB) is large enough to amortize
+// per-chunk overhead but small enough that WebSocket latency stays low.
+// Public for tests; production code uses it via
+// executeSafeSteerCommandStreaming.
+func streamPipeChunks(r io.Reader, buf *strings.Builder, onChunk func(string)) {
+	const chunkSize = 4096
+	pending := make([]byte, 0, chunkSize)
+	scratch := make([]byte, chunkSize)
+	for {
+		n, err := r.Read(scratch)
+		if n > 0 {
+			buf.Write(scratch[:n])
+			pending = append(pending, scratch[:n]...)
+			// Walk the pending buffer once and emit each complete
+			// rune. We collect them into a per-read builder so a
+			// 4 KB pipe-read becomes ONE onChunk call (not 4096
+			// per-byte calls), which keeps the event bus / WS
+			// pipeline from drowning under flood pressure during
+			// normal-speed commands. Trailing partial runes stay in
+			// `pending` for the next read.
+			i := 0
+			out := make([]byte, 0, len(pending))
+			for i < len(pending) {
+				if !utf8.FullRune(pending[i:]) {
+					// Cap pending at UTFMax to prevent unbounded growth
+					// from broken UTF-8 (e.g. continuation bytes with no
+					// leading byte). Emit replacement character and reset.
+					if len(pending)-i >= utf8.UTFMax {
+						out = append(out, "\uFFFD"...)
+						pending = pending[:0]
+					}
+					break
+				}
+				rn, size := utf8.DecodeRune(pending[i:])
+				var rb [utf8.UTFMax]byte
+				sz := utf8.EncodeRune(rb[:], rn)
+				out = append(out, rb[:sz]...)
+				i += size
+			}
+			if len(out) > 0 && onChunk != nil {
+				onChunk(string(out))
+			}
+			if i > 0 {
+				pending = pending[:copy(pending, pending[i:])]
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// Pipe closed mid-read or other read error. We can't do
+			// much — the command's writer is gone. Stop streaming
+			// and let the caller assemble whatever we captured.
+			break
+		}
+	}
+}

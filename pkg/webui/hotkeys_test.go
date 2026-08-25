@@ -187,7 +187,7 @@ func TestHotkeyConfigNil(t *testing.T) {
 }
 
 func TestHotkeyPresetConfigs(t *testing.T) {
-	for _, preset := range []string{"vscode", "webstorm", "ledit"} {
+	for _, preset := range []string{"vscode", "webstorm", "sprout"} {
 		t.Run(preset, func(t *testing.T) {
 			config := HotkeyPresetConfig(preset)
 			if config == nil {
@@ -264,7 +264,7 @@ func TestHotkeyPresetConfigs(t *testing.T) {
 			}
 
 			// Regression guard: Ctrl+D/Cmd+D must NOT be bound to
-			// editor_delete_line in vscode or ledit presets.  CodeMirror's
+			// editor_delete_line in vscode or sprout presets.  CodeMirror's
 			// searchKeymap already provides Mod-d → selectNextOccurrence and
 			// the override would break multi-cursor find-match selection.
 			if preset != "webstorm" {

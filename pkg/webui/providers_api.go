@@ -4,8 +4,8 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -27,7 +27,7 @@ type providerDescriptor struct {
 
 func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -54,8 +54,7 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 		currentModel = strings.TrimSpace(agentInst.GetModel())
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"providers":        providers,
 		"current_provider": currentProvider,
 		"current_model":    currentModel,
@@ -101,8 +100,8 @@ func (ws *ReactWebServer) listProvidersCtx(ctx context.Context, clientID string)
 	// the HTTP request when available) cancels all fetches if the client
 	// disconnects.
 	type providerResult struct {
-		index   int
-		desc    providerDescriptor
+		index int
+		desc  providerDescriptor
 	}
 
 	results := make([]providerDescriptor, len(providerTypes))
@@ -183,10 +182,11 @@ func modelsForProviderFromAPICtx(ctx context.Context, providerType api.ClientTyp
 				// rate-limited to avoid log spam — e.g. a misconfigured
 				// ollama-local pointing at an unreachable host that the
 				// WebUI polls periodically.
-				logRateLimitedf(
+				logRateLimitedWarn(
 					"model_discovery_catalog_fallback:"+string(providerType),
-					"webui: using provider catalog fallback for %s after model discovery failure: %v",
-					providerType, err,
+					"using provider catalog fallback after model discovery failure",
+					slog.String("provider", string(providerType)),
+					slog.Any("err", err),
 				)
 			}
 			return modelIDs
@@ -230,10 +230,12 @@ func (ws *ReactWebServer) modelsForProviderCtx(ctx context.Context, providerType
 		// (e.g. ollama-local pointed at an unreachable host) logs once,
 		// stays quiet through routine polling, and re-surfaces every
 		// logRateMinInterval if the failure is still happening.
-		logRateLimitedf(
+		logRateLimitedWarn(
 			"model_discovery_fail_fallback:"+string(providerType),
-			"webui: model discovery failed for provider %s, using configured fallback model %q: %v",
-			providerType, fallback, err,
+			"model discovery failed; using configured fallback model",
+			slog.String("provider", string(providerType)),
+			slog.String("fallback_model", fallback),
+			slog.Any("err", err),
 		)
 	}
 	return []string{fallback}
@@ -254,10 +256,11 @@ func (ws *ReactWebServer) modelsForProviderNoAgentCtx(ctx context.Context, provi
 	}
 
 	if _, err := api.GetModelsForProvider(providerType); err != nil {
-		logRateLimitedf(
+		logRateLimitedWarn(
 			"model_discovery_fail:"+string(providerType),
-			"webui: model discovery failed for provider %s: %v",
-			providerType, err,
+			"model discovery failed",
+			slog.String("provider", string(providerType)),
+			slog.Any("err", err),
 		)
 	}
 	return []string{}
@@ -304,21 +307,26 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 	stats["provider"] = agentInst.GetProvider()
 	stats["model"] = agentInst.GetModel()
 	stats["persona"] = agentInst.GetActivePersona()
-	stats["client_id"] = clientID
-	ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
+	agentInst.PublishEvent(events.EventTypeMetricsUpdate, stats)
 }
 
 // handleGetModels handles GET /api/providers/models?provider=<provider_type>
 // Returns the list of available models for the given provider.
 func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
+	// Derive a context from the request so model discovery is cancelled if
+	// the client disconnects, and cap it so the upstream API call can't run
+	// indefinitely. Mirrors handleAPIProviders' timeout.
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
 	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
 	if provider == "" {
-		writeJSONError(w, http.StatusBadRequest, "provider parameter is required")
+		writeJSONErr(w, http.StatusBadRequest, "provider_required", "provider parameter is required")
 		return
 	}
 
@@ -330,26 +338,65 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 	} else {
 		cm, createErr := ws.getLayeredConfigManager(ws.resolveClientID(r))
 		if createErr != nil {
-			writeJSONError(w, http.StatusInternalServerError, "failed to create config manager")
+			writeJSONErr(w, http.StatusInternalServerError, "config_manager_failed", "failed to create config manager")
 			return
 		}
 		configManager = cm
 	}
 
 	if configManager == nil {
-		writeJSONError(w, http.StatusInternalServerError, "config manager not available")
+		writeJSONErr(w, http.StatusInternalServerError, "config_manager_unavailable", "config manager not available")
 		return
 	}
 
 	clientType, err := configManager.MapStringToClientType(provider)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONErr(w, http.StatusBadRequest, "invalid_provider", err.Error())
 		return
 	}
 
-	models, err := api.GetModelsForProvider(clientType)
+	if clientType == api.TestClientType {
+		writeJSONErr(w, http.StatusBadRequest, "test_provider_blocked", "test provider models cannot be listed via API")
+		return
+	}
+
+	models, err := api.GetModelsForProviderCtx(ctx, clientType)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to list models: %v", err))
+		// Fall back to the provider catalog if the provider is known. This
+		// keeps the model picker modal consistent with the settings dropdown
+		// (which uses modelsForProviderFromAPICtx and already falls back).
+		if provider, ok := providercatalog.FindProvider(string(clientType)); ok && len(provider.Models) > 0 {
+			result := make([]map[string]interface{}, 0, len(provider.Models))
+			for _, m := range provider.Models {
+				id := strings.TrimSpace(m.ID)
+				if id == "" {
+					continue
+				}
+				result = append(result, map[string]interface{}{
+					"id":                id,
+					"name":              m.Name,
+					"context_length":    m.ContextLength,
+					"eligible_roles":    nil,
+					"recommended_roles": nil,
+					"warnings":          nil,
+				})
+			}
+			if len(result) > 0 {
+				logRateLimitedWarn(
+					"model_discovery_catalog_fallback_get:"+string(clientType),
+					"using provider catalog fallback after model discovery failure",
+					slog.String("provider", string(clientType)),
+					slog.String("operation", "get_models"),
+					slog.Any("err", err),
+				)
+				writeJSON(w, http.StatusOK, map[string]interface{}{
+					"models": result,
+					"total":  len(result),
+				})
+				return
+			}
+		}
+		writeJSONErr(w, http.StatusInternalServerError, "model_list_failed", fmt.Sprintf("failed to list models: %v", err))
 		return
 	}
 
@@ -370,4 +417,3 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		"total":  len(result),
 	})
 }
-

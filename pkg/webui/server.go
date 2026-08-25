@@ -5,7 +5,7 @@ package webui
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,66 +17,95 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 	"github.com/sprout-foundry/sprout/pkg/security"
-	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
-	"github.com/gorilla/websocket"
 )
+
+var webuiLogger = slog.Default().With("component", "webui")
+
+func (ws *ReactWebServer) log() *slog.Logger {
+	if ws != nil && ws.logger != nil {
+		return ws.logger
+	}
+	return webuiLogger
+}
 
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	agent                           *agent.Agent
-	eventBus                        *events.EventBus
-	daemonRoot                      string
-	workspaceRoot                   string
-	sshHostAlias                    string
-	sshSessionKey                   string
-	sshLauncherURL                  string
-	sshHomePath                     string
-	fileConsents                    *fileConsentManager
-	clientContexts                  map[string]*webClientContext
-	chatSubscribers                 *chatSubscribersRegistry
-	port                            int
-	bindAddr                        string
-	server                          *http.Server
-	listener                        net.Listener
-	upgrader                        websocket.Upgrader
-	connections                     sync.Map // map[*websocket.Conn]*ConnectionInfo
-	fileWatcher                     *fileWatcher
-	terminalManager                 *TerminalManager
-	securityPromptMgr               *security.ApprovalManager
-	askUserMgr                      *agenttools.AskUserManager
-	isRunning                       bool
-	mutex                           sync.RWMutex
-	startTime                       time.Time
-	activeWSByUserID                sync.Map // map[string]*activeWSConn — SP-046: tracks single active WS per user
-	queryCount                      int
-	activeQueries                   int
-	activeQueryClientID             string
-	fixReviewJobs                   map[string]*gitFixReviewJob
-	fixReviewMu                     sync.RWMutex
-	sshSessions                     map[string]*sshWorkspaceSession
-	sshSessionsMu                   sync.Mutex
-	sshInFlight                     map[string]chan struct{}
-	sshInFlightMu                   sync.Mutex
-	sshLaunchStatuses               map[string]*sshLaunchStatus
-	sshLaunchStatusMu               sync.RWMutex
-	workspaceExecMu                 sync.Mutex
+	logger              *slog.Logger
+	agent               *agent.Agent
+	eventBus            *events.EventBus
+	daemonRoot          string
+	workspaceRoot       string
+	sshHostAlias        string
+	sshSessionKey       string
+	sshLauncherURL      string
+	sshHomePath         string
+	fileConsents        *fileConsentManager
+	clientContexts      map[string]*webClientContext
+	chatSubscribers     *chatSubscribersRegistry
+	port                int
+	bindAddr            string
+	server              *http.Server
+	listener            net.Listener
+	upgrader            websocket.Upgrader
+	connections         sync.Map // map[*websocket.Conn]*ConnectionInfo
+	fileWatcher         *fileWatcher
+	terminalManager     *TerminalManager
+	securityPromptMgr   *security.ApprovalManager
+	askUserMgr          *agenttools.AskUserManager
+	isRunning           bool
+	mutex               sync.RWMutex
+	startTime           time.Time
+	activeWSByUserID    sync.Map         // map[string]*activeWSConn — SP-118 Mode1: tracks single active WS per user (agent mode)
+	userConnections     *UserConnections // SP-118 Mode2: tracks N concurrent WS per user (daemon mode)
+	queryCount          int
+	activeQueries       int
+	activeQueryClientID string
+	fixReviewJobs       map[string]*gitFixReviewJob
+	fixReviewMu         sync.RWMutex
+	sshSessions         map[string]*sshWorkspaceSession
+	sshSessionsMu       sync.Mutex
+	sshInFlight         map[string]chan struct{}
+	sshInFlightMu       sync.Mutex
+	sshLaunchStatuses   map[string]*sshLaunchStatus
+	sshLaunchStatusMu   sync.RWMutex
+	workspaceExecMu     sync.Mutex
+
+	// agentTeardownWg tracks in-flight releaseAgents goroutines so Shutdown
+	// (and tests) can wait for agent teardown — which writes history and
+	// flushes the embedding store — to finish rather than racing it.
+	agentTeardownWg sync.WaitGroup
+
 	lastClientContextCleanupAt      time.Time
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int
 	lspManager                      *lspproxy.Manager
-	normalizedAllowedOrigins        []string // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
-	trustedUserHeader               string   // Header name for user ID extraction in service mode
-	serviceMode                     bool     // true when running as a managed service (SPROUT_SERVICE=1)
-	authToken                       string   // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
-	socketPath                      string   // Unix domain socket path (when non-empty, listen on socket instead of TCP)
-	startOnce                       sync.Once // Ensures background workers are started exactly once
+	normalizedAllowedOrigins        []string     // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
+	trustedUserHeader               string       // Header name for user ID extraction in service mode
+	serviceMode                     bool         // true when running as a managed service (SPROUT_SERVICE=1)
+	agentEnforceSingleSession       bool         // true: single-active WS (sprout agent/CWS mode); false: multi-session (daemon) — SP-118
+	authToken                       string       // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
+	socketPath                      string       // Unix domain socket path (when non-empty, listen on socket instead of TCP)
+	startOnce                       sync.Once    // Ensures background workers are started exactly once
 	serverCtx                       atomic.Value // context.Context — safe to read without ws.mutex
+}
+
+// IsSharedMode reports whether the server is in "shared agent" mode —
+// where a CLI process launched the web server with a live agent. In this
+// mode, the WebUI shares the CLI's agent instance (same conversation,
+// same session) instead of creating its own per-chat agents.
+//
+// This is the non-daemon interactive case: `sprout` started with a TTY
+// passes its agent to NewReactWebServer, while `sprout daemon` passes nil.
+func (ws *ReactWebServer) IsSharedMode() bool {
+	return ws.agent != nil && !ws.serviceMode
 }
 
 // NewReactWebServer creates a new React web server
@@ -140,9 +169,12 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	// equivalent), which is always authoritative for the current user.
 	if serviceMode {
 		if u, uErr := user.Current(); uErr == nil && u.HomeDir != "" && u.HomeDir != daemonRoot {
-			log.Printf("[web] SPROUT_DAEMON_ROOT=%q disagrees with user.Current().HomeDir=%q; "+
-				"using %q (reinstall the service to update the plist: sprout service uninstall && sprout service install)",
-				daemonRoot, u.HomeDir, u.HomeDir)
+			webuiLogger.Warn("configured daemon root differs from current user home; using current user home",
+				slog.String("configured_daemon_root", daemonRoot),
+				slog.String("current_user_home", u.HomeDir),
+				slog.String("selected_daemon_root", u.HomeDir),
+				slog.String("remediation", "sprout service uninstall && sprout service install"),
+			)
 			daemonRoot = u.HomeDir
 			rootSource = "user.Current().HomeDir"
 		}
@@ -150,15 +182,44 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	if daemonRoot == "" {
 		daemonRoot = workspaceRoot
 		if serviceMode {
-			log.Printf("[web] WARNING: could not resolve user home (SPROUT_DAEMON_ROOT, $HOME, and /etc/passwd all unavailable); "+
-				"workspace browser is scoped to the daemon working dir %q and may not reach your projects — "+
-				"reinstall the service (sprout service uninstall && sprout service install) to regenerate the unit", workspaceRoot)
+			webuiLogger.Warn("user home could not be resolved; workspace browser may not reach projects",
+				slog.String("workspace_root", workspaceRoot),
+				slog.String("remediation", "sprout service uninstall && sprout service install"),
+			)
 		}
 	}
 
-	log.Printf("[web] startup: cwd=%s home=%s service=%v source=%s", workspaceRoot, daemonRoot, serviceMode, rootSource)
+	webuiLogger.Info("web UI startup configuration resolved", slog.String("workspace_root", workspaceRoot), slog.String("daemon_root", daemonRoot), slog.Bool("service_mode", serviceMode), slog.String("daemon_root_source", rootSource))
+
+	// Resolve daemonRoot symlinks early so the recent-workspace check below
+	// compares canonical paths (recent-workspace paths are stored after
+	// filepathAbsEval → EvalSymlinks). Without this, /var/folders vs
+	// /private/var/folders on macOS produces false negatives.
+	resolvedDaemonRoot := daemonRoot
+	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
+		resolvedDaemonRoot = evaled
+	}
+
 	if serviceMode {
-		workspaceRoot = daemonRoot
+		// SP-130: in service mode the daemon's CWD is typically $HOME (baked
+		// into the plist/unit), so blindly defaulting the workspace to the
+		// CWD/daemonRoot means the agent runs with the entire home directory
+		// in scope. Instead, try to restore the most recent valid workspace.
+		// If it exists and is within daemonRoot, use it; otherwise leave
+		// workspaceRoot as the CWD-derived default (home) and let the
+		// frontend gate force explicit selection.
+		if recent := GetMostRecentWorkspace(); recent != "" {
+			if info, err := os.Stat(recent); err == nil && info.IsDir() {
+				if abs, err := filepath.Abs(recent); err == nil {
+					if isWithinWorkspace(abs, resolvedDaemonRoot) {
+						workspaceRoot = abs
+					}
+				}
+			}
+		}
+		// If no valid recent workspace was found, workspaceRoot stays as the
+		// CWD-derived default — the frontend gate catches home and forces
+		// explicit selection rather than silently running scoped to ~.
 	}
 
 	// Initialize recent workspace tracking.
@@ -175,9 +236,9 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		// Check for symlinks pointing outside the config directory
 		symlinkWarnings := security.CheckAllSymlinks(configDir)
 		if len(symlinkWarnings) > 0 {
-			log.Printf("[security] Symlink warnings:")
+			webuiLogger.Warn("configuration symlink warnings detected")
 			for _, warn := range symlinkWarnings {
-				log.Printf("  %s", warn)
+				webuiLogger.Warn("configuration symlink warning", slog.String("warning", warn))
 			}
 		}
 
@@ -198,7 +259,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 			if trimmed != "" {
 				parsed, err := url.Parse(trimmed)
 				if err != nil {
-					log.Printf("[web] WARNING: skipping malformed allowed origin %q: %v", trimmed, err)
+					webuiLogger.Warn("skipping malformed allowed origin", slog.String("origin", trimmed), slog.Any("err", err))
 					continue
 				}
 				normalizedAllowedOrigins = append(normalizedAllowedOrigins, normalizeOriginForCompare(parsed))
@@ -206,16 +267,16 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		}
 	}
 	if len(normalizedAllowedOrigins) > 0 {
-		log.Printf("[web] Allowed origins: %v", normalizedAllowedOrigins)
+		webuiLogger.Info("allowed origins configured", slog.Any("allowed_origins", normalizedAllowedOrigins))
 	}
 
 	// Parse trusted user header (serviceMode already resolved above)
 	trustedUserHeader := strings.TrimSpace(configuration.GetEnvSimple("TRUSTED_USER_HEADER"))
 	if serviceMode {
 		if trustedUserHeader != "" {
-			log.Printf("[web] Trusted user header: %s (service mode)", trustedUserHeader)
+			webuiLogger.Info("trusted user header configured", slog.String("header", trustedUserHeader), slog.Bool("service_mode", true))
 		} else {
-			log.Printf("[web] Service mode enabled but no trusted user header configured")
+			webuiLogger.Warn("service mode enabled without a trusted user header")
 		}
 	}
 
@@ -225,7 +286,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		resolvedAuthToken = strings.TrimSpace(configuration.GetEnvSimple("AUTH_TOKEN"))
 	}
 	if resolvedAuthToken != "" {
-		log.Printf("[web] Auth token configured: write endpoints require authentication")
+		webuiLogger.Info("auth token configured; write endpoints require authentication")
 	}
 
 	// Security: refuse to start if bound to a non-localhost address without
@@ -248,6 +309,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	}
 
 	return &ReactWebServer{
+		logger:            webuiLogger,
 		agent:             agent,
 		eventBus:          eventBus,
 		daemonRoot:        daemonRoot,
@@ -262,18 +324,19 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		askUserMgr:        askUserMgr,
 		clientContexts:    make(map[string]*webClientContext),
 		chatSubscribers:   newChatSubscribersRegistry(),
+		userConnections:   &UserConnections{},
 		port:              port,
 		bindAddr:          bindAddr,
 		socketPath:        socketPath,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: newCheckOriginFunc(bindAddr, normalizedAllowedOrigins),
 		},
-		terminalManager:   NewTerminalManager(workspaceRoot),
-		startTime:         time.Now(),
-		fixReviewJobs:     make(map[string]*gitFixReviewJob),
-		sshSessions:       make(map[string]*sshWorkspaceSession),
-		sshInFlight:       make(map[string]chan struct{}),
-		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
+		terminalManager:          NewTerminalManager(workspaceRoot),
+		startTime:                time.Now(),
+		fixReviewJobs:            make(map[string]*gitFixReviewJob),
+		sshSessions:              make(map[string]*sshWorkspaceSession),
+		sshInFlight:              make(map[string]chan struct{}),
+		sshLaunchStatuses:        make(map[string]*sshLaunchStatus),
 		normalizedAllowedOrigins: normalizedAllowedOrigins,
 		trustedUserHeader:        trustedUserHeader,
 		serviceMode:              serviceMode,
@@ -349,11 +412,55 @@ func (ws *ReactWebServer) GetDaemonRoot() string {
 	return ws.daemonRoot
 }
 
-// getActiveQueryCount returns the current number of active queries.
-func (ws *ReactWebServer) getActiveQueryCount() int {
+// ActiveQueryCount returns the current number of active queries.
+func (ws *ReactWebServer) ActiveQueryCount() int {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	return ws.activeQueries
+}
+
+// ActiveClientCount returns the number of client contexts whose LastSeenAt
+// is within staleAfter of now. Used by the daemon's idle-reaper (SP-136 P2)
+// to decide when no client has connected recently. A client counts as
+// "active" if it performed any request (health ping, chat message, API call)
+// inside the window — browsers that merely hold a WebSocket open without
+// traffic are NOT counted, which is the correct signal for reaping an
+// unattended daemon.
+func (ws *ReactWebServer) ActiveClientCount(staleAfter time.Duration) int {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	cutoff := time.Now().Add(-staleAfter)
+	n := 0
+	for _, ctx := range ws.clientContexts {
+		if ctx != nil && ctx.LastSeenAt.After(cutoff) {
+			n++
+		}
+	}
+	return n
+}
+
+// SetAgentEnforceSingleSession configures whether the WebSocket dispatcher
+// should route connections through the single-active-session (Mode 1) path
+// or the multi-session (Mode 2) path. SP-118 Phase 1.
+//
+//   - true  → Mode 1: only one browser window active per user at a time.
+//     Conflicts trigger session_conflict and a takeover prompt. This is
+//     sprout agent / CWS interactive mode.
+//   - false → Mode 2: N parallel browser windows per user. Currently a
+//     stub that accepts connections without enforcement; the full
+//     implementation lands in SP-118-2. This is sprout service / daemon.
+//
+// Cmd should call this immediately after NewReactWebServer returns:
+//
+//	sprout agent path     → SetAgentEnforceSingleSession(true)
+//	sprout service path   → leave false (or explicitly call with false)
+//
+// Dispatch uses this flag, NOT serviceMode. Tests in pkg/webui flip
+// serviceMode=true to exercise the takeover flow under the Mode 1 path
+// (e.g., TestSessionConflict_Takeover_UserMode); using serviceMode as
+// the dispatch key would break them.
+func (ws *ReactWebServer) SetAgentEnforceSingleSession(v bool) {
+	ws.agentEnforceSingleSession = v
 }
 
 // HasActiveWebUIClients returns true if one or more WebSocket connections
@@ -397,4 +504,3 @@ func (ws *ReactWebServer) GetSecurityPromptMgr() *security.ApprovalManager {
 func (ws *ReactWebServer) GetAskUserMgr() *agenttools.AskUserManager {
 	return ws.askUserMgr
 }
-

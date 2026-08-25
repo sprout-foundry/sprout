@@ -28,11 +28,11 @@ setup_test_env() {
     mkdir -p "$TEST_DIR/pkg/agent_providers/configs"
     mkdir -p "$TEST_DIR/providers"
 
-    # Create mock provider configs
-    echo '{"name":"zeta"}' > "$TEST_DIR/pkg/agent_providers/configs/zeta.json"
-    echo '{"name":"alpha"}' > "$TEST_DIR/pkg/agent_providers/configs/alpha.json"
-    echo '{"name":"beta"}'  > "$TEST_DIR/pkg/agent_providers/configs/beta.json"
-    echo '{"name":"gamma"}' > "$TEST_DIR/pkg/agent_providers/configs/gamma.json"
+    # Create mock provider configs (HTTPS endpoints — publishable)
+    echo '{"name":"zeta","endpoint":"https://api.zeta.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/configs/zeta.json"
+    echo '{"name":"alpha","endpoint":"https://api.alpha.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/configs/alpha.json"
+    echo '{"name":"beta","endpoint":"https://api.beta.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/configs/beta.json"
+    echo '{"name":"gamma","endpoint":"https://api.gamma.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/configs/gamma.json"
 
     # Patch the script to use our test dir by overriding CONFIGS_DIR logic
     # We'll run the script with a modified path via env var or symlink
@@ -190,8 +190,8 @@ cleanup_test_env "$TEST_DIR"
 echo "=== Test: community-configs/ providers are included in index ==="
 TEST_DIR=$(setup_test_env)
 mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
-echo '{"name":"omega-community"}' > "$TEST_DIR/pkg/agent_providers/community-configs/omega-community.json"
-echo '{"name":"delta-community"}' > "$TEST_DIR/pkg/agent_providers/community-configs/delta-community.json"
+echo '{"name":"omega-community","endpoint":"https://api.omega.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/community-configs/omega-community.json"
+echo '{"name":"delta-community","endpoint":"https://api.delta.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/community-configs/delta-community.json"
 cd "$TEST_DIR"
 bash scripts/generate-provider-index.sh > /dev/null 2>&1
 cd - > /dev/null
@@ -209,7 +209,7 @@ echo "=== Test: error on cross-dir provider collision ==="
 TEST_DIR=$(setup_test_env)
 mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
 # Same id 'alpha' exists in both — should fail loud rather than pick a winner.
-echo '{"name":"alpha"}' > "$TEST_DIR/pkg/agent_providers/community-configs/alpha.json"
+echo '{"name":"alpha","endpoint":"https://api.alpha.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/community-configs/alpha.json"
 cd "$TEST_DIR"
 if bash scripts/generate-provider-index.sh > /dev/null 2>&1; then
     fail "Script should fail when the same id exists in configs/ and community-configs/"
@@ -224,7 +224,7 @@ TEST_DIR=$(setup_test_env)
 # Remove the embedded configs entirely so only community-configs/ has entries.
 rm -f "$TEST_DIR/pkg/agent_providers/configs/"*.json
 mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
-echo '{"name":"only-community"}' > "$TEST_DIR/pkg/agent_providers/community-configs/only-community.json"
+echo '{"name":"only-community","endpoint":"https://api.only.example/v1/chat/completions"}' > "$TEST_DIR/pkg/agent_providers/community-configs/only-community.json"
 cd "$TEST_DIR"
 bash scripts/generate-provider-index.sh > /dev/null 2>&1
 cd - > /dev/null
@@ -246,6 +246,95 @@ if bash scripts/generate-provider-index.sh > /dev/null 2>&1; then
     fail "Script should fail when both source dirs are empty"
 else
     pass "Script correctly fails when both source dirs are empty"
+fi
+cd - > /dev/null
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: non-HTTPS (local-only) providers are excluded from index ==="
+TEST_DIR=$(setup_test_env)
+# Add a local-only provider (lmstudio-style http://127.0.0.1 endpoint).
+echo '{"name":"lmstudio","endpoint":"http://127.0.0.1:1234/v1/chat/completions"}' \
+    > "$TEST_DIR/pkg/agent_providers/configs/lmstudio.json"
+cd "$TEST_DIR"
+bash scripts/generate-provider-index.sh > /dev/null 2>&1
+cd - > /dev/null
+
+providers=$(jq -r '.providers[]' "$TEST_DIR/providers/index.json" | tr '\n' ' ')
+expected="alpha beta gamma zeta "
+if [[ "$providers" == "$expected" ]]; then
+    pass "non-HTTPS provider excluded from index"
+else
+    fail "providers: got '$providers', expected '$expected' (lmstudio should be absent)"
+fi
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: case-insensitive HTTPS scheme (HTTPS:// accepted) ==="
+TEST_DIR=$(setup_test_env)
+# Overwrite alpha with an uppercase-scheme endpoint.
+echo '{"name":"alpha","endpoint":"HTTPS://api.alpha.example/v1/chat/completions"}' \
+    > "$TEST_DIR/pkg/agent_providers/configs/alpha.json"
+cd "$TEST_DIR"
+bash scripts/generate-provider-index.sh > /dev/null 2>&1
+cd - > /dev/null
+
+providers=$(jq -r '.providers[]' "$TEST_DIR/providers/index.json" | tr '\n' ' ')
+expected="alpha beta gamma zeta "
+if [[ "$providers" == "$expected" ]]; then
+    pass "uppercase HTTPS:// scheme accepted"
+else
+    fail "providers: got '$providers', expected '$expected'"
+fi
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: missing endpoint field is excluded ==="
+TEST_DIR=$(setup_test_env)
+# Overwrite beta with no endpoint field (legacy/bare mocks).
+echo '{"name":"beta"}' > "$TEST_DIR/pkg/agent_providers/configs/beta.json"
+cd "$TEST_DIR"
+bash scripts/generate-provider-index.sh > /dev/null 2>&1
+cd - > /dev/null
+
+providers=$(jq -r '.providers[]' "$TEST_DIR/providers/index.json" | tr '\n' ' ')
+expected="alpha gamma zeta "
+if [[ "$providers" == "$expected" ]]; then
+    pass "provider with missing endpoint excluded"
+else
+    fail "providers: got '$providers', expected '$expected' (beta should be absent)"
+fi
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: local-only community provider also excluded ==="
+TEST_DIR=$(setup_test_env)
+mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
+echo '{"name":"local-comm","endpoint":"http://localhost:8080/v1/chat/completions"}' \
+    > "$TEST_DIR/pkg/agent_providers/community-configs/local-comm.json"
+echo '{"name":"remote-comm","endpoint":"https://api.remote.example/v1/chat/completions"}' \
+    > "$TEST_DIR/pkg/agent_providers/community-configs/remote-comm.json"
+cd "$TEST_DIR"
+bash scripts/generate-provider-index.sh > /dev/null 2>&1
+cd - > /dev/null
+
+providers=$(jq -r '.providers[]' "$TEST_DIR/providers/index.json" | tr '\n' ' ')
+expected="alpha beta gamma remote-comm zeta "
+if [[ "$providers" == "$expected" ]]; then
+    pass "local-only community provider excluded, remote one included"
+else
+    fail "providers: got '$providers', expected '$expected' (local-comm should be absent)"
+fi
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: all providers local-only fails loudly (no empty publish) ==="
+TEST_DIR=$(setup_test_env)
+# Overwrite every config with a local endpoint.
+for name in zeta alpha beta gamma; do
+    echo "{\"name\":\"$name\",\"endpoint\":\"http://127.0.0.1:8080\"}" \
+        > "$TEST_DIR/pkg/agent_providers/configs/$name.json"
+done
+cd "$TEST_DIR"
+if bash scripts/generate-provider-index.sh > /dev/null 2>&1; then
+    fail "Script should fail when no providers are publishable (all local-only)"
+else
+    pass "Script correctly fails when all providers are local-only (no empty publish)"
 fi
 cd - > /dev/null
 cleanup_test_env "$TEST_DIR"

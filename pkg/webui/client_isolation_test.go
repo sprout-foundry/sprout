@@ -43,7 +43,7 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
@@ -188,7 +188,7 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
@@ -259,7 +259,7 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 
 	clientID := "window-reset"
 	if _, err := ws.setClientWorkspaceRoot(clientID, startWorkspace); err != nil {
@@ -281,6 +281,10 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 	if _, err := ws.setClientWorkspaceRoot(clientID, nextWorkspace); err != nil {
 		t.Fatalf("set next workspace: %v", err)
 	}
+	// Switching workspaces shuts the outgoing agent down asynchronously, and
+	// that shutdown writes history back under the old workspace. Wait for it
+	// so those writes land before t.TempDir cleanup, not after.
+	ws.waitForAgentTeardown()
 
 	ws.mutex.RLock()
 	ctx := ws.clientContexts[clientID]
@@ -361,7 +365,7 @@ func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
 	connMatchingBoth := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-1"}
 	connWrongChat := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-2"}
 	connUnfiltered := &ConnectionInfo{ClientID: "client-a", ChatID: ""}
-	
+
 	if !ws.shouldForwardEventToConnection(eventBoth, connMatchingBoth) {
 		t.Fatal("expected event with client_id and chat_id to match connection with both")
 	}
@@ -379,7 +383,7 @@ func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
 	}
 	connMatchingChat := &ConnectionInfo{ClientID: "client-b", ChatID: "chat-1"}
 	connWrongChatOnly := &ConnectionInfo{ClientID: "client-b", ChatID: "chat-2"}
-	
+
 	if !ws.shouldForwardEventToConnection(eventChatOnly, connMatchingChat) {
 		t.Fatal("expected event with chat_id to match connection with same chat_id")
 	}
@@ -393,7 +397,7 @@ func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
 		Data: map[string]interface{}{"message": "test"},
 	}
 	connAny := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-1"}
-	
+
 	if ws.shouldForwardEventToConnection(eventNeither, connAny) {
 		t.Fatal("expected event with no client_id or chat_id to be blocked")
 	}
@@ -458,7 +462,7 @@ func TestCleanupInactiveClientContextsRemovesOnlyStaleInactiveDisconnectedClient
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 
 	old := time.Now().Add(-2 * time.Hour)
 	recent := time.Now().Add(-5 * time.Minute)

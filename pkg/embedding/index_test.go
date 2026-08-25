@@ -37,10 +37,10 @@ func (m *mockProvider) EmbedBatchWithPrefix(_ context.Context, texts []string, p
 	return m.EmbedBatch(nil, texts)
 }
 
-func (m *mockProvider) Dimensions() int    { return m.dims }
-func (m *mockProvider) Name() string       { return "mock" }
-func (m *mockProvider) ModelHash() string  { return "mock-model-hash" }
-func (m *mockProvider) Close() error       { return nil }
+func (m *mockProvider) Dimensions() int   { return m.dims }
+func (m *mockProvider) Name() string      { return "mock" }
+func (m *mockProvider) ModelHash() string { return "mock-model-hash" }
+func (m *mockProvider) Close() error      { return nil }
 
 func newMockProvider(dims int) *mockProvider {
 	return &mockProvider{dims: dims}

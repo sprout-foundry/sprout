@@ -2,6 +2,8 @@ package agent
 
 import (
 	"testing"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 func TestParseBrowseSteps_Empty(t *testing.T) {
@@ -86,8 +88,8 @@ func TestParseBrowseSteps_MissingAction(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing action")
 	}
-	if err.Error() != "browse_url steps[0] requires action" {
-		t.Errorf("unexpected error: %v", err)
+	if !agenterrors.IsInvalidInput(err) {
+		t.Errorf("expected InvalidInput error, got %T: %v", err, err)
 	}
 }
 

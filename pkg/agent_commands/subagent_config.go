@@ -2,8 +2,11 @@ package commands
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
@@ -11,6 +14,11 @@ import (
 // SubagentConfigCommand implements the /subagent-provider and /subagent-model commands
 type SubagentConfigCommand struct {
 	configType string // "provider" or "model"
+}
+
+// SafeDuringSteer returns true - both provider and model config are safe mid-turn
+func (s *SubagentConfigCommand) SafeDuringSteer() bool {
+	return true
 }
 
 // Name returns the command name
@@ -29,6 +37,25 @@ func (s *SubagentConfigCommand) Description() string {
 	return "Set or show subagent model configuration"
 }
 
+// Usage returns the detailed help text shown by `/help subagent-provider`
+// or `/help subagent-model`.
+func (s *SubagentConfigCommand) Usage() string {
+	if s.configType == "provider" {
+		return strings.Join([]string{
+			"/subagent-provider                Show current subagent provider.",
+			"/subagent-provider <provider>     Set subagent provider.",
+			"",
+			"Leave empty to inherit the parent agent's provider.",
+		}, "\n")
+	}
+	return strings.Join([]string{
+		"/subagent-model             Show current subagent model.",
+		"/subagent-model <model>     Set subagent model.",
+		"",
+		"Leave empty to inherit the parent agent's model.",
+	}, "\n")
+}
+
 // Execute runs the subagent config command
 func (s *SubagentConfigCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	configManager := chatAgent.GetConfigManager()
@@ -44,6 +71,76 @@ func (s *SubagentConfigCommand) Execute(args []string, chatAgent *agent.Agent) e
 		return s.setProvider(value, configManager)
 	}
 	return s.setModel(value, configManager)
+}
+
+// Complete provides argument completions for /subagent-provider and
+// /subagent-model. Provider completions list the configured providers;
+// model completions list models for the subagent's configured provider
+// (falling back to the parent agent's provider when unset). Model lists
+// come from the stale-while-revalidate cache so the dropdown is never
+// blocked on a network call.
+func (s *SubagentConfigCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if chatAgent == nil {
+		return nil
+	}
+	configManager := chatAgent.GetConfigManager()
+	if configManager == nil {
+		return nil
+	}
+
+	// Provider config type: suggest provider names.
+	if s.configType == "provider" {
+		providers := configManager.GetAvailableProviders()
+		prefix := ""
+		if len(args) > 0 {
+			prefix = strings.ToLower(args[len(args)-1])
+		}
+		var matches []string
+		for _, p := range providers {
+			id := string(p)
+			if prefix == "" || strings.HasPrefix(strings.ToLower(id), prefix) {
+				matches = append(matches, id)
+			}
+		}
+		sort.Strings(matches)
+		return matches
+	}
+
+	// Model config type: resolve which provider to list models for.
+	// An unset subagent provider inherits the parent agent's provider.
+	cfg := configManager.GetConfig()
+	subProvider := cfg.GetSubagentProvider()
+	var clientType api.ClientType
+	if subProvider != "" {
+		var err error
+		clientType, err = configManager.MapStringToClientType(subProvider)
+		if err != nil {
+			return nil
+		}
+	} else {
+		clientType = chatAgent.GetProviderType()
+	}
+
+	models := cachedModelsForProvider(clientType)
+	if len(models) == 0 {
+		return nil
+	}
+
+	prefix := ""
+	if len(args) > 0 {
+		prefix = args[len(args)-1]
+	}
+	var matches []string
+	for _, model := range models {
+		if prefix == "" || strings.HasPrefix(strings.ToLower(model.ID), strings.ToLower(prefix)) {
+			matches = append(matches, model.ID)
+		}
+	}
+	sort.Strings(matches)
+	if len(matches) > 20 {
+		matches = matches[:20]
+	}
+	return matches
 }
 
 // showStatus displays current subagent configuration

@@ -103,6 +103,7 @@ class StickyScrollPlugin {
   private domElement: HTMLElement | null = null;
   private cachedSymbols: SymbolInfo[] = [];
   private fileExtension: string | undefined;
+  private symbolUpdateTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Click handler for scope navigation.
@@ -183,12 +184,19 @@ class StickyScrollPlugin {
     // Update file extension from getter (for when it's re-initialized)
     this.fileExtension = this.getFileExtension();
 
-    // Re-extract symbols on document changes
+    // Debounce symbol re-extraction on document changes — extractSymbols
+    // is cached in symbolUtils but the cache key hash is O(n). Coalescing
+    // rapid edits avoids redundant hashing on every keystroke.
     if (update.docChanged) {
-      this.updateSymbols();
+      if (this.symbolUpdateTimer) clearTimeout(this.symbolUpdateTimer);
+      this.symbolUpdateTimer = setTimeout(() => {
+        this.symbolUpdateTimer = null;
+        this.updateSymbols();
+        this.render();
+      }, 300);
     }
 
-    // Re-render on viewport or selection changes
+    // Re-render on viewport or selection changes (cheap — uses cached symbols)
     if (update.viewportChanged || update.selectionSet || update.docChanged) {
       this.render();
     }
@@ -301,6 +309,10 @@ class StickyScrollPlugin {
    * Destroy the plugin: clean up DOM and event listeners.
    */
   destroy(): void {
+    if (this.symbolUpdateTimer) {
+      clearTimeout(this.symbolUpdateTimer);
+      this.symbolUpdateTimer = null;
+    }
     this.cachedSymbols = [];
     if (this.domElement) {
       this.domElement.removeEventListener('click', this.handleClick);

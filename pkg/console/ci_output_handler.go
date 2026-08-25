@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/term"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"golang.org/x/term"
 )
 
 // CIOutputHandler manages output formatting for CI/non-interactive environments

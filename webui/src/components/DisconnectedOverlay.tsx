@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import './DisconnectedOverlay.css';
 
 // Grace before the blocking overlay appears. Ordinary reconnects (a brief
@@ -39,16 +40,16 @@ export function DisconnectedOverlay({ isConnected }: DisconnectedOverlayProps): 
       role="alertdialog"
       aria-modal="true"
       aria-label="Disconnected from sprout"
+      data-testid="disconnected-overlay"
     >
       <div className="disconnected-overlay__card">
         <div className="disconnected-overlay__icon" aria-hidden="true">
-          ⚠
+          <TriangleAlert size={32} />
         </div>
         <h2 className="disconnected-overlay__title">Disconnected from sprout</h2>
         <p className="disconnected-overlay__body">
-          The connection to the sprout server was lost and isn&apos;t coming back. The CLI may have
-          been closed, the daemon stopped, or the host detached. What you see here may be out of
-          date.
+          The connection to the sprout server was lost and isn&apos;t coming back. The CLI may have been closed, the
+          daemon stopped, or the host detached. What you see here may be out of date.
         </p>
         <button
           type="button"

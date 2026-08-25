@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/skills"
 )
 
@@ -32,9 +33,17 @@ type SkillInfo struct {
 // or is explicitly disabled cannot be activated, even if its content
 // happens to be embedded.
 func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error) {
+	return LoadSkillInWorkspace(skillID, config, "")
+}
+
+// LoadSkillInWorkspace is the workspace-aware variant of LoadSkill.
+// Project-level skills (e.g., .sprout/skills/) are resolved relative to
+// workspaceRoot instead of os.Getwd(). This is critical in daemon mode
+// where the process CWD differs from the workspace being served.
+func LoadSkillInWorkspace(skillID string, config *configuration.Config, workspaceRoot string) (*SkillInfo, error) {
 	skill := config.GetSkill(skillID)
 	if skill == nil {
-		return nil, fmt.Errorf("skill not found or disabled: %s", skillID)
+		return nil, agenterrors.NewNotFound(fmt.Sprintf("skill %q", skillID))
 	}
 
 	if content, err := skills.ReadContent(skillID); err == nil {
@@ -49,12 +58,12 @@ func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error)
 	}
 
 	// Fall back to filesystem for project/user skills
-	skillPath := resolveSkillPath(skill.Path)
+	skillPath := resolveSkillPathInWorkspace(skill.Path, workspaceRoot)
 	skillFile := filepath.Join(skillPath, SkillFileName)
 
 	content, err := os.ReadFile(skillFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read skill file %s: %w", skillFile, err)
+		return nil, agenterrors.Wrapf(err, "failed to read skill file %s", skillFile)
 	}
 
 	return &SkillInfo{
@@ -128,16 +137,26 @@ func GetSkillManifest(content string) (map[string]string, string, error) {
 // resolveSkillPath resolves a skill path for filesystem-based skills (project/user).
 // Builtin skills are served from the embedded filesystem and don't use this.
 func resolveSkillPath(relativePath string) string {
+	return resolveSkillPathInWorkspace(relativePath, "")
+}
+
+// resolveSkillPathInWorkspace resolves a skill path relative to the given
+// workspace root. If workspaceRoot is empty, falls back to os.Getwd().
+func resolveSkillPathInWorkspace(relativePath, workspaceRoot string) string {
 	if filepath.IsAbs(relativePath) {
 		return relativePath
 	}
 
-	// Project skills (e.g., .sprout/skills/...) are relative to CWD.
-	wd, err := os.Getwd()
-	if err != nil {
-		return relativePath
+	// Project skills (e.g., .sprout/skills/...) are relative to the workspace root.
+	base := strings.TrimSpace(workspaceRoot)
+	if base == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return relativePath
+		}
+		base = wd
 	}
-	return filepath.Join(wd, relativePath)
+	return filepath.Join(base, relativePath)
 }
 
 func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -176,7 +195,7 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	if err != nil {
 		// Try alternative parameter names
 		if skillID, err = getStringArg(args, "skill"); err != nil {
-			return "", fmt.Errorf("skill_id is required: %w", err)
+			return "", agenterrors.NewTool("skills", "skill_id is required", err)
 		}
 	}
 
@@ -191,9 +210,9 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	}
 
 	// Load the skill
-	skillInfo, err := LoadSkill(skillID, config)
+	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
 	if err != nil {
-		return "", fmt.Errorf("failed to activate skill: %w", err)
+		return "", agenterrors.NewTool("skills", "failed to activate skill", err)
 	}
 
 	// Add to active skills
@@ -222,11 +241,11 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 func getStringArg(args map[string]interface{}, name string) (string, error) {
 	val, ok := args[name]
 	if !ok {
-		return "", fmt.Errorf("missing required argument: %s", name)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("missing required argument: %s", name), nil)
 	}
 	str, ok := val.(string)
 	if !ok {
-		return "", fmt.Errorf("argument '%s' must be a string", name)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("argument '%s' must be a string", name), nil)
 	}
 	return str, nil
 }

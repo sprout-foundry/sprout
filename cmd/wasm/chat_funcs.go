@@ -180,4 +180,3 @@ func chatResponseToJS(r *api.ChatResponse, provider, model string) map[string]in
 	}
 	return out
 }
-

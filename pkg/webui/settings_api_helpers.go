@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -98,12 +97,6 @@ var validReasoningEfforts = map[string]bool{
 	"high":   true,
 }
 
-var validSelfReviewGateModes = map[string]bool{
-	configuration.SelfReviewGateModeOff:    true,
-	configuration.SelfReviewGateModeCode:   true,
-	configuration.SelfReviewGateModeAlways: true,
-}
-
 var validHistoryScopes = map[string]bool{
 	"project": true,
 	"global":  true,
@@ -117,21 +110,20 @@ var validHistoryScopes = map[string]bool{
 // sensitive fields stripped so they are never sent to the browser.
 func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 	out := map[string]interface{}{
-		"version":                        cfg.Version,
-		"last_used_provider":             cfg.LastUsedProvider,
-		"provider_models":                cfg.ProviderModels,
-		"provider_priority":              cfg.ProviderPriority,
-		"mcp":                            mcp.RedactMCPConfig(cfg.MCP),
-		"resource_directory":             cfg.ResourceDirectory,
-		"reasoning_effort":               cfg.ReasoningEffort,
-		"system_prompt_text":             cfg.SystemPromptText,
-		"skip_prompt":                    cfg.SkipPrompt,
-		"api_timeouts":                   cfg.APITimeouts,
-		"custom_providers":               sanitizedCustomProviders(cfg.CustomProviders),
-		"history_scope":                  cfg.HistoryScope,
-		"self_review_gate_mode":          cfg.SelfReviewGateMode,
-		"subagent_provider":              cfg.SubagentProvider,
-		"subagent_model":                 cfg.SubagentModel,
+		"version":            cfg.Version,
+		"last_used_provider": cfg.LastUsedProvider,
+		"provider_models":    cfg.ProviderModels,
+		"provider_priority":  cfg.ProviderPriority,
+		"mcp":                mcp.RedactMCPConfig(cfg.MCP),
+		"resource_directory": cfg.ResourceDirectory,
+		"reasoning_effort":   cfg.ReasoningEffort,
+		"system_prompt_text": cfg.SystemPromptText,
+		"skip_prompt":        cfg.SkipPrompt,
+		"api_timeouts":       cfg.APITimeouts,
+		"custom_providers":   sanitizedCustomProviders(cfg.CustomProviders),
+		"history_scope":      cfg.HistoryScope,
+		"subagent_provider":  cfg.SubagentProvider,
+		"subagent_model":     cfg.SubagentModel,
 		// SubagentTypes is catalog-derived and never persisted — exposed via
 		// GET /api/settings/subagent-types for the persona list view. Keeping
 		// it out of the generic settings payload prevents round-trip PUTs
@@ -148,22 +140,29 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"pdf_ocr_provider":               cfg.PDFOCRProvider,
 		"pdf_ocr_model":                  cfg.PDFOCRModel,
 		"skills":                         cfg.Skills,
-		"disable_thinking":              cfg.DisableThinking,
+		"disable_thinking":               cfg.DisableThinking,
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
 		"embedding_index":                cfg.EmbeddingIndex,
-		"ea_mode":                        cfg.EAMode,
-		"subagent_max_depth":             cfg.SubagentMaxDepth,
-		"approved_shell_commands":        cfg.ApprovedShellCommands,
-		"language_servers":               cfg.LanguageServers,
-		"security_policy":                cfg.SecurityPolicy,
-		"persistent_context":             cfg.PersistentContext,
+		// SP-063: Computer Use config — gates the computer_user persona's
+		// desktop-control tools. Exposed read-only here; edits round-trip
+		// through applyPartialSettings.
+		"computer_use":            cfg.ComputerUse,
+		"subagent_max_depth":      cfg.SubagentMaxDepth,
+		"approved_shell_commands": cfg.ApprovedShellCommands,
+		"command_policies":        cfg.CommandPolicies,
+		"language_servers":        cfg.LanguageServers,
+		"security_policy":         cfg.SecurityPolicy,
+		"persistent_context":      cfg.PersistentContext,
 		// SP-058: risk profile + per-profile overrides. The single-
 		// value selector is editable via the settings UI; the
 		// per-profile map is read-only here (advanced; edit
 		// config.json directly for now).
-		"risk_profile":  cfg.RiskProfile,
-		"risk_profiles": cfg.RiskProfiles,
+		"risk_profile":       cfg.RiskProfile,
+		"risk_profiles":      cfg.RiskProfiles,
+		"max_context_tokens": cfg.MaxContextTokens,
+		// SP-076: display verbosity for inter-tool narration filtering.
+		"output_verbosity": cfg.OutputVerbosity,
 	}
 	return out
 }
@@ -194,11 +193,10 @@ func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-// writeJSONError writes a JSON-formatted error response.
+// writeJSONError writes a JSON-formatted error response. Deprecated: use
+// writeJSONErr with an explicit code for better client-side error handling.
 func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]interface{}{
-		"error": message,
-	})
+	writeJSONErr(w, status, "error", message)
 }
 
 // writeJSONErr writes a JSON error message with both a code string and a message.
@@ -246,7 +244,7 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
 	}
 
 	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)
@@ -281,7 +279,7 @@ func (ws *ReactWebServer) resolveConfigManagerQuietly(r *http.Request) *configur
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	var workspaceDir string
 	if workspaceRoot != "" {
-		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
 	}
 
 	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)
@@ -298,13 +296,6 @@ func (ws *ReactWebServer) resolveConfigManagerQuietly(r *http.Request) *configur
 func validateReasoningEffort(v string) error {
 	if !validReasoningEfforts[v] {
 		return fmt.Errorf("invalid reasoning_effort %q (allowed: \"\", low, medium, high)", v)
-	}
-	return nil
-}
-
-func validateSelfReviewGateMode(v string) error {
-	if !validSelfReviewGateModes[v] {
-		return fmt.Errorf("invalid self_review_gate_mode %q (allowed: off, code, always)", v)
 	}
 	return nil
 }
@@ -365,7 +356,7 @@ func truncateConfigStrings(cfg *configuration.Config) *configuration.Config {
 	// --- Top-level scalar strings ---
 	cfg.ReasoningEffort = truncateString(cfg.ReasoningEffort, maxSettingEnumLength)
 	cfg.HistoryScope = truncateString(cfg.HistoryScope, maxSettingEnumLength)
-	cfg.SelfReviewGateMode = truncateString(cfg.SelfReviewGateMode, maxSettingEnumLength)
+	cfg.OutputVerbosity = truncateString(cfg.OutputVerbosity, maxSettingEnumLength)
 	cfg.ResourceDirectory = truncateString(cfg.ResourceDirectory, maxSettingPathLength)
 	cfg.SystemPromptText = truncateString(cfg.SystemPromptText, maxSettingPromptLength)
 	cfg.LastUsedProvider = truncateString(cfg.LastUsedProvider, maxSettingNameLength)

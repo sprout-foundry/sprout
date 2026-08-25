@@ -13,15 +13,23 @@
  * - A `StateField` stores the raw originalContent text.
  * - A `ViewPlugin` compares the current doc lines against the stored
  *   originalContent lines and builds `Decoration.line` decorations for
- *   every line that differs.  Only visible (viewport) lines are
+ *   every line that differs. Only visible (viewport) lines are
  *   processed for performance on large files.
+ *
+ * Block-decoration delivery: `Decoration.line` decorations affect the
+ * editor's vertical layout, so CodeMirror only allows them through the
+ * `EditorView.decorations` facet — a ViewPlugin's `decorations` option
+ * throws "Block decorations may not be specified via plugins". The
+ * plugin therefore pushes its computed set into a dedicated StateField
+ * (via `setUnsavedDecorations` StateEffect) whose `provide` wires it
+ * into the facet.
  *
  * Theming:
  * - Uses `--diff-mod-color` CSS variable for visual consistency with
  *   the existing git diff gutter markers.
  */
 
-import { StateEffect, StateField, type Extension } from '@codemirror/state';
+import { StateEffect, StateField, Annotation, type Extension } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 // ── State effect ────────────────────────────────────────────────────
@@ -32,6 +40,11 @@ import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate
  * `buffer.originalContent` changes.
  */
 export const setOriginalContent = StateEffect.define<string>();
+
+/** Annotation marking the plugin's own decoration-rebuild dispatch, so
+ *  the rebuild transaction (which only carries the decoration-set effect)
+ *  doesn't re-trigger another debounce cycle. */
+const unsavedRebuildAnnotation = Annotation.define<boolean>();
 
 // ── State field ─────────────────────────────────────────────────────
 
@@ -51,6 +64,37 @@ const originalContentField = StateField.define<string>({
     }
     return value;
   },
+});
+
+// ── Decoration delivery ─────────────────────────────────────────────
+
+/**
+ * State effect that carries a freshly computed unsaved-line decoration
+ * set from the ViewPlugin into the StateField below.
+ */
+const setUnsavedDecorations = StateEffect.define<DecorationSet>();
+
+/**
+ * Holds the current unsaved-line decoration set and provides it directly
+ * to the EditorView.decorations facet. Block decorations (Decoration.line)
+ * affect the editor's vertical layout and therefore may only be supplied
+ * via this facet — providing them through a ViewPlugin's `decorations`
+ * option throws "Block decorations may not be specified via plugins".
+ */
+const unsavedDecorationsField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setUnsavedDecorations)) {
+        return effect.value;
+      }
+    }
+    // Keep decorations roughly in place between debounced rebuilds.
+    return value.map(tr.changes);
+  },
+  provide: (f) => EditorView.decorations.from(f),
 });
 
 // ── Line-diff helpers ───────────────────────────────────────────────
@@ -192,19 +236,65 @@ const unsavedLineDeco = Decoration.line({ class: 'cm-unsavedLine' });
 const unsavedHighlightPlugin = ViewPlugin.fromClass(
   class UnsavedHighlightPlugin {
     decorations: DecorationSet;
+    private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(view: EditorView) {
       this.decorations = this.buildDecorations(view);
+      // Dispatching inside a plugin constructor is not allowed, and the
+      // plugin's update() is not called on creation — only on the first
+      // real transaction. Defer the initial render to a microtask so the
+      // field can serve the decorations through the view facet.
+      this.schedulePush(view, this.decorations);
     }
 
     update(update: ViewUpdate): void {
+      // Ignore our own rebuild dispatches (they only carry the
+      // decoration-set effect + marker annotation) so a rebuild that
+      // changes layout can't re-trigger another debounce cycle.
+      if (update.transactions.some((tr) => tr.annotation(unsavedRebuildAnnotation))) {
+        return;
+      }
+
       // Rebuild on document changes, viewport changes, or when
       // originalContent is updated via StateEffect.
       const origChanged = update.transactions.some((tr) => tr.effects.some((e) => e.is(setOriginalContent)));
 
-      if (update.viewportChanged || update.docChanged || origChanged) {
+      if (origChanged) {
+        // originalContent changes (file load/save) are not user edits —
+        // rebuild immediately so highlights are correct right away.
+        if (this.debounceTimer) {
+          clearTimeout(this.debounceTimer);
+          this.debounceTimer = null;
+        }
         this.decorations = this.buildDecorations(update.view);
+        this.schedulePush(update.view, this.decorations);
+      } else if (update.docChanged || update.viewportChanged) {
+        // Debounce user edits and viewport scrolling — the diff is O(n)
+        // and doesn't need to update on every keystroke.
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        const view = update.view;
+        this.debounceTimer = setTimeout(() => {
+          this.debounceTimer = null;
+          if (!view.dom.isConnected) return;
+          this.decorations = this.buildDecorations(view);
+          this.schedulePush(view, this.decorations);
+        }, 300);
       }
+    }
+
+    /**
+     * Push a computed decoration set into unsavedDecorationsField. Must
+     * not run synchronously from a plugin constructor or update() — both
+     * execute inside the view's update cycle, where dispatch is forbidden.
+     */
+    private schedulePush(view: EditorView, decos: DecorationSet): void {
+      queueMicrotask(() => {
+        if (!view.dom.isConnected) return;
+        view.dispatch({
+          effects: setUnsavedDecorations.of(decos),
+          annotations: [unsavedRebuildAnnotation.of(true)],
+        });
+      });
     }
 
     private buildDecorations(view: EditorView): DecorationSet {
@@ -261,9 +351,13 @@ const unsavedHighlightPlugin = ViewPlugin.fromClass(
         true,
       );
     }
-  },
-  {
-    decorations: (v) => v.decorations,
+
+    destroy() {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+    }
   },
 );
 
@@ -307,5 +401,5 @@ const unsavedHighlightBaseTheme = EditorView.baseTheme({
  * ```
  */
 export function unsavedLineHighlight(): Extension {
-  return [originalContentField, unsavedHighlightPlugin, unsavedHighlightBaseTheme];
+  return [originalContentField, unsavedDecorationsField, unsavedHighlightPlugin, unsavedHighlightBaseTheme];
 }

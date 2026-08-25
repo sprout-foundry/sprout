@@ -109,10 +109,15 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) string {
 			if label == "" {
 				label = s.SessionID
 			}
-			fmt.Fprintf(os.Stderr, "  %d) %-9s  %s\n",
+			badge := ""
+			if s.Interrupted {
+				badge = "  [interrupted — recoverable]"
+			}
+			fmt.Fprintf(os.Stderr, "  %d) %-9s  %s%s\n",
 				i+1,
 				humanizeAge(time.Since(s.LastUpdated)),
 				truncateLabel(label, 56),
+				badge,
 			)
 		}
 		fmt.Fprintln(os.Stderr)
@@ -125,9 +130,13 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) string {
 		if label == "" {
 			label = s.SessionID
 		}
+		detail := humanizeAge(time.Since(s.LastUpdated))
+		if s.Interrupted {
+			detail = "interrupted — recoverable · " + detail
+		}
 		items = append(items, console.SelectItem{
 			Label:  truncateLabel(label, 56),
-			Detail: humanizeAge(time.Since(s.LastUpdated)),
+			Detail: detail,
 			Value:  s.SessionID,
 		})
 	}
@@ -157,12 +166,26 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) string {
 	if chosen.SessionID == "" {
 		return ""
 	}
-	state, err := chatAgent.LoadStateScoped(chosen.SessionID, cwd)
-	if err != nil {
-		console.GlyphError.Fprintf(os.Stderr, "  could not load session %s: %v", chosen.SessionID, err)
-		return ""
+	var state *agent.ConversationState
+	if chosen.Interrupted {
+		recovered, report, loadErr := agent.LoadStateRecoverable(chosen.SessionID, cwd)
+		if loadErr != nil {
+			console.GlyphError.Fprintf(os.Stderr, "  could not load session %s: %v", chosen.SessionID, loadErr)
+			return ""
+		}
+		state = recovered
+		chatAgent.ApplyRecoveredState(recovered)
+		console.GlyphWarning.Fprintf(os.Stderr, "  recovered interrupted session (%d journal events, %d repairs)",
+			report.JournalEvents, report.Repair.DroppedToolResults+report.Repair.StrippedAssistantToolCalls)
+	} else {
+		loaded, loadErr := chatAgent.LoadStateScoped(chosen.SessionID, cwd)
+		if loadErr != nil {
+			console.GlyphError.Fprintf(os.Stderr, "  could not load session %s: %v", chosen.SessionID, loadErr)
+			return ""
+		}
+		state = loaded
+		chatAgent.ApplyState(state)
 	}
-	chatAgent.ApplyState(state)
 	chatAgent.SetSessionID(state.SessionID)
 
 	label := chosen.Name

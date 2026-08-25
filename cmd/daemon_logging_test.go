@@ -25,8 +25,9 @@ func TestSetupDaemonLogging_DoesNothingWithoutServiceEnv(t *testing.T) {
 		os.Stderr = origStderr
 	}()
 
-	tmpDir := t.TempDir()
-	setupDaemonLogging(tmpDir)
+	stateDir := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
+	setupDaemonLogging()
 
 	// os.Stdout and os.Stderr should be unchanged.
 	if os.Stdout != origStdout {
@@ -37,7 +38,7 @@ func TestSetupDaemonLogging_DoesNothingWithoutServiceEnv(t *testing.T) {
 	}
 
 	// No log directory should be created.
-	logDir := filepath.Join(tmpDir, ".sprout", "logs")
+	logDir := filepath.Join(stateDir, "logs")
 	if _, err := os.Stat(logDir); !os.IsNotExist(err) {
 		t.Error("log directory should not be created when SPROUT_SERVICE is unset")
 	}
@@ -57,10 +58,11 @@ func TestSetupDaemonLogging_CreatesLogDir(t *testing.T) {
 		os.Stderr = origStderr
 	}()
 
-	tmpDir := t.TempDir()
-	setupDaemonLogging(tmpDir)
+	stateDir := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
+	setupDaemonLogging()
 
-	logDir := filepath.Join(tmpDir, ".sprout", "logs")
+	logDir := filepath.Join(stateDir, "logs")
 	info, err := os.Stat(logDir)
 	if err != nil {
 		t.Fatalf("expected log directory to exist at %s: %v", logDir, err)
@@ -84,8 +86,9 @@ func TestSetupDaemonLogging_RedirectsStreams(t *testing.T) {
 		os.Stderr = origStderr
 	}()
 
-	tmpDir := t.TempDir()
-	setupDaemonLogging(tmpDir)
+	stateDir := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateDir)
+	setupDaemonLogging()
 
 	// os.Stdout and os.Stderr should now be pipe write-ends (different files).
 	if os.Stdout == origStdout {
@@ -108,8 +111,8 @@ func TestSetupDaemonLogging_RedirectsStreams(t *testing.T) {
 	// goroutine must still read the remaining buffered data and flush to disk.
 	time.Sleep(100 * time.Millisecond)
 
-	stdoutPath := filepath.Join(tmpDir, ".sprout", "logs", "daemon.stdout.log")
-	stderrPath := filepath.Join(tmpDir, ".sprout", "logs", "daemon.stderr.log")
+	stdoutPath := filepath.Join(stateDir, "logs", "daemon.stdout.log")
+	stderrPath := filepath.Join(stateDir, "logs", "daemon.stderr.log")
 
 	data, err := os.ReadFile(stdoutPath)
 	if err != nil {

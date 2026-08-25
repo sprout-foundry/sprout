@@ -6,24 +6,16 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 const ProvidersDirName = "providers"
-
-const (
-	apiKeysMigratedMarker       = ".api_keys_migrated"
-	configApiKeysMigratedMarker = ".config_api_keys_migrated"
-)
 
 type ProviderDiscoveryModel struct {
 	ID            string   `json:"id"`
@@ -33,10 +25,19 @@ type ProviderDiscoveryModel struct {
 	Tags          []string `json:"tags,omitempty"`
 }
 
-func GetProvidersDir() (string, error) {
-	configDir, err := GetConfigDir()
+// GetGlobalProvidersDir returns the global providers directory
+// (~/.config/sprout/providers/). Custom providers are always stored here
+// regardless of SPROUT_CONFIG — they are user-global resources, not
+// project-scoped. This prevents a split-brain where a provider saved from
+// a scoped session is invisible to another scope and can't be deleted
+// from a different scope.
+//
+// Uses getDefaultConfigDir (HOME-based, ignores SPROUT_CONFIG) so the
+// location is stable across all sessions.
+func GetGlobalProvidersDir() (string, error) {
+	configDir, err := getDefaultConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get config directory: %w", err)
+		return "", fmt.Errorf("failed to get global config directory: %w", err)
 	}
 	providersDir := filepath.Join(configDir, ProvidersDirName)
 	if err := os.MkdirAll(providersDir, 0700); err != nil {
@@ -45,8 +46,19 @@ func GetProvidersDir() (string, error) {
 	return providersDir, nil
 }
 
+// GetProvidersDir returns the global providers directory. Kept as an alias
+// for GetGlobalProvidersDir for backward compatibility with callers that
+// display or reference the providers directory (e.g. cmd/diag.go).
+func GetProvidersDir() (string, error) {
+	return GetGlobalProvidersDir()
+}
+
+// GetCustomProviderPath returns the path where a custom provider JSON
+// file is stored. Always resolves to the global providers directory
+// (~/.config/sprout/providers/) so that save, load, and delete all
+// agree on the same location regardless of SPROUT_CONFIG.
 func GetCustomProviderPath(name string) (string, error) {
-	providersDir, err := GetProvidersDir()
+	providersDir, err := GetGlobalProvidersDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get providers directory: %w", err)
 	}
@@ -57,20 +69,82 @@ func GetCustomProviderPath(name string) (string, error) {
 	return filepath.Join(providersDir, normalized+".json"), nil
 }
 
-// LoadCustomProviders loads all custom provider configs from the global
-// providers directory (~/.config/sprout/providers/).
-func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
-	providersDir, err := GetProvidersDir()
+// getScopedProvidersDir returns the SPROUT_CONFIG-resolved providers
+// directory, if SPROUT_CONFIG is set. Returns ("", nil) when it is not
+// set or differs from the global dir. Used by DeleteCustomProvider to
+// clean up stale copies from before the global-only fix.
+func getScopedProvidersDir() (string, error) {
+	configDir, err := GetConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("get providers directory: %w", err)
+		return "", err
 	}
-	return LoadCustomProvidersFromDir(providersDir)
+	globalDir, err := getDefaultConfigDir()
+	if err != nil {
+		return "", err
+	}
+	if configDir == globalDir {
+		return "", nil
+	}
+	return filepath.Join(configDir, ProvidersDirName), nil
+}
+
+// LoadCustomProviders loads all custom provider configs. It merges
+// providers from the SPROUT_CONFIG-resolved directory and the global
+// home directory (~/.config/sprout/providers/), with the global home
+// directory winning on name conflicts.
+//
+// This matches the layered manager's effective behavior (which only
+// reads from global) and ensures the factory's /provider switch path
+// resolves the same providers the /provider listing shows. Without
+// the merge, a user running sprout from a project workspace with
+// SPROUT_CONFIG overridden sees custom providers listed (via the
+// layered manager) but receives a "not registered as a custom
+// provider" error when trying to switch to one (via LoadCustomProviders,
+// which would otherwise only see the SPROUT_CONFIG-resolved dir).
+func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
+	// Read from both the SPROUT_CONFIG-resolved dir and the global home
+	// dir. Custom providers are always saved to the global dir now, but
+	// stale copies may still exist in the scoped dir from before the fix.
+	// Global wins on name conflicts.
+	scopedDir, err := GetConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("get scoped config directory: %w", err)
+	}
+	scopedProvidersDir := filepath.Join(scopedDir, ProvidersDirName)
+	globalDir, err := getDefaultConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("get default config directory: %w", err)
+	}
+	globalProvidersDir := filepath.Join(globalDir, ProvidersDirName)
+
+	merged := make(map[string]CustomProviderConfig)
+
+	// Read the SPROUT_CONFIG-scoped dir first so the global home dir
+	// can override on conflict (matching the layered manager: global
+	// is the source of truth for custom providers).
+	if scopedProviders, scopedErr := LoadCustomProvidersFromDir(scopedProvidersDir); scopedErr != nil {
+		log.Printf("[config] warning: failed to read scoped custom providers from %s: %v", scopedProvidersDir, scopedErr)
+	} else {
+		for name, provider := range scopedProviders {
+			merged[name] = provider
+		}
+	}
+
+	if globalProviders, globalErr := LoadCustomProvidersFromDir(globalProvidersDir); globalErr != nil {
+		log.Printf("[config] warning: failed to read global custom providers from %s: %v", globalDir, globalErr)
+	} else {
+		for name, provider := range globalProviders {
+			merged[name] = provider
+		}
+	}
+
+	return merged, nil
 }
 
 // LoadCustomProvidersFromDir loads all custom provider JSON files from the
-// given directory. Use this when SPROUT_CONFIG is temporarily overridden
-// (e.g. inside NewManagerWithLayers) and custom providers must still be read
-// from the true global location.
+// given directory. Used by LoadCustomProviders for both the
+// SPROUT_CONFIG-resolved dir and the global home dir (see the merge
+// behavior in LoadCustomProviders for context).
 func LoadCustomProvidersFromDir(providersDir string) (map[string]CustomProviderConfig, error) {
 
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))
@@ -103,97 +177,54 @@ func LoadCustomProvidersFromDir(providersDir string) (map[string]CustomProviderC
 func SaveCustomProvider(cfg CustomProviderConfig) error {
 	normalized, err := NormalizeCustomProviderConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("normalize custom provider: %w", err)
+		return fmt.Errorf("normalize custom provider config: %w", err)
 	}
 
 	path, err := GetCustomProviderPath(normalized.Name)
 	if err != nil {
-		return fmt.Errorf("get custom provider path: %w", err)
+		return err
 	}
 
 	data, err := json.MarshalIndent(normalized, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal custom provider: %w", err)
+		return fmt.Errorf("marshal custom provider config: %w", err)
 	}
 
-	return os.WriteFile(path, data, 0600)
-}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("write custom provider config: %w", err)
+	}
 
-func DeleteCustomProvider(name string) error {
-	path, err := GetCustomProviderPath(name)
-	if err != nil {
-		return fmt.Errorf("get custom provider path: %w", err)
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove custom provider %s: %w", name, err)
-	}
 	return nil
 }
 
-func MigrateLegacyCustomProviders(cfg *Config) (map[string]CustomProviderConfig, error) {
-	if cfg == nil || len(cfg.CustomProviders) == 0 {
-		return LoadCustomProviders()
-	}
-
-	fileProviders, err := LoadCustomProviders()
+func DeleteCustomProvider(name string) error {
+	normalized, err := CanonicalizeCustomProviderName(name)
 	if err != nil {
-		return nil, fmt.Errorf("load custom providers: %w", err)
+		return fmt.Errorf("normalize provider name: %w", err)
 	}
 
-	for name, provider := range cfg.CustomProviders {
-		if _, exists := fileProviders[name]; exists {
-			continue
-		}
-		legacy := provider
-		if legacy.Name == "" {
-			legacy.Name = name
-		}
-		if err := SaveCustomProvider(legacy); err != nil {
-			return nil, fmt.Errorf("failed to migrate custom provider %s: %w", name, err)
-		}
-		fileProviders[name] = legacy
-	}
-
-	return fileProviders, nil
-}
-
-func NormalizeCustomProviderConfig(cfg CustomProviderConfig) (CustomProviderConfig, error) {
-	name, err := CanonicalizeCustomProviderName(cfg.Name)
+	// Delete from the global dir (the canonical location after the
+	// split-brain fix). This is where GetCustomProviderPath resolves to.
+	globalPath, err := GetGlobalProvidersDir()
 	if err != nil {
-		return CustomProviderConfig{}, fmt.Errorf("canonicalize provider name: %w", err)
+		return fmt.Errorf("get global providers directory: %w", err)
+	}
+	globalFile := filepath.Join(globalPath, normalized+".json")
+	if err := os.Remove(globalFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove custom provider %s: %w", name, err)
 	}
 
-	endpoint, err := normalizeOpenAIEndpoint(cfg.Endpoint)
-	if err != nil {
-		return CustomProviderConfig{}, fmt.Errorf("normalize endpoint: %w", err)
+	// Also clean up any stale copy in the scoped dir (SPROUT_CONFIG-resolved).
+	// Providers saved before this fix may still live there. A missing file
+	// is expected and not an error.
+	if scopedDir, scopedErr := getScopedProvidersDir(); scopedErr == nil {
+		scopedFile := filepath.Join(scopedDir, normalized+".json")
+		if err := os.Remove(scopedFile); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove scoped custom provider %s: %w", name, err)
+		}
 	}
 
-	cfg.Name = name
-	cfg.Endpoint = endpoint
-	cfg.EnvVar = strings.TrimSpace(cfg.EnvVar)
-	cfg.ModelName = strings.TrimSpace(cfg.ModelName)
-	cfg.ReasoningEffort = strings.ToLower(strings.TrimSpace(cfg.ReasoningEffort))
-	cfg.VisionModel = strings.TrimSpace(cfg.VisionModel)
-	cfg.VisionFallbackProvider = strings.TrimSpace(cfg.VisionFallbackProvider)
-	cfg.VisionFallbackModel = strings.TrimSpace(cfg.VisionFallbackModel)
-	cfg.ToolCalls = normalizeUniqueStrings(cfg.ToolCalls)
-
-	// Initialize model context sizes map if nil
-	if cfg.ModelContextSizes == nil {
-		cfg.ModelContextSizes = make(map[string]int)
-	}
-
-	if cfg.ContextSize <= 0 {
-		cfg.ContextSize = 32768
-	}
-	if cfg.EnvVar != "" {
-		cfg.RequiresAPIKey = true
-	}
-	if cfg.ChunkTimeoutMs <= 0 {
-		cfg.ChunkTimeoutMs = 300000
-	}
-
-	return cfg, nil
+	return nil
 }
 
 func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscoveryModel, error) {
@@ -202,26 +233,34 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 		return nil, fmt.Errorf("normalize custom provider config: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, normalized.ModelsEndpoint(), nil)
+	if normalized.Endpoint == "" {
+		return nil, fmt.Errorf("endpoint URL cannot be empty")
+	}
+
+	url := strings.TrimSuffix(normalized.Endpoint, "/") + "/models"
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create discovery request: %w", err)
+		return nil, fmt.Errorf("build discovery request: %w", err)
+	}
+	if normalized.EnvVar != "" {
+		if key := strings.TrimSpace(os.Getenv(normalized.EnvVar)); key != "" {
+			req.Header.Set("Authorization", "Bearer "+key)
+		}
 	}
 
-	if resolved, err := credentials.ResolveProvider(normalized.Name); err == nil && strings.TrimSpace(resolved.Value) != "" {
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(resolved.Value))
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models: %w", err)
+		return nil, fmt.Errorf("model discovery request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, api.FormatHTTPResponseError(resp.StatusCode, resp.Header, body)
+		return nil, fmt.Errorf("model discovery returned HTTP %d", resp.StatusCode)
 	}
 
 	var payload struct {
@@ -234,7 +273,7 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to decode models response: %w", err)
+		return nil, fmt.Errorf("decode discovery response: %w", err)
 	}
 
 	models := make([]ProviderDiscoveryModel, 0, len(payload.Data))
@@ -275,16 +314,17 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 	}
 
 	conversion := normalized.Conversion
-	if !conversion.IncludeToolCallID &&
-		!conversion.ConvertToolRoleToUser &&
-		conversion.ReasoningContentField == "" &&
-		!conversion.ArgumentsAsJSON &&
-		!conversion.SkipToolExecutionSummary &&
-		conversion.ForceToolCallType == "" {
-		conversion = providers.MessageConversion{
-			IncludeToolCallID:        true,
-			SkipToolExecutionSummary: true,
-		}
+	// Enforce standard OpenAI tool-calling defaults. These are correct for
+	// virtually all OpenAI-compatible providers — the tool role and
+	// tool_call_id are part of the spec. Only override if the user explicitly
+	// set them (non-zero value means the user configured something).
+	if !conversion.IncludeToolCallID {
+		conversion.IncludeToolCallID = true
+	}
+	// ConvertToolRoleToUser defaults to false (Go zero value), which is correct.
+	// Only providers with legacy incompatibility (none currently) should set this true.
+	if !conversion.SkipToolExecutionSummary {
+		conversion.SkipToolExecutionSummary = true
 	}
 
 	// Build model overrides for context sizes
@@ -335,234 +375,130 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 			OutputTokenCost: 0.002,
 			Currency:        "USD",
 		},
+		// Custom providers are typically subscription gateways (flat monthly
+		// fee, no marginal per-token cost). Default to subscription when the
+		// user's JSON omits billing_type, otherwise BillingTypeResolved()
+		// falls through to its pay_per_token heuristic and the cost tracker
+		// estimates a fake "charged cost" from the live pricing catalog.
+		// An explicit billing_type in the user JSON is preserved as-is.
+		BillingType: defaultCustomProviderBillingType(normalized.BillingType, normalized.Endpoint),
 	}, nil
 }
 
-func CanonicalizeCustomProviderName(name string) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(name))
-	if normalized == "" {
-		return "", fmt.Errorf("provider name cannot be empty")
-	}
-	for _, r := range normalized {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			continue
-		}
-		return "", fmt.Errorf("provider name must contain only lowercase letters, numbers, '-' or '_'")
-	}
-	return normalized, nil
+// KnownProviderInfo describes a provider the runtime already knows about,
+// either from the user's custom provider config or the embedded factory.
+// The `sprout custom add` wizard uses this to detect when a user is
+// "registering credentials for an existing provider" rather than
+// "registering a brand-new OpenAI-compatible endpoint".
+type KnownProviderInfo struct {
+	// Source identifies where the metadata came from.
+	// "custom" = user's ~/.config/sprout/providers/<name>.json
+	// "factory" = embedded config in pkg/agent_providers/configs/
+	//            or upserted via refreshFromRemote
+	Source string
+
+	// Name is the canonical provider name (lowercase, trimmed).
+	Name string
+
+	// DisplayName is the friendly label shown in UI surfaces.
+	DisplayName string
+
+	// EnvVar is the environment variable the provider expects for
+	// authentication (e.g. "OPENAI_API_KEY"). Empty when no auth
+	// is required.
+	EnvVar string
+
+	// RequiresAPIKey reports whether the provider needs an API key.
+	RequiresAPIKey bool
+
+	// Endpoint is the chat endpoint URL when known.
+	Endpoint string
+
+	// DefaultModel is the configured default model when known.
+	DefaultModel string
+
+	// ContextSize is the configured default context size in tokens.
+	ContextSize int
 }
 
-func normalizeOpenAIEndpoint(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", fmt.Errorf("endpoint cannot be empty")
-	}
-
-	u, err := url.Parse(trimmed)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("endpoint must be a valid absolute URL")
-	}
-
-	path := strings.TrimRight(u.Path, "/")
-	switch {
-	case path == "":
-		path = "/v1/chat/completions"
-	case strings.HasSuffix(path, "/v1"):
-		path += "/chat/completions"
-	case strings.HasSuffix(path, "/v1/models"):
-		path = strings.TrimSuffix(path, "/models") + "/chat/completions"
-	case strings.HasSuffix(path, "/v1/chat/completions"):
-	default:
-		if strings.HasSuffix(path, "/models") {
-			path = strings.TrimSuffix(path, "/models") + "/chat/completions"
-		} else if strings.HasSuffix(path, "/chat/completions") {
-		} else {
-			path += "/chat/completions"
-		}
-	}
-
-	u.Path = path
-	u.RawPath = ""
-	u.RawQuery = ""
-	u.Fragment = ""
-	return strings.TrimRight(u.String(), "/"), nil
-}
-
-func normalizeUniqueStrings(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
-		}
-		if _, exists := seen[trimmed]; exists {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		out = append(out, trimmed)
-	}
-	return out
-}
-
-// MigrateEmbeddedAPIKeys moves any api_key values found in custom provider JSON files
-// into the unified credential store, then strips the key from the file.
-// Called on every Load() but exits immediately if the migration marker exists.
-func MigrateEmbeddedAPIKeys(providers map[string]CustomProviderConfig) error {
-	// Check if migration has already been completed
-	providersDir, err := GetProvidersDir()
-	if err != nil {
-		return err
-	}
-	markerPath := filepath.Join(providersDir, apiKeysMigratedMarker)
-	if _, err := os.Stat(markerPath); err == nil {
-		// Marker exists, migration already completed
-		return nil
-	}
-
-	// Even with zero providers in memory, scan the providers directory for any
-	// legacy JSON files that may contain api_key values, then create the marker.
-	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))
-	if err != nil {
-		return err
-	}
-	for _, path := range files {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var raw struct {
-			Name   string `json:"name"`
-			APIKey string `json:"api_key"`
-		}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			continue
-		}
-		if strings.TrimSpace(raw.APIKey) == "" {
-			continue
-		}
-		providerName := raw.Name
-		if providerName == "" {
-			providerName = strings.TrimSuffix(filepath.Base(path), ".json")
-		}
-		if err := credentials.SetToActiveBackend(providerName, strings.TrimSpace(raw.APIKey)); err != nil {
-			log.Printf("[migration] failed to migrate api_key for %s to credential store: %v", providerName, err)
-			continue
-		}
-		var cfgMap map[string]interface{}
-		if err := json.Unmarshal(data, &cfgMap); err != nil {
-			continue
-		}
-		delete(cfgMap, "api_key")
-		cleaned, err := json.MarshalIndent(cfgMap, "", "  ")
-		if err != nil {
-			continue
-		}
-		if err := os.WriteFile(path, cleaned, 0600); err != nil {
-			log.Printf("[migration] failed to clean api_key from %s: %v", path, err)
-			continue
-		}
-		log.Printf("[migration] migrated api_key for provider %q to credential store", providerName)
-	}
-	// Migration complete - create marker file to prevent re-running
-	if err := os.WriteFile(markerPath, nil, 0600); err != nil {
-		log.Printf("[migration] failed to create marker file: %v", err)
-	}
-	return nil
-}
-
-// MigrateConfigFileAPIKeys migrates any api_key values found in config.json's
-// custom_providers entries into the unified credential store, then strips the keys
-// from the config file. Called on every Load() but exits immediately if the
-// migration marker exists.
+// LookupKnownProvider returns metadata for a provider the runtime knows
+// about, checking both the user's custom provider config and the embedded
+// factory. Returns ok=false when the name doesn't match any known provider
+// — in which case the wizard should run the full URL/discovery flow.
 //
-// This is necessary because the CustomProviderConfig struct no longer has an APIKey
-// field, so json.Unmarshal would silently drop these values.
-func MigrateConfigFileAPIKeys(configPath string) error {
-	// Extract config directory from config path
-	configDir := filepath.Dir(configPath)
-	markerPath := filepath.Join(configDir, configApiKeysMigratedMarker)
-
-	// Check if migration has already been completed
-	if _, err := os.Stat(markerPath); err == nil {
-		// Marker exists, migration already completed
-		return nil
-	}
-
-	data, err := os.ReadFile(configPath)
+// The factory lookup uses GetProviderAuthMetadata, which the runtime
+// factory populates via SetProviderConfigLookup. This is safe to call
+// from the wizard because configuration init() ensures the package
+// compiles even without a registered factory.
+func LookupKnownProvider(name string) (info KnownProviderInfo, ok bool) {
+	normalized, err := CanonicalizeCustomProviderName(name)
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return KnownProviderInfo{}, false
 	}
 
-	var rawConfig map[string]interface{}
-	if err := json.Unmarshal(data, &rawConfig); err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	// Check for custom_providers map
-	customProviders, ok := rawConfig["custom_providers"].(map[string]interface{})
-	if !ok || len(customProviders) == 0 {
-		// No custom providers or not a map, still create marker to indicate completion
-		return os.WriteFile(markerPath, nil, 0600)
-	}
-
-	// Track if we need to write changes
-	needsWrite := false
-
-	// Iterate through each provider entry
-	for providerName, providerData := range customProviders {
-		providerMap, ok := providerData.(map[string]interface{})
-		if !ok {
-			continue // Not a valid provider entry
-		}
-
-		// Try to get the name from the provider's name field first
-		nameFromField, hasNameField := providerMap["name"].(string)
-		if hasNameField && strings.TrimSpace(nameFromField) != "" {
-			providerName = nameFromField
-		}
-
-		// Check for api_key field
-		apiKey, hasAPIKey := providerMap["api_key"].(string)
-		if !hasAPIKey {
-			continue // No api_key in this provider
-		}
-
-		// Skip if api_key is empty after trimming
-		apiKey = strings.TrimSpace(apiKey)
-		if apiKey == "" {
-			continue
-		}
-
-		// Migrate to credential store
-		if err := credentials.SetToActiveBackend(providerName, apiKey); err != nil {
-			log.Printf("[migration] failed to migrate api_key for config-embedded provider %q: %v", providerName, err)
-			continue
-		}
-		log.Printf("[migration] migrated api_key for config-embedded provider %q to credential store", providerName)
-
-		// Remove api_key from the map
-		delete(providerMap, "api_key")
-		needsWrite = true
-	}
-
-	// Only write if we found and migrated at least one api_key
-	if needsWrite {
-		cleaned, err := json.MarshalIndent(rawConfig, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal cleaned config: %w", err)
-		}
-		if err := os.WriteFile(configPath, cleaned, 0600); err != nil {
-			return fmt.Errorf("failed to write cleaned config: %w", err)
+	// User's custom provider config takes precedence — it overrides
+	// any embedded config the user may have customized.
+	// LoadCustomProviders reads directly from the providers/ directory
+	// (both SPROUT_CONFIG-scoped and global), which is where custom
+	// provider JSON files live. LoadOrInitConfig/Load() only reads
+	// config.json and does NOT populate CustomProviders from the
+	// providers/ directory — that merge happens in the layered manager
+	// path (LoadConfigWithLayers).
+	customProviders, err := LoadCustomProviders()
+	if err == nil {
+		if custom, exists := customProviders[normalized]; exists {
+			envVar := strings.TrimSpace(custom.EnvVar)
+			displayName := strings.TrimSpace(custom.Name)
+			if displayName == "" {
+				displayName = normalized
+			}
+			return KnownProviderInfo{
+				Source:         "custom",
+				Name:           normalized,
+				DisplayName:    displayName,
+				EnvVar:         envVar,
+				RequiresAPIKey: custom.RequiresAPIKey || envVar != "",
+				Endpoint:       strings.TrimSpace(custom.Endpoint),
+				DefaultModel:   strings.TrimSpace(custom.ModelName),
+				ContextSize:    custom.ContextSize,
+			}, true
 		}
 	}
 
-	// Migration complete - create marker file to prevent re-running
-	if err := os.WriteFile(markerPath, nil, 0600); err != nil {
-		log.Printf("[migration] failed to create config marker file: %v", err)
+	// Fallback to the embedded / factory view. This catches skill-installed
+	// providers (e.g. the deepinfra defaults shipped with sprout) and
+	// remote-refresh providers. We bypass GetProviderAuthMetadata because
+	// it returns a synthetic default (RequiresAPIKey=true, AuthType=bearer)
+	// for ANY unknown name, which would falsely mark typos as "known".
+	if providerConfigLookup != nil {
+		if envVar, authType, ok := providerConfigLookup(normalized); ok {
+			return KnownProviderInfo{
+				Source:         "factory",
+				Name:           normalized,
+				DisplayName:    GetProviderDisplayName(normalized),
+				EnvVar:         strings.TrimSpace(envVar),
+				RequiresAPIKey: authType != "" && authType != "none",
+			}, true
+		}
 	}
-	return nil
+
+	// Last resort: check the embedded configs directly. This branch is
+	// only reachable when no factory lookup was registered (e.g. narrow
+	// unit tests that import configuration without importing factory).
+	embeddedFactory := providers.NewProviderFactory()
+	if err := embeddedFactory.LoadEmbeddedConfigs(); err == nil {
+		if cfg, err := embeddedFactory.GetProviderConfig(normalized); err == nil && cfg != nil {
+			authType := strings.TrimSpace(cfg.Auth.Type)
+			envVar := strings.TrimSpace(cfg.Auth.EnvVar)
+			return KnownProviderInfo{
+				Source:         "factory",
+				Name:           normalized,
+				DisplayName:    GetProviderDisplayName(normalized),
+				EnvVar:         envVar,
+				RequiresAPIKey: authType != "" && authType != "none",
+			}, true
+		}
+	}
+
+	return KnownProviderInfo{}, false
 }

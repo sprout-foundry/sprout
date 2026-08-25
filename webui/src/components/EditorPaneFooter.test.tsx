@@ -7,11 +7,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  EditorPaneFooter,
-  areEditorPaneFooterPropsEqual,
-  type EditorPaneFooterProps,
-} from './EditorPaneFooter';
+import { EditorPaneFooter, areEditorPaneFooterPropsEqual, type EditorPaneFooterProps } from './EditorPaneFooter';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -37,6 +33,7 @@ const sharedOnZoomOut = () => {};
 const sharedOnResetZoom = () => {};
 const sharedHandleLanguageChange = () => {};
 const sharedSetWhitespaceRenderingMode = () => {};
+const sharedCursorPosition = { line: 1, column: 5 };
 
 // ---------------------------------------------------------------------------
 // Test factories
@@ -79,6 +76,7 @@ function makeProps(overrides: Partial<EditorPaneFooterProps> = {}): EditorPaneFo
       name: 'file.ts',
     } as any,
     selectionInfo: null,
+    cursorPosition: sharedCursorPosition,
     whitespaceRenderingMode: 'none',
     settings: makeSettings(),
     lsp: makeLsp(),
@@ -145,6 +143,12 @@ describe('areEditorPaneFooterPropsEqual', () => {
     it('different selectionInfo reference', () => {
       const prev = makeProps({ selectionInfo: { selectionCount: 1, charCount: 5 } });
       const next = makeProps({ selectionInfo: { selectionCount: 2, charCount: 10 } });
+      expect(areEditorPaneFooterPropsEqual(prev, next)).toBe(false);
+    });
+
+    it('different cursorPosition reference', () => {
+      const prev = makeProps({ cursorPosition: { line: 1, column: 0 } });
+      const next = makeProps({ cursorPosition: { line: 1, column: 1 } });
       expect(areEditorPaneFooterPropsEqual(prev, next)).toBe(false);
     });
 
@@ -306,18 +310,19 @@ describe('EditorPaneFooter rendering', () => {
 
   it('renders cursor position', () => {
     renderFooter({
-      buffer: { content: 'hello', cursorPosition: { line: 2, column: 3 }, path: 't.ts', name: 't.ts' } as any,
+      buffer: { content: 'hello', path: 't.ts', name: 't.ts' } as any,
+      cursorPosition: { line: 2, column: 3 },
     });
     const cursorEl = container.querySelector('.cursor-position');
     expect(cursorEl?.textContent).toContain('Ln 2');
     expect(cursorEl?.textContent).toContain('Col 4');
   });
 
-  it('shows default cursor position 0,0 when buffer is null', () => {
-    renderFooter({ buffer: null });
+  it('renders cursorPosition independently of buffer (buffer null)', () => {
+    renderFooter({ buffer: null, cursorPosition: { line: 5, column: 2 } });
     const cursorEl = container.querySelector('.cursor-position');
-    expect(cursorEl?.textContent).toContain('Ln 0');
-    expect(cursorEl?.textContent).toContain('Col 0');
+    expect(cursorEl?.textContent).toContain('Ln 5');
+    expect(cursorEl?.textContent).toContain('Col 3');
   });
 
   it('shows single selection char count', () => {

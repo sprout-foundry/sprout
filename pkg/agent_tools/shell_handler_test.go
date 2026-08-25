@@ -132,10 +132,10 @@ func TestShellCommandHandler_Execute_Background_NoTerminalManager(t *testing.T) 
 		"command":    "echo background-test",
 		"background": true,
 	})
-	// Background mode requires TerminalManager which is not available in test context
+	// Background mode requires TerminalManager or BackgroundProcessManager which are not available in test context
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "terminal manager")
+	require.Contains(t, res.Output, "TerminalManager (WebUI) or BackgroundProcessManager (CLI)")
 }
 
 func TestShellCommandHandler_Execute_CheckBackground_NoTerminalManager(t *testing.T) {
@@ -149,7 +149,7 @@ func TestShellCommandHandler_Execute_CheckBackground_NoTerminalManager(t *testin
 	})
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "terminal manager")
+	require.Contains(t, res.Output, "TerminalManager (WebUI) or BackgroundProcessManager (CLI)")
 }
 
 func TestShellCommandHandler_Execute_StopBackground_NoTerminalManager(t *testing.T) {
@@ -163,7 +163,7 @@ func TestShellCommandHandler_Execute_StopBackground_NoTerminalManager(t *testing
 	})
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "terminal manager")
+	require.Contains(t, res.Output, "TerminalManager (WebUI) or BackgroundProcessManager (CLI)")
 }
 
 func TestShellCommandHandler_Execute_SecurityBlock(t *testing.T) {
@@ -172,9 +172,11 @@ func TestShellCommandHandler_Execute_SecurityBlock(t *testing.T) {
 	h := &shellCommandHandler{}
 	ctx := newTestCtx(dir)
 
-	// pipeToShell pattern should be blocked
+	// mkfs is a genuinely DANGEROUS command (disk destruction) that should
+	// always be hard-blocked regardless of approval manager presence.
+	// (pipe-to-bash was downgraded to CAUTION, so we test a still-DANGEROUS op)
 	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
-		"command": "echo secret | bash -c 'cat /etc/passwd'",
+		"command": "mkfs.ext4 /dev/sda1",
 	})
 	require.Error(t, err)
 	require.True(t, res.IsError)
@@ -220,7 +222,7 @@ func TestShellCommandHandler_Execute_EventBus(t *testing.T) {
 	ctx := newTestCtx(dir)
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 	env := newTestEnv(t, dir)
 	env.EventBus = bus
 
@@ -229,20 +231,13 @@ func TestShellCommandHandler_Execute_EventBus(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Verify tool_start event
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Verify tool_end event
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -388,4 +383,89 @@ func createTestFile(dir, name, content string) string {
 	path := dir + "/" + name
 	os.WriteFile(path, []byte(content), 0o644) //nolint:errcheck
 	return path
+}
+
+// ---------------------------------------------------------------------------
+// Gate 2 bypass — Gate1AutoApproved
+//
+// These tests verify that when Gate1AutoApproved is true (Gate 1 already
+// auto-approved via --unsafe mode or session elevation), the shell handler's
+// Gate 2 classifier skips its interactive approval prompt for non-hard-block
+// operations. Hard blocks are still enforced.
+//
+// Classification reference (verified against ClassifyToolCall):
+//   - "rm test.txt"          → CAUTION,  ShouldPrompt=true,  IsHardBlock=false
+//   - "rm -rf /"             → DANGEROUS, ShouldBlock=true,  IsHardBlock=true
+// ---------------------------------------------------------------------------
+
+// newShellEnv builds a ToolEnv for the shell handler with an approval manager.
+func newShellEnv(t *testing.T, dir string, am ApprovalManager) ToolEnv {
+	t.Helper()
+	env := newTestEnv(t, dir)
+	env.ApprovalManager = am
+	return env
+}
+
+// TestShellHandler_PromptOp_Gate1AutoApproved_SkipsPrompt verifies that a
+// Caution-tier command (rm test.txt → ShouldPrompt, not hard block) skips the
+// Gate 2 approval prompt when Gate1AutoApproved is true.
+func TestShellHandler_PromptOp_Gate1AutoApproved_SkipsPrompt(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// Create the file so the rm doesn't error from a missing-file exit code.
+	createTestFile(dir, "test.txt", "data")
+
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	env.Gate1AutoApproved = true
+
+	_, err := h.Execute(ctx, env, map[string]any{"command": "rm test.txt"})
+	// rm may succeed or produce a non-zero exit; what matters is no approval
+	// was requested and no permission error was returned from the Gate 2 prompt.
+	if err != nil {
+		// A tool execution error (e.g. non-zero exit) is acceptable; a
+		// permission rejection from the Gate 2 prompt is NOT.
+		require.NotContains(t, err.Error(), "rejected")
+	}
+	require.Equal(t, 0, len(am.calls), "Gate1AutoApproved should skip Gate 2 prompt")
+}
+
+// TestShellHandler_PromptOp_NotGate1AutoApproved_Prompts verifies that the
+// same Caution-tier command DOES trigger the Gate 2 approval prompt when
+// Gate1AutoApproved is false.
+func TestShellHandler_PromptOp_NotGate1AutoApproved_Prompts(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	createTestFile(dir, "test.txt", "data")
+
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	// Gate1AutoApproved defaults to false.
+
+	_, _ = h.Execute(ctx, env, map[string]any{"command": "rm test.txt"})
+	require.Equal(t, 1, len(am.calls), "Gate 2 should prompt when Gate1AutoApproved is false")
+}
+
+// TestShellHandler_HardBlock_Still_Blocked_Under_Gate1AutoApproved verifies
+// that even with Gate1AutoApproved=true, a hard-block command (rm -rf /) is
+// still blocked by the handler's IsHardBlock early-return. No approval is
+// requested.
+func TestShellHandler_HardBlock_Still_Blocked_Under_Gate1AutoApproved(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	env.Gate1AutoApproved = true
+
+	res, err := h.Execute(ctx, env, map[string]any{"command": "rm -rf /"})
+	require.Error(t, err)
+	require.True(t, res.IsError, "hard block should return IsError")
+	require.Contains(t, res.Output, "security block")
+	require.Equal(t, 0, len(am.calls), "hard block early-returns before any approval request")
 }

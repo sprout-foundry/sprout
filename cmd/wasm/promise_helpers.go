@@ -108,3 +108,42 @@ func argFloat32(args []js.Value, idx int, def float32) float32 {
 	}
 	return float32(args[idx].Float())
 }
+
+// argBool reads a positional boolean argument from the JS call site, with
+// a default for missing/non-boolean slots.
+func argBool(args []js.Value, idx int, def bool) bool {
+	if idx >= len(args) || args[idx].IsUndefined() || args[idx].IsNull() {
+		return def
+	}
+	if args[idx].Type() != js.TypeBoolean {
+		return def
+	}
+	return args[idx].Bool()
+}
+
+// argStringSlice reads a positional array argument from the JS call site and
+// converts each element to a string. Returns a nil slice for missing/empty
+// arrays.
+func argStringSlice(args []js.Value, idx int) []string {
+	if idx >= len(args) || args[idx].IsUndefined() || args[idx].IsNull() {
+		return nil
+	}
+	v := args[idx]
+	if v.Type() != js.TypeObject || v.Get("length").IsUndefined() {
+		return nil
+	}
+	length := v.Get("length").Int()
+	if length <= 0 {
+		return nil
+	}
+	result := make([]string, length)
+	for i := 0; i < length; i++ {
+		elem := v.Index(i)
+		if elem.IsUndefined() || elem.IsNull() {
+			result[i] = ""
+		} else {
+			result[i] = elem.String()
+		}
+	}
+	return result
+}

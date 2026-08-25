@@ -68,7 +68,7 @@ func buildTurnCheckpointGoSummary(messages []api.Message) string {
 		}
 		switch msg.Role {
 		case "user":
-			add("User request: " + msg.Content)
+			add("User request: " + StripUserMessageTimestamp(msg.Content))
 		case "assistant":
 			if len(msg.ToolCalls) > 0 {
 				add(summarizeAssistantToolCalls(msg))
@@ -120,7 +120,7 @@ func buildTurnCheckpointActionableSummary(messages []api.Message) string {
 		switch msg.Role {
 		case "user":
 			if userRequest == "" {
-				userRequest = msg.Content
+				userRequest = StripUserMessageTimestamp(msg.Content)
 			}
 		case "assistant":
 			if len(msg.ToolCalls) > 0 {
@@ -216,7 +216,7 @@ func extractTurnCompactionContext(messages []api.Message) turnCompactionContext 
 	for _, msg := range messages {
 		switch msg.Role {
 		case "user":
-			ctx.latestUserRequest = normalizeSummaryEntry(msg.Content)
+			ctx.latestUserRequest = normalizeSummaryEntry(StripUserMessageTimestamp(msg.Content))
 		case "assistant":
 			if len(msg.ToolCalls) > 0 {
 				continue

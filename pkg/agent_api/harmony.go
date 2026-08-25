@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // HarmonyFormatter handles conversion from OpenAI format to harmony format
@@ -156,10 +158,10 @@ func (h *HarmonyFormatter) validateMessages(messages []Message) error {
 
 	for i, msg := range messages {
 		if !validRoles[msg.Role] {
-			return fmt.Errorf("invalid role '%s' at message %d", msg.Role, i)
+			return agenterrors.NewValidation(fmt.Sprintf("invalid role '%s' at message %d", msg.Role, i), nil)
 		}
 		if strings.TrimSpace(msg.Content) == "" {
-			return fmt.Errorf("empty content at message %d", i)
+			return agenterrors.NewValidation(fmt.Sprintf("empty content at message %d", i), nil)
 		}
 	}
 

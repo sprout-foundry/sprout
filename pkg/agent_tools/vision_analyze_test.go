@@ -13,9 +13,9 @@ func TestLooksLikeUI(t *testing.T) {
 	vp := &VisionProcessor{}
 
 	tests := []struct {
-		name    string
-		input   string
-		wantUI  bool
+		name   string
+		input  string
+		wantUI bool
 	}{
 		{"two UI keywords", "a login form with a submit button", true},
 		{"one UI keyword only (button + page both match)", "a button on the page", true},
@@ -48,9 +48,9 @@ func TestExtractPosition(t *testing.T) {
 	vp := &VisionProcessor{}
 
 	tests := []struct {
-		name  string
-		line  string
-		want  string
+		name string
+		line string
+		want string
 	}{
 		{"top keyword", "There is a button at the top of the page", "top"},
 		{"bottom keyword", "The footer is at the bottom", "bottom"},
@@ -84,11 +84,11 @@ func TestParseUIElementFromLine(t *testing.T) {
 	vp := &VisionProcessor{}
 
 	tests := []struct {
-		name        string
-		line        string
-		wantType    string
-		wantPos     string
-		wantInDesc  string
+		name       string
+		line       string
+		wantType   string
+		wantPos    string
+		wantInDesc string
 	}{
 		{"button keyword", "Click the Submit button at the top", "button", "top", "Submit button"},
 		{"btn keyword", "There is a btn at the bottom", "button", "bottom", "btn"},

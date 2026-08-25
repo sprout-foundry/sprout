@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // SetSystemPromptFromFile loads a custom system prompt from a file

@@ -603,8 +603,8 @@ type Greeting struct {
 	}
 	defer result.Release()
 
-	// Pass an unsupported language to trigger the generic fallback.
-	symbols := ExtractSymbolsWithMaxDepth(result.Root, result.Bound, "ruby", 2)
+	// Pass a language without a dedicated extractor to trigger the generic fallback.
+	symbols := ExtractSymbolsWithMaxDepth(result.Root, result.Bound, "unknown_lang", 2)
 	if len(symbols) == 0 {
 		t.Errorf("generic fallback should return at least some symbols, got 0")
 	}

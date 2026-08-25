@@ -1,36 +1,34 @@
 import { ChevronRight, Search, X } from 'lucide-react';
 import { useRef, useEffect, useMemo, useState } from 'react';
 import './SettingsPanel.css';
-import type { SproutSettings } from '../services/api';
-import type { AgentConfigProps } from './settings/types';
 import { Skeleton } from '@sprout/ui';
+import type { SproutSettings } from '../services/api';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 // Import from settings/ subdirectory
+import AdvancedSettingsTab from './settings/AdvancedSettingsTab';
 import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
-import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
+import ComputerUseSettingsTab from './settings/ComputerUseSettingsTab';
 import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 import GeneralSettingsTab from './settings/GeneralSettingsTab';
 import LanguageServersSettingsTab from './settings/LanguageServersSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
-import OcrSettingsTab from './settings/OcrSettingsTab';
-import PerformanceSettingsTab from './settings/PerformanceSettingsTab';
+import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
 import PersistentContextSettingsTab from './settings/PersistentContextSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
+import { LocalLLMSettingsTab } from './settings/LocalLLMSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
 import SkillsSettingsTab from './settings/SkillsSettingsTab';
 import SubagentSettingsTab from './settings/SubagentSettingsTab';
-import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
-import {
-  SECTION_GROUPS,
-  getSectionForSubsection,
-  scopeToLayer,
-  subsectionToLegacyTab,
-  type SectionDef,
-  type SettingsSubsection,
-  type SettingsSection,
-  type SettingsPanelProps,
+import type {
+  AgentConfigProps,
+  SectionDef,
+  SettingsSubsection,
+  SettingsSection,
+  SettingsPanelProps,
 } from './settings/types';
+import { SECTION_GROUPS, getSectionForSubsection, scopeToLayer, subsectionToLegacyTab } from './settings/types';
+import { isCloud } from '../config/mode';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
 import { useSettingsMutation } from './settings/useSettingsMutation';
 import { useSettingsState } from './settings/useSettingsState';
@@ -135,23 +133,43 @@ function SettingsPanel({
   // When filtering, matched sections auto-expand so results are visible.
   const normalizedQuery = filterQuery.trim().toLowerCase();
   const filteredSections = useMemo(() => {
-    if (!normalizedQuery) return SECTION_GROUPS;
-    return SECTION_GROUPS.map((section) => {
-      const sectionMatches =
-        section.label.toLowerCase().includes(normalizedQuery) ||
-        section.description.toLowerCase().includes(normalizedQuery) ||
-        section.scope.toLowerCase().includes(normalizedQuery);
-      const matchingSubs = section.subsections.filter((sub) =>
-        sub.label.toLowerCase().includes(normalizedQuery),
-      );
-      if (sectionMatches || matchingSubs.length > 0) {
-        return {
-          ...section,
-          subsections: matchingSubs.length > 0 ? matchingSubs : section.subsections,
-        };
-      }
-      return null;
-    }).filter((s): s is (typeof SECTION_GROUPS)[number] => s !== null);
+    // In cloud mode, hide sections that require a local backend.
+    // MCP, LSP, Computer Use, Skills, and Subagents all depend on
+    // process spawning or server-side state that doesn't exist in
+    // the browser IDE.
+    const cloudHiddenSubsections = new Set<SettingsSubsection>([
+      'workspace-mcp',
+      'workspace-lsp',
+      'experimental-computer-use',
+      'agent-skills',
+      'agent-subagents',
+    ]);
+
+    let groups = SECTION_GROUPS;
+    if (isCloud) {
+      groups = SECTION_GROUPS.map((section) => ({
+        ...section,
+        subsections: section.subsections.filter((sub) => !cloudHiddenSubsections.has(sub.id)),
+      })).filter((section) => section.subsections.length > 0);
+    }
+
+    if (!normalizedQuery) return groups;
+    return groups
+      .map((section) => {
+        const sectionMatches =
+          section.label.toLowerCase().includes(normalizedQuery) ||
+          section.description.toLowerCase().includes(normalizedQuery) ||
+          section.scope.toLowerCase().includes(normalizedQuery);
+        const matchingSubs = section.subsections.filter((sub) => sub.label.toLowerCase().includes(normalizedQuery));
+        if (sectionMatches || matchingSubs.length > 0) {
+          return {
+            ...section,
+            subsections: matchingSubs.length > 0 ? matchingSubs : section.subsections,
+          };
+        }
+        return null;
+      })
+      .filter((s): s is (typeof SECTION_GROUPS)[number] => s !== null);
   }, [normalizedQuery]);
 
   // Auto-expand any section that has matches while filtering.
@@ -236,10 +254,14 @@ function SettingsPanel({
     setProviderContextSize: state.setProviderContextSize,
     providerEnvVar: state.providerEnvVar,
     setProviderEnvVar: state.setProviderEnvVar,
+    providerApiKey: state.providerApiKey,
+    setProviderApiKey: state.setProviderApiKey,
     providerSupportsVision: state.providerSupportsVision,
     setProviderSupportsVision: state.setProviderSupportsVision,
     providerVisionModel: state.providerVisionModel,
     setProviderVisionModel: state.setProviderVisionModel,
+    providerBillingType: state.providerBillingType,
+    setProviderBillingType: state.setProviderBillingType,
     providerModelContextSizes: state.providerModelContextSizes,
     setProviderModelContextSizes: state.setProviderModelContextSizes,
     // Refs and workspace
@@ -308,6 +330,7 @@ function SettingsPanel({
             renderToggle={fieldRenderers.renderToggle}
             renderSelect={fieldRenderers.renderSelect}
             renderTextareaInput={fieldRenderers.renderTextareaInput}
+            renderNumberInput={fieldRenderers.renderNumberInput}
           />
         );
 
@@ -316,7 +339,6 @@ function SettingsPanel({
           <SecuritySettingsTab
             settings={activeSettings ?? settings}
             renderToggle={fieldRenderers.renderToggle}
-            renderNumberInput={fieldRenderers.renderNumberInput}
             renderSelect={fieldRenderers.renderSelect}
             updateSetting={mutations.updateSetting}
           />
@@ -341,10 +363,7 @@ function SettingsPanel({
 
       case 'agent-memory':
         return (
-          <PersistentContextSettingsTab
-            settings={activeSettings ?? settings}
-            updateSetting={mutations.updateSetting}
-          />
+          <PersistentContextSettingsTab settings={activeSettings ?? settings} updateSetting={mutations.updateSetting} />
         );
 
       /* ── Workspace section ─────────────────────────── */
@@ -360,10 +379,7 @@ function SettingsPanel({
 
       case 'workspace-lsp':
         return (
-          <LanguageServersSettingsTab
-            settings={activeSettings ?? settings}
-            updateSetting={mutations.updateSetting}
-          />
+          <LanguageServersSettingsTab settings={activeSettings ?? settings} updateSetting={mutations.updateSetting} />
         );
 
       case 'workspace-mcp':
@@ -422,8 +438,10 @@ function SettingsPanel({
             providerModelName={state.providerModelName}
             providerContextSize={state.providerContextSize}
             providerEnvVar={state.providerEnvVar}
+            providerApiKey={state.providerApiKey}
             providerSupportsVision={state.providerSupportsVision}
             providerVisionModel={state.providerVisionModel}
+            providerBillingType={state.providerBillingType}
             providerModelContextSizes={state.providerModelContextSizes}
             loadingProviderInfo={state.loadingProviderInfo}
             currentProviderInfo={state.currentProviderInfo}
@@ -433,8 +451,10 @@ function SettingsPanel({
             setProviderModelName={state.setProviderModelName}
             setProviderContextSize={state.setProviderContextSize}
             setProviderEnvVar={state.setProviderEnvVar}
+            setProviderApiKey={state.setProviderApiKey}
             setProviderSupportsVision={state.setProviderSupportsVision}
             setProviderVisionModel={state.setProviderVisionModel}
+            setProviderBillingType={state.setProviderBillingType}
             setProviderModelContextSizes={state.setProviderModelContextSizes}
             resetProviderForm={mutations.resetProviderForm}
             handleAddProvider={mutations.handleAddProvider}
@@ -443,26 +463,19 @@ function SettingsPanel({
           />
         );
 
-      case 'env-performance':
+      case 'env-local-llm':
+        return <LocalLLMSettingsTab />;
+
+      case 'env-advanced':
         return (
-          <PerformanceSettingsTab
+          <AdvancedSettingsTab
+            settings={activeSettings ?? settings}
             renderNumberInput={fieldRenderers.renderNumberInput}
             renderTextInput={fieldRenderers.renderTextInput}
-          />
-        );
-
-      case 'env-commit-review':
-        return (
-          <CommitReviewSettingsTab
-            settings={activeSettings ?? settings}
+            renderToggle={fieldRenderers.renderToggle}
             commitReviewProviders={state.commitReviewProviders}
             updateSetting={mutations.updateSetting}
           />
-        );
-
-      case 'env-ocr':
-        return (
-          <OcrSettingsTab renderToggle={fieldRenderers.renderToggle} renderTextInput={fieldRenderers.renderTextInput} />
         );
 
       /* ── Editor section ────────────────────────────── */
@@ -475,9 +488,17 @@ function SettingsPanel({
         );
 
       case 'editor-notifications':
+        return <NotificationsSettingsTab renderLocalToggle={fieldRenderers.renderLocalToggle} />;
+
+      /* ── Experimental section ──────────────────────── */
+      case 'experimental-computer-use':
         return (
-          <NotificationsSettingsTab
+          <ComputerUseSettingsTab
+            settings={activeSettings ?? settings}
+            renderToggle={fieldRenderers.renderToggle}
+            renderNumberInput={fieldRenderers.renderNumberInput}
             renderLocalToggle={fieldRenderers.renderLocalToggle}
+            updateSetting={mutations.updateSetting}
           />
         );
 
@@ -496,9 +517,9 @@ function SettingsPanel({
   };
 
   return (
-    <div className="settings-panel">
+    <div className="settings-panel" data-testid="settings-panel">
       {/* Filter bar */}
-      <div className="settings-filter">
+      <div className="settings-filter" data-testid="settings-filter">
         <Search size={12} className="settings-filter-icon" aria-hidden="true" />
         <input
           ref={filterInputRef}
@@ -535,7 +556,11 @@ function SettingsPanel({
       ) : null}
 
       {filteredSections.map((section) => (
-        <div key={section.id} className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}>
+        <div
+          key={section.id}
+          className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}
+          data-testid="settings-section"
+        >
           {/* Section header (clickable to toggle) */}
           <button
             type="button"
@@ -544,10 +569,7 @@ function SettingsPanel({
             aria-expanded={expandedSections.has(section.id)}
           >
             <span className="settings-section-label">{section.label}</span>
-            <span
-              className={`settings-scope-badge scope-${section.scope}`}
-              title={scopeTitle[section.scope]}
-            >
+            <span className={`settings-scope-badge scope-${section.scope}`} title={scopeTitle[section.scope]}>
               {section.scope}
             </span>
             <ChevronRight className="settings-section-chevron" size={14} />
@@ -635,6 +657,7 @@ function SettingsPanel({
                       aria-controls={`settings-subpanel-${sub.id}`}
                       className={`settings-subsection-btn ${isActive ? 'active' : ''}`}
                       onClick={() => setActiveSubsection(sub.id)}
+                      data-testid={`settings-${sub.id}-tab`}
                     >
                       {sub.label}
                     </button>
@@ -659,7 +682,7 @@ function SettingsPanel({
       ))}
       {/* Credentials — separate panel per spec, not inside any section */}
       {credentialsMatches && (
-        <div className="settings-credentials-link">
+        <div className="settings-credentials-link" data-testid="settings-credentials-link">
           <button
             type="button"
             className={`settings-section-header ${showCredentials ? 'expanded' : ''}`}

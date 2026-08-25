@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,9 +28,34 @@ func (m *MCPCommand) Name() string {
 	return "mcp"
 }
 
+// SafeDuringSteer returns true - /mcp list is read-only (add/remove handled in command itself)
+func (m *MCPCommand) SafeDuringSteer() bool {
+	return true
+}
+
 // Description returns the command description
 func (m *MCPCommand) Description() string {
 	return "Manage MCP (Model Context Protocol) servers - add, remove, list, test"
+}
+
+// Usage returns the detailed help text shown by `/help mcp`.
+func (m *MCPCommand) Usage() string {
+	return strings.Join([]string{
+		"/mcp <subcommand>   Manage MCP (Model Context Protocol) servers.",
+		"",
+		"Subcommands:",
+		"  add              Add a new MCP server interactively",
+		"  remove [name]    Remove an MCP server",
+		"  list             List all configured MCP servers",
+		"  test [name]      Test an MCP server connection",
+		"  help             Show this usage message",
+		"",
+		"Examples:",
+		"  /mcp add",
+		"  /mcp list",
+		"  /mcp test git",
+		"  /mcp remove github",
+	}, "\n")
 }
 
 // Execute runs the MCP command
@@ -577,4 +603,46 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	fmt.Printf("[done] Test completed successfully! Server '%s' is working properly.\n", serverName)
 
 	return nil
+}
+
+// Complete returns completions for the /mcp command.
+func (m *MCPCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	subcommands := []string{"add", "help", "list", "remove", "test"}
+	if len(args) == 0 {
+		return subcommands
+	}
+
+	switch args[0] {
+	case "add":
+		// Suggest MCP server types: stdio (local process) and http (remote).
+		return []string{"stdio", "http"}
+	case "remove", "test":
+		// List configured MCP server names from the config file.
+		mcpConfig, err := mcp.LoadMCPConfig()
+		if err != nil {
+			return nil
+		}
+		prefix := ""
+		if len(args) > 1 {
+			prefix = args[len(args)-1]
+		}
+		var names []string
+		for name := range mcpConfig.Servers {
+			if prefix == "" || strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		return names
+	default:
+		// Prefix-match against known subcommands.
+		prefix := args[0]
+		var matches []string
+		for _, sub := range subcommands {
+			if strings.HasPrefix(strings.ToLower(sub), strings.ToLower(prefix)) {
+				matches = append(matches, sub)
+			}
+		}
+		return matches
+	}
 }

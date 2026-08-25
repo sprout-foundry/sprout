@@ -17,7 +17,11 @@ type SessionsFlow struct{}
 
 // ExecuteSessionList lists sessions for the current working directory, newest first.
 func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error) {
-	sessions, err := agent.ListSessionsWithTimestamps()
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -64,7 +68,11 @@ func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error
 
 // ExecuteSessionLoad loads a session with optional summary context restoration
 func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string) (string, error) {
-	sessions, err := agent.ListSessionsWithTimestamps()
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -126,7 +134,11 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 		return "Usage: /sessions rename <number|id> <new_name>\nExample: /sessions rename 1 \"Refactor persistence module\"", nil
 	}
 
-	sessions, err := agent.ListSessionsWithTimestamps()
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -162,12 +174,16 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 }
 
 // ExecuteSessionDelete removes a session file
-func (f *SessionsFlow) ExecuteSessionDelete(args []string) (string, error) {
+func (f *SessionsFlow) ExecuteSessionDelete(chatAgent *agent.Agent, args []string) (string, error) {
 	if len(args) == 0 {
 		return "Usage: /sessions delete <number|id>\nExample: /sessions delete 1 (or /sessions delete session_1734697500)", nil
 	}
 
-	sessions, err := agent.ListSessionsWithTimestamps()
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -200,12 +216,16 @@ func (f *SessionsFlow) ExecuteSessionDelete(args []string) (string, error) {
 }
 
 // ExecuteSessionExport exports a session to a JSON file
-func (f *SessionsFlow) ExecuteSessionExport(args []string) (string, error) {
+func (f *SessionsFlow) ExecuteSessionExport(chatAgent *agent.Agent, args []string) (string, error) {
 	if len(args) < 2 {
 		return "Usage: /sessions export <number|id> <output_file.json>\nExample: /sessions export 1 my_session.json", nil
 	}
 
-	sessions, err := agent.ListSessionsWithTimestamps()
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}

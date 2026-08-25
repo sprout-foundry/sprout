@@ -38,12 +38,7 @@ export interface FieldRenderers {
     step?: number,
     helpText?: string,
   ) => JSX.Element | null;
-  renderTextInput: (
-    settingKey: string,
-    label: string,
-    placeholder?: string,
-    helpText?: string,
-  ) => JSX.Element | null;
+  renderTextInput: (settingKey: string, label: string, placeholder?: string, helpText?: string) => JSX.Element | null;
   renderTextareaInput: (
     settingKey: string,
     label: string,
@@ -115,12 +110,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     );
   };
 
-  const renderLocalToggle = (
-    checked: boolean,
-    label: string,
-    onChange: (next: boolean) => void,
-    helpText?: string,
-  ) => (
+  const renderLocalToggle = (checked: boolean, label: string, onChange: (next: boolean) => void, helpText?: string) => (
     <div className="config-item">
       <label className="styled-toggle">
         <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} />
@@ -169,6 +159,8 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
     const value = getNestedValue(current, settingKey);
+    const persistedValue = String(value ?? '');
+    const draftValue = textDrafts[settingKey];
     return (
       <div className="config-item">
         <label htmlFor={`setting-${settingKey}`}>
@@ -179,13 +171,35 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
           id={`setting-${settingKey}`}
           type="number"
           className="styled-input config-row-input"
-          value={String(value ?? '')}
+          value={draftValue ?? persistedValue}
           min={min}
           max={max}
           step={step}
           onChange={(e) => {
-            const v = e.target.value === '' ? 0 : Number(e.target.value);
-            updateSetting(settingKey, v);
+            const nextValue = e.target.value;
+            setTextDrafts((prev) => ({ ...prev, [settingKey]: nextValue }));
+
+            if (textSaveTimersRef.current[settingKey]) {
+              clearTimeout(textSaveTimersRef.current[settingKey]);
+            }
+
+            textSaveTimersRef.current[settingKey] = setTimeout(() => {
+              delete textSaveTimersRef.current[settingKey];
+              const v = nextValue === '' ? 0 : Number(nextValue);
+              void updateSetting(settingKey, v);
+            }, 250);
+          }}
+          onBlur={() => {
+            if (textSaveTimersRef.current[settingKey]) {
+              clearTimeout(textSaveTimersRef.current[settingKey]);
+              delete textSaveTimersRef.current[settingKey];
+            }
+
+            const draft = textDrafts[settingKey];
+            if (draft !== undefined && draft !== persistedValue) {
+              const v = draft === '' ? 0 : Number(draft);
+              void updateSetting(settingKey, v);
+            }
           }}
         />
         {helpText ? <div className="config-help">{helpText}</div> : null}

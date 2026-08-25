@@ -7,9 +7,9 @@ import (
 
 func TestCountLinesInSegment(t *testing.T) {
 	tests := []struct {
-		name   string
+		name    string
 		segment string
-		want   int
+		want    int
 	}{
 		{"empty", "", 0},
 		{"no_newline", "hello", 1},

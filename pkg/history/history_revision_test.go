@@ -322,8 +322,8 @@ func TestRecordChangeWithDetails_EmptyDetails(t *testing.T) {
 	description := "Add main function"
 	note := "Initial"
 	originalPrompt := "" // Empty
-	llmMessage := ""    // Empty
-	editingModel := ""  // Empty
+	llmMessage := ""     // Empty
+	editingModel := ""   // Empty
 
 	err = RecordChangeWithDetails(revisionID, filename, originalCode, newCode, description, note, originalPrompt, llmMessage, editingModel)
 	if err != nil {

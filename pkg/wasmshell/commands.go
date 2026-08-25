@@ -197,7 +197,7 @@ func GlobCompletion(prefix string) []string {
 	}
 	dir = ResolvePath(dir)
 
-	entries, err := os.ReadDir(dir)
+	entries, err := ReadDirCompat(dir)
 	if err != nil {
 		return nil
 	}
@@ -221,7 +221,7 @@ func GlobCompletion(prefix string) []string {
 // ListDirEntryJSON returns the JSON representation of directory entries.
 func ListDirEntryJSON(path string) (string, error) {
 	target := ResolvePath(path)
-	entries, err := os.ReadDir(target)
+	entries, err := ReadDirCompat(target)
 	if err != nil {
 		return "", err
 	}

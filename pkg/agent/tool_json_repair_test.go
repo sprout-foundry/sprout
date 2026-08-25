@@ -7,11 +7,11 @@ import (
 
 func TestSanitizeToolFailureMessage(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantContains string
+		name            string
+		input           string
+		wantContains    string
 		wantNotContains string
-		wantExact    string
+		wantExact       string
 	}{
 		{
 			name:      "empty string returns unknown tool error",
@@ -29,25 +29,25 @@ func TestSanitizeToolFailureMessage(t *testing.T) {
 			wantExact: "file not found",
 		},
 		{
-			name:          "data URL with base64 is redacted",
-			input:         "Error with data:image/png;base64,ABCDEF123456",
-			wantContains:  "[REDACTED]",
+			name:            "data URL with base64 is redacted",
+			input:           "Error with data:image/png;base64,ABCDEF123456",
+			wantContains:    "[REDACTED]",
 			wantNotContains: "ABCDEF123456",
 		},
 		{
-			name:          "data URL preserves MIME type",
-			input:         "Failed: data:application/pdf;base64,XYZ789",
-			wantContains:  "data:application/pdf;base64,[REDACTED]",
+			name:         "data URL preserves MIME type",
+			input:        "Failed: data:application/pdf;base64,XYZ789",
+			wantContains: "data:application/pdf;base64,[REDACTED]",
 		},
 		{
-			name:          "long base64 runs are redacted",
-			input:         "Error: " + strings.Repeat("A", 512),
-			wantContains:  "[BASE64_REDACTED]",
+			name:         "long base64 runs are redacted",
+			input:        "Error: " + strings.Repeat("A", 512),
+			wantContains: "[BASE64_REDACTED]",
 		},
 		{
-			name:          "message over maxToolFailureMessageChars is truncated",
-			input:         strings.Repeat("!", maxToolFailureMessageChars+100),
-			wantContains:  "... (truncated)",
+			name:         "message over maxToolFailureMessageChars is truncated",
+			input:        strings.Repeat("!", maxToolFailureMessageChars+100),
+			wantContains: "... (truncated)",
 		},
 	}
 
@@ -72,20 +72,20 @@ func TestSanitizeToolFailureMessage(t *testing.T) {
 
 func TestParseToolArgumentsWithRepair(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantError  bool
+		name         string
+		input        string
+		wantError    bool
 		wantRepaired bool
-		wantKey    string // key to check in result
-		wantValue  interface{} // expected value for that key
+		wantKey      string      // key to check in result
+		wantValue    interface{} // expected value for that key
 	}{
 		{
-			name:       "valid JSON not repaired",
-			input:      `{"key": "value"}`,
-			wantError:  false,
+			name:         "valid JSON not repaired",
+			input:        `{"key": "value"}`,
+			wantError:    false,
 			wantRepaired: false,
-			wantKey:    "key",
-			wantValue:  "value",
+			wantKey:      "key",
+			wantValue:    "value",
 		},
 		{
 			name:      "empty string returns error",
@@ -103,41 +103,41 @@ func TestParseToolArgumentsWithRepair(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:       "markdown code fence repaired",
-			input:      "```json\n{\"path\": \"test.go\"}\n```",
-			wantError:  false,
+			name:         "markdown code fence repaired",
+			input:        "```json\n{\"path\": \"test.go\"}\n```",
+			wantError:    false,
 			wantRepaired: true,
-			wantKey:    "path",
-			wantValue:  "test.go",
+			wantKey:      "path",
+			wantValue:    "test.go",
 		},
 		{
-			name:       "trailing comma repaired",
-			input:      `{"a":1,}`,
-			wantError:  false,
+			name:         "trailing comma repaired",
+			input:        `{"a":1,}`,
+			wantError:    false,
 			wantRepaired: true,
-			wantKey:    "a",
-			wantValue:  float64(1),
+			wantKey:      "a",
+			wantValue:    float64(1),
 		},
 		{
-			name:       "missing closing brace repaired",
-			input:      `{"a":1`,
-			wantError:  false,
+			name:         "missing closing brace repaired",
+			input:        `{"a":1`,
+			wantError:    false,
 			wantRepaired: true,
-			wantKey:    "a",
-			wantValue:  float64(1),
+			wantKey:      "a",
+			wantValue:    float64(1),
 		},
 		{
-			name:       "JSON with surrounding text extracted",
-			input:      "Here's my JSON: {\"key\": \"val\"} end",
-			wantError:  false,
+			name:         "JSON with surrounding text extracted",
+			input:        "Here's my JSON: {\"key\": \"val\"} end",
+			wantError:    false,
 			wantRepaired: true,
-			wantKey:    "key",
-			wantValue:  "val",
+			wantKey:      "key",
+			wantValue:    "val",
 		},
 		{
-			name:       "nested trailing commas",
-			input:      `{"a":{"b":1,},}`,
-			wantError:  false,
+			name:         "nested trailing commas",
+			input:        `{"a":{"b":1,},}`,
+			wantError:    false,
 			wantRepaired: true,
 		},
 	}

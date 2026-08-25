@@ -19,6 +19,7 @@ import {
   CloudOff,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
+import Collapsible from './Collapsible';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
@@ -208,16 +209,17 @@ const MessageItem = memo(function MessageItem({
       {message.type === 'assistant' ? (
         <>
           {message.reasoning && message.reasoning.trim() && (
-            <details className="reasoning-block" open={false}>
-              <summary className="reasoning-summary">
-                <BrainCircuit size={13} className="reasoning-icon" />
-                <span>Reasoning</span>
-                <span className="reasoning-toggle">▶</span>
-              </summary>
-              <div className="reasoning-content">
-                <MessageContent content={message.reasoning} />
-              </div>
-            </details>
+            <Collapsible
+              className="reasoning-block"
+              title={
+                <>
+                  <BrainCircuit size={13} />
+                  <span>Reasoning</span>
+                </>
+              }
+            >
+              <MessageContent content={message.reasoning} />
+            </Collapsible>
           )}
           <MessageSegments
             content={message.content}
@@ -270,6 +272,7 @@ function Chat({
   subagentActivities = [],
   onToolPillClick,
   onStopProcessing,
+  onRetractSteer,
   // Worktree support — chatId, workspaceRoot, onWorktreeChange available for future worktree switching
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   chatId: _chatId,
@@ -537,7 +540,7 @@ function Chat({
             </>
           </div>
         ) : (
-          <div role="log" aria-label="Chat messages" ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div role="log" aria-live="polite" aria-label="Chat messages" ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
             <Virtuoso
               ref={virtuosoRef}
               data={visibleMessages}
@@ -582,6 +585,7 @@ function Chat({
           onSend={onSendMessage}
           onQueue={onQueueMessage}
           onStop={onStopProcessing}
+          onRetractSteer={onRetractSteer}
           placeholder={
             providerAvailable === false
               ? 'Configure a provider to start chatting...'

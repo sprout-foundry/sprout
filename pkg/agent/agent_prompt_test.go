@@ -117,10 +117,12 @@ func TestResolvePromptPathRepoRelative(t *testing.T) {
 	t.Cleanup(func() { os.Remove(promptPath) })
 
 	// Change to a subdirectory and verify repo-relative resolution
-	if err := os.MkdirAll(filepath.Join(repoRoot, "sub", "dir"), 0o755); err != nil {
+	subDir := filepath.Join(repoRoot, "sub", "dir")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	os.Chdir(filepath.Join(repoRoot, "sub", "dir"))
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(repoRoot, "sub")) })
+	os.Chdir(subDir)
 
 	got, err := resolvePromptPath("test_prompt_file.txt")
 	if err != nil {

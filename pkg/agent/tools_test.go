@@ -17,8 +17,8 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	// We use OPENAI_API_KEY to force use of OpenAI provider which doesn't have tool restrictions
 	t.Setenv("CI", "1")
 	t.Setenv("OPENAI_API_KEY", "test-key-for-tools-long-enough-to-openai")
-	t.Setenv("LEDIT_SUBAGENT", "")
-	t.Setenv("LEDIT_NO_SUBAGENTS", "")
+	t.Setenv("SPROUT_SUBAGENT", "")
+	t.Setenv("SPROUT_NO_SUBAGENTS", "")
 
 	// Create a test agent
 	agent, err := NewAgent()
@@ -46,7 +46,7 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	// Check that specific standard tools are present
 	// Note: run_parallel_subagents may be filtered by custom provider config
 	requiredTools := []string{"shell_command", "read_file", "edit_file", "write_file"}
-	optionalTools := []string{"run_parallel_subagents"}  // May be filtered
+	optionalTools := []string{"run_parallel_subagents"} // May be filtered
 
 	toolMap := make(map[string]bool)
 
@@ -121,7 +121,7 @@ func TestOllamaAPIKeyDetection(t *testing.T) {
 
 func TestFilterToolsByName(t *testing.T) {
 	allTools := BuildToolDefinitions()
-	allowed := makeAllowedToolSet([]string{"read_file", "search_files", "missing_tool"})
+	allowed := makeAllowedToolSet([]string{"read_file", "search", "missing_tool"})
 
 	filtered := filterToolsByName(allTools, allowed)
 	if len(filtered) == 0 {
@@ -136,8 +136,8 @@ func TestFilterToolsByName(t *testing.T) {
 	if !found["read_file"] {
 		t.Fatalf("expected read_file to be included")
 	}
-	if !found["search_files"] {
-		t.Fatalf("expected search_files to be included")
+	if !found["search"] {
+		t.Fatalf("expected search to be included")
 	}
 	if found["write_file"] {
 		t.Fatalf("expected write_file to be excluded")

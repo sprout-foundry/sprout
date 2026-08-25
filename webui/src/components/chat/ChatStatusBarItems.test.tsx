@@ -54,42 +54,97 @@ describe('ChatStatusBarItems', () => {
     expect(container.querySelectorAll('.chat-statusbar-item').length).toBe(0);
   });
 
-  it('renders model, ctx, and cost when all fields are present', () => {
+  it('renders ctx and cost when all fields are present (model hidden by default — shown in middle section)', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: {
-        provider: 'anthropic',
-        model: 'claude-haiku-4-5',
-        current_context_tokens: 14200,
-        max_context_tokens: 200000,
-        total_cost: 0.42,
-      }}));
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5',
+            current_context_tokens: 14200,
+            max_context_tokens: 200000,
+            total_cost: 0.42,
+          },
+        }),
+      );
+    });
+    // Model segment is intentionally hidden in the right section when connected
+    // with no persona — the shared StatusBar middle section already shows
+    // provider + model. Right section shows ctx + cost only.
+    const items = container.querySelectorAll('.chat-statusbar-item');
+    expect(items.length).toBe(2);
+    expect(items[0]?.textContent).toContain('14.2k/200.0k ctx');
+    expect(container.querySelector('.chat-statusbar-cost')?.textContent).toBe('$0.420');
+  });
+
+  it('renders model when disconnected (no middle-section context available)', () => {
+    act(() => {
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5',
+            current_context_tokens: 14200,
+            max_context_tokens: 200000,
+            total_cost: 0.42,
+          },
+          isConnected: false,
+        }),
+      );
     });
     const items = container.querySelectorAll('.chat-statusbar-item');
+    // conn pill + model + ctx + cost = 4
+    expect(items.length).toBe(4);
+    expect(container.querySelector('.chat-statusbar-model-name')?.textContent).toBe('claude-haiku-4-5');
+  });
+
+  it('renders model when a non-orchestrator persona is active (signals which subagent)', () => {
+    act(() => {
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5',
+            persona: 'coder',
+            total_cost: 0.42,
+          },
+        }),
+      );
+    });
+    const items = container.querySelectorAll('.chat-statusbar-item');
+    // persona + model + cost = 3
     expect(items.length).toBe(3);
     expect(container.querySelector('.chat-statusbar-model-name')?.textContent).toBe('claude-haiku-4-5');
-    expect(items[1]?.textContent).toContain('14.2k/200.0k ctx');
-    expect(container.querySelector('.chat-statusbar-cost')?.textContent).toBe('$0.420');
   });
 
   it('omits segments for missing fields, with no orphan separators', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: {
-        model: 'gpt-5',
-        total_cost: 0.01,
-      }}));
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            model: 'gpt-5',
+            total_cost: 0.01,
+          },
+          // persona=undefined → model not surfaced → only cost visible
+        }),
+      );
     });
     const items = container.querySelectorAll('.chat-statusbar-item');
-    expect(items.length).toBe(2); // model + cost (no ctx)
+    expect(items.length).toBe(1); // cost only (no ctx, no model because no persona)
     const seps = container.querySelectorAll('.chat-statusbar-sep');
-    expect(seps.length).toBe(1); // exactly one separator between the two
+    expect(seps.length).toBe(0); // single segment → no separator
   });
 
   it('falls back to total_tokens when ctx fields are absent', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: {
-        model: 'gpt-5',
-        total_tokens: 1500,
-      }}));
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            model: 'gpt-5',
+            total_tokens: 1500,
+          },
+        }),
+      );
     });
     // Find the tok segment.
     const items = Array.from(container.querySelectorAll('.chat-statusbar-item'));
@@ -100,7 +155,7 @@ describe('ChatStatusBarItems', () => {
 
   it('cost below warn threshold has no color class', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: { total_cost: 0.50 }}));
+      root.render(createElement(ChatStatusBarItems, { stats: { total_cost: 0.5 } }));
     });
     const cost = container.querySelector('.chat-statusbar-cost') as HTMLElement | null;
     expect(cost).not.toBeNull();
@@ -110,7 +165,7 @@ describe('ChatStatusBarItems', () => {
 
   it('cost above $1 gets the warn class (yellow)', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: { total_cost: 2.00 }}));
+      root.render(createElement(ChatStatusBarItems, { stats: { total_cost: 2.0 } }));
     });
     const cost = container.querySelector('.chat-statusbar-cost');
     expect(cost?.classList.contains('chat-statusbar-cost--warn')).toBe(true);
@@ -118,7 +173,7 @@ describe('ChatStatusBarItems', () => {
 
   it('cost above $5 gets the alert class (red)', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: { total_cost: 10.00 }}));
+      root.render(createElement(ChatStatusBarItems, { stats: { total_cost: 10.0 } }));
     });
     const cost = container.querySelector('.chat-statusbar-cost');
     expect(cost?.classList.contains('chat-statusbar-cost--alert')).toBe(true);
@@ -144,7 +199,7 @@ describe('ChatStatusBarItems', () => {
 
   it('renders provider icon (lucide SVG) when provider is set', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: { provider: 'anthropic', model: 'claude-haiku-4-5' }}));
+      root.render(createElement(ChatStatusBarItems, { stats: { provider: 'anthropic', model: 'claude-haiku-4-5' } }));
     });
     const modelItem = container.querySelector('.chat-statusbar-model');
     expect(modelItem?.querySelector('svg')).not.toBeNull();
@@ -152,11 +207,15 @@ describe('ChatStatusBarItems', () => {
 
   it('renders the active persona badge when stats.persona is set (and not "orchestrator")', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: {
-        provider: 'anthropic',
-        model: 'claude-haiku-4-5',
-        persona: 'coder',
-      }}));
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5',
+            persona: 'coder',
+          },
+        }),
+      );
     });
     const persona = container.querySelector('.chat-statusbar-persona') as HTMLElement | null;
     expect(persona).not.toBeNull();
@@ -167,11 +226,15 @@ describe('ChatStatusBarItems', () => {
 
   it('omits the persona segment when persona is "orchestrator" (primary, unmarked)', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, { stats: {
-        provider: 'anthropic',
-        model: 'claude-haiku-4-5',
-        persona: 'orchestrator',
-      }}));
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5',
+            persona: 'orchestrator',
+          },
+        }),
+      );
     });
     expect(container.querySelector('.chat-statusbar-persona')).toBeNull();
   });
@@ -179,10 +242,12 @@ describe('ChatStatusBarItems', () => {
   it('renders the model as a button when onModelClick is provided', () => {
     const onClick = vi.fn();
     act(() => {
-      root.render(createElement(ChatStatusBarItems, {
-        stats: { provider: 'anthropic', model: 'claude-haiku-4-5' },
-        onModelClick: onClick,
-      }));
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: { provider: 'anthropic', model: 'claude-haiku-4-5', persona: 'coder' },
+          onModelClick: onClick,
+        }),
+      );
     });
     const btn = container.querySelector('.chat-statusbar-model-button') as HTMLButtonElement | null;
     expect(btn).not.toBeNull();
@@ -192,11 +257,13 @@ describe('ChatStatusBarItems', () => {
     expect(onClick).toHaveBeenCalledWith('anthropic');
   });
 
-  it('renders the model as plain text when onModelClick is not provided', () => {
+  it('renders the model as plain text when onModelClick is not provided (but model is surfaced)', () => {
     act(() => {
-      root.render(createElement(ChatStatusBarItems, {
-        stats: { provider: 'anthropic', model: 'claude-haiku-4-5' },
-      }));
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: { provider: 'anthropic', model: 'claude-haiku-4-5', persona: 'coder' },
+        }),
+      );
     });
     expect(container.querySelector('.chat-statusbar-model-button')).toBeNull();
     expect(container.querySelector('.chat-statusbar-model-name')?.textContent).toBe('claude-haiku-4-5');

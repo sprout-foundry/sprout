@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // writeFileHandler implements ToolHandler for the write_file tool.
@@ -44,7 +46,7 @@ func (h *writeFileHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("parameter 'path' must not be empty")
+		return agenterrors.NewValidation("parameter 'path' must not be empty", nil)
 	}
 
 	content, err := extractString(args, "content")
@@ -57,6 +59,12 @@ func (h *writeFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths resolve directly with bypass (the path is already
+	// workspace/tmp/allowlisted). Prompt paths fall through and will
+	// fail with the raw filesystem error.
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
@@ -67,12 +75,29 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "write_file",
-			"path": path,
-		})
+	// SP-127 M2: Gate 1 precheck. Consult the classifier before the
+	// resolve so Deny paths return a typed error immediately and Allow
+	// paths bypass the gate entirely (the path is already
+	// workspace/tmp/allowlisted).
+	resolvedWrite, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "write_file", path)
+	if decision == "deny" {
+		return ToolResult{Output: fmt.Sprintf("write blocked: %s is declared read_only in the active workflow's allowed_paths", path), IsError: true},
+			agenterrors.NewPermission(fmt.Sprintf("write blocked: %s is declared read_only", path), nil)
+	}
+	if decision == "allow" {
+		// Path is workspace/tmp/allowlisted — bypass the gate and resolve directly.
+		ctx = filesystem.WithSecurityBypass(ctx)
+	}
+	// "prompt" → interactive approval; on deny fall through to the raw error.
+	if decision == "prompt" {
+		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "write_file", path, resolvedWrite, "write"); approved {
+			ctx = ctx2
+		}
+	}
+
+	// SP-046-2: Check staleness before writing
+	if err := CheckStaleness(path); err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
 	result, err := WriteFile(ctx, path, content)
@@ -80,17 +105,7 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{
 			Output:  "",
 			IsError: true,
-		}, fmt.Errorf("write file %q: %w", path, err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "write_file",
-			"path":   path,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(result),
-		})
+		}, agenterrors.NewTool("write_file", fmt.Sprintf("write file %q: %v", path, err), err)
 	}
 
 	// Write to output writer if available
@@ -103,3 +118,9 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
+
+func (h *writeFileHandler) Aliases() []string      { return nil }
+func (h *writeFileHandler) Timeout() time.Duration { return 0 }
+func (h *writeFileHandler) MaxResultSize() int     { return 0 }
+func (h *writeFileHandler) SafeForParallel() bool  { return false }
+func (h *writeFileHandler) Interactive() bool      { return false }

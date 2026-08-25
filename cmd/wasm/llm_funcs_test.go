@@ -44,39 +44,39 @@ func TestLlmJSFuncs_ReturnsExpectedKeys(t *testing.T) {
 
 func TestArgDiff_NilOrEmptyArgs(t *testing.T) {
 	cases := []struct {
-		name    string
-		args    []js.Value
-		idx     int
-		defVal  string
-		want    string
+		name   string
+		args   []js.Value
+		idx    int
+		defVal string
+		want   string
 	}{
 		{
-			name:    "nil args returns default",
-			args:    nil,
-			idx:     2,
-			defVal:  "default",
-			want:    "default",
+			name:   "nil args returns default",
+			args:   nil,
+			idx:    2,
+			defVal: "default",
+			want:   "default",
 		},
 		{
-			name:    "empty args returns default",
-			args:    []js.Value{},
-			idx:     0,
-			defVal:  "fallback",
-			want:    "fallback",
+			name:   "empty args returns default",
+			args:   []js.Value{},
+			idx:    0,
+			defVal: "fallback",
+			want:   "fallback",
 		},
 		{
-			name:    "idx beyond length returns default",
-			args:    []js.Value{js.ValueOf("provider")},
-			idx:     5,
-			defVal:  "mydefault",
-			want:    "mydefault",
+			name:   "idx beyond length returns default",
+			args:   []js.Value{js.ValueOf("provider")},
+			idx:    5,
+			defVal: "mydefault",
+			want:   "mydefault",
 		},
 		{
-			name:    "idx equal to length returns default",
-			args:    []js.Value{js.ValueOf("a"), js.ValueOf("b")},
-			idx:     2,
-			defVal:  "boundary",
-			want:    "boundary",
+			name:   "idx equal to length returns default",
+			args:   []js.Value{js.ValueOf("a"), js.ValueOf("b")},
+			idx:    2,
+			defVal: "boundary",
+			want:   "boundary",
 		},
 	}
 

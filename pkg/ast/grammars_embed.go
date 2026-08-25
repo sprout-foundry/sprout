@@ -27,7 +27,7 @@ import (
 	"github.com/odvcencio/gotreesitter/grammars"
 )
 
-//go:embed grammars/bin/go.bin grammars/bin/typescript.bin grammars/bin/tsx.bin grammars/bin/javascript.bin grammars/bin/python.bin
+//go:embed grammars/bin/go.bin grammars/bin/typescript.bin grammars/bin/tsx.bin grammars/bin/javascript.bin grammars/bin/python.bin grammars/bin/c.bin grammars/bin/cpp.bin grammars/bin/c_sharp.bin grammars/bin/java.bin grammars/bin/rust.bin grammars/bin/ruby.bin grammars/bin/php.bin grammars/bin/swift.bin grammars/bin/kotlin.bin grammars/bin/dart.bin grammars/bin/lua.bin grammars/bin/elixir.bin grammars/bin/haskell.bin grammars/bin/bash.bin
 var grammarFS embed.FS
 
 func init() {
@@ -36,6 +36,20 @@ func init() {
 	registerEmbeddedGrammar("tsx", []string{".tsx"}, "grammars/bin/tsx.bin")
 	registerEmbeddedGrammar("javascript", []string{".js", ".mjs", ".cjs"}, "grammars/bin/javascript.bin")
 	registerEmbeddedGrammar("python", []string{".py"}, "grammars/bin/python.bin")
+	registerEmbeddedGrammar("c", []string{".c", ".h"}, "grammars/bin/c.bin")
+	registerEmbeddedGrammar("cpp", []string{".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".h"}, "grammars/bin/cpp.bin")
+	registerEmbeddedGrammar("c_sharp", []string{".cs"}, "grammars/bin/c_sharp.bin")
+	registerEmbeddedGrammar("java", []string{".java"}, "grammars/bin/java.bin")
+	registerEmbeddedGrammar("rust", []string{".rs"}, "grammars/bin/rust.bin")
+	registerEmbeddedGrammar("ruby", []string{".rb"}, "grammars/bin/ruby.bin")
+	registerEmbeddedGrammar("php", []string{".php"}, "grammars/bin/php.bin")
+	registerEmbeddedGrammar("swift", []string{".swift"}, "grammars/bin/swift.bin")
+	registerEmbeddedGrammar("kotlin", []string{".kt", ".kts"}, "grammars/bin/kotlin.bin")
+	registerEmbeddedGrammar("dart", []string{".dart"}, "grammars/bin/dart.bin")
+	registerEmbeddedGrammar("lua", []string{".lua"}, "grammars/bin/lua.bin")
+	registerEmbeddedGrammar("elixir", []string{".ex", ".exs"}, "grammars/bin/elixir.bin")
+	registerEmbeddedGrammar("haskell", []string{".hs", ".lhs"}, "grammars/bin/haskell.bin")
+	registerEmbeddedGrammar("bash", []string{".sh"}, "grammars/bin/bash.bin")
 }
 
 // registerEmbeddedGrammar overrides the gotreesitter registry entry for a

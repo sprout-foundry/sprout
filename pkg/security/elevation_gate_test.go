@@ -263,4 +263,3 @@ func TestEvaluate_AllowSource_WhitelistsSourceForSession(t *testing.T) {
 	assert.Equal(t, SecretAllow, action3)
 	assert.Equal(t, 2, count, "different source should prompt independently")
 }
-

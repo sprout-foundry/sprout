@@ -84,8 +84,8 @@ func TestLoadConfigFromBytes_MissingRequiredFields(t *testing.T) {
 	f := NewProviderFactory()
 
 	tests := []struct {
-		name  string
-		json  []byte
+		name string
+		json []byte
 	}{
 		{
 			name: "empty name",
@@ -834,7 +834,7 @@ func TestStress_MixedOperations(t *testing.T) {
 				}
 
 				// Rotate through all operations deterministically by iteration
-				op := (id+j)%9
+				op := (id + j) % 9
 				switch op {
 				case 0, 1:
 					// Read operations

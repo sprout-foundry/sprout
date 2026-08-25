@@ -1,0 +1,202 @@
+name: Pricing Audit Agent
+on:
+  schedule:
+    - cron: "27 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: pricing-audit
+  cancel-in-progress: true
+
+jobs:
+  pricing-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check for drift OR new models (skip agent if clean)
+        # --discover --fail-on-drift exits 1 when there is pricing drift OR
+        # new models from the live API that aren't in configs yet. Discovery
+        # is read-only here (no --update) so the working tree stays clean and
+        # we can switch to the persistent audit branch afterwards.
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CODING_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          set +e
+          go run ./cmd/audit_pricing --discover --fail-on-drift \
+            --configs-dir=pkg/agent_providers/configs \
+            --manifest-path=cmd/audit_pricing/manifest.json \
+            > /tmp/audit.txt 2>&1
+          AUDIT_EXIT=$?
+          set -e
+          cat /tmp/audit.txt
+
+          if [ "$AUDIT_EXIT" -eq 0 ]; then
+            echo "NO_ACTION=true" >> $GITHUB_ENV
+            echo "No drift or new models — skipping agent run"
+          else
+            echo "NO_ACTION=false" >> $GITHUB_ENV
+            echo "Action needed — agent will investigate"
+          fi
+
+      - name: Find or create the audit branch (single PR until merged)
+        if: env.NO_ACTION != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Reuse the open pricing-audit PR if one exists so all audit work
+          # accumulates into a single PR until it is merged. A new branch/PR
+          # is only created when none is open (e.g. after the previous one
+          # was merged).
+          EXISTING=$(gh pr list --state open --limit 100 \
+            --json number,headRefName,baseRefName \
+            | jq -r '.[] | select(.baseRefName == "main" and (.headRefName | startswith("pricing-audit/"))) | "\(.number)\t\(.headRefName)"' \
+            | head -1)
+
+          if [ -n "$EXISTING" ]; then
+            PR_NUM=$(echo "$EXISTING" | cut -f1)
+            BRANCH=$(echo "$EXISTING" | cut -f2)
+            echo "Reusing PR #$PR_NUM on branch $BRANCH"
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+          else
+            BRANCH="pricing-audit/update"
+            echo "Creating new branch $BRANCH"
+            git checkout -b "$BRANCH"
+          fi
+
+          echo "AUDIT_BRANCH=$BRANCH" >> $GITHUB_ENV
+          echo "AUDIT_PR_NUM=${PR_NUM:-}" >> $GITHUB_ENV
+          echo "BASE_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Auto-populate new models on audit branch
+        if: env.NO_ACTION != 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CODING_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          # Auto-add new models with pricing + metadata from the provider API,
+          # so the agent only needs to verify and correct. Runs on the audit
+          # branch so the results land in the single open PR.
+          go run ./cmd/audit_pricing --discover --update \
+            --configs-dir=pkg/agent_providers/configs \
+            --manifest-path=cmd/audit_pricing/manifest.json
+
+      - name: Install sprout
+        if: env.NO_ACTION != 'true'
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Run pricing audit agent
+        if: env.NO_ACTION != 'true'
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CODING_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          sprout agent "Read the task in .github/pricing-audit-task.md and execute it. The audit tool has already been run with --discover --update, so new models are already added to configs with API-sourced pricing. Your job is to verify pricing accuracy against official docs, fix any $0 or estimated prices, enrich metadata for important models, and commit your changes. Run go build ./cmd/audit_pricing/... and go test ./cmd/audit_pricing/... when done. Commit your changes." \
+            --provider deepseek \
+            --model deepseek-v4-flash \
+            --risk-profile permissive \
+            --budget-usd 8.00
+
+      - name: Validate changed files
+        if: env.NO_ACTION != 'true'
+        run: |
+          CHANGED=$(git diff --name-only "$BASE_SHA" HEAD)
+          if [ -z "$CHANGED" ]; then
+            echo "No changes produced by agent"
+            exit 0
+          fi
+          for f in $CHANGED; do
+            case "$f" in
+              pkg/agent_providers/configs/*.json|cmd/audit_pricing/*.json|cmd/audit_pricing/*.go|pkg/agent_providers/*.go) ;;
+              *) echo "ERROR: unexpected file changed: $f"; exit 1 ;;
+            esac
+          done
+          echo "All changed files are within allowed paths"
+
+      - name: Push updates to the audit PR
+        if: env.NO_ACTION != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_TITLE="fix(pricing): pricing and model audit"
+          PR_BODY=$(cat <<'EOF'
+          Automated pricing + model audit.
+
+          This pull request is maintained by the daily pricing audit workflow
+          (.github/workflows/pricing-audit-agent.yml) and is updated in place
+          until it is merged — new model discovery, pricing verification against
+          official docs, and metadata enrichment are pushed to this same PR on
+          each run.
+          EOF
+          )
+
+          create_audit_pr() {
+            gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base main --head "$1"
+          }
+
+          if git diff --quiet "$BASE_SHA" HEAD; then
+            echo "No changes this run — existing PR (if any) stays as-is"
+            exit 0
+          fi
+
+          if [ -n "$AUDIT_PR_NUM" ]; then
+            echo "Updating existing PR #$AUDIT_PR_NUM ($AUDIT_BRANCH)"
+            git push origin "HEAD:$AUDIT_BRANCH"
+            # Normalize title/body for PRs created before this workflow change.
+            gh pr edit "$AUDIT_PR_NUM" --title "$PR_TITLE" --body "$PR_BODY"
+            exit 0
+          fi
+
+          # No open audit PR — create one. Prefer the fixed branch name, but
+          # fall back to a unique name if a closed PR still owns the branch
+          # (GitHub blocks new PRs from a branch that has a closed PR).
+          BRANCH="pricing-audit/update"
+          if ! git push origin "HEAD:$BRANCH" 2>/dev/null || ! create_audit_pr "$BRANCH" 2>/dev/null; then
+            BRANCH="pricing-audit/update-$(date +%s)"
+            git branch -m "$BRANCH"
+            git push origin "HEAD:$BRANCH"
+            create_audit_pr "$BRANCH"
+          fi

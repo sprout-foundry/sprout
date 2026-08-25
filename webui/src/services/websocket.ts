@@ -3,6 +3,7 @@ import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 import { appendClientIdToUrl, clientFetch, getProxyBase } from './clientSession';
 import { notificationBus } from './notificationBus';
+import { isCloud } from '../config/mode';
 
 export type { WsEvent };
 
@@ -36,6 +37,8 @@ class WebSocketService {
     // run out the heartbeat timeout. Best-effort: the send may not flush during
     // unload, in which case the server's heartbeat still cancels it (the client
     // isn't marked paused on a close).
+    // Targets the LOCAL sprout server; in cloud mode the platform hub
+    // tolerates the unknown frame (no error, no disconnect), so it is a no-op.
     if (typeof window !== 'undefined') {
       window.addEventListener('pagehide', () => {
         this.sendControl('session_close');
@@ -44,7 +47,9 @@ class WebSocketService {
   }
 
   /** Send a small control frame if the socket is open. Used for lifecycle
-   *  signals (pause / session_close) that the server acts on immediately. */
+   *  signals (pause / session_close) that the server acts on immediately.
+   *  Frames are lifecycle signals for the local server; unknown types are
+   *  safely ignored by the platform hub in cloud mode. */
   private sendControl(type: string): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
@@ -151,9 +156,7 @@ class WebSocketService {
       const lastSeq = this.chatSeq.get(chatId);
       if (lastSeq !== undefined) {
         try {
-          const resp = await clientFetch(
-            `/api/query/status?chat_id=${encodeURIComponent(chatId)}`,
-          );
+          const resp = await clientFetch(`/api/query/status?chat_id=${encodeURIComponent(chatId)}`);
           const body: { active?: boolean; chat_id?: string } = await resp.json();
           if (body.active === true) {
             reattachChatId = body.chat_id ?? chatId;
@@ -197,7 +200,28 @@ class WebSocketService {
 
     debugLog('Connecting to WebSocket:', wsUrl);
 
-    this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
+    try {
+      this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
+    } catch (err) {
+      // new WebSocket() can throw synchronously (malformed URL, CSP
+      // violation). Without this guard, `connecting` stays true forever,
+      // blocking every subsequent connect() attempt at the top-of-method
+      // early return — the client can never recover.
+      this.connecting = false;
+      debugLog('[WebSocket] Failed to construct WebSocket:', err);
+      if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        const backoffDelay = Math.min(
+          this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
+          30000,
+        );
+        this.reconnectTimeout = setTimeout(() => {
+          this.reconnectTimeout = null;
+          this.connect();
+        }, backoffDelay);
+      }
+      return;
+    }
 
     this.ws.onopen = () => {
       this.connecting = false;
@@ -244,6 +268,7 @@ class WebSocketService {
     };
 
     this.ws.onclose = (event) => {
+      this.connecting = false;
       debugLog('WebSocket disconnected:', event);
       this.stopPingInterval();
       this.stopPongWatchdog();
@@ -285,6 +310,44 @@ class WebSocketService {
       try {
         const data = JSON.parse(event.data);
 
+        // Handle session_conflict: the backend detected another active WebSocket
+        // for this user/client and is waiting for a session_takeover confirmation.
+        // Auto-respond so the connection proceeds without a 60s hang.
+        // Only the LOCAL sprout server ever emits session_conflict (the platform
+        // hub never does), so this branch is local-only in practice.
+        if (data.type === 'session_conflict') {
+          debugLog('[WebSocket] Session conflict detected, sending takeover confirmation');
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            try {
+              this.ws.send(JSON.stringify({ type: 'session_takeover' }));
+            } catch (err) {
+              debugLog('[WebSocket] Failed to send session_takeover:', err);
+            }
+          }
+          // Do NOT notifyCallbacks — this is a transport-level handshake, not an app event.
+          return;
+        }
+
+        // Handle session_displaced: another session has taken over this connection.
+        // Stop reconnecting — the new connection is authoritative.
+        if (data.type === 'session_displaced') {
+          debugLog('[WebSocket] Session displaced by another connection:', data.data?.message);
+          this.intentionalClose = true;
+          this.stopPingInterval();
+          this.stopPongWatchdog();
+          // Neutralize handlers so the server's subsequent close of this
+          // connection doesn't fire onclose and race with a future connect().
+          if (this.ws) {
+            this.ws.onclose = null;
+            this.ws.onerror = null;
+          }
+          this.notifyCallbacks({
+            type: 'session_displaced',
+            data: data.data || {},
+          });
+          return;
+        }
+
         // Handle pong responses from server
         if (data.type === 'pong') {
           this.handlePong();
@@ -317,6 +380,7 @@ class WebSocketService {
    *  of reconnecting. */
   disconnect() {
     this.intentionalClose = true;
+    this.connecting = false;
     this.wasConnectedBefore = false;
     this.pendingQueue = []; // Clear queue on explicit disconnect
     if (this.reconnectTimeout) {
@@ -345,8 +409,13 @@ class WebSocketService {
     // Tell the server we're backgrounding (not closing) so it keeps any
     // in-flight query running and reattaches when we return, rather than
     // cancelling it on heartbeat staleness. Sent before the close below.
-    this.sendControl('pause');
+    // In cloud mode the platform hub ignores this frame (lifecycle-only WS) and
+    // the in-browser WASM agent keeps running by construction — skip the dead-letter.
+    if (!isCloud) {
+      this.sendControl('pause');
+    }
     this.intentionalClose = true;
+    this.connecting = false;
     // Intentionally do NOT reset wasConnectedBefore — see comment above.
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -387,6 +456,7 @@ class WebSocketService {
       this.ws = null;
     }
     // Reset state for fresh reconnection
+    this.connecting = false;
     this.reconnectAttempts = 0;
     this.intentionalClose = false;
     // Connect immediately (fire-and-forget — errors are handled by connect()
@@ -488,9 +558,10 @@ class WebSocketService {
 
   /** Track __seq from incoming events for reattach support. */
   private trackSeq(event: WsEvent): void {
-    const seq = (event as any).__seq;
+    const seq = (event as WsEvent & { __seq?: unknown }).__seq;
     if (typeof seq !== 'number') return;
-    const chatId = (event.data as any)?.chat_id || this.activeChatId;
+    const dataChatId = (event.data as Record<string, unknown> | null)?.chat_id;
+    const chatId = typeof dataChatId === 'string' ? dataChatId : this.activeChatId;
     if (!chatId) return;
     const current = this.chatSeq.get(chatId);
     if (current === undefined || seq > current) {

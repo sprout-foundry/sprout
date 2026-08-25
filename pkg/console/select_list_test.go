@@ -1,7 +1,10 @@
 package console
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -100,6 +103,8 @@ func TestSelectList_FilterBackspaceUTF8(t *testing.T) {
 }
 
 func TestRenderSelectRow_DetailRightAligned(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	row := renderSelectRow("claude-opus-4-7", "anthropic", true, 60)
 	if !strings.Contains(row, "claude-opus-4-7") {
 		t.Fatalf("row=%q missing label", row)
@@ -336,5 +341,218 @@ func TestSelectList_DismissKey_BackspaceNotRecorded(t *testing.T) {
 	}
 	if got := s.DismissKey(); got != "" {
 		t.Fatalf("DismissKey()=%q want \"\" (backspace should not be forwarded)", got)
+	}
+}
+
+// --- SP-106 Phase 3: Mouse wheel scroll tests ---
+
+func TestSelectList_DispatchMouseWheelUp(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 2 // start at bottom
+	s.dispatchMouseWheel(MouseEventWheelUp)
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel up", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseWheelDown(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 0 // start at top
+	s.dispatchMouseWheel(MouseEventWheelDown)
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel down", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseWheelUpClamped(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+		},
+	})
+	s.cursor = 0
+	s.dispatchMouseWheel(MouseEventWheelUp)
+	if s.cursor != 0 {
+		t.Fatalf("cursor=%d want 0 (clamped at top)", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseWheelDownClamped(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+		},
+	})
+	s.cursor = 1
+	s.dispatchMouseWheel(MouseEventWheelDown)
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 (clamped at bottom)", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_WheelUpPayload(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 2
+	// SGR payload: button=64 (wheel up), col=10, row=5 → "64;10;5M"
+	s.dispatchMouseEvent("64;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel-up payload", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_WheelDownPayload(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 0
+	// SGR payload: button=65 (wheel down), col=10, row=5 → "65;10;5M"
+	s.dispatchMouseEvent("65;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel-down payload", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_LeftRightNoOp(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+		},
+	})
+	s.cursor = 1
+	// Wheel left (button=66) and wheel right (button=67) are no-ops.
+	s.dispatchMouseEvent("66;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 (wheel left should be no-op)", s.cursor)
+	}
+	s.dispatchMouseEvent("67;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 (wheel right should be no-op)", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_InvalidPayload(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+		},
+	})
+	s.cursor = 0
+	// Malformed payloads should not panic.
+	s.dispatchMouseEvent("garbage")
+	s.dispatchMouseEvent("abc;10;5M")
+	s.dispatchMouseEvent("")
+	if s.cursor != 0 {
+		t.Fatalf("cursor=%d want 0 (invalid payloads should be no-op)", s.cursor)
+	}
+}
+
+// --- SP-106 Phase 3: mouse tracking enable/disable emission tests ---
+
+// TestSelectList_EnableMouseTrackingEmitsSequences verifies that in a
+// TTY context enabling mouse tracking emits the SGR sequence followed
+// by the VT200 sequence, byte-for-byte.
+func TestSelectList_EnableMouseTrackingEmitsSequences(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	s.isTTY = true
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.enableMouseTracking()
+
+	want := MouseTrackingSGR + MouseTrackingVT200
+	if got := buf.String(); got != want {
+		t.Fatalf("emitted=%q want %q", got, want)
+	}
+}
+
+// TestSelectList_DisableMouseTrackingEmitsSequences verifies the
+// disable path emits exactly the inverse sequence.
+func TestSelectList_DisableMouseTrackingEmitsSequences(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	s.isTTY = true
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.disableMouseTracking()
+
+	if got := buf.String(); got != MouseTrackingDisable {
+		t.Fatalf("emitted=%q want %q", got, MouseTrackingDisable)
+	}
+}
+
+// TestSelectList_MouseTrackingNoopOnNonTTY verifies that when stdin is
+// not a TTY neither enable nor disable emits anything.
+func TestSelectList_MouseTrackingNoopOnNonTTY(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	// isTTY stays false (the real test environment is non-TTY).
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.enableMouseTracking()
+	s.disableMouseTracking()
+
+	if got := buf.String(); got != "" {
+		t.Fatalf("non-TTY should emit nothing, got %q", got)
+	}
+}
+
+// TestSelectList_MouseTrackingWritesToCustomWriter verifies the test
+// seam routes sequences to testOut rather than os.Stderr.
+func TestSelectList_MouseTrackingWritesToCustomWriter(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	s.isTTY = true
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.enableMouseTracking()
+	s.disableMouseTracking()
+
+	// The seam should have captured both the enable and disable bytes.
+	want := MouseTrackingSGR + MouseTrackingVT200 + MouseTrackingDisable
+	if got := buf.String(); got != want {
+		t.Fatalf("captured=%q want %q", got, want)
+	}
+}
+
+// TestSelectList_MouseOutDefaultsToStderr verifies the production path:
+// when testOut is nil, mouse-tracking sequences go to os.Stderr (the
+// destination the interactive TTY run loop has always used).
+func TestSelectList_MouseOutDefaultsToStderr(t *testing.T) {
+	s := NewSelectList(SelectListOptions{Items: []SelectItem{{Label: "a", Value: "a"}}})
+	if got := s.mouseOut(); got != io.Writer(os.Stderr) {
+		t.Fatalf("mouseOut()=%v want os.Stderr when testOut is nil", got)
 	}
 }

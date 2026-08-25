@@ -451,15 +451,15 @@ func TestRewind_TurnsDiscardedCount(t *testing.T) {
 		a.RecordTurnCheckpoint(i, i)
 	}
 
-	// Rewind to turn 2 (index 2) — discards turns 3 and 4
+	// Rewind to turn 2 (index 2) — discards turns 2, 3, and 4
 	res, err := a.Rewind(RewindOptions{ToTurnIndex: 2, RevertFiles: false})
 	if err != nil {
 		t.Fatalf("rewind error: %v", err)
 	}
 
-	// discardedCheckpoints = checkpoints[3:] = [turn3, turn4] → 2 discarded
-	if res.TurnsDiscarded != 2 {
-		t.Errorf("TurnsDiscarded = %d, want 2", res.TurnsDiscarded)
+	// discardedCheckpoints = checkpoints[2:] = [turn2, turn3, turn4] → 3 discarded
+	if res.TurnsDiscarded != 3 {
+		t.Errorf("TurnsDiscarded = %d, want 3", res.TurnsDiscarded)
 	}
 
 	// After first rewind: checkpoints with StartIndex < 2 remain
@@ -471,13 +471,13 @@ func TestRewind_TurnsDiscardedCount(t *testing.T) {
 		t.Errorf("after first rewind: checkpoints = %d, want 2", len(remaining))
 	}
 
-	// Rewind to turn 0 — discards turn 1
+	// Rewind to turn 0 — discards turn 0 and 1
 	res2, err := a.Rewind(RewindOptions{ToTurnIndex: 0, RevertFiles: false})
 	if err != nil {
 		t.Fatalf("second rewind error: %v", err)
 	}
-	if res2.TurnsDiscarded != 1 {
-		t.Errorf("second rewind TurnsDiscarded = %d, want 1", res2.TurnsDiscarded)
+	if res2.TurnsDiscarded != 2 {
+		t.Errorf("second rewind TurnsDiscarded = %d, want 2", res2.TurnsDiscarded)
 	}
 }
 
@@ -536,14 +536,14 @@ func TestRewind_RewindToLastTurn(t *testing.T) {
 	addMessages(a, "t1a", "t1b")
 	a.RecordTurnCheckpoint(2, 3)
 
-	// Rewind to last turn (index 1) — discards nothing
+	// Rewind to last turn (index 1) — discards turn 1
 	res, err := a.Rewind(RewindOptions{ToTurnIndex: 1, RevertFiles: false})
 	if err != nil {
 		t.Fatalf("rewind error: %v", err)
 	}
 
-	if res.TurnsDiscarded != 0 {
-		t.Errorf("TurnsDiscarded = %d, want 0 when rewinding to last turn", res.TurnsDiscarded)
+	if res.TurnsDiscarded != 1 {
+		t.Errorf("TurnsDiscarded = %d, want 1 when rewinding to last turn", res.TurnsDiscarded)
 	}
 
 	// Messages truncated at checkpoints[1].StartIndex = 2

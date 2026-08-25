@@ -1,65 +1,29 @@
 {
-  "name": "chutes",
-  "endpoint": "https://llm.chutes.ai/v1/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "CHUTES_API_KEY"
+    "env_var": "CHUTES_API_KEY",
+    "type": "bearer"
   },
-  "headers": {},
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0,
+    "output_token_cost": 0
+  },
   "defaults": {
+    "max_tokens": -1,
     "model": "deepseek-ai/DeepSeek-R1-0528",
     "temperature": 0.7,
-    "max_tokens": -1,
-    "top_p": 1.0
+    "top_p": 1
   },
+  "display_name": "Chutes",
+  "endpoint": "https://llm.chutes.ai/v1/chat/completions",
+  "headers": {},
   "message_conversion": {
-    "include_tool_call_id": true,
+    "arguments_as_json": true,
     "convert_tool_role_to_user": false,
-    "reasoning_content_field": "",
-    "arguments_as_json": true
-  },
-  "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 300000,
-    "done_marker": "[DONE]"
+    "include_tool_call_id": true,
+    "reasoning_content_field": ""
   },
   "models": {
-    "default_context_limit": 64000,
-    "model_overrides": {
-      "deepseek-ai/DeepSeek-R1-0528": 64000,
-      "deepseek-ai/DeepSeek-R1": 64000,
-      "deepseek-ai/DeepSeek-V3": 64000,
-      "meta-llama/Llama-3.1-8B-Instruct": 131072,
-      "meta-llama/Llama-3.1-70B-Instruct": 131072,
-      "meta-llama/Llama-3.3-70B-Instruct": 131072,
-      "mistralai/Mistral-7B-Instruct-v0.3": 32768,
-      "mistralai/Mixtral-8x7B-Instruct-v0.1": 32768
-    },
-    "pattern_overrides": [
-      {
-        "pattern": "deepseek-ai/DeepSeek.*",
-        "context_limit": 64000
-      },
-      {
-        "pattern": "meta-llama/Llama-3\\.1.*",
-        "context_limit": 131072
-      },
-      {
-        "pattern": "meta-llama/Llama-3\\.3.*",
-        "context_limit": 131072
-      },
-      {
-        "pattern": "meta-llama/Llama-3.*",
-        "context_limit": 8192
-      },
-      {
-        "pattern": "mistralai/.*",
-        "context_limit": 32768
-      }
-    ],
-    "supports_vision": false,
-    "vision_model": "",
-    "default_model": "deepseek-ai/DeepSeek-R1-0528",
     "available_models": [
       "deepseek-ai/DeepSeek-R1-0528",
       "deepseek-ai/DeepSeek-R1",
@@ -68,13 +32,235 @@
       "meta-llama/Llama-3.1-70B-Instruct",
       "meta-llama/Llama-3.3-70B-Instruct",
       "mistralai/Mistral-7B-Instruct-v0.3",
-      "mistralai/Mixtral-8x7B-Instruct-v0.1"
-    ]
+      "mistralai/Mixtral-8x7B-Instruct-v0.1",
+      "Nemotron-3-Nano-Omni-30B-TEE",
+      "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
+      "Qwen/Qwen3-32B-TEE",
+      "Qwen/Qwen3.5-397B-A17B-TEE",
+      "Qwen/Qwen3.6-27B-TEE",
+      "deepseek-ai/DeepSeek-V3.2-TEE",
+      "google/gemma-4-31B-turbo-TEE",
+      "moonshotai/Kimi-K2.6-TEE",
+      "moonshotai/Kimi-K3-TEE",
+      "unsloth/Mistral-Nemo-Instruct-2407-TEE",
+      "zai-org/GLM-5.1-TEE",
+      "zai-org/GLM-5.2-TEE",
+      "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
+      "Qwen/Qwen3.8-27B-TEE"
+    ],
+    "default_context_limit": 64000,
+    "default_model": "deepseek-ai/DeepSeek-R1-0528",
+    "model_info": [
+      {
+        "context_length": 131072,
+        "description": "NVIDIA Nemotron 3 Nano Omni 30B on confidential TEE compute",
+        "id": "Nemotron-3-Nano-Omni-30B-TEE",
+        "input_cost": 0.0245,
+        "name": "Nemotron 3 Nano Omni 30B (TEE)",
+        "output_cost": 0.0978,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3 235B A22B Thinking on confidential TEE compute",
+        "id": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
+        "input_cost": 0.2989,
+        "name": "Qwen3 235B A22B Thinking (TEE)",
+        "output_cost": 1.1957,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 41984,
+        "description": "Qwen3 32B on confidential TEE compute",
+        "id": "Qwen/Qwen3-32B-TEE",
+        "input_cost": 0.104,
+        "name": "Qwen3 32B (TEE)",
+        "output_cost": 0.416,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.5 397B A17B on confidential TEE compute",
+        "id": "Qwen/Qwen3.5-397B-A17B-TEE",
+        "input_cost": 0.45,
+        "name": "Qwen3.5 397B A17B (TEE)",
+        "output_cost": 3,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.6 27B on confidential TEE compute",
+        "id": "Qwen/Qwen3.6-27B-TEE",
+        "input_cost": 0.3,
+        "name": "Qwen3.6 27B (TEE)",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "DeepSeek V3.2 on confidential TEE compute",
+        "id": "deepseek-ai/DeepSeek-V3.2-TEE",
+        "input_cost": 1,
+        "name": "DeepSeek V3.2 (TEE)",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "Google Gemma 4 31B Turbo on confidential TEE compute",
+        "id": "google/gemma-4-31B-turbo-TEE",
+        "input_cost": 0.12,
+        "name": "Gemma 4 31B Turbo (TEE)",
+        "output_cost": 0.37,
+        "tags": [
+          "vision",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Moonshot Kimi K2.6 on confidential TEE compute",
+        "id": "moonshotai/Kimi-K2.6-TEE",
+        "input_cost": 0.58,
+        "name": "Kimi K2.6 (TEE)",
+        "output_cost": 3.4,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Moonshot Kimi K3 on confidential TEE compute",
+        "id": "moonshotai/Kimi-K3-TEE",
+        "input_cost": 3,
+        "name": "Kimi K3 (TEE)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "Mistral Nemo Instruct 2407 on confidential TEE compute",
+        "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
+        "input_cost": 0.0245,
+        "name": "Mistral Nemo Instruct (TEE)",
+        "output_cost": 0.0978,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 207872,
+        "description": "Z.AI GLM-5.1 on confidential TEE compute",
+        "id": "zai-org/GLM-5.1-TEE",
+        "input_cost": 0.98,
+        "name": "GLM-5.1 (TEE)",
+        "output_cost": 3.08,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Z.AI GLM-5.2 on confidential TEE compute",
+        "id": "zai-org/GLM-5.2-TEE",
+        "input_cost": 1.25,
+        "name": "GLM-5.2 (TEE)",
+        "output_cost": 3.95,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "DeepSeek V4 Flash 0731 on confidential TEE compute",
+        "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
+        "input_cost": 0.14,
+        "name": "DeepSeek V4 Flash 0731 (TEE)",
+        "output_cost": 0.28,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.8 27B on confidential TEE compute",
+        "id": "Qwen/Qwen3.8-27B-TEE",
+        "input_cost": 0.4,
+        "name": "Qwen3.8 27B (TEE)",
+        "output_cost": 3,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      }
+    ],
+    "model_overrides": {
+      "deepseek-ai/DeepSeek-R1": 64000,
+      "deepseek-ai/DeepSeek-R1-0528": 64000,
+      "deepseek-ai/DeepSeek-V3": 64000,
+      "meta-llama/Llama-3.1-70B-Instruct": 131072,
+      "meta-llama/Llama-3.1-8B-Instruct": 131072,
+      "meta-llama/Llama-3.3-70B-Instruct": 131072,
+      "mistralai/Mistral-7B-Instruct-v0.3": 32768,
+      "mistralai/Mixtral-8x7B-Instruct-v0.1": 32768
+    },
+    "pattern_overrides": [
+      {
+        "context_limit": 64000,
+        "pattern": "deepseek-ai/DeepSeek.*"
+      },
+      {
+        "context_limit": 131072,
+        "pattern": "meta-llama/Llama-3\\.1.*"
+      },
+      {
+        "context_limit": 131072,
+        "pattern": "meta-llama/Llama-3\\.3.*"
+      },
+      {
+        "context_limit": 8192,
+        "pattern": "meta-llama/Llama-3.*"
+      },
+      {
+        "context_limit": 32768,
+        "pattern": "mistralai/.*"
+      }
+    ],
+    "supports_vision": false,
+    "vision_model": ""
   },
+  "name": "chutes",
   "retry": {
-    "max_attempts": 3,
+    "backoff_multiplier": 2,
     "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
+    "max_attempts": 3,
     "max_delay_ms": 30000,
     "retryable_errors": [
       "rate_limit_exceeded",
@@ -82,10 +268,9 @@
       "timeout"
     ]
   },
-  "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
-    "currency": "USD"
-  },
-  "display_name": "Chutes"
+  "streaming": {
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]",
+    "format": "sse"
+  }
 }

@@ -3,8 +3,9 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 type todoWriteHandler struct{}
@@ -25,34 +26,34 @@ func (h *todoWriteHandler) Definition() ToolDefinition {
 func (h *todoWriteHandler) Validate(args map[string]any) error {
 	todosRaw, ok := args["todos"]
 	if !ok {
-		return fmt.Errorf("parameter 'todos' is required")
+		return agenterrors.NewValidation("parameter 'todos' is required", nil)
 	}
 	todosSlice, ok := todosRaw.([]interface{})
 	if !ok {
-		return fmt.Errorf("parameter 'todos' must be an array")
+		return agenterrors.NewValidation("parameter 'todos' must be an array", nil)
 	}
 	for i, todoRaw := range todosSlice {
 		todoMap, ok := todoRaw.(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("each todo must be an object, got %T at index %d", todoRaw, i)
+			return agenterrors.NewValidation(fmt.Sprintf("each todo must be an object, got %T at index %d", todoRaw, i), nil)
 		}
 		if content, ok := todoMap["content"].(string); ok {
 			if content == "" {
-				return fmt.Errorf("todo at index %d requires non-empty 'content'", i)
+				return agenterrors.NewValidation(fmt.Sprintf("todo at index %d requires non-empty 'content'", i), nil)
 			}
 		} else {
-			return fmt.Errorf("todo at index %d requires 'content' string", i)
+			return agenterrors.NewValidation(fmt.Sprintf("todo at index %d requires 'content' string", i), nil)
 		}
 		if status, ok := todoMap["status"].(string); ok {
 			if !IsValidStatus(status) {
-				return fmt.Errorf("todo at index %d: %s", i, FormatTodoStatusError(status))
+				return agenterrors.NewValidation(fmt.Sprintf("todo at index %d: %s", i, FormatTodoStatusError(status)), nil)
 			}
 		} else {
-			return fmt.Errorf("todo at index %d requires 'status' string", i)
+			return agenterrors.NewValidation(fmt.Sprintf("todo at index %d requires 'status' string", i), nil)
 		}
 		if priority, ok := todoMap["priority"].(string); ok {
 			if !IsValidPriority(priority) {
-				return fmt.Errorf("todo at index %d: %s", i, FormatTodoPriorityError(priority))
+				return agenterrors.NewValidation(fmt.Sprintf("todo at index %d: %s", i, FormatTodoPriorityError(priority)), nil)
 			}
 		}
 	}
@@ -60,24 +61,16 @@ func (h *todoWriteHandler) Validate(args map[string]any) error {
 }
 
 func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
+	todosRaw, ok := args["todos"].([]interface{})
+	if !ok {
+		return ToolResult{}, agenterrors.NewValidation("parameter 'todos' must be an array", nil)
 	}
-
-	todosRaw := args["todos"].([]interface{})
 	todos := make([]TodoItem, 0, len(todosRaw))
 	for _, todoRaw := range todosRaw {
-		todoMap := todoRaw.(map[string]interface{})
+		todoMap, ok := todoRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
 		todo := TodoItem{}
 		if content, ok := todoMap["content"].(string); ok {
 			todo.Content = content
@@ -109,3 +102,9 @@ func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 
 	return ToolResult{Output: result}, nil
 }
+
+func (h *todoWriteHandler) Aliases() []string      { return nil }
+func (h *todoWriteHandler) Timeout() time.Duration { return 0 }
+func (h *todoWriteHandler) MaxResultSize() int     { return 0 }
+func (h *todoWriteHandler) SafeForParallel() bool  { return false }
+func (h *todoWriteHandler) Interactive() bool      { return false }

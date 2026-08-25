@@ -144,13 +144,13 @@ func TestResolveSkillPathRelative(t *testing.T) {
 // TestLoadSkillFromDiskForCustomSkill is the regression test that ensures
 // the pkg/skills refactor didn't break the user/project-skill activation
 // path. The flow is:
-//   1. Config has the custom skill registered (discovery runs at Load
-//      time and writes Path = relative-to-cwd).
-//   2. LoadSkill tries the embedded pkg/skills library first — misses,
-//      because this ID isn't shipped.
-//   3. LoadSkill falls back to disk via resolveSkillPath + os.ReadFile.
-//   4. The returned SkillInfo carries the on-disk content and the
-//      "project"/"user" source from the config metadata.
+//  1. Config has the custom skill registered (discovery runs at Load
+//     time and writes Path = relative-to-cwd).
+//  2. LoadSkill tries the embedded pkg/skills library first — misses,
+//     because this ID isn't shipped.
+//  3. LoadSkill falls back to disk via resolveSkillPath + os.ReadFile.
+//  4. The returned SkillInfo carries the on-disk content and the
+//     "project"/"user" source from the config metadata.
 //
 // If the fallback branch is removed or the embed lookup silently
 // returns success for unknown IDs, this test fails loudly.

@@ -17,20 +17,64 @@ import (
 // readers (and the next /transcript snapshot) classify it correctly.
 const compactSummaryHeader = "Compacted earlier conversation state:"
 
-// CompactCommand implements the /compact slash command. It produces an
-// LLM-generated recap of the messages preceding the most recent user
-// turn, substitutes that recap for the recapped messages, and leaves
-// the latest user turn and everything after it intact.
-type CompactCommand struct{}
+// Manual /compact tuning constants.
+const (
+	compactMinMessagesToCompact = 30
+	compactMinMiddleMessages    = 6
+	compactRecentToKeep         = 12
+	compactSummaryMaxWords      = 1500
+)
+
+// CompactCommand implements the /compact slash command.
+type CompactCommand struct {
+	ctx context.Context // cancellation context for LLM calls
+}
+
+// SetContext sets the cancellation context for the LLM summarization call.
+func (c *CompactCommand) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
+// getContext returns the stored context or the agent's interrupt context,
+// falling back to context.Background() as a last resort.
+func (c *CompactCommand) getContext(chatAgent *agent.Agent) context.Context {
+	if chatAgent != nil {
+		return chatAgent.InterruptCtx()
+	}
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
 
 // Name returns the command name
 func (c *CompactCommand) Name() string {
 	return "compact"
 }
 
+// SafeDuringSteer returns false - /compact mutates conversation state + calls LLM
+func (c *CompactCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (c *CompactCommand) Description() string {
-	return "Summarize prior conversation via the LLM and replace it with the recap, preserving the most recent user turn"
+	return "LLM-summarize the middle of the conversation, preserving the opening task anchor and the recent causal chain"
+}
+
+// Usage returns the detailed help text shown by `/help compact`.
+func (c *CompactCommand) Usage() string {
+	return strings.Join([]string{
+		"/compact          LLM-summarize the middle of the conversation, keeping",
+		"                  the opening task anchor and the most recent ~12",
+		"                  messages verbatim. Minimum 30 total messages.",
+		"",
+		"Reduces context usage. The original task framing (system prompt +",
+		"first user/assistant turn) and the recent causal chain (last ~12",
+		"messages, adjusted to keep tool calls paired with their results)",
+		"are preserved. Only the middle is summarized. File changes from the",
+		"compacted middle are carried forward in the recap.",
+	}, "\n")
 }
 
 // Execute runs the compact command
@@ -40,24 +84,28 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	messages := chatAgent.GetMessages()
-	if len(messages) < 4 {
-		fmt.Println("\n[info] Not enough conversation history to compact.")
+	if len(messages) < compactMinMessagesToCompact {
+		fmt.Printf("\n[info] Need at least %d messages to compact (have %d).\n",
+			compactMinMessagesToCompact, len(messages))
 		return nil
 	}
 
-	// Preserve the latest user turn and everything after it. Compact
-	// the head into a single LLM-generated recap message.
-	splitIdx := lastUserMessageIndex(messages)
-	if splitIdx <= 0 {
-		fmt.Println("\n[info] No prior user turn to summarize.")
+	// Mirror seed's CompactWithLLMSummary boundary logic.
+	anchorEnd := compactAnchorEnd(messages)
+	recentStart := len(messages) - compactRecentToKeep
+	if recentStart <= anchorEnd {
+		fmt.Println("\n[info] Not enough distinct history beyond anchor + recent window to compact.")
 		return nil
 	}
-	head := messages[:splitIdx]
-	tail := messages[splitIdx:]
-	if len(head) < 2 {
-		fmt.Println("\n[info] Head context too small to be worth summarizing.")
+	recentStart = adjustRecentBoundary(messages, recentStart, anchorEnd)
+	if recentStart-anchorEnd < compactMinMiddleMessages {
+		fmt.Println("\n[info] Middle segment too small to be worth summarizing.")
 		return nil
 	}
+
+	anchor := messages[:anchorEnd]
+	middle := messages[anchorEnd:recentStart]
+	tail := messages[recentStart:]
 
 	// Pre-compact snapshot for diagnostics (best-effort).
 	if path, err := chatAgent.CaptureTranscriptSnapshot("pre-compact-manual", true); err == nil {
@@ -66,14 +114,14 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	chatAgent.PublishCompactStarted("manual", len(messages), 0)
 
-	fmt.Printf("\n[compact] Summarizing %d earlier messages via LLM...\n", len(head))
+	fmt.Printf("\n[compact] Summarizing %d middle messages via LLM...\n", len(middle))
 
-	ctx := context.Background()
+	ctx := c.getContext(chatAgent)
 	hint := core.SummarizerHint{
 		DetailLevel: "detailed",
-		MaxWords:    600,
+		MaxWords:    compactSummaryMaxWords,
 	}
-	body, err := chatAgent.SummarizeViaLLM(ctx, head, hint)
+	body, err := chatAgent.SummarizeViaLLM(ctx, middle, hint)
 	if err != nil {
 		chatAgent.PublishCompactCompleted("manual", len(messages), len(messages), 0, err)
 		return fmt.Errorf("LLM summarization failed: %w", err)
@@ -85,22 +133,8 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return emptyErr
 	}
 
-	// Preserve any system messages from the head — the LLM summarizer
-	// transcript builder doesn't render system role, so their content
-	// would otherwise be lost in the recap.
-	var preservedSystem []api.Message
-	for _, m := range head {
-		if m.Role == "system" {
-			preservedSystem = append(preservedSystem, m)
-		}
-	}
-
-	// Preserve the head's file-change manifest by appending it to the
-	// summary body. The block format round-trips through
-	// ExtractFileChangesFromMessages so the manifest persists across
-	// successive compactions instead of being lost the moment the LLM
-	// recap replaces the tool-call detail it was derived from.
-	manifest := agent.ExtractFileChangesFromMessages(head)
+	// Preserve the head's file-change manifest by appending it to the summary body.
+	manifest := agent.ExtractFileChangesFromMessages(middle)
 	summaryContent := compactSummaryHeader + "\n" + body
 	if block := agent.FormatFileChangesForSummary(manifest); block != "" {
 		summaryContent += "\n\n" + block
@@ -110,14 +144,14 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		Role:    "assistant",
 		Content: summaryContent,
 	}
-	newMessages := make([]api.Message, 0, len(preservedSystem)+1+len(tail))
-	newMessages = append(newMessages, preservedSystem...)
+	// Anchor and recent preserved verbatim; middle replaced by summary.
+	newMessages := make([]api.Message, 0, len(anchor)+1+len(tail))
+	newMessages = append(newMessages, anchor...)
 	newMessages = append(newMessages, summaryMsg)
 	newMessages = append(newMessages, tail...)
 	chatAgent.SetMessages(newMessages)
 
-	// Drop turn checkpoints — their stored indices point into the old
-	// message list and are no longer meaningful after substitution.
+	// Drop turn checkpoints — their stored indices are no longer meaningful.
 	chatAgent.ReplaceTurnCheckpoints(nil)
 
 	if path, err := chatAgent.CaptureTranscriptSnapshot("post-compact-manual", false); err == nil {
@@ -126,9 +160,10 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	chatAgent.PublishCompactCompleted("manual", len(messages), len(newMessages), len(body), nil)
 
 	fmt.Println("\n[compact] LLM-driven compaction complete:")
-	fmt.Printf("       Summarized: %d messages\n", len(head))
-	fmt.Printf("       Preserved:  %d messages (current user turn and after)\n", len(tail))
-	fmt.Printf("       New total:  %d messages\n", len(newMessages))
+	fmt.Printf("       Anchor preserved: %d messages (original task framing)\n", len(anchor))
+	fmt.Printf("       Middle summarized: %d messages\n", len(middle))
+	fmt.Printf("       Recent preserved: %d messages (causal chain)\n", len(tail))
+	fmt.Printf("       New total: %d messages\n", len(newMessages))
 	fmt.Printf("       Summary length: %d chars\n", len(body))
 	if len(manifest) > 0 {
 		fmt.Printf("       File changes carried forward: %d entries\n", len(manifest))
@@ -137,13 +172,50 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return nil
 }
 
-// lastUserMessageIndex returns the index of the most recent message
-// with role "user", or -1 if no such message exists.
-func lastUserMessageIndex(messages []api.Message) int {
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			return i
-		}
+// compactAnchorEnd returns the index past the opening task anchor —
+// the system message (if any) plus the first user message and any
+// immediately-following non-tool-calling assistant response.
+func compactAnchorEnd(messages []api.Message) int {
+	if len(messages) == 0 {
+		return 0
 	}
-	return -1
+
+	anchorEnd := 0
+	if messages[0].Role == "system" {
+		anchorEnd = 1
+	}
+
+	for i := anchorEnd; i < len(messages); i++ {
+		if messages[i].Role != "user" {
+			continue
+		}
+		anchorEnd = i + 1
+		if i+1 < len(messages) && messages[i+1].Role == "assistant" && len(messages[i+1].ToolCalls) == 0 {
+			anchorEnd = i + 2
+		}
+		break
+	}
+
+	if anchorEnd == 0 {
+		anchorEnd = 1
+	}
+	return anchorEnd
+}
+
+// adjustRecentBoundary walks recentStart backward past dangling tool
+// results and assistant-with-tool-calls messages so the compaction cut
+// never splits a tool call from its result.
+func adjustRecentBoundary(messages []api.Message, recentStart, anchorEnd int) int {
+	for recentStart > anchorEnd {
+		if recentStart < len(messages) && messages[recentStart].Role == "tool" {
+			recentStart--
+			continue
+		}
+		if recentStart-1 >= anchorEnd && messages[recentStart-1].Role == "assistant" && len(messages[recentStart-1].ToolCalls) > 0 {
+			recentStart--
+			continue
+		}
+		break
+	}
+	return recentStart
 }

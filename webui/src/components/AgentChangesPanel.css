@@ -198,8 +198,12 @@
 }
 
 @keyframes changes-flash {
-  0% { background: color-mix(in srgb, var(--accent-primary) 22%, transparent); }
-  100% { background: transparent; }
+  0% {
+    background: color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
 }
 
 .changes-file-path {
@@ -248,10 +252,18 @@
   flex-shrink: 0;
 }
 
-.op-create { color: var(--accent-success); }
-.op-edit { color: var(--accent-info); }
-.op-delete { color: var(--accent-error); }
-.op-bulk { color: var(--text-muted); }
+.op-create {
+  color: var(--accent-success);
+}
+.op-edit {
+  color: var(--accent-info);
+}
+.op-delete {
+  color: var(--accent-error);
+}
+.op-bulk {
+  color: var(--text-muted);
+}
 
 /* Bulk rollups read as "ambient detail" rather than active per-file
  * edits — dim color, italic path, no hover affordance since there's no

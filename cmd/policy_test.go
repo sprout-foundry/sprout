@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -24,7 +25,6 @@ import (
 func setupPolicyTest(t *testing.T) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Pre-create config so Load() works
@@ -36,7 +36,6 @@ func setupPolicyTest(t *testing.T) {
 func setupPolicyTestWithPatterns(t *testing.T, safe, dangerous []configuration.ShellPattern) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := configuration.NewConfig()
@@ -52,7 +51,7 @@ func setupPolicyTestWithPatterns(t *testing.T, safe, dangerous []configuration.S
 func TestPolicyList_Empty(t *testing.T) {
 	setupPolicyTest(t)
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyListCmd.RunE(policyListCmd, nil)
 		require.NoError(t, err)
 	})
@@ -68,7 +67,7 @@ func TestPolicyList_WithPatterns(t *testing.T) {
 	dangerous := []configuration.ShellPattern{{Match: "terraform destroy", Kind: "prefix"}}
 	setupPolicyTestWithPatterns(t, safe, dangerous)
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyListCmd.RunE(policyListCmd, nil)
 		require.NoError(t, err)
 	})
@@ -87,7 +86,7 @@ func TestPolicyList_WithPatterns(t *testing.T) {
 func TestPolicyDump_DefaultFormat(t *testing.T) {
 	setupPolicyTest(t)
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyDumpCmd.RunE(policyDumpCmd, nil)
 		require.NoError(t, err)
 	})
@@ -105,7 +104,7 @@ func TestPolicyDump_JSON(t *testing.T) {
 	setupPolicyTestWithPatterns(t, safe, nil)
 
 	require.NoError(t, policyDumpCmd.Flags().Set("format", "json"))
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyDumpCmd.RunE(policyDumpCmd, nil)
 		require.NoError(t, err)
 	})
@@ -121,7 +120,7 @@ func TestPolicyDump_YAML(t *testing.T) {
 	setupPolicyTest(t)
 
 	require.NoError(t, policyDumpCmd.Flags().Set("format", "yaml"))
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyDumpCmd.RunE(policyDumpCmd, nil)
 		require.NoError(t, err)
 	})
@@ -139,7 +138,7 @@ func TestPolicyDump_YAML(t *testing.T) {
 func TestPolicyAdd_Safe(t *testing.T) {
 	setupPolicyTest(t)
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyAddCmd.RunE(policyAddCmd, []string{"safe", "my-tool"})
 		require.NoError(t, err)
 	})
@@ -157,7 +156,7 @@ func TestPolicyAdd_Safe(t *testing.T) {
 func TestPolicyAdd_Dangerous(t *testing.T) {
 	setupPolicyTest(t)
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyAddCmd.RunE(policyAddCmd, []string{"dangerous", "terraform destroy"})
 		require.NoError(t, err)
 	})
@@ -182,11 +181,11 @@ func TestPolicyAdd_MultipleAppends(t *testing.T) {
 	setupPolicyTest(t)
 
 	// Add two safe patterns
-	captureStdout(t, func() {
+	testutil.CaptureStdout(t, func() {
 		err := policyAddCmd.RunE(policyAddCmd, []string{"safe", "ls"})
 		require.NoError(t, err)
 	})
-	captureStdout(t, func() {
+	testutil.CaptureStdout(t, func() {
 		err := policyAddCmd.RunE(policyAddCmd, []string{"safe", "cat"})
 		require.NoError(t, err)
 	})
@@ -223,7 +222,7 @@ func TestPolicyRemove_Existing(t *testing.T) {
 	safe := []configuration.ShellPattern{{Match: "my-tool", Kind: "prefix"}}
 	setupPolicyTestWithPatterns(t, safe, nil)
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyRemoveCmd.RunE(policyRemoveCmd, []string{"safe", "my-tool"})
 		require.NoError(t, err)
 	})
@@ -259,7 +258,7 @@ func TestPolicyRemove_KeepsOthers(t *testing.T) {
 	}
 	setupPolicyTestWithPatterns(t, safe, nil)
 
-	captureStdout(t, func() {
+	testutil.CaptureStdout(t, func() {
 		err := policyRemoveCmd.RunE(policyRemoveCmd, []string{"safe", "my-tool"})
 		require.NoError(t, err)
 	})
@@ -279,7 +278,7 @@ func TestPolicyExport_DefaultYAML(t *testing.T) {
 	safe := []configuration.ShellPattern{{Match: "ls", Kind: "prefix"}}
 	setupPolicyTestWithPatterns(t, safe, nil)
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyExportCmd.RunE(policyExportCmd, nil)
 		require.NoError(t, err)
 	})
@@ -296,7 +295,7 @@ func TestPolicyExport_JSON(t *testing.T) {
 	setupPolicyTestWithPatterns(t, safe, dangerous)
 
 	require.NoError(t, policyExportCmd.Flags().Set("format", "json"))
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyExportCmd.RunE(policyExportCmd, nil)
 		require.NoError(t, err)
 	})
@@ -316,7 +315,7 @@ func TestPolicyExport_YAML(t *testing.T) {
 	setupPolicyTestWithPatterns(t, safe, nil)
 
 	require.NoError(t, policyExportCmd.Flags().Set("format", "yaml"))
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyExportCmd.RunE(policyExportCmd, nil)
 		require.NoError(t, err)
 	})
@@ -343,7 +342,7 @@ user_dangerous_patterns:
 	importFile := filepath.Join(importDir, "policy.yaml")
 	require.NoError(t, os.WriteFile(importFile, []byte(yamlContent), 0o644))
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyImportCmd.RunE(policyImportCmd, []string{importFile})
 		require.NoError(t, err)
 	})
@@ -380,7 +379,7 @@ user_dangerous_patterns:
 	importFile := filepath.Join(importDir, "policy.yaml")
 	require.NoError(t, os.WriteFile(importFile, []byte(yamlContent), 0o644))
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyImportCmd.RunE(policyImportCmd, []string{importFile})
 		require.NoError(t, err)
 	})
@@ -413,7 +412,7 @@ func TestPolicyImport_MergesWithExisting(t *testing.T) {
 	importFile := filepath.Join(importDir, "policy.yaml")
 	require.NoError(t, os.WriteFile(importFile, []byte(yamlContent), 0o644))
 
-	captureStdout(t, func() {
+	testutil.CaptureStdout(t, func() {
 		err := policyImportCmd.RunE(policyImportCmd, []string{importFile})
 		require.NoError(t, err)
 	})
@@ -433,7 +432,7 @@ func TestPolicyImport_JSON(t *testing.T) {
 	importFile := filepath.Join(importDir, "policy.json")
 	require.NoError(t, os.WriteFile(importFile, []byte(jsonContent), 0o644))
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := policyImportCmd.RunE(policyImportCmd, []string{importFile})
 		require.NoError(t, err)
 	})
@@ -546,7 +545,7 @@ func TestRemovePattern_Last(t *testing.T) {
 
 func TestFormatOutput_JSON(t *testing.T) {
 	data := map[string]string{"key": "value"}
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := formatOutput(data, "json")
 		require.NoError(t, err)
 	})
@@ -558,7 +557,7 @@ func TestFormatOutput_JSON(t *testing.T) {
 
 func TestFormatOutput_YAML(t *testing.T) {
 	data := map[string]string{"key": "value"}
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := formatOutput(data, "yaml")
 		require.NoError(t, err)
 	})

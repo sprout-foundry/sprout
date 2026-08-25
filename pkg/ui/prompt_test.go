@@ -5,26 +5,11 @@ import (
 	"io"
 	"os"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // ─── helpers ───────────────────────────────────────────────────────────
-
-// captureStdout redirects os.Stdout to a pipe, runs fn, then returns
-// the captured output as a string.
-func captureStdout(fn func()) string {
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	fn()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	return buf.String()
-}
 
 // withStdin temporarily replaces os.Stdin with a pipe fed by `input`,
 // runs fn, then restores the original stdin.
@@ -111,7 +96,7 @@ func TestNumericPromptOption(t *testing.T) {
 func TestDisplayNumberedList(t *testing.T) {
 	t.Run("non-empty list", func(t *testing.T) {
 		items := []string{"alpha", "beta", "gamma"}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedList(items)
 		})
 
@@ -123,7 +108,7 @@ func TestDisplayNumberedList(t *testing.T) {
 
 	t.Run("single item", func(t *testing.T) {
 		items := []string{"only one"}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedList(items)
 		})
 
@@ -135,7 +120,7 @@ func TestDisplayNumberedList(t *testing.T) {
 
 	t.Run("empty list", func(t *testing.T) {
 		items := []string{}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedList(items)
 		})
 
@@ -146,7 +131,7 @@ func TestDisplayNumberedList(t *testing.T) {
 
 	t.Run("items with spaces", func(t *testing.T) {
 		items := []string{"item one", "item two"}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedList(items)
 		})
 
@@ -161,7 +146,7 @@ func TestDisplayNumberedList(t *testing.T) {
 		for i := range items {
 			items[i] = "item" + string(rune('0'+i/10)) + string(rune('0'+i%10))
 		}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedList(items)
 		})
 
@@ -183,7 +168,7 @@ func TestDisplayNumberedListWithDescriptions(t *testing.T) {
 			{Index: 1, DisplayName: "Option A", Description: "First option"},
 			{Index: 2, DisplayName: "Option B", Description: "Second option"},
 		}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedListWithDescriptions(opts)
 		})
 
@@ -198,7 +183,7 @@ func TestDisplayNumberedListWithDescriptions(t *testing.T) {
 			{Index: 1, DisplayName: "Option A", Description: ""},
 			{Index: 2, DisplayName: "Option B", Description: ""},
 		}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedListWithDescriptions(opts)
 		})
 
@@ -214,7 +199,7 @@ func TestDisplayNumberedListWithDescriptions(t *testing.T) {
 			{Index: 2, DisplayName: "Option B", Description: ""},
 			{Index: 3, DisplayName: "Option C", Description: "Another desc"},
 		}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedListWithDescriptions(opts)
 		})
 
@@ -226,7 +211,7 @@ func TestDisplayNumberedListWithDescriptions(t *testing.T) {
 
 	t.Run("empty list", func(t *testing.T) {
 		opts := []NumericPromptOption{}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedListWithDescriptions(opts)
 		})
 
@@ -240,7 +225,7 @@ func TestDisplayNumberedListWithDescriptions(t *testing.T) {
 			{Index: 5, DisplayName: "Fifth"},
 			{Index: 1, DisplayName: "First"},
 		}
-		got := captureStdout(func() {
+		got := testutil.CaptureStdout(t, func() {
 			DisplayNumberedListWithDescriptions(opts)
 		})
 
@@ -256,9 +241,9 @@ func TestDisplayNumberedListWithDescriptions(t *testing.T) {
 
 func TestPromptForConfirmation(t *testing.T) {
 	cases := []struct {
-		name   string
-		input  string
-		want   bool
+		name  string
+		input string
+		want  bool
 	}{
 		// -- affirmative inputs --
 		{"lowercase y", "y", true},
@@ -303,7 +288,7 @@ func TestPromptForConfirmation(t *testing.T) {
 
 	t.Run("custom prompt", func(t *testing.T) {
 		var got bool
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("y", func() {
 				got = PromptForConfirmation("Proceed? (y/n): ")
 			})
@@ -318,7 +303,7 @@ func TestPromptForConfirmation(t *testing.T) {
 
 	t.Run("default prompt when empty", func(t *testing.T) {
 		var got bool
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("y", func() {
 				got = PromptForConfirmation("")
 			})
@@ -496,7 +481,7 @@ func TestPromptForSelection(t *testing.T) {
 	t.Run("custom prompt is displayed", func(t *testing.T) {
 		var idx int
 		var ok bool
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("2", func() {
 				idx, ok = PromptForSelection(options, "Pick: ")
 			})
@@ -515,7 +500,7 @@ func TestPromptForSelection(t *testing.T) {
 	t.Run("default prompt when empty", func(t *testing.T) {
 		var idx int
 		var ok bool
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("1", func() {
 				idx, ok = PromptForSelection(options, "")
 			})
@@ -534,7 +519,7 @@ func TestPromptForSelection(t *testing.T) {
 	t.Run("zero selection prints cancelled message", func(t *testing.T) {
 		var idx int
 		var ok bool
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("0", func() {
 				idx, ok = PromptForSelection(options, "")
 			})
@@ -551,7 +536,7 @@ func TestPromptForSelection(t *testing.T) {
 	})
 
 	t.Run("out-of-range prints range hint", func(t *testing.T) {
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("5", func() {
 				PromptForSelection(options, "")
 			})
@@ -563,7 +548,7 @@ func TestPromptForSelection(t *testing.T) {
 	})
 
 	t.Run("invalid input prints error message", func(t *testing.T) {
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("abc", func() {
 				PromptForSelection(options, "")
 			})
@@ -586,7 +571,7 @@ func TestPromptForSelectionWithOptions(t *testing.T) {
 	t.Run("valid selection", func(t *testing.T) {
 		var idx int
 		var ok bool
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			withStdin("2", func() {
 				idx, ok = PromptForSelectionWithOptions(opts, "Choose: ")
 			})
@@ -655,7 +640,7 @@ func TestPromptForSelectionWithOptions(t *testing.T) {
 	t.Run("empty options shows message and returns false", func(t *testing.T) {
 		var idx int
 		var ok bool
-		captured := captureStdout(func() {
+		captured := testutil.CaptureStdout(t, func() {
 			idx, ok = PromptForSelectionWithOptions([]NumericPromptOption{}, "Choose: ")
 		})
 		if ok {

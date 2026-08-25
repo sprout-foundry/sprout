@@ -157,7 +157,7 @@ func runWorkflowByPath(path string) error {
 		return err
 	}
 
-	args := buildAgentSubprocessArgs(path, summary)
+	args := appendDetachedSessionFileArg(buildAgentSubprocessArgs(path, summary), sproutDir, sessionID)
 
 	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
 		return fmt.Errorf("not starting workflow: %w", floorErr)
@@ -246,14 +246,18 @@ func runWorkflowByPath(path string) error {
 		// background Wait closes both; the PID then disappears and
 		// status falls back to "exited". Windows has no zombie state
 		// (its probe reads GetExitCodeProcess), so this is a no-op fix
-		// there. The exit status is deliberately discarded — recording
-		// EndedAt/ExitCode is AUTOM-4 (child-side self-finalization),
-		// not this reaper.
+		// there. The exit status is deliberately discarded — the child
+		// records its own end state on exit via the --automate-session-file
+		// path it was passed (appendDetachedSessionFileArg); this reaper
+		// owns reaping only, never the record.
 		go func() {
 			_ = cmd.Wait()
 		}()
-		// No signal forwarding, no finalizer. The child owns its log
-		// file; session end-state falls back to PID-liveness per the
+		// No signal forwarding, no launcher-side finalizer: the child owns
+		// its log file and its session record's end state, so the launcher
+		// never writes the record after spawn and cannot race the child.
+		// A record that stays unfinalized (child killed with SIGKILL,
+		// force-quit os.Exit paths) falls back to PID-liveness per the
 		// AutomateSessionInfo schema (pkg/automate/pid_file.go).
 		return nil
 	}

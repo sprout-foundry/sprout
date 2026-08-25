@@ -3,6 +3,7 @@
 package automate
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +63,101 @@ func TestFinalizeSessionFile_MissingSession(t *testing.T) {
 	dir := t.TempDir()
 	if err := FinalizeSessionFile(dir, "nope", 0); err == nil {
 		t.Error("expected error for missing session file")
+	}
+}
+
+func TestFinalizeSessionFileByPath_Success(t *testing.T) {
+	dir := t.TempDir()
+	writeTestSession(t, dir, "p1", &AutomateSessionInfo{Workflow: "wf.json", PID: 4242, StartedAt: time.Now(), Kind: "automate"})
+
+	if err := FinalizeSessionFileByPath(filepath.Join(dir, "automate", "p1.json"), 0); err != nil {
+		t.Fatalf("FinalizeSessionFileByPath: %v", err)
+	}
+
+	info, err := ReadSessionFile(dir, "p1")
+	if err != nil {
+		t.Fatalf("ReadSessionFile: %v", err)
+	}
+	if info.Status != "success" {
+		t.Errorf("Status = %q, want success", info.Status)
+	}
+	if info.EndedAt == nil {
+		t.Error("EndedAt not set")
+	}
+	if info.ExitCode == nil || *info.ExitCode != 0 {
+		t.Errorf("ExitCode = %v, want 0", info.ExitCode)
+	}
+	if info.PID != 0 {
+		t.Errorf("PID = %d, want 0 (zeroed to avoid recycled-PID matches)", info.PID)
+	}
+}
+
+func TestFinalizeSessionFileByPath_ErrorExit(t *testing.T) {
+	dir := t.TempDir()
+	writeTestSession(t, dir, "p2", &AutomateSessionInfo{Workflow: "wf.json", PID: 4242, StartedAt: time.Now(), Kind: "automate"})
+
+	if err := FinalizeSessionFileByPath(filepath.Join(dir, "automate", "p2.json"), 1); err != nil {
+		t.Fatalf("FinalizeSessionFileByPath: %v", err)
+	}
+
+	info, _ := ReadSessionFile(dir, "p2")
+	if info.Status != "error" {
+		t.Errorf("Status = %q, want error", info.Status)
+	}
+	if info.ExitCode == nil || *info.ExitCode != 1 {
+		t.Errorf("ExitCode = %v, want 1", info.ExitCode)
+	}
+	if info.PID != 0 {
+		t.Errorf("PID = %d, want 0", info.PID)
+	}
+}
+
+func TestFinalizeSessionFileByPath_MissingFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := FinalizeSessionFileByPath(filepath.Join(dir, "automate", "absent.json"), 0); err == nil {
+		t.Error("expected error for missing session file")
+	}
+}
+
+// TestFinalizeSessionFileByPath_MatchesDirIDForm pins that both entry points
+// share one record-mutation path: FinalizeSessionFile delegates to the
+// path-based form, so a detached child and an attached launcher produce
+// byte-equivalent end states for the same exit code.
+func TestFinalizeSessionFileByPath_MatchesDirIDForm(t *testing.T) {
+	dir := t.TempDir()
+	for _, id := range []string{"via-dir", "via-path"} {
+		writeTestSession(t, dir, id, &AutomateSessionInfo{Workflow: "wf.json", PID: 7, StartedAt: time.Now().Add(-time.Minute), Kind: "automate", OutputFilePath: "/tmp/x.log"})
+	}
+
+	if err := FinalizeSessionFile(dir, "via-dir", 1); err != nil {
+		t.Fatalf("FinalizeSessionFile: %v", err)
+	}
+	if err := FinalizeSessionFileByPath(filepath.Join(dir, "automate", "via-path.json"), 1); err != nil {
+		t.Fatalf("FinalizeSessionFileByPath: %v", err)
+	}
+
+	viaDir, err := ReadSessionFile(dir, "via-dir")
+	if err != nil {
+		t.Fatalf("read via-dir: %v", err)
+	}
+	viaPath, err := ReadSessionFile(dir, "via-path")
+	if err != nil {
+		t.Fatalf("read via-path: %v", err)
+	}
+	if viaDir.Status != viaPath.Status || viaDir.Status != "error" {
+		t.Errorf("Status mismatch: dir=%q path=%q", viaDir.Status, viaPath.Status)
+	}
+	if viaDir.ExitCode == nil || viaPath.ExitCode == nil || *viaDir.ExitCode != *viaPath.ExitCode {
+		t.Errorf("ExitCode mismatch: dir=%v path=%v", viaDir.ExitCode, viaPath.ExitCode)
+	}
+	if viaDir.PID != viaPath.PID || viaDir.PID != 0 {
+		t.Errorf("PID mismatch: dir=%d path=%d", viaDir.PID, viaPath.PID)
+	}
+	if viaDir.EndedAt == nil || viaPath.EndedAt == nil {
+		t.Error("both forms must set EndedAt")
+	}
+	if viaDir.Workflow != viaPath.Workflow || viaDir.OutputFilePath != viaPath.OutputFilePath {
+		t.Error("finalization must not disturb the launch-time fields")
 	}
 }
 

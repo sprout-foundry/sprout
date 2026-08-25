@@ -11,6 +11,24 @@ import (
 // Detach-mode helpers for `sprout automate run --detach`. Paired with
 // automate_run_detach_test.go.
 
+// detachedSessionFilePath returns the session-record path a detached child
+// is told to finalize on exit (child-side self-finalization).
+func detachedSessionFilePath(sproutDir, sessionID string) string {
+	return filepath.Join(sproutDir, "automate", sessionID+".json")
+}
+
+// appendDetachedSessionFileArg adds --automate-session-file to the agent
+// subprocess args in detach mode only: the launcher never waits there, so
+// the child is the only process that can write the run's end state. Attached
+// runs keep the launcher's deferred FinalizeSessionFile after cmd.Wait() —
+// passing the flag there would produce two writers of the same record.
+func appendDetachedSessionFileArg(args []string, sproutDir, sessionID string) []string {
+	if !automateDetach {
+		return args
+	}
+	return append(args, "--automate-session-file", detachedSessionFilePath(sproutDir, sessionID))
+}
+
 // openDetachLogFile creates the session log directory under sproutDir and
 // opens the per-session log file the detached workflow child will write to.
 // Returned path is recorded in the session PID file (OutputFilePath) so

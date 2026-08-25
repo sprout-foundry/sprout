@@ -259,9 +259,15 @@ function UIManager({ children }: UIManagerProps): JSX.Element {
     setFileBrowserState((prev) => ({ ...prev, isOpen: false }));
   };
 
-  // Clean up completed progress items after a delay
+  // Clean up completed progress items after a delay. The map is usually
+  // empty — bail before scheduling state work so an idle WebUI runs no
+  // per-second React updates.
+  const progressItemsRef = useRef(progressItems);
+  progressItemsRef.current = progressItems;
+
   useEffect(() => {
     const interval = setInterval(() => {
+      if (progressItemsRef.current.size === 0) return;
       setProgressItems((prev) => {
         const newMap = new Map();
         let hasChanges = false;

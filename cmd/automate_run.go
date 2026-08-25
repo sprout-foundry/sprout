@@ -151,11 +151,10 @@ func runWorkflowByPath(path string) error {
 	}
 	sessionID := fmt.Sprintf("cli-automate-%s", hex.EncodeToString(randomHex))
 
-	// Resolve sprout directory relative to current working dir — needed
-	// before start so the detach log path exists pre-launch.
-	sproutDir, err := filepath.Abs(".sprout")
+	// Resolve the session root before start so the detach log path exists.
+	sproutDir, err := automateSessionRoot()
 	if err != nil {
-		return fmt.Errorf("resolve sprout directory: %w", err)
+		return err
 	}
 
 	args := buildAgentSubprocessArgs(path, summary)
